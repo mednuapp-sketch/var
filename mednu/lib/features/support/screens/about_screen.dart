@@ -1,0 +1,340 @@
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../../../core/constants/app_colors.dart';
+import '../../../core/constants/app_text_styles.dart';
+import '../../../core/router/app_router.dart';
+
+class AboutScreen extends StatefulWidget {
+  const AboutScreen({super.key});
+
+  @override
+  State<AboutScreen> createState() => _AboutScreenState();
+}
+
+class _AboutScreenState extends State<AboutScreen> {
+  String _version = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadVersion();
+  }
+
+  Future<void> _loadVersion() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      if (mounted) setState(() => _version = 'v${info.version} (${info.buildNumber})');
+    } catch (_) {
+      if (mounted) setState(() => _version = 'v1.0.0');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: CustomScrollView(
+        slivers: [
+          SliverAppBar(
+            pinned: true,
+            expandedHeight: 220,
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
+              onPressed: () => context.pop(),
+            ),
+            flexibleSpace: FlexibleSpaceBar(
+              background: Container(
+                decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
+                child: SafeArea(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const SizedBox(height: 20),
+                      Container(
+                        width: 80, height: 80,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.15),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white.withOpacity(0.3), width: 2),
+                        ),
+                        child: const Icon(Icons.local_hospital_rounded, color: Colors.white, size: 40),
+                      ),
+                      const SizedBox(height: 12),
+                      const Text('MedNu', style: TextStyle(fontFamily: 'Poppins', fontSize: 24, fontWeight: FontWeight.w800, color: Colors.white)),
+                      const SizedBox(height: 4),
+                      const Text('Your Family Healthcare Partner', style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: Colors.white70)),
+                      const SizedBox(height: 4),
+                      if (_version.isNotEmpty)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(_version, style: const TextStyle(fontFamily: 'Poppins', fontSize: 11, color: Colors.white70)),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+
+                // Mission
+                _SectionCard(
+                  icon: Icons.favorite_rounded,
+                  color: AppColors.primary,
+                  title: 'Our Mission',
+                  content: 'MedNu is on a mission to make quality healthcare accessible, affordable, and convenient for every Indian family. We connect patients with doctors, hospitals, pharmacies, and medical services — all in one place.',
+                ),
+
+                const SizedBox(height: 16),
+
+                // Services grid
+                const _SectionHeader('Our Services', Icons.grid_view_rounded, Color(0xFF1565C0)),
+                const SizedBox(height: 12),
+                GridView.count(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  crossAxisCount: 3,
+                  childAspectRatio: 1.1,
+                  crossAxisSpacing: 10,
+                  mainAxisSpacing: 10,
+                  children: const [
+                    _ServiceTile(Icons.video_call_rounded, 'Teleconsult', Color(0xFF7B1FA2)),
+                    _ServiceTile(Icons.local_shipping_rounded, 'Medicines', Color(0xFF1565C0)),
+                    _ServiceTile(Icons.local_hospital_rounded, 'Hospitals', Color(0xFFB71C1C)),
+                    _ServiceTile(Icons.science_rounded, 'Diagnostics', Color(0xFF2E7D32)),
+                    _ServiceTile(Icons.pregnant_woman_rounded, 'Pregnancy', Color(0xFFC2185B)),
+                    _ServiceTile(Icons.psychology_rounded, 'Therapy', Color(0xFF4A148C)),
+                    _ServiceTile(Icons.emergency_rounded, 'Emergency', Color(0xFFE53935)),
+                    _ServiceTile(Icons.fitness_center_rounded, 'Physio', Color(0xFF00897B)),
+                    _ServiceTile(Icons.restaurant_rounded, 'Nutrition', Color(0xFFE65100)),
+                  ],
+                ),
+
+                const SizedBox(height: 20),
+
+                // Stats
+                Container(
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(colors: [Color(0xFF1A237E), Color(0xFF5C6BC0)]),
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: const [
+                    _Stat('50K+', 'Patients'),
+                    _StatDivider(),
+                    _Stat('500+', 'Doctors'),
+                    _StatDivider(),
+                    _Stat('100+', 'Hospitals'),
+                    _StatDivider(),
+                    _Stat('4.8★', 'Rating'),
+                  ]),
+                ),
+
+                const SizedBox(height: 20),
+
+                // Company info
+                _SectionCard(
+                  icon: Icons.business_rounded,
+                  color: const Color(0xFF1565C0),
+                  title: 'Company',
+                  content: 'MedNu Healthcare Services Private Limited\n'
+                      'Registered in India under the Companies Act, 2013\n'
+                      'GST: 36AABCM1234A1Z5\n'
+                      'CIN: U85110TS2024PTC000000',
+                ),
+
+                const SizedBox(height: 16),
+
+                // Contact
+                const _SectionHeader('Contact Us', Icons.contact_mail_rounded, Color(0xFFE65100)),
+                const SizedBox(height: 12),
+                _ContactRow(Icons.email_rounded, 'support@mednu.in', () async {
+                  final uri = Uri(scheme: 'mailto', path: 'support@mednu.in');
+                  if (await canLaunchUrl(uri)) await launchUrl(uri);
+                }),
+                const SizedBox(height: 8),
+                _ContactRow(Icons.phone_rounded, '+91 90000 00000', () async {
+                  final uri = Uri(scheme: 'tel', path: '+919000000000');
+                  if (await canLaunchUrl(uri)) await launchUrl(uri);
+                }),
+                const SizedBox(height: 8),
+                _ContactRow(Icons.language_rounded, 'www.mednu.in', () async {
+                  final uri = Uri.parse('https://www.mednu.in');
+                  if (await canLaunchUrl(uri)) await launchUrl(uri, mode: LaunchMode.externalApplication);
+                }),
+
+                const SizedBox(height: 20),
+
+                // Legal
+                const _SectionHeader('Legal', Icons.gavel_rounded, Color(0xFF37474F)),
+                const SizedBox(height: 12),
+                _LegalTile('Privacy Policy', () => context.push(AppRoutes.privacyPolicy)),
+                const SizedBox(height: 8),
+                _LegalTile('Terms of Service', () => context.push(AppRoutes.termsOfService)),
+                const SizedBox(height: 8),
+                _LegalTile('Medical Disclaimer', () {}),
+
+                const SizedBox(height: 24),
+
+                // Copyright
+                Center(
+                  child: Column(children: [
+                    const Icon(Icons.favorite_rounded, size: 18, color: AppColors.primary),
+                    const SizedBox(height: 8),
+                    Text(
+                      '© 2025 MedNu Healthcare Services Pvt. Ltd.\nAll rights reserved.',
+                      textAlign: TextAlign.center,
+                      style: AppTextStyles.caption.copyWith(color: AppColors.textHint, height: 1.6),
+                    ),
+                  ]),
+                ),
+                const SizedBox(height: 32),
+              ]),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SectionCard extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String title;
+  final String content;
+  const _SectionCard({required this.icon, required this.color, required this.title, required this.content});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: AppColors.divider),
+      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
+    ),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        Container(width: 32, height: 32, decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+            child: Icon(icon, color: color, size: 17)),
+        const SizedBox(width: 10),
+        Text(title, style: TextStyle(fontFamily: 'Poppins', fontSize: 14, fontWeight: FontWeight.w700, color: color)),
+      ]),
+      const SizedBox(height: 12),
+      Text(content, style: const TextStyle(fontFamily: 'Poppins', fontSize: 13, color: AppColors.textSecondary, height: 1.6)),
+    ]),
+  );
+}
+
+class _SectionHeader extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final Color color;
+  const _SectionHeader(this.title, this.icon, this.color);
+
+  @override
+  Widget build(BuildContext context) => Row(children: [
+    Container(width: 28, height: 28, decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+        child: Icon(icon, size: 15, color: color)),
+    const SizedBox(width: 8),
+    Text(title, style: TextStyle(fontFamily: 'Poppins', fontSize: 14, fontWeight: FontWeight.w700, color: color)),
+  ]);
+}
+
+class _ServiceTile extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  const _ServiceTile(this.icon, this.label, this.color);
+
+  @override
+  Widget build(BuildContext context) => Container(
+    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.divider)),
+    child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+      Container(width: 36, height: 36, decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle),
+          child: Icon(icon, color: color, size: 18)),
+      const SizedBox(height: 6),
+      Text(label, textAlign: TextAlign.center, style: const TextStyle(fontFamily: 'Poppins', fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+    ]),
+  );
+}
+
+class _Stat extends StatelessWidget {
+  final String value, label;
+  const _Stat(this.value, this.label);
+  @override
+  Widget build(BuildContext context) => Column(children: [
+    Text(value, style: const TextStyle(fontFamily: 'Poppins', fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white)),
+    Text(label, style: const TextStyle(fontFamily: 'Poppins', fontSize: 10, color: Colors.white60)),
+  ]);
+}
+
+class _StatDivider extends StatelessWidget {
+  const _StatDivider();
+  @override
+  Widget build(BuildContext context) => Container(width: 1, height: 36, color: Colors.white24);
+}
+
+class _ContactRow extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  final VoidCallback onTap;
+  const _ContactRow(this.icon, this.text, this.onTap);
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: onTap,
+    child: Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.divider),
+      ),
+      child: Row(children: [
+        Icon(icon, color: AppColors.primary, size: 18),
+        const SizedBox(width: 12),
+        Text(text, style: const TextStyle(fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary)),
+        const Spacer(),
+        const Icon(Icons.arrow_forward_ios_rounded, size: 12, color: AppColors.textHint),
+      ]),
+    ),
+  );
+}
+
+class _LegalTile extends StatelessWidget {
+  final String title;
+  final VoidCallback onTap;
+  const _LegalTile(this.title, this.onTap);
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: onTap,
+    child: Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.divider),
+      ),
+      child: Row(children: [
+        const Icon(Icons.article_outlined, color: AppColors.textSecondary, size: 18),
+        const SizedBox(width: 12),
+        Text(title, style: AppTextStyles.labelLarge),
+        const Spacer(),
+        const Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.textHint),
+      ]),
+    ),
+  );
+}

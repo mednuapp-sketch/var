@@ -1,0 +1,54 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6b2d5e"/>
+      <stop offset="100%" stop-color="#3a1732"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="rgba(242,168,216,0.18)"/>
+      <stop offset="100%" stop-color="rgba(242,168,216,0)"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1024" height="1024" rx="230" fill="url(#bg)"/>
+
+  <!-- Subtle top-right light bloom -->
+  <ellipse cx="820" cy="180" rx="480" ry="300" fill="url(#glow)"/>
+
+  <!-- Bold M -->
+  <text x="512" y="660"
+    font-family="'Montserrat','Arial Black',Arial,sans-serif"
+    font-weight="900"
+    font-size="580"
+    fill="white"
+    text-anchor="middle"
+    letter-spacing="-20">M</text>
+
+  <!-- Pink underline accent under M -->
+  <line x1="290" y1="688" x2="734" y2="688"
+    stroke="#f2a8d8" stroke-width="14" stroke-linecap="round" opacity="0.75"/>
+
+  <!-- Divider -->
+  <line x1="150" y1="738" x2="874" y2="738"
+    stroke="rgba(255,255,255,0.10)" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- med-NU wordmark -->
+  <text x="512" y="840"
+    font-family="'Montserrat','Arial Black',Arial,sans-serif"
+    font-weight="900"
+    font-size="118"
+    text-anchor="middle"
+    letter-spacing="2">
+    <tspan fill="white">med</tspan><tspan fill="#f2a8d8">-NU</tspan>
+  </text>
+
+  <!-- Tagline -->
+  <text x="512" y="930"
+    font-family="'Nunito','Arial',sans-serif"
+    font-weight="600"
+    font-size="42"
+    fill="rgba(255,255,255,0.30)"
+    text-anchor="middle"
+    letter-spacing="18">ALWAYS WITH YOU</text>
+</svg>

@@ -1,0 +1,31 @@
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "mednu-healthcare-app",
+          "appId": "1:1056867138858:android:30048e176831118845b253",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "mednu-healthcare-app",
+          "configurations": {
+            "android": "1:1056867138858:android:30048e176831118845b253",
+            "ios": "1:1056867138858:ios:712e11391692dee445b253",
+            "macos": "1:1056867138858:ios:712e11391692dee445b253",
+            "web": "1:1056867138858:web:2a2aa821fa4ab4f545b253",
+            "windows": "1:1056867138858:web:debefafa90eb420d45b253"
+          }
+        }
+      }
+    }
+  },
+  "firestore": {
+    "database": "(default)",
+    "location": "asia-south1",
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  }
+}

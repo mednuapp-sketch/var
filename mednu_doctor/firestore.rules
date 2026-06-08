@@ -1,0 +1,339 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helper functions ────────────────────────────────────────────────────
+
+    // Check if the requesting user is authenticated
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    // Check if the requesting user owns the document
+    function isOwner(uid) {
+      return isAuth() && request.auth.uid == uid;
+    }
+
+    // Check if user is an admin (admins are stored in the 'admins' collection)
+    function isAdmin() {
+      return isAuth() &&
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    // Check if user is a verified doctor
+    function isDoctor() {
+      return isAuth() &&
+        exists(/databases/$(database)/documents/doctors/$(request.auth.uid));
+    }
+
+    // Validate that a write doesn't modify protected fields
+    function doesNotModify(fields) {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
+    }
+
+    // ── Admins collection ───────────────────────────────────────────────────
+    match /admins/{adminId} {
+      allow read: if isAdmin();
+      allow write: if false; // Only Firebase Console / Cloud Functions can manage admins
+    }
+
+    // ── Users ───────────────────────────────────────────────────────────────
+    match /users/{userId} {
+      // Users can read/update their own profile; admins can read all
+      allow read:   if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId) && doesNotModify(['walletBalance', 'referralPoints', 'role', 'createdAt']);
+      allow delete: if false; // Account deletion handled by Cloud Functions only
+
+      // Wallet transactions — user reads own; writes via Cloud Functions/transactions only
+      match /transactions/{txId} {
+        allow read:  if isOwner(userId) || isAdmin();
+        allow write: if false; // Wallet writes handled server-side only
+      }
+
+      // Family members — user manages their own
+      match /family_members/{memberId} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+
+    // ── Patient notifications ───────────────────────────────────────────────
+    match /patient_notifications/{userId}/items/{notifId} {
+      allow read:   if isOwner(userId) || isAdmin();
+      allow update: if isOwner(userId) &&
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead']);
+      allow create: if isAdmin() || isDoctor(); // Doctors/admins can send notifications
+      allow delete: if isOwner(userId) || isAdmin();
+    }
+
+    // ── Doctors ─────────────────────────────────────────────────────────────
+    match /doctors/{doctorId} {
+      // Any authenticated user can browse approved doctors
+      allow read: if isAuth() && (
+        resource.data.status == 'approved' || isOwner(doctorId) || isAdmin()
+      );
+      // Doctors update their own profile (limited fields); admins can update all
+      allow create: if isOwner(doctorId);
+      allow update: if (isOwner(doctorId) &&
+                         doesNotModify(['status', 'rating', 'reviewCount', 'earnings', 'verificationStatus'])) ||
+                       isAdmin();
+      allow delete: if isAdmin();
+
+      // Doctor reviews subcollection
+      match /reviews/{reviewId} {
+        allow read: if isAuth();
+        allow create: if isAuth() && !isDoctor();
+        allow update, delete: if isAdmin();
+      }
+    }
+
+    // ── Appointments ────────────────────────────────────────────────────────
+    match /appointments/{appointmentId} {
+      // Patient who booked, the assigned doctor, or admin can read
+      allow read: if isAuth() && (
+        resource.data.patientId == request.auth.uid ||
+        resource.data.doctorId  == request.auth.uid ||
+        isAdmin()
+      );
+      // Only authenticated patients can create; must set their own patientId
+      allow create: if isAuth() &&
+                       !isDoctor() &&
+                       request.resource.data.patientId == request.auth.uid;
+      // Patient can cancel (status update only); doctor can update consultation status
+      allow update: if isAuth() && (
+        (resource.data.patientId == request.auth.uid &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'cancelReason', 'updatedAt'])) ||
+        (resource.data.doctorId == request.auth.uid &&
+          doesNotModify(['patientId', 'doctorId', 'amount', 'createdAt'])) ||
+        isAdmin()
+      );
+      allow delete: if isAdmin();
+    }
+
+    // ── Health records ───────────────────────────────────────────────────────
+    match /health_records/{userId}/{recordId} {
+      allow read, write: if isOwner(userId) || isAdmin();
+    }
+
+    match /prescriptions/{prescriptionId} {
+      allow read: if isAuth() && (
+        resource.data.patientId == request.auth.uid ||
+        resource.data.doctorId  == request.auth.uid ||
+        isAdmin()
+      );
+      allow create: if isDoctor();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ── Period & water tracker ────────────────────────────────────────────────
+    match /period_tracker/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    match /water_tracker/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    // ── Pregnancy ────────────────────────────────────────────────────────────
+    match /pregnancy/{userId} {
+      allow read, write: if isOwner(userId);
+
+      match /journal/{entryId} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+
+    // ── Hospitals & Ambulances (public read, admin write) ───────────────────
+    match /hospitals/{hospitalId} {
+      allow read:  if isAuth();
+      allow write: if isAdmin();
+    }
+
+    match /ambulances/{ambulanceId} {
+      allow read:  if isAuth();
+      allow write: if isAdmin();
+    }
+
+    // ── Promotional banners (public read, admin write) ──────────────────────
+    match /banners/{bannerId} {
+      allow read:  if true; // Banners visible even on login/onboarding screen
+      allow write: if isAdmin();
+    }
+
+    // ── Medicines & pharmacy ─────────────────────────────────────────────────
+    match /medicines/{medicineId} {
+      allow read:  if isAuth();
+      allow write: if isAdmin();
+    }
+
+    // ── Doctors specialisations (public read) ────────────────────────────────
+    match /specialisations/{specId} {
+      allow read:  if isAuth();
+      allow write: if isAdmin();
+    }
+
+    // ── Support tickets ──────────────────────────────────────────────────────
+    match /support_tickets/{ticketId} {
+      allow read: if isAuth() && (
+        resource.data.userId == request.auth.uid || isAdmin()
+      );
+      allow create: if isAuth() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ── Referrals ────────────────────────────────────────────────────────────
+    match /referrals/{referralId} {
+      allow read: if isAuth() && (
+        resource.data.referrerId == request.auth.uid ||
+        resource.data.referredId  == request.auth.uid ||
+        isAdmin()
+      );
+      allow create: if isAuth() && request.resource.data.referrerId == request.auth.uid;
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ── Deletion requests (account deletion) ─────────────────────────────────
+    match /deletion_requests/{userId} {
+      allow create: if isOwner(userId);
+      allow read:   if isOwner(userId) || isAdmin();
+      allow update, delete: if isAdmin();
+    }
+
+    // ── Doctor consultation active sessions ───────────────────────────────────
+    match /active_consultations/{sessionId} {
+      allow read: if isAuth() && (
+        resource.data.patientId == request.auth.uid ||
+        resource.data.doctorId  == request.auth.uid ||
+        isAdmin()
+      );
+      allow write: if isAuth() && (
+        request.resource.data.patientId == request.auth.uid ||
+        request.resource.data.doctorId  == request.auth.uid ||
+        isAdmin()
+      );
+    }
+
+    // ── Doctor online status ──────────────────────────────────────────────────
+    match /doctor_status/{doctorId} {
+      allow read:   if isAuth();
+      allow write:  if isOwner(doctorId) || isAdmin();
+    }
+
+    // ── Broadcast notifications (admin only write) ────────────────────────────
+    match /broadcast_notifications/{notifId} {
+      allow read:  if isAuth();
+      allow write: if isAdmin();
+    }
+
+    // ── Service requests (diagnostics, physio, etc.) ─────────────────────────
+    match /service_requests/{requestId} {
+      allow read: if isAuth() && (
+        resource.data.userId == request.auth.uid || isAdmin()
+      );
+      allow create: if isAuth() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAdmin() || isDoctor();
+      allow delete: if isAdmin();
+    }
+
+    // ── Analytics & feedback ─────────────────────────────────────────────────
+    match /feedback/{feedbackId} {
+      allow read:   if isAdmin();
+      allow create: if isAuth();
+      allow update, delete: if isAdmin();
+    }
+
+    // ── Doctor reviews (public-facing) ───────────────────────────────────────
+    match /doctor_reviews/{reviewId} {
+      allow read:   if isAuth();
+      allow create: if isAuth() && !isDoctor() &&
+                       request.resource.data.patientId == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    // ── Consultations (video/audio calls between patient and doctor) ──────────
+    match /consultations/{consultationId} {
+      // Patient or doctor involved in the session can read
+      allow read: if isAuth() && (
+        resource.data.patientId == request.auth.uid ||
+        resource.data.doctorId  == request.auth.uid ||
+        isAdmin()
+      );
+      // Patient can create a consultation (patient-initiated call)
+      allow create: if isAuth() && !isDoctor() &&
+                       request.resource.data.patientId == request.auth.uid;
+      // Either party can update status (accept, reject, end call); admin can update all
+      allow update: if isAuth() && (
+        resource.data.patientId == request.auth.uid ||
+        resource.data.doctorId  == request.auth.uid ||
+        isAdmin()
+      );
+      allow delete: if isAdmin();
+
+      // In-call chat messages subcollection
+      match /messages/{messageId} {
+        allow read, create: if isAuth() && (
+          get(/databases/$(database)/documents/consultations/$(consultationId)).data.patientId == request.auth.uid ||
+          get(/databases/$(database)/documents/consultations/$(consultationId)).data.doctorId  == request.auth.uid
+        );
+        allow update, delete: if isAdmin();
+      }
+    }
+
+    // ── Patients (FCM token + basic profile for call routing) ────────────────
+    match /patients/{patientId} {
+      allow read: if isOwner(patientId) || isDoctor() || isAdmin();
+      // Only the patient themselves can write their own record (FCM token update)
+      allow write: if isOwner(patientId);
+    }
+
+    // ── Doctor notifications ──────────────────────────────────────────────────
+    match /doctor_notifications/{doctorId}/items/{notifId} {
+      allow read:   if isOwner(doctorId) || isAdmin();
+      allow update: if isOwner(doctorId) &&
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead']);
+      allow create: if isAdmin();
+      allow delete: if isOwner(doctorId) || isAdmin();
+    }
+
+    // ── Feedbacks (doctor-side reviews) ──────────────────────────────────────
+    match /feedbacks/{feedbackId} {
+      allow read: if isAuth() && (
+        resource.data.doctorId == request.auth.uid || isAdmin()
+      );
+      allow create: if isAuth() && !isDoctor();
+      allow update, delete: if isAdmin();
+    }
+
+    // ── Wallets ───────────────────────────────────────────────────────────────
+    match /wallets/{userId} {
+      allow read:  if isOwner(userId) || isAdmin();
+      allow write: if false; // Wallet writes handled server-side only
+    }
+
+    // ── Transactions ──────────────────────────────────────────────────────────
+    match /transactions/{txId} {
+      allow read:  if isAuth() && (
+        resource.data.userId == request.auth.uid || isAdmin()
+      );
+      allow write: if false; // Transactions written server-side only
+    }
+
+    // ── Operation Logs ──────────────────────────────────────────────────────────
+    match /operation_logs/{logId} {
+      allow create: if isAuth()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.keys().hasAll(['userId', 'userType', 'action', 'status', 'timestamp']);
+      allow read:   if isAdmin();
+      allow update, delete: if false;
+    }
+
+    // ── Deny everything else ──────────────────────────────────────────────────
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

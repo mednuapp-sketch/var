@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+  <defs>
+    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#C2185B"/>
+      <stop offset="100%" stop-color="#7B1FA2"/>
+    </linearGradient>
+    <linearGradient id="gw" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#E91E8C"/>
+      <stop offset="100%" stop-color="#9C27B0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Left earpiece circle -->
+  <circle cx="21" cy="11" r="6" fill="url(#g)"/>
+  <!-- Right earpiece circle -->
+  <circle cx="79" cy="11" r="6" fill="url(#g)"/>
+
+  <!-- Left binaural tube — down then sweeping to center -->
+  <path d="M21 17 L21 34 Q21 46 50 46"
+        stroke="url(#g)" stroke-width="5.5"
+        stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Right binaural tube — down then sweeping to center -->
+  <path d="M79 17 L79 34 Q79 46 50 46"
+        stroke="url(#g)" stroke-width="5.5"
+        stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Main tube — down then curling right toward chest piece -->
+  <path d="M50 46 L50 70 Q50 85 65 85 Q80 85 80 70 L80 63"
+        stroke="url(#g)" stroke-width="5.5"
+        stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Chest piece outer ring -->
+  <circle cx="80" cy="57" r="15" fill="url(#g)"/>
+  <!-- Chest piece membrane highlight -->
+  <circle cx="80" cy="57" r="9.5" fill="white" fill-opacity="0.18"/>
+  <!-- Chest piece center dot -->
+  <circle cx="80" cy="57" r="4.5" fill="url(#gw)"/>
+  <circle cx="80" cy="57" r="2"   fill="white" fill-opacity="0.5"/>
+</svg>

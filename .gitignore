@@ -1,0 +1,48 @@
+# Firebase Functions
+functions/node_modules/
+functions/.env
+
+# Environment / secrets
+.env
+*.secret
+service-account*.json
+
+# Firebase secrets
+google-services.json
+GoogleService-Info.plist
+**/firebase_options.dart
+
+# Android keystore
+*.jks
+*.keystore
+key.properties
+
+# iOS certificates
+*.p12
+*.mobileprovision
+AuthKey_*.p8
+
+# Flutter build artifacts
+**/build/
+**/.dart_tool/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/.packages
+**/pubspec.lock
+
+# Android generated
+**/android/.gradle/
+**/android/local.properties
+**/android/captures/
+**/android/generatedDebugSources/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+**/*.g.dart
+**/*.freezed.dart
+
+# Admin node modules
+mednu-admin/node_modules/
+mednu-admin/.next/

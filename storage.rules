@@ -1,0 +1,68 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isAuth() && request.auth.uid == uid;
+    }
+
+    function isAdmin() {
+      return firestore.exists(/databases/(default)/documents/admins/$(request.auth.uid));
+    }
+
+    function isImage() {
+      return request.resource.contentType.matches('image/.*');
+    }
+
+    function isDocument() {
+      return request.resource.contentType.matches('image/.*') ||
+             request.resource.contentType.matches('application/pdf');
+    }
+
+    // ── Patient profile photos: users/{uid}/profile.jpg ─────────────────────
+    match /users/{uid}/{allPaths=**} {
+      allow read:  if isAuth();
+      allow write: if isOwner(uid)
+                   && request.resource.size < 5 * 1024 * 1024
+                   && isImage();
+    }
+
+    // ── Doctor profile photos + verification docs: doctors/{uid}/... ─────────
+    match /doctors/{uid}/{allPaths=**} {
+      allow read: if isAuth();
+      allow write: if isOwner(uid)
+                   && request.resource.size < 10 * 1024 * 1024
+                   && isDocument();
+    }
+
+    // ── Lab reports uploaded by patients: reports/{uid}/... ─────────────────
+    match /reports/{uid}/{allPaths=**} {
+      allow read:  if isAuth() && (request.auth.uid == uid || isAdmin());
+      allow write: if isOwner(uid)
+                   && request.resource.size < 10 * 1024 * 1024
+                   && isDocument();
+    }
+
+    // ── Prescription photos sent to pharmacy: prescriptions/{uid}/... ────────
+    match /prescriptions/{uid}/{allPaths=**} {
+      allow read:  if isAuth() && (request.auth.uid == uid || isAdmin());
+      allow write: if isOwner(uid)
+                   && request.resource.size < 10 * 1024 * 1024
+                   && isDocument();
+    }
+
+    // ── Promotional banners ───────────────────────────────────────────────────
+    // Any authenticated user can upload the image file. The Firestore `banners`
+    // collection (allow write: if isAdmin()) is the real security gate — an
+    // uploaded image with no Firestore document is harmless orphaned storage.
+    match /banners/{allPaths=**} {
+      allow read:  if true;
+      allow write: if isAuth() && request.resource.size < 5 * 1024 * 1024;
+    }
+  }
+}

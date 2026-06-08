@@ -1,0 +1,7 @@
+## RENAME THIS FILE TO key.properties AND FILL IN YOUR VALUES
+## NEVER commit key.properties to version control — it is in .gitignore
+
+storePassword=YOUR_KEYSTORE_PASSWORD
+keyPassword=YOUR_KEY_PASSWORD
+keyAlias=YOUR_KEY_ALIAS
+storeFile=../your-keystore-file.jks

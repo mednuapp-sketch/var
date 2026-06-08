@@ -1,0 +1,85 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# VS Code
+#.vscode/
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+/coverage/
+
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# Android Studio will place build artifacts here
+/android/app/debug
+/android/app/profile
+/android/app/release
+
+# Firebase — never commit secrets
+google-services.json
+GoogleService-Info.plist
+.firebaserc
+**/firebase_options.dart
+
+# Environment / secrets
+.env
+.env.*
+*.secret
+secrets.json
+service-account*.json
+*-service-account.json
+
+# Android keystore
+*.jks
+*.keystore
+key.properties
+/android/key.properties
+
+# iOS certificates & provisioning
+*.p12
+*.mobileprovision
+*.p8
+AuthKey_*.p8
+
+# Node / Firebase Functions
+functions/node_modules/
+functions/.env
+functions/.runtimeconfig.json
+functions/lib/
+
+# macOS
+__MACOSX/
+*.DS_Store
+
+# Windows thumbnails
+Thumbs.db
+ehthumbs.db
+Desktop.ini

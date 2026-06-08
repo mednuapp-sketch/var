@@ -1,0 +1,63 @@
+<svg width="1080" height="2400" viewBox="0 0 1080 2400" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="60%" y2="100%">
+      <stop offset="0%" stop-color="#7b2d6e"/>
+      <stop offset="55%" stop-color="#5e2750"/>
+      <stop offset="100%" stop-color="#3a1732"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="rgba(242,168,216,0.12)"/>
+      <stop offset="100%" stop-color="rgba(242,168,216,0)"/>
+    </linearGradient>
+    <linearGradient id="accentLine" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="rgba(242,168,216,0)"/>
+      <stop offset="30%" stop-color="#f2a8d8"/>
+      <stop offset="70%" stop-color="#f2a8d8"/>
+      <stop offset="100%" stop-color="rgba(242,168,216,0)"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Full-bleed background -->
+  <rect width="1080" height="2400" fill="url(#bg)"/>
+
+  <!-- Top-right soft bloom -->
+  <ellipse cx="900" cy="350" rx="600" ry="420" fill="url(#glow)"/>
+  <!-- Bottom-left soft bloom -->
+  <ellipse cx="180" cy="2100" rx="400" ry="300" fill="rgba(242,168,216,0.05)"/>
+
+  <!-- Bold M — vertically centred ~1100 -->
+  <text x="540" y="1220"
+    font-family="'Montserrat','Arial Black',Arial,sans-serif"
+    font-weight="900"
+    font-size="760"
+    fill="white"
+    text-anchor="middle"
+    letter-spacing="-24">M</text>
+
+  <!-- Pink accent underline -->
+  <line x1="270" y1="1268" x2="810" y2="1268"
+    stroke="url(#accentLine)" stroke-width="10" stroke-linecap="round"/>
+
+  <!-- Thin full-width divider -->
+  <line x1="120" y1="1330" x2="960" y2="1330"
+    stroke="rgba(255,255,255,0.08)" stroke-width="2"/>
+
+  <!-- med-NU wordmark -->
+  <text x="540" y="1480"
+    font-family="'Montserrat','Arial Black',Arial,sans-serif"
+    font-weight="900"
+    font-size="148"
+    text-anchor="middle"
+    letter-spacing="4">
+    <tspan fill="white">med</tspan><tspan fill="#f2a8d8">-NU</tspan>
+  </text>
+
+  <!-- Tagline -->
+  <text x="540" y="1582"
+    font-family="'Nunito',Arial,sans-serif"
+    font-weight="600"
+    font-size="52"
+    fill="rgba(255,255,255,0.35)"
+    text-anchor="middle"
+    letter-spacing="22">ALWAYS WITH YOU</text>
+</svg>

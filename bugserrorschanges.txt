@@ -1,0 +1,50 @@
+1. ai to provide tips>>>> health education''
+
+2 there should be no direct closing AS from another section it need to come to home and there need to ask confirm to exit
+
+3 take contacts accesss and ADD Them as family member section
+
+4 not only in quick connect it shold open the consulation screen anywhere touch on the widget 
+
+5 notifications actionable so they can click as mark completed
+
+6 search among the doctors (name,specilization) filtering is working fine
+
+7 from the home screen if they are clicking on the any specialities like genral/cardiology then that specific need to display
+
+8 from home screen family members need to be clickable editable and access their health records once they uploaded by the doctor
+
+9  family members add button is not working from home screen
+
+10 our services should be circular like need to rotate full and in first there should left card also (- - -) circular they can toggle
+
+11 service emergency is different from sos as service emergency  need to give support and assign available doctor until  the relative gets come it should instalnty high priotity meet
+
+12 in appoitments screen you added +book appointment it redicrs to the doctors ok but if i succsfully book an appointment then  its doesn't revent back to the appointment section 
+
+
+13 upload prescription is not working from medicine delivery 
+
+14 while placing the order it should ask about address name ph for firstime and location can be fetchable and they can order to their family members /out side the famoly membes and need to store the address /name /ph as flipkart and next directly they can order
+
+15 add gmaps in track order 
+
+16 add + - symbols in medicine delivery cart so they can ajust the quantity
+
+17 consult need to turn on video if they need but i see its not working
+
+18 in the ambulance also location problem pls fix this like Zomato food order/rapido booking locatin can be live or set by maps /search
+
+19 prescription needs to share and download from there order all btutoon it need to add that medicine to cart 
+
+20 i cant see any reports as for now
+
+21 uploadd record not working i think its not needed there if need plas explain 
+
+
+23 search icon on home screen
+  
+
+
+
+

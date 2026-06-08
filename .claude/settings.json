@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(head -30)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\nuday\\\\Desktop\\\\var\\\\mednu_doctor\" -Recurse -Directory)",
+      "Bash(flutter build *)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\nuday\\\\Desktop\\\\var\" -Force)",
+      "Bash(grep -v \"^.*//.*â€\")",
+      "Bash(sed -n '430,460p' c:/Users/nuday/Desktop/var/mednu/lib/features/health/screens/health_dashboard_screen.dart)",
+      "Bash(sed -n '490,520p' c:/Users/nuday/Desktop/var/mednu/lib/features/health/screens/health_dashboard_screen.dart)",
+      "Bash(sed -n '560,570p' c:/Users/nuday/Desktop/var/mednu/lib/features/health/screens/health_dashboard_screen.dart)",
+      "Bash(sed -n '1190,1200p' c:/Users/nuday/Desktop/var/mednu/lib/features/health/screens/health_dashboard_screen.dart)",
+      "Bash(sed -n '1210,1220p' c:/Users/nuday/Desktop/var/mednu/lib/features/health/screens/health_dashboard_screen.dart)",
+      "Bash(xargs grep -l \"async\\\\|await\\\\|Future\")",
+      "Bash(xargs -I{} sh -c \"grep -n 'await\\\\|setState' {} | grep -v 'if \\(mounted\\)\\\\|if \\(!mounted\\)\\\\|mounted &&' | grep -A1 'await' | grep 'setState'\")"
+    ]
+  }
+}

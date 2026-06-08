@@ -1,0 +1,73 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f4c7a"/>
+      <stop offset="100%" stop-color="#071d30"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="rgba(100,200,240,0.16)"/>
+      <stop offset="100%" stop-color="rgba(100,200,240,0)"/>
+    </linearGradient>
+    <linearGradient id="accentLine" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#64c8f0"/>
+      <stop offset="100%" stop-color="#a8dffa"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1024" height="1024" rx="230" fill="url(#bg)"/>
+
+  <!-- Subtle top-right light bloom -->
+  <ellipse cx="820" cy="180" rx="480" ry="300" fill="url(#glow)"/>
+
+  <!-- Bold M -->
+  <text x="512" y="620"
+    font-family="'Montserrat','Arial Black',Arial,sans-serif"
+    font-weight="900"
+    font-size="530"
+    fill="white"
+    text-anchor="middle"
+    letter-spacing="-20">M</text>
+
+  <!-- Stethoscope cross accent (top-right of M, subtle) -->
+  <!-- Vertical bar -->
+  <rect x="768" y="96" width="20" height="80" rx="10" fill="#64c8f0" opacity="0.85"/>
+  <!-- Horizontal bar -->
+  <rect x="738" y="126" width="80" height="20" rx="10" fill="#64c8f0" opacity="0.85"/>
+
+  <!-- Cyan underline accent under M -->
+  <line x1="290" y1="650" x2="734" y2="650"
+    stroke="url(#accentLine)" stroke-width="14" stroke-linecap="round" opacity="0.80"/>
+
+  <!-- Divider -->
+  <line x1="150" y1="700" x2="874" y2="700"
+    stroke="rgba(255,255,255,0.10)" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- med-NU wordmark -->
+  <text x="512" y="800"
+    font-family="'Montserrat','Arial Black',Arial,sans-serif"
+    font-weight="900"
+    font-size="110"
+    text-anchor="middle"
+    letter-spacing="2">
+    <tspan fill="white">med</tspan><tspan fill="#64c8f0">-NU</tspan>
+  </text>
+
+  <!-- DOCTOR badge -->
+  <text x="512" y="890"
+    font-family="'Montserrat','Arial Black',Arial,sans-serif"
+    font-weight="900"
+    font-size="56"
+    fill="#64c8f0"
+    text-anchor="middle"
+    letter-spacing="18">DOCTOR</text>
+
+  <!-- Tagline -->
+  <text x="512" y="958"
+    font-family="'Nunito','Arial',sans-serif"
+    font-weight="600"
+    font-size="36"
+    fill="rgba(255,255,255,0.28)"
+    text-anchor="middle"
+    letter-spacing="14">CARE · CONNECT · CURE</text>
+</svg>

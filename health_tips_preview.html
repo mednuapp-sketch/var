@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MedNu – Health Tips Design Options</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #f0f4f8; font-family: 'Segoe UI', sans-serif; padding: 24px; }
+  h1 { text-align: center; color: #1a237e; font-size: 22px; margin-bottom: 6px; }
+  .subtitle { text-align: center; color: #666; font-size: 13px; margin-bottom: 36px; }
+
+  .section { margin-bottom: 48px; }
+  .section-label {
+    font-size: 13px; font-weight: 700; color: #1565C0;
+    text-transform: uppercase; letter-spacing: 1.2px;
+    margin-bottom: 6px; padding-left: 4px;
+  }
+  .section-title {
+    font-size: 19px; font-weight: 700; color: #1a237e;
+    margin-bottom: 4px; padding-left: 4px;
+  }
+  .section-desc {
+    font-size: 12px; color: #888; margin-bottom: 16px; padding-left: 4px;
+  }
+
+  /* Phone frame */
+  .phone {
+    width: 360px; background: #fff; border-radius: 36px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.18); overflow: hidden;
+    margin: 0 auto; position: relative;
+  }
+  .phone-bar {
+    background: #1565C0; padding: 14px 20px 10px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .phone-bar-title { color: #fff; font-size: 15px; font-weight: 700; }
+  .phone-bar-time { color: rgba(255,255,255,0.8); font-size: 12px; }
+  .phone-content { padding: 16px 0 20px; background: #f7f9fc; overflow: hidden; }
+  .section-header { padding: 0 20px 12px; display: flex; justify-content: space-between; align-items: center; }
+  .section-header h3 { font-size: 16px; font-weight: 700; color: #1a237e; }
+  .section-header span { font-size: 12px; color: #1565C0; font-weight: 600; }
+
+  /* ── OPTION 1: Square Gradient Cards ── */
+  .opt1-scroll {
+    display: flex; gap: 12px;
+    padding: 0 20px 8px;
+    overflow-x: auto; scrollbar-width: none;
+  }
+  .opt1-scroll::-webkit-scrollbar { display: none; }
+  .opt1-card {
+    min-width: 130px; height: 150px;
+    border-radius: 20px; padding: 16px 14px;
+    display: flex; flex-direction: column;
+    justify-content: space-between;
+    position: relative; overflow: hidden;
+    flex-shrink: 0;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+  }
+  .opt1-card .blob {
+    position: absolute; width: 90px; height: 90px;
+    border-radius: 50%; top: -20px; right: -20px;
+    opacity: 0.25;
+  }
+  .opt1-icon-wrap {
+    width: 44px; height: 44px; border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px;
+    background: rgba(255,255,255,0.3);
+    backdrop-filter: blur(4px);
+  }
+  .opt1-card-bottom {}
+  .opt1-card-title { font-size: 13px; font-weight: 700; color: #fff; margin-bottom: 2px; }
+  .opt1-card-sub { font-size: 10px; color: rgba(255,255,255,0.8); line-height: 1.3; }
+
+  /* ── OPTION 2: Wide Story Cards ── */
+  .opt2-scroll {
+    display: flex; gap: 12px;
+    padding: 0 20px 8px;
+    overflow-x: auto; scrollbar-width: none;
+  }
+  .opt2-scroll::-webkit-scrollbar { display: none; }
+  .opt2-card {
+    min-width: 300px; height: 130px;
+    border-radius: 20px; padding: 18px 16px;
+    display: flex; align-items: center; gap: 16px;
+    flex-shrink: 0;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+    position: relative; overflow: hidden;
+  }
+  .opt2-card .bg-blob {
+    position: absolute; width: 160px; height: 160px;
+    border-radius: 50%; right: -40px; top: -40px;
+    opacity: 0.2;
+    background: #fff;
+  }
+  .opt2-icon-wrap {
+    width: 64px; height: 64px; border-radius: 18px;
+    background: rgba(255,255,255,0.25);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 30px; flex-shrink: 0;
+    backdrop-filter: blur(4px);
+    border: 1.5px solid rgba(255,255,255,0.35);
+  }
+  .opt2-text {}
+  .opt2-chip {
+    display: inline-block; font-size: 9px; font-weight: 700;
+    color: rgba(255,255,255,0.9); background: rgba(255,255,255,0.2);
+    border-radius: 20px; padding: 2px 8px;
+    letter-spacing: 0.8px; text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .opt2-title { font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 4px; }
+  .opt2-sub { font-size: 11px; color: rgba(255,255,255,0.85); line-height: 1.4; max-width: 180px; }
+  .opt2-dots { display: flex; gap: 5px; justify-content: center; margin-top: 10px; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: #c5cae9; }
+  .dot.active { width: 20px; background: #1565C0; border-radius: 4px; }
+
+  /* ── OPTION 3: Glassmorphism Cards ── */
+  .opt3-scroll {
+    display: flex; gap: 12px;
+    padding: 0 20px 8px;
+    overflow-x: auto; scrollbar-width: none;
+  }
+  .opt3-scroll::-webkit-scrollbar { display: none; }
+  .opt3-card {
+    min-width: 130px; height: 155px;
+    border-radius: 22px; padding: 14px;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 10px;
+    flex-shrink: 0;
+    position: relative; overflow: hidden;
+    border: 1.5px solid rgba(255,255,255,0.6);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+  .opt3-card::before {
+    content: ''; position: absolute;
+    width: 120px; height: 120px; border-radius: 50%;
+    opacity: 0.35; top: -30px; right: -30px;
+  }
+  .opt3-card::after {
+    content: ''; position: absolute;
+    width: 80px; height: 80px; border-radius: 50%;
+    opacity: 0.2; bottom: -20px; left: -10px;
+  }
+  .opt3-glass-icon {
+    width: 52px; height: 52px; border-radius: 16px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 24px;
+    background: rgba(255,255,255,0.55);
+    border: 1.5px solid rgba(255,255,255,0.8);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+    position: relative; z-index: 1;
+  }
+  .opt3-card-title { font-size: 12px; font-weight: 700; color: #1a237e; text-align: center; position: relative; z-index: 1; }
+  .opt3-card-sub { font-size: 9px; color: #546e7a; text-align: center; line-height: 1.4; position: relative; z-index: 1; }
+
+  .badge {
+    display: inline-block; background: #e8f5e9; color: #2e7d32;
+    font-size: 11px; font-weight: 700; padding: 4px 12px;
+    border-radius: 20px; margin-bottom: 8px; margin-left: 4px;
+  }
+  .badge.recommended { background: #fff3e0; color: #e65100; }
+</style>
+</head>
+<body>
+
+<h1>MedNu – Health Tips UI Preview</h1>
+<p class="subtitle">3 design options — scroll cards horizontally in each phone preview</p>
+
+<!-- OPTION 1 -->
+<div class="section">
+  <div style="padding-left:4px; margin-bottom:12px;">
+    <div class="section-label">Option 1</div>
+    <div class="section-title">Gradient Square Cards</div>
+    <div class="section-desc">No network images · Vivid gradient backgrounds · Icon in frosted pill · Clean white text · 130×150px cards</div>
+  </div>
+  <div class="phone">
+    <div class="phone-bar">
+      <div class="phone-bar-title">Good Morning, Vinay 👋</div>
+      <div class="phone-bar-time">9:41</div>
+    </div>
+    <div class="phone-content">
+      <div class="section-header">
+        <h3>Health Tips</h3>
+        <span>See all</span>
+      </div>
+      <div class="opt1-scroll">
+
+        <div class="opt1-card" style="background: linear-gradient(135deg, #1565C0, #42A5F5);">
+          <div class="blob" style="background:#fff;"></div>
+          <div class="opt1-icon-wrap">💧</div>
+          <div class="opt1-card-bottom">
+            <div class="opt1-card-title">Stay Hydrated</div>
+            <div class="opt1-card-sub">8 glasses a day keeps fatigue away</div>
+          </div>
+        </div>
+
+        <div class="opt1-card" style="background: linear-gradient(135deg, #2E7D32, #66BB6A);">
+          <div class="blob" style="background:#fff;"></div>
+          <div class="opt1-icon-wrap">🏃</div>
+          <div class="opt1-card-bottom">
+            <div class="opt1-card-title">Exercise Daily</div>
+            <div class="opt1-card-sub">30 mins boosts immunity</div>
+          </div>
+        </div>
+
+        <div class="opt1-card" style="background: linear-gradient(135deg, #4A148C, #AB47BC);">
+          <div class="blob" style="background:#fff;"></div>
+          <div class="opt1-icon-wrap">😴</div>
+          <div class="opt1-card-bottom">
+            <div class="opt1-card-title">Sleep Well</div>
+            <div class="opt1-card-sub">7–8 hours restores health</div>
+          </div>
+        </div>
+
+        <div class="opt1-card" style="background: linear-gradient(135deg, #E65100, #FF8A65);">
+          <div class="blob" style="background:#fff;"></div>
+          <div class="opt1-icon-wrap">🥗</div>
+          <div class="opt1-card-bottom">
+            <div class="opt1-card-title">Eat Healthy</div>
+            <div class="opt1-card-sub">Fresh food fuels your body</div>
+          </div>
+        </div>
+
+        <div class="opt1-card" style="background: linear-gradient(135deg, #00695C, #4DB6AC);">
+          <div class="blob" style="background:#fff;"></div>
+          <div class="opt1-icon-wrap">🧘</div>
+          <div class="opt1-card-bottom">
+            <div class="opt1-card-title">Manage Stress</div>
+            <div class="opt1-card-sub">Meditate 10 mins daily</div>
+          </div>
+        </div>
+
+        <div class="opt1-card" style="background: linear-gradient(135deg, #B71C1C, #EF5350);">
+          <div class="blob" style="background:#fff;"></div>
+          <div class="opt1-icon-wrap">🩺</div>
+          <div class="opt1-card-bottom">
+            <div class="opt1-card-title">Checkup</div>
+            <div class="opt1-card-sub">Annual screenings save lives</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- OPTION 2 -->
+<div class="section">
+  <div style="padding-left:4px; margin-bottom:12px;">
+    <div class="section-label">Option 2 &nbsp;<span class="badge recommended">⭐ My Pick</span></div>
+    <div class="section-title">Wide Story Cards</div>
+    <div class="section-desc">Landscape layout · Category chip · Large icon left · Rich text right · Dot indicator · Swipe like stories</div>
+  </div>
+  <div class="phone">
+    <div class="phone-bar">
+      <div class="phone-bar-title">Good Morning, Vinay 👋</div>
+      <div class="phone-bar-time">9:41</div>
+    </div>
+    <div class="phone-content">
+      <div class="section-header">
+        <h3>Health Tips</h3>
+        <span>6 tips</span>
+      </div>
+      <div class="opt2-scroll">
+
+        <div class="opt2-card" style="background: linear-gradient(135deg, #1565C0 0%, #1E88E5 60%, #42A5F5 100%);">
+          <div class="bg-blob"></div>
+          <div class="opt2-icon-wrap">💧</div>
+          <div class="opt2-text">
+            <div class="opt2-chip">Hydration</div>
+            <div class="opt2-title">Stay Hydrated</div>
+            <div class="opt2-sub">Drink 8 glasses daily to keep your body at peak performance.</div>
+          </div>
+        </div>
+
+        <div class="opt2-card" style="background: linear-gradient(135deg, #2E7D32 0%, #43A047 60%, #66BB6A 100%);">
+          <div class="bg-blob"></div>
+          <div class="opt2-icon-wrap">🏃</div>
+          <div class="opt2-text">
+            <div class="opt2-chip">Fitness</div>
+            <div class="opt2-title">Exercise Daily</div>
+            <div class="opt2-sub">30 minutes of movement boosts immunity and lifts your mood.</div>
+          </div>
+        </div>
+
+        <div class="opt2-card" style="background: linear-gradient(135deg, #4A148C 0%, #7B1FA2 60%, #AB47BC 100%);">
+          <div class="bg-blob"></div>
+          <div class="opt2-icon-wrap">😴</div>
+          <div class="opt2-text">
+            <div class="opt2-chip">Sleep</div>
+            <div class="opt2-title">Sleep Well</div>
+            <div class="opt2-sub">7–8 hours of quality sleep restores and repairs your body.</div>
+          </div>
+        </div>
+
+        <div class="opt2-card" style="background: linear-gradient(135deg, #E65100 0%, #F57C00 60%, #FF8A65 100%);">
+          <div class="bg-blob"></div>
+          <div class="opt2-icon-wrap">🥗</div>
+          <div class="opt2-text">
+            <div class="opt2-chip">Nutrition</div>
+            <div class="opt2-title">Eat Healthy</div>
+            <div class="opt2-sub">Fresh fruits and veggies fuel your energy all day long.</div>
+          </div>
+        </div>
+
+        <div class="opt2-card" style="background: linear-gradient(135deg, #00695C 0%, #00897B 60%, #4DB6AC 100%);">
+          <div class="bg-blob"></div>
+          <div class="opt2-icon-wrap">🧘</div>
+          <div class="opt2-text">
+            <div class="opt2-chip">Mindfulness</div>
+            <div class="opt2-title">Manage Stress</div>
+            <div class="opt2-sub">10 minutes of meditation a day reduces cortisol significantly.</div>
+          </div>
+        </div>
+
+        <div class="opt2-card" style="background: linear-gradient(135deg, #B71C1C 0%, #C62828 60%, #EF5350 100%);">
+          <div class="bg-blob"></div>
+          <div class="opt2-icon-wrap">🩺</div>
+          <div class="opt2-text">
+            <div class="opt2-chip">Prevention</div>
+            <div class="opt2-title">Regular Checkup</div>
+            <div class="opt2-sub">Annual health screenings catch problems before they start.</div>
+          </div>
+        </div>
+
+      </div>
+      <div class="opt2-dots">
+        <div class="dot active"></div>
+        <div class="dot"></div>
+        <div class="dot"></div>
+        <div class="dot"></div>
+        <div class="dot"></div>
+        <div class="dot"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- OPTION 3 -->
+<div class="section">
+  <div style="padding-left:4px; margin-bottom:12px;">
+    <div class="section-label">Option 3</div>
+    <div class="section-title">Glassmorphism Cards</div>
+    <div class="section-desc">Frosted glass look · Color blobs in background · White text on light cards · Premium, trendy feel</div>
+  </div>
+  <div class="phone">
+    <div class="phone-bar">
+      <div class="phone-bar-title">Good Morning, Vinay 👋</div>
+      <div class="phone-bar-time">9:41</div>
+    </div>
+    <div class="phone-content">
+      <div class="section-header">
+        <h3>Health Tips</h3>
+        <span>See all</span>
+      </div>
+      <div class="opt3-scroll">
+
+        <div class="opt3-card" style="background: rgba(227,242,253,0.75);">
+          <style>.opt3-card:nth-child(1)::before{background:#1565C0;} .opt3-card:nth-child(1)::after{background:#42A5F5;}</style>
+          <div class="opt3-glass-icon" style="color:#1565C0;">💧</div>
+          <div class="opt3-card-title">Stay Hydrated</div>
+          <div class="opt3-card-sub">Drink 8 glasses daily</div>
+        </div>
+
+        <div class="opt3-card" style="background: rgba(232,245,233,0.75);">
+          <div style="position:absolute;width:120px;height:120px;border-radius:50%;background:#2E7D32;opacity:0.25;top:-30px;right:-30px;"></div>
+          <div style="position:absolute;width:80px;height:80px;border-radius:50%;background:#66BB6A;opacity:0.2;bottom:-20px;left:-10px;"></div>
+          <div class="opt3-glass-icon" style="color:#2E7D32;">🏃</div>
+          <div class="opt3-card-title">Exercise Daily</div>
+          <div class="opt3-card-sub">30 mins boosts immunity</div>
+        </div>
+
+        <div class="opt3-card" style="background: rgba(237,231,246,0.75);">
+          <div style="position:absolute;width:120px;height:120px;border-radius:50%;background:#4A148C;opacity:0.25;top:-30px;right:-30px;"></div>
+          <div style="position:absolute;width:80px;height:80px;border-radius:50%;background:#AB47BC;opacity:0.2;bottom:-20px;left:-10px;"></div>
+          <div class="opt3-glass-icon" style="color:#4A148C;">😴</div>
+          <div class="opt3-card-title">Sleep Well</div>
+          <div class="opt3-card-sub">7–8 hours restores you</div>
+        </div>
+
+        <div class="opt3-card" style="background: rgba(241,248,233,0.75);">
+          <div style="position:absolute;width:120px;height:120px;border-radius:50%;background:#388E3C;opacity:0.25;top:-30px;right:-30px;"></div>
+          <div style="position:absolute;width:80px;height:80px;border-radius:50%;background:#AED581;opacity:0.2;bottom:-20px;left:-10px;"></div>
+          <div class="opt3-glass-icon" style="color:#388E3C;">🥗</div>
+          <div class="opt3-card-title">Eat Healthy</div>
+          <div class="opt3-card-sub">Fresh food fuels your body</div>
+        </div>
+
+        <div class="opt3-card" style="background: rgba(224,242,241,0.75);">
+          <div style="position:absolute;width:120px;height:120px;border-radius:50%;background:#00695C;opacity:0.25;top:-30px;right:-30px;"></div>
+          <div style="position:absolute;width:80px;height:80px;border-radius:50%;background:#4DB6AC;opacity:0.2;bottom:-20px;left:-10px;"></div>
+          <div class="opt3-glass-icon" style="color:#00695C;">🧘</div>
+          <div class="opt3-card-title">Manage Stress</div>
+          <div class="opt3-card-sub">Meditate 10 mins daily</div>
+        </div>
+
+        <div class="opt3-card" style="background: rgba(255,235,238,0.75);">
+          <div style="position:absolute;width:120px;height:120px;border-radius:50%;background:#B71C1C;opacity:0.25;top:-30px;right:-30px;"></div>
+          <div style="position:absolute;width:80px;height:80px;border-radius:50%;background:#EF5350;opacity:0.2;bottom:-20px;left:-10px;"></div>
+          <div class="opt3-glass-icon" style="color:#B71C1C;">🩺</div>
+          <div class="opt3-card-title">Regular Checkup</div>
+          <div class="opt3-card-sub">Annual screenings save lives</div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<p style="text-align:center; color:#aaa; font-size:12px; margin-top: 8px; margin-bottom: 24px;">
+  All cards are horizontally scrollable · No Unsplash/network images used
+</p>
+
+</body>
+</html>

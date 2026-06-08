@@ -1,0 +1,23 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6b2d5e"/>
+      <stop offset="100%" stop-color="#3a1732"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="114" fill="url(#bg)"/>
+  <ellipse cx="410" cy="90" rx="240" ry="150" fill="rgba(255,255,255,0.04)"/>
+
+  <!-- Bold M -->
+  <text x="256" y="368"
+    font-family="'Montserrat','Arial Black',Arial,sans-serif"
+    font-weight="900"
+    font-size="330"
+    fill="white"
+    text-anchor="middle"
+    letter-spacing="-10">M</text>
+
+  <!-- Pink underline accent -->
+  <line x1="140" y1="390" x2="372" y2="390"
+    stroke="#f2a8d8" stroke-width="8" stroke-linecap="round" opacity="0.75"/>
+</svg>

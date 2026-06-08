@@ -1,0 +1,542 @@
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../../../core/constants/app_colors.dart';
+import '../../../core/constants/app_text_styles.dart';
+import '../../../core/router/app_router.dart';
+
+class _PatientSummary {
+  final String patientId;
+  final String name;
+  final int visitCount;
+  final String lastVisitDate;
+  final String lastCondition;
+
+  const _PatientSummary({
+    required this.patientId,
+    required this.name,
+    required this.visitCount,
+    required this.lastVisitDate,
+    required this.lastCondition,
+  });
+}
+
+class PatientsListScreen extends StatefulWidget {
+  const PatientsListScreen({super.key});
+  @override
+  State<PatientsListScreen> createState() => _PatientsListScreenState();
+}
+
+class _PatientsListScreenState extends State<PatientsListScreen>
+    with SingleTickerProviderStateMixin {
+  String _search = '';
+  late AnimationController _shimmerController;
+  late Animation<double> _shimmerAnimation;
+
+  static const _avatarColors = [
+    Color(0xFFC2185B),
+    Color(0xFF7B1FA2),
+    Color(0xFF1565C0),
+    Color(0xFF2E7D32),
+    Color(0xFFE65100),
+    Color(0xFF00695C),
+    Color(0xFF6A1B9A),
+    Color(0xFF0277BD),
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _shimmerController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat(reverse: true);
+    _shimmerAnimation =
+        Tween<double>(begin: 0.3, end: 0.9).animate(_shimmerController);
+  }
+
+  @override
+  void dispose() {
+    _shimmerController.dispose();
+    super.dispose();
+  }
+
+  // Safe: guards against empty string → no codeUnitAt(0) crash
+  Color _colorFor(String name) {
+    if (name.isEmpty) return _avatarColors[0];
+    return _avatarColors[name.codeUnitAt(0) % _avatarColors.length];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: NestedScrollView(
+        headerSliverBuilder: (_, __) => [
+          SliverAppBar(
+            pinned: true,
+            expandedHeight: 130,
+            backgroundColor: AppColors.primary,
+            foregroundColor: Colors.white,
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
+              onPressed: () => context.pop(),
+            ),
+            flexibleSpace: FlexibleSpaceBar(
+              collapseMode: CollapseMode.pin,
+              background: Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Color(0xFF880E4F), Color(0xFFC2185B), Color(0xFF7B1FA2)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                ),
+                child: Stack(
+                  children: [
+                    Positioned(
+                      top: -20,
+                      right: -20,
+                      child: Container(
+                        width: 110,
+                        height: 110,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white.withOpacity(0.06),
+                        ),
+                      ),
+                    ),
+                    SafeArea(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 52, 20, 16),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.18),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: const Icon(Icons.people_rounded,
+                                  color: Colors.white, size: 22),
+                            ),
+                            const SizedBox(width: 12),
+                            const Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  'My Patients',
+                                  style: TextStyle(
+                                    fontFamily: 'Poppins',
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                Text(
+                                  'All your consultation history',
+                                  style: TextStyle(
+                                    fontFamily: 'Poppins',
+                                    fontSize: 12,
+                                    color: Colors.white70,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+        body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        stream: uid.isNotEmpty
+            ? FirebaseFirestore.instance
+                .collection('appointments')
+                .where('doctorId', isEqualTo: uid)
+                .snapshots()
+            : const Stream.empty(),
+        builder: (context, snap) {
+          if (snap.connectionState == ConnectionState.waiting) {
+            return _buildSkeletonLoader();
+          }
+          if (snap.hasError) {
+            debugPrint('[MyPatients] Firestore error: ${snap.error}');
+            return _buildErrorState(snap.error.toString());
+          }
+
+          final docs = snap.data?.docs ?? [];
+
+          final Map<String, _PatientSummary> seen = {};
+          for (final doc in docs) {
+            final d = doc.data();
+
+            // Safely extract patientId — never trust Firestore field blindly
+            final rawPid = (d['patientId'] as String? ?? '').trim();
+            final pid = rawPid.isNotEmpty ? rawPid : doc.id;
+
+            // Safely extract name — coalesce null AND empty string
+            final rawName = (d['patientName'] as String? ?? '').trim();
+            final name = rawName.isNotEmpty ? rawName : 'Patient';
+
+            final condition =
+                (d['consultationType'] as String? ?? '').trim().isNotEmpty
+                    ? d['consultationType'] as String
+                    : 'Consultation';
+            final dateStr = d['date'] as String? ?? '';
+
+            if (!seen.containsKey(pid)) {
+              seen[pid] = _PatientSummary(
+                patientId: pid,
+                name: name,
+                visitCount: 1,
+                lastVisitDate: dateStr,
+                lastCondition: condition,
+              );
+            } else {
+              final existing = seen[pid]!;
+              final isNewer = dateStr.compareTo(existing.lastVisitDate) > 0;
+              seen[pid] = _PatientSummary(
+                patientId: pid,
+                name: name,
+                visitCount: existing.visitCount + 1,
+                lastVisitDate: isNewer ? dateStr : existing.lastVisitDate,
+                lastCondition: isNewer ? condition : existing.lastCondition,
+              );
+            }
+          }
+
+          var patients = seen.values.toList()
+            ..sort((a, b) => b.lastVisitDate.compareTo(a.lastVisitDate));
+
+          if (_search.isNotEmpty) {
+            final q = _search.toLowerCase();
+            patients =
+                patients.where((p) => p.name.toLowerCase().contains(q)).toList();
+          }
+
+          return Column(children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: TextField(
+                onChanged: (v) => setState(() => _search = v),
+                decoration: const InputDecoration(
+                  hintText: 'Search patients...',
+                  prefixIcon:
+                      Icon(Icons.search_rounded, color: AppColors.textHint),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: Row(children: [
+                Text(
+                  '${patients.length} Patient${patients.length == 1 ? '' : 's'}',
+                  style: AppTextStyles.h4,
+                ),
+                const Spacer(),
+                Text(
+                  'Total Visits: ${patients.fold(0, (s, p) => s + p.visitCount)}',
+                  style: AppTextStyles.bodySmall,
+                ),
+              ]),
+            ),
+            if (patients.isEmpty)
+              Expanded(child: _buildEmptyState())
+            else
+              Expanded(
+                child: ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: patients.length,
+                  itemBuilder: (_, i) {
+                    // Safe index — we know i < patients.length from itemCount
+                    final p = patients[i];
+                    final color = _colorFor(p.name);
+                    String displayDate = p.lastVisitDate;
+                    try {
+                      final dt = DateTime.parse(p.lastVisitDate);
+                      const months = [
+                        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+                      ];
+                      displayDate =
+                          '${dt.day} ${months[dt.month - 1]} ${dt.year}';
+                    } catch (_) {}
+
+                    return GestureDetector(
+                      onTap: () => context.push(
+                        AppRoutes.patientDetail,
+                        extra: {
+                          'patientId': p.patientId,
+                          'patientName': p.name,
+                        },
+                      ),
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: AppColors.divider),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.04),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Row(children: [
+                          Container(
+                            width: 52,
+                            height: 52,
+                            decoration: BoxDecoration(
+                              color: color.withOpacity(0.15),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Center(
+                              child: Text(
+                                p.name.isNotEmpty
+                                    ? p.name[0].toUpperCase()
+                                    : '?',
+                                style: TextStyle(
+                                  fontFamily: 'Poppins',
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w800,
+                                  color: color,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(p.name, style: AppTextStyles.labelLarge),
+                                  Text(p.lastCondition,
+                                      style: AppTextStyles.bodySmall),
+                                  Text('Last visit: $displayDate',
+                                      style: AppTextStyles.caption),
+                                ]),
+                          ),
+                          Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: color.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    '${p.visitCount} visit${p.visitCount == 1 ? '' : 's'}',
+                                    style: TextStyle(
+                                      fontFamily: 'Poppins',
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700,
+                                      color: color,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                const Icon(Icons.chevron_right_rounded,
+                                    color: AppColors.textHint, size: 18),
+                              ]),
+                        ]),
+                      ),
+                    );
+                  },
+                ),
+              ),
+          ]);
+        },
+      ),
+      ),
+    );
+  }
+
+  Widget _buildSkeletonLoader() {
+    return AnimatedBuilder(
+      animation: _shimmerAnimation,
+      builder: (context, _) {
+        final shimmerColor =
+            Colors.grey.withOpacity(_shimmerAnimation.value * 0.25 + 0.05);
+        return Column(children: [
+          // Fake search bar
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Container(
+              height: 52,
+              decoration: BoxDecoration(
+                color: shimmerColor,
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
+          ),
+          // Fake count row
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: Row(children: [
+              Container(
+                  width: 100,
+                  height: 14,
+                  decoration: BoxDecoration(
+                      color: shimmerColor,
+                      borderRadius: BorderRadius.circular(7))),
+              const Spacer(),
+              Container(
+                  width: 80,
+                  height: 12,
+                  decoration: BoxDecoration(
+                      color: shimmerColor,
+                      borderRadius: BorderRadius.circular(6))),
+            ]),
+          ),
+          // Fake patient cards
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              itemCount: 5,
+              itemBuilder: (_, __) => Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.divider),
+                ),
+                child: Row(children: [
+                  Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      color: shimmerColor,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            height: 13,
+                            width: double.infinity,
+                            decoration: BoxDecoration(
+                                color: shimmerColor,
+                                borderRadius: BorderRadius.circular(6)),
+                          ),
+                          const SizedBox(height: 6),
+                          Container(
+                            height: 11,
+                            width: 140,
+                            decoration: BoxDecoration(
+                                color: shimmerColor,
+                                borderRadius: BorderRadius.circular(5)),
+                          ),
+                          const SizedBox(height: 5),
+                          Container(
+                            height: 10,
+                            width: 100,
+                            decoration: BoxDecoration(
+                                color: shimmerColor,
+                                borderRadius: BorderRadius.circular(5)),
+                          ),
+                        ]),
+                  ),
+                  const SizedBox(width: 12),
+                  Container(
+                    width: 48,
+                    height: 22,
+                    decoration: BoxDecoration(
+                        color: shimmerColor,
+                        borderRadius: BorderRadius.circular(8)),
+                  ),
+                ]),
+              ),
+            ),
+          ),
+        ]);
+      },
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+        Container(
+          width: 80,
+          height: 80,
+          decoration: BoxDecoration(
+            color: AppColors.primary.withOpacity(0.08),
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(Icons.people_outline_rounded,
+              size: 40, color: AppColors.primary),
+        ),
+        const SizedBox(height: 16),
+        Text('No Patients Yet', style: AppTextStyles.h4),
+        const SizedBox(height: 6),
+        Text(
+          'Your patient list will appear here\nonce you complete appointments.',
+          textAlign: TextAlign.center,
+          style:
+              AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+        ),
+      ]),
+    );
+  }
+
+  Widget _buildErrorState(String errorMessage) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Container(
+            width: 72,
+            height: 72,
+            decoration: BoxDecoration(
+              color: AppColors.error.withOpacity(0.08),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.wifi_off_rounded,
+                size: 36, color: AppColors.error),
+          ),
+          const SizedBox(height: 16),
+          Text('Failed to Load Patients',
+              style: AppTextStyles.h4
+                  .copyWith(color: AppColors.error)),
+          const SizedBox(height: 6),
+          Text(
+            'Please check your connection and try again.',
+            textAlign: TextAlign.center,
+            style:
+                AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton.icon(
+            onPressed: () => setState(() {}),
+            icon: const Icon(Icons.refresh_rounded, size: 18),
+            label: const Text('Retry'),
+            style: ElevatedButton.styleFrom(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+}

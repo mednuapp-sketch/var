@@ -1,0 +1,36 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f4c7a"/>
+      <stop offset="100%" stop-color="#071d30"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="114" fill="url(#bg)"/>
+  <ellipse cx="410" cy="90" rx="240" ry="150" fill="rgba(100,200,240,0.06)"/>
+
+  <!-- Bold M -->
+  <text x="256" y="345"
+    font-family="'Montserrat','Arial Black',Arial,sans-serif"
+    font-weight="900"
+    font-size="300"
+    fill="white"
+    text-anchor="middle"
+    letter-spacing="-10">M</text>
+
+  <!-- Cross accent top-right -->
+  <rect x="384" y="48" width="12" height="50" rx="6" fill="#64c8f0" opacity="0.85"/>
+  <rect x="362" y="70" width="56" height="12" rx="6" fill="#64c8f0" opacity="0.85"/>
+
+  <!-- Cyan underline accent -->
+  <line x1="140" y1="368" x2="372" y2="368"
+    stroke="#64c8f0" stroke-width="8" stroke-linecap="round" opacity="0.80"/>
+
+  <!-- DOCTOR label -->
+  <text x="256" y="440"
+    font-family="'Montserrat','Arial Black',Arial,sans-serif"
+    font-weight="900"
+    font-size="46"
+    fill="#64c8f0"
+    text-anchor="middle"
+    letter-spacing="8">DOCTOR</text>
+</svg>
