@@ -8,9 +8,9 @@ functions/.env
 service-account*.json
 
 # Firebase secrets
-google-services.json
-GoogleService-Info.plist
-**/firebase_options.dart
+# google-services.json
+# GoogleService-Info.plist
+# **/firebase_options.dart
 
 # Android keystore
 *.jks
