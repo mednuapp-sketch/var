@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../auth/services/doctor_auth_service.dart';
+import '../../../core/widgets/ux_widgets.dart';
 
 class AvailabilityScreen extends StatefulWidget {
   const AvailabilityScreen({super.key});
@@ -177,7 +178,16 @@ class _AvailabilityScreenState extends State<AvailabilityScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? SingleChildScrollView(
+              physics: const NeverScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(16, 160, 16, 16),
+              child: Column(
+                children: List.generate(5, (_) => const Padding(
+                  padding: EdgeInsets.only(bottom: 16),
+                  child: SkeletonBox(width: double.infinity, height: 72, radius: 16),
+                )),
+              ),
+            )
           : CustomScrollView(
               slivers: [
                 SliverAppBar(
@@ -236,7 +246,7 @@ class _AvailabilityScreenState extends State<AvailabilityScreen> {
                               height: 110,
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                color: Colors.white.withOpacity(0.06),
+                                color: Colors.white.withValues(alpha:0.06),
                               ),
                             ),
                           ),
@@ -249,7 +259,7 @@ class _AvailabilityScreenState extends State<AvailabilityScreen> {
                                     width: 40,
                                     height: 40,
                                     decoration: BoxDecoration(
-                                      color: Colors.white.withOpacity(0.18),
+                                      color: Colors.white.withValues(alpha:0.18),
                                       borderRadius: BorderRadius.circular(12),
                                     ),
                                     child: const Icon(Icons.calendar_month_rounded,
@@ -303,7 +313,7 @@ class _AvailabilityScreenState extends State<AvailabilityScreen> {
                     border: Border.all(color: AppColors.divider),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.04),
+                        color: Colors.black.withValues(alpha:0.04),
                         blurRadius: 10,
                         offset: const Offset(0, 3),
                       ),
@@ -334,9 +344,9 @@ class _AvailabilityScreenState extends State<AvailabilityScreen> {
                 Container(
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.05),
+                    color: AppColors.primary.withValues(alpha:0.05),
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+                    border: Border.all(color: AppColors.primary.withValues(alpha:0.2)),
                   ),
                   child: Row(children: [
                     const Icon(Icons.info_outline_rounded, color: AppColors.primary, size: 18),
@@ -407,13 +417,13 @@ class _DayCard extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: enabled ? AppColors.primary.withOpacity(0.3) : AppColors.divider,
+          color: enabled ? AppColors.primary.withValues(alpha:0.3) : AppColors.divider,
         ),
         boxShadow: [
           BoxShadow(
             color: enabled
-                ? AppColors.primary.withOpacity(0.06)
-                : Colors.black.withOpacity(0.03),
+                ? AppColors.primary.withValues(alpha:0.06)
+                : Colors.black.withValues(alpha:0.03),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -433,7 +443,7 @@ class _DayCard extends StatelessWidget {
               margin: const EdgeInsets.only(right: 8),
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               decoration: BoxDecoration(
-                color: AppColors.success.withOpacity(0.1),
+                color: AppColors.success.withValues(alpha:0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
@@ -472,7 +482,7 @@ class _TimeButton extends StatelessWidget {
     child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
-        color: AppColors.primary.withOpacity(0.06),
+        color: AppColors.primary.withValues(alpha:0.06),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

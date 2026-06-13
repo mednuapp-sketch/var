@@ -7,6 +7,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
 import '../../auth/services/doctor_auth_service.dart';
+import '../../../core/widgets/ux_widgets.dart';
 
 class PatientDetailScreen extends StatefulWidget {
   final String patientId;
@@ -117,10 +118,10 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
                         width: 72,
                         height: 72,
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
+                          color: Colors.white.withValues(alpha:0.2),
                           shape: BoxShape.circle,
                           border: Border.all(
-                              color: Colors.white.withOpacity(0.4), width: 2),
+                              color: Colors.white.withValues(alpha:0.4), width: 2),
                         ),
                         child: const Icon(Icons.person_rounded,
                             size: 38, color: Colors.white),
@@ -198,7 +199,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
                 color: Colors.white,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.06),
+                    color: Colors.black.withValues(alpha:0.06),
                     blurRadius: 10,
                     offset: const Offset(0, -3),
                   ),
@@ -326,7 +327,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
                   padding:
                       const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.08),
+                    color: AppColors.primary.withValues(alpha:0.08),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
@@ -351,9 +352,9 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: AppColors.primary.withOpacity(0.04),
+            color: AppColors.primary.withValues(alpha:0.04),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.primary.withOpacity(0.15)),
+            border: Border.all(color: AppColors.primary.withValues(alpha:0.15)),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -362,7 +363,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.12),
+                  color: AppColors.primary.withValues(alpha:0.12),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Icon(Icons.monitor_heart_rounded,
@@ -413,7 +414,8 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
           : const Stream.empty(),
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return ListView(physics: const NeverScrollableScrollPhysics(), padding: const EdgeInsets.symmetric(vertical: 8),
+            children: List.generate(5, (_) => const SkeletonListTile()));
         }
         final docs = snap.data?.docs ?? [];
         docs.sort((a, b) {
@@ -460,7 +462,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
                     width: 46,
                     height: 46,
                     decoration: BoxDecoration(
-                      color: AppColors.primary.withOpacity(0.08),
+                      color: AppColors.primary.withValues(alpha:0.08),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Icon(
@@ -487,7 +489,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
                     padding:
                         const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: statusColor.withOpacity(0.1),
+                      color: statusColor.withValues(alpha:0.1),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
@@ -521,7 +523,8 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
           : const Stream.empty(),
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return ListView(physics: const NeverScrollableScrollPhysics(), padding: const EdgeInsets.symmetric(vertical: 8),
+            children: List.generate(5, (_) => const SkeletonListTile()));
         }
         final docs = snap.data?.docs ?? [];
 
@@ -557,7 +560,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
                     width: 46,
                     height: 46,
                     decoration: BoxDecoration(
-                      color: AppColors.secondary.withOpacity(0.1),
+                      color: AppColors.secondary.withValues(alpha:0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: const Icon(Icons.receipt_long_rounded,
@@ -595,7 +598,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha:0.04),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -619,7 +622,7 @@ class _HeaderChip extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.18),
+          color: Colors.white.withValues(alpha:0.18),
           borderRadius: BorderRadius.circular(20),
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -672,7 +675,7 @@ class _SummaryTile extends StatelessWidget {
             width: 38,
             height: 38,
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: color.withValues(alpha:0.1),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(icon, color: color, size: 20),
@@ -716,7 +719,7 @@ class _EmptyState extends StatelessWidget {
                 width: 72,
                 height: 72,
                 decoration: BoxDecoration(
-                  color: AppColors.textHint.withOpacity(0.1),
+                  color: AppColors.textHint.withValues(alpha:0.1),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(icon, size: 36, color: AppColors.textHint),

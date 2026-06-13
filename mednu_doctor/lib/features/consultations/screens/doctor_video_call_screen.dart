@@ -205,7 +205,7 @@ class _DoctorVideoCallScreenState extends State<DoctorVideoCallScreen>
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                      color: AppColors.primary.withOpacity(0.4),
+                      color: AppColors.primary.withValues(alpha:0.4),
                       blurRadius: 30,
                       spreadRadius: 10)
                 ]),
@@ -249,7 +249,7 @@ class _DoctorVideoCallScreenState extends State<DoctorVideoCallScreen>
         decoration: BoxDecoration(
           color: const Color(0xFF2C2C3E),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white.withOpacity(0.3), width: 2),
+          border: Border.all(color: Colors.white.withValues(alpha:0.3), width: 2),
         ),
         child: _isCameraOff
             ? const Column(
@@ -321,7 +321,7 @@ class _DoctorVideoCallScreenState extends State<DoctorVideoCallScreen>
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: Colors.orange.withOpacity(0.9),
+          color: Colors.orange.withValues(alpha:0.9),
           borderRadius: BorderRadius.circular(12),
         ),
         child: const Row(
@@ -356,7 +356,7 @@ class _DoctorVideoCallScreenState extends State<DoctorVideoCallScreen>
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: Colors.red.shade700.withOpacity(0.92),
+          color: Colors.red.shade700.withValues(alpha:0.92),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Row(
@@ -391,7 +391,7 @@ class _DoctorVideoCallScreenState extends State<DoctorVideoCallScreen>
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-            color: Colors.black.withOpacity(0.8),
+            color: Colors.black.withValues(alpha:0.8),
             borderRadius: BorderRadius.circular(14)),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           const Text('Consultation Notes',
@@ -410,7 +410,7 @@ class _DoctorVideoCallScreenState extends State<DoctorVideoCallScreen>
               hintText: 'Symptoms, diagnosis...',
               hintStyle:
                   const TextStyle(color: Colors.white38, fontSize: 12),
-              fillColor: Colors.white.withOpacity(0.1),
+              fillColor: Colors.white.withValues(alpha:0.1),
               filled: true,
               border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
@@ -431,7 +431,7 @@ class _DoctorVideoCallScreenState extends State<DoctorVideoCallScreen>
         padding: const EdgeInsets.fromLTRB(16, 50, 16, 16),
         decoration: BoxDecoration(
           gradient: LinearGradient(
-              colors: [Colors.black.withOpacity(0.6), Colors.transparent],
+              colors: [Colors.black.withValues(alpha:0.6), Colors.transparent],
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter),
         ),
@@ -440,7 +440,7 @@ class _DoctorVideoCallScreenState extends State<DoctorVideoCallScreen>
             padding:
                 const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.4),
+                color: Colors.black.withValues(alpha:0.4),
                 borderRadius: BorderRadius.circular(12)),
             child: Row(children: [
               Icon(Icons.signal_cellular_alt_rounded,
@@ -488,7 +488,7 @@ class _DoctorVideoCallScreenState extends State<DoctorVideoCallScreen>
         padding: const EdgeInsets.fromLTRB(24, 24, 24, 48),
         decoration: BoxDecoration(
           gradient: LinearGradient(
-              colors: [Colors.transparent, Colors.black.withOpacity(0.8)],
+              colors: [Colors.transparent, Colors.black.withValues(alpha:0.8)],
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter),
         ),
@@ -530,7 +530,7 @@ class _DoctorVideoCallScreenState extends State<DoctorVideoCallScreen>
                     boxShadow: [
                       BoxShadow(
                           color:
-                              const Color(0xFFE53935).withOpacity(0.5),
+                              const Color(0xFFE53935).withValues(alpha:0.5),
                           blurRadius: 20,
                           spreadRadius: 4)
                     ]),
@@ -570,9 +570,9 @@ class _DoctorVideoCallScreenState extends State<DoctorVideoCallScreen>
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
-            color: Colors.orange.withOpacity(0.15),
+            color: Colors.orange.withValues(alpha:0.15),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.orange.withOpacity(0.3))),
+            border: Border.all(color: Colors.orange.withValues(alpha:0.3))),
         child: const Row(children: [
           Icon(Icons.lock_clock_rounded, color: Colors.orangeAccent, size: 16),
           SizedBox(width: 8),
@@ -592,7 +592,7 @@ class _DoctorVideoCallScreenState extends State<DoctorVideoCallScreen>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.1),
+          color: Colors.white.withValues(alpha:0.1),
           borderRadius: BorderRadius.circular(12)),
       child: Row(children: [
         const Icon(Icons.receipt_long_rounded,
@@ -609,7 +609,7 @@ class _DoctorVideoCallScreenState extends State<DoctorVideoCallScreen>
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.8),
+              color: AppColors.primary.withValues(alpha:0.8),
               borderRadius: BorderRadius.circular(8),
             ),
             child: const Text('End & Prescribe',
@@ -821,7 +821,7 @@ class _TopBtn extends StatelessWidget {
           width: 36,
           height: 36,
           decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.4), shape: BoxShape.circle),
+              color: Colors.black.withValues(alpha:0.4), shape: BoxShape.circle),
           child: Icon(icon, color: Colors.white, size: 18),
         ),
       );
@@ -843,8 +843,8 @@ class _CallBtn extends StatelessWidget {
             height: 52,
             decoration: BoxDecoration(
                 color: isActive
-                    ? Colors.white.withOpacity(0.3)
-                    : Colors.white.withOpacity(0.15),
+                    ? Colors.white.withValues(alpha:0.3)
+                    : Colors.white.withValues(alpha:0.15),
                 shape: BoxShape.circle,
                 border: isActive
                     ? Border.all(color: Colors.white, width: 1.5)
@@ -942,7 +942,7 @@ class _DoctorConsultationChatState extends State<_DoctorConsultationChat> {
                 Container(
                   width: 36, height: 36,
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.1),
+                    color: AppColors.primary.withValues(alpha:0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: const Icon(Icons.chat_rounded, color: AppColors.primary, size: 18),
@@ -1007,7 +1007,7 @@ class _DoctorConsultationChatState extends State<_DoctorConsultationChat> {
                             Container(
                               width: 28, height: 28,
                               decoration: BoxDecoration(
-                                color: AppColors.secondary.withOpacity(0.15),
+                                color: AppColors.secondary.withValues(alpha:0.15),
                                 shape: BoxShape.circle,
                               ),
                               child: const Icon(Icons.person_rounded, color: AppColors.secondary, size: 14),
@@ -1056,7 +1056,7 @@ class _DoctorConsultationChatState extends State<_DoctorConsultationChat> {
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
             decoration: BoxDecoration(
               color: Colors.white,
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, -2))],
+              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:0.05), blurRadius: 8, offset: const Offset(0, -2))],
             ),
             child: Row(
               children: [

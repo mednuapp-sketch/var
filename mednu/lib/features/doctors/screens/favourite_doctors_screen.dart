@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -6,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/widgets/ux_widgets.dart';
 
 class FavouriteDoctorsScreen extends StatelessWidget {
   const FavouriteDoctorsScreen({super.key});
@@ -48,7 +50,7 @@ class FavouriteDoctorsScreen extends StatelessWidget {
                         height: 110,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: Colors.white.withOpacity(0.06),
+                          color: Colors.white.withValues(alpha:0.06),
                         ),
                       ),
                     ),
@@ -61,7 +63,7 @@ class FavouriteDoctorsScreen extends StatelessWidget {
                               width: 40,
                               height: 40,
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.18),
+                                color: Colors.white.withValues(alpha:0.18),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: const Icon(
@@ -119,21 +121,33 @@ class FavouriteDoctorsScreen extends StatelessWidget {
                   .snapshots(),
               builder: (context, snap) {
                 if (snap.connectionState == ConnectionState.waiting) {
-                  return const SliverFillRemaining(
-                    child: Center(child: CircularProgressIndicator()),
+                  return SliverPadding(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    sliver: SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (_, __) => const SkeletonDoctorCard(),
+                        childCount: 5,
+                      ),
+                    ),
                   );
                 }
                 final docs = snap.data?.docs ?? [];
                 if (docs.isEmpty) {
-                  return const SliverFillRemaining(child: _EmptyState());
+                  return SliverFillRemaining(
+                    child: AppEmptyState(
+                      icon: Icons.favorite_border_rounded,
+                      title: 'No favourites yet',
+                      message: 'Doctors you save will appear here for quick access.',
+                    ),
+                  );
                 }
                 return SliverPadding(
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
                   sliver: SliverList(
                     delegate: SliverChildBuilderDelegate(
-                      (_, i) => _DoctorCard(
-                        doc: docs[i],
-                        uid: _uid,
+                      (_, i) => FadeInSlide(
+                        delay: Duration(milliseconds: i * 40),
+                        child: _DoctorCard(doc: docs[i], uid: _uid),
                       ),
                       childCount: docs.length,
                     ),
@@ -228,7 +242,7 @@ class _DoctorCard extends StatelessWidget {
           border: Border.all(color: AppColors.divider),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.04),
+              color: Colors.black.withValues(alpha:0.04),
               blurRadius: 10,
               offset: const Offset(0, 2),
             ),
@@ -293,7 +307,7 @@ class _DoctorCard extends StatelessWidget {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                         decoration: BoxDecoration(
-                          color: AppColors.accent.withOpacity(0.1),
+                          color: AppColors.accent.withValues(alpha:0.1),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
@@ -339,7 +353,7 @@ class _DoctorCard extends StatelessWidget {
                     width: 36,
                     height: 36,
                     decoration: BoxDecoration(
-                      color: AppColors.primary.withOpacity(0.08),
+                      color: AppColors.primary.withValues(alpha:0.08),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: const Icon(
@@ -358,69 +372,4 @@ class _DoctorCard extends StatelessWidget {
   }
 }
 
-// ── Empty state ───────────────────────────────────────────────────────────────
-
-class _EmptyState extends StatelessWidget {
-  const _EmptyState();
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 96,
-              height: 96,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    AppColors.primary.withOpacity(0.08),
-                    AppColors.secondary.withOpacity(0.08),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.favorite_border_rounded,
-                size: 44,
-                color: AppColors.primary,
-              ),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'No favourites yet',
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Tap the heart icon on any doctor\'s profile to save them here for quick access.',
-              textAlign: TextAlign.center,
-              style: AppTextStyles.bodySmall.copyWith(
-                color: AppColors.textSecondary,
-                height: 1.6,
-              ),
-            ),
-            const SizedBox(height: 28),
-            ElevatedButton.icon(
-              onPressed: () => context.push(AppRoutes.doctors),
-              icon: const Icon(Icons.search_rounded, size: 18),
-              label: const Text(
-                'Find Doctors',
-                style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
+// _EmptyState removed — replaced by AppEmptyState from ux_widgets.dart

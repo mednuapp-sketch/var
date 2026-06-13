@@ -9,6 +9,7 @@ import '../../../core/constants/app_text_styles.dart';
 import '../../../core/services/image_upload_service.dart';
 import '../../../core/router/app_router.dart';
 import '../../auth/services/doctor_auth_service.dart';
+import '../../../core/widgets/ux_widgets.dart';
 
 class DoctorProfileEditScreen extends StatefulWidget {
   const DoctorProfileEditScreen({super.key});
@@ -356,7 +357,7 @@ class _DoctorProfileEditScreenState extends State<DoctorProfileEditScreen> {
                   border: Border.all(color: Colors.white, width: 3),
                   boxShadow: [
                     BoxShadow(
-                      color: AppColors.primary.withOpacity(0.25),
+                      color: AppColors.primary.withValues(alpha:0.25),
                       blurRadius: 16,
                       offset: const Offset(0, 6),
                     ),
@@ -369,7 +370,7 @@ class _DoctorProfileEditScreenState extends State<DoctorProfileEditScreen> {
                 Container(
                   width: 90, height: 90,
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.45),
+                    color: Colors.black.withValues(alpha:0.45),
                     shape: BoxShape.circle,
                   ),
                   child: Center(
@@ -451,7 +452,18 @@ class _DoctorProfileEditScreenState extends State<DoctorProfileEditScreen> {
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? ListView(
+              physics: const NeverScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(16),
+              children: [
+                const Center(child: SkeletonCircle(size: 100)),
+                const SizedBox(height: 20),
+                ...List.generate(6, (_) => const Padding(
+                  padding: EdgeInsets.only(bottom: 12),
+                  child: SkeletonBox(width: double.infinity, height: 52, radius: 12),
+                )),
+              ],
+            )
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
@@ -481,7 +493,7 @@ class _DoctorProfileEditScreenState extends State<DoctorProfileEditScreen> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                           decoration: BoxDecoration(
-                            color: AppColors.warning.withOpacity(0.12),
+                            color: AppColors.warning.withValues(alpha:0.12),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text('Pending',
@@ -497,13 +509,13 @@ class _DoctorProfileEditScreenState extends State<DoctorProfileEditScreen> {
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                       decoration: BoxDecoration(
                         color: _hasPendingSpecRequest
-                            ? AppColors.warning.withOpacity(0.08)
-                            : AppColors.primary.withOpacity(0.07),
+                            ? AppColors.warning.withValues(alpha:0.08)
+                            : AppColors.primary.withValues(alpha:0.07),
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(
                           color: _hasPendingSpecRequest
-                              ? AppColors.warning.withOpacity(0.3)
-                              : AppColors.primary.withOpacity(0.25),
+                              ? AppColors.warning.withValues(alpha:0.3)
+                              : AppColors.primary.withValues(alpha:0.25),
                         ),
                       ),
                       child: Row(children: [
@@ -552,7 +564,7 @@ class _DoctorProfileEditScreenState extends State<DoctorProfileEditScreen> {
                     children: _allLanguages.map((lang) => FilterChip(
                       label: Text(lang, style: const TextStyle(fontFamily: 'Poppins', fontSize: 12)),
                       selected: _selectedLanguages.contains(lang),
-                      selectedColor: AppColors.primary.withOpacity(0.12),
+                      selectedColor: AppColors.primary.withValues(alpha:0.12),
                       checkmarkColor: AppColors.primary,
                       onSelected: (selected) {
                         setState(() {
@@ -621,14 +633,14 @@ class _SheetOption extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           decoration: BoxDecoration(
-            color: color.withOpacity(0.06),
+            color: color.withValues(alpha:0.06),
             borderRadius: BorderRadius.circular(14),
           ),
           child: Row(children: [
             Container(
               width: 40, height: 40,
               decoration: BoxDecoration(
-                color: color.withOpacity(0.12),
+                color: color.withValues(alpha:0.12),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(icon, color: color, size: 20),

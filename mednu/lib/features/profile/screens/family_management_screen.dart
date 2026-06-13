@@ -12,6 +12,7 @@ import '../../../core/router/app_router.dart';
 import '../../../core/services/feedback_service.dart';
 import '../../../core/services/operation_logger.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../../../core/widgets/ux_widgets.dart';
 
 // Top-level so it can be called from any screen
 void showAddFamilyMemberSheet(
@@ -310,7 +311,7 @@ class _FamilyManagementScreenState extends ConsumerState<FamilyManagementScreen>
                         width: 130, height: 130,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: Colors.white.withOpacity(0.06),
+                          color: Colors.white.withValues(alpha:0.06),
                         ),
                       ),
                     ),
@@ -321,9 +322,9 @@ class _FamilyManagementScreenState extends ConsumerState<FamilyManagementScreen>
                           Container(
                             width: 46, height: 46,
                             decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.15),
+                              color: Colors.white.withValues(alpha:0.15),
                               shape: BoxShape.circle,
-                              border: Border.all(color: Colors.white.withOpacity(0.3)),
+                              border: Border.all(color: Colors.white.withValues(alpha:0.3)),
                             ),
                             child: const Icon(Icons.family_restroom_rounded,
                                 color: Colors.white, size: 24),
@@ -363,8 +364,10 @@ class _FamilyManagementScreenState extends ConsumerState<FamilyManagementScreen>
           ),
 
           if (_loading)
-            const SliverFillRemaining(
-              child: Center(child: CircularProgressIndicator()),
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              sliver: SliverList(delegate: SliverChildBuilderDelegate(
+                (_, __) => const SkeletonListTile(), childCount: 5)),
             )
           else
             SliverPadding(
@@ -376,9 +379,9 @@ class _FamilyManagementScreenState extends ConsumerState<FamilyManagementScreen>
                     padding: const EdgeInsets.all(14),
                     margin: const EdgeInsets.only(bottom: 16),
                     decoration: BoxDecoration(
-                      color: AppColors.primary.withOpacity(0.07),
+                      color: AppColors.primary.withValues(alpha:0.07),
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: AppColors.primary.withOpacity(0.18)),
+                      border: Border.all(color: AppColors.primary.withValues(alpha:0.18)),
                     ),
                     child: Row(children: [
                       const Icon(Icons.info_outline_rounded, color: AppColors.primary, size: 18),
@@ -399,7 +402,7 @@ class _FamilyManagementScreenState extends ConsumerState<FamilyManagementScreen>
                         Container(
                           width: 80, height: 80,
                           decoration: BoxDecoration(
-                            color: AppColors.primary.withOpacity(0.08),
+                            color: AppColors.primary.withValues(alpha:0.08),
                             shape: BoxShape.circle,
                           ),
                           child: const Icon(Icons.family_restroom_rounded,
@@ -442,9 +445,9 @@ class _FamilyManagementScreenState extends ConsumerState<FamilyManagementScreen>
                           Container(
                             width: 54, height: 54,
                             decoration: BoxDecoration(
-                              color: color.withOpacity(0.12),
+                              color: color.withValues(alpha:0.12),
                               shape: BoxShape.circle,
-                              border: Border.all(color: color.withOpacity(0.2)),
+                              border: Border.all(color: color.withValues(alpha:0.2)),
                             ),
                             child: Center(
                               child: Text(
@@ -468,7 +471,7 @@ class _FamilyManagementScreenState extends ConsumerState<FamilyManagementScreen>
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFFB71C1C).withOpacity(0.09),
+                                    color: const Color(0xFFB71C1C).withValues(alpha:0.09),
                                     borderRadius: BorderRadius.circular(6),
                                   ),
                                   child: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -548,7 +551,7 @@ class _FamilyManagementScreenState extends ConsumerState<FamilyManagementScreen>
                         borderRadius: BorderRadius.circular(14),
                         boxShadow: [
                           BoxShadow(
-                            color: AppColors.primary.withOpacity(0.3),
+                            color: AppColors.primary.withValues(alpha:0.3),
                             blurRadius: 10,
                             offset: const Offset(0, 4),
                           ),
@@ -706,7 +709,8 @@ class _ContactPickerSheetState extends State<_ContactPickerSheet> {
         ),
         Expanded(
           child: _loading
-              ? const Center(child: CircularProgressIndicator())
+              ? ListView(physics: const NeverScrollableScrollPhysics(), padding: const EdgeInsets.symmetric(vertical: 8),
+                  children: List.generate(5, (_) => const SkeletonListTile()))
               : _filtered.isEmpty
                   ? Center(child: Text('No contacts found', style: AppTextStyles.bodySmall))
                   : ListView.builder(
@@ -717,7 +721,7 @@ class _ContactPickerSheetState extends State<_ContactPickerSheet> {
                         final phone = c.phones.isNotEmpty ? c.phones.first.number : '';
                         return ListTile(
                           leading: CircleAvatar(
-                            backgroundColor: AppColors.primary.withOpacity(0.12),
+                            backgroundColor: AppColors.primary.withValues(alpha:0.12),
                             child: Text(initial,
                                 style: const TextStyle(fontFamily: 'Poppins',
                                     fontWeight: FontWeight.w700, color: AppColors.primary)),

@@ -6,6 +6,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
 import '../../search/search_service.dart';
+import '../../../core/widgets/ux_widgets.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Global Search Screen
@@ -599,10 +600,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen>
               ],
 
               if (_isLoadingFirestore && _firestoreDoctors.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 24),
-                  child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-                ),
+                ...List.generate(4, (_) => const SkeletonListTile()),
             ],
           ),
         ),
@@ -623,7 +621,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen>
             decoration: BoxDecoration(
               color: isDark
                   ? AppColors.darkCard
-                  : AppColors.primary.withOpacity(0.06),
+                  : AppColors.primary.withValues(alpha:0.06),
               shape: BoxShape.circle,
             ),
             child: Icon(Icons.search_off_rounded,
@@ -718,7 +716,7 @@ class _SectionHeader extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-              color: color.withOpacity(isDark ? 0.2 : 0.1),
+              color: color.withValues(alpha:isDark ? 0.2 : 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Row(
@@ -740,7 +738,7 @@ class _SectionHeader extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(
                         horizontal: 5, vertical: 1),
                     decoration: BoxDecoration(
-                      color: color.withOpacity(0.18),
+                      color: color.withValues(alpha:0.18),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
@@ -815,7 +813,7 @@ class _FilterRow extends StatelessWidget {
                     ? AppColors.primary
                     : isDark
                         ? AppColors.darkCard
-                        : AppColors.primary.withOpacity(0.07),
+                        : AppColors.primary.withValues(alpha:0.07),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text(
@@ -871,13 +869,13 @@ class _DoctorCard extends StatelessWidget {
           border: Border.all(
             color: isDark
                 ? AppColors.darkBorder
-                : AppColors.border.withOpacity(0.5),
+                : AppColors.border.withValues(alpha:0.5),
           ),
           boxShadow: isDark
               ? null
               : [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.04),
+                    color: Colors.black.withValues(alpha:0.04),
                     blurRadius: 8,
                     offset: const Offset(0, 2),
                   ),
@@ -1030,7 +1028,7 @@ class _ResultTile extends StatelessWidget {
         width: 44,
         height: 44,
         decoration: BoxDecoration(
-          color: item.color.withOpacity(isDark ? 0.2 : 0.1),
+          color: item.color.withValues(alpha:isDark ? 0.2 : 0.1),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Icon(item.icon, size: 20, color: item.color),
@@ -1051,7 +1049,7 @@ class _ResultTile extends StatelessWidget {
               padding:
                   const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
-                color: item.color.withOpacity(0.12),
+                color: item.color.withValues(alpha:0.12),
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Text(
@@ -1106,7 +1104,7 @@ class _LabTestTile extends StatelessWidget {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                color: item.color.withOpacity(isDark ? 0.2 : 0.1),
+                color: item.color.withValues(alpha:isDark ? 0.2 : 0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(item.icon, size: 20, color: item.color),
@@ -1134,7 +1132,7 @@ class _LabTestTile extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
-                color: const Color(0xFF0097A7).withOpacity(0.1),
+                color: const Color(0xFF0097A7).withValues(alpha:0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
@@ -1217,7 +1215,7 @@ class _HistoryChip extends StatelessWidget {
           border: Border.all(
             color: isDark
                 ? AppColors.darkBorder
-                : AppColors.border.withOpacity(0.6),
+                : AppColors.border.withValues(alpha:0.6),
           ),
         ),
         child: Row(
@@ -1264,8 +1262,8 @@ class _TrendingChip extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
         decoration: BoxDecoration(
           color: isDark
-              ? AppColors.primary.withOpacity(0.15)
-              : AppColors.primary.withOpacity(0.07),
+              ? AppColors.primary.withValues(alpha:0.15)
+              : AppColors.primary.withValues(alpha:0.07),
           borderRadius: BorderRadius.circular(20),
         ),
         child: Text(
@@ -1300,13 +1298,13 @@ class _QuickAccessTile extends StatelessWidget {
           border: Border.all(
             color: isDark
                 ? AppColors.darkBorder
-                : AppColors.border.withOpacity(0.5),
+                : AppColors.border.withValues(alpha:0.5),
           ),
           boxShadow: isDark
               ? null
               : [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.03),
+                    color: Colors.black.withValues(alpha:0.03),
                     blurRadius: 6,
                     offset: const Offset(0, 2),
                   ),
@@ -1318,7 +1316,7 @@ class _QuickAccessTile extends StatelessWidget {
               width: 34,
               height: 34,
               decoration: BoxDecoration(
-                color: item.color.withOpacity(isDark ? 0.2 : 0.1),
+                color: item.color.withValues(alpha:isDark ? 0.2 : 0.1),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(item.icon, size: 17, color: item.color),
@@ -1363,7 +1361,7 @@ class _BrowseChip extends StatelessWidget {
           border: Border.all(
             color: isDark
                 ? AppColors.darkBorder
-                : AppColors.border.withOpacity(0.5),
+                : AppColors.border.withValues(alpha:0.5),
           ),
         ),
         child: Row(

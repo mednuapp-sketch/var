@@ -409,7 +409,7 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
             margin: const EdgeInsets.only(right: 8),
             padding: const EdgeInsets.symmetric(vertical: 12),
             decoration: BoxDecoration(
-              color: _selectedGender == g ? AppColors.primary.withOpacity(0.1) : Colors.white,
+              color: _selectedGender == g ? AppColors.primary.withValues(alpha:0.1) : Colors.white,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
                   color: _selectedGender == g ? AppColors.primary : AppColors.border,
@@ -503,9 +503,9 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
       Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: AppColors.primary.withOpacity(0.06),
+          color: AppColors.primary.withValues(alpha:0.06),
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+          border: Border.all(color: AppColors.primary.withValues(alpha:0.2)),
         ),
         child: Row(children: [
           const Icon(Icons.info_outline_rounded, color: AppColors.primary, size: 16),
@@ -588,13 +588,13 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: AppColors.border),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:0.04), blurRadius: 8, offset: const Offset(0, 2))],
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
             Container(
               padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+              decoration: BoxDecoration(color: AppColors.primary.withValues(alpha:0.1), borderRadius: BorderRadius.circular(10)),
               child: const Icon(Icons.medical_services_rounded, color: AppColors.primary, size: 20),
             ),
             const SizedBox(width: 10),
@@ -652,7 +652,7 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
           Row(children: [
             Container(
               padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(color: const Color(0xFF7B1FA2).withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+              decoration: BoxDecoration(color: const Color(0xFF7B1FA2).withValues(alpha:0.1), borderRadius: BorderRadius.circular(10)),
               child: const Icon(Icons.description_rounded, color: Color(0xFF7B1FA2), size: 20),
             ),
             const SizedBox(width: 10),
@@ -817,10 +817,10 @@ class _DocUploadTile extends StatelessWidget {
         duration: const Duration(milliseconds: 250),
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: uploaded ? AppColors.success.withOpacity(0.04) : Colors.white,
+          color: uploaded ? AppColors.success.withValues(alpha:0.04) : Colors.white,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: uploaded ? AppColors.success.withOpacity(0.5) : AppColors.border,
+            color: uploaded ? AppColors.success.withValues(alpha:0.5) : AppColors.border,
             width: uploaded ? 1.5 : 1,
           ),
         ),
@@ -828,7 +828,7 @@ class _DocUploadTile extends StatelessWidget {
           Container(
             width: 48, height: 48,
             decoration: BoxDecoration(
-              color: (uploaded ? AppColors.success : AppColors.primary).withOpacity(0.1),
+              color: (uploaded ? AppColors.success : AppColors.primary).withValues(alpha:0.1),
               borderRadius: BorderRadius.circular(12),
             ),
             child: uploaded
@@ -865,9 +865,9 @@ class _DocUploadTile extends StatelessWidget {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
-                    color: AppColors.success.withOpacity(0.1),
+                    color: AppColors.success.withValues(alpha:0.1),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: AppColors.success.withOpacity(0.3))),
+                    border: Border.all(color: AppColors.success.withValues(alpha:0.3))),
                 child: const Text('Change',
                     style: TextStyle(fontFamily: 'Poppins', fontSize: 11,
                         fontWeight: FontWeight.w600, color: AppColors.success)),
@@ -890,10 +890,10 @@ class _DocsProgressBar extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: allDone ? AppColors.success.withOpacity(0.06) : AppColors.warning.withOpacity(0.06),
+        color: allDone ? AppColors.success.withValues(alpha:0.06) : AppColors.warning.withValues(alpha:0.06),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-            color: allDone ? AppColors.success.withOpacity(0.3) : AppColors.warning.withOpacity(0.3)),
+            color: allDone ? AppColors.success.withValues(alpha:0.3) : AppColors.warning.withValues(alpha:0.3)),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [

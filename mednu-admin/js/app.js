@@ -853,10 +853,10 @@ function _updateSrStats() {
   const approved = allSpecRequests.filter(r => r.status === 'approved').length;
   const rejected = allSpecRequests.filter(r => r.status === 'rejected').length;
 
-  document.getElementById('sr-count-pending')?.textContent  !== undefined && (document.getElementById('sr-count-pending').textContent  = pending);
-  document.getElementById('sr-count-review')?.textContent   !== undefined && (document.getElementById('sr-count-review').textContent   = review);
-  document.getElementById('sr-count-approved')?.textContent !== undefined && (document.getElementById('sr-count-approved').textContent = approved);
-  document.getElementById('sr-count-rejected')?.textContent !== undefined && (document.getElementById('sr-count-rejected').textContent = rejected);
+  const _srPending  = document.getElementById('sr-count-pending');  if (_srPending)  _srPending.textContent  = pending;
+  const _srReview   = document.getElementById('sr-count-review');   if (_srReview)   _srReview.textContent   = review;
+  const _srApproved = document.getElementById('sr-count-approved'); if (_srApproved) _srApproved.textContent = approved;
+  const _srRejected = document.getElementById('sr-count-rejected'); if (_srRejected) _srRejected.textContent = rejected;
 
   const actionable = pending + review;
   const badge = document.getElementById('nav-spec-requests-count');
@@ -1386,7 +1386,7 @@ function loadReportsList() {
   // This shows generated report metadata
   db.collection('reports').orderBy('createdAt', 'desc').limit(10).get().then(snap => {
     const el = document.getElementById('reports-list');
-    if (snap.empty) { el.innerHTML = '<div class="empty-state"><div class="empty-icon"> reports generated yet</p></div>'; return; }
+    if (snap.empty) { el.innerHTML = '<div class="empty-state"><div class="empty-icon"><i class="ti ti-file-analytics"></i></div><p>No reports generated yet</p></div>'; return; }
     el.innerHTML = snap.docs.map(doc => {
       const r = doc.data();
       return `<div class="user-cell" style="padding:12px 0;border-bottom:1px solid var(--border);">
@@ -1631,7 +1631,7 @@ function getBannerStatusBadge(b) {
 function renderBannersList(banners) {
   const el = document.getElementById('banners-list');
   if (!banners.length) {
-    el.innerHTML = '<div class="empty-state"><div class="empty-icon"> banners yet — create one above.</p></div>';
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon"><i class="ti ti-speakerphone"></i></div><p>No banners yet — create one above.</p></div>';
     return;
   }
   el.innerHTML = banners.map(b => {
@@ -1730,6 +1730,7 @@ function editBanner(id) {
     img.src = banner.imageUrl;
     img.style.display = 'block';
     document.getElementById('banner-upload-placeholder').style.display = 'none';
+    document.getElementById('banner-remove-img').style.display = 'flex';
   }
 
   document.getElementById('banner-form-title').textContent = 'Edit Banner';
@@ -1755,8 +1756,9 @@ function resetBannerForm() {
   document.getElementById('banner-end-date').value   = '';
   document.getElementById('banner-enabled').checked  = true;
   document.getElementById('banner-file-input').value = '';
-  document.getElementById('banner-preview-img').style.display      = 'none';
+  document.getElementById('banner-preview-img').style.display        = 'none';
   document.getElementById('banner-upload-placeholder').style.display = 'block';
+  document.getElementById('banner-remove-img').style.display         = 'none';
   document.getElementById('banner-form-title').textContent  = 'Create New Banner';
   document.getElementById('publish-banner-btn').innerHTML   = '<i class="ti ti-upload"></i> Publish Banner';
   document.getElementById('cancel-banner-btn').style.display = 'none';
@@ -1784,8 +1786,19 @@ function previewBannerImage(event) {
     img.src = e.target.result;
     img.style.display = 'block';
     document.getElementById('banner-upload-placeholder').style.display = 'none';
+    document.getElementById('banner-remove-img').style.display = 'flex';
   };
   reader.readAsDataURL(file);
+}
+
+function removeBannerImage(e) {
+  e.stopPropagation();
+  document.getElementById('banner-file-input').value = '';
+  const img = document.getElementById('banner-preview-img');
+  img.src = '';
+  img.style.display = 'none';
+  document.getElementById('banner-upload-placeholder').style.display = 'block';
+  document.getElementById('banner-remove-img').style.display = 'none';
 }
 
 async function publishBanner() {
@@ -2186,6 +2199,9 @@ function viewRequestDetail(id) {
         ${status === 'in_progress' ? `
           <button class="btn btn-approve" style="flex:1;" onclick="updateRequestStatus('${r.id}','completed',this);document.getElementById('req-detail-modal').remove();">Mark Completed</button>
         ` : ''}
+        ${r.patientId ? `
+          <button class="btn btn-outline" style="color:var(--primary);" onclick="document.getElementById('req-detail-modal').remove();openNotifyPatientModal('${escHtml(r.patientId)}','${escHtml(r.patientName||'Patient')}');">Notify Patient</button>
+        ` : ''}
         <button class="btn btn-outline" onclick="document.getElementById('req-detail-modal').remove()">Close</button>
       </div>
     </div>`;
@@ -2369,7 +2385,7 @@ function renderHospitalsList(hospitals) {
   const el = document.getElementById('hospitals-list');
   if (!el) return;
   if (!hospitals.length) {
-    el.innerHTML = '<div class="empty-state"><div class="empty-icon"> hospitals added yet</p></div>';
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon"><i class="ti ti-building-hospital"></i></div><p>No hospitals added yet</p></div>';
     return;
   }
   el.innerHTML = hospitals.map(h => `
@@ -2533,7 +2549,7 @@ function renderAmbulancesList(ambulances) {
   const el = document.getElementById('ambulances-list');
   if (!el) return;
   if (!ambulances.length) {
-    el.innerHTML = '<div class="empty-state"><div class="empty-icon"> ambulance services added yet</p></div>';
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon"><i class="ti ti-ambulance"></i></div><p>No ambulance services added yet</p></div>';
     return;
   }
   const typeColors = { Basic: '#d93025', ALS: '#e65100', ICU: '#4a148c' };
@@ -4588,7 +4604,7 @@ async function loadBroadcasts() {
   if (!el) return;
   try {
     const snap = await db.collection('broadcasts').orderBy('sentAt', 'desc').limit(20).get();
-    if (snap.empty) { el.innerHTML = '<div class="empty-state"><div class="empty-icon"> broadcasts sent yet</p></div>'; return; }
+    if (snap.empty) { el.innerHTML = '<div class="empty-state"><div class="empty-icon"><i class="ti ti-speakerphone"></i></div><p>No broadcasts sent yet</p></div>'; return; }
     const iconMap = { general:'', offer:'', alert:'âš ï¸', update:'', emergency:'' };
     const tgLabel = { all_patients:'All Patients', all_doctors:'All Doctors', all_users:'Everyone', specific_user:'Specific User' };
     el.innerHTML = snap.docs.map(doc => {
@@ -6464,5 +6480,199 @@ function rerunSearch(query) {
   input.value = query;
   document.getElementById('gs-clear-btn').style.display = '';
   runSearch(query);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ADMIN NOTIFICATION UTILITIES
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// NOTE: Status-change notifications (appointment accepted/rejected, ambulance
+// dispatched, lab booked, etc.) are sent automatically by Firebase Cloud
+// Functions that listen to Firestore writes. No manual step is required from
+// the admin when changing a booking status — just update the status field and
+// the Cloud Function fires within 1-2 seconds.
+//
+// These helpers are for CUSTOM / MANUAL notifications that the admin wants to
+// send outside of the standard status-change flow.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Writes a notification directly into patient_notifications/{patientId}/items.
+ * The patient's Firestore stream picks it up in realtime (no FCM call needed
+ * from the admin panel — FCM is handled by Cloud Functions on status changes).
+ * For manual messages, the in-app notification is sufficient.
+ *
+ * @param {string} patientId
+ * @param {{ title: string, body: string, type?: string, serviceType?: string,
+ *           bookingId?: string, actionType?: string }} opts
+ */
+async function adminSendNotification(patientId, opts) {
+  const {
+    title, body,
+    type        = 'admin_message',
+    serviceType = 'general',
+    bookingId   = '',
+    actionType  = 'open_notifications',
+  } = opts;
+
+  if (!patientId || !title || !body) return;
+
+  try {
+    // deliverAt is set 90 s in the past so the Flutter query
+    // (deliverAt ≤ Timestamp.now()) resolves immediately.
+    const deliverAt = firebase.firestore.Timestamp.fromDate(
+      new Date(Date.now() - 90_000)
+    );
+
+    await db
+      .collection('patient_notifications')
+      .doc(patientId)
+      .collection('items')
+      .add({
+        type,
+        title,
+        body,
+        serviceType,
+        bookingId,
+        actionType,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        deliverAt,
+        isRead: false,
+        source: 'admin',
+      });
+
+    console.log(`[Admin] Notification sent to patient ${patientId}: "${title}"`);
+  } catch (err) {
+    console.error('[Admin] adminSendNotification failed:', err);
+    throw err;
+  }
+}
+
+/**
+ * Opens a modal that lets the admin compose and send a custom in-app
+ * notification to a specific patient.
+ *
+ * @param {string} patientId
+ * @param {string} patientName
+ * @param {string} [bookingId]   Optional — pre-fills the booking reference.
+ * @param {string} [serviceType] Optional — pre-fills the service context.
+ */
+function openNotifyPatientModal(patientId, patientName, bookingId = '', serviceType = 'general') {
+  document.getElementById('notify-patient-modal')?.remove();
+
+  const safeId   = escHtml(patientId);
+  const safeName = escHtml(patientName || 'this patient');
+  const safeSvc  = escHtml(serviceType);
+  const safeBook = escHtml(bookingId);
+
+  const modal = document.createElement('div');
+  modal.id = 'notify-patient-modal';
+  modal.style.cssText = [
+    'position:fixed;inset:0;background:rgba(0,0,0,0.5);',
+    'z-index:9999;display:flex;align-items:center;',
+    'justify-content:center;padding:16px;',
+  ].join('');
+
+  modal.innerHTML = `
+    <div style="background:#fff;border-radius:20px;width:100%;max-width:440px;padding:28px;
+                box-shadow:0 20px 60px rgba(0,0,0,0.2);">
+
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+        <div>
+          <h2 style="font-size:17px;font-weight:700;margin:0 0 2px;">Notify Patient</h2>
+          <div style="font-size:12px;color:#888;">Sending to <strong>${safeName}</strong></div>
+        </div>
+        <button onclick="document.getElementById('notify-patient-modal').remove()"
+          style="border:none;background:#f5f5f5;border-radius:50%;width:32px;height:32px;
+                 cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;">
+          &times;
+        </button>
+      </div>
+
+      <div style="margin-bottom:14px;">
+        <label style="font-size:11px;font-weight:700;color:#999;letter-spacing:.5px;display:block;margin-bottom:5px;">
+          NOTIFICATION TITLE
+        </label>
+        <input id="np-title" type="text" maxlength="80"
+          placeholder="e.g. Your appointment is confirmed"
+          style="width:100%;padding:11px 13px;border:1.5px solid #e8e8e8;border-radius:11px;
+                 font-size:14px;font-family:inherit;box-sizing:border-box;outline:none;
+                 transition:border-color .2s;"
+          onfocus="this.style.borderColor='var(--primary)'"
+          onblur="this.style.borderColor='#e8e8e8'">
+      </div>
+
+      <div style="margin-bottom:14px;">
+        <label style="font-size:11px;font-weight:700;color:#999;letter-spacing:.5px;display:block;margin-bottom:5px;">
+          MESSAGE BODY
+        </label>
+        <textarea id="np-body" rows="3" maxlength="220"
+          placeholder="Write a clear, helpful message for the patient…"
+          style="width:100%;padding:11px 13px;border:1.5px solid #e8e8e8;border-radius:11px;
+                 font-size:14px;font-family:inherit;resize:none;box-sizing:border-box;outline:none;
+                 transition:border-color .2s;"
+          onfocus="this.style.borderColor='var(--primary)'"
+          onblur="this.style.borderColor='#e8e8e8'"></textarea>
+        <div style="font-size:11px;color:#aaa;text-align:right;margin-top:3px;">
+          <span id="np-char-count">0</span>/220
+        </div>
+      </div>
+
+      <div style="margin-bottom:20px;">
+        <label style="font-size:11px;font-weight:700;color:#999;letter-spacing:.5px;display:block;margin-bottom:5px;">
+          TYPE (optional)
+        </label>
+        <select id="np-action" style="width:100%;padding:10px 13px;border:1.5px solid #e8e8e8;
+                border-radius:11px;font-size:13px;font-family:inherit;box-sizing:border-box;
+                background:#fff;outline:none;">
+          <option value="open_notifications">General (opens notifications)</option>
+          <option value="open_appointment">Appointment</option>
+          <option value="open_order">Medicine Order</option>
+          <option value="open_diagnostics">Lab / Diagnostics</option>
+          <option value="open_ambulance">Ambulance</option>
+          <option value="open_pregnancy">Pregnancy</option>
+          <option value="open_service">Other Service</option>
+        </select>
+      </div>
+
+      <div style="display:flex;gap:10px;">
+        <button class="btn btn-approve" style="flex:1;padding:12px;"
+          onclick="
+            const t = document.getElementById('np-title').value.trim();
+            const b = document.getElementById('np-body').value.trim();
+            const a = document.getElementById('np-action').value;
+            if (!t) { showToast('Please enter a title.'); return; }
+            if (!b) { showToast('Please enter a message.'); return; }
+            this.disabled = true; this.textContent = 'Sending…';
+            adminSendNotification('${safeId}', {
+              title: t, body: b,
+              type: 'admin_message',
+              serviceType: '${safeSvc}',
+              bookingId:   '${safeBook}',
+              actionType:  a,
+            }).then(() => {
+              showToast('Notification sent ✓');
+              document.getElementById('notify-patient-modal').remove();
+            }).catch(err => {
+              showToast('Failed to send: ' + err.message);
+              this.disabled = false; this.textContent = 'Send Notification';
+            });
+          ">
+          Send Notification
+        </button>
+        <button class="btn btn-outline" onclick="document.getElementById('notify-patient-modal').remove()">
+          Cancel
+        </button>
+      </div>
+    </div>`;
+
+  // Character counter
+  modal.querySelector('#np-body').addEventListener('input', function () {
+    modal.querySelector('#np-char-count').textContent = this.value.length;
+  });
+
+  document.body.appendChild(modal);
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  setTimeout(() => modal.querySelector('#np-title')?.focus(), 80);
 }
 

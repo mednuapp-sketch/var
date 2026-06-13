@@ -313,7 +313,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         height: 130,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: Colors.white.withOpacity(0.06),
+                          color: Colors.white.withValues(alpha:0.06),
                         ),
                       ),
                     ),
@@ -325,7 +325,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         height: 90,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: Colors.white.withOpacity(0.05),
+                          color: Colors.white.withValues(alpha:0.05),
                         ),
                       ),
                     ),
@@ -339,9 +339,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               height: 56,
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                color: Colors.white.withOpacity(0.18),
+                                color: Colors.white.withValues(alpha:0.18),
                                 border: Border.all(
-                                  color: Colors.white.withOpacity(0.35),
+                                  color: Colors.white.withValues(alpha:0.35),
                                   width: 2,
                                 ),
                                 image: photoUrl.isNotEmpty
@@ -393,10 +393,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 12, vertical: 7),
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.18),
+                                  color: Colors.white.withValues(alpha:0.18),
                                   borderRadius: BorderRadius.circular(20),
                                   border: Border.all(
-                                    color: Colors.white.withOpacity(0.3),
+                                    color: Colors.white.withValues(alpha:0.3),
                                   ),
                                 ),
                                 child: const Text(
@@ -627,7 +627,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     label: const Text('Sign Out'),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppColors.error,
-                      side: BorderSide(color: AppColors.error.withOpacity(0.5)),
+                      side: BorderSide(color: AppColors.error.withValues(alpha:0.5)),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14)),
                     ),
@@ -658,7 +658,7 @@ class _BiometricTile extends StatelessWidget {
           height: 38,
           decoration: BoxDecoration(
             color: (supported ? const Color(0xFF1565C0) : AppColors.textHint)
-                .withOpacity(0.1),
+                .withValues(alpha:0.1),
             borderRadius: BorderRadius.circular(11),
           ),
           child: Icon(Icons.fingerprint_rounded,
@@ -694,7 +694,7 @@ class _SectionHeader extends StatelessWidget {
             width: 28,
             height: 28,
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: color.withValues(alpha:0.1),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(icon, size: 15, color: color),
@@ -727,7 +727,7 @@ class _SettingsCard extends StatelessWidget {
           border: Border.all(color: AppColors.divider),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.04),
+              color: Colors.black.withValues(alpha:0.04),
               blurRadius: 10,
               offset: const Offset(0, 3),
             ),
@@ -754,7 +754,7 @@ class _SwitchTile extends StatelessWidget {
           width: 38,
           height: 38,
           decoration: BoxDecoration(
-            color: (iconColor ?? AppColors.primary).withOpacity(0.1),
+            color: (iconColor ?? AppColors.primary).withValues(alpha:0.1),
             borderRadius: BorderRadius.circular(11),
           ),
           child: Icon(icon,
@@ -785,7 +785,7 @@ class _NavTile extends StatelessWidget {
           height: 38,
           decoration: BoxDecoration(
             color: (isDestructive ? AppColors.error : AppColors.primary)
-                .withOpacity(0.1),
+                .withValues(alpha:0.1),
             borderRadius: BorderRadius.circular(11),
           ),
           child: Icon(icon,
@@ -803,7 +803,7 @@ class _NavTile extends StatelessWidget {
                 color: Theme.of(context)
                     .colorScheme
                     .onSurface
-                    .withOpacity(0.3),
+                    .withValues(alpha:0.3),
                 size: 20)
             : null,
       );

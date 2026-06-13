@@ -58,10 +58,16 @@ class FcmService {
     // Foreground messages: FCM delivers data payloads silently when the app
     // is open, so we show a local call notification ourselves.
     FirebaseMessaging.onMessage.listen((message) {
-      if (message.data['type'] == 'incoming_consultation') {
+      final type = message.data['type'];
+      if (type == 'incoming_consultation') {
         CallNotificationService.showIncomingCall(
           patientName: message.data['patientName'] ?? 'Patient',
           complaint: message.data['complaint'] ?? '',
+        );
+      } else if (type == 'emergency_doctor_request') {
+        CallNotificationService.showEmergencyAlert(
+          patientName: message.data['patientName'] ?? 'Patient',
+          requestId: message.data['requestId'] ?? '',
         );
       }
     });

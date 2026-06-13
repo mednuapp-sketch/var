@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
@@ -305,6 +306,10 @@ class LocationNotifier extends StateNotifier<LocationState> {
       status: LocationStatus.detecting,
     );
     try {
+      // Check connectivity first — skip GPS if offline
+      final conn = await Connectivity().checkConnectivity();
+      final isOnline = conn.any((r) => r != ConnectivityResult.none);
+
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
         state = state.copyWith(
@@ -331,38 +336,67 @@ class LocationNotifier extends StateNotifier<LocationState> {
         return;
       }
 
-      // Fast low-accuracy first for quick UX
+      // Fast low-accuracy fix for quick UX
       try {
         final quick = await Geolocator.getCurrentPosition(
           desiredAccuracy: LocationAccuracy.low,
           timeLimit: const Duration(seconds: 3),
         );
         if (mounted) {
-          await _reverseGeocodeAndApply(quick.latitude, quick.longitude,
-              persist: false);
+          if (isOnline) {
+            await _reverseGeocodeAndApply(quick.latitude, quick.longitude,
+                persist: false);
+          } else {
+            // Offline: show coordinates as address
+            _applyOfflinePosition(quick.latitude, quick.longitude,
+                persist: false);
+          }
         }
       } catch (_) {}
 
-      // High accuracy follow-up
+      // High-accuracy follow-up
       final pos = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.bestForNavigation,
         timeLimit: const Duration(seconds: 15),
       );
       if (mounted) {
-        await _reverseGeocodeAndApply(pos.latitude, pos.longitude,
-            persist: true);
+        if (isOnline) {
+          await _reverseGeocodeAndApply(pos.latitude, pos.longitude,
+              persist: true);
+        } else {
+          _applyOfflinePosition(pos.latitude, pos.longitude, persist: true);
+        }
       }
     } catch (_) {
       if (mounted) {
         state = state.copyWith(
-          displayName:
-              state.displayName == 'Detecting…' ? 'Select location' : state.displayName,
+          displayName: state.displayName == 'Detecting…'
+              ? 'Select location'
+              : state.displayName,
           isLoading: false,
           isDetecting: false,
           status: LocationStatus.error,
         );
       }
     }
+  }
+
+  void _applyOfflinePosition(double lat, double lng,
+      {required bool persist}) {
+    final precise = PreciseAddress(lat: lat, lng: lng);
+    state = state.copyWith(
+      displayName: 'Current location',
+      fullAddress:
+          '${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)}',
+      lat: lat,
+      lng: lng,
+      isLoading: false,
+      isDetecting: false,
+      status: LocationStatus.set,
+      preciseAddress: precise,
+      lastFixMs: DateTime.now().millisecondsSinceEpoch,
+    );
+    if (persist) _persist();
   }
 
   void _applyPlacemark(Placemark pm, double lat, double lng,

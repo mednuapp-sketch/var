@@ -4,8 +4,8 @@ class WeeklyPregnancyData {
   final int week;
   final String babySize;
   final String babySizeComparison;
-  final String babyLength; // approximate
-  final String babyWeight; // approximate
+  final String babyLength;
+  final String babyWeight;
   final String development;
   final List<String> commonSymptoms;
   final List<String> foodsToEat;
@@ -33,6 +33,9 @@ class WeeklyPregnancyData {
 }
 
 const Map<int, WeeklyPregnancyData> kPregnancyWeekData = {
+
+  // ── First Trimester (Weeks 4–13) ─────────────────────────────────────────
+
   4: WeeklyPregnancyData(
     week: 4,
     babySize: '2mm',
@@ -43,11 +46,12 @@ const Map<int, WeeklyPregnancyData> kPregnancyWeekData = {
     commonSymptoms: ['Implantation bleeding', 'Mild cramping', 'Breast tenderness', 'Fatigue', 'Nausea starting'],
     foodsToEat: ['Leafy greens', 'Folate-rich foods', 'Legumes', 'Citrus fruits', 'Fortified cereals'],
     foodsToAvoid: ['Alcohol', 'Raw fish', 'High-mercury fish', 'Unpasteurized dairy'],
-    nutritionTip: 'Start taking 400–800mcg folic acid daily to prevent neural tube defects.',
+    nutritionTip: 'Start taking 400–800 mcg folic acid daily to prevent neural tube defects.',
     weeklyTip: 'Take a home pregnancy test and schedule your first prenatal appointment.',
     motherChanges: 'You may experience mild spotting and fatigue as implantation occurs.',
     keyNutrients: ['Folic Acid', 'Iron', 'Calcium', 'Vitamin D'],
   ),
+
   5: WeeklyPregnancyData(
     week: 5,
     babySize: '4mm',
@@ -63,6 +67,7 @@ const Map<int, WeeklyPregnancyData> kPregnancyWeekData = {
     motherChanges: 'Morning sickness may begin. Your uterus is growing to accommodate the embryo.',
     keyNutrients: ['Folic Acid', 'Vitamin B6', 'Ginger', 'Iron'],
   ),
+
   6: WeeklyPregnancyData(
     week: 6,
     babySize: '6mm',
@@ -78,6 +83,23 @@ const Map<int, WeeklyPregnancyData> kPregnancyWeekData = {
     motherChanges: 'Increased blood volume causes breasts to feel heavier and more sensitive.',
     keyNutrients: ['Calcium', 'Folic Acid', 'Vitamin C', 'Protein'],
   ),
+
+  7: WeeklyPregnancyData(
+    week: 7,
+    babySize: '1.0 cm',
+    babySizeComparison: 'Blueberry',
+    babyLength: '1.0 cm',
+    babyWeight: '< 1g',
+    development: 'Brain is growing rapidly. Hands and feet emerge as paddle-like structures. Baby\'s liver is producing blood cells.',
+    commonSymptoms: ['Morning sickness', 'Fatigue', 'Excess saliva', 'Food aversions', 'Light-headedness'],
+    foodsToEat: ['Protein-rich snacks', 'Ginger biscuits', 'Cold foods if nausea is severe', 'Avocado', 'Nuts'],
+    foodsToAvoid: ['Alcohol', 'Raw meat', 'Unpasteurized foods', 'High-caffeine drinks'],
+    nutritionTip: 'Cold foods and strong smells may be easier to tolerate if nausea is severe.',
+    weeklyTip: 'Rest when you can — fatigue at this stage is completely normal and necessary.',
+    motherChanges: 'Your uterus has doubled in size. You may need to urinate more frequently.',
+    keyNutrients: ['Folic Acid', 'Iron', 'Protein', 'Vitamin B6'],
+  ),
+
   8: WeeklyPregnancyData(
     week: 8,
     babySize: '1.6 cm',
@@ -93,6 +115,23 @@ const Map<int, WeeklyPregnancyData> kPregnancyWeekData = {
     motherChanges: 'Your uterus is now the size of a large orange. Waistline may be thickening.',
     keyNutrients: ['Iron', 'Folic Acid', 'Fiber', 'Protein'],
   ),
+
+  9: WeeklyPregnancyData(
+    week: 9,
+    babySize: '2.3 cm',
+    babySizeComparison: 'Cherry',
+    babyLength: '2.3 cm',
+    babyWeight: '2g',
+    development: 'Embryo becomes a fetus this week. All essential organs have begun forming. Tiny muscles allow movement. Eyelids cover eyes.',
+    commonSymptoms: ['Nausea', 'Fatigue', 'Mood swings', 'Heartburn', 'Visible veins on breasts'],
+    foodsToEat: ['Lean chicken', 'Eggs', 'Whole grains', 'Dairy', 'Iron-fortified cereals'],
+    foodsToAvoid: ['Alcohol', 'Raw/undercooked meat', 'Unpasteurized cheeses', 'Excess caffeine'],
+    nutritionTip: 'Calcium builds your baby\'s rapidly forming bones. Aim for 1000 mg per day.',
+    weeklyTip: 'Consider your prenatal screening options — discuss with your OB at the next visit.',
+    motherChanges: 'Your waistline is expanding. Some women start showing a small bump.',
+    keyNutrients: ['Calcium', 'Protein', 'Folic Acid', 'Iron'],
+  ),
+
   10: WeeklyPregnancyData(
     week: 10,
     babySize: '3 cm',
@@ -108,6 +147,23 @@ const Map<int, WeeklyPregnancyData> kPregnancyWeekData = {
     motherChanges: 'Morning sickness may ease. Your uterus is now the size of a grapefruit.',
     keyNutrients: ['Omega-3', 'Calcium', 'Vitamin D', 'Iron'],
   ),
+
+  11: WeeklyPregnancyData(
+    week: 11,
+    babySize: '4.1 cm',
+    babySizeComparison: 'Fig',
+    babyLength: '4.1 cm',
+    babyWeight: '7g',
+    development: 'Baby can hiccup. Fingers and toes are fully separated. Tooth buds are forming. Bones are beginning to harden.',
+    commonSymptoms: ['Reduced nausea', 'Bloating', 'Gas', 'Fatigue', 'Increased appetite'],
+    foodsToEat: ['Calcium-rich dairy', 'Leafy greens', 'Lean proteins', 'Whole grains', 'Fruits'],
+    foodsToAvoid: ['Alcohol', 'Gas-causing foods (beans, cabbage)', 'Excess sugar', 'Raw fish'],
+    nutritionTip: 'Eat smaller portions more frequently to manage bloating and gas.',
+    weeklyTip: 'Nearly at the second trimester! Risk of miscarriage drops significantly after week 10.',
+    motherChanges: 'Your uterus extends above your pelvic bone. Some women start showing.',
+    keyNutrients: ['Calcium', 'Folic Acid', 'Iron', 'Protein'],
+  ),
+
   12: WeeklyPregnancyData(
     week: 12,
     babySize: '5.4 cm',
@@ -123,6 +179,57 @@ const Map<int, WeeklyPregnancyData> kPregnancyWeekData = {
     motherChanges: 'Your bump may start showing. Energy levels are increasing as morning sickness fades.',
     keyNutrients: ['Protein', 'Calcium', 'Iron', 'Vitamin D'],
   ),
+
+  13: WeeklyPregnancyData(
+    week: 13,
+    babySize: '7.4 cm',
+    babySizeComparison: 'Peach',
+    babyLength: '7.4 cm',
+    babyWeight: '23g',
+    development: 'Baby can suck its thumb. Vocal cords are forming. Intestines are moving from umbilical cord into abdomen. Brain continues rapid growth.',
+    commonSymptoms: ['Increased energy', 'Visible veins on abdomen', 'Round ligament pain', 'Mild backache', 'Skin darkening (linea nigra)'],
+    foodsToEat: ['Iron-rich foods', 'Vitamin C foods', 'Whole grains', 'Lean meat', 'Dairy'],
+    foodsToAvoid: ['Alcohol', 'Raw fish', 'Processed meats', 'Excess sugar'],
+    nutritionTip: 'Pair iron-rich foods with Vitamin C to maximize iron absorption.',
+    weeklyTip: 'Welcome to the second trimester! Energy typically improves from here.',
+    motherChanges: 'Your waistline is expanding and you\'re entering the most comfortable trimester for many.',
+    keyNutrients: ['Iron', 'Vitamin C', 'Protein', 'Folic Acid'],
+  ),
+
+  // ── Second Trimester (Weeks 14–26) ───────────────────────────────────────
+
+  14: WeeklyPregnancyData(
+    week: 14,
+    babySize: '8.7 cm',
+    babySizeComparison: 'Lemon',
+    babyLength: '8.7 cm',
+    babyWeight: '43g',
+    development: 'Baby can make facial expressions. Kidneys function and produce urine. Thyroid gland matures. Baby can squint and grimace.',
+    commonSymptoms: ['Increased appetite', 'Nasal congestion', 'Backache', 'Breast growth', 'Round ligament pain'],
+    foodsToEat: ['Calcium-rich foods', 'Protein', 'Omega-3 sources', 'Green vegetables', 'Whole grains'],
+    foodsToAvoid: ['Alcohol', 'Raw seafood', 'Unpasteurized products', 'High-mercury fish'],
+    nutritionTip: 'Your appetite will increase — focus on nutrient-dense snacks between meals.',
+    weeklyTip: 'Start practicing good posture as your bump grows to prevent back pain.',
+    motherChanges: 'Your energy returns. Skin may glow due to increased blood flow.',
+    keyNutrients: ['Calcium', 'Omega-3', 'Iron', 'Protein'],
+  ),
+
+  15: WeeklyPregnancyData(
+    week: 15,
+    babySize: '10 cm',
+    babySizeComparison: 'Apple',
+    babyLength: '10 cm',
+    babyWeight: '70g',
+    development: 'Baby can sense light even through closed eyelids. Baby is moving vigorously but you may not feel it yet. Taste buds developing.',
+    commonSymptoms: ['Increased appetite', 'Heartburn', 'Backache', 'Nasal congestion', 'Gum sensitivity'],
+    foodsToEat: ['Yogurt', 'Leafy greens', 'Eggs', 'Sweet potato', 'Lentils'],
+    foodsToAvoid: ['Spicy food (if causing heartburn)', 'Alcohol', 'Raw fish', 'Unpasteurized cheese'],
+    nutritionTip: 'Keep healthy snacks handy — nuts, fruit, and yogurt make excellent choices.',
+    weeklyTip: 'Inform your dentist you\'re pregnant — gum sensitivity is common due to hormone changes.',
+    motherChanges: 'Your bump is more noticeable. Some women experience nosebleeds from increased blood flow.',
+    keyNutrients: ['Calcium', 'Vitamin D', 'Iron', 'Fiber'],
+  ),
+
   16: WeeklyPregnancyData(
     week: 16,
     babySize: '11.6 cm',
@@ -133,11 +240,60 @@ const Map<int, WeeklyPregnancyData> kPregnancyWeekData = {
     commonSymptoms: ['Back pain', 'Round ligament pain', 'Increased appetite', 'Nasal congestion', 'Leg cramps'],
     foodsToEat: ['Calcium-rich foods', 'Dark leafy greens', 'Salmon', 'Fortified cereals', 'Beans'],
     foodsToAvoid: ['High-sugar foods', 'Alcohol', 'Raw fish', 'Deli meats'],
-    nutritionTip: 'Calcium is crucial now for bone development. Aim for 1000mg daily.',
+    nutritionTip: 'Calcium is crucial now for bone development. Aim for 1000 mg daily.',
     weeklyTip: 'You may start feeling baby\'s first movements (quickening) around week 16–20.',
     motherChanges: 'Your bump is clearly visible. You may experience backaches as your center of gravity shifts.',
     keyNutrients: ['Calcium', 'Vitamin D', 'Iron', 'Magnesium'],
   ),
+
+  17: WeeklyPregnancyData(
+    week: 17,
+    babySize: '13 cm',
+    babySizeComparison: 'Pear',
+    babyLength: '13 cm',
+    babyWeight: '140g',
+    development: 'Baby\'s skeleton is changing from cartilage to bone. Fat deposits forming under skin. Baby can hear external sounds.',
+    commonSymptoms: ['Backache', 'Swollen hands and feet', 'Stretch marks beginning', 'Heartburn', 'Vivid dreams'],
+    foodsToEat: ['Bone broth', 'Dairy', 'Calcium-fortified drinks', 'Fish', 'Seeds and nuts'],
+    foodsToAvoid: ['Alcohol', 'Processed junk food', 'Excess sodium', 'Raw fish'],
+    nutritionTip: 'Talk and play music for your baby — their hearing is developing rapidly.',
+    weeklyTip: 'Apply moisturizer regularly to reduce itching as skin stretches.',
+    motherChanges: 'You may start feeling flutters — like butterflies — your baby\'s first movements.',
+    keyNutrients: ['Calcium', 'Protein', 'Iron', 'Vitamin D'],
+  ),
+
+  18: WeeklyPregnancyData(
+    week: 18,
+    babySize: '14.2 cm',
+    babySizeComparison: 'Bell pepper',
+    babyLength: '14.2 cm',
+    babyWeight: '190g',
+    development: 'Baby yawns, hiccups, and stretches. Unique fingerprints forming. Myelin coating begins on nerves. Female babies form uterus.',
+    commonSymptoms: ['Baby movements', 'Backache', 'Leg cramps', 'Varicose veins', 'Increased appetite'],
+    foodsToEat: ['Magnesium-rich foods', 'Bananas', 'Leafy greens', 'Whole grains', 'Lean protein'],
+    foodsToAvoid: ['Alcohol', 'Raw/undercooked foods', 'High-sodium foods', 'Artificial sweeteners'],
+    nutritionTip: 'Magnesium helps prevent leg cramps. Include bananas, nuts, and whole grains.',
+    weeklyTip: 'Consider prenatal yoga or swimming to ease backache and stay active.',
+    motherChanges: 'Your uterus reaches just below your navel. Kicks are becoming more regular.',
+    keyNutrients: ['Magnesium', 'Iron', 'Calcium', 'Omega-3'],
+  ),
+
+  19: WeeklyPregnancyData(
+    week: 19,
+    babySize: '15.3 cm',
+    babySizeComparison: 'Mango',
+    babyLength: '15.3 cm',
+    babyWeight: '240g',
+    development: 'Vernix caseosa (waxy coating) covers baby\'s skin to protect it. Senses of smell, taste, and touch develop.',
+    commonSymptoms: ['Round ligament pain', 'Backache', 'Shortness of breath', 'Heartburn', 'Baby kicks'],
+    foodsToEat: ['Vitamin A foods (carrots, sweet potato)', 'Fish', 'Nuts', 'Eggs', 'Whole grains'],
+    foodsToAvoid: ['Alcohol', 'Liver in excess (too much Vitamin A)', 'Raw fish', 'Unpasteurized foods'],
+    nutritionTip: 'Vitamin A supports your baby\'s developing senses. Get it from carrots, not supplements.',
+    weeklyTip: 'Keep a kick counter — noting movements helps you monitor baby\'s health.',
+    motherChanges: 'Your belly is a prominent bump now. Consider a pregnancy support belt for back pain.',
+    keyNutrients: ['Vitamin A', 'Iron', 'Calcium', 'Protein'],
+  ),
+
   20: WeeklyPregnancyData(
     week: 20,
     babySize: '16.4 cm',
@@ -153,11 +309,60 @@ const Map<int, WeeklyPregnancyData> kPregnancyWeekData = {
     motherChanges: 'Anatomy scan week! Your uterus reaches your navel. Baby movements are regular.',
     keyNutrients: ['Iron', 'Protein', 'Calcium', 'Fiber'],
   ),
+
+  21: WeeklyPregnancyData(
+    week: 21,
+    babySize: '26.7 cm',
+    babySizeComparison: 'Carrot',
+    babyLength: '26.7 cm (head to toe)',
+    babyWeight: '360g',
+    development: 'Baby now measures from head to toe. Eyebrows and eyelids are fully developed. Bone marrow begins making blood cells.',
+    commonSymptoms: ['Backache', 'Swelling', 'Heartburn', 'Shortness of breath', 'Braxton Hicks starting'],
+    foodsToEat: ['Iron-rich spinach', 'Lentils', 'Red meat (moderate)', 'Vitamin C fruits', 'Whole grains'],
+    foodsToAvoid: ['Alcohol', 'Raw or undercooked foods', 'Excess sodium', 'High-sugar snacks'],
+    nutritionTip: 'Iron supports your increased blood supply. Pair with Vitamin C for better absorption.',
+    weeklyTip: 'Start researching childbirth classes — booking early ensures you get a spot.',
+    motherChanges: 'You may notice Braxton Hicks contractions — practice contractions that are painless.',
+    keyNutrients: ['Iron', 'Vitamin C', 'Calcium', 'Protein'],
+  ),
+
+  22: WeeklyPregnancyData(
+    week: 22,
+    babySize: '27.8 cm',
+    babySizeComparison: 'Papaya',
+    babyLength: '27.8 cm',
+    babyWeight: '430g',
+    development: 'Baby looks like a miniature newborn. Lips, eyelids, and eyebrows more distinct. Inner ear fully formed for balance.',
+    commonSymptoms: ['Swollen ankles', 'Backache', 'Heartburn', 'Leg cramps at night', 'Increased hunger'],
+    foodsToEat: ['Potassium-rich foods (banana, sweet potato)', 'Dairy', 'Lean protein', 'Leafy greens', 'Water-rich foods'],
+    foodsToAvoid: ['Alcohol', 'Salty snacks', 'Carbonated drinks', 'Raw fish'],
+    nutritionTip: 'Potassium reduces leg cramps and swelling. Include bananas and sweet potatoes.',
+    weeklyTip: 'Elevate your feet when resting to reduce ankle and foot swelling.',
+    motherChanges: 'Your belly button may start to pop outward as your uterus grows.',
+    keyNutrients: ['Potassium', 'Calcium', 'Iron', 'Magnesium'],
+  ),
+
+  23: WeeklyPregnancyData(
+    week: 23,
+    babySize: '28.9 cm',
+    babySizeComparison: 'Grapefruit',
+    babyLength: '28.9 cm',
+    babyWeight: '500g',
+    development: 'Baby is gaining more fat. Skin is still thin and translucent. Lungs are developing with production of surfactant.',
+    commonSymptoms: ['Back pain', 'Swelling', 'Heartburn', 'Braxton Hicks', 'Fatigue'],
+    foodsToEat: ['Healthy fats (avocado, olive oil)', 'Fish', 'Nuts', 'Eggs', 'Whole grains'],
+    foodsToAvoid: ['Alcohol', 'Trans fats', 'Raw fish', 'Highly processed foods'],
+    nutritionTip: 'Healthy fats support your baby\'s brain and lung development at this critical stage.',
+    weeklyTip: 'Practice side-sleeping with a pillow between your knees for better comfort.',
+    motherChanges: 'You may feel short of breath as your uterus pushes against your diaphragm.',
+    keyNutrients: ['Omega-3', 'Protein', 'Iron', 'Calcium'],
+  ),
+
   24: WeeklyPregnancyData(
     week: 24,
-    babySize: '21 cm',
+    babySize: '30 cm',
     babySizeComparison: 'Corn cob',
-    babyLength: '21 cm',
+    babyLength: '30 cm',
     babyWeight: '600g',
     development: 'Baby has a chance of survival outside womb (viability milestone). Lungs developing rapidly. Footprints and fingerprints forming.',
     commonSymptoms: ['Braxton Hicks contractions', 'Back pain', 'Heartburn', 'Swelling', 'Shortness of breath'],
@@ -168,11 +373,62 @@ const Map<int, WeeklyPregnancyData> kPregnancyWeekData = {
     motherChanges: 'Your bump is growing rapidly. Practice good posture to reduce back pain.',
     keyNutrients: ['Protein', 'Iron', 'Calcium', 'Omega-3', 'Vitamin C'],
   ),
+
+  25: WeeklyPregnancyData(
+    week: 25,
+    babySize: '34.6 cm',
+    babySizeComparison: 'Cauliflower',
+    babyLength: '34.6 cm',
+    babyWeight: '660g',
+    development: 'Baby responds to sound by moving or kicking. Nostrils begin to open. Baby is establishing more regular wake/sleep cycles.',
+    commonSymptoms: ['Heartburn', 'Back pain', 'Constipation', 'Hemorrhoids', 'Swelling'],
+    foodsToEat: ['High-fiber foods', 'Prunes', 'Water-rich fruits', 'Whole grains', 'Legumes'],
+    foodsToAvoid: ['Alcohol', 'Processed foods', 'Low-fiber foods', 'Excess spicy food'],
+    nutritionTip: 'Fiber prevents constipation and hemorrhoids. Drink plenty of water alongside it.',
+    weeklyTip: 'Play music or read aloud — your baby can hear and respond to familiar voices.',
+    motherChanges: 'You may notice hemorrhoids. Use cold compresses and high-fiber diet for relief.',
+    keyNutrients: ['Fiber', 'Iron', 'Calcium', 'Vitamin C'],
+  ),
+
+  26: WeeklyPregnancyData(
+    week: 26,
+    babySize: '35.6 cm',
+    babySizeComparison: 'Scallion bunch',
+    babyLength: '35.6 cm',
+    babyWeight: '760g',
+    development: 'Eyes begin to open for the first time. Baby inhales and exhales amniotic fluid to develop lungs. Brain continues rapid growth.',
+    commonSymptoms: ['Backache', 'Swelling', 'Braxton Hicks', 'Insomnia', 'Shortness of breath'],
+    foodsToEat: ['DHA-rich fish', 'Eggs', 'Walnuts', 'Fortified cereals', 'Leafy greens'],
+    foodsToAvoid: ['Alcohol', 'High-mercury fish', 'Raw foods', 'Caffeine (limit)'],
+    nutritionTip: 'DHA (found in fish, walnuts, and eggs) is critical for your baby\'s brain and eye development.',
+    weeklyTip: 'Talk with your partner about birth preferences and hospital bag essentials.',
+    motherChanges: 'You\'re almost at the end of the second trimester. Energy may start dropping again.',
+    keyNutrients: ['Omega-3 (DHA)', 'Iron', 'Calcium', 'Protein'],
+  ),
+
+  // ── Third Trimester (Weeks 27–40) ────────────────────────────────────────
+
+  27: WeeklyPregnancyData(
+    week: 27,
+    babySize: '36.6 cm',
+    babySizeComparison: 'Rutabaga',
+    babyLength: '36.6 cm',
+    babyWeight: '875g',
+    development: 'Baby sleeps and wakes at regular intervals. Lungs continue to mature. Brain tissue is growing more complex.',
+    commonSymptoms: ['Leg cramps', 'Backache', 'Heartburn', 'Frequent urination', 'Fatigue'],
+    foodsToEat: ['Magnesium-rich foods', 'Bananas', 'Whole grains', 'Dairy', 'Iron-rich meats'],
+    foodsToAvoid: ['Alcohol', 'Excess caffeine', 'Spicy foods', 'Processed meats'],
+    nutritionTip: 'Magnesium helps relieve leg cramps — include nuts, seeds, and leafy greens.',
+    weeklyTip: 'Third trimester begins next week — start preparing your hospital bag.',
+    motherChanges: 'You may feel your baby hiccup as tiny rhythmic kicks. This is completely normal.',
+    keyNutrients: ['Magnesium', 'Iron', 'Calcium', 'Fiber'],
+  ),
+
   28: WeeklyPregnancyData(
     week: 28,
-    babySize: '25 cm',
+    babySize: '37.6 cm',
     babySizeComparison: 'Eggplant',
-    babyLength: '25 cm',
+    babyLength: '37.6 cm',
     babyWeight: '1 kg',
     development: 'Third trimester begins! Baby can blink and has eyelashes. Brain is growing rapidly. Can hear and respond to sounds.',
     commonSymptoms: ['Frequent urination', 'Insomnia', 'Leg cramps', 'Heartburn', 'Braxton Hicks'],
@@ -183,11 +439,60 @@ const Map<int, WeeklyPregnancyData> kPregnancyWeekData = {
     motherChanges: 'Third trimester begins. You may feel more tired as baby grows rapidly.',
     keyNutrients: ['Iron', 'Calcium', 'Omega-3', 'Magnesium', 'Fiber'],
   ),
+
+  29: WeeklyPregnancyData(
+    week: 29,
+    babySize: '38.6 cm',
+    babySizeComparison: 'Butternut squash',
+    babyLength: '38.6 cm',
+    babyWeight: '1.15 kg',
+    development: 'Baby\'s bones are fully developed but soft. Muscles and lungs continue maturing. Brain develops billions of neurons.',
+    commonSymptoms: ['Shortness of breath', 'Heartburn', 'Pelvic pressure', 'Insomnia', 'Swelling'],
+    foodsToEat: ['Calcium-rich dairy', 'Sardines', 'Leafy greens', 'Protein-rich foods', 'Whole grains'],
+    foodsToAvoid: ['Alcohol', 'High-sodium foods', 'Gas-causing foods', 'Raw fish'],
+    nutritionTip: 'Your baby\'s bones are hardening rapidly — keep calcium intake at 1000 mg/day.',
+    weeklyTip: 'Sleep on your left side to improve circulation to you and your baby.',
+    motherChanges: 'Your belly is large and heavy. Use pillows for support while sleeping.',
+    keyNutrients: ['Calcium', 'Protein', 'Iron', 'Omega-3'],
+  ),
+
+  30: WeeklyPregnancyData(
+    week: 30,
+    babySize: '39.9 cm',
+    babySizeComparison: 'Cabbage',
+    babyLength: '39.9 cm',
+    babyWeight: '1.3 kg',
+    development: 'Baby can distinguish light from dark. Brain connections multiplying rapidly. Eyes can track moving objects and focus.',
+    commonSymptoms: ['Heartburn', 'Backache', 'Leg cramps', 'Fatigue', 'Difficulty sleeping'],
+    foodsToEat: ['Small frequent meals', 'Antacid-friendly foods', 'Protein', 'Calcium', 'Healthy fats'],
+    foodsToAvoid: ['Spicy foods', 'Alcohol', 'Carbonated beverages', 'Fatty heavy meals'],
+    nutritionTip: 'Small frequent meals help manage heartburn and ensure steady energy.',
+    weeklyTip: 'Discuss your birth plan with your doctor and birthing team.',
+    motherChanges: 'Your body is producing colostrum — the first milk for your baby.',
+    keyNutrients: ['Calcium', 'Iron', 'Protein', 'Vitamin D'],
+  ),
+
+  31: WeeklyPregnancyData(
+    week: 31,
+    babySize: '41.1 cm',
+    babySizeComparison: 'Coconut',
+    babyLength: '41.1 cm',
+    babyWeight: '1.5 kg',
+    development: 'Baby gains about 250g per week now. All five senses are functioning. Lungs and digestive system nearly fully mature.',
+    commonSymptoms: ['Pelvic pressure', 'Braxton Hicks', 'Back pain', 'Fatigue', 'Shortness of breath'],
+    foodsToEat: ['Iron-rich foods', 'Protein', 'Omega-3', 'Whole grains', 'Vitamin C'],
+    foodsToAvoid: ['Alcohol', 'Heavy fried foods', 'Excess sodium', 'Raw/undercooked foods'],
+    nutritionTip: 'Your baby is gaining weight rapidly — focus on protein and healthy fats for their growth.',
+    weeklyTip: 'Practice breathing exercises and relaxation techniques for labour preparation.',
+    motherChanges: 'Your uterus extends well above your navel. Shortness of breath is common.',
+    keyNutrients: ['Protein', 'Iron', 'Omega-3', 'Calcium'],
+  ),
+
   32: WeeklyPregnancyData(
     week: 32,
-    babySize: '28 cm',
+    babySize: '42.4 cm',
     babySizeComparison: 'Squash',
-    babyLength: '28 cm',
+    babyLength: '42.4 cm',
     babyWeight: '1.7 kg',
     development: 'Baby practices breathing. Skin is less wrinkled. Nails grown to fingertips. Most organ systems mature.',
     commonSymptoms: ['Pelvic pressure', 'Braxton Hicks', 'Shortness of breath', 'Fatigue', 'Back pain'],
@@ -195,14 +500,63 @@ const Map<int, WeeklyPregnancyData> kPregnancyWeekData = {
     foodsToAvoid: ['Gas-causing foods', 'Spicy foods', 'Excessive sugar', 'Alcohol'],
     nutritionTip: 'Vitamin K helps with blood clotting for delivery. Include leafy greens.',
     weeklyTip: 'Prepare your hospital bag. Discuss birth preferences with your doctor.',
-    motherChanges: 'Baby drops lower in the pelvis. Breathing may become easier but pressure increases below.',
+    motherChanges: 'Baby may drop lower in pelvis. Breathing may become easier but pressure increases below.',
     keyNutrients: ['Protein', 'Calcium', 'Iron', 'Vitamin K'],
   ),
+
+  33: WeeklyPregnancyData(
+    week: 33,
+    babySize: '43.7 cm',
+    babySizeComparison: 'Pineapple',
+    babyLength: '43.7 cm',
+    babyWeight: '1.9 kg',
+    development: 'Baby\'s skull bones are still separate (fontanelles) to ease delivery. Immune system is developing. Bones hardening.',
+    commonSymptoms: ['Frequent urination', 'Pelvic pressure', 'Backache', 'Braxton Hicks', 'Insomnia'],
+    foodsToEat: ['Iron-rich foods', 'Calcium', 'Vitamin D', 'Hydrating foods', 'Light healthy snacks'],
+    foodsToAvoid: ['Alcohol', 'Gas-producing vegetables', 'Excess caffeine', 'Spicy foods before bed'],
+    nutritionTip: 'Stay hydrated to prevent Braxton Hicks contractions — drink at least 8–10 glasses of water.',
+    weeklyTip: 'Check that your hospital bag is packed. Your baby could come any time from week 37.',
+    motherChanges: 'Your cervix may start preparing for delivery with softening (ripening).',
+    keyNutrients: ['Calcium', 'Iron', 'Vitamin D', 'Hydration'],
+  ),
+
+  34: WeeklyPregnancyData(
+    week: 34,
+    babySize: '45 cm',
+    babySizeComparison: 'Cantaloupe',
+    babyLength: '45 cm',
+    babyWeight: '2.1 kg',
+    development: 'Baby\'s central nervous system and lungs are maturing. Vernix thickens. Fingernails reach fingertips.',
+    commonSymptoms: ['Pelvic pressure', 'Swollen feet', 'Braxton Hicks', 'Fatigue', 'Frequent urination'],
+    foodsToEat: ['Easily digestible foods', 'Protein', 'Calcium', 'Dates', 'Hydrating fruits'],
+    foodsToAvoid: ['Alcohol', 'Heavy meals', 'Foods causing bloating', 'Excess caffeine'],
+    nutritionTip: 'Dates have been shown to support cervical ripening in late pregnancy — try 6 per day.',
+    weeklyTip: 'Prenatal visits are now every 2 weeks. Make sure you attend all of them.',
+    motherChanges: 'Baby is settling into a head-down position (vertex) in preparation for birth.',
+    keyNutrients: ['Protein', 'Calcium', 'Iron', 'Hydration'],
+  ),
+
+  35: WeeklyPregnancyData(
+    week: 35,
+    babySize: '46.2 cm',
+    babySizeComparison: 'Honeydew melon',
+    babyLength: '46.2 cm',
+    babyWeight: '2.4 kg',
+    development: 'Baby\'s kidneys and liver are fully functional. Most physical development is complete. Baby is gaining weight rapidly.',
+    commonSymptoms: ['Pelvic pressure', 'Frequent urination', 'Fatigue', 'Swelling', 'Shortness of breath'],
+    foodsToEat: ['Light meals', 'Protein snacks', 'Calcium-rich foods', 'Water-rich fruits', 'Whole grains'],
+    foodsToAvoid: ['Alcohol', 'Spicy heavy foods', 'Excess sodium', 'Gas-causing foods'],
+    nutritionTip: 'Eat lighter, more frequent meals as your growing baby leaves less room in your stomach.',
+    weeklyTip: 'Know your labour signs: regular contractions, water breaking, or bloody show.',
+    motherChanges: 'You may feel "lightening" as baby drops into your pelvis — breathing becomes easier.',
+    keyNutrients: ['Protein', 'Calcium', 'Iron', 'Hydration'],
+  ),
+
   36: WeeklyPregnancyData(
     week: 36,
-    babySize: '33 cm',
+    babySize: '47.4 cm',
     babySizeComparison: 'Romaine lettuce',
-    babyLength: '33 cm',
+    babyLength: '47.4 cm',
     babyWeight: '2.6 kg',
     development: 'Baby is almost full term. Lungs are mature. Most babies turn head-down. Gaining weight rapidly.',
     commonSymptoms: ['Pelvic pressure', 'Frequent urination', 'Difficulty sleeping', 'Swelling', 'Nesting instinct'],
@@ -213,18 +567,67 @@ const Map<int, WeeklyPregnancyData> kPregnancyWeekData = {
     motherChanges: 'You\'re almost there! Baby may drop lower, making breathing easier but increasing pelvic pressure.',
     keyNutrients: ['Iron', 'Protein', 'Vitamin C', 'Folate'],
   ),
+
+  37: WeeklyPregnancyData(
+    week: 37,
+    babySize: '48.6 cm',
+    babySizeComparison: 'Swiss chard bunch',
+    babyLength: '48.6 cm',
+    babyWeight: '2.85 kg',
+    development: 'Baby is considered early term. Practices swallowing, breathing, and blinking. Head hair may be thick already.',
+    commonSymptoms: ['Pelvic pressure', 'Mucus plug discharge', 'Nesting urge', 'Backache', 'Braxton Hicks intensifying'],
+    foodsToEat: ['Energy snacks', 'Dates', 'Protein-rich foods', 'Iron-rich foods', 'Hydrating foods'],
+    foodsToAvoid: ['Alcohol', 'Raw fish', 'Unpasteurized products', 'Heavy meals'],
+    nutritionTip: 'Stock easy-to-grab, nutritious foods at home for the early postpartum period.',
+    weeklyTip: 'Any regular contractions or water breaking should prompt a call to your doctor immediately.',
+    motherChanges: 'You may lose your mucus plug — a sign your cervix is preparing for labour.',
+    keyNutrients: ['Iron', 'Protein', 'Calcium', 'Hydration'],
+  ),
+
+  38: WeeklyPregnancyData(
+    week: 38,
+    babySize: '49.8 cm',
+    babySizeComparison: 'Leek',
+    babyLength: '49.8 cm',
+    babyWeight: '3.1 kg',
+    development: 'Baby is full term. All organs are ready. Baby continues to add fat stores. Meconium (first stool) is forming in intestines.',
+    commonSymptoms: ['Braxton Hicks', 'Pelvic pressure', 'Nesting drive', 'Fatigue', 'Emotional sensitivity'],
+    foodsToEat: ['Easy-to-digest foods', 'Protein', 'Energy foods', 'Dates', 'Hydrating snacks'],
+    foodsToAvoid: ['Alcohol', 'Heavy meals', 'Constipation-causing foods', 'Gas-causing foods'],
+    nutritionTip: 'Eat foods that will give you sustained energy — labour requires significant energy reserves.',
+    weeklyTip: 'Confirm your birth plan with your doctor. Rest as much as possible before labour.',
+    motherChanges: 'Your body is preparing for labour. You may feel an overwhelming nesting urge.',
+    keyNutrients: ['Protein', 'Iron', 'Hydration', 'Electrolytes'],
+  ),
+
+  39: WeeklyPregnancyData(
+    week: 39,
+    babySize: '50.7 cm',
+    babySizeComparison: 'Watermelon (small)',
+    babyLength: '50.7 cm',
+    babyWeight: '3.3 kg',
+    development: 'Baby is full term. Brain, lungs, and liver fully functional. Antibodies from you protect baby from infection.',
+    commonSymptoms: ['Cervix dilating', 'Bloody show', 'Intense Braxton Hicks', 'Pelvic pressure', 'Back pain'],
+    foodsToEat: ['Light, easy meals', 'Energy-sustaining snacks', 'Hydrating foods', 'Dates', 'Protein'],
+    foodsToAvoid: ['Alcohol', 'Heavy greasy foods', 'Gas-causing foods', 'Excess sugar'],
+    nutritionTip: 'Stay hydrated and eat light meals — a full stomach during labour can be uncomfortable.',
+    weeklyTip: 'Trust your body. Know the signs of active labour vs. false labour (Braxton Hicks).',
+    motherChanges: 'You could go into labour any day. Any strong, regular contractions — call your doctor.',
+    keyNutrients: ['Hydration', 'Electrolytes', 'Iron', 'Protein'],
+  ),
+
   40: WeeklyPregnancyData(
     week: 40,
-    babySize: '36 cm',
+    babySize: '51.2 cm',
     babySizeComparison: 'Pumpkin',
-    babyLength: '36 cm (crown to rump)',
+    babyLength: '51.2 cm (head to toe)',
     babyWeight: '3.3–3.5 kg',
     development: 'Full term! Baby\'s skull bones remain unfused to ease delivery. All systems ready. Waiting for labor signals.',
     commonSymptoms: ['Cervix dilation', 'Braxton Hicks intensifying', 'Mucus plug loss', 'Nesting drive', 'Pelvic pressure'],
     foodsToEat: ['Light nutritious meals', 'Energy snacks', 'Dates', 'Hydrating foods', 'Easy-to-digest foods'],
     foodsToAvoid: ['Heavy meals', 'Gassy foods', 'Alcohol'],
-    nutritionTip: 'Stay well-hydrated. Labor requires energy — maintain good nutrition.',
-    weeklyTip: 'Know your labor signs: regular contractions, water breaking, bloody show. Call your doctor promptly.',
+    nutritionTip: 'Stay well-hydrated. Labour requires energy — maintain good nutrition.',
+    weeklyTip: 'Know your labour signs: regular contractions, water breaking, bloody show. Call your doctor promptly.',
     motherChanges: 'Your baby is ready! Every day now counts. Stay calm, trust your body, trust your team.',
     keyNutrients: ['Hydration', 'Electrolytes', 'Iron', 'Protein'],
   ),
@@ -232,7 +635,7 @@ const Map<int, WeeklyPregnancyData> kPregnancyWeekData = {
 
 WeeklyPregnancyData getWeekData(int week) {
   if (kPregnancyWeekData.containsKey(week)) return kPregnancyWeekData[week]!;
-  // Find nearest defined week
+  // Return nearest lower week's data with the actual week number
   final keys = kPregnancyWeekData.keys.toList()..sort();
   WeeklyPregnancyData nearest = kPregnancyWeekData[keys.first]!;
   for (final k in keys) {
@@ -269,15 +672,15 @@ const List<String> kAllMoods = [
 ];
 
 const List<Map<String, String>> kStandardCheckups = [
-  {'week': '4-8',  'title': 'First Prenatal Visit',        'type': 'routine'},
-  {'week': '8-10', 'title': 'Nuchal Translucency Scan',    'type': 'ultrasound'},
-  {'week': '11-14','title': 'First Trimester Blood Tests', 'type': 'blood_test'},
-  {'week': '16',   'title': 'Maternal Serum Screening',    'type': 'blood_test'},
-  {'week': '18-22','title': 'Anomaly Scan (Level II)',      'type': 'ultrasound'},
-  {'week': '24-28','title': 'Glucose Tolerance Test',      'type': 'blood_test'},
-  {'week': '28',   'title': 'Rh Factor / Anemia Check',    'type': 'blood_test'},
-  {'week': '32',   'title': 'Growth Scan',                 'type': 'ultrasound'},
-  {'week': '36',   'title': 'Group B Strep Test',          'type': 'blood_test'},
-  {'week': '37-38','title': 'Pre-Delivery Check',          'type': 'routine'},
-  {'week': '39-40','title': 'NST / BPP Test',              'type': 'scan'},
+  {'week': '4–8',   'title': 'First Prenatal Visit',           'type': 'routine'},
+  {'week': '8–10',  'title': 'Nuchal Translucency Scan',       'type': 'ultrasound'},
+  {'week': '11–14', 'title': 'First Trimester Blood Tests',    'type': 'blood_test'},
+  {'week': '16',    'title': 'Maternal Serum Screening',       'type': 'blood_test'},
+  {'week': '18–22', 'title': 'Anomaly Scan (Level II)',        'type': 'ultrasound'},
+  {'week': '24–28', 'title': 'Glucose Tolerance Test',        'type': 'blood_test'},
+  {'week': '28',    'title': 'Rh Factor / Anemia Check',      'type': 'blood_test'},
+  {'week': '32',    'title': 'Growth Scan',                   'type': 'ultrasound'},
+  {'week': '36',    'title': 'Group B Strep Test',            'type': 'blood_test'},
+  {'week': '37–38', 'title': 'Pre-Delivery Check',            'type': 'routine'},
+  {'week': '39–40', 'title': 'NST / BPP Test',               'type': 'scan'},
 ];

@@ -8,6 +8,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
+import '../../../core/widgets/ux_widgets.dart';
 import '../../referral/referral_provider.dart';
 import '../../referral/referral_service.dart';
 import '../wallet_provider.dart';
@@ -245,7 +246,7 @@ class _HeaderCard extends StatelessWidget {
                   Container(
                     width: 40, height: 40,
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.15),
+                      color: Colors.white.withValues(alpha:0.15),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: const Icon(Icons.account_balance_wallet_rounded,
@@ -262,7 +263,7 @@ class _HeaderCard extends StatelessWidget {
                       Text('Available Balance',
                           style: TextStyle(
                               fontFamily: 'Poppins', fontSize: 11,
-                              color: Colors.white.withOpacity(0.5))),
+                              color: Colors.white.withValues(alpha:0.5))),
                     ],
                   ),
                 ],
@@ -328,16 +329,16 @@ class _ReferralBanner extends ConsumerWidget {
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: Colors.amber.withOpacity(0.08),
+          color: Colors.amber.withValues(alpha:0.08),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.amber.withOpacity(0.25)),
+          border: Border.all(color: Colors.amber.withValues(alpha:0.25)),
         ),
         child: Row(
           children: [
             Container(
               width: 40, height: 40,
               decoration: BoxDecoration(
-                color: Colors.amber.withOpacity(0.15),
+                color: Colors.amber.withValues(alpha:0.15),
                 shape: BoxShape.circle,
               ),
               child: const Icon(Icons.stars_rounded, color: Colors.amber, size: 22),
@@ -431,7 +432,7 @@ class _ReferralSheet extends ConsumerWidget {
           Container(
             width: 64, height: 64,
             decoration: BoxDecoration(
-              color: Colors.amber.withOpacity(0.12),
+              color: Colors.amber.withValues(alpha:0.12),
               shape: BoxShape.circle,
             ),
             child: const Icon(Icons.card_giftcard_rounded,
@@ -498,7 +499,7 @@ class _ReferralSheet extends ConsumerWidget {
                 color: AppColors.background,
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
-                    color: AppColors.primary.withOpacity(0.3), width: 1.5),
+                    color: AppColors.primary.withValues(alpha:0.3), width: 1.5),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -584,9 +585,9 @@ class _RewardCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.07),
+        color: color.withValues(alpha:0.07),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withOpacity(0.2)),
+        border: Border.all(color: color.withValues(alpha:0.2)),
       ),
       child: Column(
         children: [
@@ -717,7 +718,7 @@ class _TransactionCard extends StatelessWidget {
         border: Border.all(color: AppColors.divider),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha:0.03),
             blurRadius: 6,
             offset: const Offset(0, 2),
           ),
@@ -728,7 +729,7 @@ class _TransactionCard extends StatelessWidget {
         leading: Container(
           width: 44, height: 44,
           decoration: BoxDecoration(
-            color: tx.color.withOpacity(0.1),
+            color: tx.color.withValues(alpha:0.1),
             shape: BoxShape.circle,
           ),
           child: Icon(tx.icon, color: tx.color, size: 20),
@@ -790,11 +791,11 @@ class _EmptyState extends StatelessWidget {
           Container(
             width: 80, height: 80,
             decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.08),
+              color: AppColors.primary.withValues(alpha:0.08),
               shape: BoxShape.circle,
             ),
             child: Icon(Icons.receipt_long_rounded,
-                size: 38, color: AppColors.primary.withOpacity(0.6)),
+                size: 38, color: AppColors.primary.withValues(alpha:0.6)),
           ),
           const SizedBox(height: 16),
           Text('No Transactions Yet',
@@ -828,11 +829,11 @@ class _ErrorState extends StatelessWidget {
           Container(
             width: 80, height: 80,
             decoration: BoxDecoration(
-              color: AppColors.error.withOpacity(0.08),
+              color: AppColors.error.withValues(alpha:0.08),
               shape: BoxShape.circle,
             ),
             child: Icon(Icons.wifi_off_rounded,
-                size: 38, color: AppColors.error.withOpacity(0.7)),
+                size: 38, color: AppColors.error.withValues(alpha:0.7)),
           ),
           const SizedBox(height: 16),
           Text('Couldn\'t Load Transactions',
@@ -1008,7 +1009,7 @@ class _AddMoneySheetState extends ConsumerState<_AddMoneySheet> {
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16),
                 borderSide: BorderSide(
-                    color: AppColors.primary.withOpacity(0.4), width: 2),
+                    color: AppColors.primary.withValues(alpha:0.4), width: 2),
               ),
               errorText: _error,
             ),
@@ -1029,10 +1030,10 @@ class _AddMoneySheetState extends ConsumerState<_AddMoneySheet> {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.06),
+                  color: AppColors.primary.withValues(alpha:0.06),
                   borderRadius: BorderRadius.circular(24),
                   border: Border.all(
-                      color: AppColors.primary.withOpacity(0.2)),
+                      color: AppColors.primary.withValues(alpha:0.2)),
                 ),
                 child: Text('₹$a',
                     style: AppTextStyles.labelMedium
@@ -1168,7 +1169,7 @@ class _TransferSheetState extends ConsumerState<_TransferSheet> {
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
                 borderSide: BorderSide(
-                    color: AppColors.primary.withOpacity(0.4), width: 2),
+                    color: AppColors.primary.withValues(alpha:0.4), width: 2),
               ),
             ),
             onChanged: (_) => setState(() => _error = null),
@@ -1195,7 +1196,7 @@ class _TransferSheetState extends ConsumerState<_TransferSheet> {
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
                 borderSide: BorderSide(
-                    color: AppColors.primary.withOpacity(0.4), width: 2),
+                    color: AppColors.primary.withValues(alpha:0.4), width: 2),
               ),
               errorText: _error,
             ),
@@ -1215,9 +1216,9 @@ class _TransferSheetState extends ConsumerState<_TransferSheet> {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.06),
+                  color: AppColors.primary.withValues(alpha:0.06),
                   borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+                  border: Border.all(color: AppColors.primary.withValues(alpha:0.2)),
                 ),
                 child: Text('₹$a',
                     style: AppTextStyles.labelMedium
@@ -1350,34 +1351,35 @@ class _StatementSheetState extends ConsumerState<_StatementSheet> {
           // List
           Expanded(
             child: txAsync.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => Center(
-                  child: Text('Error loading transactions',
-                      style: AppTextStyles.bodyMedium
-                          .copyWith(color: AppColors.textSecondary))),
+              loading: () => ListView.builder(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                itemCount: 6,
+                itemBuilder: (_, __) => Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: SkeletonBox(width: double.infinity, height: 70),
+                ),
+              ),
+              error: (e, _) => AppErrorState(
+                message: 'Unable to load transactions. Try again.',
+                onRetry: () => ref.invalidate(walletTransactionsProvider),
+              ),
               data: (all) {
                 final list = _filtered(all);
                 if (list.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.receipt_long_rounded,
-                            size: 48,
-                            color: AppColors.textHint.withOpacity(0.4)),
-                        const SizedBox(height: 12),
-                        Text('No transactions',
-                            style: AppTextStyles.bodyMedium
-                                .copyWith(color: AppColors.textSecondary)),
-                      ],
-                    ),
+                  return AppEmptyState(
+                    icon: Icons.receipt_long_rounded,
+                    title: 'No transactions yet',
+                    message: 'Your transaction history will appear here once you start using your wallet.',
                   );
                 }
                 return ListView.separated(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
                   itemCount: list.length,
                   separatorBuilder: (_, __) => const SizedBox(height: 8),
-                  itemBuilder: (_, i) => _TransactionCard(tx: list[i]),
+                  itemBuilder: (_, i) => FadeInSlide(
+                    delay: Duration(milliseconds: i * 30),
+                    child: _TransactionCard(tx: list[i]),
+                  ),
                 );
               },
             ),
@@ -1405,7 +1407,7 @@ class _FilterChip extends StatelessWidget {
         decoration: BoxDecoration(
           color: selected
               ? AppColors.primary
-              : AppColors.primary.withOpacity(0.07),
+              : AppColors.primary.withValues(alpha:0.07),
           borderRadius: BorderRadius.circular(24),
         ),
         child: Text(
@@ -1436,7 +1438,7 @@ class _HelpItem extends StatelessWidget {
           Container(
             width: 36, height: 36,
             decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.08),
+              color: AppColors.primary.withValues(alpha:0.08),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(icon, color: AppColors.primary, size: 18),

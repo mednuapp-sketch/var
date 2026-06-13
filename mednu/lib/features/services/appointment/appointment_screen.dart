@@ -7,6 +7,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
 import '../../doctors/services/review_service.dart';
+import '../../../core/widgets/ux_widgets.dart';
 
 // Converts "09:00 AM" / "02:30 PM" to total minutes since midnight for sorting.
 int _slotToMinutes(String t) {
@@ -114,20 +115,16 @@ class _AppointmentScreenState extends State<AppointmentScreen>
 
           if (uid == null) {
             if (authSnap.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
+              return ListView(
+                physics: const NeverScrollableScrollPhysics(),
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                children: List.generate(5, (_) => const SkeletonListTile()),
+              );
             }
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.lock_outline_rounded,
-                      size: 64, color: AppColors.textHint),
-                  const SizedBox(height: 16),
-                  Text('Please log in to view appointments',
-                      style: AppTextStyles.h4
-                          .copyWith(color: AppColors.textHint)),
-                ],
-              ),
+            return const AppEmptyState(
+              icon: Icons.lock_outline_rounded,
+              title: 'Not logged in',
+              message: 'Please log in to view your appointments.',
             );
           }
 
@@ -141,26 +138,15 @@ class _AppointmentScreenState extends State<AppointmentScreen>
                 .snapshots(),
             builder: (context, snap) {
               if (snap.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
+                return ListView(
+                  physics: const NeverScrollableScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  children: List.generate(5, (_) => const SkeletonListTile()),
+                );
               }
               if (snap.hasError) {
-                return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.error_outline_rounded,
-                          size: 48, color: AppColors.error),
-                      const SizedBox(height: 12),
-                      Text('Failed to load appointments',
-                          style: AppTextStyles.bodyMedium),
-                      const SizedBox(height: 8),
-                      TextButton(
-                        onPressed: () =>
-                            context.go(AppRoutes.appointment),
-                        child: const Text('Retry'),
-                      ),
-                    ],
-                  ),
+                return AppErrorState(
+                  onRetry: () => context.go(AppRoutes.appointment),
                 );
               }
 
@@ -287,12 +273,12 @@ class _AppointmentScreenState extends State<AppointmentScreen>
             borderRadius: BorderRadius.circular(18),
             border: Border.all(
                 color: isUpcoming
-                    ? AppColors.primary.withOpacity(0.3)
+                    ? AppColors.primary.withValues(alpha:0.3)
                     : AppColors.divider),
             boxShadow: isUpcoming
                 ? [
                     BoxShadow(
-                        color: AppColors.primary.withOpacity(0.08),
+                        color: AppColors.primary.withValues(alpha:0.08),
                         blurRadius: 12,
                         offset: const Offset(0, 4))
                   ]
@@ -306,7 +292,7 @@ class _AppointmentScreenState extends State<AppointmentScreen>
                   width: 54,
                   height: 54,
                   decoration: BoxDecoration(
-                      color: AppColors.primary.withOpacity(0.12),
+                      color: AppColors.primary.withValues(alpha:0.12),
                       borderRadius: BorderRadius.circular(14)),
                   child: const Icon(Icons.person_rounded,
                       size: 30, color: AppColors.primary),
@@ -327,12 +313,12 @@ class _AppointmentScreenState extends State<AppointmentScreen>
                       horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
                     color: isUpcoming
-                        ? AppColors.accent.withOpacity(0.1)
+                        ? AppColors.accent.withValues(alpha:0.1)
                         : isCompleted
                             ? (badgeLabel == 'Past'
-                                ? AppColors.textHint.withOpacity(0.15)
-                                : AppColors.primary.withOpacity(0.1))
-                            : AppColors.error.withOpacity(0.1),
+                                ? AppColors.textHint.withValues(alpha:0.15)
+                                : AppColors.primary.withValues(alpha:0.1))
+                            : AppColors.error.withValues(alpha:0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
@@ -367,9 +353,11 @@ class _AppointmentScreenState extends State<AppointmentScreen>
                     Expanded(child: _AptDetail(
                       type == 'Video'
                           ? Icons.video_call_rounded
-                          : type == 'In-Person'
-                              ? Icons.person_rounded
-                              : Icons.chat_rounded,
+                          : type == 'Audio'
+                              ? Icons.phone_in_talk_rounded
+                              : type == 'In-Person'
+                                  ? Icons.local_hospital_rounded
+                                  : Icons.chat_bubble_rounded,
                       type,
                     )),
                   ],
@@ -393,12 +381,20 @@ class _AppointmentScreenState extends State<AppointmentScreen>
                       icon: Icon(
                           type == 'Video'
                               ? Icons.video_call_rounded
-                              : Icons.directions_rounded,
+                              : type == 'Audio'
+                                  ? Icons.phone_in_talk_rounded
+                                  : type == 'Chat'
+                                      ? Icons.chat_bubble_rounded
+                                      : Icons.directions_rounded,
                           size: 16),
                       label: Text(
-                          type == 'Video' ? 'Join Call' : 'Directions'),
+                          (type == 'Video' || type == 'Audio')
+                              ? 'Join Call'
+                              : type == 'Chat'
+                                  ? 'Chat Now'
+                                  : 'Directions'),
                       onPressed: () {
-                        if (type == 'Video') {
+                        if (type == 'Video' || type == 'Audio') {
                           final callId = (data['consultationId'] as String?)?.isNotEmpty == true
                               ? data['consultationId'] as String
                               : appointments[i].id;
@@ -527,28 +523,15 @@ class _AppointmentScreenState extends State<AppointmentScreen>
       ),
     );
     if (confirm == true) {
-      final db = FirebaseFirestore.instance;
-
-      // Fetch appointment data to reconstruct the slot lock ID.
-      final apptSnap = await db.collection('appointments').doc(docId).get();
-      final apptData = apptSnap.data();
-
-      await db.collection('appointments').doc(docId).update({
+      await FirebaseFirestore.instance
+          .collection('appointments')
+          .doc(docId)
+          .update({
         'status': 'cancelled',
         'updatedAt': FieldValue.serverTimestamp(),
       });
-
-      // Release the slot lock so other patients can book this slot.
-      if (apptData != null) {
-        final doctorId = apptData['doctorId'] as String? ?? '';
-        final date     = apptData['date'] as String? ?? '';
-        final time     = apptData['time'] as String? ?? '';
-        if (doctorId.isNotEmpty && date.isNotEmpty && time.isNotEmpty) {
-          final safeSlot = time.replaceAll(' ', '_').replaceAll(':', '-');
-          final lockId   = '${doctorId}_${date}_$safeSlot';
-          db.collection('appointment_slots').doc(lockId).delete().catchError((_) {});
-        }
-      }
+      // Slot availability is derived from appointments where status == 'booked';
+      // cancelled appointments are automatically excluded from that query.
     }
   }
 }
@@ -610,9 +593,9 @@ class _RateButton extends StatelessWidget {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 10),
             decoration: BoxDecoration(
-              color: AppColors.accent.withOpacity(0.08),
+              color: AppColors.accent.withValues(alpha:0.08),
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppColors.accent.withOpacity(0.3)),
+              border: Border.all(color: AppColors.accent.withValues(alpha:0.3)),
             ),
             child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
               const Icon(Icons.check_circle_rounded,
@@ -630,7 +613,7 @@ class _RateButton extends StatelessWidget {
             style: OutlinedButton.styleFrom(
               foregroundColor: Colors.amber.shade700,
               side: BorderSide(color: Colors.amber.shade300),
-              backgroundColor: Colors.amber.withOpacity(0.05),
+              backgroundColor: Colors.amber.withValues(alpha:0.05),
             ),
             icon: const Icon(Icons.star_rounded, size: 16),
             label: const Text('Rate Doctor'),

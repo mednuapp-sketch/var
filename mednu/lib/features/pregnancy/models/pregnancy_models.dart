@@ -10,6 +10,7 @@ class PregnancyProfile {
   final DateTime dueDate;
   final String bloodGroup;
   final double weightKg;
+  final double? heightCm;
   final int ageYears;
   final List<String> medicalConditions;
   final int previousPregnancies;
@@ -31,6 +32,7 @@ class PregnancyProfile {
     required this.dueDate,
     required this.bloodGroup,
     required this.weightKg,
+    this.heightCm,
     required this.ageYears,
     required this.medicalConditions,
     required this.previousPregnancies,
@@ -45,9 +47,10 @@ class PregnancyProfile {
     required this.updatedAt,
   });
 
+  // Bug fix: clamp to 40, not 42
   int get currentWeek {
     final days = DateTime.now().difference(lmpDate).inDays;
-    return (days / 7).floor().clamp(1, 42);
+    return (days / 7).floor().clamp(1, 40);
   }
 
   int get currentTrimester {
@@ -74,6 +77,7 @@ class PregnancyProfile {
     'dueDate': Timestamp.fromDate(dueDate),
     'bloodGroup': bloodGroup,
     'weightKg': weightKg,
+    'heightCm': heightCm,
     'ageYears': ageYears,
     'medicalConditions': medicalConditions,
     'previousPregnancies': previousPregnancies,
@@ -97,6 +101,7 @@ class PregnancyProfile {
         dueDate: (d['dueDate'] as Timestamp?)?.toDate() ?? DateTime.now().add(const Duration(days: 280)),
         bloodGroup: d['bloodGroup'] as String? ?? '',
         weightKg: (d['weightKg'] as num?)?.toDouble() ?? 0,
+        heightCm: (d['heightCm'] as num?)?.toDouble(),
         ageYears: d['ageYears'] as int? ?? 0,
         medicalConditions: List<String>.from(d['medicalConditions'] as List? ?? []),
         previousPregnancies: d['previousPregnancies'] as int? ?? 0,
@@ -112,30 +117,47 @@ class PregnancyProfile {
       );
 
   PregnancyProfile copyWith({
+    String? id,
+    String? patientId,
+    DateTime? pregnancyStartDate,
+    DateTime? lmpDate,
+    DateTime? dueDate,
+    String? bloodGroup,
+    double? weightKg,
+    double? heightCm,
+    int? ageYears,
+    List<String>? medicalConditions,
+    int? previousPregnancies,
+    int? previousLiveBirths,
+    String? emergencyContactName,
+    String? emergencyContactPhone,
     String? assignedDoctorId,
     String? assignedDoctorName,
     bool? isHighRisk,
     bool? isActive,
+    DateTime? createdAt,
+    DateTime? updatedAt,
   }) => PregnancyProfile(
-    id: id,
-    patientId: patientId,
-    pregnancyStartDate: pregnancyStartDate,
-    lmpDate: lmpDate,
-    dueDate: dueDate,
-    bloodGroup: bloodGroup,
-    weightKg: weightKg,
-    ageYears: ageYears,
-    medicalConditions: medicalConditions,
-    previousPregnancies: previousPregnancies,
-    previousLiveBirths: previousLiveBirths,
-    emergencyContactName: emergencyContactName,
-    emergencyContactPhone: emergencyContactPhone,
+    id: id ?? this.id,
+    patientId: patientId ?? this.patientId,
+    pregnancyStartDate: pregnancyStartDate ?? this.pregnancyStartDate,
+    lmpDate: lmpDate ?? this.lmpDate,
+    dueDate: dueDate ?? this.dueDate,
+    bloodGroup: bloodGroup ?? this.bloodGroup,
+    weightKg: weightKg ?? this.weightKg,
+    heightCm: heightCm ?? this.heightCm,
+    ageYears: ageYears ?? this.ageYears,
+    medicalConditions: medicalConditions ?? this.medicalConditions,
+    previousPregnancies: previousPregnancies ?? this.previousPregnancies,
+    previousLiveBirths: previousLiveBirths ?? this.previousLiveBirths,
+    emergencyContactName: emergencyContactName ?? this.emergencyContactName,
+    emergencyContactPhone: emergencyContactPhone ?? this.emergencyContactPhone,
     assignedDoctorId: assignedDoctorId ?? this.assignedDoctorId,
     assignedDoctorName: assignedDoctorName ?? this.assignedDoctorName,
     isHighRisk: isHighRisk ?? this.isHighRisk,
     isActive: isActive ?? this.isActive,
-    createdAt: createdAt,
-    updatedAt: DateTime.now(),
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? DateTime.now(),
   );
 }
 
@@ -211,6 +233,40 @@ class PregnancyWeeklyLog {
         notes: d['notes'] as String? ?? '',
         loggedAt: (d['loggedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       );
+
+  PregnancyWeeklyLog copyWith({
+    String? id,
+    String? patientId,
+    String? date,
+    int? pregnancyWeek,
+    List<String>? symptoms,
+    double? weightKg,
+    String? bpSystolic,
+    String? bpDiastolic,
+    double? sugarLevel,
+    int? babyMovements,
+    String? mood,
+    double? sleepHours,
+    int? waterGlasses,
+    String? notes,
+    DateTime? loggedAt,
+  }) => PregnancyWeeklyLog(
+    id: id ?? this.id,
+    patientId: patientId ?? this.patientId,
+    date: date ?? this.date,
+    pregnancyWeek: pregnancyWeek ?? this.pregnancyWeek,
+    symptoms: symptoms ?? this.symptoms,
+    weightKg: weightKg ?? this.weightKg,
+    bpSystolic: bpSystolic ?? this.bpSystolic,
+    bpDiastolic: bpDiastolic ?? this.bpDiastolic,
+    sugarLevel: sugarLevel ?? this.sugarLevel,
+    babyMovements: babyMovements ?? this.babyMovements,
+    mood: mood ?? this.mood,
+    sleepHours: sleepHours ?? this.sleepHours,
+    waterGlasses: waterGlasses ?? this.waterGlasses,
+    notes: notes ?? this.notes,
+    loggedAt: loggedAt ?? this.loggedAt,
+  );
 }
 
 // ─── Pregnancy Checkup ───────────────────────────────────────────────────────
@@ -265,6 +321,30 @@ class PregnancyCheckup {
         pregnancyWeek: d['pregnancyWeek'] as int? ?? 1,
         createdAt: (d['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       );
+
+  PregnancyCheckup copyWith({
+    String? id,
+    String? patientId,
+    String? type,
+    String? title,
+    DateTime? scheduledDate,
+    String? status,
+    String? notes,
+    String? doctorId,
+    int? pregnancyWeek,
+    DateTime? createdAt,
+  }) => PregnancyCheckup(
+    id: id ?? this.id,
+    patientId: patientId ?? this.patientId,
+    type: type ?? this.type,
+    title: title ?? this.title,
+    scheduledDate: scheduledDate ?? this.scheduledDate,
+    status: status ?? this.status,
+    notes: notes ?? this.notes,
+    doctorId: doctorId ?? this.doctorId,
+    pregnancyWeek: pregnancyWeek ?? this.pregnancyWeek,
+    createdAt: createdAt ?? this.createdAt,
+  );
 }
 
 // ─── Pregnancy Medicine ──────────────────────────────────────────────────────
@@ -331,6 +411,36 @@ class PregnancyMedicine {
         isActive: d['isActive'] as bool? ?? true,
         createdAt: (d['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       );
+
+  PregnancyMedicine copyWith({
+    String? id,
+    String? patientId,
+    String? name,
+    String? dosage,
+    String? frequency,
+    String? type,
+    DateTime? startDate,
+    DateTime? endDate,
+    String? reminderTime,
+    String? instructions,
+    String? prescribedBy,
+    bool? isActive,
+    DateTime? createdAt,
+  }) => PregnancyMedicine(
+    id: id ?? this.id,
+    patientId: patientId ?? this.patientId,
+    name: name ?? this.name,
+    dosage: dosage ?? this.dosage,
+    frequency: frequency ?? this.frequency,
+    type: type ?? this.type,
+    startDate: startDate ?? this.startDate,
+    endDate: endDate ?? this.endDate,
+    reminderTime: reminderTime ?? this.reminderTime,
+    instructions: instructions ?? this.instructions,
+    prescribedBy: prescribedBy ?? this.prescribedBy,
+    isActive: isActive ?? this.isActive,
+    createdAt: createdAt ?? this.createdAt,
+  );
 }
 
 // ─── Pregnancy Alert ─────────────────────────────────────────────────────────
@@ -385,6 +495,30 @@ class PregnancyAlert {
         reportedAt: (d['reportedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
         resolvedAt: (d['resolvedAt'] as Timestamp?)?.toDate(),
       );
+
+  PregnancyAlert copyWith({
+    String? id,
+    String? patientId,
+    String? patientName,
+    String? type,
+    String? severity,
+    String? message,
+    bool? isResolved,
+    String? resolvedBy,
+    DateTime? reportedAt,
+    DateTime? resolvedAt,
+  }) => PregnancyAlert(
+    id: id ?? this.id,
+    patientId: patientId ?? this.patientId,
+    patientName: patientName ?? this.patientName,
+    type: type ?? this.type,
+    severity: severity ?? this.severity,
+    message: message ?? this.message,
+    isResolved: isResolved ?? this.isResolved,
+    resolvedBy: resolvedBy ?? this.resolvedBy,
+    reportedAt: reportedAt ?? this.reportedAt,
+    resolvedAt: resolvedAt ?? this.resolvedAt,
+  );
 }
 
 // ─── Doctor Note ─────────────────────────────────────────────────────────────
@@ -431,4 +565,24 @@ class PregnancyDoctorNote {
         pregnancyWeek: d['pregnancyWeek'] as int? ?? 1,
         createdAt: (d['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       );
+
+  PregnancyDoctorNote copyWith({
+    String? id,
+    String? patientId,
+    String? doctorId,
+    String? doctorName,
+    String? content,
+    String? recommendation,
+    int? pregnancyWeek,
+    DateTime? createdAt,
+  }) => PregnancyDoctorNote(
+    id: id ?? this.id,
+    patientId: patientId ?? this.patientId,
+    doctorId: doctorId ?? this.doctorId,
+    doctorName: doctorName ?? this.doctorName,
+    content: content ?? this.content,
+    recommendation: recommendation ?? this.recommendation,
+    pregnancyWeek: pregnancyWeek ?? this.pregnancyWeek,
+    createdAt: createdAt ?? this.createdAt,
+  );
 }

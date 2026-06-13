@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/router/app_router.dart';
 import '../models/pregnancy_models.dart';
 import '../providers/pregnancy_provider.dart';
 
@@ -24,13 +25,14 @@ class _PregnancyOnboardingScreenState
   DateTime? _lmpDate;
   DateTime? _dueDate;
   String _bloodGroup = 'O+';
-  final _weightCtrl = TextEditingController();
-  final _ageCtrl = TextEditingController();
-  final _emergencyNameCtrl = TextEditingController();
+  final _weightCtrl   = TextEditingController();
+  final _heightCtrl   = TextEditingController();
+  final _ageCtrl      = TextEditingController();
+  final _emergencyNameCtrl  = TextEditingController();
   final _emergencyPhoneCtrl = TextEditingController();
   final List<String> _medicalConditions = [];
   int _previousPregnancies = 0;
-  int _previousLiveBirths = 0;
+  int _previousLiveBirths  = 0;
 
   final _formKey1 = GlobalKey<FormState>();
   final _formKey2 = GlobalKey<FormState>();
@@ -40,21 +42,26 @@ class _PregnancyOnboardingScreenState
   void dispose() {
     _pageController.dispose();
     _weightCtrl.dispose();
+    _heightCtrl.dispose();
     _ageCtrl.dispose();
     _emergencyNameCtrl.dispose();
     _emergencyPhoneCtrl.dispose();
     super.dispose();
   }
 
-  DateTime _calcDueDate(DateTime lmp) =>
-      lmp.add(const Duration(days: 280));
+  DateTime _calcDueDate(DateTime lmp) => lmp.add(const Duration(days: 280));
 
   void _nextPage() {
     bool valid = true;
-    if (_currentPage == 0 && _formKey1.currentState != null) {
-      valid = _formKey1.currentState!.validate();
-    } else if (_currentPage == 1 && _formKey2.currentState != null) {
-      valid = _formKey2.currentState!.validate();
+    if (_currentPage == 0) {
+      valid = (_formKey1.currentState?.validate() ?? false) && _lmpDate != null;
+      if (_lmpDate == null && valid == false) {
+        _showSnack('Please select your last menstrual period date.');
+        return;
+      }
+      if (!(_formKey1.currentState?.validate() ?? false)) return;
+    } else if (_currentPage == 1) {
+      valid = _formKey2.currentState?.validate() ?? true;
     }
     if (!valid) return;
     if (_currentPage < 2) {
@@ -66,12 +73,16 @@ class _PregnancyOnboardingScreenState
   }
 
   Future<void> _submit() async {
-    if (!_formKey3.currentState!.validate()) return;
+    if (!(_formKey3.currentState?.validate() ?? false)) return;
     if (_lmpDate == null) {
       _showSnack('Please select your last menstrual period date.');
       return;
     }
     final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    if (uid.isEmpty) {
+      _showSnack('Authentication error. Please log in again.');
+      return;
+    }
     final profile = PregnancyProfile(
       id: '',
       patientId: uid,
@@ -80,6 +91,7 @@ class _PregnancyOnboardingScreenState
       dueDate: _dueDate ?? _calcDueDate(_lmpDate!),
       bloodGroup: _bloodGroup,
       weightKg: double.tryParse(_weightCtrl.text) ?? 0,
+      heightCm: double.tryParse(_heightCtrl.text),
       ageYears: int.tryParse(_ageCtrl.text) ?? 0,
       medicalConditions: List.from(_medicalConditions),
       previousPregnancies: _previousPregnancies,
@@ -94,7 +106,7 @@ class _PregnancyOnboardingScreenState
     final ok = await ref.read(pregnancyProvider.notifier).createProfile(profile);
     if (!mounted) return;
     if (ok) {
-      context.go('/pregnancy');
+      context.go(AppRoutes.pregnancy);
     } else {
       _showSnack('Failed to save profile. Please try again.');
     }
@@ -144,7 +156,7 @@ class _PregnancyOnboardingScreenState
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(12),
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 8)],
+              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:0.06), blurRadius: 8)],
             ),
             child: const Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: Color(0xFF880E4F)),
           ),
@@ -229,6 +241,12 @@ class _PregnancyOnboardingScreenState
                   });
                 },
               ),
+              if (_lmpDate == null)
+                const Padding(
+                  padding: EdgeInsets.only(top: 4, left: 4),
+                  child: Text('LMP date is required',
+                      style: TextStyle(fontSize: 11, color: Colors.red)),
+                ),
               const SizedBox(height: 12),
               _datePicker(
                 label: 'Expected Due Date (auto-calculated)',
@@ -239,7 +257,7 @@ class _PregnancyOnboardingScreenState
                     initialDate: _dueDate ?? DateTime.now().add(const Duration(days: 280)),
                     firstDate: DateTime.now(),
                     lastDate: DateTime.now().add(const Duration(days: 300)),
-                    helpText: 'Select Due Date',
+                    helpText: 'Adjust Due Date',
                   );
                   if (d != null) setState(() => _dueDate = d);
                 },
@@ -259,12 +277,18 @@ class _PregnancyOnboardingScreenState
                   validator: (v) => (v == null || v.isEmpty) ? 'Required' : null,
                 ),
                 _buildField(
-                  controller: _ageCtrl,
-                  label: 'Age (years)',
+                  controller: _heightCtrl,
+                  label: 'Height (cm)',
                   keyboardType: TextInputType.number,
-                  validator: (v) => (v == null || v.isEmpty) ? 'Required' : null,
                 ),
               ]),
+              const SizedBox(height: 12),
+              _buildField(
+                controller: _ageCtrl,
+                label: 'Age (years)',
+                keyboardType: TextInputType.number,
+                validator: (v) => (v == null || v.isEmpty) ? 'Required' : null,
+              ),
               const SizedBox(height: 12),
               _buildDropdown(
                 label: 'Blood Group',
@@ -291,10 +315,10 @@ class _PregnancyOnboardingScreenState
             title: 'Previous Pregnancies',
             children: [
               _counterRow('Previous Pregnancies', _previousPregnancies,
-                (v) => setState(() => _previousPregnancies = v)),
+                  (v) => setState(() => _previousPregnancies = v)),
               const SizedBox(height: 12),
               _counterRow('Previous Live Births', _previousLiveBirths,
-                (v) => setState(() => _previousLiveBirths = v)),
+                  (v) => setState(() => _previousLiveBirths = v)),
             ],
           ),
           const SizedBox(height: 16),
@@ -329,6 +353,29 @@ class _PregnancyOnboardingScreenState
                   );
                 }).toList(),
               ),
+              if (_medicalConditions.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF3E0),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFFF9800).withValues(alpha:0.4)),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.warning_amber_rounded, color: Color(0xFFE65100), size: 14),
+                      SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'You will be marked as high-risk pregnancy. Your doctor will provide extra care.',
+                          style: TextStyle(fontSize: 11, color: Color(0xFFE65100)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ],
           ),
         ],
@@ -360,7 +407,7 @@ class _PregnancyOnboardingScreenState
                 keyboardType: TextInputType.phone,
                 validator: (v) {
                   if (v == null || v.isEmpty) return 'Required';
-                  if (v.length < 10) return 'Enter valid phone number';
+                  if (v.replaceAll(RegExp(r'\D'), '').length < 10) return 'Enter valid phone number';
                   return null;
                 },
               ),
@@ -374,7 +421,7 @@ class _PregnancyOnboardingScreenState
                 colors: [Color(0xFFFCE4EC), Color(0xFFF3E5F5)],
               ),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+              border: Border.all(color: AppColors.primary.withValues(alpha:0.2)),
             ),
             child: Row(
               children: [
@@ -405,7 +452,7 @@ class _PregnancyOnboardingScreenState
     padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
     decoration: BoxDecoration(
       color: Colors.white,
-      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 8, offset: const Offset(0, -2))],
+      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:0.06), blurRadius: 8, offset: const Offset(0, -2))],
     ),
     child: Row(
       children: [
@@ -463,7 +510,7 @@ class _PregnancyOnboardingScreenState
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:0.05), blurRadius: 10)],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -472,7 +519,7 @@ class _PregnancyOnboardingScreenState
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.1),
+                  color: AppColors.primary.withValues(alpha:0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(icon, color: AppColors.primary, size: 20),
@@ -550,13 +597,14 @@ class _PregnancyOnboardingScreenState
         ),
       );
 
-  Widget _fieldRow(List<Widget> children) => Row(
-    children: children.map((c) => Expanded(child: c)).toList()
-        .asMap()
-        .entries
-        .expand((e) => e.key == children.length - 1 ? [e.value] : [e.value, const SizedBox(width: 10)])
-        .toList(),
-  );
+  Widget _fieldRow(List<Widget> fields) {
+    final items = <Widget>[];
+    for (int i = 0; i < fields.length; i++) {
+      items.add(Expanded(child: fields[i]));
+      if (i < fields.length - 1) items.add(const SizedBox(width: 10));
+    }
+    return Row(children: items);
+  }
 
   Widget _buildDropdown({
     required String label,
@@ -601,7 +649,7 @@ class _PregnancyOnboardingScreenState
       width: 32,
       height: 32,
       decoration: BoxDecoration(
-        color: AppColors.primary.withOpacity(0.1),
+        color: AppColors.primary.withValues(alpha:0.1),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Icon(icon, size: 18, color: AppColors.primary),

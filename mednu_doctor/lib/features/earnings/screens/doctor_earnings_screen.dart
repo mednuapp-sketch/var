@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../auth/services/doctor_auth_service.dart';
+import '../../../core/widgets/ux_widgets.dart';
 
 class DoctorEarningsScreen extends StatelessWidget {
   const DoctorEarningsScreen({super.key});
@@ -50,22 +51,19 @@ class _LoadingBody extends StatelessWidget {
     return CustomScrollView(
       slivers: [
         _GradientAppBar(),
-        SliverFillRemaining(
-          child: const Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                CircularProgressIndicator(color: AppColors.primary),
-                SizedBox(height: 14),
-                Text(
-                  'Loading analytics…',
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ],
-            ),
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
+          sliver: SliverList(
+            delegate: SliverChildListDelegate([
+              const SkeletonBox(width: double.infinity, height: 100, radius: 20),
+              const SizedBox(height: 16),
+              const SkeletonBox(width: double.infinity, height: 180, radius: 20),
+              const SizedBox(height: 16),
+              ...List.generate(4, (_) => const Padding(
+                padding: EdgeInsets.only(bottom: 12),
+                child: SkeletonListTile(),
+              )),
+            ]),
           ),
         ),
       ],
@@ -83,18 +81,7 @@ class _ErrorBody extends StatelessWidget {
       slivers: [
         _GradientAppBar(),
         SliverFillRemaining(
-          child: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.cloud_off_rounded, size: 56, color: AppColors.textHint),
-                const SizedBox(height: 12),
-                const Text('Failed to load data', style: AppTextStyles.labelLarge),
-                const SizedBox(height: 8),
-                TextButton(onPressed: onRetry, child: const Text('Retry')),
-              ],
-            ),
-          ),
+          child: AppErrorState(onRetry: onRetry),
         ),
       ],
     );
@@ -484,7 +471,7 @@ class _WalletSection extends StatelessWidget {
             borderRadius: BorderRadius.circular(18),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF1565C0).withOpacity(0.25),
+                color: const Color(0xFF1565C0).withValues(alpha:0.25),
                 blurRadius: 12,
                 offset: const Offset(0, 4),
               ),
@@ -842,8 +829,8 @@ class _MonthlyTrendChart extends StatelessWidget {
                   show: true,
                   gradient: LinearGradient(
                     colors: [
-                      AppColors.primary.withOpacity(0.25),
-                      AppColors.primary.withOpacity(0.0),
+                      AppColors.primary.withValues(alpha:0.25),
+                      AppColors.primary.withValues(alpha:0.0),
                     ],
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
@@ -925,7 +912,7 @@ class _ConsultGrid extends StatelessWidget {
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  color: item.color.withOpacity(0.12),
+                  color: item.color.withValues(alpha:0.12),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(item.icon, color: item.color, size: 18),
@@ -1087,7 +1074,7 @@ class _InsightCard extends StatelessWidget {
               width: 38,
               height: 38,
               decoration: BoxDecoration(
-                color: color.withOpacity(0.12),
+                color: color.withValues(alpha:0.12),
                 shape: BoxShape.circle,
               ),
               child: Icon(icon, color: color, size: 18),
@@ -1197,7 +1184,7 @@ class _TransactionTile extends StatelessWidget {
           width: 44,
           height: 44,
           decoration: BoxDecoration(
-            color: AppColors.success.withOpacity(0.1),
+            color: AppColors.success.withValues(alpha:0.1),
             shape: BoxShape.circle,
           ),
           child: const Icon(Icons.arrow_downward_rounded,

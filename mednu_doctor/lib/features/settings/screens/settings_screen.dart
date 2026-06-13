@@ -8,6 +8,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
 import '../../security/services/biometric_service.dart';
+import '../../../core/widgets/ux_widgets.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -124,7 +125,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? SingleChildScrollView(
+              physics: const NeverScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(16, 160, 16, 16),
+              child: Column(children: List.generate(6, (_) => const Padding(
+                padding: EdgeInsets.only(bottom: 16),
+                child: SkeletonBox(width: double.infinity, height: 56, radius: 14),
+              ))),
+            )
           : CustomScrollView(
               slivers: [
                 // ── Gradient header ──────────────────────────────
@@ -162,7 +170,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               height: 110,
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                color: Colors.white.withOpacity(0.06),
+                                color: Colors.white.withValues(alpha:0.06),
                               ),
                             ),
                           ),
@@ -176,7 +184,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                     width: 40,
                                     height: 40,
                                     decoration: BoxDecoration(
-                                      color: Colors.white.withOpacity(0.18),
+                                      color: Colors.white.withValues(alpha:0.18),
                                       borderRadius: BorderRadius.circular(12),
                                     ),
                                     child: const Icon(Icons.settings_rounded,
@@ -360,7 +368,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           style: OutlinedButton.styleFrom(
                             foregroundColor: AppColors.error,
                             side: BorderSide(
-                                color: AppColors.error.withOpacity(0.5)),
+                                color: AppColors.error.withValues(alpha:0.5)),
                             shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(14)),
                           ),
@@ -391,7 +399,7 @@ class _SectionHeader extends StatelessWidget {
             width: 28,
             height: 28,
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: color.withValues(alpha:0.1),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(icon, size: 15, color: color),
@@ -423,7 +431,7 @@ class _SettingsCard extends StatelessWidget {
           border: Border.all(color: AppColors.divider),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.04),
+              color: Colors.black.withValues(alpha:0.04),
               blurRadius: 10,
               offset: const Offset(0, 3),
             ),
@@ -446,7 +454,7 @@ class _BiometricTile extends StatelessWidget {
       Container(
         width: 40, height: 40,
         decoration: BoxDecoration(
-          color: (supported ? AppColors.primary : AppColors.textHint).withOpacity(0.1),
+          color: (supported ? AppColors.primary : AppColors.textHint).withValues(alpha:0.1),
           borderRadius: BorderRadius.circular(10),
         ),
         child: Icon(Icons.fingerprint_rounded, color: supported ? AppColors.primary : AppColors.textHint, size: 22),
@@ -460,7 +468,7 @@ class _BiometricTile extends StatelessWidget {
         value: enabled,
         onChanged: supported ? onToggle : null,
         activeThumbColor: AppColors.primary,
-        activeTrackColor: AppColors.primary.withOpacity(0.4),
+        activeTrackColor: AppColors.primary.withValues(alpha:0.4),
       ),
     ]),
   );
@@ -489,7 +497,7 @@ class _ToggleTile extends StatelessWidget {
     child: Row(children: [
       Container(
         width: 40, height: 40,
-        decoration: BoxDecoration(color: iconColor.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+        decoration: BoxDecoration(color: iconColor.withValues(alpha:0.1), borderRadius: BorderRadius.circular(10)),
         child: Icon(icon, color: iconColor, size: 20),
       ),
       const SizedBox(width: 14),
@@ -501,7 +509,7 @@ class _ToggleTile extends StatelessWidget {
         value: value,
         onChanged: onChanged,
         activeThumbColor: AppColors.primary,
-        activeTrackColor: AppColors.primary.withOpacity(0.4),
+        activeTrackColor: AppColors.primary.withValues(alpha:0.4),
       ),
     ]),
   );
@@ -520,7 +528,7 @@ class _SettingsTile extends StatelessWidget {
     onTap: onTap,
     leading: Container(
       width: 40, height: 40,
-      decoration: BoxDecoration(color: iconColor.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+      decoration: BoxDecoration(color: iconColor.withValues(alpha:0.1), borderRadius: BorderRadius.circular(10)),
       child: Icon(icon, color: iconColor, size: 20),
     ),
     title: Text(title, style: AppTextStyles.labelLarge),

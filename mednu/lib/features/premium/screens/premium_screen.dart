@@ -75,7 +75,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
                         decoration: BoxDecoration(
                           gradient: const LinearGradient(colors: [Color(0xFFFFD700), Color(0xFFFF8C00)]),
                           shape: BoxShape.circle,
-                          boxShadow: [BoxShadow(color: const Color(0xFFFFD700).withOpacity(0.4), blurRadius: 20, spreadRadius: 5)],
+                          boxShadow: [BoxShadow(color: const Color(0xFFFFD700).withValues(alpha:0.4), blurRadius: 20, spreadRadius: 5)],
                         ),
                         child: const Icon(Icons.workspace_premium_rounded, color: Colors.white, size: 44),
                       ),
@@ -113,7 +113,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
                             color: selected ? null : Colors.white,
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(color: selected ? const Color(0xFF7B1FA2) : AppColors.border, width: selected ? 2 : 1),
-                            boxShadow: selected ? [BoxShadow(color: const Color(0xFF7B1FA2).withOpacity(0.2), blurRadius: 12, offset: const Offset(0, 4))] : null,
+                            boxShadow: selected ? [BoxShadow(color: const Color(0xFF7B1FA2).withValues(alpha:0.2), blurRadius: 12, offset: const Offset(0, 4))] : null,
                           ),
                           child: Row(children: [
                             Container(
@@ -169,7 +169,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
                             Flexible(child: Text(f['title'] as String, style: AppTextStyles.labelLarge, overflow: TextOverflow.ellipsis)),
                             if (f['free'] as bool) ...[
                               const SizedBox(width: 6),
-                              Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: AppColors.accent.withOpacity(0.1), borderRadius: BorderRadius.circular(6)), child: const Text('FREE', style: TextStyle(fontFamily: 'Poppins', fontSize: 9, fontWeight: FontWeight.w700, color: AppColors.accent))),
+                              Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: AppColors.accent.withValues(alpha:0.1), borderRadius: BorderRadius.circular(6)), child: const Text('FREE', style: TextStyle(fontFamily: 'Poppins', fontSize: 9, fontWeight: FontWeight.w700, color: AppColors.accent))),
                             ],
                           ]),
                           Text(f['desc'] as String, style: AppTextStyles.bodySmall),

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,6 +7,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geolocator/geolocator.dart';
 import '../services/booking_service.dart';
 import '../services/feedback_service.dart';
+import '../services/places_service.dart';
 import '../constants/app_colors.dart';
 import '../constants/app_text_styles.dart';
 import '../../features/home/providers/location_provider.dart';
@@ -81,6 +83,12 @@ class _ServiceBookingSheetState extends ConsumerState<ServiceBookingSheet> {
   Map<String, dynamic> _selectedAddrMap = {};
   bool _useManualEntry = false;
 
+  // Address autocomplete state
+  List<PlacesSuggestion> _addrSuggestions = [];
+  bool _addrSearching = false;
+  Timer? _addrDebounce;
+  bool _addrConfirmed = false;
+
   bool get _hasGpsCoordinates =>
       _selectedLat != null && _selectedLng != null;
 
@@ -88,8 +96,79 @@ class _ServiceBookingSheetState extends ConsumerState<ServiceBookingSheet> {
   void initState() {
     super.initState();
     _prefill();
+    _manualAddrCtrl.addListener(_onAddrChanged);
     WidgetsBinding.instance
         .addPostFrameCallback((_) => _prefillAddress());
+  }
+
+  void _onAddrChanged() {
+    final q = _manualAddrCtrl.text.trim();
+    _addrDebounce?.cancel();
+    if (_addrConfirmed) {
+      setState(() {
+        _addrConfirmed = false;
+        _selectedLat = null;
+        _selectedLng = null;
+      });
+    }
+    if (q.length < 2) {
+      setState(() {
+        _addrSuggestions = [];
+        _addrSearching = false;
+      });
+      return;
+    }
+    setState(() => _addrSearching = true);
+    _addrDebounce =
+        Timer(const Duration(milliseconds: 350), () => _runAddrSearch(q));
+  }
+
+  Future<void> _runAddrSearch(String q) async {
+    if (!mounted) return;
+    final suggestions = await placesService.autocomplete(q);
+    if (!mounted) return;
+    setState(() {
+      _addrSuggestions = suggestions;
+      _addrSearching = false;
+    });
+  }
+
+  Future<void> _pickAddrSuggestion(PlacesSuggestion s) async {
+    setState(() {
+      _addrSearching = true;
+      _addrSuggestions = [];
+    });
+    final details = await placesService.details(s.placeId);
+    if (!mounted) return;
+    if (details != null) {
+      _manualAddrCtrl.removeListener(_onAddrChanged);
+      _manualAddrCtrl.text = details.formattedAddress;
+      _manualAddrCtrl.addListener(_onAddrChanged);
+      setState(() {
+        _selectedLat = details.lat;
+        _selectedLng = details.lng;
+        _selectedAddrMap = {
+          'formattedAddress': details.formattedAddress,
+          'lat': details.lat,
+          'lng': details.lng,
+          if (details.street != null) 'street': details.street!,
+          if (details.area != null) 'area': details.area!,
+          if (details.city != null) 'city': details.city!,
+          if (details.state != null) 'state': details.state!,
+          if (details.pincode != null) 'pincode': details.pincode!,
+        };
+        _addrConfirmed = true;
+        _addrSearching = false;
+      });
+    } else {
+      _manualAddrCtrl.removeListener(_onAddrChanged);
+      _manualAddrCtrl.text = s.fullText;
+      _manualAddrCtrl.addListener(_onAddrChanged);
+      setState(() {
+        _addrConfirmed = true;
+        _addrSearching = false;
+      });
+    }
   }
 
   Future<void> _refreshGps() async {
@@ -269,7 +348,7 @@ class _ServiceBookingSheetState extends ConsumerState<ServiceBookingSheet> {
                 height: 4,
                 decoration: BoxDecoration(
                   color: isDark
-                      ? Colors.white.withOpacity(0.15)
+                      ? Colors.white.withValues(alpha:0.15)
                       : Colors.grey.shade300,
                   borderRadius: BorderRadius.circular(2),
                 ),
@@ -382,7 +461,7 @@ class _ServiceBookingSheetState extends ConsumerState<ServiceBookingSheet> {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                color: iconBg.withOpacity(0.12),
+                color: iconBg.withValues(alpha:0.12),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(icon, color: iconBg, size: 22),
@@ -409,7 +488,7 @@ class _ServiceBookingSheetState extends ConsumerState<ServiceBookingSheet> {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
-                            color: AppColors.primary.withOpacity(0.12),
+                            color: AppColors.primary.withValues(alpha:0.12),
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: const Text(
@@ -510,11 +589,13 @@ class _ServiceBookingSheetState extends ConsumerState<ServiceBookingSheet> {
     FeedbackService.showLoading(context, 'Booking ${widget.serviceName}...');
 
     try {
-      final locationData = _useManualEntry
-          ? {'formattedAddress': finalAddr}
-          : _selectedAddrMap.isNotEmpty
-              ? _selectedAddrMap
-              : {'formattedAddress': finalAddr};
+      final locationData = (_useManualEntry && _addrConfirmed && _selectedAddrMap.isNotEmpty)
+          ? _selectedAddrMap
+          : _useManualEntry
+              ? {'formattedAddress': finalAddr}
+              : _selectedAddrMap.isNotEmpty
+                  ? _selectedAddrMap
+                  : {'formattedAddress': finalAddr};
 
       await BookingService.createRequest(
         type: widget.type,
@@ -549,6 +630,8 @@ class _ServiceBookingSheetState extends ConsumerState<ServiceBookingSheet> {
 
   @override
   void dispose() {
+    _addrDebounce?.cancel();
+    _manualAddrCtrl.removeListener(_onAddrChanged);
     _nameCtrl.dispose();
     _phoneCtrl.dispose();
     _manualAddrCtrl.dispose();
@@ -582,7 +665,7 @@ class _ServiceBookingSheetState extends ConsumerState<ServiceBookingSheet> {
               width: 80,
               height: 80,
               decoration: BoxDecoration(
-                color: widget.themeColor.withOpacity(0.12),
+                color: widget.themeColor.withValues(alpha:0.12),
                 shape: BoxShape.circle,
               ),
               child: Icon(Icons.check_circle_rounded,
@@ -680,7 +763,7 @@ class _ServiceBookingSheetState extends ConsumerState<ServiceBookingSheet> {
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                    color: widget.themeColor.withOpacity(0.1),
+                    color: widget.themeColor.withValues(alpha:0.1),
                     borderRadius: BorderRadius.circular(12)),
                 child: Icon(Icons.calendar_today_rounded,
                     color: widget.themeColor, size: 22),
@@ -771,67 +854,7 @@ class _ServiceBookingSheetState extends ConsumerState<ServiceBookingSheet> {
                     ],
                   ),
                   _useManualEntry
-                      ? Column(
-                          crossAxisAlignment:
-                              CrossAxisAlignment.start,
-                          children: [
-                            _field(_manualAddrCtrl,
-                                'Full address for visit / service',
-                                maxLines: 2,
-                                validator: _req),
-                            const SizedBox(height: 6),
-                            // Warning: no GPS coordinates
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFFFF8E1),
-                                borderRadius:
-                                    BorderRadius.circular(8),
-                                border: Border.all(
-                                    color: const Color(0xFFFFB300)
-                                        .withOpacity(0.4)),
-                              ),
-                              child: Row(
-                                children: [
-                                  const Icon(
-                                      Icons.warning_amber_rounded,
-                                      size: 14,
-                                      color: Color(0xFFE65100)),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      'No GPS coordinates — typed addresses may delay service dispatch.',
-                                      style: TextStyle(
-                                        fontFamily: 'Poppins',
-                                        fontSize: 11,
-                                        color:
-                                            Colors.orange.shade800,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Align(
-                              alignment: Alignment.centerRight,
-                              child: GestureDetector(
-                                onTap: () => setState(
-                                    () => _useManualEntry = false),
-                                child: Text(
-                                  'Use saved / GPS location',
-                                  style: TextStyle(
-                                    fontFamily: 'Poppins',
-                                    fontSize: 12,
-                                    color: widget.themeColor,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        )
+                      ? _buildAddrAutocomplete()
                       : Column(
                           crossAxisAlignment:
                               CrossAxisAlignment.start,
@@ -941,7 +964,7 @@ class _ServiceBookingSheetState extends ConsumerState<ServiceBookingSheet> {
                                 BorderRadius.circular(14)),
                         elevation: 0,
                         disabledBackgroundColor:
-                            widget.themeColor.withOpacity(0.6),
+                            widget.themeColor.withValues(alpha:0.6),
                       ),
                       child: _busy
                           ? const SizedBox(
@@ -1028,6 +1051,196 @@ class _ServiceBookingSheetState extends ConsumerState<ServiceBookingSheet> {
               horizontal: 14, vertical: 13),
         ),
       );
+
+  Widget _buildAddrAutocomplete() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextFormField(
+          controller: _manualAddrCtrl,
+          style: const TextStyle(fontFamily: 'Poppins', fontSize: 14),
+          decoration: InputDecoration(
+            hintText: 'Search address…',
+            hintStyle: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 13,
+                color: Colors.grey[400]),
+            filled: true,
+            fillColor: const Color(0xFFF8F9FA),
+            border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none),
+            enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: Colors.grey[200]!)),
+            focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide:
+                    BorderSide(color: widget.themeColor, width: 1.5)),
+            errorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Colors.red)),
+            focusedErrorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Colors.red)),
+            contentPadding: const EdgeInsets.symmetric(
+                horizontal: 14, vertical: 13),
+            prefixIcon: const Icon(Icons.search_rounded,
+                color: Colors.grey, size: 18),
+            suffixIcon: _manualAddrCtrl.text.isNotEmpty
+                ? IconButton(
+                    icon: const Icon(Icons.close_rounded,
+                        size: 18, color: Colors.grey),
+                    onPressed: () {
+                      _manualAddrCtrl.removeListener(_onAddrChanged);
+                      _manualAddrCtrl.clear();
+                      _manualAddrCtrl.addListener(_onAddrChanged);
+                      setState(() {
+                        _addrSuggestions = [];
+                        _addrConfirmed = false;
+                        _addrSearching = false;
+                      });
+                    },
+                  )
+                : null,
+          ),
+          validator: (v) {
+            if (v == null || v.trim().isEmpty) {
+              return 'Please search and select an address';
+            }
+            if (!_addrConfirmed) {
+              return 'Please select an address from the list below';
+            }
+            return null;
+          },
+        ),
+        if (_addrSearching)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: LinearProgressIndicator(
+              minHeight: 2,
+              color: widget.themeColor,
+              backgroundColor: widget.themeColor.withValues(alpha: 0.1),
+            ),
+          ),
+        if (!_addrConfirmed && _addrSuggestions.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey[200]!),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.06),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  for (int i = 0; i < _addrSuggestions.length; i++) ...[
+                    if (i > 0)
+                      Divider(height: 1, color: Colors.grey[100]),
+                    _AddrSuggestionTile(
+                      suggestion: _addrSuggestions[i],
+                      isFirst: i == 0,
+                      isLast: i == _addrSuggestions.length - 1,
+                      onTap: () => _pickAddrSuggestion(_addrSuggestions[i]),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        if (_addrConfirmed)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE8F5E9),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                    color: const Color(0xFF81C784).withValues(alpha: 0.5)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.check_circle_rounded,
+                      size: 14, color: Color(0xFF2E7D32)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _selectedLat != null
+                          ? 'Address confirmed with GPS coordinates'
+                          : 'Address selected',
+                      style: const TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 11,
+                        color: Color(0xFF2E7D32),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          )
+        else if (!_addrSearching &&
+            _addrSuggestions.isEmpty &&
+            _manualAddrCtrl.text.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF8E1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                    color:
+                        const Color(0xFFFFB300).withValues(alpha: 0.4)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.info_outlined,
+                      size: 14, color: Color(0xFFE65100)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'No matches found. Try a different search term.',
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 11,
+                        color: Colors.orange.shade800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        const SizedBox(height: 6),
+        Align(
+          alignment: Alignment.centerRight,
+          child: GestureDetector(
+            onTap: () => setState(() => _useManualEntry = false),
+            child: Text(
+              'Use saved / GPS location',
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 12,
+                color: widget.themeColor,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 
   Widget _datePicker() => GestureDetector(
         onTap: _pickDate,
@@ -1124,11 +1337,11 @@ class _AddressSelectorCard extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
         decoration: BoxDecoration(
           color: hasAddr
-              ? themeColor.withOpacity(0.04)
+              ? themeColor.withValues(alpha:0.04)
               : const Color(0xFFF8F9FA),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: hasAddr ? themeColor.withOpacity(0.3) : Colors.grey[200]!,
+            color: hasAddr ? themeColor.withValues(alpha:0.3) : Colors.grey[200]!,
             width: hasAddr ? 1.5 : 1,
           ),
         ),
@@ -1181,6 +1394,68 @@ class _AddressSelectorCard extends StatelessWidget {
             ),
             Icon(Icons.expand_more_rounded,
                 color: Colors.grey.shade400, size: 20),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AddrSuggestionTile extends StatelessWidget {
+  final PlacesSuggestion suggestion;
+  final VoidCallback onTap;
+  final bool isFirst;
+  final bool isLast;
+
+  const _AddrSuggestionTile({
+    required this.suggestion,
+    required this.onTap,
+    required this.isFirst,
+    required this.isLast,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.vertical(
+        top: isFirst ? const Radius.circular(12) : Radius.zero,
+        bottom: isLast ? const Radius.circular(12) : Radius.zero,
+      ),
+      child: Padding(
+        padding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(
+          children: [
+            const Icon(Icons.location_on_rounded,
+                size: 16, color: Color(0xFF00897B)),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    suggestion.mainText,
+                    style: const TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  if (suggestion.secondaryText.isNotEmpty)
+                    Text(
+                      suggestion.secondaryText,
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 11,
+                        color: Colors.grey[500],
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                ],
+              ),
+            ),
           ],
         ),
       ),

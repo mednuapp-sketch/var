@@ -86,7 +86,7 @@ class PregnancyNutritionScreen extends ConsumerWidget {
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.15),
+            color: Colors.white.withValues(alpha:0.15),
             borderRadius: BorderRadius.circular(10),
           ),
           child: Text(data.nutritionTip,
@@ -104,7 +104,7 @@ class PregnancyNutritionScreen extends ConsumerWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8)],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:0.05), blurRadius: 8)],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -172,7 +172,7 @@ class PregnancyNutritionScreen extends ConsumerWidget {
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withValues(alpha:0.3)),
       ),
       child: Text(f, style: TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.w500)),
     )).toList(),
@@ -183,7 +183,7 @@ class PregnancyNutritionScreen extends ConsumerWidget {
     decoration: BoxDecoration(
       color: Colors.white,
       borderRadius: BorderRadius.circular(16),
-      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8)],
+      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:0.05), blurRadius: 8)],
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -217,7 +217,7 @@ class PregnancyNutritionScreen extends ConsumerWidget {
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: (info.$3 as Color).withOpacity(0.06),
+        color: (info.$3 as Color).withValues(alpha:0.06),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Row(

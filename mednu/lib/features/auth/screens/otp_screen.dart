@@ -10,7 +10,16 @@ import '../providers/auth_provider.dart';
 
 class OtpScreen extends ConsumerStatefulWidget {
   final String phone;
-  const OtpScreen({super.key, required this.phone});
+
+  // Present during registration: {name, dob, gender, referralCode?, phone}
+  // Null means the OTP screen is being shown outside the signup flow.
+  final Map<String, dynamic>? signupData;
+
+  const OtpScreen({
+    super.key,
+    required this.phone,
+    this.signupData,
+  });
 
   @override
   ConsumerState<OtpScreen> createState() => _OtpScreenState();
@@ -34,11 +43,10 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
     _animCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 600),
-    );
+    )..forward();
     _fadeIn = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut);
     _slideUp = Tween(begin: const Offset(0, 0.10), end: Offset.zero)
         .animate(CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut));
-    _animCtrl.forward();
   }
 
   void _startTimer() {
@@ -48,27 +56,39 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
       if (_secondsLeft == 0) {
         t.cancel();
       } else {
-        setState(() => _secondsLeft--);
+        if (mounted) setState(() => _secondsLeft--);
       }
     });
   }
 
+  // ── Verify OTP ─────────────────────────────────────────────────────────────
+  // If signupData is present: verifies phone AND creates the Firestore account.
+  // Otherwise: navigates to home (fallback, not used in normal flow).
   Future<void> _verifyOtp(String otp) async {
     if (otp.length < 6) return;
     setState(() => _isLoading = true);
     try {
-      final isNew = await ref.read(authProvider.notifier).verifyOtp(otp);
-      if (!mounted) return;
-      if (isNew) {
-        context.go(AppRoutes.register);
+      if (widget.signupData != null) {
+        await ref.read(authProvider.notifier).verifyPhoneAndRegister(
+              otp: otp,
+              name: widget.signupData!['name'] as String? ?? '',
+              phone: widget.signupData!['phone'] as String? ?? widget.phone,
+              dob: widget.signupData!['dob'] as String? ?? '',
+              gender: widget.signupData!['gender'] as String? ?? 'Male',
+              referralCode:
+                  widget.signupData!['referralCode'] as String?,
+            );
+        if (!mounted) return;
+        // Navigate to home; replace entire stack so back button can't return here
+        context.go(AppRoutes.home);
       } else {
+        if (!mounted) return;
         context.go(AppRoutes.home);
       }
-    } catch (e) {
+    } on Exception catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Invalid OTP. Please try again.')),
-      );
+      final msg = e.toString().replaceFirst('Exception: ', '');
+      _showError(msg);
       _otpController.clear();
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -82,14 +102,32 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
       _startTimer();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('OTP resent successfully!')),
+        SnackBar(
+          content: const Text('OTP resent successfully!'),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: AppColors.success,
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12)),
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
-      );
+      _showError(e.toString().replaceFirst('Exception: ', ''));
     }
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: AppColors.error,
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      ),
+    );
   }
 
   @override
@@ -121,7 +159,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
         border: Border.all(color: AppColors.primary, width: 2),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primary.withOpacity(0.15),
+            color: AppColors.primary.withValues(alpha:0.15),
             blurRadius: 10,
             offset: const Offset(0, 3),
           ),
@@ -131,7 +169,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
 
     final submittedPinTheme = defaultPinTheme.copyWith(
       decoration: defaultPinTheme.decoration!.copyWith(
-        color: AppColors.primary.withOpacity(0.08),
+        color: AppColors.primary.withValues(alpha:0.08),
         border: Border.all(color: AppColors.primary, width: 1.5),
       ),
     );
@@ -140,16 +178,20 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
       backgroundColor: Colors.white,
       body: Stack(
         children: [
-          // ── Top gradient band ────────────────────────────
+          // ── Top gradient band ────────────────────────────────────────────
           Positioned(
             top: 0,
             left: 0,
             right: 0,
-            height: size.height * 0.32,
+            height: size.height * 0.38,
             child: Container(
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [Color(0xFF880E4F), Color(0xFFC2185B), Color(0xFF7B1FA2)],
+                  colors: [
+                    Color(0xFF880E4F),
+                    Color(0xFFC2185B),
+                    Color(0xFF7B1FA2),
+                  ],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
@@ -160,23 +202,23 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
                     top: -40,
                     right: -40,
                     child: Container(
-                      width: 150,
-                      height: 150,
+                      width: 160,
+                      height: 160,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: Colors.white.withOpacity(0.05),
+                        color: Colors.white.withValues(alpha:0.05),
                       ),
                     ),
                   ),
                   Positioned(
-                    bottom: 20,
+                    bottom: 30,
                     left: -20,
                     child: Container(
-                      width: 100,
-                      height: 100,
+                      width: 110,
+                      height: 110,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: Colors.white.withOpacity(0.05),
+                        color: Colors.white.withValues(alpha:0.05),
                       ),
                     ),
                   ),
@@ -185,21 +227,22 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
             ),
           ),
 
-          // ── White card base ──────────────────────────────
+          // ── White card base ──────────────────────────────────────────────
           Positioned(
-            top: size.height * 0.28,
+            top: size.height * 0.34,
             left: 0,
             right: 0,
             bottom: 0,
             child: Container(
               decoration: const BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+                borderRadius:
+                    BorderRadius.vertical(top: Radius.circular(32)),
               ),
             ),
           ),
 
-          // ── Content ──────────────────────────────────────
+          // ── Content ──────────────────────────────────────────────────────
           SafeArea(
             child: Column(
               children: [
@@ -218,20 +261,27 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
 
                 // Hero icon
                 Container(
-                  width: 72,
-                  height: 72,
+                  width: 76,
+                  height: 76,
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.18),
+                    color: Colors.white.withValues(alpha:0.18),
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: Colors.white.withOpacity(0.3),
+                      color: Colors.white.withValues(alpha:0.3),
                       width: 2,
                     ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha:0.12),
+                        blurRadius: 20,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
                   ),
                   child: const Icon(
                     Icons.shield_rounded,
                     color: Colors.white,
-                    size: 34,
+                    size: 36,
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -242,6 +292,15 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
                     fontSize: 20,
                     fontWeight: FontWeight.w700,
                     color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'One-time verification',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 13,
+                    color: Colors.white.withValues(alpha:0.7),
                   ),
                 ),
 
@@ -256,7 +315,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // ── Title ──────────────────────────
+                            // Title
                             Text(
                               'Enter Verification Code',
                               style: AppTextStyles.h3,
@@ -266,7 +325,8 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
                               text: TextSpan(
                                 style: AppTextStyles.bodyMedium,
                                 children: [
-                                  const TextSpan(text: 'We sent a 6-digit OTP to '),
+                                  const TextSpan(
+                                      text: 'We sent a 6-digit OTP to '),
                                   TextSpan(
                                     text: widget.phone,
                                     style: AppTextStyles.bodyMedium.copyWith(
@@ -277,9 +337,42 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
                                 ],
                               ),
                             ),
-                            const SizedBox(height: 36),
 
-                            // ── PIN input ───────────────────────
+                            const SizedBox(height: 12),
+                            // One-time notice chip
+                            if (widget.signupData != null)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: AppColors.success.withValues(alpha:0.08),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: AppColors.success.withValues(alpha:0.2),
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.check_circle_outline_rounded,
+                                        color: AppColors.success, size: 14),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      'This verification happens only once.',
+                                      style: TextStyle(
+                                        fontFamily: 'Poppins',
+                                        fontSize: 11.5,
+                                        color: AppColors.success,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+
+                            const SizedBox(height: 32),
+
+                            // PIN input
                             Center(
                               child: Pinput(
                                 length: 6,
@@ -289,89 +382,45 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
                                 submittedPinTheme: submittedPinTheme,
                                 onCompleted: _verifyOtp,
                                 autofocus: true,
-                                hapticFeedbackType: HapticFeedbackType.lightImpact,
+                                hapticFeedbackType:
+                                    HapticFeedbackType.lightImpact,
                                 closeKeyboardWhenCompleted: false,
                               ),
                             ),
                             const SizedBox(height: 36),
 
-                            // ── Verify button ───────────────────
-                            SizedBox(
-                              width: double.infinity,
-                              height: 54,
-                              child: DecoratedBox(
-                                decoration: BoxDecoration(
-                                  gradient: _isLoading
-                                      ? null
-                                      : const LinearGradient(
-                                          colors: [Color(0xFFC2185B), Color(0xFF7B1FA2)],
-                                          begin: Alignment.centerLeft,
-                                          end: Alignment.centerRight,
-                                        ),
-                                  color: _isLoading ? AppColors.primary : null,
-                                  borderRadius: BorderRadius.circular(14),
-                                  boxShadow: _isLoading
-                                      ? null
-                                      : [
-                                          BoxShadow(
-                                            color: AppColors.primary.withOpacity(0.35),
-                                            blurRadius: 14,
-                                            offset: const Offset(0, 6),
-                                          ),
-                                        ],
-                                ),
-                                child: ElevatedButton(
-                                  onPressed: _isLoading
-                                      ? null
-                                      : () => _verifyOtp(_otpController.text),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.transparent,
-                                    shadowColor: Colors.transparent,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(14),
-                                    ),
-                                  ),
-                                  child: _isLoading
-                                      ? const SizedBox(
-                                          width: 22,
-                                          height: 22,
-                                          child: CircularProgressIndicator(
-                                            color: Colors.white,
-                                            strokeWidth: 2.5,
-                                          ),
-                                        )
-                                      : const Text(
-                                          'Verify OTP',
-                                          style: TextStyle(
-                                            fontFamily: 'Poppins',
-                                            fontSize: 15,
-                                            fontWeight: FontWeight.w700,
-                                            color: Colors.white,
-                                          ),
-                                        ),
-                                ),
-                              ),
+                            // Verify button
+                            _VerifyButton(
+                              isLoading: _isLoading,
+                              onTap: () =>
+                                  _verifyOtp(_otpController.text),
                             ),
                             const SizedBox(height: 28),
 
-                            // ── Resend timer ────────────────────
+                            // Resend timer / button
                             Center(
                               child: _secondsLeft > 0
                                   ? Container(
                                       padding: const EdgeInsets.symmetric(
                                           horizontal: 16, vertical: 10),
                                       decoration: BoxDecoration(
-                                        color: AppColors.primary.withOpacity(0.06),
-                                        borderRadius: BorderRadius.circular(20),
+                                        color: AppColors.primary
+                                            .withValues(alpha:0.06),
+                                        borderRadius:
+                                            BorderRadius.circular(20),
                                       ),
                                       child: RichText(
                                         text: TextSpan(
                                           style: AppTextStyles.bodySmall,
                                           children: [
-                                            const TextSpan(text: 'Resend OTP in '),
+                                            const TextSpan(
+                                                text: 'Resend OTP in '),
                                             TextSpan(
-                                              text: '00:${_secondsLeft.toString().padLeft(2, '0')}',
-                                              style: AppTextStyles.bodySmall.copyWith(
+                                              text:
+                                                  '00:${_secondsLeft.toString().padLeft(2, '0')}',
+                                              style: AppTextStyles
+                                                  .bodySmall
+                                                  .copyWith(
                                                 color: AppColors.primary,
                                                 fontWeight: FontWeight.w700,
                                               ),
@@ -387,11 +436,15 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
                                             horizontal: 20, vertical: 10),
                                         decoration: BoxDecoration(
                                           gradient: const LinearGradient(
-                                            colors: [Color(0xFFC2185B), Color(0xFF7B1FA2)],
+                                            colors: [
+                                              Color(0xFFC2185B),
+                                              Color(0xFF7B1FA2),
+                                            ],
                                             begin: Alignment.centerLeft,
                                             end: Alignment.centerRight,
                                           ),
-                                          borderRadius: BorderRadius.circular(20),
+                                          borderRadius:
+                                              BorderRadius.circular(20),
                                         ),
                                         child: const Text(
                                           'Resend OTP',
@@ -405,7 +458,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
                                       ),
                                     ),
                             ),
-                            const SizedBox(height: 20),
+                            const SizedBox(height: 16),
                             Center(
                               child: Text(
                                 'Didn\'t receive it? Check spam or try again.',
@@ -423,6 +476,71 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ── Verify Button ─────────────────────────────────────────────────────────────
+class _VerifyButton extends StatelessWidget {
+  final bool isLoading;
+  final VoidCallback onTap;
+  const _VerifyButton({required this.isLoading, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      height: 54,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: isLoading
+              ? null
+              : const LinearGradient(
+                  colors: [Color(0xFFC2185B), Color(0xFF7B1FA2)],
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                ),
+          color: isLoading ? AppColors.primary : null,
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: isLoading
+              ? null
+              : [
+                  BoxShadow(
+                    color: AppColors.primary.withValues(alpha:0.35),
+                    blurRadius: 14,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+        ),
+        child: ElevatedButton(
+          onPressed: isLoading ? null : onTap,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.transparent,
+            shadowColor: Colors.transparent,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
+          ),
+          child: isLoading
+              ? const SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(
+                    color: Colors.white,
+                    strokeWidth: 2.5,
+                  ),
+                )
+              : const Text(
+                  'Verify & Create Account',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                ),
+        ),
       ),
     );
   }

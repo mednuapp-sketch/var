@@ -95,7 +95,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   count: _pages.length,
                   effect: ExpandingDotsEffect(
                     activeDotColor: AppColors.primary,
-                    dotColor: AppColors.primary.withOpacity(0.2),
+                    dotColor: AppColors.primary.withValues(alpha:0.2),
                     dotHeight: 8,
                     dotWidth: 8,
                     expansionFactor: 4,
@@ -118,7 +118,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       borderRadius: BorderRadius.circular(14),
                       boxShadow: [
                         BoxShadow(
-                          color: AppColors.primary.withOpacity(0.35),
+                          color: AppColors.primary.withValues(alpha:0.35),
                           blurRadius: 14,
                           offset: const Offset(0, 6),
                         ),
@@ -197,7 +197,7 @@ class _OnboardPage extends StatelessWidget {
                       height: 150,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: Colors.white.withOpacity(0.06),
+                        color: Colors.white.withValues(alpha:0.06),
                       ),
                     ),
                   ),
@@ -209,7 +209,7 @@ class _OnboardPage extends StatelessWidget {
                       height: 120,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: Colors.white.withOpacity(0.05),
+                        color: Colors.white.withValues(alpha:0.05),
                       ),
                     ),
                   ),
@@ -221,7 +221,7 @@ class _OnboardPage extends StatelessWidget {
                       height: 80,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: Colors.white.withOpacity(0.04),
+                        color: Colors.white.withValues(alpha:0.04),
                       ),
                     ),
                   ),
@@ -233,10 +233,10 @@ class _OnboardPage extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 16, vertical: 7),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
+                          color: Colors.white.withValues(alpha:0.2),
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(
-                            color: Colors.white.withOpacity(0.25),
+                            color: Colors.white.withValues(alpha:0.25),
                           ),
                         ),
                         child: Text(
@@ -256,10 +256,10 @@ class _OnboardPage extends StatelessWidget {
                         width: 200,
                         height: 200,
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.12),
+                          color: Colors.white.withValues(alpha:0.12),
                           shape: BoxShape.circle,
                           border: Border.all(
-                            color: Colors.white.withOpacity(0.15),
+                            color: Colors.white.withValues(alpha:0.15),
                             width: 1.5,
                           ),
                         ),
@@ -268,7 +268,7 @@ class _OnboardPage extends StatelessWidget {
                             width: 140,
                             height: 140,
                             decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.18),
+                              color: Colors.white.withValues(alpha:0.18),
                               shape: BoxShape.circle,
                             ),
                             child: Icon(

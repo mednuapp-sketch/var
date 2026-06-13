@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 enum NotifType {
   consultationRequest,
+  emergencyRequest,
   review,
   payment,
   appointment,
@@ -32,6 +33,7 @@ class NotificationModel {
   static NotifType _typeFrom(String raw) {
     switch (raw) {
       case 'consultation_request': return NotifType.consultationRequest;
+      case 'emergency_request':    return NotifType.emergencyRequest;
       case 'review':               return NotifType.review;
       case 'payment':              return NotifType.payment;
       case 'appointment':          return NotifType.appointment;

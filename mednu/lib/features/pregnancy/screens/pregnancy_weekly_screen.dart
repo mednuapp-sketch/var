@@ -16,18 +16,15 @@ class PregnancyWeeklyScreen extends ConsumerStatefulWidget {
 class _PregnancyWeeklyScreenState extends ConsumerState<PregnancyWeeklyScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tab;
-  int _selectedWeek = 1;
+  late int _selectedWeek;
 
   @override
   void initState() {
     super.initState();
     _tab = TabController(length: 4, vsync: this);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final profile = ref.read(pregnancyProvider).profile;
-      if (profile != null) {
-        setState(() => _selectedWeek = profile.currentWeek);
-      }
-    });
+    // Read profile synchronously before first build to avoid week-1 flicker
+    final profile = ref.read(pregnancyProvider).profile;
+    _selectedWeek = profile?.currentWeek ?? 1;
   }
 
   @override
@@ -188,7 +185,7 @@ class _PregnancyWeeklyScreenState extends ConsumerState<PregnancyWeeklyScreen>
   Widget _babyStatPill(String emoji, String value, String label) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
     decoration: BoxDecoration(
-      color: Colors.white.withOpacity(0.2),
+      color: Colors.white.withValues(alpha: 0.2),
       borderRadius: BorderRadius.circular(12),
     ),
     child: Column(
@@ -210,7 +207,7 @@ class _PregnancyWeeklyScreenState extends ConsumerState<PregnancyWeeklyScreen>
           decoration: BoxDecoration(
             color: const Color(0xFFF1F8E9),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0xFF66BB6A).withOpacity(0.3)),
+            border: Border.all(color: const Color(0xFF66BB6A).withValues(alpha: 0.3)),
           ),
           child: Row(
             children: [
@@ -268,10 +265,10 @@ class _PregnancyWeeklyScreenState extends ConsumerState<PregnancyWeeklyScreen>
           decoration: BoxDecoration(
             color: const Color(0xFFFFF3E0),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0xFFFFA726).withOpacity(0.3)),
+            border: Border.all(color: const Color(0xFFFFA726).withValues(alpha: 0.3)),
           ),
-          child: Row(
-            children: const [
+          child: const Row(
+            children: [
               Text('⚠️', style: TextStyle(fontSize: 20)),
               SizedBox(width: 10),
               Expanded(
@@ -295,7 +292,7 @@ class _PregnancyWeeklyScreenState extends ConsumerState<PregnancyWeeklyScreen>
     decoration: BoxDecoration(
       color: Colors.white,
       borderRadius: BorderRadius.circular(10),
-      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6)],
+      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 6)],
     ),
     child: Row(
       children: [
@@ -328,8 +325,8 @@ class _PregnancyWeeklyScreenState extends ConsumerState<PregnancyWeeklyScreen>
     decoration: BoxDecoration(
       color: Colors.white,
       borderRadius: BorderRadius.circular(14),
-      border: Border.all(color: color.withOpacity(0.2)),
-      boxShadow: [BoxShadow(color: color.withOpacity(0.08), blurRadius: 8)],
+      border: Border.all(color: color.withValues(alpha: 0.2)),
+      boxShadow: [BoxShadow(color: color.withValues(alpha: 0.08), blurRadius: 8)],
     ),
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -362,7 +359,7 @@ class _PregnancyWeeklyScreenState extends ConsumerState<PregnancyWeeklyScreen>
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(14),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8)],
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8)],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -408,7 +405,7 @@ class _PregnancyWeeklyScreenState extends ConsumerState<PregnancyWeeklyScreen>
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: iconColor.withOpacity(0.2)),
+                  border: Border.all(color: iconColor.withValues(alpha: 0.2)),
                 ),
                 child: Text(item, style: TextStyle(fontSize: 11, color: iconColor, fontWeight: FontWeight.w500)),
               )).toList(),

@@ -161,7 +161,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                             Container(
                               width: 46, height: 46,
-                              decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+                              decoration: BoxDecoration(color: color.withValues(alpha:0.1), borderRadius: BorderRadius.circular(12)),
                               child: Icon(eq['icon'] as IconData, color: color, size: 26),
                             ),
                             const SizedBox(height: 10),

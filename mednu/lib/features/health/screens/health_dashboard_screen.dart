@@ -9,6 +9,7 @@ import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../providers/water_tracker_provider.dart';
+import '../../../core/widgets/ux_widgets.dart';
 
 // â”€â”€â”€ Entry point â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 //
@@ -70,8 +71,28 @@ class _FullPageLoader extends StatelessWidget {
             onPressed: () => Navigator.of(context).maybePop(),
           ),
         ),
-        body: const Center(
-          child: CircularProgressIndicator(color: AppColors.primary),
+        body: SingleChildScrollView(
+          physics: const NeverScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SkeletonBox(width: double.infinity, height: 140, radius: 20),
+              const SizedBox(height: 16),
+              const Row(children: [
+                Expanded(child: SkeletonBox(width: double.infinity, height: 90, radius: 16)),
+                SizedBox(width: 12),
+                Expanded(child: SkeletonBox(width: double.infinity, height: 90, radius: 16)),
+              ]),
+              const SizedBox(height: 16),
+              const SkeletonBox(width: double.infinity, height: 200, radius: 20),
+              const SizedBox(height: 16),
+              ...List.generate(3, (_) => const Padding(
+                padding: EdgeInsets.only(bottom: 12),
+                child: SkeletonListTile(),
+              )),
+            ],
+          ),
         ),
       );
 }
@@ -249,7 +270,7 @@ class _DashboardContent extends ConsumerWidget {
                       width: 36,
                       height: 36,
                       decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
+                          color: Colors.white.withValues(alpha:0.2),
                           shape: BoxShape.circle),
                       child: const Icon(Icons.monitor_heart_rounded,
                           color: Colors.white, size: 20),
@@ -328,7 +349,7 @@ class _SecHead extends StatelessWidget {
             width: 30,
             height: 30,
             decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
+                color: color.withValues(alpha:0.1),
                 borderRadius: BorderRadius.circular(9)),
             child: Icon(icon, size: 15, color: color),
           ),
@@ -552,7 +573,7 @@ class _VCard extends StatelessWidget {
         border: Border.all(color: AppColors.divider),
         boxShadow: [
           BoxShadow(
-              color: color.withOpacity(0.06),
+              color: color.withValues(alpha:0.06),
               blurRadius: 10,
               offset: const Offset(0, 3))
         ],
@@ -568,7 +589,7 @@ class _VCard extends StatelessWidget {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                 decoration: BoxDecoration(
-                    color: sc.withOpacity(0.1),
+                    color: sc.withValues(alpha:0.1),
                     borderRadius: BorderRadius.circular(5)),
                 child: Text(status,
                     style: TextStyle(
@@ -617,7 +638,7 @@ class _WaterCard extends StatelessWidget {
           border: Border.all(color: AppColors.divider),
           boxShadow: [
             BoxShadow(
-                color: c.withOpacity(0.06),
+                color: c.withValues(alpha:0.06),
                 blurRadius: 10,
                 offset: const Offset(0, 3))
           ]),
@@ -649,7 +670,7 @@ class _WaterCard extends StatelessWidget {
             child: LinearProgressIndicator(
               value: state.progress,
               minHeight: 8,
-              backgroundColor: c.withOpacity(0.1),
+              backgroundColor: c.withValues(alpha:0.1),
               valueColor: const AlwaysStoppedAnimation<Color>(c),
             ),
           ),
@@ -671,7 +692,7 @@ class _WaterCard extends StatelessWidget {
                         size: 22,
                         color: i < state.glassesLogged
                             ? c
-                            : c.withOpacity(0.18)),
+                            : c.withValues(alpha:0.18)),
                   ),
                 ),
               ),
@@ -739,7 +760,7 @@ class _WaterCard extends StatelessWidget {
         padding:
             const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
+            color: color.withValues(alpha:0.1),
             borderRadius: BorderRadius.circular(20)),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           Icon(icon, color: color, size: 13),
@@ -800,7 +821,7 @@ class _AppointmentsSection extends StatelessWidget {
             iconColor: AppColors.info,
             text: 'No upcoming appointments.',
             cta: 'Book Now',
-            onCta: () => context.push(AppRoutes.bookAppointment),
+            onCta: () => context.push(AppRoutes.doctors),
           );
         }
 
@@ -1051,12 +1072,12 @@ class _WomensHealth extends StatelessWidget {
             padding: const EdgeInsets.all(15),
             decoration: BoxDecoration(
               gradient: LinearGradient(colors: [
-                const Color(0xFF880E4F).withOpacity(0.08),
-                const Color(0xFFE91E8C).withOpacity(0.08),
+                const Color(0xFF880E4F).withValues(alpha:0.08),
+                const Color(0xFFE91E8C).withValues(alpha:0.08),
               ]),
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                  color: const Color(0xFFE91E8C).withOpacity(0.3)),
+                  color: const Color(0xFFE91E8C).withValues(alpha:0.3)),
             ),
             child: Row(children: [
               Container(
@@ -1107,7 +1128,7 @@ class _WomensHealth extends StatelessWidget {
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
-                    color: const Color(0xFFC2185B).withOpacity(0.2),
+                    color: const Color(0xFFC2185B).withValues(alpha:0.2),
                     blurRadius: 10,
                     offset: const Offset(0, 4))
               ],
@@ -1117,7 +1138,7 @@ class _WomensHealth extends StatelessWidget {
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
+                    color: Colors.white.withValues(alpha:0.2),
                     shape: BoxShape.circle),
                 child: const Icon(Icons.pregnant_woman_rounded,
                     color: Colors.white, size: 24),
@@ -1205,7 +1226,7 @@ class _BMICard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(11),
                 decoration: BoxDecoration(
-                    color: bmiColor.withOpacity(0.08),
+                    color: bmiColor.withValues(alpha:0.08),
                     borderRadius: BorderRadius.circular(10)),
                 child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -1314,7 +1335,7 @@ class _BMICard extends StatelessWidget {
                 return Container(
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                      color: col.withOpacity(0.1),
+                      color: col.withValues(alpha:0.1),
                       borderRadius: BorderRadius.circular(12)),
                   child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -1599,7 +1620,7 @@ class _InfoCard extends StatelessWidget {
             width: 38,
             height: 38,
             decoration: BoxDecoration(
-                color: iconColor.withOpacity(0.1), shape: BoxShape.circle),
+                color: iconColor.withValues(alpha:0.1), shape: BoxShape.circle),
             child: Icon(icon, color: iconColor, size: 19),
           ),
           const SizedBox(width: 12),

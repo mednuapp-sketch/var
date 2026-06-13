@@ -175,7 +175,7 @@ class _PregnancyEmergencyScreenState
               width: 72,
               height: 72,
               decoration: BoxDecoration(
-                color: const Color(0xFFB71C1C).withOpacity(0.1),
+                color: const Color(0xFFB71C1C).withValues(alpha:0.1),
                 shape: BoxShape.circle,
               ),
               child: const Icon(Icons.check_circle_rounded, color: Color(0xFFB71C1C), size: 36),
@@ -272,7 +272,7 @@ class _PregnancyEmergencyScreenState
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
+                          color: Colors.white.withValues(alpha:0.2),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: const Row(
@@ -311,7 +311,7 @@ class _PregnancyEmergencyScreenState
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(14),
-                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8)],
+                    boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:0.05), blurRadius: 8)],
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -379,7 +379,7 @@ class _PregnancyEmergencyScreenState
         decoration: BoxDecoration(
           color: bg,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: color.withOpacity(0.3)),
+          border: Border.all(color: color.withValues(alpha:0.3)),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,

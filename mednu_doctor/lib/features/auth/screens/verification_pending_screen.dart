@@ -104,7 +104,7 @@ class _VerificationPendingScreenState extends State<VerificationPendingScreen>
                       height: 160,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: Colors.white.withOpacity(0.06),
+                        color: Colors.white.withValues(alpha:0.06),
                       ),
                     ),
                   ),
@@ -116,7 +116,7 @@ class _VerificationPendingScreenState extends State<VerificationPendingScreen>
                       height: 100,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: Colors.white.withOpacity(0.05),
+                        color: Colors.white.withValues(alpha:0.05),
                       ),
                     ),
                   ),
@@ -157,10 +157,10 @@ class _VerificationPendingScreenState extends State<VerificationPendingScreen>
                       width: 100,
                       height: 100,
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.18),
+                        color: Colors.white.withValues(alpha:0.18),
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: Colors.white.withOpacity(0.3),
+                          color: Colors.white.withValues(alpha:0.3),
                           width: 2,
                         ),
                       ),
@@ -195,7 +195,7 @@ class _VerificationPendingScreenState extends State<VerificationPendingScreen>
                       borderRadius: BorderRadius.circular(24),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.06),
+                          color: Colors.black.withValues(alpha:0.06),
                           blurRadius: 20,
                           offset: const Offset(0, 6),
                         ),
@@ -234,7 +234,7 @@ class _VerificationPendingScreenState extends State<VerificationPendingScreen>
                         borderRadius: BorderRadius.circular(20),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.04),
+                            color: Colors.black.withValues(alpha:0.04),
                             blurRadius: 12,
                             offset: const Offset(0, 4),
                           ),
@@ -282,10 +282,10 @@ class _VerificationPendingScreenState extends State<VerificationPendingScreen>
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: AppColors.primary.withOpacity(0.06),
+                        color: AppColors.primary.withValues(alpha:0.06),
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(
-                          color: AppColors.primary.withOpacity(0.15),
+                          color: AppColors.primary.withValues(alpha:0.15),
                         ),
                       ),
                       child: Row(
@@ -294,7 +294,7 @@ class _VerificationPendingScreenState extends State<VerificationPendingScreen>
                             width: 36,
                             height: 36,
                             decoration: BoxDecoration(
-                              color: AppColors.primary.withOpacity(0.1),
+                              color: AppColors.primary.withValues(alpha:0.1),
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: const Icon(
@@ -422,7 +422,7 @@ class _ProgressStep extends StatelessWidget {
               Container(
                 width: 2,
                 height: 36,
-                color: isDone ? AppColors.success.withOpacity(0.3) : AppColors.divider,
+                color: isDone ? AppColors.success.withValues(alpha:0.3) : AppColors.divider,
               ),
           ],
         ),

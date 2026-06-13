@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
+import '../../../core/widgets/ux_widgets.dart';
 
 class PatientFeedbackScreen extends StatefulWidget {
   const PatientFeedbackScreen({super.key});
@@ -94,7 +95,8 @@ class _ReviewsList extends StatelessWidget {
           .snapshots(),
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return ListView(physics: const NeverScrollableScrollPhysics(), padding: const EdgeInsets.symmetric(vertical: 8),
+            children: List.generate(5, (_) => const SkeletonListTile()));
         }
         if (snap.hasError) {
           // Fallback — try doctor_reviews collection
@@ -152,7 +154,8 @@ class _DoctorReviewsFallback extends StatelessWidget {
           .snapshots(),
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return ListView(physics: const NeverScrollableScrollPhysics(), padding: const EdgeInsets.symmetric(vertical: 8),
+            children: List.generate(5, (_) => const SkeletonListTile()));
         }
         if (snap.hasError) {
           return Center(
@@ -249,7 +252,8 @@ class _FollowupsList extends StatelessWidget {
           .snapshots(),
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return ListView(physics: const NeverScrollableScrollPhysics(), padding: const EdgeInsets.symmetric(vertical: 8),
+            children: List.generate(5, (_) => const SkeletonListTile()));
         }
         if (snap.hasError) {
           return Center(
@@ -343,7 +347,7 @@ class _FollowupsList extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 10, vertical: 3),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
+                        color: Colors.white.withValues(alpha:0.2),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
@@ -472,7 +476,7 @@ class _FollowupCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
           color: isOverdue
-              ? AppColors.error.withOpacity(0.2)
+              ? AppColors.error.withValues(alpha:0.2)
               : AppColors.divider,
         ),
       ),
@@ -504,8 +508,8 @@ class _FollowupCard extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
               color: isOverdue
-                  ? AppColors.error.withOpacity(0.08)
-                  : AppColors.success.withOpacity(0.08),
+                  ? AppColors.error.withValues(alpha:0.08)
+                  : AppColors.success.withValues(alpha:0.08),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Text(
@@ -568,7 +572,7 @@ class _FollowupCard extends StatelessWidget {
           width: double.infinity,
           padding: const EdgeInsets.symmetric(vertical: 6),
           decoration: BoxDecoration(
-            color: AppColors.primary.withOpacity(0.05),
+            color: AppColors.primary.withValues(alpha:0.05),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Center(
@@ -601,9 +605,9 @@ class _InfoChip extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.06),
+          color: color.withValues(alpha:0.06),
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: color.withOpacity(0.15)),
+          border: Border.all(color: color.withValues(alpha:0.15)),
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
@@ -747,10 +751,10 @@ class _FeedbackCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
-                  color: _feelingColor(feeling).withOpacity(0.08),
+                  color: _feelingColor(feeling).withValues(alpha:0.08),
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(
-                      color: _feelingColor(feeling).withOpacity(0.3)),
+                      color: _feelingColor(feeling).withValues(alpha:0.3)),
                 ),
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
                   Text(_feelingEmoji(feeling),
@@ -772,7 +776,7 @@ class _FeedbackCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.06),
+                  color: AppColors.primary.withValues(alpha:0.06),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(

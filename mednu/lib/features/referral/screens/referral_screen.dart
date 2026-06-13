@@ -76,7 +76,7 @@ class ReferralScreen extends ConsumerWidget {
                       Container(
                         width: 28, height: 28,
                         decoration: BoxDecoration(
-                          color: AppColors.accent.withOpacity(0.1),
+                          color: AppColors.accent.withValues(alpha:0.1),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: const Icon(Icons.history_rounded,
@@ -99,7 +99,7 @@ class ReferralScreen extends ConsumerWidget {
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 10, vertical: 4),
                                 decoration: BoxDecoration(
-                                  color: AppColors.accent.withOpacity(0.08),
+                                  color: AppColors.accent.withValues(alpha:0.08),
                                   borderRadius: BorderRadius.circular(20),
                                 ),
                                 child: Text('${list.length} total',
@@ -165,7 +165,7 @@ class _HeroHeader extends StatelessWidget {
               width: 180, height: 180,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Colors.white.withOpacity(0.06),
+                color: Colors.white.withValues(alpha:0.06),
               ),
             ),
           ),
@@ -175,7 +175,7 @@ class _HeroHeader extends StatelessWidget {
               width: 120, height: 120,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Colors.white.withOpacity(0.05),
+                color: Colors.white.withValues(alpha:0.05),
               ),
             ),
           ),
@@ -188,7 +188,7 @@ class _HeroHeader extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.15),
+                  color: Colors.white.withValues(alpha:0.15),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Row(
@@ -316,7 +316,7 @@ class _StatCard extends StatelessWidget {
         border: Border.all(color: AppColors.divider),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.03),
+              color: Colors.black.withValues(alpha:0.03),
               blurRadius: 6,
               offset: const Offset(0, 2))
         ],
@@ -327,7 +327,7 @@ class _StatCard extends StatelessWidget {
           Container(
             width: 32, height: 32,
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: color.withValues(alpha:0.1),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(icon, color: color, size: 16),
@@ -362,14 +362,14 @@ class _RewardCard extends StatelessWidget {
         decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: [
-              AppColors.primary.withOpacity(0.08),
-              AppColors.secondary.withOpacity(0.06),
+              AppColors.primary.withValues(alpha:0.08),
+              AppColors.secondary.withValues(alpha:0.06),
             ],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: AppColors.primary.withOpacity(0.15)),
+          border: Border.all(color: AppColors.primary.withValues(alpha:0.15)),
         ),
         child: Row(
           children: [
@@ -391,7 +391,7 @@ class _RewardCard extends StatelessWidget {
             ),
             Container(
               width: 1, height: 60,
-              color: AppColors.primary.withOpacity(0.15),
+              color: AppColors.primary.withValues(alpha:0.15),
             ),
             Expanded(
               child: Padding(
@@ -460,7 +460,7 @@ class _ReferralCodeCard extends StatelessWidget {
           border: Border.all(color: AppColors.divider),
           boxShadow: [
             BoxShadow(
-                color: Colors.black.withOpacity(0.03),
+                color: Colors.black.withValues(alpha:0.03),
                 blurRadius: 8,
                 offset: const Offset(0, 2))
           ],
@@ -480,7 +480,7 @@ class _ReferralCodeCard extends StatelessWidget {
                       color: AppColors.background,
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(
-                          color: AppColors.primary.withOpacity(0.25),
+                          color: AppColors.primary.withValues(alpha:0.25),
                           width: 1.5),
                     ),
                     child: Text(
@@ -532,7 +532,7 @@ class _CodeButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: color.withOpacity(0.08),
+      color: color.withValues(alpha:0.08),
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         onTap: onTap,
@@ -570,7 +570,7 @@ class _HowItWorks extends StatelessWidget {
             Container(
               width: 28, height: 28,
               decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.1),
+                color: AppColors.primary.withValues(alpha:0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Icon(Icons.info_outline_rounded,
@@ -642,7 +642,7 @@ class _Step extends StatelessWidget {
             Container(
               width: 40, height: 40,
               decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
+                color: color.withValues(alpha:0.1),
                 shape: BoxShape.circle,
               ),
               child: Icon(icon, color: color, size: 20),
@@ -653,7 +653,7 @@ class _Step extends StatelessWidget {
                 margin: const EdgeInsets.symmetric(vertical: 4),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [color.withOpacity(0.3), color.withOpacity(0.05)],
+                    colors: [color.withValues(alpha:0.3), color.withValues(alpha:0.05)],
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                   ),
@@ -701,7 +701,7 @@ class _ReferralCard extends StatelessWidget {
           border: Border.all(color: AppColors.divider),
           boxShadow: [
             BoxShadow(
-                color: Colors.black.withOpacity(0.03),
+                color: Colors.black.withValues(alpha:0.03),
                 blurRadius: 6,
                 offset: const Offset(0, 2))
           ],
@@ -713,7 +713,7 @@ class _ReferralCard extends StatelessWidget {
             width: 44, height: 44,
             decoration: BoxDecoration(
               color: (isRewarded ? AppColors.success : AppColors.warning)
-                  .withOpacity(0.1),
+                  .withValues(alpha:0.1),
               shape: BoxShape.circle,
             ),
             child: Icon(
@@ -738,7 +738,7 @@ class _ReferralCard extends StatelessWidget {
                     const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
                   color: (isRewarded ? AppColors.success : AppColors.warning)
-                      .withOpacity(0.1),
+                      .withValues(alpha:0.1),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
@@ -794,11 +794,11 @@ class _EmptyHistory extends StatelessWidget {
           Container(
             width: 72, height: 72,
             decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.07),
+              color: AppColors.primary.withValues(alpha:0.07),
               shape: BoxShape.circle,
             ),
             child: Icon(Icons.people_alt_outlined,
-                size: 34, color: AppColors.primary.withOpacity(0.5)),
+                size: 34, color: AppColors.primary.withValues(alpha:0.5)),
           ),
           const SizedBox(height: 14),
           Text('No Referrals Yet',
@@ -828,7 +828,7 @@ class _ErrorState extends StatelessWidget {
       child: Column(
         children: [
           Icon(Icons.wifi_off_rounded,
-              size: 48, color: AppColors.error.withOpacity(0.5)),
+              size: 48, color: AppColors.error.withValues(alpha:0.5)),
           const SizedBox(height: 12),
           Text('Couldn\'t load history',
               style:
@@ -883,7 +883,7 @@ class _ShareBar extends StatelessWidget {
         border: Border(top: BorderSide(color: AppColors.divider)),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withValues(alpha:0.05),
               blurRadius: 12,
               offset: const Offset(0, -4))
         ],
@@ -901,7 +901,7 @@ class _ShareBar extends StatelessWidget {
             borderRadius: BorderRadius.circular(14),
             boxShadow: [
               BoxShadow(
-                color: AppColors.primary.withOpacity(0.3),
+                color: AppColors.primary.withValues(alpha:0.3),
                 blurRadius: 12,
                 offset: const Offset(0, 4),
               ),

@@ -421,14 +421,14 @@ class _AmbulanceScreenState extends ConsumerState<AmbulanceScreen> {
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
                 color: _hasValidLocation
-                    ? _kRed.withOpacity(0.35)
+                    ? _kRed.withValues(alpha:0.35)
                     : Colors.grey[200]!,
                 width: _hasValidLocation ? 1.5 : 1,
               ),
               boxShadow: _hasValidLocation
                   ? [
                       BoxShadow(
-                          color: _kRed.withOpacity(0.07),
+                          color: _kRed.withValues(alpha:0.07),
                           blurRadius: 10,
                           offset: const Offset(0, 3))
                     ]
@@ -545,7 +545,7 @@ class _AmbulanceScreenState extends ConsumerState<AmbulanceScreen> {
             padding:
                 const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
-              color: _kRed.withOpacity(0.08),
+              color: _kRed.withValues(alpha:0.08),
               borderRadius: BorderRadius.circular(8),
             ),
             child: const Text(
@@ -569,7 +569,7 @@ class _AmbulanceScreenState extends ConsumerState<AmbulanceScreen> {
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: _kRed.withOpacity(0.08),
+                  color: _kRed.withValues(alpha:0.08),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Icon(Icons.add_location_alt_rounded,
@@ -641,9 +641,9 @@ class _AmbulanceScreenState extends ConsumerState<AmbulanceScreen> {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
-            color: _kRed.withOpacity(0.06),
+            color: _kRed.withValues(alpha:0.06),
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: _kRed.withOpacity(0.15)),
+            border: Border.all(color: _kRed.withValues(alpha:0.15)),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -721,8 +721,8 @@ class _AmbulanceScreenState extends ConsumerState<AmbulanceScreen> {
                       height: 44,
                       decoration: BoxDecoration(
                         color: selected
-                            ? _kRed.withOpacity(0.1)
-                            : Colors.grey.withOpacity(0.08),
+                            ? _kRed.withValues(alpha:0.1)
+                            : Colors.grey.withValues(alpha:0.08),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Icon(t.icon,
@@ -807,7 +807,7 @@ class _AmbulanceScreenState extends ConsumerState<AmbulanceScreen> {
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.06),
+              color: Colors.black.withValues(alpha:0.06),
               blurRadius: 12,
               offset: const Offset(0, -4)),
         ],
@@ -843,7 +843,7 @@ class _AmbulanceScreenState extends ConsumerState<AmbulanceScreen> {
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14)),
                 elevation: 0,
-                disabledBackgroundColor: _kRed.withOpacity(0.45),
+                disabledBackgroundColor: _kRed.withValues(alpha:0.45),
               ),
               child: _busy
                   ? const SizedBox(
@@ -894,7 +894,7 @@ class _AmbulanceScreenState extends ConsumerState<AmbulanceScreen> {
                 width: 90,
                 height: 90,
                 decoration: BoxDecoration(
-                    color: _kRed.withOpacity(0.1),
+                    color: _kRed.withValues(alpha:0.1),
                     shape: BoxShape.circle),
                 child: const Icon(Icons.check_circle_rounded,
                     color: _kRed, size: 52),
@@ -913,10 +913,10 @@ class _AmbulanceScreenState extends ConsumerState<AmbulanceScreen> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: _kGreen.withOpacity(0.08),
+                  color: _kGreen.withValues(alpha:0.08),
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
-                      color: _kGreen.withOpacity(0.2)),
+                      color: _kGreen.withValues(alpha:0.2)),
                 ),
                 child: Row(
                   children: [
@@ -1115,7 +1115,7 @@ class _LocationPickerSheet extends StatelessWidget {
                 color: const Color(0xFFFFF3E0),
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
-                    color: const Color(0xFFFF8F00).withOpacity(0.35)),
+                    color: const Color(0xFFFF8F00).withValues(alpha:0.35)),
               ),
               child: const Row(
                 children: [
@@ -1222,7 +1222,7 @@ class _LocationPickerSheet extends StatelessWidget {
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: iconBg.withOpacity(0.12),
+                  color: iconBg.withValues(alpha:0.12),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(icon, color: iconBg, size: 22),
@@ -1269,7 +1269,7 @@ class _LocationPickerSheet extends StatelessWidget {
         padding:
             const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
-          color: _kGreen.withOpacity(0.1),
+          color: _kGreen.withValues(alpha:0.1),
           borderRadius: BorderRadius.circular(6),
         ),
         child: const Row(
@@ -1306,7 +1306,7 @@ class _LocationPickerSheet extends StatelessWidget {
         padding:
             const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
         decoration: BoxDecoration(
-          color: AppColors.primary.withOpacity(0.1),
+          color: AppColors.primary.withValues(alpha:0.1),
           borderRadius: BorderRadius.circular(5),
         ),
         child: const Text(

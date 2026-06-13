@@ -399,7 +399,7 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen> {
               Container(
                 width: 80, height: 80,
                 decoration: BoxDecoration(
-                  color: AppColors.warning.withOpacity(0.1),
+                  color: AppColors.warning.withValues(alpha:0.1),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(Icons.edit_note_rounded,
@@ -422,9 +422,9 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: AppColors.warning.withOpacity(0.08),
+                  color: AppColors.warning.withValues(alpha:0.08),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.warning.withOpacity(0.3)),
+                  border: Border.all(color: AppColors.warning.withValues(alpha:0.3)),
                 ),
                 child: Row(children: [
                   const Icon(Icons.info_outline_rounded,
@@ -476,7 +476,7 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen> {
             Container(
               width: 80, height: 80,
               decoration: BoxDecoration(
-                color: AppColors.error.withOpacity(0.1),
+                color: AppColors.error.withValues(alpha:0.1),
                 shape: BoxShape.circle,
               ),
               child: const Icon(Icons.lock_rounded,
@@ -520,7 +520,7 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen> {
             child: Row(children: [
               Container(
                 width: 46, height: 46,
-                decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), shape: BoxShape.circle),
+                decoration: BoxDecoration(color: Colors.white.withValues(alpha:0.2), shape: BoxShape.circle),
                 child: const Icon(Icons.person_rounded, color: Colors.white, size: 26),
               ),
               const SizedBox(width: 12),
@@ -657,7 +657,7 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen> {
                     ? null
                     : [
                         BoxShadow(
-                          color: AppColors.primary.withOpacity(0.3),
+                          color: AppColors.primary.withValues(alpha:0.3),
                           blurRadius: 10,
                           offset: const Offset(0, 4),
                         ),
@@ -703,10 +703,10 @@ class _MedicineCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+        border: Border.all(color: AppColors.primary.withValues(alpha:0.2)),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primary.withOpacity(0.06),
+            color: AppColors.primary.withValues(alpha:0.06),
             blurRadius: 10,
             offset: const Offset(0, 3),
           ),

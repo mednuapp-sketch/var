@@ -49,7 +49,7 @@ class _CounsellingScreenState extends State<CounsellingScreen> {
               decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
           Container(width: 64, height: 64,
               decoration: BoxDecoration(
-                  color: (t['color'] as Color).withOpacity(0.1), shape: BoxShape.circle),
+                  color: (t['color'] as Color).withValues(alpha:0.1), shape: BoxShape.circle),
               child: Icon(t['icon'] as IconData, color: t['color'] as Color, size: 32)),
           const SizedBox(height: 16),
           Text(t['title'] as String, style: AppTextStyles.h3, textAlign: TextAlign.center),
@@ -125,7 +125,7 @@ class _CounsellingScreenState extends State<CounsellingScreen> {
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Container(
                   padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(color: const Color(0xFF7B1FA2).withOpacity(0.08), borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFF7B1FA2).withOpacity(0.2))),
+                  decoration: BoxDecoration(color: const Color(0xFF7B1FA2).withValues(alpha:0.08), borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFF7B1FA2).withValues(alpha:0.2))),
                   child: const Row(children: [
                     Icon(Icons.lock_rounded, color: Color(0xFF7B1FA2)),
                     SizedBox(width: 10),
@@ -160,13 +160,13 @@ class _CounsellingScreenState extends State<CounsellingScreen> {
                         duration: const Duration(milliseconds: 200),
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
-                          color: isSelected ? (t['color'] as Color).withOpacity(0.08) : Colors.white,
+                          color: isSelected ? (t['color'] as Color).withValues(alpha:0.08) : Colors.white,
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
                             color: isSelected ? t['color'] as Color : AppColors.divider,
                             width: isSelected ? 2 : 1,
                           ),
-                          boxShadow: isSelected ? [BoxShadow(color: (t['color'] as Color).withOpacity(0.12), blurRadius: 12, offset: const Offset(0, 4))] : null,
+                          boxShadow: isSelected ? [BoxShadow(color: (t['color'] as Color).withValues(alpha:0.12), blurRadius: 12, offset: const Offset(0, 4))] : null,
                         ),
                         child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
                           Icon(t['icon'] as IconData, color: t['color'] as Color, size: 30),
@@ -178,7 +178,7 @@ class _CounsellingScreenState extends State<CounsellingScreen> {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                             decoration: BoxDecoration(
-                              color: (t['color'] as Color).withOpacity(0.08),
+                              color: (t['color'] as Color).withValues(alpha:0.08),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: const Text('Tap to book', style: TextStyle(fontFamily: 'Poppins', fontSize: 9, fontWeight: FontWeight.w600, color: AppColors.textHint)),
@@ -238,9 +238,9 @@ class _InfoChip extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
     decoration: BoxDecoration(
-      color: color.withOpacity(0.08),
+      color: color.withValues(alpha:0.08),
       borderRadius: BorderRadius.circular(20),
-      border: Border.all(color: color.withOpacity(0.2)),
+      border: Border.all(color: color.withValues(alpha:0.2)),
     ),
     child: Row(mainAxisSize: MainAxisSize.min, children: [
       Icon(icon, size: 12, color: color),

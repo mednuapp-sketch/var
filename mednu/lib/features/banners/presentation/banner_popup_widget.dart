@@ -27,7 +27,7 @@ class BannerPopupWidget extends StatelessWidget {
                 borderRadius: BorderRadius.circular(24),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.28),
+                    color: Colors.black.withValues(alpha:0.28),
                     blurRadius: 48,
                     offset: const Offset(0, 16),
                   ),
@@ -103,7 +103,7 @@ class _BannerImage extends StatelessWidget {
               width: 32,
               height: 32,
               decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.42),
+                color: Colors.black.withValues(alpha:0.42),
                 shape: BoxShape.circle,
               ),
               child: const Icon(Icons.close_rounded, color: Colors.white, size: 18),
@@ -143,7 +143,7 @@ class _BannerContent extends StatelessWidget {
               style: TextStyle(
                 fontFamily: 'Poppins',
                 fontSize: 12,
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                color: Theme.of(context).colorScheme.onSurface.withValues(alpha:0.6),
                 height: 1.5,
               ),
             ),
@@ -221,7 +221,7 @@ Future<void> showBannerPopup(BuildContext context, BannerModel banner) {
     context: context,
     barrierDismissible: true,
     barrierLabel: 'Dismiss banner',
-    barrierColor: Colors.black.withOpacity(0.65),
+    barrierColor: Colors.black.withValues(alpha:0.65),
     transitionDuration: const Duration(milliseconds: 380),
     pageBuilder: (_, __, ___) => BannerPopupWidget(banner: banner),
     transitionBuilder: (_, anim, __, child) {

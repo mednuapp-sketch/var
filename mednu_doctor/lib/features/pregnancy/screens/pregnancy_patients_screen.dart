@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/widgets/ux_widgets.dart';
 
 class PregnancyPatientsScreen extends StatefulWidget {
   const PregnancyPatientsScreen({super.key});
@@ -99,7 +100,8 @@ class _PregnancyPatientsScreenState extends State<PregnancyPatientsScreen>
           .snapshots(),
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+          return ListView(physics: const NeverScrollableScrollPhysics(), padding: const EdgeInsets.all(16),
+            children: List.generate(5, (_) => const Padding(padding: EdgeInsets.only(bottom: 12), child: SkeletonListTile())));
         }
         final docs = snap.data?.docs ?? [];
         final filtered = docs.where((d) {
@@ -144,9 +146,9 @@ class _PregnancyPatientsScreenState extends State<PregnancyPatientsScreen>
           color: Colors.white,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: isHighRisk ? const Color(0xFFEF5350).withOpacity(0.3) : AppColors.border,
+            color: isHighRisk ? const Color(0xFFEF5350).withValues(alpha:0.3) : AppColors.border,
           ),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8)],
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:0.04), blurRadius: 8)],
         ),
         child: Row(
           children: [
@@ -216,7 +218,8 @@ class _PregnancyPatientsScreenState extends State<PregnancyPatientsScreen>
           .snapshots(),
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+          return ListView(physics: const NeverScrollableScrollPhysics(), padding: const EdgeInsets.all(16),
+            children: List.generate(4, (_) => const Padding(padding: EdgeInsets.only(bottom: 12), child: SkeletonCard(height: 80))));
         }
         final docs = snap.data?.docs ?? [];
         if (docs.isEmpty) {
@@ -249,8 +252,8 @@ class _PregnancyPatientsScreenState extends State<PregnancyPatientsScreen>
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withOpacity(0.3)),
-        boxShadow: [BoxShadow(color: color.withOpacity(0.08), blurRadius: 8)],
+        border: Border.all(color: color.withValues(alpha:0.3)),
+        boxShadow: [BoxShadow(color: color.withValues(alpha:0.08), blurRadius: 8)],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -266,7 +269,7 @@ class _PregnancyPatientsScreenState extends State<PregnancyPatientsScreen>
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
+                  color: color.withValues(alpha:0.1),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(severity.toUpperCase(),
@@ -290,9 +293,9 @@ class _PregnancyPatientsScreenState extends State<PregnancyPatientsScreen>
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF66BB6A).withOpacity(0.1),
+                    color: const Color(0xFF66BB6A).withValues(alpha:0.1),
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: const Color(0xFF66BB6A).withOpacity(0.3)),
+                    border: Border.all(color: const Color(0xFF66BB6A).withValues(alpha:0.3)),
                   ),
                   child: const Text('Resolve',
                       style: TextStyle(fontSize: 11, color: Color(0xFF2E7D32), fontWeight: FontWeight.w600)),
@@ -341,7 +344,7 @@ class _PregnancyPatientsScreenState extends State<PregnancyPatientsScreen>
             width: 72,
             height: 72,
             decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.08),
+              color: AppColors.primary.withValues(alpha:0.08),
               shape: BoxShape.circle,
             ),
             child: const Icon(Icons.pregnant_woman_rounded, size: 36, color: AppColors.primary),

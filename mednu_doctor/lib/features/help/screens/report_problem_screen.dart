@@ -170,7 +170,7 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.08),
+                color: AppColors.primary.withValues(alpha:0.08),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
@@ -219,9 +219,9 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: AppColors.error.withOpacity(0.05),
+              color: AppColors.error.withValues(alpha:0.05),
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppColors.error.withOpacity(0.2)),
+              border: Border.all(color: AppColors.error.withValues(alpha:0.2)),
             ),
             child: Row(children: [
               const Icon(Icons.bug_report_rounded, color: AppColors.error, size: 22),
@@ -291,7 +291,7 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
                   color: _screenshot != null
-                      ? AppColors.primary.withOpacity(0.3)
+                      ? AppColors.primary.withValues(alpha:0.3)
                       : AppColors.border,
                   style: BorderStyle.solid,
                 ),

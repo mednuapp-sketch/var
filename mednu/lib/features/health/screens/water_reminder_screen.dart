@@ -65,7 +65,7 @@ class WaterReminderScreen extends ConsumerWidget {
                       child: CircularProgressIndicator(
                         value: state.progress,
                         strokeWidth: 10,
-                        backgroundColor: Colors.white.withOpacity(0.2),
+                        backgroundColor: Colors.white.withValues(alpha:0.2),
                         valueColor:
                             const AlwaysStoppedAnimation<Color>(Colors.white),
                       ),

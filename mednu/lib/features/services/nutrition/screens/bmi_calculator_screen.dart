@@ -201,7 +201,7 @@ class _SliderCard extends StatelessWidget {
                 text: TextSpan(
                   text: value.toStringAsFixed(label == 'Weight' ? 1 : 0),
                   style: TextStyle(fontFamily: 'Poppins', fontSize: 24, fontWeight: FontWeight.w800, color: color),
-                  children: [TextSpan(text: ' $unit', style: TextStyle(fontFamily: 'Poppins', fontSize: 14, color: color.withOpacity(0.7)))],
+                  children: [TextSpan(text: ' $unit', style: TextStyle(fontFamily: 'Poppins', fontSize: 14, color: color.withValues(alpha:0.7)))],
                 ),
               ),
             ],
@@ -210,8 +210,8 @@ class _SliderCard extends StatelessWidget {
             data: SliderTheme.of(context).copyWith(
               activeTrackColor: color,
               thumbColor: color,
-              inactiveTrackColor: color.withOpacity(0.15),
-              overlayColor: color.withOpacity(0.12),
+              inactiveTrackColor: color.withValues(alpha:0.15),
+              overlayColor: color.withValues(alpha:0.12),
               trackHeight: 6,
             ),
             child: Slider(
@@ -288,7 +288,7 @@ class _RoundBtn extends StatelessWidget {
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle, border: Border.all(color: color.withOpacity(0.3))),
+        decoration: BoxDecoration(color: color.withValues(alpha:0.1), shape: BoxShape.circle, border: Border.all(color: color.withValues(alpha:0.3))),
         child: Icon(icon, color: color, size: 20),
       ),
     );
@@ -308,9 +308,9 @@ class _ResultCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: categoryColor.withOpacity(0.05),
+        color: categoryColor.withValues(alpha:0.05),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: categoryColor.withOpacity(0.3)),
+        border: Border.all(color: categoryColor.withValues(alpha:0.3)),
       ),
       child: Column(
         children: [
@@ -368,7 +368,7 @@ class _BmiScaleChart extends StatelessWidget {
               margin: const EdgeInsets.only(bottom: 8),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
-                color: isActive ? r.$3.withOpacity(0.1) : Colors.transparent,
+                color: isActive ? r.$3.withValues(alpha:0.1) : Colors.transparent,
                 borderRadius: BorderRadius.circular(10),
                 border: isActive ? Border.all(color: r.$3, width: 1.5) : null,
               ),

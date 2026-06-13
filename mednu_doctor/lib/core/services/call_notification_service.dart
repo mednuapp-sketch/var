@@ -21,6 +21,8 @@ class CallNotificationService {
 
   static const _callChannelId = 'incoming_call';
   static const _callChannelName = 'Incoming Consultations';
+  static const _emergencyChannelId = 'emergency_alert';
+  static const _emergencyChannelName = 'Emergency Alerts';
 
   // ── Init ──────────────────────────────────────────────────────────────────
 
@@ -52,12 +54,24 @@ class CallNotificationService {
           description: 'Incoming patient consultation requests',
           importance: Importance.max,
           enableVibration: true,
-          // Repeating buzz-pause pattern mimics a real phone ring.
           vibrationPattern:
               Int64List.fromList([0, 800, 200, 800, 200, 800, 200, 800]),
           playSound: true,
           enableLights: true,
           ledColor: const Color(0xFF4CAF50),
+        ),
+      );
+      await androidPlugin?.createNotificationChannel(
+        AndroidNotificationChannel(
+          _emergencyChannelId,
+          _emergencyChannelName,
+          description: 'Critical emergency patient alerts',
+          importance: Importance.max,
+          enableVibration: true,
+          vibrationPattern: Int64List.fromList([0, 500, 100, 500, 100, 500]),
+          playSound: true,
+          enableLights: true,
+          ledColor: const Color(0xFFE53935),
         ),
       );
     }
@@ -113,6 +127,55 @@ class CallNotificationService {
     // Start ringtone AFTER posting the notification so the OS wake-up
     // happens first and the audio plays on the now-active screen.
     await startRinging();
+  }
+
+  /// Shows a high-priority emergency alert notification (not a call UI).
+  /// Plays a short alert tone once instead of looping the ringtone.
+  static Future<void> showEmergencyAlert({
+    required String patientName,
+    String requestId = '',
+  }) async {
+    const title = '🚨 Emergency Doctor Request';
+    final body = '$patientName needs immediate medical assistance.';
+
+    await _plugin.show(
+      _notifId++,
+      title,
+      body,
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          _emergencyChannelId,
+          _emergencyChannelName,
+          importance: Importance.max,
+          priority: Priority.max,
+          enableVibration: true,
+          vibrationPattern: Int64List.fromList([0, 500, 100, 500, 100, 500]),
+          playSound: true,
+          fullScreenIntent: true,
+          category: AndroidNotificationCategory.alarm,
+          autoCancel: true,
+          styleInformation: BigTextStyleInformation(body),
+          color: const Color(0xFFE53935),
+        ),
+        iOS: const DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+          interruptionLevel: InterruptionLevel.critical,
+        ),
+      ),
+    );
+
+    // Single short alert tone — not a looping ringtone.
+    try {
+      await _ringtonePlayer.play(
+        android: AndroidSounds.alarm,
+        ios: IosSounds.electronic,
+        looping: false,
+        volume: 1.0,
+        asAlarm: true,
+      );
+    } catch (_) {}
   }
 
   // ── Ringtone + wakelock ───────────────────────────────────────────────────

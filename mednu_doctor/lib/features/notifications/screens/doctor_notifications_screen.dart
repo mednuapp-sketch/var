@@ -9,6 +9,7 @@ import '../../auth/services/doctor_auth_service.dart';
 import '../models/notification_model.dart';
 import '../providers/notification_provider.dart';
 import '../services/notification_service.dart';
+import '../../../core/widgets/ux_widgets.dart';
 
 class DoctorNotificationsScreen extends ConsumerWidget {
   const DoctorNotificationsScreen({super.key});
@@ -82,7 +83,7 @@ class DoctorNotificationsScreen extends ConsumerWidget {
                         height: 110,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: Colors.white.withOpacity(0.06),
+                          color: Colors.white.withValues(alpha:0.06),
                         ),
                       ),
                     ),
@@ -96,7 +97,7 @@ class DoctorNotificationsScreen extends ConsumerWidget {
                               width: 40,
                               height: 40,
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.18),
+                                color: Colors.white.withValues(alpha:0.18),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: const Icon(
@@ -148,23 +149,42 @@ class DoctorNotificationsScreen extends ConsumerWidget {
             ),
           ),
           notifAsync.when(
-            loading: () => const SliverFillRemaining(
-              child: Center(child: CircularProgressIndicator()),
+            loading: () => SliverPadding(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (_, __) => const SkeletonListTile(),
+                  childCount: 7,
+                ),
+              ),
             ),
             error: (e, _) => SliverFillRemaining(
-              child: Center(child: Text('Error: $e')),
+              child: AppErrorState(
+                onRetry: () => ref.invalidate(notificationsProvider),
+              ),
             ),
             data: (notifications) {
               if (notifications.isEmpty) {
-                return SliverFillRemaining(child: _EmptyState());
+                return SliverFillRemaining(
+                  child: FadeInSlide(
+                    child: AppEmptyState(
+                      icon: Icons.notifications_none_rounded,
+                      title: 'No notifications yet',
+                      message: 'You\'re all caught up!',
+                    ),
+                  ),
+                );
               }
               return SliverPadding(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
                 sliver: SliverList(
                   delegate: SliverChildBuilderDelegate(
-                    (_, i) => _NotifTile(
-                      notif: notifications[i],
-                      doctorUid: uid,
+                    (_, i) => FadeInSlide(
+                      delay: Duration(milliseconds: i * 40),
+                      child: _NotifTile(
+                        notif: notifications[i],
+                        doctorUid: uid,
+                      ),
                     ),
                     childCount: notifications.length,
                   ),
@@ -197,18 +217,18 @@ class _NotifTile extends StatelessWidget {
         decoration: BoxDecoration(
           color: notif.isRead
               ? Colors.white
-              : AppColors.primary.withOpacity(0.04),
+              : AppColors.primary.withValues(alpha:0.04),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: notif.isRead
                 ? AppColors.divider
-                : AppColors.primary.withOpacity(0.2),
+                : AppColors.primary.withValues(alpha:0.2),
           ),
           boxShadow: notif.isRead
               ? []
               : [
                   BoxShadow(
-                    color: AppColors.primary.withOpacity(0.06),
+                    color: AppColors.primary.withValues(alpha:0.06),
                     blurRadius: 8,
                     offset: const Offset(0, 2),
                   ),
@@ -219,7 +239,7 @@ class _NotifTile extends StatelessWidget {
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: meta.color.withOpacity(0.12),
+              color: meta.color.withValues(alpha:0.12),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(meta.icon, color: meta.color, size: 22),
@@ -329,29 +349,3 @@ class _NotifMeta {
   const _NotifMeta(this.icon, this.color);
 }
 
-class _EmptyState extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-        Container(
-          width: 80,
-          height: 80,
-          decoration: BoxDecoration(
-            color: AppColors.primary.withOpacity(0.08),
-            shape: BoxShape.circle,
-          ),
-          child: const Icon(Icons.notifications_none_rounded,
-              size: 40, color: AppColors.primary),
-        ),
-        const SizedBox(height: 16),
-        Text('No notifications yet', style: AppTextStyles.h4),
-        const SizedBox(height: 6),
-        Text(
-          'You\'re all caught up!',
-          style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
-        ),
-      ]),
-    );
-  }
-}

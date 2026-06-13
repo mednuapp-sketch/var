@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math' show asin, cos, pi, sin, sqrt;
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -7,6 +8,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:dio/dio.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
+import '../../../core/widgets/ux_widgets.dart';
 import '../../home/providers/location_provider.dart';
 
 double _haversineKm(double lat1, double lng1, double lat2, double lng2) {
@@ -68,8 +70,14 @@ class _FilterState {
 class DoctorsListScreen extends ConsumerStatefulWidget {
   final String? initialSpecialty;
   final String? initialMode; // 'video' | 'inperson'
+  final bool showBackButton;
 
-  const DoctorsListScreen({super.key, this.initialSpecialty, this.initialMode});
+  const DoctorsListScreen({
+    super.key,
+    this.initialSpecialty,
+    this.initialMode,
+    this.showBackButton = true,
+  });
 
   @override
   ConsumerState<DoctorsListScreen> createState() => _DoctorsListScreenState();
@@ -81,6 +89,8 @@ class _DoctorsListScreenState extends ConsumerState<DoctorsListScreen>
   // 'video' = online/global | 'inperson' = location-filtered
   late String _consultationMode;
   String _search = '';
+  String _debouncedSearch = '';
+  Timer? _searchDebounce;
   _FilterState _filters = const _FilterState();
   late TabController _tabController;
 
@@ -110,8 +120,17 @@ class _DoctorsListScreenState extends ConsumerState<DoctorsListScreen>
     });
   }
 
+  void _onSearchChanged(String v) {
+    _searchDebounce?.cancel();
+    setState(() => _search = v.toLowerCase());
+    _searchDebounce = Timer(const Duration(milliseconds: 320), () {
+      if (mounted) setState(() => _debouncedSearch = _search);
+    });
+  }
+
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _tabController.dispose();
     super.dispose();
   }
@@ -149,7 +168,7 @@ class _DoctorsListScreenState extends ConsumerState<DoctorsListScreen>
               leading: Container(
                 width: 40, height: 40,
                 decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.1),
+                    color: AppColors.primary.withValues(alpha:0.1),
                     shape: BoxShape.circle),
                 child: const Icon(Icons.edit_location_alt_rounded,
                     color: AppColors.primary, size: 20),
@@ -180,7 +199,7 @@ class _DoctorsListScreenState extends ConsumerState<DoctorsListScreen>
               leading: Container(
                 width: 40, height: 40,
                 decoration: BoxDecoration(
-                    color: Colors.teal.withOpacity(0.1),
+                    color: Colors.teal.withValues(alpha:0.1),
                     shape: BoxShape.circle),
                 child: const Icon(Icons.my_location_rounded,
                     color: Colors.teal, size: 20),
@@ -222,10 +241,12 @@ class _DoctorsListScreenState extends ConsumerState<DoctorsListScreen>
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-          onPressed: () => context.pop(),
-        ),
+        leading: widget.showBackButton
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
+                onPressed: () => context.pop(),
+              )
+            : null,
         actions: [
           IconButton(
             icon: Stack(children: [
@@ -292,7 +313,7 @@ class _DoctorsListScreenState extends ConsumerState<DoctorsListScreen>
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
           child: TextField(
-            onChanged: (v) => setState(() => _search = v.toLowerCase()),
+            onChanged: _onSearchChanged,
             decoration: InputDecoration(
               hintText: 'Search doctors, specialities…',
               prefixIcon:
@@ -318,13 +339,13 @@ class _DoctorsListScreenState extends ConsumerState<DoctorsListScreen>
                     horizontal: 14, vertical: 9),
                 decoration: BoxDecoration(
                   color: locState.hasCoordinates
-                      ? AppColors.primary.withOpacity(0.07)
-                      : Colors.orange.withOpacity(0.07),
+                      ? AppColors.primary.withValues(alpha:0.07)
+                      : Colors.orange.withValues(alpha:0.07),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
                     color: locState.hasCoordinates
-                        ? AppColors.primary.withOpacity(0.2)
-                        : Colors.orange.withOpacity(0.3),
+                        ? AppColors.primary.withValues(alpha:0.2)
+                        : Colors.orange.withValues(alpha:0.3),
                   ),
                 ),
                 child: Row(children: [
@@ -372,9 +393,9 @@ class _DoctorsListScreenState extends ConsumerState<DoctorsListScreen>
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
               decoration: BoxDecoration(
-                color: Colors.teal.withOpacity(0.07),
+                color: Colors.teal.withValues(alpha:0.07),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.teal.withOpacity(0.2)),
+                border: Border.all(color: Colors.teal.withValues(alpha:0.2)),
               ),
               child: Row(children: [
                 const Icon(Icons.public_rounded, size: 15, color: Colors.teal),
@@ -490,13 +511,17 @@ class _DoctorsListScreenState extends ConsumerState<DoctorsListScreen>
               // Video / Online tab — global, no location filter
               _DoctorListView(
                 specialty: _selectedSpecialty,
-                search: _search,
+                search: _debouncedSearch,
                 filters: _filters,
                 locationMode: _LocationMode.global,
               ),
               // In-Person tab — requires location
               locState.isDetecting
-                  ? const Center(child: CircularProgressIndicator())
+                  ? ListView.builder(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      itemCount: 5,
+                      itemBuilder: (_, __) => const SkeletonDoctorCard(),
+                    )
                   : !locState.hasCoordinates
                       ? _LocationRequiredView(
                           onEnable: () => ref
@@ -505,7 +530,7 @@ class _DoctorsListScreenState extends ConsumerState<DoctorsListScreen>
                         )
                       : _DoctorListView(
                           specialty: _selectedSpecialty,
-                          search: _search,
+                          search: _debouncedSearch,
                           filters: _filters,
                           locationMode: _LocationMode.nearby(
                               locState.lat!, locState.lng!),
@@ -581,18 +606,15 @@ class _DoctorListView extends StatelessWidget {
       stream: q.snapshots(),
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return ListView.builder(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            itemCount: 5,
+            itemBuilder: (_, __) => const SkeletonDoctorCard(),
+          );
         }
         if (snap.hasError) {
-          return Center(
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              const Icon(Icons.error_outline_rounded,
-                  size: 48, color: AppColors.textHint),
-              const SizedBox(height: 8),
-              Text('Error loading doctors',
-                  style: AppTextStyles.bodySmall
-                      .copyWith(color: AppColors.textHint)),
-            ]),
+          return AppErrorState(
+            message: 'Unable to load doctors. Check your connection.',
           );
         }
 
@@ -731,15 +753,20 @@ class _DoctorListView extends StatelessWidget {
         }
 
         if (withDistance.isEmpty) {
-          return _EmptyState(
-            message: isInPerson && !locationMode.isGlobal
-                ? 'No doctors found within ${_LocationMode.maxKm.toInt()} km.\nTry adjusting your location or filters.'
-                : search.isNotEmpty
-                    ? 'No doctors match "$search".\nTry a different search term.'
-                    : 'No doctors available right now.\nCheck back soon.',
+          return AppEmptyState(
             icon: isInPerson
                 ? Icons.location_searching_rounded
                 : Icons.people_outline_rounded,
+            title: isInPerson && !locationMode.isGlobal
+                ? 'No nearby doctors'
+                : search.isNotEmpty
+                    ? 'No results for "$search"'
+                    : 'No doctors available',
+            message: isInPerson && !locationMode.isGlobal
+                ? 'No doctors found within ${_LocationMode.maxKm.toInt()} km. Try adjusting your location or filters.'
+                : search.isNotEmpty
+                    ? 'Try a different search term or remove filters.'
+                    : 'No doctors available right now. Check back soon.',
           );
         }
 
@@ -748,11 +775,14 @@ class _DoctorListView extends StatelessWidget {
           itemCount: withDistance.length,
           itemBuilder: (_, i) {
             final entry = withDistance[i];
-            return _DoctorCard(
-              data: entry.key.data(),
-              docId: entry.key.id,
-              distanceKm: entry.value,
-              isInPerson: isInPerson,
+            return FadeInSlide(
+              delay: Duration(milliseconds: i * 35),
+              child: _DoctorCard(
+                data: entry.key.data(),
+                docId: entry.key.id,
+                distanceKm: entry.value,
+                isInPerson: isInPerson,
+              ),
             );
           },
         );
@@ -799,7 +829,7 @@ class _DoctorCard extends StatelessWidget {
     final hospital = data['hospital'] as String? ??
         data['hospitalAffiliation'] as String? ?? '';
 
-    return GestureDetector(
+    return TapScale(
       onTap: () => context.push('/doctors/$docId'),
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
@@ -809,7 +839,7 @@ class _DoctorCard extends StatelessWidget {
           border: Border.all(color: AppColors.divider),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.03),
+              color: Colors.black.withValues(alpha:0.03),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),
@@ -827,16 +857,18 @@ class _DoctorCard extends StatelessWidget {
                     width: 66,
                     height: 66,
                     decoration: BoxDecoration(
-                      color: AppColors.primary.withOpacity(0.10),
+                      color: AppColors.primary.withValues(alpha:0.10),
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: photoUrl.isNotEmpty
                         ? ClipRRect(
                             borderRadius: BorderRadius.circular(16),
-                            child: Image.network(
-                              photoUrl,
+                            child: CachedNetworkImage(
+                              imageUrl: photoUrl,
                               fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) =>
+                              placeholder: (_, __) => const SkeletonBox(
+                                  width: 66, height: 66, radius: 16),
+                              errorWidget: (_, __, ___) =>
                                   const Icon(Icons.person_rounded,
                                       size: 36, color: AppColors.primary),
                             ),
@@ -875,7 +907,7 @@ class _DoctorCard extends StatelessWidget {
                             horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
                           color: (isOnline ? AppColors.accent : Colors.grey)
-                              .withOpacity(0.1),
+                              .withValues(alpha:0.1),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
@@ -975,9 +1007,9 @@ class _ActiveFilterChip extends StatelessWidget {
         margin: const EdgeInsets.only(right: 8),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
-          color: AppColors.primary.withOpacity(0.1),
+          color: AppColors.primary.withValues(alpha:0.1),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.primary.withOpacity(0.3)),
+          border: Border.all(color: AppColors.primary.withValues(alpha:0.3)),
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           Text(label,
@@ -999,28 +1031,6 @@ class _ActiveFilterChip extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────
 //  Empty state
 // ─────────────────────────────────────────────────────────────
-class _EmptyState extends StatelessWidget {
-  final String message;
-  final IconData icon;
-  const _EmptyState(
-      {required this.message, this.icon = Icons.people_outline_rounded});
-
-  @override
-  Widget build(BuildContext context) => Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Icon(icon, size: 60, color: AppColors.textHint),
-            const SizedBox(height: 16),
-            Text(message,
-                textAlign: TextAlign.center,
-                style: AppTextStyles.bodySmall
-                    .copyWith(color: AppColors.textHint, height: 1.6)),
-          ]),
-        ),
-      );
-}
-
 // ─────────────────────────────────────────────────────────────
 //  Advanced filter bottom sheet
 // ─────────────────────────────────────────────────────────────
@@ -1229,12 +1239,12 @@ class _FilterSheetState extends State<_FilterSheet> {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
         decoration: BoxDecoration(
           color: selected
-              ? AppColors.primary.withOpacity(0.1)
+              ? AppColors.primary.withValues(alpha:0.1)
               : Colors.grey.shade100,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: selected
-                ? AppColors.primary.withOpacity(0.4)
+                ? AppColors.primary.withValues(alpha:0.4)
                 : Colors.transparent,
           ),
         ),
@@ -1381,7 +1391,7 @@ class _LocationChangeSheetState extends ConsumerState<_LocationChangeSheet> {
               padding:
                   const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.07),
+                color: AppColors.primary.withValues(alpha:0.07),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Row(children: [
@@ -1396,7 +1406,7 @@ class _LocationChangeSheetState extends ConsumerState<_LocationChangeSheet> {
           ),
           const SizedBox(height: 12),
           if (_loading)
-            const Center(child: CircularProgressIndicator())
+            Column(children: List.generate(3, (_) => const SkeletonListTile()))
           else
             Flexible(
               child: ListView.separated(
@@ -1455,7 +1465,7 @@ class _LocationRequiredView extends StatelessWidget {
               width: 80,
               height: 80,
               decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.08),
+                color: AppColors.primary.withValues(alpha:0.08),
                 shape: BoxShape.circle,
               ),
               child: Icon(Icons.location_searching_rounded,

@@ -6,15 +6,17 @@ import '../models/pregnancy_models.dart';
 
 // ─── Firestore paths ─────────────────────────────────────────────────────────
 
-const _kProfiles  = 'pregnancy_profiles';
-const _kLogs      = 'pregnancy_weekly_data';
-const _kCheckups  = 'pregnancy_checkups';
-const _kMeds      = 'pregnancy_medicines';
-const _kAlerts    = 'pregnancy_alerts';
-const _kNotes     = 'pregnancy_doctor_notes';
+const _kProfiles = 'pregnancy_profiles';
+const _kLogs     = 'pregnancy_weekly_data';
+const _kCheckups = 'pregnancy_checkups';
+const _kMeds     = 'pregnancy_medicines';
+const _kAlerts   = 'pregnancy_alerts';
+const _kNotes    = 'pregnancy_doctor_notes';
 
-final _db  = FirebaseFirestore.instance;
+final _db   = FirebaseFirestore.instance;
 final _auth = FirebaseAuth.instance;
+
+String? get _currentUid => _auth.currentUser?.uid;
 
 // ─── State ───────────────────────────────────────────────────────────────────
 
@@ -51,6 +53,7 @@ class PregnancyState {
     bool? isLoading,
     String? error,
     bool clearProfile = false,
+    bool clearError = false,
   }) => PregnancyState(
     profile: clearProfile ? null : (profile ?? this.profile),
     recentLogs: recentLogs ?? this.recentLogs,
@@ -59,7 +62,7 @@ class PregnancyState {
     alerts: alerts ?? this.alerts,
     doctorNotes: doctorNotes ?? this.doctorNotes,
     isLoading: isLoading ?? this.isLoading,
-    error: error,
+    error: clearError ? null : (error ?? this.error),
   );
 }
 
@@ -67,56 +70,79 @@ class PregnancyState {
 
 class PregnancyNotifier extends StateNotifier<PregnancyState> {
   PregnancyNotifier() : super(const PregnancyState()) {
-    _uid = _auth.currentUser?.uid;
-    if (_uid != null) _init();
+    if (_currentUid != null) _init();
   }
 
-  String? _uid;
-
   Future<void> _init() async {
-    state = state.copyWith(isLoading: true);
-    await _loadProfile();
-    if (state.hasProfile) {
-      await Future.wait([
-        _loadRecentLogs(),
-        _loadCheckups(),
-        _loadMedicines(),
-        _loadAlerts(),
-        _loadDoctorNotes(),
-      ]);
+    state = state.copyWith(isLoading: true, clearError: true);
+    try {
+      await _loadProfile();
+      if (state.hasProfile) {
+        await Future.wait([
+          _loadRecentLogs(),
+          _loadCheckups(),
+          _loadMedicines(),
+          _loadAlerts(),
+          _loadDoctorNotes(),
+        ]);
+      }
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+    } finally {
+      state = state.copyWith(isLoading: false);
     }
-    state = state.copyWith(isLoading: false);
   }
 
   // ── Profile ──────────────────────────────────────────────────────────────
 
   Future<void> _loadProfile() async {
-    if (_uid == null) return;
-    try {
-      final snap = await _db
-          .collection(_kProfiles)
-          .where('patientId', isEqualTo: _uid)
-          .where('isActive', isEqualTo: true)
-          .limit(1)
-          .get();
-      if (snap.docs.isNotEmpty) {
-        state = state.copyWith(
-          profile: PregnancyProfile.fromMap(snap.docs.first.id, snap.docs.first.data()),
-        );
-      }
-    } catch (e) {
-      state = state.copyWith(error: e.toString());
+    final uid = _currentUid;
+    if (uid == null) return;
+    final snap = await _db
+        .collection(_kProfiles)
+        .where('patientId', isEqualTo: uid)
+        .where('isActive', isEqualTo: true)
+        .limit(1)
+        .get();
+    if (snap.docs.isNotEmpty) {
+      state = state.copyWith(
+        profile: PregnancyProfile.fromMap(snap.docs.first.id, snap.docs.first.data()),
+      );
     }
   }
 
   Future<bool> createProfile(PregnancyProfile profile) async {
-    if (_uid == null) return false;
-    state = state.copyWith(isLoading: true);
+    final uid = _currentUid;
+    if (uid == null) return false;
+
+    // Prevent duplicate active profiles
+    final existing = await _db
+        .collection(_kProfiles)
+        .where('patientId', isEqualTo: uid)
+        .where('isActive', isEqualTo: true)
+        .limit(1)
+        .get();
+    if (existing.docs.isNotEmpty) {
+      // Update existing instead of creating a new one
+      await _db.collection(_kProfiles).doc(existing.docs.first.id).update({
+        ...profile.toMap(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      state = state.copyWith(
+        profile: PregnancyProfile.fromMap(existing.docs.first.id, {
+          ...profile.toMap(),
+          'updatedAt': Timestamp.fromDate(DateTime.now()),
+        }),
+      );
+      await _loadSubCollections();
+      return true;
+    }
+
+    state = state.copyWith(isLoading: true, clearError: true);
     try {
-      // Fetch patient name to store with profile for doctor-side display
       String patientName = 'Patient';
       try {
-        final userDoc = await _db.collection('users').doc(_uid).get();
+        final userDoc = await _db.collection('users').doc(uid).get();
         patientName = userDoc.data()?['name'] as String? ?? 'Patient';
       } catch (_) {}
 
@@ -126,9 +152,13 @@ class PregnancyNotifier extends StateNotifier<PregnancyState> {
       profileData['updatedAt'] = FieldValue.serverTimestamp();
 
       final ref = await _db.collection(_kProfiles).add(profileData);
-      final created = PregnancyProfile.fromMap(ref.id, profileData);
-      state = state.copyWith(profile: created, isLoading: false);
-      await _init();
+      // Re-fetch the created doc to get server-resolved timestamps
+      final created = await ref.get();
+      state = state.copyWith(
+        profile: PregnancyProfile.fromMap(ref.id, created.data() ?? profileData),
+        isLoading: false,
+      );
+      await _loadSubCollections();
       return true;
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
@@ -136,14 +166,39 @@ class PregnancyNotifier extends StateNotifier<PregnancyState> {
     }
   }
 
+  Future<bool> updateProfile(Map<String, dynamic> updates) async {
+    final profile = state.profile;
+    if (profile == null) return false;
+    try {
+      updates['updatedAt'] = FieldValue.serverTimestamp();
+      await _db.collection(_kProfiles).doc(profile.id).update(updates);
+      await _loadProfile();
+      return true;
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+      return false;
+    }
+  }
+
+  Future<void> _loadSubCollections() async {
+    await Future.wait([
+      _loadRecentLogs(),
+      _loadCheckups(),
+      _loadMedicines(),
+      _loadAlerts(),
+      _loadDoctorNotes(),
+    ]);
+  }
+
   // ── Weekly Logs ──────────────────────────────────────────────────────────
 
   Future<void> _loadRecentLogs() async {
-    if (_uid == null) return;
+    final uid = _currentUid;
+    if (uid == null) return;
     try {
       final snap = await _db
           .collection(_kLogs)
-          .where('patientId', isEqualTo: _uid)
+          .where('patientId', isEqualTo: uid)
           .orderBy('loggedAt', descending: true)
           .limit(10)
           .get();
@@ -152,7 +207,9 @@ class PregnancyNotifier extends StateNotifier<PregnancyState> {
             .map((d) => PregnancyWeeklyLog.fromMap(d.id, d.data()))
             .toList(),
       );
-    } catch (_) {}
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+    }
   }
 
   Future<bool> logToday({
@@ -167,41 +224,43 @@ class PregnancyNotifier extends StateNotifier<PregnancyState> {
     int? waterGlasses,
     required String notes,
   }) async {
-    if (_uid == null || state.profile == null) return false;
+    final uid = _currentUid;
+    if (uid == null || state.profile == null) return false;
     try {
       final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
-      final log = PregnancyWeeklyLog(
-        id: '',
-        patientId: _uid!,
-        date: today,
-        pregnancyWeek: state.profile!.currentWeek,
-        symptoms: symptoms,
-        weightKg: weightKg,
-        bpSystolic: bpSystolic,
-        bpDiastolic: bpDiastolic,
-        sugarLevel: sugarLevel,
-        babyMovements: babyMovements,
-        mood: mood,
-        sleepHours: sleepHours,
-        waterGlasses: waterGlasses,
-        notes: notes,
-        loggedAt: DateTime.now(),
-      );
-      // Upsert by date
+      final data = {
+        'patientId': uid,
+        'date': today,
+        'pregnancyWeek': state.profile!.currentWeek,
+        'symptoms': symptoms,
+        'weightKg': weightKg,
+        'bpSystolic': bpSystolic,
+        'bpDiastolic': bpDiastolic,
+        'sugarLevel': sugarLevel,
+        'babyMovements': babyMovements,
+        'mood': mood,
+        'sleepHours': sleepHours,
+        'waterGlasses': waterGlasses,
+        'notes': notes,
+        'loggedAt': FieldValue.serverTimestamp(),
+      };
+
+      // Upsert by date to prevent duplicate entries per day
       final existing = await _db
           .collection(_kLogs)
-          .where('patientId', isEqualTo: _uid)
+          .where('patientId', isEqualTo: uid)
           .where('date', isEqualTo: today)
           .limit(1)
           .get();
       if (existing.docs.isNotEmpty) {
-        await existing.docs.first.reference.set(log.toMap());
+        await existing.docs.first.reference.set(data);
       } else {
-        await _db.collection(_kLogs).add(log.toMap());
+        await _db.collection(_kLogs).add(data);
       }
       await _loadRecentLogs();
       return true;
-    } catch (_) {
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
       return false;
     }
   }
@@ -209,46 +268,84 @@ class PregnancyNotifier extends StateNotifier<PregnancyState> {
   // ── Checkups ─────────────────────────────────────────────────────────────
 
   Future<void> _loadCheckups() async {
-    if (_uid == null) return;
+    final uid = _currentUid;
+    if (uid == null) return;
     try {
       final snap = await _db
           .collection(_kCheckups)
-          .where('patientId', isEqualTo: _uid)
+          .where('patientId', isEqualTo: uid)
           .get();
       final list = snap.docs
           .map((d) => PregnancyCheckup.fromMap(d.id, d.data()))
           .toList()
         ..sort((a, b) => a.scheduledDate.compareTo(b.scheduledDate));
       state = state.copyWith(checkups: list);
-    } catch (_) {}
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+    }
   }
 
-  Future<void> addCheckup(PregnancyCheckup checkup) async {
+  Future<bool> addCheckup(PregnancyCheckup checkup) async {
     try {
-      await _db.collection(_kCheckups).add(checkup.toMap());
+      final data = checkup.toMap();
+      data['createdAt'] = FieldValue.serverTimestamp();
+      await _db.collection(_kCheckups).add(data);
       await _loadCheckups();
-    } catch (_) {}
+      return true;
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+      return false;
+    }
   }
 
-  Future<void> markCheckupComplete(String checkupId, {String? notes}) async {
+  Future<bool> markCheckupComplete(String checkupId, {String? notes}) async {
     try {
       await _db.collection(_kCheckups).doc(checkupId).update({
         'status': 'completed',
-        'notes': notes,
+        if (notes != null && notes.isNotEmpty) 'notes': notes,
         'completedAt': FieldValue.serverTimestamp(),
       });
       await _loadCheckups();
-    } catch (_) {}
+      return true;
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+      return false;
+    }
+  }
+
+  Future<bool> markCheckupMissed(String checkupId) async {
+    try {
+      await _db.collection(_kCheckups).doc(checkupId).update({'status': 'missed'});
+      await _loadCheckups();
+      return true;
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+      return false;
+    }
+  }
+
+  Future<bool> deleteCheckup(String checkupId) async {
+    try {
+      await _db.collection(_kCheckups).doc(checkupId).delete();
+      state = state.copyWith(
+        checkups: state.checkups.where((c) => c.id != checkupId).toList(),
+      );
+      return true;
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+      return false;
+    }
   }
 
   // ── Medicines ────────────────────────────────────────────────────────────
 
   Future<void> _loadMedicines() async {
-    if (_uid == null) return;
+    final uid = _currentUid;
+    if (uid == null) return;
     try {
       final snap = await _db
           .collection(_kMeds)
-          .where('patientId', isEqualTo: _uid)
+          .where('patientId', isEqualTo: uid)
           .get();
       final list = snap.docs
           .map((d) => PregnancyMedicine.fromMap(d.id, d.data()))
@@ -256,19 +353,48 @@ class PregnancyNotifier extends StateNotifier<PregnancyState> {
           .toList()
         ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
       state = state.copyWith(medicines: list);
-    } catch (_) {}
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+    }
   }
 
   Future<void> refreshMedicines() => _loadMedicines();
 
+  Future<bool> addMedicine(PregnancyMedicine medicine) async {
+    try {
+      final data = medicine.toMap();
+      data['createdAt'] = FieldValue.serverTimestamp();
+      await _db.collection(_kMeds).add(data);
+      await _loadMedicines();
+      return true;
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+      return false;
+    }
+  }
+
+  Future<bool> deleteMedicine(String medicineId) async {
+    try {
+      await _db.collection(_kMeds).doc(medicineId).update({'isActive': false});
+      state = state.copyWith(
+        medicines: state.medicines.where((m) => m.id != medicineId).toList(),
+      );
+      return true;
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+      return false;
+    }
+  }
+
   // ── Alerts ───────────────────────────────────────────────────────────────
 
   Future<void> _loadAlerts() async {
-    if (_uid == null) return;
+    final uid = _currentUid;
+    if (uid == null) return;
     try {
       final snap = await _db
           .collection(_kAlerts)
-          .where('patientId', isEqualTo: _uid)
+          .where('patientId', isEqualTo: uid)
           .where('isResolved', isEqualTo: false)
           .orderBy('reportedAt', descending: true)
           .get();
@@ -277,7 +403,9 @@ class PregnancyNotifier extends StateNotifier<PregnancyState> {
             .map((d) => PregnancyAlert.fromMap(d.id, d.data()))
             .toList(),
       );
-    } catch (_) {}
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+    }
   }
 
   Future<bool> reportEmergency({
@@ -286,10 +414,11 @@ class PregnancyNotifier extends StateNotifier<PregnancyState> {
     required String message,
     required String patientName,
   }) async {
-    if (_uid == null) return false;
+    final uid = _currentUid;
+    if (uid == null) return false;
     try {
       await _db.collection(_kAlerts).add({
-        'patientId': _uid,
+        'patientId': uid,
         'patientName': patientName,
         'type': type,
         'severity': severity,
@@ -299,7 +428,8 @@ class PregnancyNotifier extends StateNotifier<PregnancyState> {
       });
       await _loadAlerts();
       return true;
-    } catch (_) {
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
       return false;
     }
   }
@@ -307,11 +437,12 @@ class PregnancyNotifier extends StateNotifier<PregnancyState> {
   // ── Doctor Notes ─────────────────────────────────────────────────────────
 
   Future<void> _loadDoctorNotes() async {
-    if (_uid == null) return;
+    final uid = _currentUid;
+    if (uid == null) return;
     try {
       final snap = await _db
           .collection(_kNotes)
-          .where('patientId', isEqualTo: _uid)
+          .where('patientId', isEqualTo: uid)
           .orderBy('createdAt', descending: true)
           .limit(10)
           .get();
@@ -320,10 +451,14 @@ class PregnancyNotifier extends StateNotifier<PregnancyState> {
             .map((d) => PregnancyDoctorNote.fromMap(d.id, d.data()))
             .toList(),
       );
-    } catch (_) {}
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+    }
   }
 
   Future<void> refresh() => _init();
+
+  void clearError() => state = state.copyWith(clearError: true);
 }
 
 // ─── Providers ───────────────────────────────────────────────────────────────
@@ -333,9 +468,24 @@ final pregnancyProvider =
   (ref) => PregnancyNotifier(),
 );
 
-// Stream provider for real-time checkup updates
-final pregnancyCheckupsStreamProvider = StreamProvider<List<PregnancyCheckup>>((ref) {
-  final uid = _auth.currentUser?.uid;
+// Real-time stream for profile (detects doctor assignments, high-risk updates)
+final pregnancyProfileStreamProvider = StreamProvider.autoDispose<PregnancyProfile?>((ref) {
+  final uid = _currentUid;
+  if (uid == null) return const Stream.empty();
+  return _db
+      .collection(_kProfiles)
+      .where('patientId', isEqualTo: uid)
+      .where('isActive', isEqualTo: true)
+      .limit(1)
+      .snapshots()
+      .map((snap) => snap.docs.isEmpty
+          ? null
+          : PregnancyProfile.fromMap(snap.docs.first.id, snap.docs.first.data()));
+});
+
+// Real-time stream for checkups
+final pregnancyCheckupsStreamProvider = StreamProvider.autoDispose<List<PregnancyCheckup>>((ref) {
+  final uid = _currentUid;
   if (uid == null) return const Stream.empty();
   return _db
       .collection(_kCheckups)
@@ -350,9 +500,9 @@ final pregnancyCheckupsStreamProvider = StreamProvider<List<PregnancyCheckup>>((
       });
 });
 
-// Stream for doctor notes
-final pregnancyDoctorNotesStreamProvider = StreamProvider<List<PregnancyDoctorNote>>((ref) {
-  final uid = _auth.currentUser?.uid;
+// Real-time stream for doctor notes
+final pregnancyDoctorNotesStreamProvider = StreamProvider.autoDispose<List<PregnancyDoctorNote>>((ref) {
+  final uid = _currentUid;
   if (uid == null) return const Stream.empty();
   return _db
       .collection(_kNotes)
@@ -364,9 +514,9 @@ final pregnancyDoctorNotesStreamProvider = StreamProvider<List<PregnancyDoctorNo
           .toList());
 });
 
-// Stream for medicines
-final pregnancyMedicinesStreamProvider = StreamProvider<List<PregnancyMedicine>>((ref) {
-  final uid = _auth.currentUser?.uid;
+// Real-time stream for medicines
+final pregnancyMedicinesStreamProvider = StreamProvider.autoDispose<List<PregnancyMedicine>>((ref) {
+  final uid = _currentUid;
   if (uid == null) return const Stream.empty();
   return _db
       .collection(_kMeds)

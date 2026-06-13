@@ -1,4 +1,6 @@
 import 'dart:math';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -91,11 +93,36 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     if (!mounted) return;
     final prefs     = await SharedPreferences.getInstance();
     final onboarded = prefs.getBool('onboarded') ?? false;
-    final uid       = prefs.getString('uid');
+
+    // Firebase Auth is the authoritative session source.
+    // currentUser is synchronously available after Firebase.initializeApp().
+    final firebaseUser = FirebaseAuth.instance.currentUser;
+
+    if (firebaseUser != null) {
+      try {
+        final doc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(firebaseUser.uid)
+            .get();
+        if (!mounted) return;
+        if (doc.exists) {
+          // Existing user with complete profile → straight to home.
+          context.go(AppRoutes.home);
+          return;
+        }
+        // Firebase session exists but Firestore doc is missing (incomplete
+        // registration). Fall through to login so user can complete signup.
+      } catch (_) {
+        // Firestore unavailable (offline) → fall through to login.
+      }
+    }
+
     if (!mounted) return;
-    if (!onboarded)      context.go(AppRoutes.onboarding);
-    else if (uid == null) context.go(AppRoutes.login);
-    else                 context.go(AppRoutes.home);
+    if (!onboarded) {
+      context.go(AppRoutes.onboarding);
+    } else {
+      context.go(AppRoutes.login);
+    }
   }
 
   @override
@@ -219,7 +246,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                                   decoration: BoxDecoration(
                                     shape: BoxShape.circle,
                                     gradient: RadialGradient(colors: [
-                                      const Color(0xFFF2A8D8).withOpacity(0.40),
+                                      const Color(0xFFF2A8D8).withValues(alpha:0.40),
                                       Colors.transparent,
                                     ]),
                                   ),
@@ -252,9 +279,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                                           width: size.width * 0.30,
                                           decoration: BoxDecoration(
                                             gradient: LinearGradient(colors: [
-                                              Colors.white.withOpacity(0.00),
-                                              Colors.white.withOpacity(0.26),
-                                              Colors.white.withOpacity(0.00),
+                                              Colors.white.withValues(alpha:0.00),
+                                              Colors.white.withValues(alpha:0.26),
+                                              Colors.white.withValues(alpha:0.00),
                                             ]),
                                           ),
                                         ),
@@ -302,7 +329,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                         opacity: wordFade,
                         child: Container(
                           width: size.width * 0.72, height: 1,
-                          color: Colors.white.withOpacity(0.10),
+                          color: Colors.white.withValues(alpha:0.10),
                         ),
                       ),
 
@@ -343,7 +370,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                             fontFamily:  'Poppins',
                             fontSize:    size.width * 0.033,
                             fontWeight:  FontWeight.w500,
-                            color:       Colors.white.withOpacity(0.38),
+                            color:       Colors.white.withValues(alpha:0.38),
                             letterSpacing: 5.0,
                           ),
                         ),
@@ -365,7 +392,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                               SizedBox(
                                 width: 26, height: 26,
                                 child: CircularProgressIndicator(
-                                  color: Colors.white.withOpacity(0.50),
+                                  color: Colors.white.withValues(alpha:0.50),
                                   strokeWidth: 2.0,
                                 ),
                               ),
@@ -375,7 +402,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                                 style: TextStyle(
                                   fontFamily: 'Poppins',
                                   fontSize:   size.width * 0.028,
-                                  color:      Colors.white.withOpacity(0.28),
+                                  color:      Colors.white.withValues(alpha:0.28),
                                   letterSpacing: 0.3,
                                 ),
                               ),
@@ -413,7 +440,7 @@ class _Bloom extends StatelessWidget {
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         gradient: RadialGradient(colors: [
-          const Color(0xFFF2A8D8).withOpacity(opacity),
+          const Color(0xFFF2A8D8).withValues(alpha:opacity),
           Colors.transparent,
         ]),
       ),

@@ -387,7 +387,7 @@ class _PrescriptionViewerScreenState extends State<PrescriptionViewerScreen> {
                 Row(children: [
                   Container(
                     width: 50, height: 50,
-                    decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), shape: BoxShape.circle),
+                    decoration: BoxDecoration(color: Colors.white.withValues(alpha:0.2), shape: BoxShape.circle),
                     child: const Icon(Icons.local_hospital_rounded, color: Colors.white, size: 28),
                   ),
                   const SizedBox(width: 12),
@@ -397,7 +397,7 @@ class _PrescriptionViewerScreenState extends State<PrescriptionViewerScreen> {
                   ])),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(8)),
+                    decoration: BoxDecoration(color: Colors.white.withValues(alpha:0.2), borderRadius: BorderRadius.circular(8)),
                     child: const Text('VERIFIED', style: TextStyle(fontFamily: 'Poppins', fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white)),
                   ),
                 ]),
@@ -467,7 +467,7 @@ class _PrescriptionViewerScreenState extends State<PrescriptionViewerScreen> {
                     Row(children: [
                       Container(
                         width: 32, height: 32,
-                        decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
+                        decoration: BoxDecoration(color: color.withValues(alpha:0.15), borderRadius: BorderRadius.circular(8)),
                         child: Center(child: Text('${e.key + 1}', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w800, color: color))),
                       ),
                       const SizedBox(width: 10),
@@ -510,7 +510,7 @@ class _PrescriptionViewerScreenState extends State<PrescriptionViewerScreen> {
               const SizedBox(height: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(color: AppColors.accent.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                decoration: BoxDecoration(color: AppColors.accent.withValues(alpha:0.1), borderRadius: BorderRadius.circular(8)),
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
                   const Icon(Icons.verified_rounded, color: AppColors.accent, size: 16),
                   const SizedBox(width: 6),
@@ -559,7 +559,7 @@ class _MedTag extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-    decoration: BoxDecoration(color: color.withOpacity(0.08), borderRadius: BorderRadius.circular(8), border: Border.all(color: color.withOpacity(0.2))),
+    decoration: BoxDecoration(color: color.withValues(alpha:0.08), borderRadius: BorderRadius.circular(8), border: Border.all(color: color.withValues(alpha:0.2))),
     child: Text(label, style: TextStyle(fontFamily: 'Poppins', fontSize: 11, fontWeight: FontWeight.w500, color: color)),
   );
 }

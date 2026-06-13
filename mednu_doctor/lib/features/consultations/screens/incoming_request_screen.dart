@@ -387,7 +387,7 @@ class _IncomingRequestScreenState extends State<IncomingRequestScreen>
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.primary.withOpacity(0.55),
+                    color: AppColors.primary.withValues(alpha:0.55),
                     blurRadius: 30,
                     spreadRadius: 8,
                   ),
@@ -445,16 +445,16 @@ class _IncomingRequestScreenState extends State<IncomingRequestScreen>
       margin: const EdgeInsets.symmetric(horizontal: 8),
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.07),
+        color: Colors.white.withValues(alpha:0.07),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.08)),
+        border: Border.all(color: Colors.white.withValues(alpha:0.08)),
       ),
       child: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(6),
             decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.2),
+              color: AppColors.primary.withValues(alpha:0.2),
               borderRadius: BorderRadius.circular(8),
             ),
             child: const Icon(Icons.medical_information_rounded,
@@ -480,7 +480,7 @@ class _IncomingRequestScreenState extends State<IncomingRequestScreen>
                       fontFamily: 'Poppins',
                       fontSize: 13,
                       fontWeight: FontWeight.w500,
-                      color: Colors.white.withOpacity(0.87)),
+                      color: Colors.white.withValues(alpha:0.87)),
                 ),
               ],
             ),
@@ -613,7 +613,7 @@ class _CallButton extends StatelessWidget {
           shape: BoxShape.circle,
           boxShadow: [
             BoxShadow(
-              color: glowColor.withOpacity(0.45),
+              color: glowColor.withValues(alpha:0.45),
               blurRadius: 22,
               spreadRadius: 4,
             ),
@@ -647,7 +647,7 @@ class _RippleRing extends StatelessWidget {
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             border: Border.all(
-              color: AppColors.primary.withOpacity(opacity),
+              color: AppColors.primary.withValues(alpha:opacity),
               width: 2.0,
             ),
           ),
@@ -673,9 +673,9 @@ class _TypeChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.08),
+        color: Colors.white.withValues(alpha:0.08),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.12)),
+        border: Border.all(color: Colors.white.withValues(alpha:0.12)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

@@ -31,7 +31,6 @@ import '../../features/services/physiotherapy/physio_screen.dart';
 import '../../features/services/counselling/counselling_screen.dart';
 import '../../features/services/equipment_hiring/equipment_screen.dart';
 import '../../features/services/appointment/appointment_screen.dart';
-import '../../features/services/appointment/book_appointment_screen.dart';
 import '../../features/doctors/screens/doctors_list_screen.dart';
 import '../../features/doctors/screens/doctor_profile_screen.dart';
 import '../../features/doctors/screens/favourite_doctors_screen.dart';
@@ -86,7 +85,6 @@ class AppRoutes {
   static const doctors            = '/doctors';
   static const doctorProfile      = '/doctors/:id';
   static const appointment        = '/appointment';
-  static const bookAppointment    = '/appointment/book';
   static const consultation       = '/consultation';
   static const videoCall          = '/consultation/video/:id';
   static const emergency          = '/emergency';
@@ -179,7 +177,19 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: AppRoutes.splash,             builder: (c, s) => const SplashScreen()),
       GoRoute(path: AppRoutes.onboarding,         builder: (c, s) => const OnboardingScreen()),
       GoRoute(path: AppRoutes.login,              builder: (c, s) => const LoginScreen()),
-      GoRoute(path: AppRoutes.otp,                builder: (c, s) => OtpScreen(phone: s.extra as String? ?? '')),
+      GoRoute(
+        path: AppRoutes.otp,
+        builder: (c, s) {
+          final extra = s.extra;
+          if (extra is Map<String, dynamic>) {
+            return OtpScreen(
+              phone: extra['phone'] as String? ?? '',
+              signupData: extra,
+            );
+          }
+          return OtpScreen(phone: extra as String? ?? '');
+        },
+      ),
       GoRoute(path: AppRoutes.register,           builder: (c, s) => const RegisterScreen()),
       GoRoute(path: AppRoutes.home,               builder: (c, s) => const HomeScreen()),
       GoRoute(path: AppRoutes.consultation,       builder: (c, s) => const ConsultationScreen()),
@@ -221,7 +231,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: AppRoutes.counselling,        builder: (c, s) => const CounsellingScreen()),
       GoRoute(path: AppRoutes.equipment,          builder: (c, s) => const EquipmentScreen()),
       GoRoute(path: AppRoutes.appointment,        builder: (c, s) => const AppointmentScreen()),
-      GoRoute(path: AppRoutes.bookAppointment,    builder: (c, s) => const BookAppointmentScreen()),
       GoRoute(path: AppRoutes.doctors,            builder: (c, s) => DoctorsListScreen(initialSpecialty: s.uri.queryParameters['specialty'], initialMode: s.uri.queryParameters['mode'])),
       GoRoute(path: AppRoutes.specialities,       builder: (c, s) => const SpecialitiesScreen()),
       GoRoute(path: AppRoutes.doctorProfile,      builder: (c, s) => DoctorProfileScreen(doctorId: s.pathParameters['id'] ?? '')),
@@ -296,7 +305,8 @@ GoRoute(path: AppRoutes.referral,           builder: (c, s) => const ReferralScr
       GoRoute(
         path: AppRoutes.serviceDetail,
         builder: (c, s) {
-          final booking = s.extra as UnifiedBooking;
+          final booking = s.extra as UnifiedBooking?;
+          if (booking == null) return const MyServicesScreen();
           return ServiceDetailScreen(booking: booking);
         },
       ),

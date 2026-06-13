@@ -8,15 +8,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../referral/referral_service.dart';
 
 // Unique referral code: up to 3 letters from name + 5 chars derived from UID hash.
-// UID is globally unique so the hash suffix guarantees no collisions.
-// e.g. name="Akilesh", uid="abc123xyz" → "AKI2X9K4"
 String generateReferralCode(String name, String uid) {
   final letters = name.toUpperCase().replaceAll(RegExp(r'[^A-Z]'), '');
   final prefix = letters.length >= 3
       ? letters.substring(0, 3)
       : letters.padRight(3, 'M');
-
-  // Derive 5 alphanumeric chars from UID's hashCode — deterministic per user
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   var hash = uid.hashCode.abs();
   final suffix = StringBuffer();
@@ -24,11 +20,10 @@ String generateReferralCode(String name, String uid) {
     suffix.write(chars[hash % chars.length]);
     hash = (hash ~/ chars.length) + uid.codeUnitAt(i % uid.length);
   }
-
   return '$prefix$suffix';
 }
 
-// ── Auth State ──────────────────────────────────────────
+// ── Auth State ──────────────────────────────────────────────────────────────
 class AuthState {
   final User? user;
   final bool isLoading;
@@ -56,7 +51,7 @@ class AuthState {
       );
 }
 
-// ── Auth Notifier ───────────────────────────────────────
+// ── Auth Notifier ───────────────────────────────────────────────────────────
 class AuthNotifier extends StateNotifier<AuthState> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -68,7 +63,52 @@ class AuthNotifier extends StateNotifier<AuthState> {
     });
   }
 
-  // ── Send OTP ──────────────────────────────────────────
+  // ── Google Sign-In (primary auth method) ────────────────────────────────
+  // Returns true if new user (no Firestore doc exists) → route to signup.
+  // Returns false if existing user → route to home.
+  Future<bool> signInWithGoogle() async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      final googleUser = await _googleSignIn.signIn();
+      if (googleUser == null) {
+        state = state.copyWith(isLoading: false);
+        throw Exception('Sign-in was cancelled');
+      }
+      final googleAuth = await googleUser.authentication;
+      final credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+      final result = await _auth.signInWithCredential(credential);
+      final uid = result.user!.uid;
+
+      // Check Firestore — authoritative source for whether this user has completed
+      // registration. Firebase's isNewUser flag is per-device and unreliable.
+      final doc = await _db.collection('users').doc(uid).get();
+      final isNew = !doc.exists;
+
+      if (!isNew) {
+        await _db.collection('users').doc(uid).update({
+          'lastLogin': FieldValue.serverTimestamp(),
+        });
+        await _saveUid(uid);
+      }
+
+      state = state.copyWith(isLoading: false, user: result.user);
+      return isNew;
+    } on FirebaseAuthException catch (e) {
+      final msg = _friendlyError(e.code);
+      state = state.copyWith(isLoading: false, error: msg);
+      throw Exception(msg);
+    } catch (e) {
+      final msg = e.toString().replaceFirst('Exception: ', '');
+      state = state.copyWith(isLoading: false, error: msg);
+      rethrow;
+    }
+  }
+
+  // ── Send OTP ─────────────────────────────────────────────────────────────
+  // Used during new-user registration to verify phone ownership.
   Future<void> sendOtp(String phoneNumber) async {
     state = state.copyWith(isLoading: true, error: null);
     final completer = Completer<void>();
@@ -76,12 +116,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
       phoneNumber: phoneNumber,
       timeout: const Duration(seconds: 60),
       verificationCompleted: (PhoneAuthCredential credential) async {
-        await _auth.signInWithCredential(credential);
+        // Android auto-detection — completer resolves; user skips manual entry.
+        state = state.copyWith(isLoading: false);
         if (!completer.isCompleted) completer.complete();
       },
       verificationFailed: (FirebaseAuthException e) {
-        state = state.copyWith(isLoading: false, error: e.message);
-        if (!completer.isCompleted) completer.completeError(Exception(e.message));
+        final msg = _friendlyError(e.code);
+        state = state.copyWith(isLoading: false, error: msg);
+        if (!completer.isCompleted) completer.completeError(Exception(msg));
       },
       codeSent: (String verificationId, int? resendToken) {
         state = state.copyWith(isLoading: false, verificationId: verificationId);
@@ -95,93 +137,95 @@ class AuthNotifier extends StateNotifier<AuthState> {
     await completer.future;
   }
 
-  // ── Verify OTP ────────────────────────────────────────
-  Future<bool> verifyOtp(String otp) async {
-    final vid = state.verificationId;
-    if (vid == null) {
-      state = state.copyWith(isLoading: false, error: 'Session expired. Please request a new OTP.');
-      throw Exception('Verification session expired. Please request a new OTP.');
-    }
-    state = state.copyWith(isLoading: true, error: null);
-    try {
-      final credential = PhoneAuthProvider.credential(
-        verificationId: vid,
-        smsCode: otp,
-      );
-      final result = await _auth.signInWithCredential(credential);
-      final isNew = result.additionalUserInfo?.isNewUser ?? false;
-      if (!isNew) await _saveUid(result.user!.uid);
-      state = state.copyWith(isLoading: false, user: result.user);
-      return isNew;
-    } on FirebaseAuthException catch (e) {
-      state = state.copyWith(isLoading: false, error: e.message);
-      throw Exception(e.message ?? 'OTP verification failed');
-    }
-  }
-
-  // ── Google Sign-in ────────────────────────────────────
-  Future<bool> signInWithGoogle() async {
-    state = state.copyWith(isLoading: true, error: null);
-    try {
-      final googleUser = await _googleSignIn.signIn();
-      if (googleUser == null) throw Exception('Google sign-in cancelled');
-      final googleAuth = await googleUser.authentication;
-      final credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
-        idToken: googleAuth.idToken,
-      );
-      final result = await _auth.signInWithCredential(credential);
-      final isNew = result.additionalUserInfo?.isNewUser ?? false;
-      if (!isNew) await _saveUid(result.user!.uid);
-      state = state.copyWith(isLoading: false, user: result.user);
-      return isNew;
-    } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
-      throw Exception(e.toString());
-    }
-  }
-
-  // ── Register ──────────────────────────────────────────
-  Future<void> register({
+  // ── Verify OTP + Register (atomic) ────────────────────────────────────────
+  // Links the verified phone to the existing Google account, then creates the
+  // Firestore user document. Called once, at the end of the signup flow.
+  Future<void> verifyPhoneAndRegister({
+    required String otp,
     required String name,
-    required String email,
+    required String phone,
     required String dob,
     required String gender,
     String? referralCode,
   }) async {
+    final vid = state.verificationId;
+    if (vid == null) {
+      state = state.copyWith(
+        isLoading: false,
+        error: 'Session expired. Please request a new OTP.',
+      );
+      throw Exception('Session expired. Please request a new OTP.');
+    }
     state = state.copyWith(isLoading: true, error: null);
     try {
-      final uid = _auth.currentUser!.uid;
+      final phoneCredential = PhoneAuthProvider.credential(
+        verificationId: vid,
+        smsCode: otp,
+      );
+
+      // Link the verified phone number to the existing Google Firebase account.
+      try {
+        await _auth.currentUser!.linkWithCredential(phoneCredential);
+      } on FirebaseAuthException catch (e) {
+        if (e.code == 'credential-already-in-use') {
+          state = state.copyWith(
+            isLoading: false,
+            error: 'This phone number is already linked to another MedNU account.',
+          );
+          throw Exception(
+              'This phone number is already linked to another MedNU account.');
+        }
+        // provider-already-linked → phone already on this account → safe to proceed.
+        if (e.code != 'provider-already-linked') {
+          final msg = _friendlyError(e.code);
+          state = state.copyWith(isLoading: false, error: msg);
+          throw Exception(msg);
+        }
+      }
+
+      // Create Firestore user document (idempotent via set, not update).
+      final user = _auth.currentUser!;
+      final uid = user.uid;
       await _db.collection('users').doc(uid).set({
         'uid': uid,
         'name': name,
-        'email': email,
-        'dob': dob,
+        'googleEmail': user.email ?? '',
+        'email': user.email ?? '',
+        'photoUrl': user.photoURL ?? '',
+        'phoneNumber': phone,
+        'phone': phone,
+        'phoneVerified': true,
         'gender': gender,
-        'phone': _auth.currentUser!.phoneNumber ?? '',
-        'photoUrl': _auth.currentUser!.photoURL ?? '',
+        'dob': dob,
         'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+        'lastLogin': FieldValue.serverTimestamp(),
         'familyMembers': [],
         'isPremium': false,
         'walletBalance': 0.0,
         'referralCode': generateReferralCode(name, uid),
         'referralPoints': 0,
       });
+
       await _saveUid(uid);
+
       if (referralCode != null && referralCode.trim().isNotEmpty) {
         await ReferralService().applyReferralCode(
           referralCode: referralCode.trim(),
           newUserId: uid,
         );
       }
+
       state = state.copyWith(isLoading: false);
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
-      throw Exception(e.toString());
+      if (state.isLoading) {
+        state = state.copyWith(isLoading: false, error: e.toString());
+      }
+      rethrow;
     }
   }
 
-  // ── Update profile ────────────────────────────────────
+  // ── Update profile ────────────────────────────────────────────────────────
   Future<void> updateProfile({
     required String name,
     required String email,
@@ -196,6 +240,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         'email': email,
         'dob': dob,
         'gender': gender,
+        'updatedAt': FieldValue.serverTimestamp(),
       });
       state = state.copyWith(isLoading: false);
     } catch (e) {
@@ -204,7 +249,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
-  // ── Update photo URL ──────────────────────────────────
+  // ── Update photo URL ──────────────────────────────────────────────────────
   Future<void> updatePhotoUrl(String photoUrl) async {
     try {
       final uid = _auth.currentUser!.uid;
@@ -215,14 +260,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
-  // ── Helpers ───────────────────────────────────────────
-  String get _uid {
-    final uid = _auth.currentUser?.uid ?? state.user?.uid;
-    if (uid == null || uid.isEmpty) throw Exception('User not authenticated');
-    return uid;
-  }
-
-  // ── Family members ────────────────────────────────────
+  // ── Family members ────────────────────────────────────────────────────────
   Future<void> addFamilyMember(Map<String, dynamic> member) async {
     try {
       final uid = _uid;
@@ -237,7 +275,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
           ...member,
           'id': DateTime.now().millisecondsSinceEpoch.toString(),
         });
-        // set+merge creates the document if it doesn't exist yet
         tx.set(docRef, {'familyMembers': current}, SetOptions(merge: true));
       });
     } catch (e) {
@@ -258,7 +295,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
         );
         current.removeWhere((m) => member['id'] != null
             ? m['id'] == member['id']
-            : m['name'] == member['name'] && m['relation'] == member['relation']);
+            : m['name'] == member['name'] &&
+                m['relation'] == member['relation']);
         tx.set(docRef, {'familyMembers': current}, SetOptions(merge: true));
       });
     } catch (e) {
@@ -282,11 +320,13 @@ class AuthNotifier extends StateNotifier<AuthState> {
         );
         final idx = current.indexWhere((m) => oldMember['id'] != null
             ? m['id'] == oldMember['id']
-            : m['name'] == oldMember['name'] && m['relation'] == oldMember['relation']);
+            : m['name'] == oldMember['name'] &&
+                m['relation'] == oldMember['relation']);
         if (idx != -1) {
           current[idx] = {
             ...newMember,
-            'id': oldMember['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
+            'id': oldMember['id'] ??
+                DateTime.now().millisecondsSinceEpoch.toString(),
           };
         }
         tx.set(docRef, {'familyMembers': current}, SetOptions(merge: true));
@@ -297,7 +337,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
-  // ── Sign out ──────────────────────────────────────────
+  // ── Sign out ─────────────────────────────────────────────────────────────
+  // Only clears local session. Never deletes Firestore data.
   Future<void> signOut() async {
     await _googleSignIn.signOut();
     await _auth.signOut();
@@ -306,13 +347,39 @@ class AuthNotifier extends StateNotifier<AuthState> {
     state = const AuthState();
   }
 
+  // ── Private helpers ───────────────────────────────────────────────────────
+  String get _uid {
+    final uid = _auth.currentUser?.uid ?? state.user?.uid;
+    if (uid == null || uid.isEmpty) throw Exception('User not authenticated');
+    return uid;
+  }
+
+  String _friendlyError(String code) => switch (code) {
+        'sign_in_canceled' => 'Sign-in was cancelled',
+        'network-request-failed' =>
+          'No internet connection. Please try again.',
+        'too-many-requests' =>
+          'Too many attempts. Please wait and try again.',
+        'invalid-phone-number' =>
+          'Invalid phone number. Please check and try again.',
+        'invalid-verification-code' =>
+          'Incorrect OTP. Please check and try again.',
+        'session-expired' => 'OTP expired. Please request a new one.',
+        'quota-exceeded' => 'SMS quota exceeded. Please try again later.',
+        'credential-already-in-use' =>
+          'This phone is already linked to another account.',
+        'operation-not-allowed' =>
+          'This sign-in method is not enabled.',
+        _ => 'Something went wrong. Please try again.',
+      };
+
   Future<void> _saveUid(String uid) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('uid', uid);
   }
 }
 
-// ── Providers ───────────────────────────────────────────
+// ── Providers ──────────────────────────────────────────────────────────────
 final authProvider = StateNotifierProvider<AuthNotifier, AuthState>(
   (ref) => AuthNotifier(),
 );

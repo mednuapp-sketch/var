@@ -7,6 +7,7 @@ import '../../../core/router/app_router.dart';
 import '../models/pregnancy_models.dart';
 import '../providers/pregnancy_provider.dart';
 import '../data/pregnancy_week_data.dart';
+import '../../../core/widgets/ux_widgets.dart';
 
 class PregnancyDashboardScreen extends ConsumerStatefulWidget {
   const PregnancyDashboardScreen({super.key});
@@ -31,9 +32,27 @@ class _PregnancyDashboardScreenState
     final state = ref.watch(pregnancyProvider);
 
     if (state.isLoading) {
-      return const Scaffold(
-        backgroundColor: Color(0xFFFFF0F5),
-        body: Center(child: CircularProgressIndicator(color: AppColors.primary)),
+      return Scaffold(
+        backgroundColor: const Color(0xFFFFF0F5),
+        body: SingleChildScrollView(
+          physics: const NeverScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(16),
+          child: Column(children: [
+            const SizedBox(height: 60),
+            const SkeletonBox(width: double.infinity, height: 180, radius: 24),
+            const SizedBox(height: 16),
+            const Row(children: [
+              Expanded(child: SkeletonBox(width: double.infinity, height: 90, radius: 16)),
+              SizedBox(width: 12),
+              Expanded(child: SkeletonBox(width: double.infinity, height: 90, radius: 16)),
+            ]),
+            const SizedBox(height: 16),
+            ...List.generate(3, (_) => const Padding(
+              padding: EdgeInsets.only(bottom: 12),
+              child: SkeletonBox(width: double.infinity, height: 72, radius: 16),
+            )),
+          ]),
+        ),
       );
     }
 
@@ -177,7 +196,7 @@ class _PregnancyDashboardScreenState
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
+                        color: Colors.white.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
@@ -215,7 +234,7 @@ class _PregnancyDashboardScreenState
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 10)],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 10)],
       ),
       child: Column(
         children: [
@@ -255,7 +274,7 @@ class _PregnancyDashboardScreenState
               decoration: BoxDecoration(
                 color: const Color(0xFFFFF3E0),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: const Color(0xFFFF9800).withOpacity(0.4)),
+                border: Border.all(color: const Color(0xFFFF9800).withValues(alpha: 0.4)),
               ),
               child: Row(
                 children: const [
@@ -278,7 +297,7 @@ class _PregnancyDashboardScreenState
     child: Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
+        color: color.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
@@ -316,7 +335,7 @@ class _PregnancyDashboardScreenState
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(12),
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8)],
+              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8)],
             ),
             child: Column(
               children: [
@@ -324,7 +343,7 @@ class _PregnancyDashboardScreenState
                   width: 36,
                   height: 36,
                   decoration: BoxDecoration(
-                    color: color.withOpacity(0.12),
+                    color: color.withValues(alpha: 0.12),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(icon, color: color, size: 18),
@@ -393,7 +412,7 @@ class _PregnancyDashboardScreenState
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.15),
+                        color: Colors.white.withValues(alpha: 0.15),
                         shape: BoxShape.circle,
                       ),
                       child: Text(
@@ -459,7 +478,7 @@ class _PregnancyDashboardScreenState
           width: 44,
           height: 44,
           decoration: BoxDecoration(
-            color: const Color(0xFF42A5F5).withOpacity(0.1),
+            color: const Color(0xFF42A5F5).withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(10),
           ),
           child: Icon(_checkupIcon(c.type), color: const Color(0xFF42A5F5), size: 22),
@@ -478,7 +497,7 @@ class _PregnancyDashboardScreenState
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(
-            color: const Color(0xFF42A5F5).withOpacity(0.1),
+            color: const Color(0xFF42A5F5).withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(20),
           ),
           child: Text('Week ${c.pregnancyWeek}',
@@ -517,9 +536,9 @@ class _PregnancyDashboardScreenState
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: typeColor.withOpacity(0.06),
+        color: typeColor.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: typeColor.withOpacity(0.2)),
+        border: Border.all(color: typeColor.withValues(alpha: 0.2)),
       ),
       child: Row(
         children: [
@@ -538,7 +557,7 @@ class _PregnancyDashboardScreenState
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(
-              color: typeColor.withOpacity(0.12),
+              color: typeColor.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(m.type[0].toUpperCase() + m.type.substring(1),
@@ -585,7 +604,7 @@ class _PregnancyDashboardScreenState
     decoration: BoxDecoration(
       color: const Color(0xFFF3E5F5),
       borderRadius: BorderRadius.circular(10),
-      border: Border.all(color: const Color(0xFF7B1FA2).withOpacity(0.15)),
+      border: Border.all(color: const Color(0xFF7B1FA2).withValues(alpha: 0.15)),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -645,7 +664,7 @@ class _PregnancyDashboardScreenState
           width: 40,
           height: 40,
           decoration: BoxDecoration(
-            color: AppColors.primary.withOpacity(0.1),
+            color: AppColors.primary.withValues(alpha: 0.1),
             shape: BoxShape.circle,
           ),
           child: Center(child: Text(_moodEmoji(l.mood), style: const TextStyle(fontSize: 20))),
@@ -691,7 +710,7 @@ class _PregnancyDashboardScreenState
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10)],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

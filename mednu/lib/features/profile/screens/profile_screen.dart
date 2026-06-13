@@ -8,6 +8,7 @@ import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/services/feedback_service.dart';
 import '../../../core/services/operation_logger.dart';
+import '../../../core/widgets/ux_widgets.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../referral/referral_provider.dart';
 
@@ -145,7 +146,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         height: 130,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: Colors.white.withOpacity(0.06),
+                          color: Colors.white.withValues(alpha:0.06),
                         ),
                       ),
                     ),
@@ -159,10 +160,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                 width: 64,
                                 height: 64,
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.18),
+                                  color: Colors.white.withValues(alpha:0.18),
                                   shape: BoxShape.circle,
                                   border: Border.all(
-                                    color: Colors.white.withOpacity(0.35),
+                                    color: Colors.white.withValues(alpha:0.35),
                                     width: 2,
                                   ),
                                 ),
@@ -226,11 +227,32 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           ),
           SliverToBoxAdapter(
             child: userDocAsync.when(
-              loading: () => const SizedBox(
-                height: 300,
-                child: Center(child: CircularProgressIndicator()),
+              loading: () => Padding(
+                padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SkeletonBox(width: 100, height: 13),
+                    const SizedBox(height: 8),
+                    SkeletonBox(width: double.infinity, height: 52),
+                    const SizedBox(height: 20),
+                    SkeletonBox(width: 100, height: 13),
+                    const SizedBox(height: 8),
+                    SkeletonBox(width: double.infinity, height: 52),
+                    const SizedBox(height: 20),
+                    SkeletonBox(width: 100, height: 13),
+                    const SizedBox(height: 8),
+                    SkeletonBox(width: double.infinity, height: 52),
+                    const SizedBox(height: 20),
+                    SkeletonBox(width: 100, height: 13),
+                    const SizedBox(height: 8),
+                    SkeletonBox(width: double.infinity, height: 52),
+                  ],
+                ),
               ),
-              error: (e, _) => Center(child: Text('Error: $e')),
+              error: (e, _) => AppErrorState(
+                message: 'Unable to load profile. Please try again.',
+              ),
               data: (_) => SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
                 child: Column(
@@ -413,7 +435,7 @@ class _FamilyMembersRow extends StatelessWidget {
                             return Row(mainAxisSize: MainAxisSize.min, children: [
                               CircleAvatar(
                                 radius: 14,
-                                backgroundColor: color.withOpacity(0.15),
+                                backgroundColor: color.withValues(alpha:0.15),
                                 child: Text(
                                   name.isNotEmpty ? name[0].toUpperCase() : '?',
                                   style: TextStyle(fontFamily: 'Poppins', fontSize: 12,
@@ -553,14 +575,14 @@ class _ReferralEntryCard extends ConsumerWidget {
         decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: [
-              AppColors.primary.withOpacity(0.07),
-              AppColors.secondary.withOpacity(0.05),
+              AppColors.primary.withValues(alpha:0.07),
+              AppColors.secondary.withValues(alpha:0.05),
             ],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.primary.withOpacity(0.18)),
+          border: Border.all(color: AppColors.primary.withValues(alpha:0.18)),
         ),
         child: Row(
           children: [

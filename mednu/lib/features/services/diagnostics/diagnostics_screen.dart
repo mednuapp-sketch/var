@@ -274,7 +274,7 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
               child: Row(children: [
                 Container(
                   width: 46, height: 46,
-                  decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+                  decoration: BoxDecoration(color: color.withValues(alpha:0.1), borderRadius: BorderRadius.circular(12)),
                   child: Icon(t['icon'] as IconData, color: color, size: 24),
                 ),
                 const SizedBox(width: 12),
@@ -402,7 +402,7 @@ class _DiagnosticBookingCard extends StatelessWidget {
           border: Border.all(color: AppColors.divider),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.03),
+              color: Colors.black.withValues(alpha:0.03),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),
@@ -414,7 +414,7 @@ class _DiagnosticBookingCard extends StatelessWidget {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                color: _themeColor.withOpacity(0.1),
+                color: _themeColor.withValues(alpha:0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: const Icon(Icons.biotech_rounded,

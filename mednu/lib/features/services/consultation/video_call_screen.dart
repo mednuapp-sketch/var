@@ -254,7 +254,7 @@ class _VideoCallScreenState extends State<VideoCallScreen>
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
-                        color: AppColors.primary.withOpacity(0.4),
+                        color: AppColors.primary.withValues(alpha:0.4),
                         blurRadius: 30,
                         spreadRadius: 10),
                   ],
@@ -336,7 +336,7 @@ class _VideoCallScreenState extends State<VideoCallScreen>
           color: const Color(0xFF2C2C3E),
           borderRadius: BorderRadius.circular(16),
           border:
-              Border.all(color: Colors.white.withOpacity(0.3), width: 2),
+              Border.all(color: Colors.white.withValues(alpha:0.3), width: 2),
         ),
         child: _isCameraOff || _isAudioOnly
             ? Column(
@@ -388,7 +388,7 @@ class _VideoCallScreenState extends State<VideoCallScreen>
         padding: const EdgeInsets.fromLTRB(16, 50, 16, 16),
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: [Colors.black.withOpacity(0.6), Colors.transparent],
+            colors: [Colors.black.withValues(alpha:0.6), Colors.transparent],
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
           ),
@@ -399,7 +399,7 @@ class _VideoCallScreenState extends State<VideoCallScreen>
               padding:
                   const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.4),
+                color: Colors.black.withValues(alpha:0.4),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Row(children: [
@@ -442,7 +442,7 @@ class _VideoCallScreenState extends State<VideoCallScreen>
         padding:
             const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: Colors.orange.withOpacity(0.9),
+          color: Colors.orange.withValues(alpha:0.9),
           borderRadius: BorderRadius.circular(12),
         ),
         child: const Row(
@@ -479,7 +479,7 @@ class _VideoCallScreenState extends State<VideoCallScreen>
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: Colors.red.shade700.withOpacity(0.92),
+          color: Colors.red.shade700.withValues(alpha:0.92),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Row(
@@ -517,7 +517,7 @@ class _VideoCallScreenState extends State<VideoCallScreen>
         padding: const EdgeInsets.fromLTRB(24, 24, 24, 48),
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: [Colors.transparent, Colors.black.withOpacity(0.8)],
+            colors: [Colors.transparent, Colors.black.withValues(alpha:0.8)],
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
           ),
@@ -529,10 +529,10 @@ class _VideoCallScreenState extends State<VideoCallScreen>
                   const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               margin: const EdgeInsets.only(bottom: 24),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.1),
+                color: Colors.white.withValues(alpha:0.1),
                 borderRadius: BorderRadius.circular(12),
                 border:
-                    Border.all(color: Colors.white.withOpacity(0.2)),
+                    Border.all(color: Colors.white.withValues(alpha:0.2)),
               ),
               child: Row(children: [
                 const Icon(Icons.note_alt_rounded,
@@ -593,7 +593,7 @@ class _VideoCallScreenState extends State<VideoCallScreen>
                       boxShadow: [
                         BoxShadow(
                             color:
-                                const Color(0xFFE53935).withOpacity(0.5),
+                                const Color(0xFFE53935).withValues(alpha:0.5),
                             blurRadius: 20,
                             spreadRadius: 4),
                       ],
@@ -895,9 +895,9 @@ class _FeedbackOption extends StatelessWidget {
             width: 64,
             height: 64,
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: color.withValues(alpha:0.1),
               shape: BoxShape.circle,
-              border: Border.all(color: color.withOpacity(0.3), width: 2),
+              border: Border.all(color: color.withValues(alpha:0.3), width: 2),
             ),
             child: Center(
                 child: Text(emoji, style: const TextStyle(fontSize: 28))),
@@ -985,7 +985,7 @@ class _TopButton extends StatelessWidget {
         width: 38,
         height: 38,
         decoration: BoxDecoration(
-          color: Colors.black.withOpacity(0.4),
+          color: Colors.black.withValues(alpha:0.4),
           shape: BoxShape.circle,
         ),
         child: Icon(icon, color: Colors.white, size: 18),
@@ -1016,8 +1016,8 @@ class _CallButton extends StatelessWidget {
             height: 52,
             decoration: BoxDecoration(
               color: isActive
-                  ? Colors.white.withOpacity(0.3)
-                  : Colors.white.withOpacity(0.15),
+                  ? Colors.white.withValues(alpha:0.3)
+                  : Colors.white.withValues(alpha:0.15),
               shape: BoxShape.circle,
               border: isActive
                   ? Border.all(color: Colors.white, width: 1.5)
@@ -1115,7 +1115,7 @@ class _ConsultationChatState extends State<_ConsultationChat> {
                 Container(
                   width: 36, height: 36,
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.1),
+                    color: AppColors.primary.withValues(alpha:0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: const Icon(Icons.chat_rounded, color: AppColors.primary, size: 18),
@@ -1183,7 +1183,7 @@ class _ConsultationChatState extends State<_ConsultationChat> {
                             Container(
                               width: 28, height: 28,
                               decoration: BoxDecoration(
-                                color: AppColors.primary.withOpacity(0.1),
+                                color: AppColors.primary.withValues(alpha:0.1),
                                 shape: BoxShape.circle,
                               ),
                               child: Icon(
@@ -1237,7 +1237,7 @@ class _ConsultationChatState extends State<_ConsultationChat> {
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
             decoration: BoxDecoration(
               color: Colors.white,
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, -2))],
+              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:0.05), blurRadius: 8, offset: const Offset(0, -2))],
             ),
             child: Row(
               children: [

@@ -59,9 +59,9 @@ class _OperationBannerState extends State<OperationBanner>
           margin: const EdgeInsets.only(bottom: 12),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
-            color: _bgColor.withOpacity(0.1),
+            color: _bgColor.withValues(alpha:0.1),
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: _bgColor.withOpacity(0.3)),
+            border: Border.all(color: _bgColor.withValues(alpha:0.3)),
           ),
           child: Row(
             children: [
@@ -85,7 +85,7 @@ class _OperationBannerState extends State<OperationBanner>
                     padding:
                         const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                     decoration: BoxDecoration(
-                      color: _bgColor.withOpacity(0.15),
+                      color: _bgColor.withValues(alpha:0.15),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text('Retry',
@@ -240,7 +240,7 @@ class ActionStateButton extends StatelessWidget {
     final style = outlined
         ? OutlinedButton.styleFrom(
             foregroundColor: bgColor,
-            side: BorderSide(color: bgColor.withOpacity(0.6)),
+            side: BorderSide(color: bgColor.withValues(alpha:0.6)),
             padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
             shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14)),
@@ -294,7 +294,7 @@ class LoadingOverlay extends StatelessWidget {
         if (isLoading)
           Positioned.fill(
             child: Container(
-              color: Colors.black.withOpacity(0.45),
+              color: Colors.black.withValues(alpha:0.45),
               child: Center(
                 child: Container(
                   margin: const EdgeInsets.symmetric(horizontal: 40),
@@ -304,7 +304,7 @@ class LoadingOverlay extends StatelessWidget {
                     borderRadius: BorderRadius.circular(20),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.15),
+                        color: Colors.black.withValues(alpha:0.15),
                         blurRadius: 24,
                         offset: const Offset(0, 8),
                       ),
@@ -361,10 +361,10 @@ class RetryCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.error.withOpacity(0.2)),
+        border: Border.all(color: AppColors.error.withValues(alpha:0.2)),
         boxShadow: [
           BoxShadow(
-              color: AppColors.error.withOpacity(0.06),
+              color: AppColors.error.withValues(alpha:0.06),
               blurRadius: 16,
               offset: const Offset(0, 4)),
         ],
@@ -376,7 +376,7 @@ class RetryCard extends StatelessWidget {
             width: 60,
             height: 60,
             decoration: BoxDecoration(
-              color: AppColors.error.withOpacity(0.08),
+              color: AppColors.error.withValues(alpha:0.08),
               shape: BoxShape.circle,
             ),
             child: Icon(icon, size: 28, color: AppColors.error),
@@ -462,7 +462,7 @@ class _SyncStatusRowState extends State<SyncStatusRow>
               height: 8,
               decoration: BoxDecoration(
                 color: AppColors.accent
-                    .withOpacity(0.5 + _pulse.value * 0.5),
+                    .withValues(alpha:0.5 + _pulse.value * 0.5),
                 shape: BoxShape.circle,
               ),
             ),
@@ -519,7 +519,7 @@ class OperationProgressCard extends StatelessWidget {
         border: Border.all(color: AppColors.border),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.04),
+              color: Colors.black.withValues(alpha:0.04),
               blurRadius: 8,
               offset: const Offset(0, 2)),
         ],
@@ -587,7 +587,7 @@ class OperationProgressCard extends StatelessWidget {
         width: 22,
         height: 22,
         decoration: BoxDecoration(
-            color: AppColors.primary.withOpacity(0.15), shape: BoxShape.circle),
+            color: AppColors.primary.withValues(alpha:0.15), shape: BoxShape.circle),
         child: const Padding(
           padding: EdgeInsets.all(5),
           child: CircularProgressIndicator(

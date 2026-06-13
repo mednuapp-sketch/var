@@ -55,9 +55,9 @@ class _AboutScreenState extends State<AboutScreen> {
                       Container(
                         width: 80, height: 80,
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.15),
+                          color: Colors.white.withValues(alpha:0.15),
                           shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white.withOpacity(0.3), width: 2),
+                          border: Border.all(color: Colors.white.withValues(alpha:0.3), width: 2),
                         ),
                         child: const Icon(Icons.local_hospital_rounded, color: Colors.white, size: 40),
                       ),
@@ -70,7 +70,7 @@ class _AboutScreenState extends State<AboutScreen> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.15),
+                            color: Colors.white.withValues(alpha:0.15),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Text(_version, style: const TextStyle(fontFamily: 'Poppins', fontSize: 11, color: Colors.white70)),
@@ -222,11 +222,11 @@ class _SectionCard extends StatelessWidget {
       color: Colors.white,
       borderRadius: BorderRadius.circular(16),
       border: Border.all(color: AppColors.divider),
-      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
+      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:0.04), blurRadius: 8, offset: const Offset(0, 2))],
     ),
     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(children: [
-        Container(width: 32, height: 32, decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+        Container(width: 32, height: 32, decoration: BoxDecoration(color: color.withValues(alpha:0.1), borderRadius: BorderRadius.circular(10)),
             child: Icon(icon, color: color, size: 17)),
         const SizedBox(width: 10),
         Text(title, style: TextStyle(fontFamily: 'Poppins', fontSize: 14, fontWeight: FontWeight.w700, color: color)),
@@ -245,7 +245,7 @@ class _SectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Row(children: [
-    Container(width: 28, height: 28, decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+    Container(width: 28, height: 28, decoration: BoxDecoration(color: color.withValues(alpha:0.1), borderRadius: BorderRadius.circular(8)),
         child: Icon(icon, size: 15, color: color)),
     const SizedBox(width: 8),
     Text(title, style: TextStyle(fontFamily: 'Poppins', fontSize: 14, fontWeight: FontWeight.w700, color: color)),
@@ -262,7 +262,7 @@ class _ServiceTile extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.divider)),
     child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-      Container(width: 36, height: 36, decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle),
+      Container(width: 36, height: 36, decoration: BoxDecoration(color: color.withValues(alpha:0.1), shape: BoxShape.circle),
           child: Icon(icon, color: color, size: 18)),
       const SizedBox(height: 6),
       Text(label, textAlign: TextAlign.center, style: const TextStyle(fontFamily: 'Poppins', fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),

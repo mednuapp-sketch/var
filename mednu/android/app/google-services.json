@@ -14,11 +14,11 @@
       },
       "oauth_client": [
         {
-          "client_id": "1056867138858-02qunfh757npa2rdr0j7b9qjh7v2h6gt.apps.googleusercontent.com",
+          "client_id": "1056867138858-n3iquct1cfe5cic5ipkr0kqgquj7tpr7.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.example.mednu",
-            "certificate_hash": "a04b59a3be9392caace2b91f7985d41fd2db648f"
+            "certificate_hash": "29eff4d15cb462cb5245e8e85b6301b8344d8698"
           }
         },
         {

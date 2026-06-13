@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
+import '../../../core/widgets/ux_widgets.dart';
 import '../../auth/services/doctor_auth_service.dart';
 import '../models/emergency_contact.dart';
 import '../services/sos_service.dart';
@@ -109,7 +110,7 @@ class _SosScreenState extends State<SosScreen> {
         title: Row(children: [
           Container(
             padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: AppColors.error.withOpacity(0.1), shape: BoxShape.circle),
+            decoration: BoxDecoration(color: AppColors.error.withValues(alpha:0.1), shape: BoxShape.circle),
             child: const Icon(Icons.contacts_rounded, color: AppColors.error, size: 22),
           ),
           const SizedBox(width: 12),
@@ -226,7 +227,13 @@ class _SosScreenState extends State<SosScreen> {
               stream: SosService.contactsStream(uid),
               builder: (context, snap) {
                 if (snap.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
+                  return ListView(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+                    children: List.generate(4, (_) => const Padding(
+                      padding: EdgeInsets.only(bottom: 10),
+                      child: SkeletonBox(width: double.infinity, height: 72, radius: 14),
+                    )),
+                  );
                 }
 
                 final contacts = snap.data ?? [];
@@ -238,9 +245,9 @@ class _SosScreenState extends State<SosScreen> {
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: AppColors.error.withOpacity(0.08),
+                        color: AppColors.error.withValues(alpha:0.08),
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: AppColors.error.withOpacity(0.25)),
+                        border: Border.all(color: AppColors.error.withValues(alpha:0.25)),
                       ),
                       child: Row(
                         children: [
@@ -248,7 +255,7 @@ class _SosScreenState extends State<SosScreen> {
                             width: 44,
                             height: 44,
                             decoration: BoxDecoration(
-                              color: AppColors.error.withOpacity(0.12),
+                              color: AppColors.error.withValues(alpha:0.12),
                               shape: BoxShape.circle,
                             ),
                             child: const Icon(Icons.emergency_rounded, color: AppColors.error, size: 24),
@@ -281,7 +288,7 @@ class _SosScreenState extends State<SosScreen> {
                               width: 80,
                               height: 80,
                               decoration: BoxDecoration(
-                                color: AppColors.error.withOpacity(0.08),
+                                color: AppColors.error.withValues(alpha:0.08),
                                 shape: BoxShape.circle,
                               ),
                               child: const Icon(Icons.contacts_outlined, size: 40, color: AppColors.error),
@@ -342,7 +349,7 @@ class _ContactCard extends StatelessWidget {
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: AppColors.error.withOpacity(0.1),
+              color: AppColors.error.withValues(alpha:0.1),
               shape: BoxShape.circle,
             ),
             child: Center(
@@ -376,7 +383,7 @@ class _ContactCard extends StatelessWidget {
               width: 38,
               height: 38,
               decoration: BoxDecoration(
-                color: AppColors.success.withOpacity(0.1),
+                color: AppColors.success.withValues(alpha:0.1),
                 shape: BoxShape.circle,
               ),
               child: const Icon(Icons.call_rounded, color: AppColors.success, size: 20),
@@ -390,7 +397,7 @@ class _ContactCard extends StatelessWidget {
               width: 38,
               height: 38,
               decoration: BoxDecoration(
-                color: AppColors.error.withOpacity(0.1),
+                color: AppColors.error.withValues(alpha:0.1),
                 shape: BoxShape.circle,
               ),
               child: const Icon(Icons.delete_outline_rounded, color: AppColors.error, size: 20),
@@ -518,7 +525,7 @@ class _ContactPickerSheetState extends State<_ContactPickerSheet> {
                         onTap: () => Navigator.pop(context, c),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         leading: CircleAvatar(
-                          backgroundColor: AppColors.error.withOpacity(0.1),
+                          backgroundColor: AppColors.error.withValues(alpha:0.1),
                           child: Text(initial, style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, color: AppColors.error)),
                         ),
                         title: Text(c.displayName, style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 14)),

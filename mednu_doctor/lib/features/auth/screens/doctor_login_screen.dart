@@ -70,7 +70,7 @@ class _DoctorLoginScreenState extends State<DoctorLoginScreen>
                       height: 160,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: Colors.white.withOpacity(0.06),
+                        color: Colors.white.withValues(alpha:0.06),
                       ),
                     ),
                   ),
@@ -82,7 +82,7 @@ class _DoctorLoginScreenState extends State<DoctorLoginScreen>
                       height: 80,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: Colors.white.withOpacity(0.06),
+                        color: Colors.white.withValues(alpha:0.06),
                       ),
                     ),
                   ),
@@ -94,7 +94,7 @@ class _DoctorLoginScreenState extends State<DoctorLoginScreen>
                       height: 120,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: Colors.white.withOpacity(0.05),
+                        color: Colors.white.withValues(alpha:0.05),
                       ),
                     ),
                   ),
@@ -114,10 +114,10 @@ class _DoctorLoginScreenState extends State<DoctorLoginScreen>
                                 width: 64,
                                 height: 64,
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.2),
+                                  color: Colors.white.withValues(alpha:0.2),
                                   borderRadius: BorderRadius.circular(18),
                                   border: Border.all(
-                                      color: Colors.white.withOpacity(0.3)),
+                                      color: Colors.white.withValues(alpha:0.3)),
                                 ),
                                 child: const Icon(Icons.medical_services_rounded,
                                     color: Colors.white, size: 32),
@@ -214,7 +214,7 @@ class _DoctorLoginScreenState extends State<DoctorLoginScreen>
                                 border: Border.all(color: AppColors.border),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Colors.black.withOpacity(0.04),
+                                    color: Colors.black.withValues(alpha:0.04),
                                     blurRadius: 8,
                                     offset: const Offset(0, 2),
                                   ),
@@ -319,21 +319,21 @@ class _DoctorLoginScreenState extends State<DoctorLoginScreen>
                               decoration: BoxDecoration(
                                 gradient: LinearGradient(
                                   colors: [
-                                    AppColors.primary.withOpacity(0.06),
-                                    const Color(0xFF7B1FA2).withOpacity(0.04),
+                                    AppColors.primary.withValues(alpha:0.06),
+                                    const Color(0xFF7B1FA2).withValues(alpha:0.04),
                                   ],
                                 ),
                                 borderRadius: BorderRadius.circular(14),
                                 border: Border.all(
                                     color:
-                                        AppColors.primary.withOpacity(0.15)),
+                                        AppColors.primary.withValues(alpha:0.15)),
                               ),
                               child: Row(children: [
                                 Container(
                                   width: 36,
                                   height: 36,
                                   decoration: BoxDecoration(
-                                    color: AppColors.primary.withOpacity(0.1),
+                                    color: AppColors.primary.withValues(alpha:0.1),
                                     borderRadius: BorderRadius.circular(10),
                                   ),
                                   child: const Icon(Icons.verified_rounded,
@@ -425,9 +425,9 @@ class _TrustBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.18),
+        color: Colors.white.withValues(alpha:0.18),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.35)),
+        border: Border.all(color: Colors.white.withValues(alpha:0.35)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

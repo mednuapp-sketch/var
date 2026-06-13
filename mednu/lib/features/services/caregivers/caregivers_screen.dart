@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/widgets/service_booking_sheet.dart';
+import '../../../core/widgets/ux_widgets.dart';
 
 class CaregiversScreen extends StatefulWidget {
   const CaregiversScreen({super.key});
@@ -165,10 +166,7 @@ class _CaregiversScreenState extends State<CaregiversScreen> {
                     ),
                     const SizedBox(height: 16),
                     if (!snap.hasData && !snap.hasError)
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 32),
-                        child: Center(child: CircularProgressIndicator()),
-                      )
+                      Column(children: List.generate(4, (_) => const SkeletonListTile()))
                     else if (filtered.isEmpty)
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 32),
@@ -194,7 +192,7 @@ class _CaregiversScreenState extends State<CaregiversScreen> {
                             Container(
                               width: 60, height: 60,
                               decoration: BoxDecoration(
-                                  color: color.withOpacity(0.15), shape: BoxShape.circle),
+                                  color: color.withValues(alpha:0.15), shape: BoxShape.circle),
                               child: Icon(Icons.person_rounded, size: 34, color: color),
                             ),
                             const SizedBox(width: 14),

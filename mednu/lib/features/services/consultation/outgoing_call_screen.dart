@@ -345,13 +345,13 @@ class _OutgoingCallScreenState extends State<OutgoingCallScreen>
                         _callState == _OutgoingState.ringing
                     ? AppColors.primaryGradient
                     : RadialGradient(colors: [
-                        glowColor.withOpacity(0.9),
-                        glowColor.withOpacity(0.5),
+                        glowColor.withValues(alpha:0.9),
+                        glowColor.withValues(alpha:0.5),
                       ]),
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: glowColor.withOpacity(0.55),
+                    color: glowColor.withValues(alpha:0.55),
                     blurRadius: 32,
                     spreadRadius: 10,
                   ),
@@ -453,7 +453,7 @@ class _OutgoingCallScreenState extends State<OutgoingCallScreen>
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFFE53935).withOpacity(0.5),
+                  color: const Color(0xFFE53935).withValues(alpha:0.5),
                   blurRadius: 24,
                   spreadRadius: 6,
                 ),
@@ -505,7 +505,7 @@ class _RippleRing extends StatelessWidget {
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             border: Border.all(
-              color: color.withOpacity(opacity),
+              color: color.withValues(alpha:opacity),
               width: 2.0,
             ),
           ),

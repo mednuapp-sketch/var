@@ -181,7 +181,7 @@ class _SubmitReviewScreenState extends State<SubmitReviewScreen>
                 width: 52,
                 height: 52,
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.12),
+                  color: AppColors.primary.withValues(alpha:0.12),
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: const Icon(Icons.person_rounded,
@@ -201,7 +201,7 @@ class _SubmitReviewScreenState extends State<SubmitReviewScreen>
                     padding: const EdgeInsets.symmetric(
                         horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                      color: AppColors.accent.withOpacity(0.1),
+                      color: AppColors.accent.withValues(alpha:0.1),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Row(mainAxisSize: MainAxisSize.min, children: [

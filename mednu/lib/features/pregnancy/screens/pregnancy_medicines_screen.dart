@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
 import '../models/pregnancy_models.dart';
 import '../providers/pregnancy_provider.dart';
+import '../../../core/widgets/ux_widgets.dart';
 
 class PregnancyMedicinesScreen extends ConsumerWidget {
   const PregnancyMedicinesScreen({super.key});
@@ -24,8 +25,9 @@ class PregnancyMedicinesScreen extends ConsumerWidget {
             style: TextStyle(color: Color(0xFF1A1A2E), fontWeight: FontWeight.w700, fontSize: 16)),
       ),
       body: ref.watch(pregnancyMedicinesStreamProvider).when(
-        loading: () => const Center(child: CircularProgressIndicator(color: AppColors.primary)),
-        error: (e, _) => Center(child: Text('Error: $e')),
+        loading: () => ListView(physics: const NeverScrollableScrollPhysics(), padding: const EdgeInsets.symmetric(vertical: 8),
+          children: List.generate(5, (_) => const SkeletonListTile())),
+        error: (e, _) => const AppErrorState(),
         data: (meds) {
           if (meds.isEmpty) {
             return _buildEmpty();
@@ -112,8 +114,8 @@ class PregnancyMedicinesScreen extends ConsumerWidget {
     decoration: BoxDecoration(
       color: Colors.white,
       borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: color.withOpacity(0.15)),
-      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6)],
+      border: Border.all(color: color.withValues(alpha:0.15)),
+      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:0.04), blurRadius: 6)],
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -124,7 +126,7 @@ class PregnancyMedicinesScreen extends ConsumerWidget {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
+                color: color.withValues(alpha:0.1),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(_typeIcon(m.type), color: color, size: 20),
@@ -144,7 +146,7 @@ class PregnancyMedicinesScreen extends ConsumerWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
+                color: color.withValues(alpha:0.1),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text(m.frequency,
@@ -199,7 +201,7 @@ class PregnancyMedicinesScreen extends ConsumerWidget {
             width: 80,
             height: 80,
             decoration: BoxDecoration(
-              color: const Color(0xFF66BB6A).withOpacity(0.1),
+              color: const Color(0xFF66BB6A).withValues(alpha:0.1),
               shape: BoxShape.circle,
             ),
             child: const Icon(Icons.medication_rounded, size: 40, color: Color(0xFF66BB6A)),

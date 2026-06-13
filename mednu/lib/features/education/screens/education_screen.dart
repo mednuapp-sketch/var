@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../services/ai_tips_service.dart';
+import '../../../core/widgets/ux_widgets.dart';
 
 class EducationScreen extends StatefulWidget {
   const EducationScreen({super.key});
@@ -132,7 +133,7 @@ class _EducationScreenState extends State<EducationScreen> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
+                        color: Colors.white.withValues(alpha:0.2),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: const Text('FEATURED', style: TextStyle(fontFamily: 'Poppins', fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white, letterSpacing: 1)),
@@ -227,7 +228,7 @@ class _EducationScreenState extends State<EducationScreen> {
                       Container(
                         width: 56, height: 56,
                         decoration: BoxDecoration(
-                          color: (article['color'] as Color).withOpacity(0.1),
+                          color: (article['color'] as Color).withValues(alpha:0.1),
                           borderRadius: BorderRadius.circular(14),
                         ),
                         child: Icon(article['icon'] as IconData, color: article['color'] as Color, size: 28),
@@ -240,7 +241,7 @@ class _EducationScreenState extends State<EducationScreen> {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                             decoration: BoxDecoration(
-                              color: (article['color'] as Color).withOpacity(0.1),
+                              color: (article['color'] as Color).withValues(alpha:0.1),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(article['category'] as String, style: TextStyle(fontFamily: 'Poppins', fontSize: 10, fontWeight: FontWeight.w600, color: article['color'] as Color)),
@@ -316,7 +317,7 @@ class _AiTipCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF7B1FA2).withOpacity(0.35),
+            color: const Color(0xFF7B1FA2).withValues(alpha:0.35),
             blurRadius: 16,
             offset: const Offset(0, 6),
           ),
@@ -330,7 +331,7 @@ class _AiTipCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
+                color: Colors.white.withValues(alpha:0.2),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: const Row(children: [
@@ -343,7 +344,7 @@ class _AiTipCard extends StatelessWidget {
             if (category != 'All')
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(color: Colors.white.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
+                decoration: BoxDecoration(color: Colors.white.withValues(alpha:0.15), borderRadius: BorderRadius.circular(8)),
                 child: Text(category, style: const TextStyle(fontFamily: 'Poppins', fontSize: 10, fontWeight: FontWeight.w600, color: Colors.white70)),
               ),
             const SizedBox(width: 8),
@@ -351,7 +352,7 @@ class _AiTipCard extends StatelessWidget {
               onTap: isLoading ? null : onRefresh,
               child: Container(
                 width: 32, height: 32,
-                decoration: BoxDecoration(color: Colors.white.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
+                decoration: BoxDecoration(color: Colors.white.withValues(alpha:0.15), borderRadius: BorderRadius.circular(8)),
                 child: isLoading
                     ? const Padding(
                         padding: EdgeInsets.all(8),
@@ -408,7 +409,7 @@ class _AiTipCard extends StatelessWidget {
       width: constraints.maxWidth * widthFactor,
       height: 12,
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.25),
+        color: Colors.white.withValues(alpha:0.25),
         borderRadius: BorderRadius.circular(6),
       ),
     ));
@@ -491,7 +492,7 @@ class _AskAiSheetState extends State<_AskAiSheet> {
           child: Row(children: [
             Container(
               width: 38, height: 38,
-              decoration: BoxDecoration(color: const Color(0xFF7B1FA2).withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+              decoration: BoxDecoration(color: const Color(0xFF7B1FA2).withValues(alpha:0.1), borderRadius: BorderRadius.circular(10)),
               child: const Icon(Icons.auto_awesome_rounded, color: Color(0xFF7B1FA2), size: 20),
             ),
             const SizedBox(width: 12),
@@ -548,7 +549,7 @@ class _AskAiSheetState extends State<_AskAiSheet> {
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
           decoration: BoxDecoration(
             color: Colors.white,
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, -2))],
+            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:0.05), blurRadius: 8, offset: const Offset(0, -2))],
           ),
           child: Row(children: [
             Expanded(
@@ -591,7 +592,7 @@ class _AskAiSheetState extends State<_AskAiSheet> {
       child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
         Container(
           width: 72, height: 72,
-          decoration: BoxDecoration(color: const Color(0xFF7B1FA2).withOpacity(0.1), shape: BoxShape.circle),
+          decoration: BoxDecoration(color: const Color(0xFF7B1FA2).withValues(alpha:0.1), shape: BoxShape.circle),
           child: const Icon(Icons.auto_awesome_rounded, color: Color(0xFF7B1FA2), size: 34),
         ),
         const SizedBox(height: 16),
@@ -615,7 +616,7 @@ class _AskAiSheetState extends State<_AskAiSheet> {
       child: Row(children: [
         Container(
           width: 32, height: 32,
-          decoration: BoxDecoration(color: const Color(0xFF7B1FA2).withOpacity(0.1), shape: BoxShape.circle),
+          decoration: BoxDecoration(color: const Color(0xFF7B1FA2).withValues(alpha:0.1), shape: BoxShape.circle),
           child: const Icon(Icons.auto_awesome_rounded, color: Color(0xFF7B1FA2), size: 16),
         ),
         const SizedBox(width: 8),
@@ -682,7 +683,7 @@ class _ArticleSheetState extends State<_ArticleSheet> {
             child: ListView(controller: controller, padding: const EdgeInsets.all(20), children: [
               Container(
                 height: 160,
-                decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(16)),
+                decoration: BoxDecoration(color: color.withValues(alpha:0.1), borderRadius: BorderRadius.circular(16)),
                 child: Center(child: Icon(widget.article['icon'] as IconData, size: 64, color: color)),
               ),
               const SizedBox(height: 16),
@@ -691,7 +692,7 @@ class _ArticleSheetState extends State<_ArticleSheet> {
               Row(children: [
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
+                  decoration: BoxDecoration(color: color.withValues(alpha:0.1), borderRadius: BorderRadius.circular(6)),
                   child: Text(widget.article['category'] as String,
                       style: TextStyle(fontFamily: 'Poppins', fontSize: 11, fontWeight: FontWeight.w600, color: color)),
                 ),
@@ -704,9 +705,7 @@ class _ArticleSheetState extends State<_ArticleSheet> {
               ]),
               const SizedBox(height: 20),
               if (_loading) ...[
-                const Center(child: CircularProgressIndicator()),
-                const SizedBox(height: 12),
-                const Center(child: Text('Loading article content...', style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: AppColors.textHint))),
+                ...List.generate(4, (_) => const Padding(padding: EdgeInsets.only(bottom: 12), child: SkeletonBox(width: double.infinity, height: 16, radius: 8))),
               ] else
                 Text(
                   _content ?? 'Content unavailable. Please try again.',
@@ -718,7 +717,7 @@ class _ArticleSheetState extends State<_ArticleSheet> {
                 decoration: BoxDecoration(
                   color: const Color(0xFFFFF8E1),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFFBC02D).withOpacity(0.4)),
+                  border: Border.all(color: const Color(0xFFFBC02D).withValues(alpha:0.4)),
                 ),
                 child: const Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Icon(Icons.info_outline_rounded, size: 16, color: Color(0xFFF57F17)),
@@ -754,7 +753,7 @@ class _ChatBubble extends StatelessWidget {
           if (!isUser) ...[
             Container(
               width: 32, height: 32,
-              decoration: BoxDecoration(color: const Color(0xFF7B1FA2).withOpacity(0.1), shape: BoxShape.circle),
+              decoration: BoxDecoration(color: const Color(0xFF7B1FA2).withValues(alpha:0.1), shape: BoxShape.circle),
               child: const Icon(Icons.auto_awesome_rounded, color: Color(0xFF7B1FA2), size: 16),
             ),
             const SizedBox(width: 8),

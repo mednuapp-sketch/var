@@ -6,6 +6,7 @@ import '../../../../core/constants/app_text_styles.dart';
 import '../providers/nutrition_provider.dart';
 import '../models/meal_log_model.dart';
 import '../services/nutrition_service.dart';
+import '../../../../core/widgets/ux_widgets.dart';
 
 class MealTrackingScreen extends ConsumerStatefulWidget {
   const MealTrackingScreen({super.key});
@@ -75,8 +76,8 @@ class _MealTrackingScreenState extends ConsumerState<MealTrackingScreen> {
           ),
           Expanded(
             child: meals.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => Center(child: Text('Error: $e', style: AppTextStyles.bodySmall)),
+              loading: () => Column(children: List.generate(4, (_) => const SkeletonListTile())),
+              error: (e, _) => const AppErrorState(),
               data: (list) {
                 final filtered = list.where((m) => m.mealType == _selectedType).toList();
                 if (filtered.isEmpty) {
@@ -152,7 +153,7 @@ class _SumItem extends StatelessWidget {
           text: TextSpan(
             text: value,
             style: TextStyle(fontFamily: 'Poppins', fontSize: 18, fontWeight: FontWeight.w800, color: color),
-            children: [TextSpan(text: unit, style: TextStyle(fontFamily: 'Poppins', fontSize: 10, color: color.withOpacity(0.7)))],
+            children: [TextSpan(text: unit, style: TextStyle(fontFamily: 'Poppins', fontSize: 10, color: color.withValues(alpha:0.7)))],
           ),
         ),
         Text(label, style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
@@ -199,9 +200,9 @@ class _MealTypeFilter extends StatelessWidget {
                 margin: const EdgeInsets.symmetric(horizontal: 3),
                 padding: const EdgeInsets.symmetric(vertical: 10),
                 decoration: BoxDecoration(
-                  color: isSelected ? color : color.withOpacity(0.06),
+                  color: isSelected ? color : color.withValues(alpha:0.06),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: isSelected ? color : color.withOpacity(0.2)),
+                  border: Border.all(color: isSelected ? color : color.withValues(alpha:0.2)),
                 ),
                 child: Column(
                   children: [
@@ -212,7 +213,7 @@ class _MealTypeFilter extends StatelessWidget {
                       Container(
                         margin: const EdgeInsets.only(top: 2),
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(color: isSelected ? Colors.white.withOpacity(0.3) : color.withOpacity(0.15), borderRadius: BorderRadius.circular(6)),
+                        decoration: BoxDecoration(color: isSelected ? Colors.white.withValues(alpha:0.3) : color.withValues(alpha:0.15), borderRadius: BorderRadius.circular(6)),
                         child: Text('$count', style: TextStyle(fontFamily: 'Poppins', fontSize: 8, fontWeight: FontWeight.w700, color: isSelected ? Colors.white : color)),
                       ),
                   ],
@@ -247,7 +248,7 @@ class _MealTile extends StatelessWidget {
       background: Container(
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 20),
-        decoration: BoxDecoration(color: Colors.red.withOpacity(0.1), borderRadius: BorderRadius.circular(14)),
+        decoration: BoxDecoration(color: Colors.red.withValues(alpha:0.1), borderRadius: BorderRadius.circular(14)),
         child: const Icon(Icons.delete_rounded, color: Colors.red),
       ),
       onDismissed: (_) => onDelete(),
@@ -262,7 +263,7 @@ class _MealTile extends StatelessWidget {
           children: [
             Container(
               padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+              decoration: BoxDecoration(color: color.withValues(alpha:0.1), borderRadius: BorderRadius.circular(10)),
               child: Icon(Icons.restaurant_rounded, color: color, size: 20),
             ),
             const SizedBox(width: 12),
@@ -301,7 +302,7 @@ class _MacroTag extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(right: 4),
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(color: color.withOpacity(0.08), borderRadius: BorderRadius.circular(4)),
+      decoration: BoxDecoration(color: color.withValues(alpha:0.08), borderRadius: BorderRadius.circular(4)),
       child: Text(label, style: TextStyle(fontFamily: 'Poppins', fontSize: 9, color: color, fontWeight: FontWeight.w600)),
     );
   }
@@ -486,9 +487,9 @@ class _MealTypeRow extends StatelessWidget {
               margin: const EdgeInsets.symmetric(horizontal: 3),
               padding: const EdgeInsets.symmetric(vertical: 8),
               decoration: BoxDecoration(
-                color: isSelected ? color : color.withOpacity(0.06),
+                color: isSelected ? color : color.withValues(alpha:0.06),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: isSelected ? color : color.withOpacity(0.2)),
+                border: Border.all(color: isSelected ? color : color.withValues(alpha:0.2)),
               ),
               child: Text(
                 MealLogModel.mealTypeLabel(t),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/widgets/ux_widgets.dart';
 import '../models/saved_address.dart';
 import '../providers/saved_addresses_provider.dart';
 import 'add_edit_address_screen.dart';
@@ -48,8 +49,12 @@ class AddressBookScreen extends ConsumerWidget {
         ],
       ),
       body: savedAsync.when(
-        loading: () => const Center(
-          child: CircularProgressIndicator(color: AppColors.primary),
+        loading: () => ListView(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
+          children: List.generate(4, (_) => const Padding(
+            padding: EdgeInsets.only(bottom: 10),
+            child: SkeletonBox(width: double.infinity, height: 72, radius: 14),
+          )),
         ),
         error: (e, _) => Center(
           child: Column(
@@ -166,7 +171,7 @@ class AddressBookScreen extends ConsumerWidget {
               width: 90,
               height: 90,
               decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.08),
+                color: AppColors.primary.withValues(alpha:0.08),
                 shape: BoxShape.circle,
               ),
               child: const Icon(Icons.add_location_alt_rounded,
@@ -262,13 +267,13 @@ class _AddressTile extends StatelessWidget {
         color: isDark ? AppColors.darkCard : Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: address.isDefault
-            ? Border.all(color: AppColors.primary.withOpacity(0.3), width: 1.5)
+            ? Border.all(color: AppColors.primary.withValues(alpha:0.3), width: 1.5)
             : null,
         boxShadow: isDark
             ? null
             : [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
+                  color: Colors.black.withValues(alpha:0.04),
                   blurRadius: 8,
                   offset: const Offset(0, 2),
                 ),
@@ -285,7 +290,7 @@ class _AddressTile extends StatelessWidget {
                   width: 44,
                   height: 44,
                   decoration: BoxDecoration(
-                    color: _iconBg.withOpacity(0.12),
+                    color: _iconBg.withValues(alpha:0.12),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(_icon, color: _iconBg, size: 22),
@@ -312,7 +317,7 @@ class _AddressTile extends StatelessWidget {
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 8, vertical: 3),
                               decoration: BoxDecoration(
-                                color: AppColors.primary.withOpacity(0.12),
+                                color: AppColors.primary.withValues(alpha:0.12),
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: const Text(
@@ -398,7 +403,7 @@ class _AddressTile extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
           color: isDark
-              ? Colors.white.withOpacity(0.06)
+              ? Colors.white.withValues(alpha:0.06)
               : Colors.grey.shade100,
           borderRadius: BorderRadius.circular(20),
         ),

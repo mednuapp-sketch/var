@@ -3,6 +3,50 @@ import 'package:flutter/services.dart';
 import '../constants/app_colors.dart';
 import '../constants/app_text_styles.dart';
 
+// ─────────────────────────────────────────────────────────────
+// Smooth slide-right + fade transition — used on every platform
+// ─────────────────────────────────────────────────────────────
+class _SmoothPageTransitionsBuilder extends PageTransitionsBuilder {
+  const _SmoothPageTransitionsBuilder();
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    final fade = CurvedAnimation(
+        parent: animation, curve: Curves.easeOut, reverseCurve: Curves.easeIn);
+    final slide = Tween<Offset>(
+            begin: const Offset(0.04, 0), end: Offset.zero)
+        .animate(CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOutCubic,
+            reverseCurve: Curves.easeInCubic));
+    final secondarySlide = Tween<Offset>(
+            begin: Offset.zero, end: const Offset(-0.04, 0))
+        .animate(CurvedAnimation(
+            parent: secondaryAnimation, curve: Curves.easeInCubic));
+    return FadeTransition(
+      opacity: fade,
+      child: SlideTransition(
+        position: slide,
+        child: SlideTransition(position: secondarySlide, child: child),
+      ),
+    );
+  }
+}
+
+const _transitions = PageTransitionsTheme(builders: {
+  TargetPlatform.android: _SmoothPageTransitionsBuilder(),
+  TargetPlatform.iOS:     _SmoothPageTransitionsBuilder(),
+  TargetPlatform.linux:   _SmoothPageTransitionsBuilder(),
+  TargetPlatform.windows: _SmoothPageTransitionsBuilder(),
+  TargetPlatform.macOS:   _SmoothPageTransitionsBuilder(),
+});
+
 class AppTheme {
   AppTheme._();
 
@@ -21,6 +65,7 @@ class AppTheme {
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
+      pageTransitionsTheme: _transitions,
       colorScheme: ColorScheme(
         brightness: Brightness.dark,
         primary: AppColors.primary,
@@ -113,7 +158,7 @@ class AppTheme {
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
           textStyle: WidgetStateProperty.all(AppTextStyles.button),
           minimumSize: WidgetStateProperty.all(const Size(double.infinity, 52)),
-          overlayColor: WidgetStateProperty.all(Colors.white.withOpacity(0.08)),
+          overlayColor: WidgetStateProperty.all(Colors.white.withValues(alpha:0.08)),
         ),
       ),
 
@@ -126,7 +171,7 @@ class AppTheme {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           textStyle: AppTextStyles.button.copyWith(color: AppColors.primaryBright),
           minimumSize: const Size(double.infinity, 52),
-          backgroundColor: AppColors.primary.withOpacity(0.06),
+          backgroundColor: AppColors.primary.withValues(alpha:0.06),
         ),
       ),
 
@@ -199,7 +244,7 @@ class AppTheme {
       // ── Chip ────────────────────────────────────────────
       chipTheme: ChipThemeData(
         backgroundColor: card,
-        selectedColor: AppColors.primary.withOpacity(0.20),
+        selectedColor: AppColors.primary.withValues(alpha:0.20),
         disabledColor: card,
         labelStyle: const TextStyle(
             fontFamily: 'Poppins', fontSize: 12, color: Colors.white,
@@ -291,7 +336,7 @@ class AppTheme {
         ),
         indicatorSize: TabBarIndicatorSize.label,
         overlayColor: WidgetStateProperty.all(
-            AppColors.primary.withOpacity(0.08)),
+            AppColors.primary.withValues(alpha:0.08)),
       ),
 
       // ── Icon ────────────────────────────────────────────
@@ -322,6 +367,7 @@ class AppTheme {
   static ThemeData get lightTheme {
     return ThemeData(
       useMaterial3: true,
+      pageTransitionsTheme: _transitions,
       colorScheme: ColorScheme.fromSeed(
         seedColor: AppColors.primary,
         primary: AppColors.primary,
@@ -441,7 +487,7 @@ class AppTheme {
       // ── Chip ──────────────────────────────────────────
       chipTheme: ChipThemeData(
         backgroundColor: AppColors.background,
-        selectedColor: AppColors.primary.withOpacity(0.15),
+        selectedColor: AppColors.primary.withValues(alpha:0.15),
         labelStyle: AppTextStyles.labelSmall,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         side: const BorderSide(color: AppColors.border),

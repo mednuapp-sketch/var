@@ -108,7 +108,7 @@ class _PregnancyPatientDetailScreenState
                               width: 60,
                               height: 60,
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.2),
+                                color: Colors.white.withValues(alpha:0.2),
                                 shape: BoxShape.circle,
                               ),
                               child: Center(
@@ -180,7 +180,7 @@ class _PregnancyPatientDetailScreenState
   Widget _headerChip(String text, {Color? color, Color? textColor}) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
     decoration: BoxDecoration(
-      color: color ?? Colors.white.withOpacity(0.2),
+      color: color ?? Colors.white.withValues(alpha:0.2),
       borderRadius: BorderRadius.circular(20),
     ),
     child: Text(text, style: TextStyle(
@@ -316,7 +316,7 @@ class _PregnancyPatientDetailScreenState
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6)],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:0.04), blurRadius: 6)],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -325,7 +325,7 @@ class _PregnancyPatientDetailScreenState
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.1),
+                color: AppColors.primary.withValues(alpha:0.1),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text('Week $week',
@@ -398,7 +398,7 @@ class _PregnancyPatientDetailScreenState
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.2)),
+        border: Border.all(color: color.withValues(alpha:0.2)),
       ),
       child: Row(children: [
         Icon(Icons.event_rounded, color: color, size: 20),
@@ -416,7 +416,7 @@ class _PregnancyPatientDetailScreenState
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
+            color: color.withValues(alpha:0.1),
             borderRadius: BorderRadius.circular(20),
           ),
           child: Text(status.toUpperCase(),
@@ -478,7 +478,7 @@ class _PregnancyPatientDetailScreenState
     decoration: BoxDecoration(
       color: Colors.white,
       borderRadius: BorderRadius.circular(12),
-      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6)],
+      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:0.04), blurRadius: 6)],
     ),
     child: Row(children: [
       const Icon(Icons.medication_rounded, color: Color(0xFF66BB6A), size: 22),
@@ -527,7 +527,7 @@ class _PregnancyPatientDetailScreenState
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 6)],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:0.05), blurRadius: 6)],
       ),
       child: Column(children: [
         Icon(icon, color: color, size: 18),
@@ -550,7 +550,7 @@ class _PregnancyPatientDetailScreenState
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6)],
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:0.04), blurRadius: 6)],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

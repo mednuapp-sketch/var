@@ -8,6 +8,7 @@ import '../../../../core/router/app_router.dart';
 import '../providers/nutrition_provider.dart';
 import '../models/meal_log_model.dart';
 import '../models/nutrition_goal_model.dart';
+import '../../../../core/widgets/ux_widgets.dart';
 import '../models/nutrition_appointment_model.dart';
 
 class NutritionDashboardScreen extends ConsumerWidget {
@@ -248,7 +249,7 @@ class _MacroBar extends StatelessWidget {
           borderRadius: BorderRadius.circular(4),
           child: LinearProgressIndicator(
             value: progress,
-            backgroundColor: color.withOpacity(0.12),
+            backgroundColor: color.withValues(alpha:0.12),
             color: color,
             minHeight: 6,
           ),
@@ -285,7 +286,7 @@ class _WaterCard extends ConsumerWidget {
       decoration: BoxDecoration(
         gradient: const LinearGradient(colors: [Color(0xFFE3F2FD), Color(0xFFBBDEFB)]),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFF1565C0).withOpacity(0.2)),
+        border: Border.all(color: const Color(0xFF1565C0).withValues(alpha:0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -305,7 +306,7 @@ class _WaterCard extends ConsumerWidget {
             borderRadius: BorderRadius.circular(6),
             child: LinearProgressIndicator(
               value: progress,
-              backgroundColor: Colors.white.withOpacity(0.6),
+              backgroundColor: Colors.white.withValues(alpha:0.6),
               color: const Color(0xFF1565C0),
               minHeight: 10,
             ),
@@ -324,7 +325,7 @@ class _WaterCard extends ConsumerWidget {
                       size: 22,
                       color: i < glasses
                           ? const Color(0xFF1565C0)
-                          : const Color(0xFF1565C0).withOpacity(0.2),
+                          : const Color(0xFF1565C0).withValues(alpha:0.2),
                     ),
                   )),
                 ),
@@ -376,7 +377,7 @@ class _MealsList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return meals.when(
-      loading: () => const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator())),
+      loading: () => Column(children: List.generate(3, (_) => const SkeletonListTile())),
       error: (_, __) => const SizedBox.shrink(),
       data: (list) {
         if (list.isEmpty) {
@@ -499,7 +500,7 @@ class _UpcomingAppointmentsSection extends StatelessWidget {
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFF2E7D32).withOpacity(0.2)),
+                border: Border.all(color: const Color(0xFF2E7D32).withValues(alpha:0.2)),
               ),
               child: Row(
                 children: [
@@ -518,8 +519,8 @@ class _UpcomingAppointmentsSection extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                     decoration: BoxDecoration(
                       color: a.status == 'confirmed'
-                          ? const Color(0xFF2E7D32).withOpacity(0.1)
-                          : Colors.orange.withOpacity(0.1),
+                          ? const Color(0xFF2E7D32).withValues(alpha:0.1)
+                          : Colors.orange.withValues(alpha:0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(

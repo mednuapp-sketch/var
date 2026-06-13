@@ -89,9 +89,9 @@ class CareAssistantScreen extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: _themeColor.withOpacity(0.07),
+                    color: _themeColor.withValues(alpha:0.07),
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: _themeColor.withOpacity(0.2)),
+                    border: Border.all(color: _themeColor.withValues(alpha:0.2)),
                   ),
                   child: const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Text('What is Care Assistant?',
@@ -147,7 +147,7 @@ class CareAssistantScreen extends StatelessWidget {
                       child: Row(children: [
                         Container(
                           width: 46, height: 46,
-                          decoration: BoxDecoration(color: _themeColor.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+                          decoration: BoxDecoration(color: _themeColor.withValues(alpha:0.1), borderRadius: BorderRadius.circular(12)),
                           child: Icon(task['icon'] as IconData, color: _themeColor, size: 24),
                         ),
                         const SizedBox(width: 12),

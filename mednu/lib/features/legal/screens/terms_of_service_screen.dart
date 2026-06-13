@@ -47,7 +47,7 @@ class TermsOfServiceScreen extends StatelessWidget {
                         Text(
                           'Last updated: May 2025',
                           style: TextStyle(
-                            color: Colors.white.withOpacity(0.75),
+                            color: Colors.white.withValues(alpha:0.75),
                             fontSize: 12,
                           ),
                         ),

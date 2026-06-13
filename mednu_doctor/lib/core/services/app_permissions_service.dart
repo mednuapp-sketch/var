@@ -223,9 +223,9 @@ class _PermissionsSheetState extends State<_PermissionsSheet> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: AppColors.warning.withOpacity(0.08),
+                        color: AppColors.warning.withValues(alpha:0.08),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppColors.warning.withOpacity(0.3)),
+                        border: Border.all(color: AppColors.warning.withValues(alpha:0.3)),
                       ),
                       child: Row(children: [
                         const Icon(Icons.info_outline_rounded, color: AppColors.warning, size: 18),
@@ -261,7 +261,7 @@ class _PermissionsSheetState extends State<_PermissionsSheet> {
                     onPressed: _requesting ? null : _requestAll,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
-                      disabledBackgroundColor: AppColors.primary.withOpacity(0.6),
+                      disabledBackgroundColor: AppColors.primary.withValues(alpha:0.6),
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     ),
@@ -326,9 +326,9 @@ class _PermissionRow extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: isGranted
-              ? AppColors.success.withOpacity(0.2)
+              ? AppColors.success.withValues(alpha:0.2)
               : isBlocked
-                  ? AppColors.error.withOpacity(0.2)
+                  ? AppColors.error.withValues(alpha:0.2)
                   : AppColors.border,
         ),
       ),
@@ -336,7 +336,7 @@ class _PermissionRow extends StatelessWidget {
         Container(
           width: 40, height: 40,
           decoration: BoxDecoration(
-            color: AppColors.primary.withOpacity(0.1),
+            color: AppColors.primary.withValues(alpha:0.1),
             borderRadius: BorderRadius.circular(10),
           ),
           child: Icon(info.icon, color: AppColors.primary, size: 20),
@@ -351,7 +351,7 @@ class _PermissionRow extends StatelessWidget {
         const SizedBox(width: 8),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(color: badgeColor.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+          decoration: BoxDecoration(color: badgeColor.withValues(alpha:0.1), borderRadius: BorderRadius.circular(8)),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
             Icon(badgeIcon, size: 12, color: badgeColor),
             const SizedBox(width: 4),

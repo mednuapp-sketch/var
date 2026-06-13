@@ -8,6 +8,7 @@ import '../providers/nutrition_provider.dart';
 import '../models/nutritionist_model.dart';
 import '../models/nutrition_appointment_model.dart';
 import '../models/nutrition_goal_model.dart';
+import '../../../../core/widgets/ux_widgets.dart';
 
 class NutritionHomeScreen extends ConsumerWidget {
   const NutritionHomeScreen({super.key});
@@ -93,7 +94,7 @@ class NutritionHomeScreen extends ConsumerWidget {
                       Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
+                          color: Colors.white.withValues(alpha:0.2),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: const Icon(Icons.restaurant_rounded, color: Colors.white, size: 26),
@@ -186,7 +187,7 @@ class _StatCard extends StatelessWidget {
       decoration: BoxDecoration(
         gradient: gradient,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border.withOpacity(0.3)),
+        border: Border.all(color: AppColors.border.withValues(alpha:0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -219,7 +220,7 @@ class _FindNutritionistBanner extends StatelessWidget {
             end: Alignment.bottomRight,
           ),
           borderRadius: BorderRadius.circular(20),
-          boxShadow: [BoxShadow(color: const Color(0xFF2E7D32).withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 4))],
+          boxShadow: [BoxShadow(color: const Color(0xFF2E7D32).withValues(alpha:0.3), blurRadius: 12, offset: const Offset(0, 4))],
         ),
         child: Row(
           children: [
@@ -268,7 +269,7 @@ class _DashboardCard extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: AppColors.border),
-        boxShadow: [BoxShadow(color: AppColors.shadow.withOpacity(0.1), blurRadius: 8, offset: const Offset(0, 2))],
+        boxShadow: [BoxShadow(color: AppColors.shadow.withValues(alpha:0.1), blurRadius: 8, offset: const Offset(0, 2))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -311,9 +312,9 @@ class _HubButton extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 14),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.07),
+          color: color.withValues(alpha:0.07),
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: color.withOpacity(0.15)),
+          border: Border.all(color: color.withValues(alpha:0.15)),
         ),
         child: Column(
           children: [
@@ -367,14 +368,14 @@ class _AppointmentTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFF2E7D32).withOpacity(0.2)),
+        border: Border.all(color: const Color(0xFF2E7D32).withValues(alpha:0.2)),
       ),
       child: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: const Color(0xFF2E7D32).withOpacity(0.1),
+              color: const Color(0xFF2E7D32).withValues(alpha:0.1),
               borderRadius: BorderRadius.circular(10),
             ),
             child: const Icon(Icons.person_rounded, color: Color(0xFF2E7D32), size: 22),
@@ -393,7 +394,7 @@ class _AppointmentTile extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             decoration: BoxDecoration(
-              color: appointment.status == 'confirmed' ? const Color(0xFF2E7D32).withOpacity(0.1) : Colors.orange.withOpacity(0.1),
+              color: appointment.status == 'confirmed' ? const Color(0xFF2E7D32).withValues(alpha:0.1) : Colors.orange.withValues(alpha:0.1),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(
@@ -417,8 +418,8 @@ class _FeaturedNutritionists extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return nutritionists.when(
-      loading: () => const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator())),
-      error: (e, _) => Center(child: Text('Failed to load nutritionists', style: AppTextStyles.bodySmall)),
+      loading: () => Column(children: List.generate(3, (_) => const SkeletonListTile())),
+      error: (e, _) => const AppErrorState(),
       data: (list) {
         if (list.isEmpty) {
           return _EmptyNutritionists(onAdd: onViewAll);
@@ -489,7 +490,7 @@ class _NutritionistCard extends StatelessWidget {
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: AppColors.border),
-          boxShadow: [BoxShadow(color: AppColors.shadow.withOpacity(0.08), blurRadius: 6, offset: const Offset(0, 2))],
+          boxShadow: [BoxShadow(color: AppColors.shadow.withValues(alpha:0.08), blurRadius: 6, offset: const Offset(0, 2))],
         ),
         child: Row(
           children: [
@@ -555,7 +556,7 @@ class _AvatarFallback extends StatelessWidget {
       width: 56,
       height: 56,
       decoration: BoxDecoration(
-        color: const Color(0xFF2E7D32).withOpacity(0.12),
+        color: const Color(0xFF2E7D32).withValues(alpha:0.12),
         borderRadius: BorderRadius.circular(12),
       ),
       alignment: Alignment.center,
@@ -606,9 +607,9 @@ class _HealthGoalsSection extends StatelessWidget {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.08),
+                  color: color.withValues(alpha:0.08),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: color.withOpacity(0.2)),
+                  border: Border.all(color: color.withValues(alpha:0.2)),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,

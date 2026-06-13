@@ -32,7 +32,7 @@ class DoctorConsultBanner extends StatelessWidget {
           gradient: AppColors.primaryGradient,
           boxShadow: [
             BoxShadow(
-              color: AppColors.primary.withOpacity(0.38),
+              color: AppColors.primary.withValues(alpha:0.38),
               blurRadius: 24,
               offset: const Offset(0, 10),
             ),
@@ -46,7 +46,7 @@ class DoctorConsultBanner extends StatelessWidget {
               child: Container(
                 width: 130, height: 130,
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.08),
+                  color: Colors.white.withValues(alpha:0.08),
                   shape: BoxShape.circle,
                 ),
               ),
@@ -56,7 +56,7 @@ class DoctorConsultBanner extends StatelessWidget {
               child: Container(
                 width: 80, height: 80,
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.05),
+                  color: Colors.white.withValues(alpha:0.05),
                   shape: BoxShape.circle,
                 ),
               ),
@@ -74,7 +74,7 @@ class DoctorConsultBanner extends StatelessWidget {
                       width: 96, height: 96,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white.withOpacity(0.2), width: 2),
+                        border: Border.all(color: Colors.white.withValues(alpha:0.2), width: 2),
                       ),
                     ),
                     // Doctor photo
@@ -86,7 +86,7 @@ class DoctorConsultBanner extends StatelessWidget {
                         placeholder: (_, __) => Container(
                           width: 82, height: 82,
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.18),
+                            color: Colors.white.withValues(alpha:0.18),
                             shape: BoxShape.circle,
                           ),
                           child: const Icon(Icons.medical_services_rounded, color: Colors.white, size: 38),
@@ -94,7 +94,7 @@ class DoctorConsultBanner extends StatelessWidget {
                         errorWidget: (_, __, ___) => Container(
                           width: 82, height: 82,
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.18),
+                            color: Colors.white.withValues(alpha:0.18),
                             shape: BoxShape.circle,
                           ),
                           child: const Icon(Icons.medical_services_rounded, color: Colors.white, size: 38),
@@ -110,7 +110,7 @@ class DoctorConsultBanner extends StatelessWidget {
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(10),
                           boxShadow: [
-                            BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 8)
+                            BoxShadow(color: Colors.black.withValues(alpha:0.12), blurRadius: 8)
                           ],
                         ),
                         child: Row(
@@ -143,7 +143,7 @@ class DoctorConsultBanner extends StatelessWidget {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.22),
+                          color: Colors.white.withValues(alpha:0.22),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: const Text(
@@ -195,7 +195,7 @@ class DoctorConsultBanner extends StatelessWidget {
                       borderRadius: BorderRadius.circular(22),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.12),
+                          color: Colors.black.withValues(alpha:0.12),
                           blurRadius: 8,
                           offset: const Offset(0, 3),
                         ),
@@ -252,7 +252,7 @@ class AiDoctorCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF4527A0).withOpacity(0.38),
+              color: const Color(0xFF4527A0).withValues(alpha:0.38),
               blurRadius: 24,
               offset: const Offset(0, 10),
             ),
@@ -265,7 +265,7 @@ class AiDoctorCard extends StatelessWidget {
               child: Container(
                 width: 100, height: 100,
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.07),
+                  color: Colors.white.withValues(alpha:0.07),
                   shape: BoxShape.circle,
                 ),
               ),
@@ -275,7 +275,7 @@ class AiDoctorCard extends StatelessWidget {
               child: Container(
                 width: 70, height: 70,
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.05),
+                  color: Colors.white.withValues(alpha:0.05),
                   shape: BoxShape.circle,
                 ),
               ),
@@ -288,7 +288,7 @@ class AiDoctorCard extends StatelessWidget {
                     Container(
                       width: 50, height: 50,
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.18),
+                        color: Colors.white.withValues(alpha:0.18),
                         borderRadius: BorderRadius.circular(16),
                       ),
                       child: const Icon(
@@ -317,7 +317,7 @@ class AiDoctorCard extends StatelessWidget {
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.22),
+                                  color: Colors.white.withValues(alpha:0.22),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: const Text(
@@ -372,9 +372,9 @@ class AiDoctorCard extends StatelessWidget {
                   children: _questions.map((q) => Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.14),
+                      color: Colors.white.withValues(alpha:0.14),
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.white.withOpacity(0.3)),
+                      border: Border.all(color: Colors.white.withValues(alpha:0.3)),
                     ),
                     child: Text(
                       q,
@@ -397,7 +397,7 @@ class AiDoctorCard extends StatelessWidget {
                       borderRadius: BorderRadius.circular(22),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.14),
+                          color: Colors.black.withValues(alpha:0.14),
                           blurRadius: 8,
                           offset: const Offset(0, 3),
                         ),
@@ -508,16 +508,16 @@ class _SpecChip extends StatelessWidget {
               width: 56, height: 56,
               decoration: BoxDecoration(
                 color: isDark
-                    ? spec.color.withOpacity(0.15)
-                    : spec.color.withOpacity(0.10),
+                    ? spec.color.withValues(alpha:0.15)
+                    : spec.color.withValues(alpha:0.10),
                 borderRadius: BorderRadius.circular(18),
                 border: Border.all(
-                  color: spec.color.withOpacity(isDark ? 0.35 : 0.20),
+                  color: spec.color.withValues(alpha:isDark ? 0.35 : 0.20),
                   width: 1,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: spec.color.withOpacity(isDark ? 0.25 : 0.12),
+                    color: spec.color.withValues(alpha:isDark ? 0.25 : 0.12),
                     blurRadius: isDark ? 14 : 8,
                     offset: const Offset(0, 3),
                   ),
@@ -534,7 +534,7 @@ class _SpecChip extends StatelessWidget {
               style: AppTextStyles.caption.copyWith(
                 fontWeight: FontWeight.w600,
                 fontSize: 10,
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.75),
+                color: Theme.of(context).colorScheme.onSurface.withValues(alpha:0.75),
                 height: 1.3,
               ),
             ),
@@ -629,7 +629,7 @@ class FamilyRow extends ConsumerWidget {
                             width: 1.5,
                             strokeAlign: BorderSide.strokeAlignOutside,
                           ),
-                          color: AppColors.primary.withOpacity(0.06),
+                          color: AppColors.primary.withValues(alpha:0.06),
                         ),
                         child: const Icon(Icons.add_rounded, color: AppColors.primary, size: 26),
                       ),
@@ -689,7 +689,7 @@ class _FamilyMemberTile extends StatelessWidget {
                   boxShadow: [
                     BoxShadow(
                       color: (member.isActive ? AppColors.primary : const Color(0xFFAB47BC))
-                          .withOpacity(0.28),
+                          .withValues(alpha:0.28),
                       blurRadius: 12,
                       offset: const Offset(0, 4),
                     ),
@@ -739,7 +739,7 @@ class _FamilyMemberTile extends StatelessWidget {
               fontSize: 11,
               color: member.isActive
                   ? AppColors.primary
-                  : Theme.of(context).colorScheme.onSurface.withOpacity(0.75),
+                  : Theme.of(context).colorScheme.onSurface.withValues(alpha:0.75),
             ),
           ),
         ],
@@ -857,14 +857,14 @@ class _StripTile extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
           color: isDark
-              ? strip.color.withOpacity(0.12)
+              ? strip.color.withValues(alpha:0.12)
               : strip.bg,
           borderRadius: BorderRadius.circular(16),
           border: isDark
-              ? Border.all(color: strip.color.withOpacity(0.25), width: 1)
+              ? Border.all(color: strip.color.withValues(alpha:0.25), width: 1)
               : Border(left: BorderSide(color: strip.color, width: 4)),
           boxShadow: isDark
-              ? [BoxShadow(color: strip.color.withOpacity(0.12), blurRadius: 16, offset: const Offset(0, 4))]
+              ? [BoxShadow(color: strip.color.withValues(alpha:0.12), blurRadius: 16, offset: const Offset(0, 4))]
               : null,
         ),
         child: Row(
@@ -872,7 +872,7 @@ class _StripTile extends StatelessWidget {
             Container(
               width: 40, height: 40,
               decoration: BoxDecoration(
-                color: strip.color.withOpacity(0.18),
+                color: strip.color.withValues(alpha:0.18),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(strip.icon, color: strip.color, size: 22),
@@ -1012,7 +1012,7 @@ class _ServiceGridState extends State<ServiceGrid> {
               width: active ? 18 : 5,
               height: 5,
               decoration: BoxDecoration(
-                color: active ? AppColors.primary : AppColors.primary.withOpacity(0.2),
+                color: active ? AppColors.primary : AppColors.primary.withValues(alpha:0.2),
                 borderRadius: BorderRadius.circular(3),
               ),
             );
@@ -1057,7 +1057,7 @@ class _ServiceCarouselCard extends StatelessWidget {
           boxShadow: isCenter
               ? [
                   BoxShadow(
-                    color: baseColor.withOpacity(0.5),
+                    color: baseColor.withValues(alpha:0.5),
                     blurRadius: 24,
                     offset: const Offset(0, 10),
                   ),
@@ -1082,7 +1082,7 @@ class _ServiceCarouselCard extends StatelessWidget {
                 child: Container(
                   width: 90, height: 90,
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.08),
+                    color: Colors.white.withValues(alpha:0.08),
                     shape: BoxShape.circle,
                   ),
                 ),
@@ -1099,7 +1099,7 @@ class _ServiceCarouselCard extends StatelessWidget {
                           width: isCenter ? 44 : 34,
                           height: isCenter ? 44 : 34,
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.22),
+                            color: Colors.white.withValues(alpha:0.22),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Icon(
@@ -1113,7 +1113,7 @@ class _ServiceCarouselCard extends StatelessWidget {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.28),
+                              color: Colors.white.withValues(alpha:0.28),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
@@ -1162,7 +1162,7 @@ class _ServiceCarouselCard extends StatelessWidget {
                             borderRadius: BorderRadius.circular(16),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.15),
+                                color: Colors.black.withValues(alpha:0.15),
                                 blurRadius: 6,
                                 offset: const Offset(0, 2),
                               ),
@@ -1206,7 +1206,7 @@ class _EcgLinePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.white.withOpacity(0.15)
+      ..color = Colors.white.withValues(alpha:0.15)
       ..strokeWidth = 1.5
       ..style = PaintingStyle.stroke;
     final path = Path();
@@ -1375,16 +1375,16 @@ class UpcomingAppointmentCard extends StatelessWidget {
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: Theme.of(context).colorScheme.outlineVariant.withOpacity(0.4),
+          color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha:0.4),
         ),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primary.withOpacity(0.08),
+            color: AppColors.primary.withValues(alpha:0.08),
             blurRadius: 20,
             offset: const Offset(0, 6),
           ),
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha:0.05),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -1455,7 +1455,7 @@ class UpcomingAppointmentCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(14),
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.primary.withOpacity(0.35),
+                    color: AppColors.primary.withValues(alpha:0.35),
                     blurRadius: 12,
                     offset: const Offset(0, 4),
                   ),
@@ -1500,11 +1500,11 @@ class UpcomingAppointmentCard extends StatelessWidget {
           color: Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: AppColors.primary.withOpacity(0.15),
+            color: AppColors.primary.withValues(alpha:0.15),
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.04),
+              color: Colors.black.withValues(alpha:0.04),
               blurRadius: 12,
               offset: const Offset(0, 4),
             ),
@@ -1516,7 +1516,7 @@ class UpcomingAppointmentCard extends StatelessWidget {
               width: 52,
               height: 52,
               decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.1),
+                color: AppColors.primary.withValues(alpha:0.1),
                 borderRadius: BorderRadius.circular(14),
               ),
               child: const Icon(Icons.calendar_today_outlined,
@@ -1566,7 +1566,7 @@ class UpcomingAppointmentCard extends StatelessWidget {
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: Theme.of(context).colorScheme.outlineVariant.withOpacity(0.4),
+          color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha:0.4),
         ),
       ),
       child: Row(
@@ -1575,7 +1575,7 @@ class UpcomingAppointmentCard extends StatelessWidget {
             width: 68,
             height: 68,
             decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.08),
+              color: AppColors.primary.withValues(alpha:0.08),
               borderRadius: BorderRadius.circular(18),
             ),
           ),
@@ -1624,7 +1624,7 @@ class _InfoChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha:0.1),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
@@ -1794,7 +1794,7 @@ class _StoryTipCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(22),
         boxShadow: [
           BoxShadow(
-            color: tip.gradient.first.withOpacity(0.35),
+            color: tip.gradient.first.withValues(alpha:0.35),
             blurRadius: 16,
             offset: const Offset(0, 6),
           ),
@@ -1811,7 +1811,7 @@ class _StoryTipCard extends StatelessWidget {
               height: 110,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Colors.white.withOpacity(0.12),
+                color: Colors.white.withValues(alpha:0.12),
               ),
             ),
           ),
@@ -1823,7 +1823,7 @@ class _StoryTipCard extends StatelessWidget {
               height: 60,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Colors.white.withOpacity(0.08),
+                color: Colors.white.withValues(alpha:0.08),
               ),
             ),
           ),
@@ -1837,9 +1837,9 @@ class _StoryTipCard extends StatelessWidget {
                   width: 68,
                   height: 68,
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.22),
+                    color: Colors.white.withValues(alpha:0.22),
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: Colors.white.withOpacity(0.35), width: 1.5),
+                    border: Border.all(color: Colors.white.withValues(alpha:0.35), width: 1.5),
                   ),
                   child: Icon(tip.icon, color: Colors.white, size: 32),
                 ),
@@ -1853,7 +1853,7 @@ class _StoryTipCard extends StatelessWidget {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.22),
+                          color: Colors.white.withValues(alpha:0.22),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
@@ -1884,7 +1884,7 @@ class _StoryTipCard extends StatelessWidget {
                         style: TextStyle(
                           fontFamily: 'Poppins',
                           fontSize: 11,
-                          color: Colors.white.withOpacity(0.88),
+                          color: Colors.white.withValues(alpha:0.88),
                           height: 1.4,
                         ),
                         maxLines: 2,

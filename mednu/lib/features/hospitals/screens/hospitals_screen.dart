@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../services/hospital_service.dart';
+import '../../../core/widgets/ux_widgets.dart';
 
 class HospitalsScreen extends StatefulWidget {
   const HospitalsScreen({super.key});
@@ -75,8 +76,10 @@ class _HospitalsScreenState extends State<HospitalsScreen> {
               stream: HospitalService.stream(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(
-                    child: CircularProgressIndicator(color: Color(0xFF1565C0)),
+                  return ListView(
+                    physics: const NeverScrollableScrollPhysics(),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    children: List.generate(6, (_) => const SkeletonListTile()),
                   );
                 }
                 if (snapshot.hasError) {
@@ -118,7 +121,7 @@ class _HospitalsScreenState extends State<HospitalsScreen> {
                             width: 80,
                             height: 80,
                             decoration: BoxDecoration(
-                              color: const Color(0xFF1565C0).withOpacity(0.08),
+                              color: const Color(0xFF1565C0).withValues(alpha:0.08),
                               shape: BoxShape.circle,
                             ),
                             child: const Icon(Icons.local_hospital_outlined,
@@ -194,7 +197,7 @@ class _HospitalCard extends StatelessWidget {
         border: Border.all(color: AppColors.divider),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha:0.04),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -209,7 +212,7 @@ class _HospitalCard extends StatelessWidget {
                 width: 52,
                 height: 52,
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
+                  color: color.withValues(alpha:0.1),
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: const Icon(Icons.local_hospital_rounded, color: color, size: 28),
@@ -234,7 +237,7 @@ class _HospitalCard extends StatelessWidget {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFE53935).withOpacity(0.1),
+                              color: const Color(0xFFE53935).withValues(alpha:0.1),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: const Text(

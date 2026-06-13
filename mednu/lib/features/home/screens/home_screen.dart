@@ -21,6 +21,7 @@ import '../../health/screens/prescription_viewer_screen.dart';
 import 'global_search_screen.dart';
 import 'location_picker_screen.dart';
 import '../../my_services/screens/my_services_screen.dart';
+import '../../doctors/screens/doctors_list_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -100,7 +101,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         index: _currentIndex,
         children: const [
           _HomeBody(),
-          _FindBody(),
+          DoctorsListScreen(showBackButton: false),
           MyServicesScreen(),
           _ProfileBody(),
         ],

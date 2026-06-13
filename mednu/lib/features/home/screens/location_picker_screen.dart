@@ -213,7 +213,7 @@ class _LocationPickerScreenState extends ConsumerState<LocationPickerScreen>
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bg = isDark ? const Color(0xFF0F1923) : const Color(0xFFF8F9FE);
     final divColor =
-        isDark ? Colors.white.withOpacity(0.06) : Colors.grey.shade100;
+        isDark ? Colors.white.withValues(alpha:0.06) : Colors.grey.shade100;
 
     return Stack(
       children: [
@@ -262,7 +262,7 @@ class _LocationPickerScreenState extends ConsumerState<LocationPickerScreen>
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(
                         color: _focusNode.hasFocus
-                            ? AppColors.primary.withOpacity(0.6)
+                            ? AppColors.primary.withValues(alpha:0.6)
                             : Colors.transparent,
                         width: 1.5,
                       ),
@@ -339,7 +339,7 @@ class _LocationPickerScreenState extends ConsumerState<LocationPickerScreen>
         // Global loading overlay while fetching place details
         if (_loadingDetails)
           Container(
-            color: Colors.black.withOpacity(0.3),
+            color: Colors.black.withValues(alpha:0.3),
             child: const Center(
               child: CircularProgressIndicator(color: AppColors.primary),
             ),
@@ -523,7 +523,7 @@ class _LocationPickerScreenState extends ConsumerState<LocationPickerScreen>
                         ? null
                         : Border.all(
                             color: isDark
-                                ? Colors.white.withOpacity(0.08)
+                                ? Colors.white.withValues(alpha:0.08)
                                 : Colors.grey.shade200,
                           ),
                   ),
@@ -712,7 +712,7 @@ class _SavedAddressTile extends StatelessWidget {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                color: _iconBg.withOpacity(0.12),
+                color: _iconBg.withValues(alpha:0.12),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(_icon, color: _iconBg, size: 22),
@@ -739,7 +739,7 @@ class _SavedAddressTile extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
-                            color: AppColors.primary.withOpacity(0.12),
+                            color: AppColors.primary.withValues(alpha:0.12),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: const Text(
@@ -818,7 +818,7 @@ class _CurrentLocationTile extends StatelessWidget {
                           width: 44,
                           height: 44,
                           decoration: BoxDecoration(
-                            color: AppColors.primary.withOpacity(0.12),
+                            color: AppColors.primary.withValues(alpha:0.12),
                             shape: BoxShape.circle,
                           ),
                         ),
@@ -836,7 +836,7 @@ class _CurrentLocationTile extends StatelessWidget {
                               end: Alignment.bottomRight,
                             ),
                       color: isDetecting
-                          ? AppColors.primary.withOpacity(0.2)
+                          ? AppColors.primary.withValues(alpha:0.2)
                           : null,
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -932,7 +932,7 @@ class _PlacesTile extends StatelessWidget {
               height: 40,
               decoration: BoxDecoration(
                 color: isDark
-                    ? Colors.white.withOpacity(0.05)
+                    ? Colors.white.withValues(alpha:0.05)
                     : Colors.grey.shade100,
                 borderRadius: BorderRadius.circular(10),
               ),

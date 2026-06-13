@@ -21,25 +21,132 @@ import 'core/services/crash_reporting_service.dart';
 
 // FCM background/terminated handler — runs in a separate Dart isolate.
 // Must re-initialise Firebase because isolates do not share state.
-// Guard with Firebase.apps.isEmpty so a hot-restart in debug mode
-// does not trigger the "already initialised" assertion.
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   if (Firebase.apps.isEmpty) {
     await Firebase.initializeApp(
         options: DefaultFirebaseOptions.currentPlatform);
   }
-  await CallNotificationService.init();
+
+  // Incoming call from doctor — show full-screen call UI even when killed.
   if (message.data['type'] == 'incoming_doctor_call') {
+    await CallNotificationService.init();
     await CallNotificationService.showIncomingCall(
       doctorName: message.data['doctorName'] ?? 'Doctor',
-      specialty: message.data['doctorSpecialty'] ?? '',
+      specialty:  message.data['doctorSpecialty'] ?? '',
     );
   }
+  // All other types are handled by the FCM system tray notification automatically.
+  // The Firestore stream will pick up the in-app notification when the app opens.
 }
 
 // Local notifications plugin instance
 final _localNotifications = FlutterLocalNotificationsPlugin();
+
+/// Routes the user to the correct screen when they tap an FCM notification.
+/// Works for background taps (onMessageOpenedApp), terminated taps
+/// (getInitialMessage), and local notification taps (onDidReceiveNotificationResponse).
+/// [data] is the FCM data map or the pipe-split local-notification payload.
+void _handleFcmNavigation(Map<String, dynamic> data) {
+  final ctx = appNavigatorKey.currentContext;
+  if (ctx == null) return;
+
+  final type        = data['type']        as String? ?? '';
+  final serviceType = data['serviceType'] as String? ?? '';
+  final actionType  = data['actionType']  as String? ?? '';
+
+  // Incoming call: go straight to the incoming call screen.
+  if (type == 'incoming_doctor_call') {
+    ctx.go(AppRoutes.incomingCall, extra: {
+      'doctorName':      data['doctorName']      ?? 'Doctor',
+      'doctorSpecialty': data['doctorSpecialty'] ?? '',
+      'consultationId':  data['consultationId']  ?? '',
+    });
+    return;
+  }
+
+  // Route by explicit actionType first (most specific).
+  switch (actionType) {
+    case 'open_call':
+      ctx.go(AppRoutes.consultation);
+      return;
+    case 'open_prescription':
+      ctx.go(AppRoutes.prescriptionViewer);
+      return;
+    case 'open_order':
+      ctx.go(AppRoutes.orderTracking);
+      return;
+    case 'open_diagnostics':
+      ctx.go(AppRoutes.diagnostics);
+      return;
+    case 'open_ambulance':
+      ctx.go(AppRoutes.ambulance);
+      return;
+    case 'open_appointment':
+      ctx.go(AppRoutes.appointment);
+      return;
+    case 'open_pregnancy':
+      ctx.go(AppRoutes.pregnancyCheckups);
+      return;
+    case 'open_service':
+      ctx.go(_serviceRouteFromType(serviceType));
+      return;
+  }
+
+  // Fallback: route by notification type string.
+  if (type.startsWith('appointment_') || type == 'appointment_reminder') {
+    ctx.go(AppRoutes.appointment);
+  } else if (type.startsWith('medicine_') || type == 'order_update') {
+    ctx.go(AppRoutes.orderTracking);
+  } else if (type.startsWith('lab_') || type.startsWith('diagnostics_')) {
+    ctx.go(AppRoutes.diagnostics);
+  } else if (type.startsWith('ambulance_')) {
+    ctx.go(AppRoutes.ambulance);
+  } else if (type.startsWith('homecare_') || type.startsWith('caregiver_')) {
+    ctx.go(AppRoutes.caregivers);
+  } else if (type.startsWith('physio_')) {
+    ctx.go(AppRoutes.physio);
+  } else if (type.startsWith('hospital_')) {
+    ctx.go(AppRoutes.hospitals);
+  } else if (type.startsWith('pregnancy_')) {
+    ctx.go(AppRoutes.pregnancyCheckups);
+  } else if (type.startsWith('nutrition_')) {
+    ctx.go(AppRoutes.nutrition);
+  } else if (type.startsWith('quickconnect_')) {
+    ctx.go(AppRoutes.consultation);
+  } else if (type == 'prescription_uploaded') {
+    ctx.go(AppRoutes.prescriptionViewer);
+  } else if (type == 'consultation_done' || type == 'followup_day1' || type == 'followup_day2') {
+    ctx.go(AppRoutes.postConsultation);
+  } else if (type == 'water_reminder') {
+    ctx.go(AppRoutes.waterReminder);
+  } else if (type == 'period_tracker') {
+    ctx.go(AppRoutes.periodTracker);
+  } else if (type == 'review_prompt') {
+    ctx.go(AppRoutes.submitReview);
+  } else {
+    ctx.go(AppRoutes.notifications);
+  }
+}
+
+String _serviceRouteFromType(String serviceType) {
+  switch (serviceType.toLowerCase()) {
+    case 'appointment':   return AppRoutes.appointment;
+    case 'medicine':      return AppRoutes.orderTracking;
+    case 'diagnostics':
+    case 'lab':           return AppRoutes.diagnostics;
+    case 'ambulance':     return AppRoutes.ambulance;
+    case 'home_care':
+    case 'caregiver':     return AppRoutes.caregivers;
+    case 'physiotherapy': return AppRoutes.physio;
+    case 'hospital':      return AppRoutes.hospitals;
+    case 'pregnancy':     return AppRoutes.pregnancyCheckups;
+    case 'nutrition':     return AppRoutes.nutrition;
+    case 'quick_connect': return AppRoutes.consultation;
+    case 'counselling':   return AppRoutes.careAssistant;
+    default:              return AppRoutes.myServices;
+  }
+}
 
 // Android notification channel for FCM high-importance alerts
 const _androidChannel = AndroidNotificationChannel(
@@ -77,56 +184,63 @@ Future<void> _initFCM() async {
       iOS: DarwinInitializationSettings(),
     ),
     onDidReceiveNotificationResponse: (NotificationResponse response) {
-      final payload = response.payload;
-      if (payload == null || payload.isEmpty) return;
-      final ctx = appNavigatorKey.currentContext;
-      if (ctx == null) return;
-      // Route based on notification payload type
-      if (payload.startsWith('appointment:')) {
-        ctx.go(AppRoutes.appointment);
-      } else if (payload.startsWith('consultation:')) {
-        ctx.go(AppRoutes.consultation);
-      } else if (payload.startsWith('health:')) {
-        ctx.go(AppRoutes.healthDashboard);
-      } else if (payload.startsWith('prescription:')) {
-        ctx.go(AppRoutes.prescriptionViewer);
-      } else if (payload.startsWith('water_reminder')) {
-        ctx.go(AppRoutes.waterReminder);
-      } else if (payload.startsWith('period_tracker')) {
-        ctx.go(AppRoutes.periodTracker);
-      } else {
-        ctx.go(AppRoutes.notifications);
-      }
+      final raw = response.payload;
+      if (raw == null || raw.isEmpty) return;
+      // Payload format: "type|serviceType|bookingId|actionType"
+      // (written by the foreground onMessage handler above)
+      final parts = raw.split('|');
+      _handleFcmNavigation({
+        'type':        parts.isNotEmpty ? parts[0] : '',
+        'serviceType': parts.length > 1 ? parts[1] : '',
+        'bookingId':   parts.length > 2 ? parts[2] : '',
+        'actionType':  parts.length > 3 ? parts[3] : '',
+      });
     },
   );
 
-  // Show incoming call notification for doctor-initiated calls (foreground)
+  // Foreground FCM handler — app is open and in the foreground.
   FirebaseMessaging.onMessage.listen((message) {
-    if (message.data['type'] == 'incoming_doctor_call') {
+    final type = message.data['type'] ?? '';
+
+    // Doctor-initiated incoming call — show full-screen call overlay.
+    if (type == 'incoming_doctor_call') {
       CallNotificationService.showIncomingCall(
         doctorName: message.data['doctorName'] ?? 'Doctor',
-        specialty: message.data['doctorSpecialty'] ?? '',
+        specialty:  message.data['doctorSpecialty'] ?? '',
       );
       return;
     }
 
-    // Show local notification when app is in foreground
-    final notification = message.notification;
-    if (notification == null) return;
+    // All other notification types: show as local heads-up notification.
+    // The Firestore stream already updates the in-app notification center
+    // in realtime, so the heads-up banner is the only extra step needed here.
+    final n = message.notification;
+    final title = n?.title ?? message.data['title'] ?? '';
+    final body  = n?.body  ?? message.data['body']  ?? '';
+    if (title.isEmpty && body.isEmpty) return;
+
+    final serviceType = message.data['serviceType'] ?? '';
+    final bookingId   = message.data['bookingId']   ?? '';
+    final actionType  = message.data['actionType']  ?? '';
+
+    // Build a compact payload so the tap handler can deep-link correctly.
+    final payload = '$type|$serviceType|$bookingId|$actionType';
+
     _localNotifications.show(
-      notification.hashCode,
-      notification.title,
-      notification.body,
+      // Use a stable ID so duplicate pushes replace rather than stack.
+      (type + bookingId).hashCode,
+      title,
+      body,
       NotificationDetails(
         android: AndroidNotificationDetails(
           _androidChannel.id,
           _androidChannel.name,
           channelDescription: _androidChannel.description,
-          importance: Importance.high,
-          priority: Priority.high,
-          icon: '@mipmap/ic_launcher',
-          playSound: true,
-          enableVibration: true,
+          importance:       Importance.high,
+          priority:         Priority.high,
+          icon:             '@mipmap/ic_launcher',
+          playSound:        true,
+          enableVibration:  true,
         ),
         iOS: const DarwinNotificationDetails(
           presentAlert: true,
@@ -134,8 +248,23 @@ Future<void> _initFCM() async {
           presentSound: true,
         ),
       ),
+      payload: payload,
     );
   });
+
+  // Background tap — user tapped the system notification while app was backgrounded.
+  FirebaseMessaging.onMessageOpenedApp.listen((message) {
+    _handleFcmNavigation(message.data);
+  });
+
+  // Terminated tap — user tapped a notification that launched the app from killed.
+  final initial = await messaging.getInitialMessage();
+  if (initial != null) {
+    // Delay to let the navigator finish mounting.
+    Future.delayed(const Duration(milliseconds: 800), () {
+      _handleFcmNavigation(initial.data);
+    });
+  }
 
   // iOS foreground presentation options
   await messaging.setForegroundNotificationPresentationOptions(

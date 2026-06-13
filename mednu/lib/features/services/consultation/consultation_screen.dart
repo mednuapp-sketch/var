@@ -395,12 +395,12 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
-                  AppColors.primary.withOpacity(0.08),
-                  AppColors.secondary.withOpacity(0.05),
+                  AppColors.primary.withValues(alpha:0.08),
+                  AppColors.secondary.withValues(alpha:0.05),
                 ],
               ),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.primary.withOpacity(0.15)),
+              border: Border.all(color: AppColors.primary.withValues(alpha:0.15)),
             ),
             child: Row(
               children: [
@@ -552,7 +552,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
                       borderRadius: BorderRadius.circular(20),
                       border: selected ? null : Border.all(color: AppColors.border),
                       boxShadow: selected
-                          ? [BoxShadow(color: AppColors.primary.withOpacity(0.3),
+                          ? [BoxShadow(color: AppColors.primary.withValues(alpha:0.3),
                               blurRadius: 8, offset: const Offset(0, 3))]
                           : null,
                     ),
@@ -589,9 +589,9 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
                 child: Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.orange.withOpacity(0.07),
+                    color: Colors.orange.withValues(alpha:0.07),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                    border: Border.all(color: Colors.orange.withValues(alpha:0.3)),
                   ),
                   child: Row(children: [
                     const Icon(Icons.location_on_rounded,
@@ -725,7 +725,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
                         color: selected ? null : (isWorkingDay ? Colors.white : const Color(0xFFF5F5F5)),
                         borderRadius: BorderRadius.circular(14),
                         boxShadow: selected
-                            ? [BoxShadow(color: AppColors.primary.withOpacity(0.3),
+                            ? [BoxShadow(color: AppColors.primary.withValues(alpha:0.3),
                                 blurRadius: 10, offset: const Offset(0, 4))]
                             : null,
                         border: selected ? null : Border.all(
@@ -791,9 +791,9 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
                 child: Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: Colors.orange.withOpacity(0.07),
+                    color: Colors.orange.withValues(alpha:0.07),
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: Colors.orange.withOpacity(0.25)),
+                    border: Border.all(color: Colors.orange.withValues(alpha:0.25)),
                   ),
                   child: const Row(
                     children: [
@@ -875,7 +875,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
                               Text('Booked',
                                   style: TextStyle(
                                     fontFamily: 'Poppins', fontSize: 9,
-                                    color: textColor.withOpacity(0.8),
+                                    color: textColor.withValues(alpha:0.8),
                                   )),
                           ],
                         ),
@@ -926,7 +926,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.06),
+            color: Colors.black.withValues(alpha:0.06),
             blurRadius: 20,
             offset: const Offset(0, -4),
           ),
@@ -998,7 +998,7 @@ class _QuickConnectCard extends StatelessWidget {
           Container(
             width: 60, height: 60,
             decoration: BoxDecoration(
-              color: (doctor['color'] as Color).withOpacity(0.12),
+              color: (doctor['color'] as Color).withValues(alpha:0.12),
               borderRadius: BorderRadius.circular(16),
             ),
             child: Stack(
@@ -1036,7 +1036,7 @@ class _QuickConnectCard extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF4CAF50).withOpacity(0.1),
+                        color: const Color(0xFF4CAF50).withValues(alpha:0.1),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
@@ -1062,7 +1062,7 @@ class _QuickConnectCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(14),
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.primary.withOpacity(0.3),
+                    color: AppColors.primary.withValues(alpha:0.3),
                     blurRadius: 8,
                     offset: const Offset(0, 3),
                   ),
@@ -1159,7 +1159,7 @@ class _ConnectingSheetState extends State<_ConnectingSheet>
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: AppColors.primary.withOpacity(0.35),
+                  color: AppColors.primary.withValues(alpha:0.35),
                   blurRadius: 24, spreadRadius: 4,
                 ),
               ],
@@ -1225,7 +1225,7 @@ class _DoctorCard extends StatelessWidget {
             width: isSelected ? 2 : 1,
           ),
           boxShadow: isSelected
-              ? [BoxShadow(color: AppColors.primary.withOpacity(0.15),
+              ? [BoxShadow(color: AppColors.primary.withValues(alpha:0.15),
                   blurRadius: 16, offset: const Offset(0, 4))]
               : null,
         ),
@@ -1234,7 +1234,7 @@ class _DoctorCard extends StatelessWidget {
             Container(
               width: 64, height: 64,
               decoration: BoxDecoration(
-                color: (doctor['color'] as Color).withOpacity(0.12),
+                color: (doctor['color'] as Color).withValues(alpha:0.12),
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Icon(doctor['icon'] as IconData, size: 36, color: doctor['color'] as Color),
@@ -1252,8 +1252,8 @@ class _DoctorCard extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
                           color: doctor['available']
-                              ? AppColors.accent.withOpacity(0.1)
-                              : Colors.grey.withOpacity(0.1),
+                              ? AppColors.accent.withValues(alpha:0.1)
+                              : Colors.grey.withValues(alpha:0.1),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
@@ -1483,7 +1483,7 @@ class _ConfirmRow extends StatelessWidget {
           Container(
             width: 36, height: 36,
             decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.1),
+              color: AppColors.primary.withValues(alpha:0.1),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(icon, size: 18, color: AppColors.primary),

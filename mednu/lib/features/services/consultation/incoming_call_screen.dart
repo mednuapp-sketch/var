@@ -272,7 +272,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.primary.withOpacity(0.55),
+                    color: AppColors.primary.withValues(alpha:0.55),
                     blurRadius: 30,
                     spreadRadius: 8,
                   ),
@@ -449,7 +449,7 @@ class _CallBtn extends StatelessWidget {
           shape: BoxShape.circle,
           boxShadow: [
             BoxShadow(
-              color: color.withOpacity(0.45),
+              color: color.withValues(alpha:0.45),
               blurRadius: 22,
               spreadRadius: 4,
             ),
@@ -481,7 +481,7 @@ class _RippleRing extends StatelessWidget {
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             border: Border.all(
-              color: AppColors.primary.withOpacity(opacity),
+              color: AppColors.primary.withValues(alpha:opacity),
               width: 2.0,
             ),
           ),
@@ -504,9 +504,9 @@ class _TypeChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.08),
+        color: Colors.white.withValues(alpha:0.08),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.12)),
+        border: Border.all(color: Colors.white.withValues(alpha:0.12)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

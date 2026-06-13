@@ -18,6 +18,7 @@ import '../../../core/utils/r.dart';
 import '../../auth/services/doctor_auth_service.dart';
 import '../../location/services/doctor_location_service.dart';
 import '../../notifications/providers/notification_provider.dart';
+import '../../../core/widgets/ux_widgets.dart';
 
 int _slotToMins(String t) {
   try {
@@ -193,7 +194,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         title: Row(children: [
           Container(
             padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: AppColors.error.withOpacity(0.1), shape: BoxShape.circle),
+            decoration: BoxDecoration(color: AppColors.error.withValues(alpha:0.1), shape: BoxShape.circle),
             child: const Icon(Icons.location_off_rounded, color: AppColors.error, size: 24),
           ),
           const SizedBox(width: 12),
@@ -224,7 +225,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         title: Row(children: [
           Container(
             padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.1), shape: BoxShape.circle),
+            decoration: BoxDecoration(color: AppColors.primary.withValues(alpha:0.1), shape: BoxShape.circle),
             child: const Icon(Icons.location_searching_rounded, color: AppColors.primary, size: 24),
           ),
           const SizedBox(width: 12),
@@ -305,7 +306,7 @@ class _NavItem extends StatelessWidget {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: isActive ? AppColors.primary.withOpacity(0.08) : Colors.transparent,
+          color: isActive ? AppColors.primary.withValues(alpha:0.08) : Colors.transparent,
           borderRadius: BorderRadius.circular(14),
         ),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -423,7 +424,7 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                       : const LinearGradient(colors: [Color(0xFF455A64), Color(0xFF607D8B)]),
                   borderRadius: BorderRadius.circular(R.r(context, 24)),
                   boxShadow: [BoxShadow(
-                    color: (widget.isOnline ? AppColors.online : AppColors.offline).withOpacity(0.4),
+                    color: (widget.isOnline ? AppColors.online : AppColors.offline).withValues(alpha:0.4),
                     blurRadius: 16, offset: const Offset(0, 6),
                   )],
                 ),
@@ -444,7 +445,7 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                         if (widget.isOnline) ...[
                           Container(
                             padding: EdgeInsets.symmetric(horizontal: R.p(context, 10), vertical: R.p(context, 4)),
-                            decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(R.r(context, 10))),
+                            decoration: BoxDecoration(color: Colors.white.withValues(alpha:0.2), borderRadius: BorderRadius.circular(R.r(context, 10))),
                             child: Row(mainAxisSize: MainAxisSize.min, children: [
                               Container(width: R.w(context, 6), height: R.w(context, 6), decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle)),
                               SizedBox(width: R.p(context, 6)),
@@ -454,7 +455,7 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                           SizedBox(height: R.h(context, 6)),
                           Container(
                             padding: EdgeInsets.symmetric(horizontal: R.p(context, 10), vertical: R.p(context, 4)),
-                            decoration: BoxDecoration(color: Colors.white.withOpacity(0.15), borderRadius: BorderRadius.circular(R.r(context, 10))),
+                            decoration: BoxDecoration(color: Colors.white.withValues(alpha:0.15), borderRadius: BorderRadius.circular(R.r(context, 10))),
                             child: Row(mainAxisSize: MainAxisSize.min, children: [
                               Icon(Icons.my_location_rounded, size: R.w(context, 12), color: Colors.white),
                               SizedBox(width: R.p(context, 5)),
@@ -476,9 +477,9 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                               duration: const Duration(milliseconds: 300),
                               width: R.w(context, 72), height: R.h(context, 36),
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.2),
+                                color: Colors.white.withValues(alpha:0.2),
                                 borderRadius: BorderRadius.circular(R.r(context, 20)),
-                                border: Border.all(color: Colors.white.withOpacity(0.4), width: 2),
+                                border: Border.all(color: Colors.white.withValues(alpha:0.4), width: 2),
                               ),
                               child: Stack(alignment: Alignment.center, children: [
                                 AnimatedAlign(
@@ -520,8 +521,8 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(18),
-                          border: Border.all(color: AppColors.primary.withOpacity(0.3), width: 2),
-                          boxShadow: [BoxShadow(color: AppColors.primary.withOpacity(0.1), blurRadius: 12, offset: const Offset(0, 4))],
+                          border: Border.all(color: AppColors.primary.withValues(alpha:0.3), width: 2),
+                          boxShadow: [BoxShadow(color: AppColors.primary.withValues(alpha:0.1), blurRadius: 12, offset: const Offset(0, 4))],
                         ),
                         child: Row(children: [
                           Container(
@@ -625,7 +626,7 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                             ])),
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                              decoration: BoxDecoration(color: AppColors.primary.withValues(alpha:0.1), borderRadius: BorderRadius.circular(8)),
                               child: Text(type, style: AppTextStyles.caption.copyWith(color: AppColors.primary, fontWeight: FontWeight.w700)),
                             ),
                           ]),
@@ -687,14 +688,14 @@ class _MaternityCareCard extends StatelessWidget {
               ),
               borderRadius: BorderRadius.circular(18),
               boxShadow: [
-                BoxShadow(color: const Color(0xFFC2185B).withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 4)),
+                BoxShadow(color: const Color(0xFFC2185B).withValues(alpha:0.3), blurRadius: 12, offset: const Offset(0, 4)),
               ],
             ),
             child: Row(children: [
               Container(
                 width: 50,
                 height: 50,
-                decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), shape: BoxShape.circle),
+                decoration: BoxDecoration(color: Colors.white.withValues(alpha:0.2), shape: BoxShape.circle),
                 child: const Icon(Icons.pregnant_woman_rounded, color: Colors.white, size: 28),
               ),
               const SizedBox(width: 12),
@@ -708,7 +709,7 @@ class _MaternityCareCard extends StatelessWidget {
               ])),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(10)),
+                decoration: BoxDecoration(color: Colors.white.withValues(alpha:0.2), borderRadius: BorderRadius.circular(10)),
                 child: const Text('View', style: TextStyle(fontFamily: 'Poppins', fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
               ),
             ]),
@@ -870,7 +871,7 @@ class _ReviewsSummaryCard extends StatelessWidget {
                       width: 38,
                       height: 38,
                       decoration: BoxDecoration(
-                        color: Colors.amber.withOpacity(0.12),
+                        color: Colors.amber.withValues(alpha:0.12),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: const Icon(Icons.star_rounded,
@@ -898,7 +899,7 @@ class _ReviewsSummaryCard extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
-                        color: AppColors.accent.withOpacity(0.1),
+                        color: AppColors.accent.withValues(alpha:0.1),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -1090,6 +1091,59 @@ bool _isStartingSoon(String dateStr, String timeStr, {int thresholdMinutes = 5})
   return diff >= 0 && diff <= thresholdMinutes;
 }
 
+// ── DASHBOARD SKELETON ────────────────────────────────────
+class _DashboardSkeleton extends StatelessWidget {
+  const _DashboardSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      physics: const NeverScrollableScrollPhysics(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Banner skeleton
+          AppShimmer(
+            child: Container(
+              margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+              height: 110,
+              decoration: BoxDecoration(
+                color: const Color(0xFFE8E8E8),
+                borderRadius: BorderRadius.circular(20),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          // Stats row skeleton
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: List.generate(3, (i) => Expanded(
+                child: Container(
+                  margin: EdgeInsets.only(right: i < 2 ? 10 : 0),
+                  child: const SkeletonBox(width: double.infinity, height: 78, radius: 16),
+                ),
+              )),
+            ),
+          ),
+          const SizedBox(height: 20),
+          // Tab bar skeleton
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: SkeletonBox(width: double.infinity, height: 44, radius: 14),
+          ),
+          const SizedBox(height: 16),
+          // Appointment card skeletons
+          ...List.generate(4, (i) => const Padding(
+            padding: EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: SkeletonCard(height: 92),
+          )),
+        ],
+      ),
+    );
+  }
+}
+
 // ── APPOINTMENTS TAB ──────────────────────────────────────
 class _AppointmentsTab extends StatefulWidget {
   @override
@@ -1147,7 +1201,10 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
         final uid = authSnap.data?.uid ?? DoctorAuthService.currentUid;
         if (uid == null) {
           if (authSnap.connectionState == ConnectionState.waiting) {
-            return const Scaffold(body: Center(child: CircularProgressIndicator()));
+            return const Scaffold(
+              backgroundColor: AppColors.background,
+              body: _DashboardSkeleton(),
+            );
           }
           return const Scaffold(body: Center(child: Text('Please log in')));
         }
@@ -1161,11 +1218,14 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
             if (snap.connectionState == ConnectionState.waiting) {
               return const Scaffold(
                 backgroundColor: AppColors.background,
-                body: Center(child: CircularProgressIndicator(color: AppColors.primary)),
+                body: _DashboardSkeleton(),
               );
             }
             if (snap.hasError) {
-              return Scaffold(body: Center(child: Text('Failed to load appointments', style: AppTextStyles.bodyMedium)));
+              return Scaffold(
+                backgroundColor: AppColors.background,
+                body: AppErrorState(message: 'Failed to load appointments'),
+              );
             }
             final docs = List<QueryDocumentSnapshot<Map<String, dynamic>>>.of(snap.data?.docs ?? []);
             final todayKey = DateFormat('yyyy-MM-dd').format(DateTime.now());
@@ -1255,7 +1315,7 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
         child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
           Container(
             width: 88, height: 88,
-            decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.08), shape: BoxShape.circle),
+            decoration: BoxDecoration(color: AppColors.primary.withValues(alpha:0.08), shape: BoxShape.circle),
             child: const Icon(Icons.calendar_month_rounded, size: 40, color: AppColors.primary),
           ),
           const SizedBox(height: 16),
@@ -1314,7 +1374,7 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
             color: Colors.white,
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
-              BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 14, offset: const Offset(0, 4)),
+              BoxShadow(color: Colors.black.withValues(alpha:0.05), blurRadius: 14, offset: const Offset(0, 4)),
             ],
           ),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -1353,7 +1413,7 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
-                          color: AppColors.primary.withOpacity(0.08),
+                          color: AppColors.primary.withValues(alpha:0.08),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -1370,7 +1430,7 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: statusColor.withOpacity(0.1),
+                      color: statusColor.withValues(alpha:0.1),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
@@ -1401,7 +1461,7 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
                       label: const Text('Cancel'),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: AppColors.error,
-                        side: BorderSide(color: AppColors.error.withOpacity(0.45)),
+                        side: BorderSide(color: AppColors.error.withValues(alpha:0.45)),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         padding: const EdgeInsets.symmetric(vertical: 11),
                         textStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w600),
@@ -1416,7 +1476,7 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
                       decoration: BoxDecoration(
                         gradient: AppColors.primaryGradient,
                         borderRadius: BorderRadius.circular(12),
-                        boxShadow: [BoxShadow(color: AppColors.primary.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 3))],
+                        boxShadow: [BoxShadow(color: AppColors.primary.withValues(alpha:0.3), blurRadius: 8, offset: const Offset(0, 3))],
                       ),
                       child: ElevatedButton.icon(
                         icon: const Icon(Icons.videocam_rounded, size: 18),
@@ -1447,7 +1507,7 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
                       label: const Text('Prescription'),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: AppColors.primary,
-                        side: BorderSide(color: AppColors.primary.withOpacity(0.45)),
+                        side: BorderSide(color: AppColors.primary.withValues(alpha:0.45)),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         padding: const EdgeInsets.symmetric(vertical: 11),
                         textStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w600),
@@ -1828,7 +1888,7 @@ class _EarningsTab extends StatelessWidget {
                     child: Row(children: [
                       Container(
                         width: 42, height: 42,
-                        decoration: BoxDecoration(color: AppColors.success.withOpacity(0.1), shape: BoxShape.circle),
+                        decoration: BoxDecoration(color: AppColors.success.withValues(alpha:0.1), shape: BoxShape.circle),
                         child: const Icon(Icons.arrow_downward_rounded, color: AppColors.success, size: 20),
                       ),
                       const SizedBox(width: 12),
@@ -1970,7 +2030,7 @@ class _ProfileTab extends StatelessWidget {
                             const SizedBox(height: 8),
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                              decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(10)),
+                              decoration: BoxDecoration(color: Colors.white.withValues(alpha:0.2), borderRadius: BorderRadius.circular(10)),
                               child: const Text('✓ MCI Verified', style: TextStyle(fontFamily: 'Poppins', fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white)),
                             ),
                             const SizedBox(height: 16),
@@ -2009,7 +2069,7 @@ class _ProfileTab extends StatelessWidget {
               child: Row(children: [
                 Container(
                   width: 40, height: 40,
-                  decoration: BoxDecoration(color: (item['color'] as Color).withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+                  decoration: BoxDecoration(color: (item['color'] as Color).withValues(alpha:0.1), borderRadius: BorderRadius.circular(10)),
                   child: Icon(item['icon'] as IconData, color: item['color'] as Color, size: 20),
                 ),
                 const SizedBox(width: 14),
@@ -2030,7 +2090,7 @@ class _ProfileTab extends StatelessWidget {
               child: Row(children: [
                 Container(
                   width: 40, height: 40,
-                  decoration: BoxDecoration(color: const Color(0xFF7B1FA2).withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+                  decoration: BoxDecoration(color: const Color(0xFF7B1FA2).withValues(alpha:0.1), borderRadius: BorderRadius.circular(10)),
                   child: const Icon(Icons.receipt_long_rounded, color: Color(0xFF7B1FA2), size: 20),
                 ),
                 const SizedBox(width: 14),
@@ -2224,7 +2284,7 @@ class _DoctorAvatarOnGradient extends StatelessWidget {
         width: size, height: size,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          border: Border.all(color: Colors.white.withOpacity(0.5), width: 2),
+          border: Border.all(color: Colors.white.withValues(alpha:0.5), width: 2),
         ),
         child: ClipOval(
           child: CachedNetworkImage(
@@ -2242,7 +2302,7 @@ class _DoctorAvatarOnGradient extends StatelessWidget {
 
   Widget _fallback() => Container(
         width: size, height: size,
-        decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), shape: BoxShape.circle),
+        decoration: BoxDecoration(color: Colors.white.withValues(alpha:0.2), shape: BoxShape.circle),
         child: Icon(Icons.person_rounded, size: size * 0.57, color: Colors.white),
       );
 }

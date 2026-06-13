@@ -6,6 +6,7 @@ import '../../../../core/constants/app_text_styles.dart';
 import '../../../../core/router/app_router.dart';
 import '../providers/nutrition_provider.dart';
 import '../models/nutritionist_model.dart';
+import '../../../../core/widgets/ux_widgets.dart';
 
 class NutritionistListScreen extends ConsumerStatefulWidget {
   const NutritionistListScreen({super.key});
@@ -68,8 +69,9 @@ class _NutritionistListScreenState extends ConsumerState<NutritionistListScreen>
           ),
           Expanded(
             child: nutritionists.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => Center(child: Text('Error loading nutritionists\n$e', textAlign: TextAlign.center, style: AppTextStyles.bodySmall)),
+              loading: () => ListView(physics: const NeverScrollableScrollPhysics(), padding: const EdgeInsets.symmetric(vertical: 8),
+                children: List.generate(6, (_) => const SkeletonListTile())),
+              error: (e, _) => const AppErrorState(),
               data: (list) {
                 final filtered = _searchQuery.isEmpty
                     ? list
@@ -205,7 +207,7 @@ class _NutritionistCard extends StatelessWidget {
           color: Colors.white,
           borderRadius: BorderRadius.circular(18),
           border: Border.all(color: AppColors.border),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:0.04), blurRadius: 8, offset: const Offset(0, 2))],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -224,7 +226,7 @@ class _NutritionistCard extends StatelessWidget {
                           if (nutritionist.isAvailable)
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(color: const Color(0xFF2E7D32).withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
+                              decoration: BoxDecoration(color: const Color(0xFF2E7D32).withValues(alpha:0.1), borderRadius: BorderRadius.circular(6)),
                               child: const Text('Available', style: TextStyle(fontFamily: 'Poppins', fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFF2E7D32))),
                             ),
                         ],
@@ -255,7 +257,7 @@ class _NutritionistCard extends StatelessWidget {
                 children: nutritionist.expertiseAreas.take(4).map((e) => Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF2E7D32).withOpacity(0.06),
+                    color: const Color(0xFF2E7D32).withValues(alpha:0.06),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(e, style: const TextStyle(fontFamily: 'Poppins', fontSize: 10, color: Color(0xFF2E7D32))),
@@ -373,9 +375,9 @@ class _ModeChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: const Color(0xFF2E7D32).withOpacity(0.08),
+        color: const Color(0xFF2E7D32).withValues(alpha:0.08),
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: const Color(0xFF2E7D32).withOpacity(0.2)),
+        border: Border.all(color: const Color(0xFF2E7D32).withValues(alpha:0.2)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

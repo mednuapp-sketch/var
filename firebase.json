@@ -17,5 +17,21 @@
         "firebase-debug.*.log"
       ]
     }
-  ]
+  ],
+  "hosting": {
+    "site": "mednu-admin",
+    "public": "mednu-admin",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**",
+      "README.md"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  }
 }

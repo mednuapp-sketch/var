@@ -80,7 +80,7 @@ class _MedicalDisclaimerScreenState extends State<MedicalDisclaimerScreen> {
                       Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
+                          color: Colors.white.withValues(alpha:0.2),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: const Icon(
@@ -107,7 +107,7 @@ class _MedicalDisclaimerScreenState extends State<MedicalDisclaimerScreen> {
                   Text(
                     'Please read carefully before using MedNU',
                     style: TextStyle(
-                      color: Colors.white.withOpacity(0.85),
+                      color: Colors.white.withValues(alpha:0.85),
                       fontSize: 14,
                     ),
                   ),
@@ -178,9 +178,9 @@ class _MedicalDisclaimerScreenState extends State<MedicalDisclaimerScreen> {
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: AppColors.primary.withOpacity(0.05),
+                        color: AppColors.primary.withValues(alpha:0.05),
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+                        border: Border.all(color: AppColors.primary.withValues(alpha:0.2)),
                       ),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -211,7 +211,7 @@ class _MedicalDisclaimerScreenState extends State<MedicalDisclaimerScreen> {
                 color: Colors.white,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.06),
+                    color: Colors.black.withValues(alpha:0.06),
                     blurRadius: 12,
                     offset: const Offset(0, -4),
                   ),
@@ -293,7 +293,7 @@ class _Section extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
+                  color: color.withValues(alpha:0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(icon, color: color, size: 18),

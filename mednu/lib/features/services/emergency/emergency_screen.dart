@@ -188,7 +188,7 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
                         borderRadius: BorderRadius.circular(20),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFF7B1FA2).withOpacity(0.35),
+                            color: const Color(0xFF7B1FA2).withValues(alpha:0.35),
                             blurRadius: 16,
                             offset: const Offset(0, 6),
                           ),
@@ -199,7 +199,7 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
                           Container(
                             width: 60, height: 60,
                             decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.18),
+                              color: Colors.white.withValues(alpha:0.18),
                               shape: BoxShape.circle,
                             ),
                             child: _requestingDoctor
@@ -243,13 +243,13 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
                       decoration: BoxDecoration(
                         gradient: const LinearGradient(colors: [Color(0xFFB71C1C), Color(0xFFE53935)]),
                         borderRadius: BorderRadius.circular(24),
-                        boxShadow: [BoxShadow(color: const Color(0xFFE53935).withOpacity(0.4), blurRadius: 20, offset: const Offset(0, 8))],
+                        boxShadow: [BoxShadow(color: const Color(0xFFE53935).withValues(alpha:0.4), blurRadius: 20, offset: const Offset(0, 8))],
                       ),
                       child: Column(
                         children: [
                           Container(
                             width: 100, height: 100,
-                            decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), shape: BoxShape.circle),
+                            decoration: BoxDecoration(color: Colors.white.withValues(alpha:0.2), shape: BoxShape.circle),
                             child: const Icon(Icons.sos_rounded, color: Colors.white, size: 56),
                           ),
                           const SizedBox(height: 16),
@@ -273,9 +273,9 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFE53935).withOpacity(0.08),
+                        color: const Color(0xFFE53935).withValues(alpha:0.08),
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: const Color(0xFFE53935).withOpacity(0.3)),
+                        border: Border.all(color: const Color(0xFFE53935).withValues(alpha:0.3)),
                       ),
                       child: Row(children: [
                         const Icon(Icons.contacts_rounded, color: Color(0xFFE53935), size: 20),
@@ -488,17 +488,23 @@ class _EmergencyCard extends StatelessWidget {
   const _EmergencyCard(this.emoji, this.label, this.number, this.color);
 
   @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(16),
-    decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(16), border: Border.all(color: color.withOpacity(0.3))),
-    child: Row(children: [
-      Text(emoji, style: const TextStyle(fontSize: 28)),
-      const SizedBox(width: 10),
-      Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
-        Text(label, style: AppTextStyles.labelLarge.copyWith(color: color)),
-        Text(number, style: AppTextStyles.h3.copyWith(color: color)),
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: () async {
+      final uri = Uri.parse('tel:$number');
+      if (await canLaunchUrl(uri)) await launchUrl(uri);
+    },
+    child: Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: color.withValues(alpha:0.1), borderRadius: BorderRadius.circular(16), border: Border.all(color: color.withValues(alpha:0.3))),
+      child: Row(children: [
+        Text(emoji, style: const TextStyle(fontSize: 28)),
+        const SizedBox(width: 10),
+        Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
+          Text(label, style: AppTextStyles.labelLarge.copyWith(color: color)),
+          Text(number, style: AppTextStyles.h3.copyWith(color: color)),
+        ]),
       ]),
-    ]),
+    ),
   );
 }
 
@@ -513,7 +519,7 @@ class _NearbyCard extends StatelessWidget {
     padding: const EdgeInsets.all(16),
     decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: AppColors.divider)),
     child: Row(children: [
-      Container(width: 48, height: 48, decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(12)), child: Icon(icon, color: color, size: 24)),
+      Container(width: 48, height: 48, decoration: BoxDecoration(color: color.withValues(alpha:0.1), borderRadius: BorderRadius.circular(12)), child: Icon(icon, color: color, size: 24)),
       const SizedBox(width: 12),
       Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(name, style: AppTextStyles.labelLarge, maxLines: 1, overflow: TextOverflow.ellipsis),

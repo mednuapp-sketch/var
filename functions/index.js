@@ -751,6 +751,187 @@ exports.onConsultationStatusChange = onDocumentUpdated(
   }
 );
 
+// ── Emergency Doctor Request ──────────────────────────────────────────────────
+//
+// Fires when a patient taps "Emergency Doctor". Deduplicates within 5 minutes,
+// then broadcasts a critical FCM to every active doctor and writes an
+// admin_alerts doc so the admin panel surfaces it instantly.
+exports.onEmergencyDoctorRequest = onDocumentCreated(
+  "service_requests/{requestId}",
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+    const data = snap.data();
+
+    if (data.type !== "emergency_doctor") return;
+
+    const db = getFirestore();
+    const patientId = data.patientId;
+    const requestId = event.params.requestId;
+
+    // Deduplication: 1 emergency per patient per 5 minutes.
+    const fiveMinAgo = Timestamp.fromDate(new Date(Date.now() - 5 * 60 * 1000));
+    const recentSnap = await db.collection("service_requests")
+      .where("type", "==", "emergency_doctor")
+      .where("patientId", "==", patientId)
+      .where("status", "==", "pending")
+      .where("createdAt", ">", fiveMinAgo)
+      .get();
+
+    const duplicates = recentSnap.docs.filter((d) => d.id !== requestId);
+    if (duplicates.length > 0) {
+      await snap.ref.update({
+        status: "duplicate",
+        reason: "Throttled — previous request still active",
+      });
+      console.log(`Emergency duplicate from ${patientId} — throttled.`);
+      return;
+    }
+
+    // Resolve patient name.
+    let patientName = "Patient";
+    try {
+      const userDoc = await db.collection("users").doc(patientId).get();
+      if (userDoc.exists) {
+        const u = userDoc.data();
+        patientName = u.name || u.fullName || u.displayName || "Patient";
+      }
+    } catch (_) {}
+
+    // Fetch ALL active doctors that have an FCM token.
+    const doctorsSnap = await db.collection("doctors")
+      .where("status", "==", "active")
+      .get();
+
+    const tokens = [];
+    const doctorIds = [];
+    doctorsSnap.forEach((doc) => {
+      const token = doc.data().fcmToken;
+      if (token) {
+        tokens.push(token);
+        doctorIds.push(doc.id);
+      }
+    });
+
+    const notifTitle = "🚨 Emergency Doctor Request";
+    const notifBody = `${patientName} needs immediate medical assistance.${
+      data.latitude ? " Location shared." : ""
+    }`;
+
+    // Broadcast FCM in 500-token chunks (API limit).
+    for (let i = 0; i < tokens.length; i += 500) {
+      const chunk = tokens.slice(i, i + 500);
+      const message = {
+        tokens: chunk,
+        data: {
+          type: "emergency_doctor_request",
+          requestId,
+          patientId,
+          patientName,
+          latitude: data.latitude != null ? String(data.latitude) : "",
+          longitude: data.longitude != null ? String(data.longitude) : "",
+        },
+        android: {
+          priority: "high",
+          notification: {
+            channelId: "emergency_alert",
+            priority: "max",
+            sound: "default",
+            defaultVibrateTimings: false,
+            vibrateTimingsMillis: ["0", "500", "100", "500", "100", "500"],
+            title: notifTitle,
+            body: notifBody,
+          },
+        },
+        apns: {
+          headers: { "apns-priority": "10", "apns-push-type": "alert" },
+          payload: {
+            aps: {
+              alert: { title: notifTitle, body: notifBody },
+              sound: "default",
+              badge: 1,
+              "content-available": 1,
+              "interruption-level": "critical",
+            },
+          },
+        },
+      };
+
+      try {
+        const res = await getMessaging().sendEachForMulticast(message);
+        console.log(`Emergency FCM batch ${Math.floor(i / 500) + 1}: ${res.successCount}/${chunk.length} sent.`);
+      } catch (err) {
+        console.error(`Emergency FCM batch ${Math.floor(i / 500) + 1} failed:`, err);
+      }
+    }
+
+    // Write in-app notifications for each doctor + admin alert in batches.
+    // Firestore batch limit is 500 writes.
+    const BATCH_LIMIT = 490;
+    let batch = db.batch();
+    let opCount = 0;
+
+    const flushBatch = async () => {
+      if (opCount > 0) {
+        await batch.commit();
+        batch = db.batch();
+        opCount = 0;
+      }
+    };
+
+    for (const doctorId of doctorIds) {
+      if (opCount >= BATCH_LIMIT) await flushBatch();
+      const notifRef = db
+        .collection("doctor_notifications")
+        .doc(doctorId)
+        .collection("items")
+        .doc();
+      batch.set(notifRef, {
+        type: "emergency_request",
+        title: notifTitle,
+        body: notifBody,
+        requestId,
+        patientId,
+        patientName,
+        createdAt: FieldValue.serverTimestamp(),
+        isRead: false,
+        payload: {
+          latitude: data.latitude || null,
+          longitude: data.longitude || null,
+        },
+      });
+      opCount++;
+    }
+
+    // Admin alert.
+    if (opCount >= BATCH_LIMIT) await flushBatch();
+    const alertRef = db.collection("admin_alerts").doc();
+    batch.set(alertRef, {
+      type: "emergency_doctor",
+      severity: "critical",
+      patientId,
+      patientName,
+      requestId,
+      latitude: data.latitude || null,
+      longitude: data.longitude || null,
+      createdAt: FieldValue.serverTimestamp(),
+      isRead: false,
+    });
+
+    await batch.commit();
+
+    // Mark the request as notified.
+    await snap.ref.update({
+      status: "notified",
+      patientName,
+      doctorsNotified: doctorIds.length,
+      notifiedAt: FieldValue.serverTimestamp(),
+    });
+
+    console.log(`Emergency ${requestId}: notified ${doctorIds.length} doctors + admin.`);
+  }
+);
+
 // ── Stale Pending Consultation Auto-Expiry ────────────────────────────────────
 //
 // Runs every 2 minutes. Finds any consultation still in 'pending' status
@@ -783,5 +964,554 @@ exports.expireStaleConsultations = onSchedule(
     });
     await batch.commit();
     console.log(`Auto-expired ${staleSnap.size} stale pending consultation(s).`);
+  }
+);
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// REAL-TIME NOTIFICATION ENGINE — All Service Modules
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// Architecture:
+//  • Every status change in any booking collection triggers a Cloud Function.
+//  • The function calls _sendPatientNotification() which:
+//      1. Deduplicates (no duplicate for same booking+status within 30s)
+//      2. Writes to patient_notifications/{uid}/items (in-app notification center)
+//      3. Sends FCM push to patient's device(s)
+//  • deliverAt is set to 1 minute in the past so the Firestore stream
+//    filter (deliverAt ≤ now) passes immediately regardless of clock skew.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Internal helper — writes in-app notification + sends FCM to patient.
+ * Never throws; all errors are caught and logged.
+ */
+async function _sendPatientNotification(db, messaging, patientId, opts) {
+  const {
+    title,
+    body,
+    type,
+    serviceType = "general",
+    bookingId = "",
+    doctorId = "",
+    actionType = "open_notifications",
+    extraData = {},
+  } = opts;
+
+  if (!patientId || !title || !body || !type) {
+    console.warn("_sendPatientNotification: missing required fields", opts);
+    return;
+  }
+
+  // ── Deduplication ────────────────────────────────────────────────────────────
+  // Prevents the same (type + bookingId) from being written twice within 30 s.
+  if (bookingId) {
+    const dedupKey = `${type}_${bookingId}`;
+    const cutoff = Timestamp.fromDate(new Date(Date.now() - 30_000));
+    try {
+      const dup = await db
+        .collection("patient_notifications")
+        .doc(patientId)
+        .collection("items")
+        .where("dedupKey", "==", dedupKey)
+        .where("createdAt", ">=", cutoff)
+        .limit(1)
+        .get();
+      if (!dup.empty) {
+        console.log(`Dedup skip: ${dedupKey} for patient ${patientId}`);
+        return;
+      }
+    } catch (_) {}
+  }
+
+  // ── Write in-app notification ─────────────────────────────────────────────
+  // deliverAt is set 90 seconds in the PAST so the Flutter query
+  // (deliverAt ≤ Timestamp.now()) always resolves immediately.
+  const deliverAt = Timestamp.fromDate(new Date(Date.now() - 90_000));
+
+  const notifDoc = {
+    type,
+    title,
+    body,
+    serviceType,
+    bookingId,
+    doctorId,
+    actionType,
+    createdAt: FieldValue.serverTimestamp(),
+    deliverAt,
+    isRead: false,
+    data: extraData,
+  };
+  if (bookingId) notifDoc.dedupKey = `${type}_${bookingId}`;
+
+  try {
+    await db
+      .collection("patient_notifications")
+      .doc(patientId)
+      .collection("items")
+      .add(notifDoc);
+  } catch (err) {
+    console.error(`Failed to write in-app notification for ${patientId}:`, err);
+    return;
+  }
+
+  // ── FCM push ─────────────────────────────────────────────────────────────────
+  let fcmToken = null;
+  try {
+    const userDoc = await db.collection("users").doc(patientId).get();
+    if (userDoc.exists) fcmToken = userDoc.data()?.fcmToken || null;
+  } catch (_) {}
+
+  if (!fcmToken) {
+    console.log(`No FCM token for patient ${patientId} — in-app only.`);
+    return;
+  }
+
+  // Build string-safe data payload (FCM data values must be strings).
+  const fcmData = {
+    type,
+    serviceType,
+    bookingId,
+    doctorId,
+    actionType,
+  };
+  for (const [k, v] of Object.entries(extraData)) {
+    if (v != null) fcmData[k] = String(v);
+  }
+
+  const fcmMsg = {
+    token: fcmToken,
+    data: fcmData,
+    android: {
+      priority: "high",
+      notification: {
+        channelId: "mednu_default_channel",
+        title,
+        body,
+        sound: "default",
+        defaultVibrateTimings: true,
+      },
+    },
+    apns: {
+      headers: { "apns-priority": "5" },
+      payload: {
+        aps: {
+          alert: { title, body },
+          sound: "default",
+          badge: 1,
+        },
+      },
+    },
+  };
+
+  try {
+    await messaging.send(fcmMsg);
+    console.log(`FCM sent → patient ${patientId} [${type}]: "${title}"`);
+  } catch (err) {
+    console.error(`FCM failed for patient ${patientId} [${type}]:`, err.message);
+  }
+}
+
+// ── Appointment Status Change ────────────────────────────────────────────────
+//
+// Fires on every status transition in the appointments collection.
+// Handles: booked, accepted/confirmed, rejected, rescheduled, started,
+//          prescription_uploaded, completed, cancelled.
+exports.onAppointmentStatusChange = onDocumentUpdated(
+  "appointments/{appointmentId}",
+  async (event) => {
+    const before = event.data.before.data();
+    const after  = event.data.after.data();
+    if (before.status === after.status) return;
+
+    const patientId = after.patientId;
+    if (!patientId) return;
+
+    const db        = getFirestore();
+    const messaging = getMessaging();
+    const apptId    = event.params.appointmentId;
+    const doctorName = after.doctorName || "your doctor";
+    const doctorId   = after.doctorId   || "";
+
+    // Format appointment date/time if available.
+    let formattedDt = "";
+    const raw = after.appointmentDate || after.scheduledAt || after.date || null;
+    if (raw) {
+      try {
+        const d = raw.toDate ? raw.toDate() : new Date(raw);
+        formattedDt = d.toLocaleString("en-IN", {
+          day: "numeric", month: "short",
+          hour: "2-digit", minute: "2-digit",
+        });
+      } catch (_) {}
+    }
+
+    let title = "";
+    let body  = "";
+    let type  = "";
+    let actionType = "open_appointment";
+
+    switch (after.status) {
+      case "booked":
+        title = "Appointment Booked";
+        body  = formattedDt
+          ? `Your appointment with Dr. ${doctorName} has been booked for ${formattedDt}.`
+          : `Your appointment with Dr. ${doctorName} has been successfully booked.`;
+        type  = "appointment_booked";
+        break;
+      case "confirmed":
+      case "accepted":
+        title = "Appointment Confirmed";
+        body  = formattedDt
+          ? `Your appointment with Dr. ${doctorName} is confirmed for ${formattedDt}.`
+          : `Dr. ${doctorName} accepted your appointment.`;
+        type  = "appointment_accepted";
+        break;
+      case "rejected":
+      case "declined":
+        title = "Appointment Rejected";
+        body  = `Your appointment with Dr. ${doctorName} was not accepted. Please book another slot.`;
+        type  = "appointment_rejected";
+        break;
+      case "rescheduled":
+        title = "Appointment Rescheduled";
+        body  = formattedDt
+          ? `Your appointment with Dr. ${doctorName} has been rescheduled to ${formattedDt}.`
+          : `Your appointment with Dr. ${doctorName} has been rescheduled.`;
+        type  = "appointment_rescheduled";
+        break;
+      case "started":
+      case "call_started":
+        title = "Doctor is Calling You";
+        body  = `Dr. ${doctorName} is calling you now. Tap to join.`;
+        type  = "doctor_started_call";
+        actionType = "open_call";
+        break;
+      case "prescription_uploaded":
+        title = "Prescription Ready";
+        body  = `Your prescription from Dr. ${doctorName} is ready. Tap to view.`;
+        type  = "prescription_uploaded";
+        actionType = "open_prescription";
+        break;
+      case "completed":
+        title = "Consultation Completed";
+        body  = `Your consultation with Dr. ${doctorName} is complete.`;
+        type  = "appointment_completed";
+        break;
+      case "cancelled":
+        title = "Appointment Cancelled";
+        body  = `Your appointment with Dr. ${doctorName} has been cancelled.`;
+        type  = "appointment_cancelled";
+        break;
+      default:
+        return;
+    }
+
+    await _sendPatientNotification(db, messaging, patientId, {
+      title, body, type,
+      serviceType: "appointment",
+      bookingId: apptId,
+      doctorId,
+      actionType,
+      extraData: { doctorName, appointmentDate: formattedDt },
+    });
+  }
+);
+
+// ── Service Request Status Change ────────────────────────────────────────────
+//
+// Handles all non-emergency service requests:
+// ambulance, lab, diagnostics, home_care, caregiver, physiotherapy,
+// hospital, quick_connect, nutrition, counselling, equipment, pharmacy.
+exports.onServiceRequestStatusChange = onDocumentUpdated(
+  "service_requests/{requestId}",
+  async (event) => {
+    const before = event.data.before.data();
+    const after  = event.data.after.data();
+    if (before.status === after.status) return;
+
+    // Emergency doctor is handled by onEmergencyDoctorRequest — skip here.
+    if ((after.type || after.serviceType) === "emergency_doctor") return;
+    // Internal-only status values — no user-facing notification needed.
+    if (["duplicate", "notified", "pending"].includes(after.status)) return;
+
+    const patientId = after.patientId || after.userId;
+    if (!patientId) return;
+
+    const db        = getFirestore();
+    const messaging = getMessaging();
+    const requestId = event.params.requestId;
+    const svcType   = (after.type || after.serviceType || "general").toLowerCase();
+    const newStatus = after.status;
+
+    // Per-service, per-status notification content.
+    // Key structure: statusMap[serviceType][status] = [title, body, notifType]
+    const statusMap = {
+      ambulance: {
+        accepted:    ["Ambulance Booked", "An ambulance has been dispatched and is on the way.", "ambulance_accepted"],
+        assigned:    ["Ambulance Assigned", "Your ambulance has been assigned and is heading to you.", "ambulance_assigned"],
+        in_progress: ["Ambulance En Route", "Your ambulance is en route to your location.", "ambulance_en_route"],
+        arrived:     ["Ambulance Arrived", "The ambulance has arrived at your location.", "ambulance_reached"],
+        completed:   ["Ambulance Service Complete", "Your ambulance service has been completed.", "ambulance_completed"],
+        rejected:    ["Ambulance Unavailable", "We could not fulfil your ambulance request right now. Please try again.", "ambulance_rejected"],
+        cancelled:   ["Ambulance Booking Cancelled", "Your ambulance booking has been cancelled.", "ambulance_cancelled"],
+      },
+      lab: {
+        accepted:         ["Lab Booking Confirmed", "Your lab booking has been accepted. Our technician will visit you soon.", "lab_accepted"],
+        assigned:         ["Technician Assigned", "A lab technician has been assigned to your booking.", "lab_assigned"],
+        in_progress:      ["Technician on the Way", "Your lab technician is on the way to collect your sample.", "lab_in_progress"],
+        sample_collected: ["Sample Collected", "Your sample has been collected and sent to the lab.", "lab_sample_collected"],
+        report_ready:     ["Report Ready", "Your lab test report is now available. Tap to view.", "lab_report_ready"],
+        completed:        ["Lab Test Completed", "Your lab test has been completed.", "lab_completed"],
+        rejected:         ["Lab Booking Rejected", "Your lab booking could not be accepted. Please try again.", "lab_rejected"],
+        cancelled:        ["Lab Booking Cancelled", "Your lab booking has been cancelled.", "lab_cancelled"],
+      },
+      diagnostics: {
+        accepted:     ["Diagnostics Confirmed", "Your diagnostic booking has been accepted.", "lab_accepted"],
+        assigned:     ["Technician Assigned", "A diagnostic technician has been assigned.", "lab_assigned"],
+        in_progress:  ["Diagnostics In Progress", "Your diagnostic test is in progress.", "lab_in_progress"],
+        report_ready: ["Report Ready", "Your diagnostic report is now available.", "lab_report_ready"],
+        completed:    ["Diagnostics Completed", "Your diagnostic test has been completed.", "lab_completed"],
+        rejected:     ["Diagnostics Rejected", "Your diagnostic booking was not accepted. Please try again.", "lab_rejected"],
+        cancelled:    ["Diagnostics Cancelled", "Your diagnostics booking has been cancelled.", "lab_cancelled"],
+      },
+      home_care: {
+        accepted:    ["Home Care Confirmed", "Your home care request has been accepted.", "homecare_accepted"],
+        assigned:    ["Caregiver Assigned", "A caregiver has been assigned to you.", "caregiver_assigned"],
+        in_progress: ["Home Care Started", "Your home care session has started.", "homecare_started"],
+        completed:   ["Home Care Completed", "Your home care session has been completed.", "homecare_completed"],
+        rejected:    ["Home Care Rejected", "Your home care request could not be accepted.", "homecare_rejected"],
+        cancelled:   ["Home Care Cancelled", "Your home care booking has been cancelled.", "homecare_cancelled"],
+      },
+      caregiver: {
+        accepted:    ["Caregiver Booking Accepted", "Your caregiver request has been accepted.", "caregiver_accepted"],
+        assigned:    ["Caregiver Assigned", "A caregiver has been assigned to you.", "caregiver_assigned"],
+        in_progress: ["Caregiver Service Started", "Your caregiver has arrived and the service has started.", "caregiver_started"],
+        completed:   ["Caregiver Service Completed", "Your caregiver service has been completed.", "caregiver_completed"],
+        rejected:    ["Caregiver Booking Rejected", "Your caregiver booking could not be accepted.", "caregiver_rejected"],
+        cancelled:   ["Caregiver Booking Cancelled", "Your caregiver booking has been cancelled.", "caregiver_cancelled"],
+      },
+      physiotherapy: {
+        accepted:    ["Physiotherapy Confirmed", "Your physiotherapy session has been confirmed.", "physio_accepted"],
+        assigned:    ["Physiotherapist Assigned", "A physiotherapist has been assigned to your session.", "physio_assigned"],
+        in_progress: ["Physiotherapy Session Started", "Your physiotherapy session has started.", "physio_started"],
+        completed:   ["Physiotherapy Completed", "Your physiotherapy session has been completed.", "physio_completed"],
+        rejected:    ["Physiotherapy Rejected", "Your physiotherapy booking could not be accepted.", "physio_rejected"],
+        cancelled:   ["Physiotherapy Cancelled", "Your physiotherapy booking has been cancelled.", "physio_cancelled"],
+      },
+      hospital: {
+        accepted:    ["Hospital Booking Confirmed", "Your hospital booking has been confirmed.", "hospital_accepted"],
+        assigned:    ["Bed Assigned", "A bed has been assigned to you at the hospital.", "hospital_assigned"],
+        in_progress: ["Admitted", "You have been admitted to the hospital.", "hospital_admitted"],
+        completed:   ["Discharged", "You have been discharged from the hospital. Wishing you a speedy recovery.", "hospital_discharged"],
+        rejected:    ["Hospital Booking Rejected", "Your hospital booking could not be confirmed. Please contact support.", "hospital_rejected"],
+        cancelled:   ["Hospital Booking Cancelled", "Your hospital booking has been cancelled.", "hospital_cancelled"],
+      },
+      quick_connect: {
+        accepted:    ["Doctor Accepted", "A doctor has accepted your quick connect request.", "quickconnect_accepted"],
+        in_progress: ["Doctor is Connecting", "The doctor is joining your quick connect session.", "quickconnect_started"],
+        completed:   ["Quick Connect Completed", "Your quick connect session has been completed.", "quickconnect_completed"],
+        rejected:    ["Quick Connect Declined", "No doctor is available right now. Please try again shortly.", "quickconnect_rejected"],
+        cancelled:   ["Quick Connect Cancelled", "Your quick connect request has been cancelled.", "quickconnect_cancelled"],
+      },
+      nutrition: {
+        accepted:    ["Nutrition Consultation Confirmed", "Your nutrition consultation has been confirmed.", "nutrition_accepted"],
+        in_progress: ["Nutrition Session Started", "Your nutrition consultation session has started.", "nutrition_started"],
+        completed:   ["Nutrition Consultation Completed", "Your nutrition consultation has been completed.", "nutrition_completed"],
+        rejected:    ["Nutrition Consultation Rejected", "Your nutrition consultation could not be accepted.", "nutrition_rejected"],
+        cancelled:   ["Nutrition Consultation Cancelled", "Your nutrition consultation has been cancelled.", "nutrition_cancelled"],
+      },
+      counselling: {
+        accepted:    ["Counselling Session Confirmed", "Your counselling session has been confirmed.", "counselling_accepted"],
+        in_progress: ["Counselling Session Started", "Your counselling session has started.", "counselling_started"],
+        completed:   ["Counselling Session Completed", "Your counselling session has been completed.", "counselling_completed"],
+        cancelled:   ["Counselling Cancelled", "Your counselling session has been cancelled.", "counselling_cancelled"],
+      },
+      pregnancy_checkup: {
+        accepted:  ["Checkup Confirmed", "Your pregnancy checkup has been confirmed.", "pregnancy_checkup_confirmed"],
+        assigned:  ["Doctor Assigned", "A doctor has been assigned for your pregnancy checkup.", "pregnancy_checkup_assigned"],
+        completed: ["Checkup Completed", "Your pregnancy checkup has been completed. Stay healthy!", "pregnancy_checkup_completed"],
+        cancelled: ["Checkup Cancelled", "Your pregnancy checkup has been cancelled. Please reschedule.", "pregnancy_checkup_cancelled"],
+      },
+    };
+
+    // Fallback: generic messages for unknown service types.
+    const genericMap = {
+      accepted:    ["Booking Confirmed", `Your ${svcType} booking has been confirmed.`, "booking_accepted"],
+      assigned:    ["Staff Assigned", `A staff member has been assigned to your ${svcType} booking.`, "booking_assigned"],
+      in_progress: ["Service Started", `Your ${svcType} service has started.`, "booking_started"],
+      completed:   ["Service Completed", `Your ${svcType} service has been completed.`, "booking_completed"],
+      rejected:    ["Booking Rejected", `Your ${svcType} booking was not accepted.`, "booking_rejected"],
+      cancelled:   ["Booking Cancelled", `Your ${svcType} booking has been cancelled.`, "booking_cancelled"],
+    };
+
+    const typeMap = statusMap[svcType] || genericMap;
+    const entry   = typeMap[newStatus] || genericMap[newStatus];
+    if (!entry) return;
+
+    const [title, body, notifType] = entry;
+
+    // Personalise with assignee name when available.
+    let finalBody = body;
+    const assigneeName = after.assigneeName || after.caregiverName
+      || after.technicianName || after.driverName || "";
+    if (assigneeName) {
+      finalBody = finalBody
+        .replace("A caregiver", assigneeName)
+        .replace("A lab technician", assigneeName)
+        .replace("A staff member", assigneeName);
+    }
+
+    await _sendPatientNotification(db, messaging, patientId, {
+      title,
+      body: finalBody,
+      type: notifType,
+      serviceType: svcType,
+      bookingId: requestId,
+      actionType: "open_service",
+      extraData: { svcType, assigneeName, status: newStatus },
+    });
+  }
+);
+
+// ── Medicine Order Status Change ──────────────────────────────────────────────
+//
+// Fires for every status transition in medicine_orders/{orderId}.
+// Tracks the full delivery pipeline from accepted → delivered.
+exports.onMedicineOrderStatusChange = onDocumentUpdated(
+  "medicine_orders/{orderId}",
+  async (event) => {
+    const before = event.data.before.data();
+    const after  = event.data.after.data();
+    if (before.status === after.status) return;
+
+    const patientId = after.patientId || after.userId;
+    if (!patientId) return;
+
+    const db        = getFirestore();
+    const messaging = getMessaging();
+    const orderId   = event.params.orderId;
+
+    const statusMap = {
+      accepted:         ["Order Accepted", "Your medicine order has been accepted and is being prepared.", "medicine_accepted"],
+      processing:       ["Order Processing", "Your medicine order is being processed.", "medicine_processing"],
+      verified:         ["Order Verified", "Your medicine order has been verified by our pharmacist.", "medicine_verified"],
+      packed:           ["Medicines Packed", "Your medicines are packed and ready for dispatch.", "medicine_packed"],
+      dispatched:       ["Out for Delivery", "Your medicines are out for delivery and will arrive soon.", "medicine_out_for_delivery"],
+      out_for_delivery: ["Out for Delivery", "Your medicines are on the way! Track your delivery.", "medicine_out_for_delivery"],
+      delivered:        ["Order Delivered", "Your medicines have been delivered successfully.", "medicine_delivered"],
+      rejected:         ["Order Rejected", "Your medicine order could not be processed. Please try again.", "medicine_rejected"],
+      cancelled:        ["Order Cancelled", "Your medicine order has been cancelled.", "medicine_cancelled"],
+      returned:         ["Order Returned", "Your medicine order has been returned.", "medicine_returned"],
+    };
+
+    const entry = statusMap[after.status];
+    if (!entry) return;
+
+    const [title, body, notifType] = entry;
+
+    await _sendPatientNotification(db, messaging, patientId, {
+      title, body, type: notifType,
+      serviceType: "medicine",
+      bookingId: orderId,
+      actionType: "open_order",
+      extraData: { orderId, status: after.status },
+    });
+  }
+);
+
+// ── Lab Booking Status Change ─────────────────────────────────────────────────
+//
+// Fires for every status transition in lab_bookings/{bookingId}.
+// Covers: sample collection → lab processing → report ready.
+exports.onLabBookingStatusChange = onDocumentUpdated(
+  "lab_bookings/{bookingId}",
+  async (event) => {
+    const before = event.data.before.data();
+    const after  = event.data.after.data();
+    if (before.status === after.status) return;
+
+    const patientId = after.patientId || after.userId;
+    if (!patientId) return;
+
+    const db        = getFirestore();
+    const messaging = getMessaging();
+    const bookingId = event.params.bookingId;
+    const testName  = after.testName || after.serviceName || "your test";
+
+    const statusMap = {
+      accepted:         ["Lab Booking Accepted", `Your booking for ${testName} has been accepted.`, "lab_accepted"],
+      assigned:         ["Technician Assigned", `A lab technician has been assigned for ${testName}.`, "lab_assigned"],
+      in_progress:      ["Technician on the Way", `Our technician is on the way to collect your ${testName} sample.`, "lab_in_progress"],
+      sample_collected: ["Sample Collected", `Your ${testName} sample has been collected and sent to the lab.`, "lab_sample_collected"],
+      processing:       ["Sample Processing", `Your ${testName} sample is being analysed in the lab.`, "lab_processing"],
+      report_ready:     ["Report Ready", `Your ${testName} report is ready. Tap to view your results.`, "lab_report_ready"],
+      completed:        ["Lab Test Completed", `Your ${testName} has been completed.`, "lab_completed"],
+      rejected:         ["Lab Booking Rejected", `Your booking for ${testName} could not be accepted. Please try again.`, "lab_rejected"],
+      cancelled:        ["Lab Booking Cancelled", `Your booking for ${testName} has been cancelled.`, "lab_cancelled"],
+    };
+
+    const entry = statusMap[after.status];
+    if (!entry) return;
+
+    const [title, body, notifType] = entry;
+
+    await _sendPatientNotification(db, messaging, patientId, {
+      title, body, type: notifType,
+      serviceType: "diagnostics",
+      bookingId,
+      actionType: "open_diagnostics",
+      extraData: { testName, status: after.status },
+    });
+  }
+);
+
+// ── Pregnancy Checkup Status Change ──────────────────────────────────────────
+//
+// Fires for status transitions in pregnancy_checkups/{checkupId}.
+// Covers: booked, reminder, confirmed, completed, cancelled.
+exports.onPregnancyCheckupStatusChange = onDocumentUpdated(
+  "pregnancy_checkups/{checkupId}",
+  async (event) => {
+    const before = event.data.before.data();
+    const after  = event.data.after.data();
+    if (before.status === after.status) return;
+
+    const patientId = after.patientId || after.userId;
+    if (!patientId) return;
+
+    const db        = getFirestore();
+    const messaging = getMessaging();
+    const checkupId = event.params.checkupId;
+
+    // Format checkup date if available.
+    let formattedDate = "";
+    const rawDate = after.checkupDate || after.scheduledAt || after.date || null;
+    if (rawDate) {
+      try {
+        const d = rawDate.toDate ? rawDate.toDate() : new Date(rawDate);
+        formattedDate = d.toLocaleDateString("en-IN", { day: "numeric", month: "long" });
+      } catch (_) {}
+    }
+
+    const statusMap = {
+      booked:     ["Checkup Scheduled", formattedDate ? `Your pregnancy checkup is scheduled for ${formattedDate}.` : "Your pregnancy checkup has been scheduled.", "pregnancy_checkup_booked"],
+      reminder:   ["Checkup Reminder", formattedDate ? `Reminder: You have a pregnancy checkup on ${formattedDate}. Please be prepared.` : "You have a pregnancy checkup coming up. Please be prepared.", "pregnancy_checkup_reminder"],
+      confirmed:  ["Checkup Confirmed", formattedDate ? `Your pregnancy checkup on ${formattedDate} has been confirmed.` : "Your pregnancy checkup has been confirmed.", "pregnancy_checkup_confirmed"],
+      completed:  ["Checkup Completed", "Your pregnancy checkup has been completed. Stay healthy!", "pregnancy_checkup_completed"],
+      cancelled:  ["Checkup Cancelled", "Your pregnancy checkup has been cancelled. Please reschedule.", "pregnancy_checkup_cancelled"],
+    };
+
+    const entry = statusMap[after.status];
+    if (!entry) return;
+
+    const [title, body, notifType] = entry;
+
+    await _sendPatientNotification(db, messaging, patientId, {
+      title, body, type: notifType,
+      serviceType: "pregnancy",
+      bookingId: checkupId,
+      actionType: "open_pregnancy",
+      extraData: { checkupDate: formattedDate, status: after.status },
+    });
   }
 );

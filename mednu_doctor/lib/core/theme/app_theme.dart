@@ -2,6 +2,47 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../constants/app_colors.dart';
 
+class _SmoothPageTransitionsBuilder extends PageTransitionsBuilder {
+  const _SmoothPageTransitionsBuilder();
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    final fade = CurvedAnimation(
+        parent: animation, curve: Curves.easeOut, reverseCurve: Curves.easeIn);
+    final slide = Tween<Offset>(
+            begin: const Offset(0.04, 0), end: Offset.zero)
+        .animate(CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOutCubic,
+            reverseCurve: Curves.easeInCubic));
+    final secondarySlide = Tween<Offset>(
+            begin: Offset.zero, end: const Offset(-0.04, 0))
+        .animate(CurvedAnimation(
+            parent: secondaryAnimation, curve: Curves.easeInCubic));
+    return FadeTransition(
+      opacity: fade,
+      child: SlideTransition(
+        position: slide,
+        child: SlideTransition(position: secondarySlide, child: child),
+      ),
+    );
+  }
+}
+
+const _transitions = PageTransitionsTheme(builders: {
+  TargetPlatform.android: _SmoothPageTransitionsBuilder(),
+  TargetPlatform.iOS:     _SmoothPageTransitionsBuilder(),
+  TargetPlatform.linux:   _SmoothPageTransitionsBuilder(),
+  TargetPlatform.windows: _SmoothPageTransitionsBuilder(),
+  TargetPlatform.macOS:   _SmoothPageTransitionsBuilder(),
+});
+
 class AppTheme {
   AppTheme._();
 
@@ -9,6 +50,7 @@ class AppTheme {
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
+      pageTransitionsTheme: _transitions,
       colorScheme: ColorScheme.fromSeed(
         seedColor: AppColors.primary,
         primary: AppColors.primary,
@@ -169,7 +211,7 @@ class AppTheme {
       // ── Chip ────────────────────────────────────────────
       chipTheme: ChipThemeData(
         backgroundColor: AppColors.background,
-        selectedColor: AppColors.primary.withOpacity(0.15),
+        selectedColor: AppColors.primary.withValues(alpha:0.15),
         disabledColor: AppColors.background,
         labelStyle: const TextStyle(
           fontFamily: 'Poppins',
@@ -283,7 +325,7 @@ class AppTheme {
         ),
         indicatorSize: TabBarIndicatorSize.label,
         overlayColor: WidgetStateProperty.all(
-          AppColors.primary.withOpacity(0.06),
+          AppColors.primary.withValues(alpha:0.06),
         ),
         dividerColor: AppColors.divider,
       ),

@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
+import '../../../core/widgets/ux_widgets.dart';
 
 class OrderTrackingScreen extends StatefulWidget {
   /// Passed from MedicineScreen cart checkout.
@@ -200,7 +201,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with TickerPr
           builder: (_, __) => Container(
             width: 10, height: 10,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.5 + _pulseCtrl.value * 0.5),
+              color: Colors.white.withValues(alpha:0.5 + _pulseCtrl.value * 0.5),
               shape: BoxShape.circle,
             ),
           ),
@@ -210,7 +211,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with TickerPr
         const Spacer(),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          decoration: BoxDecoration(color: Colors.white.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
+          decoration: BoxDecoration(color: Colors.white.withValues(alpha:0.15), borderRadius: BorderRadius.circular(8)),
           child: Text('ETA: $_etaMinutes min', style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: Colors.white, fontWeight: FontWeight.w600)),
         ),
       ]),
@@ -219,7 +220,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with TickerPr
       // Address row
       Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(color: Colors.white.withOpacity(0.12), borderRadius: BorderRadius.circular(10)),
+        decoration: BoxDecoration(color: Colors.white.withValues(alpha:0.12), borderRadius: BorderRadius.circular(10)),
         child: Row(children: [
           const Icon(Icons.location_on_rounded, color: Colors.white70, size: 16),
           const SizedBox(width: 6),
@@ -246,7 +247,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with TickerPr
                   child: const Icon(Icons.home_rounded, color: Colors.white, size: 14),
                 ),
                 Container(width: 2, height: 6, color: Colors.red),
-                Container(width: 6, height: 3, decoration: BoxDecoration(color: Colors.red.withOpacity(0.4), borderRadius: BorderRadius.circular(3))),
+                Container(width: 6, height: 3, decoration: BoxDecoration(color: Colors.red.withValues(alpha:0.4), borderRadius: BorderRadius.circular(3))),
               ]),
             ),
             // Delivery bike marker (animated pulse)
@@ -262,7 +263,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with TickerPr
                     child: const Icon(Icons.delivery_dining_rounded, color: Colors.white, size: 18),
                   ),
                   Container(width: 2, height: 6, color: _green),
-                  Container(width: 6, height: 3, decoration: BoxDecoration(color: _green.withOpacity(0.4), borderRadius: BorderRadius.circular(3))),
+                  Container(width: 6, height: 3, decoration: BoxDecoration(color: _green.withValues(alpha:0.4), borderRadius: BorderRadius.circular(3))),
                 ]),
               ),
             ),
@@ -321,7 +322,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with TickerPr
       color: Colors.white,
       borderRadius: BorderRadius.circular(18),
       border: Border.all(color: AppColors.divider),
-      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
+      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:0.04), blurRadius: 8, offset: const Offset(0, 2))],
     ),
     child: Row(children: [
       Stack(children: [
@@ -357,14 +358,14 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with TickerPr
           onTap: _callDriver,
           child: Container(
             width: 44, height: 44,
-            decoration: BoxDecoration(color: _green.withOpacity(0.1), shape: BoxShape.circle),
+            decoration: BoxDecoration(color: _green.withValues(alpha:0.1), shape: BoxShape.circle),
             child: const Icon(Icons.call_rounded, color: _green, size: 22),
           ),
         ),
         const SizedBox(height: 4),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-          decoration: BoxDecoration(color: _green.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
+          decoration: BoxDecoration(color: _green.withValues(alpha:0.1), borderRadius: BorderRadius.circular(6)),
           child: const Text('On the way', style: TextStyle(fontFamily: 'Poppins', fontSize: 9, fontWeight: FontWeight.w700, color: _green)),
         ),
       ]),
@@ -446,7 +447,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with TickerPr
         Row(children: [
           Container(
             width: 42, height: 42,
-            decoration: BoxDecoration(color: _green.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+            decoration: BoxDecoration(color: _green.withValues(alpha:0.1), borderRadius: BorderRadius.circular(10)),
             child: const Icon(Icons.medication_rounded, color: _green, size: 22),
           ),
           const SizedBox(width: 10),
@@ -563,7 +564,7 @@ class _OrderSupportChatState extends State<_OrderSupportChat> {
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
           child: Row(children: [
             Container(width: 38, height: 38,
-                decoration: BoxDecoration(color: _green.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+                decoration: BoxDecoration(color: _green.withValues(alpha:0.1), borderRadius: BorderRadius.circular(10)),
                 child: const Icon(Icons.support_agent_rounded, color: _green, size: 20)),
             const SizedBox(width: 12),
             Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -584,14 +585,20 @@ class _OrderSupportChatState extends State<_OrderSupportChat> {
                 .snapshots(),
             builder: (context, snap) {
               if (snap.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator(color: _green));
+                return ListView(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  children: List.generate(4, (_) => const Padding(
+                    padding: EdgeInsets.only(bottom: 8),
+                    child: SkeletonListTile(),
+                  )),
+                );
               }
               final docs = snap.data?.docs ?? [];
               if (docs.isEmpty) {
                 return Center(
                   child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
                     Container(width: 68, height: 68,
-                        decoration: BoxDecoration(color: _green.withOpacity(0.08), shape: BoxShape.circle),
+                        decoration: BoxDecoration(color: _green.withValues(alpha:0.08), shape: BoxShape.circle),
                         child: const Icon(Icons.support_agent_rounded, color: _green, size: 32)),
                     const SizedBox(height: 12),
                     const Text('Support Chat', style: TextStyle(fontFamily: 'Poppins', fontSize: 14, fontWeight: FontWeight.w700)),
@@ -626,7 +633,7 @@ class _OrderSupportChatState extends State<_OrderSupportChat> {
                       children: [
                         if (!isMe) ...[
                           Container(width: 30, height: 30,
-                              decoration: BoxDecoration(color: _green.withOpacity(0.1), shape: BoxShape.circle),
+                              decoration: BoxDecoration(color: _green.withValues(alpha:0.1), shape: BoxShape.circle),
                               child: const Icon(Icons.support_agent_rounded, color: _green, size: 15)),
                           const SizedBox(width: 8),
                         ],
@@ -663,7 +670,7 @@ class _OrderSupportChatState extends State<_OrderSupportChat> {
 
         Container(
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
-          decoration: BoxDecoration(color: Colors.white, boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, -2))]),
+          decoration: BoxDecoration(color: Colors.white, boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:0.05), blurRadius: 8, offset: const Offset(0, -2))]),
           child: Row(children: [
             Expanded(
               child: TextField(
@@ -731,7 +738,7 @@ class _RoutePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = const Color(0xFF2E7D32).withOpacity(0.6)
+      ..color = const Color(0xFF2E7D32).withValues(alpha:0.6)
       ..strokeWidth = 3
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
@@ -753,7 +760,7 @@ class _RoutePainter extends CustomPainter {
 
     // Dashed overlay
     final dashPaint = Paint()
-      ..color = Colors.white.withOpacity(0.7)
+      ..color = Colors.white.withValues(alpha:0.7)
       ..strokeWidth = 1.5
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;

@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_text_styles.dart';
 import '../providers/nutrition_provider.dart';
+import '../../../../core/widgets/ux_widgets.dart';
 
 class BookNutritionAppointmentScreen extends ConsumerStatefulWidget {
   final Map<String, dynamic> extra;
@@ -212,7 +213,7 @@ class _BookNutritionAppointmentScreenState
             _SectionHeader(title: 'Select Time Slot'),
             const SizedBox(height: 10),
             bookedSlots.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
+              loading: () => const Padding(padding: EdgeInsets.symmetric(vertical: 16), child: SkeletonBox(width: double.infinity, height: 100, radius: 16)),
               error: (_, __) => _SlotGrid(slots: _availableSlots, bookedSlots: const [], selected: _selectedSlot, onSelect: (s) => setState(() => _selectedSlot = s)),
               data: (booked) => _SlotGrid(slots: _availableSlots, bookedSlots: booked, selected: _selectedSlot, onSelect: (s) => setState(() => _selectedSlot = s)),
             ),
@@ -401,7 +402,7 @@ class _DateSelector extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: const Color(0xFF2E7D32).withOpacity(0.1),
+                color: const Color(0xFF2E7D32).withValues(alpha:0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Text('Change', style: TextStyle(fontFamily: 'Poppins', fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF2E7D32))),
@@ -442,7 +443,7 @@ class _SlotGrid extends StatelessWidget {
               borderRadius: BorderRadius.circular(10),
               border: Border.all(
                 color: isBooked
-                    ? AppColors.border.withOpacity(0.5)
+                    ? AppColors.border.withValues(alpha:0.5)
                     : isSelected
                         ? const Color(0xFF2E7D32)
                         : AppColors.border,
@@ -510,7 +511,7 @@ class _BottomBar extends StatelessWidget {
       padding: EdgeInsets.fromLTRB(16, 12, 16, MediaQuery.of(context).padding.bottom + 12),
       decoration: BoxDecoration(
         color: Colors.white,
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 12, offset: const Offset(0, -2))],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:0.06), blurRadius: 12, offset: const Offset(0, -2))],
       ),
       child: Row(
         children: [

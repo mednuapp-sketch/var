@@ -7,6 +7,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/widgets/ux_widgets.dart';
 
 class PostConsultationScreen extends StatefulWidget {
   final String? consultationId;
@@ -272,7 +273,11 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
     return Scaffold(
       backgroundColor: AppColors.background,
       body: _checking
-          ? const Center(child: CircularProgressIndicator())
+          ? SingleChildScrollView(physics: const NeverScrollableScrollPhysics(), padding: const EdgeInsets.all(16),
+              child: Column(children: [
+                const SizedBox(height: 40),
+                ...List.generate(4, (_) => const Padding(padding: EdgeInsets.only(bottom: 16), child: SkeletonBox(width: double.infinity, height: 64, radius: 16))),
+              ]))
           : _submitted
               ? _buildSuccessView()
               : _alreadySubmitted
@@ -307,7 +312,7 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
                   width: 120,
                   height: 120,
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.15),
+                    color: Colors.white.withValues(alpha:0.15),
                     shape: BoxShape.circle,
                     border: Border.all(color: Colors.white30, width: 2),
                   ),
@@ -372,7 +377,7 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
                     onPressed: () => context.go(AppRoutes.home),
                     style: TextButton.styleFrom(
                       foregroundColor: Colors.white,
-                      backgroundColor: Colors.white.withOpacity(0.15),
+                      backgroundColor: Colors.white.withValues(alpha:0.15),
                       padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                     ),
@@ -413,7 +418,7 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
                 width: 96,
                 height: 96,
                 decoration: BoxDecoration(
-                  color: AppColors.accent.withOpacity(0.1),
+                  color: AppColors.accent.withValues(alpha:0.1),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(Icons.check_circle_rounded, color: AppColors.accent, size: 54),
@@ -469,7 +474,7 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
                         Container(
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.15),
+                            color: Colors.white.withValues(alpha:0.15),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Icon(
@@ -600,7 +605,7 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.divider),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 2))],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:0.04), blurRadius: 10, offset: const Offset(0, 2))],
       ),
       child: Row(children: [
         Container(
@@ -623,7 +628,7 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
           decoration: BoxDecoration(
-            color: AppColors.accent.withOpacity(0.1),
+            color: AppColors.accent.withValues(alpha:0.1),
             borderRadius: BorderRadius.circular(20),
           ),
           child: Text(
@@ -658,7 +663,7 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
         border: Border.all(
           color: _isImmediate && _rating == 0 ? const Color(0xFFFFCDD2) : AppColors.divider,
         ),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 2))],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:0.04), blurRadius: 10, offset: const Offset(0, 2))],
       ),
       child: Column(children: [
         Row(
@@ -726,7 +731,7 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 decoration: BoxDecoration(
                   color: _selectedFeeling == f['value']
-                      ? (f['color'] as Color).withOpacity(0.12)
+                      ? (f['color'] as Color).withValues(alpha:0.12)
                       : Colors.white,
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
@@ -736,7 +741,7 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
                     width: _selectedFeeling == f['value'] ? 2 : 1,
                   ),
                   boxShadow: _selectedFeeling == f['value']
-                      ? [BoxShadow(color: (f['color'] as Color).withOpacity(0.2), blurRadius: 8)]
+                      ? [BoxShadow(color: (f['color'] as Color).withValues(alpha:0.2), blurRadius: 8)]
                       : null,
                 ),
                 child: Column(children: [
@@ -787,7 +792,7 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.divider),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 2))],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:0.04), blurRadius: 10, offset: const Offset(0, 2))],
       ),
       child: Column(children: [
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
@@ -797,9 +802,9 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
             duration: const Duration(milliseconds: 300),
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
             decoration: BoxDecoration(
-              color: painColor.withOpacity(0.1),
+              color: painColor.withValues(alpha:0.1),
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: painColor.withOpacity(0.3)),
+              border: Border.all(color: painColor.withValues(alpha:0.3)),
             ),
             child: Text(
               _painLevel == 0 ? 'No Pain' : '$_painLevel / 10',
@@ -820,7 +825,7 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
             value: _painLevel.toDouble(),
             min: 0, max: 10, divisions: 10,
             activeColor: painColor,
-            inactiveColor: painColor.withOpacity(0.15),
+            inactiveColor: painColor.withValues(alpha:0.15),
             onChanged: (v) => setState(() => _painLevel = v.round()),
           ),
         ),
@@ -849,14 +854,14 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
             duration: const Duration(milliseconds: 200),
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             decoration: BoxDecoration(
-              color: selected ? AppColors.primary.withOpacity(0.1) : Colors.white,
+              color: selected ? AppColors.primary.withValues(alpha:0.1) : Colors.white,
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
                 color: selected ? AppColors.primary : AppColors.border,
                 width: selected ? 2 : 1,
               ),
               boxShadow: selected
-                  ? [BoxShadow(color: AppColors.primary.withOpacity(0.15), blurRadius: 6)]
+                  ? [BoxShadow(color: AppColors.primary.withValues(alpha:0.15), blurRadius: 6)]
                   : null,
             ),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -924,7 +929,7 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
             color: _canSubmit ? null : Colors.grey.shade300,
             borderRadius: BorderRadius.circular(16),
             boxShadow: _canSubmit
-                ? [BoxShadow(color: AppColors.primary.withOpacity(0.35), blurRadius: 16, offset: const Offset(0, 6))]
+                ? [BoxShadow(color: AppColors.primary.withValues(alpha:0.35), blurRadius: 16, offset: const Offset(0, 6))]
                 : null,
           ),
           child: Material(

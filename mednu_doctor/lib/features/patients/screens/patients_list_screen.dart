@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -5,6 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/widgets/ux_widgets.dart';
 
 class _PatientSummary {
   final String patientId;
@@ -28,11 +30,10 @@ class PatientsListScreen extends StatefulWidget {
   State<PatientsListScreen> createState() => _PatientsListScreenState();
 }
 
-class _PatientsListScreenState extends State<PatientsListScreen>
-    with SingleTickerProviderStateMixin {
+class _PatientsListScreenState extends State<PatientsListScreen> {
   String _search = '';
-  late AnimationController _shimmerController;
-  late Animation<double> _shimmerAnimation;
+  String _debouncedSearch = '';
+  Timer? _searchDebounce;
 
   static const _avatarColors = [
     Color(0xFFC2185B),
@@ -45,20 +46,16 @@ class _PatientsListScreenState extends State<PatientsListScreen>
     Color(0xFF0277BD),
   ];
 
-  @override
-  void initState() {
-    super.initState();
-    _shimmerController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1200),
-    )..repeat(reverse: true);
-    _shimmerAnimation =
-        Tween<double>(begin: 0.3, end: 0.9).animate(_shimmerController);
+  void _onSearchChanged(String v) {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 320), () {
+      if (mounted) setState(() => _debouncedSearch = v);
+    });
   }
 
   @override
   void dispose() {
-    _shimmerController.dispose();
+    _searchDebounce?.cancel();
     super.dispose();
   }
 
@@ -104,7 +101,7 @@ class _PatientsListScreenState extends State<PatientsListScreen>
                         height: 110,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: Colors.white.withOpacity(0.06),
+                          color: Colors.white.withValues(alpha:0.06),
                         ),
                       ),
                     ),
@@ -117,7 +114,7 @@ class _PatientsListScreenState extends State<PatientsListScreen>
                               width: 40,
                               height: 40,
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.18),
+                                color: Colors.white.withValues(alpha:0.18),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: const Icon(Icons.people_rounded,
@@ -170,7 +167,9 @@ class _PatientsListScreenState extends State<PatientsListScreen>
           }
           if (snap.hasError) {
             debugPrint('[MyPatients] Firestore error: ${snap.error}');
-            return _buildErrorState(snap.error.toString());
+            return AppErrorState(
+              onRetry: () => setState(() {}),
+            );
           }
 
           final docs = snap.data?.docs ?? [];
@@ -217,8 +216,8 @@ class _PatientsListScreenState extends State<PatientsListScreen>
           var patients = seen.values.toList()
             ..sort((a, b) => b.lastVisitDate.compareTo(a.lastVisitDate));
 
-          if (_search.isNotEmpty) {
-            final q = _search.toLowerCase();
+          if (_debouncedSearch.isNotEmpty) {
+            final q = _debouncedSearch.toLowerCase();
             patients =
                 patients.where((p) => p.name.toLowerCase().contains(q)).toList();
           }
@@ -227,7 +226,7 @@ class _PatientsListScreenState extends State<PatientsListScreen>
             Padding(
               padding: const EdgeInsets.all(16),
               child: TextField(
-                onChanged: (v) => setState(() => _search = v),
+                onChanged: _onSearchChanged,
                 decoration: const InputDecoration(
                   hintText: 'Search patients...',
                   prefixIcon:
@@ -250,7 +249,13 @@ class _PatientsListScreenState extends State<PatientsListScreen>
               ]),
             ),
             if (patients.isEmpty)
-              Expanded(child: _buildEmptyState())
+              Expanded(
+                child: AppEmptyState(
+                  icon: Icons.people_outline_rounded,
+                  title: 'No Patients Yet',
+                  message: 'Your patient list will appear here once you complete appointments.',
+                ),
+              )
             else
               Expanded(
                 child: ListView.builder(
@@ -271,7 +276,9 @@ class _PatientsListScreenState extends State<PatientsListScreen>
                           '${dt.day} ${months[dt.month - 1]} ${dt.year}';
                     } catch (_) {}
 
-                    return GestureDetector(
+                    return FadeInSlide(
+                      delay: Duration(milliseconds: i * 35),
+                      child: TapScale(
                       onTap: () => context.push(
                         AppRoutes.patientDetail,
                         extra: {
@@ -288,7 +295,7 @@ class _PatientsListScreenState extends State<PatientsListScreen>
                           border: Border.all(color: AppColors.divider),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.04),
+                              color: Colors.black.withValues(alpha:0.04),
                               blurRadius: 8,
                               offset: const Offset(0, 2),
                             ),
@@ -299,7 +306,7 @@ class _PatientsListScreenState extends State<PatientsListScreen>
                             width: 52,
                             height: 52,
                             decoration: BoxDecoration(
-                              color: color.withOpacity(0.15),
+                              color: color.withValues(alpha:0.15),
                               shape: BoxShape.circle,
                             ),
                             child: Center(
@@ -335,7 +342,7 @@ class _PatientsListScreenState extends State<PatientsListScreen>
                                   padding: const EdgeInsets.symmetric(
                                       horizontal: 8, vertical: 3),
                                   decoration: BoxDecoration(
-                                    color: color.withOpacity(0.1),
+                                    color: color.withValues(alpha:0.1),
                                     borderRadius: BorderRadius.circular(8),
                                   ),
                                   child: Text(
@@ -354,7 +361,7 @@ class _PatientsListScreenState extends State<PatientsListScreen>
                               ]),
                         ]),
                       ),
-                    );
+                    ));
                   },
                 ),
               ),
@@ -366,177 +373,32 @@ class _PatientsListScreenState extends State<PatientsListScreen>
   }
 
   Widget _buildSkeletonLoader() {
-    return AnimatedBuilder(
-      animation: _shimmerAnimation,
-      builder: (context, _) {
-        final shimmerColor =
-            Colors.grey.withOpacity(_shimmerAnimation.value * 0.25 + 0.05);
-        return Column(children: [
-          // Fake search bar
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Container(
-              height: 52,
-              decoration: BoxDecoration(
-                color: shimmerColor,
-                borderRadius: BorderRadius.circular(14),
-              ),
-            ),
-          ),
-          // Fake count row
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-            child: Row(children: [
-              Container(
-                  width: 100,
-                  height: 14,
-                  decoration: BoxDecoration(
-                      color: shimmerColor,
-                      borderRadius: BorderRadius.circular(7))),
-              const Spacer(),
-              Container(
-                  width: 80,
-                  height: 12,
-                  decoration: BoxDecoration(
-                      color: shimmerColor,
-                      borderRadius: BorderRadius.circular(6))),
-            ]),
-          ),
-          // Fake patient cards
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: 5,
-              itemBuilder: (_, __) => Container(
-                margin: const EdgeInsets.only(bottom: 10),
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: AppColors.divider),
-                ),
-                child: Row(children: [
-                  Container(
-                    width: 52,
-                    height: 52,
-                    decoration: BoxDecoration(
-                      color: shimmerColor,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Container(
-                            height: 13,
-                            width: double.infinity,
-                            decoration: BoxDecoration(
-                                color: shimmerColor,
-                                borderRadius: BorderRadius.circular(6)),
-                          ),
-                          const SizedBox(height: 6),
-                          Container(
-                            height: 11,
-                            width: 140,
-                            decoration: BoxDecoration(
-                                color: shimmerColor,
-                                borderRadius: BorderRadius.circular(5)),
-                          ),
-                          const SizedBox(height: 5),
-                          Container(
-                            height: 10,
-                            width: 100,
-                            decoration: BoxDecoration(
-                                color: shimmerColor,
-                                borderRadius: BorderRadius.circular(5)),
-                          ),
-                        ]),
-                  ),
-                  const SizedBox(width: 12),
-                  Container(
-                    width: 48,
-                    height: 22,
-                    decoration: BoxDecoration(
-                        color: shimmerColor,
-                        borderRadius: BorderRadius.circular(8)),
-                  ),
-                ]),
-              ),
-            ),
-          ),
-        ]);
-      },
-    );
-  }
-
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-        Container(
-          width: 80,
-          height: 80,
-          decoration: BoxDecoration(
-            color: AppColors.primary.withOpacity(0.08),
-            shape: BoxShape.circle,
-          ),
-          child: const Icon(Icons.people_outline_rounded,
-              size: 40, color: AppColors.primary),
-        ),
-        const SizedBox(height: 16),
-        Text('No Patients Yet', style: AppTextStyles.h4),
-        const SizedBox(height: 6),
-        Text(
-          'Your patient list will appear here\nonce you complete appointments.',
-          textAlign: TextAlign.center,
-          style:
-              AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
-        ),
-      ]),
-    );
-  }
-
-  Widget _buildErrorState(String errorMessage) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Container(
-            width: 72,
-            height: 72,
-            decoration: BoxDecoration(
-              color: AppColors.error.withOpacity(0.08),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.wifi_off_rounded,
-                size: 36, color: AppColors.error),
-          ),
-          const SizedBox(height: 16),
-          Text('Failed to Load Patients',
-              style: AppTextStyles.h4
-                  .copyWith(color: AppColors.error)),
-          const SizedBox(height: 6),
-          Text(
-            'Please check your connection and try again.',
-            textAlign: TextAlign.center,
-            style:
-                AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
-          ),
-          const SizedBox(height: 24),
-          ElevatedButton.icon(
-            onPressed: () => setState(() {}),
-            icon: const Icon(Icons.refresh_rounded, size: 18),
-            label: const Text('Retry'),
-            style: ElevatedButton.styleFrom(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-            ),
-          ),
+    return Column(children: [
+      const Padding(
+        padding: EdgeInsets.all(16),
+        child: SkeletonBox(width: double.infinity, height: 52, radius: 14),
+      ),
+      const Padding(
+        padding: EdgeInsets.fromLTRB(16, 0, 16, 12),
+        child: Row(children: [
+          SkeletonBox(width: 100, height: 14, radius: 7),
+          Spacer(),
+          SkeletonBox(width: 80, height: 12, radius: 6),
         ]),
       ),
-    );
+      Expanded(
+        child: ListView.builder(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: 6,
+          itemBuilder: (_, __) => const Padding(
+            padding: EdgeInsets.only(bottom: 10),
+            child: SkeletonListTile(),
+          ),
+        ),
+      ),
+    ]);
   }
+
+  // _buildEmptyState and _buildErrorState removed — replaced by AppEmptyState/AppErrorState
 }

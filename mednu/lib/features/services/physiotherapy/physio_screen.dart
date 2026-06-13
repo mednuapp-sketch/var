@@ -135,7 +135,7 @@ class PhysioScreen extends StatelessWidget {
                           Container(
                             width: 50, height: 50,
                             decoration: BoxDecoration(
-                              color: _themeColor.withOpacity(0.1),
+                              color: _themeColor.withValues(alpha:0.1),
                               borderRadius: BorderRadius.circular(14),
                             ),
                             child: Icon(icon, color: _themeColor, size: 26),

@@ -120,7 +120,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
                         width: 44,
                         height: 44,
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
+                          color: Colors.white.withValues(alpha:0.2),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Icon(info.icon, color: Colors.white, size: 22),
@@ -183,10 +183,10 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isDark ? AppColors.darkCard : bg.withOpacity(0.08),
+        color: isDark ? AppColors.darkCard : bg.withValues(alpha:0.08),
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-            color: isDark ? AppColors.darkBorder : bg.withOpacity(0.3)),
+            color: isDark ? AppColors.darkBorder : bg.withValues(alpha:0.3)),
       ),
       child: Row(
         children: [
@@ -197,9 +197,9 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
               height: 44,
               decoration: BoxDecoration(
                 color: live.isActive
-                    ? Color.lerp(bg.withOpacity(0.15), bg.withOpacity(0.3),
+                    ? Color.lerp(bg.withValues(alpha:0.15), bg.withValues(alpha:0.3),
                         _pulseCtrl.value)!
-                    : bg.withOpacity(0.15),
+                    : bg.withValues(alpha:0.15),
                 borderRadius: BorderRadius.circular(14),
               ),
               child: Icon(_statusIcon(live.status), color: fg, size: 22),
@@ -230,7 +230,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
               padding:
                   const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: bg.withOpacity(0.15),
+                color: bg.withValues(alpha:0.15),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
@@ -243,7 +243,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
                       height: 6,
                       decoration: BoxDecoration(
                         color:
-                            fg.withOpacity(0.5 + _pulseCtrl.value * 0.5),
+                            fg.withValues(alpha:0.5 + _pulseCtrl.value * 0.5),
                         shape: BoxShape.circle,
                       ),
                     ),
@@ -279,7 +279,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
             ? null
             : [
                 BoxShadow(
-                    color: Colors.black.withOpacity(0.04),
+                    color: Colors.black.withValues(alpha:0.04),
                     blurRadius: 8,
                     offset: const Offset(0, 2)),
               ],
@@ -315,7 +315,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
             ? null
             : [
                 BoxShadow(
-                    color: Colors.black.withOpacity(0.04),
+                    color: Colors.black.withValues(alpha:0.04),
                     blurRadius: 8,
                     offset: const Offset(0, 2)),
               ],
@@ -374,7 +374,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
                     width: 42,
                     height: 42,
                     decoration: BoxDecoration(
-                      color: AppColors.success.withOpacity(0.1),
+                      color: AppColors.success.withValues(alpha:0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: const Icon(Icons.call_rounded,
@@ -443,7 +443,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
             ? null
             : [
                 BoxShadow(
-                    color: Colors.black.withOpacity(0.04),
+                    color: Colors.black.withValues(alpha:0.04),
                     blurRadius: 8,
                     offset: const Offset(0, 2)),
               ],
@@ -699,7 +699,7 @@ class _TimelineStep extends StatelessWidget {
             boxShadow: [
               BoxShadow(
                 color: AppColors.primary
-                    .withOpacity(0.3 + pulseCtrl.value * 0.2),
+                    .withValues(alpha:0.3 + pulseCtrl.value * 0.2),
                 blurRadius: 12,
                 spreadRadius: 2,
               ),
@@ -801,7 +801,7 @@ class _BookingDetailRow extends StatelessWidget {
           width: 36,
           height: 36,
           decoration: BoxDecoration(
-            color: item.color.withOpacity(0.1),
+            color: item.color.withValues(alpha:0.1),
             borderRadius: BorderRadius.circular(10),
           ),
           child: Icon(item.icon, size: 18, color: item.color),
@@ -855,7 +855,7 @@ class _ActionButton extends StatelessWidget {
               label: Text(label),
               style: OutlinedButton.styleFrom(
                 foregroundColor: color,
-                side: BorderSide(color: color.withOpacity(0.6)),
+                side: BorderSide(color: color.withValues(alpha:0.6)),
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 textStyle: const TextStyle(
                     fontFamily: 'Poppins',
@@ -898,7 +898,7 @@ class _AppBarChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.2),
+        color: Colors.white.withValues(alpha:0.2),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
@@ -949,11 +949,11 @@ class _LiveStatusDot extends StatelessWidget {
         width: 7,
         height: 7,
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.5 + pulse.value * 0.5),
+          color: Colors.white.withValues(alpha:0.5 + pulse.value * 0.5),
           shape: BoxShape.circle,
           boxShadow: [
             BoxShadow(
-              color: Colors.white.withOpacity(pulse.value * 0.4),
+              color: Colors.white.withValues(alpha:pulse.value * 0.4),
               blurRadius: 4,
               spreadRadius: 1,
             ),
@@ -1107,7 +1107,7 @@ class _SupportChatSheetState extends State<_SupportChatSheet> {
                   width: 38,
                   height: 38,
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.1),
+                    color: AppColors.primary.withValues(alpha:0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: const Icon(Icons.headset_mic_rounded,
@@ -1157,7 +1157,7 @@ class _SupportChatSheetState extends State<_SupportChatSheet> {
                           width: 60,
                           height: 60,
                           decoration: BoxDecoration(
-                            color: AppColors.primary.withOpacity(0.08),
+                            color: AppColors.primary.withValues(alpha:0.08),
                             shape: BoxShape.circle,
                           ),
                           child: const Icon(Icons.headset_mic_rounded,
@@ -1199,7 +1199,7 @@ class _SupportChatSheetState extends State<_SupportChatSheet> {
                               width: 28,
                               height: 28,
                               decoration: BoxDecoration(
-                                color: AppColors.primary.withOpacity(0.1),
+                                color: AppColors.primary.withValues(alpha:0.1),
                                 shape: BoxShape.circle,
                               ),
                               child: const Icon(Icons.support_agent_rounded,
@@ -1248,7 +1248,7 @@ class _SupportChatSheetState extends State<_SupportChatSheet> {
               color: Colors.white,
               boxShadow: [
                 BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
+                    color: Colors.black.withValues(alpha:0.05),
                     blurRadius: 8,
                     offset: const Offset(0, -2)),
               ],

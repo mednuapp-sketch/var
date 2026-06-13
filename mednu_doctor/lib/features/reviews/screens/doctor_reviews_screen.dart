@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
+import '../../../core/widgets/ux_widgets.dart';
 
 class DoctorReviewsScreen extends StatefulWidget {
   const DoctorReviewsScreen({super.key});
@@ -62,7 +63,7 @@ class _DoctorReviewsScreenState extends State<DoctorReviewsScreen> {
                         height: 110,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: Colors.white.withOpacity(0.06),
+                          color: Colors.white.withValues(alpha:0.06),
                         ),
                       ),
                     ),
@@ -75,7 +76,7 @@ class _DoctorReviewsScreenState extends State<DoctorReviewsScreen> {
                               width: 40,
                               height: 40,
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.18),
+                                color: Colors.white.withValues(alpha:0.18),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: const Icon(Icons.star_rounded,
@@ -142,7 +143,7 @@ class _DoctorReviewsScreenState extends State<DoctorReviewsScreen> {
                     borderRadius: BorderRadius.circular(20),
                     boxShadow: [
                       BoxShadow(
-                        color: AppColors.primary.withOpacity(0.3),
+                        color: AppColors.primary.withValues(alpha:0.3),
                         blurRadius: 16,
                         offset: const Offset(0, 6),
                       ),
@@ -166,7 +167,7 @@ class _DoctorReviewsScreenState extends State<DoctorReviewsScreen> {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 10, vertical: 4),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.15),
+                            color: Colors.white.withValues(alpha:0.15),
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Row(
@@ -236,7 +237,7 @@ class _DoctorReviewsScreenState extends State<DoctorReviewsScreen> {
                                               value: fraction,
                                               minHeight: 5,
                                               backgroundColor:
-                                                  Colors.white.withOpacity(0.2),
+                                                  Colors.white.withValues(alpha:0.2),
                                               valueColor:
                                                   const AlwaysStoppedAnimation<
                                                       Color>(Colors.white),
@@ -284,11 +285,11 @@ class _DoctorReviewsScreenState extends State<DoctorReviewsScreen> {
             stream: _reviewsStream,
             builder: (context, snap) {
               if (snap.connectionState == ConnectionState.waiting) {
-                return const SliverToBoxAdapter(
-                  child: Center(
-                      child: Padding(
-                          padding: EdgeInsets.all(32),
-                          child: CircularProgressIndicator())),
+                return SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (_, __) => const SkeletonListTile(),
+                    childCount: 5,
+                  ),
                 );
               }
 
@@ -346,7 +347,7 @@ class _DoctorReviewsScreenState extends State<DoctorReviewsScreen> {
                               Border.all(color: const Color(0xFFF5F5F5)),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.04),
+                              color: Colors.black.withValues(alpha:0.04),
                               blurRadius: 8,
                               offset: const Offset(0, 2),
                             ),
@@ -361,7 +362,7 @@ class _DoctorReviewsScreenState extends State<DoctorReviewsScreen> {
                                 height: 40,
                                 decoration: BoxDecoration(
                                   color:
-                                      AppColors.primary.withOpacity(0.1),
+                                      AppColors.primary.withValues(alpha:0.1),
                                   shape: BoxShape.circle,
                                 ),
                                 child: Center(
@@ -392,7 +393,7 @@ class _DoctorReviewsScreenState extends State<DoctorReviewsScreen> {
                                             horizontal: 6, vertical: 2),
                                         decoration: BoxDecoration(
                                           color: AppColors.accent
-                                              .withOpacity(0.1),
+                                              .withValues(alpha:0.1),
                                           borderRadius:
                                               BorderRadius.circular(4),
                                         ),
@@ -462,7 +463,7 @@ class _DoctorReviewsScreenState extends State<DoctorReviewsScreen> {
                                     horizontal: 8, vertical: 3),
                                 decoration: BoxDecoration(
                                   color:
-                                      AppColors.primary.withOpacity(0.07),
+                                      AppColors.primary.withValues(alpha:0.07),
                                   borderRadius: BorderRadius.circular(6),
                                 ),
                                 child: Text(consultationType,
@@ -514,9 +515,9 @@ class _DoctorReviewsScreenState extends State<DoctorReviewsScreen> {
             padding:
                 const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-              color: Colors.amber.withOpacity(0.08),
+              color: Colors.amber.withValues(alpha:0.08),
               borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: Colors.amber.withOpacity(0.3)),
+              border: Border.all(color: Colors.amber.withValues(alpha:0.3)),
             ),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
               Text(label,

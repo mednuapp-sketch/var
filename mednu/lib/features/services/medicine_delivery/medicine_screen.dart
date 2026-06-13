@@ -4,21 +4,24 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
+import '../../home/providers/location_provider.dart';
+import '../../location/screens/map_location_picker_screen.dart';
 
-class MedicineScreen extends StatefulWidget {
+class MedicineScreen extends ConsumerStatefulWidget {
   final List<Map<String, dynamic>>? prescriptionMedicines;
   const MedicineScreen({super.key, this.prescriptionMedicines});
 
   @override
-  State<MedicineScreen> createState() => _MedicineScreenState();
+  ConsumerState<MedicineScreen> createState() => _MedicineScreenState();
 }
 
-class _MedicineScreenState extends State<MedicineScreen> {
+class _MedicineScreenState extends ConsumerState<MedicineScreen> {
   // Firestore-loaded catalogue
   List<Map<String, dynamic>> _catalogue = [];
   bool _catalogueLoading = true;
@@ -227,7 +230,7 @@ class _MedicineScreenState extends State<MedicineScreen> {
                 const Spacer(),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(color: const Color(0xFF2E7D32).withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                  decoration: BoxDecoration(color: const Color(0xFF2E7D32).withValues(alpha:0.1), borderRadius: BorderRadius.circular(8)),
                   child: Text('${items.length} item${items.length > 1 ? 's' : ''}', style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF2E7D32))),
                 ),
               ]),
@@ -242,7 +245,7 @@ class _MedicineScreenState extends State<MedicineScreen> {
                   return Padding(
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     child: Row(children: [
-                      Container(width: 44, height: 44, decoration: BoxDecoration(color: const Color(0xFF2E7D32).withOpacity(0.1), borderRadius: BorderRadius.circular(10)), child: const Icon(Icons.medication_rounded, color: Color(0xFF2E7D32), size: 24)),
+                      Container(width: 44, height: 44, decoration: BoxDecoration(color: const Color(0xFF2E7D32).withValues(alpha:0.1), borderRadius: BorderRadius.circular(10)), child: const Icon(Icons.medication_rounded, color: Color(0xFF2E7D32), size: 24)),
                       const SizedBox(width: 12),
                       Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                         Text(m['name'] as String, style: AppTextStyles.labelLarge),
@@ -298,7 +301,11 @@ class _MedicineScreenState extends State<MedicineScreen> {
                           'items':           cartItems,
                           'total':           total,
                           'status':          'confirmed',
-                          'deliveryAddress': address,
+                          'deliveryAddress': address['address'],
+                          'deliveryName':    address['name'],
+                          'deliveryPhone':   address['phone'],
+                          if (address['lat'] != null) 'lat': address['lat'],
+                          if (address['lng'] != null) 'lng': address['lng'],
                           'createdAt':       FieldValue.serverTimestamp(),
                         };
                         if (uid.isNotEmpty) {
@@ -328,53 +335,186 @@ class _MedicineScreenState extends State<MedicineScreen> {
     );
   }
 
-  Future<Map<String, String>?> _collectDeliveryAddress(BuildContext ctx) async {
+  Future<Map<String, dynamic>?> _collectDeliveryAddress(BuildContext ctx) async {
     final nameCtrl    = TextEditingController();
     final phoneCtrl   = TextEditingController();
     final addressCtrl = TextEditingController();
+    double? deliveryLat;
+    double? deliveryLng;
+
     final uid = FirebaseAuth.instance.currentUser?.uid;
+
+    // Pre-fill from locationProvider (shared service)
+    final locState = ref.read(locationProvider);
+    if (locState.hasCoordinates) {
+      final precise = locState.preciseAddress;
+      addressCtrl.text = precise?.formatted ?? locState.fullAddress;
+      deliveryLat = locState.lat;
+      deliveryLng = locState.lng;
+    }
+
+    // Also load name/phone from Firestore
     if (uid != null) {
       try {
-        final snap = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+        final snap = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(uid)
+            .get();
         final data = snap.data();
         if (data != null) {
-          nameCtrl.text    = data['name']    as String? ?? '';
-          phoneCtrl.text   = data['phone']   as String? ?? '';
-          final savedAddr  = data['deliveryAddress'] as String? ?? '';
-          if (savedAddr.isNotEmpty) addressCtrl.text = savedAddr;
+          nameCtrl.text  = data['name']  as String? ?? '';
+          phoneCtrl.text = data['phone'] as String? ?? '';
+          // Only override address if locationProvider had nothing
+          if (addressCtrl.text.isEmpty) {
+            addressCtrl.text =
+                data['deliveryAddress'] as String? ?? '';
+          }
         }
       } catch (_) {}
     }
-    return showDialog<Map<String, String>>(
+
+    if (!ctx.mounted) return null;
+
+    return showDialog<Map<String, dynamic>>(
       context: ctx,
-      builder: (dCtx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Delivery Details', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 16)),
-        content: SingleChildScrollView(
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            TextField(controller: nameCtrl, decoration: InputDecoration(labelText: 'Full Name', prefixIcon: const Icon(Icons.person_outline_rounded), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12)), style: const TextStyle(fontFamily: 'Poppins', fontSize: 13)),
-            const SizedBox(height: 12),
-            TextField(controller: phoneCtrl, keyboardType: TextInputType.phone, decoration: InputDecoration(labelText: 'Phone Number', prefixIcon: const Icon(Icons.phone_outlined), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12)), style: const TextStyle(fontFamily: 'Poppins', fontSize: 13)),
-            const SizedBox(height: 12),
-            TextField(controller: addressCtrl, maxLines: 2, decoration: InputDecoration(labelText: 'Delivery Address', prefixIcon: const Icon(Icons.location_on_outlined), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)), contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12)), style: const TextStyle(fontFamily: 'Poppins', fontSize: 13)),
-          ]),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(dCtx), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () {
-              final name  = nameCtrl.text.trim();
-              final phone = phoneCtrl.text.trim();
-              final addr  = addressCtrl.text.trim();
-              if (name.isEmpty || phone.isEmpty || addr.isEmpty) return;
-              if (uid != null) {
-                FirebaseFirestore.instance.collection('users').doc(uid).update({'deliveryAddress': addr}).catchError((_) {});
-              }
-              Navigator.pop(dCtx, {'name': name, 'phone': phone, 'address': addr});
-            },
-            child: const Text('Confirm'),
+      builder: (dCtx) => StatefulBuilder(
+        builder: (dCtx, setDState) => AlertDialog(
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20)),
+          title: const Text(
+            'Delivery Details',
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontWeight: FontWeight.w700,
+              fontSize: 16,
+            ),
           ),
-        ],
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameCtrl,
+                  decoration: InputDecoration(
+                    labelText: 'Full Name',
+                    prefixIcon:
+                        const Icon(Icons.person_outline_rounded),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 12),
+                  ),
+                  style: const TextStyle(
+                      fontFamily: 'Poppins', fontSize: 13),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: phoneCtrl,
+                  keyboardType: TextInputType.phone,
+                  decoration: InputDecoration(
+                    labelText: 'Phone Number',
+                    prefixIcon:
+                        const Icon(Icons.phone_outlined),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 12),
+                  ),
+                  style: const TextStyle(
+                      fontFamily: 'Poppins', fontSize: 13),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: addressCtrl,
+                  maxLines: 2,
+                  decoration: InputDecoration(
+                    labelText: 'Delivery Address',
+                    prefixIcon:
+                        const Icon(Icons.location_on_outlined),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 12),
+                  ),
+                  style: const TextStyle(
+                      fontFamily: 'Poppins', fontSize: 13),
+                ),
+                const SizedBox(height: 10),
+                // Map picker shortcut
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    final locS = ref.read(locationProvider);
+                    final picked =
+                        await Navigator.push<PreciseAddress>(
+                      dCtx,
+                      MaterialPageRoute(
+                        builder: (_) => MapLocationPickerScreen(
+                          initialLat: locS.lat,
+                          initialLng: locS.lng,
+                        ),
+                      ),
+                    );
+                    if (picked != null) {
+                      setDState(() {
+                        addressCtrl.text = picked.formatted;
+                        deliveryLat = picked.lat;
+                        deliveryLng = picked.lng;
+                      });
+                    }
+                  },
+                  icon: const Icon(Icons.map_outlined, size: 16),
+                  label: const Text(
+                    'Pick on Map',
+                    style: TextStyle(
+                        fontFamily: 'Poppins', fontSize: 13),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.primary,
+                    side: BorderSide(
+                        color: AppColors.primary.withValues(alpha: 0.4)),
+                    minimumSize: const Size(double.infinity, 40),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dCtx),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final name  = nameCtrl.text.trim();
+                final phone = phoneCtrl.text.trim();
+                final addr  = addressCtrl.text.trim();
+                if (name.isEmpty || phone.isEmpty || addr.isEmpty) {
+                  return;
+                }
+                if (uid != null) {
+                  FirebaseFirestore.instance
+                      .collection('users')
+                      .doc(uid)
+                      .update({'deliveryAddress': addr})
+                      .catchError((_) {});
+                }
+                Navigator.pop(dCtx, {
+                  'name': name,
+                  'phone': phone,
+                  'address': addr,
+                  if (deliveryLat != null) 'lat': deliveryLat,
+                  if (deliveryLng != null) 'lng': deliveryLng,
+                });
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+              ),
+              child: const Text('Confirm'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -428,12 +568,12 @@ class _MedicineScreenState extends State<MedicineScreen> {
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(colors: [Color(0xFFE3F2FD), Color(0xFFE8F5E9)]),
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFF2E7D32).withOpacity(0.3)),
+                    border: Border.all(color: const Color(0xFF2E7D32).withValues(alpha:0.3)),
                   ),
                   child: Row(children: [
                     _prescriptionImage != null
                         ? ClipRRect(borderRadius: BorderRadius.circular(10), child: Image.file(_prescriptionImage!, width: 56, height: 56, fit: BoxFit.cover))
-                        : Container(width: 56, height: 56, decoration: BoxDecoration(color: const Color(0xFF2E7D32).withOpacity(0.1), borderRadius: BorderRadius.circular(12)), child: const Icon(Icons.upload_file_rounded, color: Color(0xFF2E7D32), size: 30)),
+                        : Container(width: 56, height: 56, decoration: BoxDecoration(color: const Color(0xFF2E7D32).withValues(alpha:0.1), borderRadius: BorderRadius.circular(12)), child: const Icon(Icons.upload_file_rounded, color: Color(0xFF2E7D32), size: 30)),
                     const SizedBox(width: 12),
                     Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       Text(
@@ -469,8 +609,8 @@ class _MedicineScreenState extends State<MedicineScreen> {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFF2E7D32).withOpacity(0.35)),
-                    boxShadow: [BoxShadow(color: const Color(0xFF2E7D32).withOpacity(0.06), blurRadius: 12, offset: const Offset(0, 4))],
+                    border: Border.all(color: const Color(0xFF2E7D32).withValues(alpha:0.35)),
+                    boxShadow: [BoxShadow(color: const Color(0xFF2E7D32).withValues(alpha:0.06), blurRadius: 12, offset: const Offset(0, 4))],
                   ),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Row(children: [
@@ -585,7 +725,7 @@ class _MedicineScreenState extends State<MedicineScreen> {
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 30),
               decoration: BoxDecoration(
                 color: Colors.white,
-                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 16, offset: const Offset(0, -4))],
+                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:0.08), blurRadius: 16, offset: const Offset(0, -4))],
               ),
               child: ElevatedButton(
                 onPressed: _showCart,
@@ -596,7 +736,7 @@ class _MedicineScreenState extends State<MedicineScreen> {
                 child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(8)),
+                    decoration: BoxDecoration(color: Colors.white.withValues(alpha:0.2), borderRadius: BorderRadius.circular(8)),
                     child: Text('$_cartCount item${_cartCount > 1 ? 's' : ''}', style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: Colors.white)),
                   ),
                   Row(children: [
@@ -674,9 +814,9 @@ class _UploadOption extends StatelessWidget {
     child: Container(
       padding: const EdgeInsets.symmetric(vertical: 22),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.07),
+        color: color.withValues(alpha:0.07),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withValues(alpha:0.3)),
       ),
       child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
         Icon(icon, color: color, size: 32),
@@ -713,13 +853,13 @@ class _MedicineCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: inCart ? const Color(0xFF2E7D32).withOpacity(0.4) : AppColors.divider),
-        boxShadow: inCart ? [BoxShadow(color: const Color(0xFF2E7D32).withOpacity(0.08), blurRadius: 8, offset: const Offset(0, 2))] : null,
+        border: Border.all(color: inCart ? const Color(0xFF2E7D32).withValues(alpha:0.4) : AppColors.divider),
+        boxShadow: inCart ? [BoxShadow(color: const Color(0xFF2E7D32).withValues(alpha:0.08), blurRadius: 8, offset: const Offset(0, 2))] : null,
       ),
       child: Row(children: [
         Container(
           width: 52, height: 52,
-          decoration: BoxDecoration(color: const Color(0xFF2E7D32).withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+          decoration: BoxDecoration(color: const Color(0xFF2E7D32).withValues(alpha:0.1), borderRadius: BorderRadius.circular(12)),
           child: const Icon(Icons.medication_rounded, color: Color(0xFF2E7D32), size: 28),
         ),
         const SizedBox(width: 12),
@@ -729,7 +869,7 @@ class _MedicineCard extends StatelessWidget {
             if (needsRx)
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(color: Colors.orange.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
+                decoration: BoxDecoration(color: Colors.orange.withValues(alpha:0.1), borderRadius: BorderRadius.circular(6)),
                 child: const Text('Rx', style: TextStyle(fontFamily: 'Poppins', fontSize: 9, fontWeight: FontWeight.w800, color: Colors.orange)),
               ),
           ]),
@@ -743,7 +883,7 @@ class _MedicineCard extends StatelessWidget {
               const SizedBox(width: 6),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(color: const Color(0xFF2E7D32).withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
+                decoration: BoxDecoration(color: const Color(0xFF2E7D32).withValues(alpha:0.1), borderRadius: BorderRadius.circular(6)),
                 child: Text('$discount% OFF', style: const TextStyle(fontFamily: 'Poppins', fontSize: 9, fontWeight: FontWeight.w700, color: Color(0xFF2E7D32))),
               ),
             ],

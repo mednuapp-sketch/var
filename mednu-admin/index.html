@@ -801,6 +801,9 @@
               <small>JPG, PNG, WebP · Max 5 MB · Recommended 1200 × 628 px</small>
             </div>
             <img id="banner-preview-img" style="display:none;" alt="Banner preview" />
+            <button type="button" id="banner-remove-img" class="banner-remove-img-btn" style="display:none;" onclick="removeBannerImage(event)" title="Remove image">
+              <i class="ti ti-x"></i>
+            </button>
           </div>
           <input type="file" id="banner-file-input" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none;" onchange="previewBannerImage(event)" />
 

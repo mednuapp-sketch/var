@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../auth/services/doctor_auth_service.dart';
+import '../../../core/widgets/ux_widgets.dart';
 
 class SpecializationChangeRequestScreen extends StatefulWidget {
   const SpecializationChangeRequestScreen({super.key});
@@ -305,7 +306,8 @@ class _SpecializationChangeRequestScreenState
         ),
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? SingleChildScrollView(physics: const NeverScrollableScrollPhysics(), padding: const EdgeInsets.all(16),
+              child: Column(children: List.generate(5, (_) => const Padding(padding: EdgeInsets.only(bottom: 16), child: SkeletonBox(width: double.infinity, height: 60, radius: 14)))))
           : _existingRequest != null
               ? _buildStatusView()
               : _buildRequestForm(),
@@ -341,7 +343,7 @@ class _SpecializationChangeRequestScreenState
           decoration: BoxDecoration(
             color: bg,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: color.withOpacity(0.3)),
+            border: Border.all(color: color.withValues(alpha:0.3)),
           ),
           child: Column(
             children: [
@@ -353,7 +355,7 @@ class _SpecializationChangeRequestScreenState
               const SizedBox(height: 6),
               Text('Your specialization change request is $label.'.toLowerCase(),
                   style: TextStyle(fontFamily: 'Poppins', fontSize: 13,
-                      color: color.withOpacity(0.8)),
+                      color: color.withValues(alpha:0.8)),
                   textAlign: TextAlign.center),
             ],
           ),
@@ -461,7 +463,7 @@ class _SpecializationChangeRequestScreenState
             Container(
               width: 44, height: 44,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
+                color: Colors.white.withValues(alpha:0.2),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: const Icon(Icons.verified_user_rounded, color: Colors.white, size: 22),
@@ -475,7 +477,7 @@ class _SpecializationChangeRequestScreenState
                         fontWeight: FontWeight.w700, color: Colors.white)),
                 Text('Specialization changes require admin approval and document verification.',
                     style: TextStyle(fontFamily: 'Poppins', fontSize: 11,
-                        color: Colors.white.withOpacity(0.85))),
+                        color: Colors.white.withValues(alpha:0.85))),
               ],
             )),
           ]),
@@ -501,7 +503,7 @@ class _SpecializationChangeRequestScreenState
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: AppColors.success.withOpacity(0.12),
+                  color: AppColors.success.withValues(alpha:0.12),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text('Active',
@@ -562,10 +564,10 @@ class _SpecializationChangeRequestScreenState
             child: Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                border: Border.all(color: AppColors.primary.withOpacity(0.4), width: 1.5,
+                border: Border.all(color: AppColors.primary.withValues(alpha:0.4), width: 1.5,
                     style: BorderStyle.solid),
                 borderRadius: BorderRadius.circular(12),
-                color: AppColors.primary.withOpacity(0.04),
+                color: AppColors.primary.withValues(alpha:0.04),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -594,9 +596,9 @@ class _SpecializationChangeRequestScreenState
         Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: AppColors.warning.withOpacity(0.08),
+            color: AppColors.warning.withValues(alpha:0.08),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.warning.withOpacity(0.25)),
+            border: Border.all(color: AppColors.warning.withValues(alpha:0.25)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -639,7 +641,7 @@ class _SpecializationChangeRequestScreenState
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primary,
               foregroundColor: Colors.white,
-              disabledBackgroundColor: AppColors.primary.withOpacity(0.4),
+              disabledBackgroundColor: AppColors.primary.withValues(alpha:0.4),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
               elevation: 0,
             ),
@@ -767,12 +769,12 @@ class _DocumentTile extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: hasError
-            ? AppColors.error.withOpacity(0.05)
+            ? AppColors.error.withValues(alpha:0.05)
             : AppColors.background,
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
           color: hasError
-              ? AppColors.error.withOpacity(0.3)
+              ? AppColors.error.withValues(alpha:0.3)
               : AppColors.border,
         ),
       ),
@@ -872,14 +874,14 @@ class _PickerOption extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
-            color: color.withOpacity(0.05),
+            color: color.withValues(alpha:0.05),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Row(children: [
             Container(
               width: 40, height: 40,
               decoration: BoxDecoration(
-                color: color.withOpacity(0.12),
+                color: color.withValues(alpha:0.12),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(icon, color: color, size: 20),

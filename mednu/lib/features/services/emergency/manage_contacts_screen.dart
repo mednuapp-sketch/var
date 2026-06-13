@@ -270,10 +270,10 @@ class _ManageContactsScreenState extends State<ManageContactsScreen> {
                     Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFE53935).withOpacity(0.08),
+                        color: const Color(0xFFE53935).withValues(alpha:0.08),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                            color: const Color(0xFFE53935).withOpacity(0.3)),
+                            color: const Color(0xFFE53935).withValues(alpha:0.3)),
                       ),
                       child: const Row(children: [
                         Icon(Icons.info_outline_rounded,
@@ -321,7 +321,7 @@ class _ManageContactsScreenState extends State<ManageContactsScreen> {
                 width: 100,
                 height: 100,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFE53935).withOpacity(0.1),
+                  color: const Color(0xFFE53935).withValues(alpha:0.1),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(Icons.contacts_rounded,
@@ -423,7 +423,7 @@ class _OptionTile extends StatelessWidget {
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
+                  color: color.withValues(alpha:0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(icon, color: color, size: 22),
@@ -471,7 +471,7 @@ class _ContactTile extends StatelessWidget {
           borderRadius: BorderRadius.circular(14),
           boxShadow: [
             BoxShadow(
-                color: Colors.black.withOpacity(0.05),
+                color: Colors.black.withValues(alpha:0.05),
                 blurRadius: 8,
                 offset: const Offset(0, 2))
           ],
@@ -480,7 +480,7 @@ class _ContactTile extends StatelessWidget {
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
           leading: CircleAvatar(
-            backgroundColor: const Color(0xFFE53935).withOpacity(0.12),
+            backgroundColor: const Color(0xFFE53935).withValues(alpha:0.12),
             child: Text(
               contact.name.isNotEmpty ? contact.name[0].toUpperCase() : '?',
               style: const TextStyle(

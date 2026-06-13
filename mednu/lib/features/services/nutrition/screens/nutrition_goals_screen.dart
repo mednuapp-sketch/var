@@ -228,7 +228,7 @@ class _GoalOptionTile extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: isSelected ? color.withOpacity(0.06) : Colors.white,
+          color: isSelected ? color.withValues(alpha:0.06) : Colors.white,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: isSelected ? color : AppColors.border, width: isSelected ? 1.5 : 1),
         ),
@@ -237,7 +237,7 @@ class _GoalOptionTile extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: isSelected ? color : color.withOpacity(0.08),
+                color: isSelected ? color : color.withValues(alpha:0.08),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(icon, color: isSelected ? Colors.white : color, size: 22),
@@ -303,9 +303,9 @@ class _MacroPreviewCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.04),
+        color: color.withValues(alpha:0.04),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withOpacity(0.2)),
+        border: Border.all(color: color.withValues(alpha:0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

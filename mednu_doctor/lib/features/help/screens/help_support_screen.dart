@@ -96,7 +96,7 @@ class HelpSupportScreen extends StatelessWidget {
               width: double.infinity,
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.06),
+                color: AppColors.primary.withValues(alpha:0.06),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
@@ -162,7 +162,7 @@ class HelpSupportScreen extends StatelessWidget {
                         height: 110,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: Colors.white.withOpacity(0.06),
+                          color: Colors.white.withValues(alpha:0.06),
                         ),
                       ),
                     ),
@@ -175,10 +175,10 @@ class HelpSupportScreen extends StatelessWidget {
                               width: 48,
                               height: 48,
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.18),
+                                color: Colors.white.withValues(alpha:0.18),
                                 shape: BoxShape.circle,
                                 border: Border.all(
-                                    color: Colors.white.withOpacity(0.3),
+                                    color: Colors.white.withValues(alpha:0.3),
                                     width: 1.5),
                               ),
                               child: const Icon(Icons.support_agent_rounded,
@@ -267,10 +267,10 @@ class HelpSupportScreen extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: AppColors.error.withOpacity(0.05),
+                    color: AppColors.error.withValues(alpha:0.05),
                     borderRadius: BorderRadius.circular(16),
                     border:
-                        Border.all(color: AppColors.error.withOpacity(0.2)),
+                        Border.all(color: AppColors.error.withValues(alpha:0.2)),
                   ),
                   child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -345,7 +345,7 @@ class _ContactCard extends StatelessWidget {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
+                  color: color.withValues(alpha:0.1),
                   borderRadius: BorderRadius.circular(12)),
               child: Icon(icon, color: color, size: 22),
             ),
@@ -357,7 +357,7 @@ class _ContactCard extends StatelessWidget {
                   Text(title, style: AppTextStyles.labelLarge),
                   Text(subtitle, style: AppTextStyles.bodySmall),
                 ])),
-            Icon(Icons.chevron_right_rounded, color: color.withOpacity(0.5)),
+            Icon(Icons.chevron_right_rounded, color: color.withValues(alpha:0.5)),
           ]),
         ),
       );
@@ -383,7 +383,7 @@ class _FaqTileState extends State<_FaqTile> {
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
               color: _expanded
-                  ? AppColors.primary.withOpacity(0.3)
+                  ? AppColors.primary.withValues(alpha:0.3)
                   : AppColors.divider),
         ),
         child: Column(children: [
@@ -396,7 +396,7 @@ class _FaqTileState extends State<_FaqTile> {
                   width: 28,
                   height: 28,
                   decoration: BoxDecoration(
-                      color: AppColors.primary.withOpacity(0.1),
+                      color: AppColors.primary.withValues(alpha:0.1),
                       shape: BoxShape.circle),
                   child: const Center(
                       child: Text('?',

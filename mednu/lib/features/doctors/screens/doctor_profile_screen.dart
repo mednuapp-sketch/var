@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -8,6 +9,7 @@ import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/widgets/ux_widgets.dart';
 import '../data/doctors_data.dart';
 import '../models/doctor_review.dart';
 import '../services/review_service.dart';
@@ -267,6 +269,20 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
       final slot      = _selectedSlot!;
       final db        = FirebaseFirestore.instance;
 
+      // Resolve patient name from Firestore so it stays consistent
+      // with whatever the user set in their profile (auth displayName
+      // is only set at Google sign-in and never updated by us).
+      String patientName;
+      try {
+        final userSnap = await db.collection('users').doc(uid).get();
+        final fsName = (userSnap.data()?['name'] as String?)?.trim() ?? '';
+        patientName = fsName.isNotEmpty
+            ? fsName
+            : patient?.displayName ?? patient?.phoneNumber ?? 'Patient';
+      } catch (_) {
+        patientName = patient?.displayName ?? patient?.phoneNumber ?? 'Patient';
+      }
+
       // Pre-flight: check if slot is already booked (uses the existing
       // `allow list: if isAuth()` rule — no separate collection needed).
       final existing = await db.collection('appointments')
@@ -288,7 +304,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
         'doctorName':        doc.name,
         'doctorSpecialty':   doc.spec,
         'patientId':         uid,
-        'patientName':       patient?.displayName ?? patient?.phoneNumber ?? 'Patient',
+        'patientName':       patientName,
         'date':              dateKey,
         'time':              slot,
         'consultationType':  _consultationType,
@@ -345,7 +361,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                   begin: Alignment.topLeft, end: Alignment.bottomRight,
                 ),
                 shape: BoxShape.circle,
-                boxShadow: [BoxShadow(color: const Color(0xFF4CAF50).withOpacity(0.3), blurRadius: 16, offset: const Offset(0, 6))],
+                boxShadow: [BoxShadow(color: const Color(0xFF4CAF50).withValues(alpha:0.3), blurRadius: 16, offset: const Offset(0, 6))],
               ),
               child: const Icon(Icons.check_rounded, color: Colors.white, size: 36),
             ),
@@ -380,7 +396,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                 decoration: BoxDecoration(
                   gradient: AppColors.primaryGradient,
                   borderRadius: BorderRadius.circular(14),
-                  boxShadow: [BoxShadow(color: AppColors.primary.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 5))],
+                  boxShadow: [BoxShadow(color: AppColors.primary.withValues(alpha:0.3), blurRadius: 12, offset: const Offset(0, 5))],
                 ),
                 child: ElevatedButton(
                   onPressed: () { Navigator.pop(ctx); context.go(AppRoutes.appointment); },
@@ -514,7 +530,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
       leading: Container(
         margin: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.2),
+          color: Colors.white.withValues(alpha:0.2),
           borderRadius: BorderRadius.circular(12),
         ),
         child: IconButton(
@@ -526,7 +542,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
         Container(
           margin: const EdgeInsets.only(right: 4, top: 8, bottom: 8),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.2),
+            color: Colors.white.withValues(alpha:0.2),
             borderRadius: BorderRadius.circular(12),
           ),
           child: _loadingFav
@@ -546,7 +562,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
         Container(
           margin: const EdgeInsets.only(right: 12, top: 8, bottom: 8),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.2),
+            color: Colors.white.withValues(alpha:0.2),
             borderRadius: BorderRadius.circular(12),
           ),
           child: IconButton(
@@ -564,13 +580,13 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
               // Decorative circles
               Positioned(top: -50, right: -50,
                 child: Container(width: 200, height: 200, decoration: BoxDecoration(
-                  shape: BoxShape.circle, color: Colors.white.withOpacity(0.06)))),
+                  shape: BoxShape.circle, color: Colors.white.withValues(alpha:0.06)))),
               Positioned(bottom: -20, left: -40,
                 child: Container(width: 140, height: 140, decoration: BoxDecoration(
-                  shape: BoxShape.circle, color: Colors.white.withOpacity(0.05)))),
+                  shape: BoxShape.circle, color: Colors.white.withValues(alpha:0.05)))),
               Positioned(top: 80, right: 30,
                 child: Container(width: 60, height: 60, decoration: BoxDecoration(
-                  shape: BoxShape.circle, color: Colors.white.withOpacity(0.04)))),
+                  shape: BoxShape.circle, color: Colors.white.withValues(alpha:0.04)))),
 
               SafeArea(
                 child: Padding(
@@ -594,20 +610,22 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                                 begin: Alignment.topLeft, end: Alignment.bottomRight,
                               ),
                               boxShadow: [BoxShadow(
-                                color: Colors.black.withOpacity(0.2),
+                                color: Colors.black.withValues(alpha:0.2),
                                 blurRadius: 20, offset: const Offset(0, 8),
                               )],
                             ),
                             padding: const EdgeInsets.all(3),
                             child: ClipOval(
                               child: doc.img.isNotEmpty
-                                  ? Image.network(doc.img, width: 104, height: 104, fit: BoxFit.cover,
-                                      errorBuilder: (_, __, ___) => Container(
-                                        color: AppColors.primary.withOpacity(0.1),
+                                  ? CachedNetworkImage(
+                                      imageUrl: doc.img, width: 104, height: 104, fit: BoxFit.cover,
+                                      placeholder: (_, __) => const SkeletonCircle(size: 104),
+                                      errorWidget: (_, __, ___) => Container(
+                                        color: AppColors.primary.withValues(alpha:0.1),
                                         child: const Icon(Icons.person_rounded, size: 58, color: AppColors.primary),
                                       ))
                                   : Container(
-                                      color: Colors.white.withOpacity(0.15),
+                                      color: Colors.white.withValues(alpha:0.15),
                                       child: const Icon(Icons.person_rounded, size: 58, color: Colors.white),
                                     ),
                             ),
@@ -621,7 +639,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                                 color: const Color(0xFF1565C0),
                                 shape: BoxShape.circle,
                                 border: Border.all(color: Colors.white, width: 2),
-                                boxShadow: [BoxShadow(color: const Color(0xFF1565C0).withOpacity(0.4), blurRadius: 8)],
+                                boxShadow: [BoxShadow(color: const Color(0xFF1565C0).withValues(alpha:0.4), blurRadius: 8)],
                               ),
                               child: const Icon(Icons.verified_rounded, color: Colors.white, size: 14),
                             ),
@@ -695,57 +713,60 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
       children: [
         _PremiumSectionTitle('Consultation Type', Icons.medical_services_rounded, AppColors.primary),
         const SizedBox(height: 14),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          physics: const BouncingScrollPhysics(),
-          child: Row(
-            children: _supportedModes.map((t) {
-              final meta = _kConsultMeta[t] ?? _kConsultMeta['Video']!;
-              final sel = _consultationType == t;
-              final iconData = meta['icon'] as IconData;
-              final color = meta['color'] as Color;
-              final label = meta['label'] as String;
-              return GestureDetector(
-                onTap: () => setState(() => _consultationType = t),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  margin: const EdgeInsets.only(right: 10),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    gradient: sel ? AppColors.primaryGradient : null,
-                    color: sel ? null : Colors.white,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: sel ? Colors.transparent : const Color(0xFFE5E7EB),
-                      width: 1.5,
-                    ),
-                    boxShadow: sel
-                      ? [BoxShadow(color: AppColors.primary.withOpacity(0.28), blurRadius: 14, offset: const Offset(0, 5))]
-                      : [const BoxShadow(color: Color(0x08000000), blurRadius: 8, offset: Offset(0, 2))],
+        GridView.count(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisCount: 2,
+          childAspectRatio: 2.9,
+          crossAxisSpacing: 10,
+          mainAxisSpacing: 10,
+          children: _supportedModes.map((t) {
+            final meta = _kConsultMeta[t] ?? _kConsultMeta['Video']!;
+            final sel = _consultationType == t;
+            final iconData = meta['icon'] as IconData;
+            final color = meta['color'] as Color;
+            final label = meta['label'] as String;
+            return GestureDetector(
+              onTap: () => setState(() => _consultationType = t),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                decoration: BoxDecoration(
+                  gradient: sel ? AppColors.primaryGradient : null,
+                  color: sel ? null : Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: sel ? Colors.transparent : const Color(0xFFE5E7EB),
+                    width: 1.5,
                   ),
+                  boxShadow: sel
+                    ? [BoxShadow(color: AppColors.primary.withValues(alpha:0.28), blurRadius: 14, offset: const Offset(0, 5))]
+                    : [const BoxShadow(color: Color(0x08000000), blurRadius: 8, offset: Offset(0, 2))],
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   child: Row(children: [
                     Container(
                       width: 34, height: 34,
                       decoration: BoxDecoration(
-                        color: sel ? Colors.white.withOpacity(0.2) : color.withOpacity(0.1),
+                        color: sel ? Colors.white.withValues(alpha:0.2) : color.withValues(alpha:0.1),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Icon(iconData, color: sel ? Colors.white : color, size: 18),
                     ),
                     const SizedBox(width: 10),
-                    Text(label, style: TextStyle(
-                      fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w600,
-                      color: sel ? Colors.white : const Color(0xFF1F2937),
-                    )),
-                    if (sel) ...[
-                      const SizedBox(width: 8),
-                      const Icon(Icons.check_circle_rounded, color: Colors.white, size: 15),
-                    ],
+                    Expanded(
+                      child: Text(label, style: TextStyle(
+                        fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w600,
+                        color: sel ? Colors.white : const Color(0xFF1F2937),
+                      ), overflow: TextOverflow.ellipsis),
+                    ),
+                    if (sel)
+                      const Icon(Icons.check_circle_rounded, color: Colors.white, size: 16),
                   ]),
                 ),
-              );
-            }).toList(),
-          ),
+              ),
+            );
+          }).toList(),
         ),
         if (_consultationType == 'In-Person' && (_hospital != null || _hospitalAddress != null))
           Padding(
@@ -753,9 +774,9 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
             child: Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: const Color(0xFFB71C1C).withOpacity(0.05),
+                color: const Color(0xFFB71C1C).withValues(alpha:0.05),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFB71C1C).withOpacity(0.15)),
+                border: Border.all(color: const Color(0xFFB71C1C).withValues(alpha:0.15)),
               ),
               child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 const Icon(Icons.place_rounded, size: 18, color: Color(0xFFB71C1C)),
@@ -796,9 +817,9 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
             return Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
-                color: c.withOpacity(0.08),
+                color: c.withValues(alpha:0.08),
                 borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: c.withOpacity(0.25)),
+                border: Border.all(color: c.withValues(alpha:0.25)),
               ),
               child: Row(mainAxisSize: MainAxisSize.min, children: [
                 Icon(Icons.local_pharmacy_rounded, size: 13, color: c),
@@ -826,9 +847,9 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
           children: _languages.map((lang) => Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
             decoration: BoxDecoration(
-              color: Colors.teal.withOpacity(0.08),
+              color: Colors.teal.withValues(alpha:0.08),
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.teal.withOpacity(0.25)),
+              border: Border.all(color: Colors.teal.withValues(alpha:0.25)),
             ),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
               const Icon(Icons.language_rounded, size: 13, color: Colors.teal),
@@ -854,7 +875,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
             decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.08),
+              color: AppColors.primary.withValues(alpha:0.08),
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
@@ -891,7 +912,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                       width: sel ? 1.5 : 1,
                     ),
                     boxShadow: sel
-                        ? [BoxShadow(color: AppColors.primary.withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 4))]
+                        ? [BoxShadow(color: AppColors.primary.withValues(alpha:0.3), blurRadius: 10, offset: const Offset(0, 4))]
                         : null,
                   ),
                   child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
@@ -1022,12 +1043,12 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.05),
+        color: color.withValues(alpha:0.05),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withOpacity(0.2)),
+        border: Border.all(color: color.withValues(alpha:0.2)),
       ),
       child: Column(children: [
-        Icon(icon, size: 36, color: color.withOpacity(0.7)),
+        Icon(icon, size: 36, color: color.withValues(alpha:0.7)),
         const SizedBox(height: 10),
         Text(title, style: AppTextStyles.labelLarge.copyWith(color: color)),
         const SizedBox(height: 4),
@@ -1056,9 +1077,9 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             margin: const EdgeInsets.only(bottom: 12),
             decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.04),
+              color: AppColors.primary.withValues(alpha:0.04),
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppColors.primary.withOpacity(0.12), width: 1.5),
+              border: Border.all(color: AppColors.primary.withValues(alpha:0.12), width: 1.5),
             ),
             child: Row(children: [
               Container(
@@ -1137,7 +1158,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                       gradient: AppColors.primaryGradient,
                       borderRadius: BorderRadius.circular(16),
                       boxShadow: [BoxShadow(
-                        color: AppColors.primary.withOpacity(0.35), blurRadius: 18, offset: const Offset(0, 7),
+                        color: AppColors.primary.withValues(alpha:0.35), blurRadius: 18, offset: const Offset(0, 7),
                       )],
                     ),
                     child: ElevatedButton(
@@ -1167,7 +1188,9 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
-            pinned: true, expandedHeight: 320, backgroundColor: AppColors.primary,
+            pinned: true,
+            expandedHeight: 320,
+            backgroundColor: AppColors.primary,
             leading: IconButton(
               icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
               onPressed: () => context.pop(),
@@ -1178,14 +1201,25 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                 child: SafeArea(
                   child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
                     const SizedBox(height: 48),
-                    Container(width: 110, height: 110, decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2), shape: BoxShape.circle)),
+                    AppShimmer(
+                      child: Container(width: 110, height: 110,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha:0.3), shape: BoxShape.circle)),
+                    ),
                     const SizedBox(height: 14),
-                    Container(width: 180, height: 20, decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(10))),
+                    AppShimmer(
+                      child: Container(width: 180, height: 18,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha:0.3),
+                            borderRadius: BorderRadius.circular(9))),
+                    ),
                     const SizedBox(height: 8),
-                    Container(width: 120, height: 14, decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.15), borderRadius: BorderRadius.circular(7))),
+                    AppShimmer(
+                      child: Container(width: 120, height: 13,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha:0.2),
+                            borderRadius: BorderRadius.circular(6))),
+                    ),
                   ]),
                 ),
               ),
@@ -1195,14 +1229,13 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
             child: Padding(
               padding: const EdgeInsets.all(20),
               child: Column(children: [
-                Container(height: 80, decoration: BoxDecoration(
-                  color: Colors.grey.shade200, borderRadius: BorderRadius.circular(16))),
+                SkeletonBox(width: double.infinity, height: 80),
                 const SizedBox(height: 16),
-                Container(height: 120, decoration: BoxDecoration(
-                  color: Colors.grey.shade200, borderRadius: BorderRadius.circular(16))),
+                SkeletonBox(width: double.infinity, height: 120),
                 const SizedBox(height: 16),
-                Container(height: 100, decoration: BoxDecoration(
-                  color: Colors.grey.shade200, borderRadius: BorderRadius.circular(16))),
+                SkeletonBox(width: double.infinity, height: 100),
+                const SizedBox(height: 16),
+                SkeletonBox(width: double.infinity, height: 180),
               ]),
             ),
           ),
@@ -1214,23 +1247,19 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
   // ── Not Found ─────────────────────────────────────────
   Widget _buildNotFound(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(leading: IconButton(
-        icon: const Icon(Icons.arrow_back_ios_new_rounded), onPressed: () => context.pop())),
-      body: Center(child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Icon(Icons.person_off_rounded, size: 64, color: Colors.grey.shade400),
-          const SizedBox(height: 16),
-          const Text('Doctor not found', style: TextStyle(
-              fontFamily: 'Poppins', fontSize: 18, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 8),
-          Text('This doctor profile is no longer available.',
-              style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: Colors.grey.shade600),
-              textAlign: TextAlign.center),
-          const SizedBox(height: 24),
-          ElevatedButton(onPressed: () => context.pop(), child: const Text('Go Back')),
-        ]),
-      )),
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded),
+          onPressed: () => context.pop(),
+        ),
+      ),
+      body: AppEmptyState(
+        icon: Icons.person_off_rounded,
+        title: 'Doctor not found',
+        message: 'This doctor profile is no longer available.',
+        actionLabel: 'Go Back',
+        onAction: () => context.pop(),
+      ),
     );
   }
 }
@@ -1269,7 +1298,7 @@ class _OnlinePulseDotState extends State<_OnlinePulseDot> with SingleTickerProvi
         color: const Color(0xFF4CAF50),
         shape: BoxShape.circle,
         border: Border.all(color: Colors.white, width: 2.5),
-        boxShadow: [BoxShadow(color: const Color(0xFF4CAF50).withOpacity(0.5), blurRadius: 8)],
+        boxShadow: [BoxShadow(color: const Color(0xFF4CAF50).withValues(alpha:0.5), blurRadius: 8)],
       ),
     ),
   );
@@ -1286,9 +1315,9 @@ class _HeaderChip extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
     decoration: BoxDecoration(
-      color: Colors.white.withOpacity(0.18),
+      color: Colors.white.withValues(alpha:0.18),
       borderRadius: BorderRadius.circular(24),
-      border: Border.all(color: Colors.white.withOpacity(0.25), width: 1),
+      border: Border.all(color: Colors.white.withValues(alpha:0.25), width: 1),
     ),
     child: Row(mainAxisSize: MainAxisSize.min, children: [
       Icon(icon, size: 12, color: Colors.white),
@@ -1349,17 +1378,17 @@ class _TrustStatsRow extends StatelessWidget {
             color: Colors.white,
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
-              BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 20, offset: const Offset(0, 4)),
+              BoxShadow(color: Colors.black.withValues(alpha:0.06), blurRadius: 20, offset: const Offset(0, 4)),
             ],
           ),
-          child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
-            _StatCell(displayRating, 'Rating', Icons.star_rounded, const Color(0xFFF59E0B)),
+          child: Row(children: [
+            Expanded(child: _StatCell(displayRating, 'Rating', Icons.star_rounded, const Color(0xFFF59E0B))),
             _vDivider(),
-            _StatCell(doc.exp > 0 ? '${doc.exp}+ yrs' : 'New', 'Experience', Icons.work_history_rounded, AppColors.primary),
+            Expanded(child: _StatCell(doc.exp > 0 ? '${doc.exp}+ yrs' : 'New', 'Experience', Icons.work_history_rounded, AppColors.primary)),
             _vDivider(),
-            _StatCell(reviewCount, 'Reviews', Icons.people_alt_rounded, const Color(0xFF10B981)),
+            Expanded(child: _StatCell(reviewCount, 'Reviews', Icons.people_alt_rounded, const Color(0xFF10B981))),
             _vDivider(),
-            _StatCell(doc.fee > 0 ? '₹${doc.fee}' : 'Free', 'Consult Fee', Icons.currency_rupee_rounded, const Color(0xFF8B5CF6)),
+            Expanded(child: _StatCell(doc.fee > 0 ? '₹${doc.fee}' : 'Free', 'Consult Fee', Icons.currency_rupee_rounded, const Color(0xFF8B5CF6))),
           ]),
         );
       },
@@ -1374,25 +1403,29 @@ class _StatCell extends StatelessWidget {
   const _StatCell(this.value, this.label, this.icon, this.color);
 
   @override
-  Widget build(BuildContext context) => Column(children: [
-    Container(
-      width: 40, height: 40,
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(12),
+  Widget build(BuildContext context) => Column(
+    mainAxisAlignment: MainAxisAlignment.center,
+    crossAxisAlignment: CrossAxisAlignment.center,
+    children: [
+      Container(
+        width: 40, height: 40,
+        decoration: BoxDecoration(
+          color: color.withValues(alpha:0.08),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(icon, size: 20, color: color),
       ),
-      child: Icon(icon, size: 20, color: color),
-    ),
-    const SizedBox(height: 8),
-    Text(value, style: TextStyle(
-      fontFamily: 'Poppins', fontSize: 14, fontWeight: FontWeight.w800,
-      color: const Color(0xFF111827),
-    )),
-    const SizedBox(height: 2),
-    Text(label, style: const TextStyle(
-      fontFamily: 'Poppins', fontSize: 10.5, color: Color(0xFF9CA3AF), fontWeight: FontWeight.w500,
-    )),
-  ]);
+      const SizedBox(height: 8),
+      Text(value, textAlign: TextAlign.center, style: const TextStyle(
+        fontFamily: 'Poppins', fontSize: 14, fontWeight: FontWeight.w800,
+        color: Color(0xFF111827),
+      )),
+      const SizedBox(height: 2),
+      Text(label, textAlign: TextAlign.center, style: const TextStyle(
+        fontFamily: 'Poppins', fontSize: 10.5, color: Color(0xFF9CA3AF), fontWeight: FontWeight.w500,
+      )),
+    ],
+  );
 }
 
 Widget _vDivider() => Container(width: 1, height: 52, color: const Color(0xFFF3F4F6));
@@ -1458,14 +1491,14 @@ class _HospitalCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFF1565C0).withOpacity(0.1)),
-          boxShadow: [BoxShadow(color: const Color(0xFF1565C0).withOpacity(0.06), blurRadius: 12, offset: const Offset(0, 4))],
+          border: Border.all(color: const Color(0xFF1565C0).withValues(alpha:0.1)),
+          boxShadow: [BoxShadow(color: const Color(0xFF1565C0).withValues(alpha:0.06), blurRadius: 12, offset: const Offset(0, 4))],
         ),
         child: Row(children: [
           Container(
             width: 50, height: 50,
             decoration: BoxDecoration(
-              color: const Color(0xFF1565C0).withOpacity(0.1),
+              color: const Color(0xFF1565C0).withValues(alpha:0.1),
               borderRadius: BorderRadius.circular(14),
             ),
             child: const Icon(Icons.local_hospital_rounded, color: Color(0xFF1565C0), size: 26),
@@ -1524,7 +1557,7 @@ class _SlotSection extends StatelessWidget {
         const SizedBox(width: 8),
         Text('$available available', style: TextStyle(
           fontFamily: 'Poppins', fontSize: 11,
-          color: color.withOpacity(0.6), fontWeight: FontWeight.w500,
+          color: color.withValues(alpha:0.6), fontWeight: FontWeight.w500,
         )),
       ]),
       const SizedBox(height: 10),
@@ -1553,7 +1586,7 @@ class _SlotSection extends StatelessWidget {
                   width: 1.5,
                 ),
                 boxShadow: isSelected
-                    ? [BoxShadow(color: AppColors.primary.withOpacity(0.28), blurRadius: 10, offset: const Offset(0, 4))]
+                    ? [BoxShadow(color: AppColors.primary.withValues(alpha:0.28), blurRadius: 10, offset: const Offset(0, 4))]
                     : null,
               ),
               child: Text(slot, style: TextStyle(
@@ -1580,7 +1613,7 @@ class _ConfirmRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Row(children: [
     Container(width: 32, height: 32, decoration: BoxDecoration(
-      color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+      color: color.withValues(alpha:0.1), borderRadius: BorderRadius.circular(8)),
       child: Icon(icon, size: 16, color: color)),
     const SizedBox(width: 10),
     Expanded(child: Text(text, style: AppTextStyles.labelMedium.copyWith(color: AppColors.textPrimary))),
@@ -1632,9 +1665,9 @@ class _ReviewsSection extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
-                    color: AppColors.accent.withOpacity(0.1),
+                    color: AppColors.accent.withValues(alpha:0.1),
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: AppColors.accent.withOpacity(0.2)),
+                    border: Border.all(color: AppColors.accent.withValues(alpha:0.2)),
                   ),
                   child: Row(mainAxisSize: MainAxisSize.min, children: [
                     const Icon(Icons.verified_rounded, size: 12, color: AppColors.accent),
@@ -1651,7 +1684,7 @@ class _ReviewsSection extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(20),
-                  boxShadow: [BoxShadow(color: Colors.amber.withOpacity(0.1), blurRadius: 16, offset: const Offset(0, 4))],
+                  boxShadow: [BoxShadow(color: Colors.amber.withValues(alpha:0.1), blurRadius: 16, offset: const Offset(0, 4))],
                 ),
                 child: Row(children: [
                   Column(mainAxisAlignment: MainAxisAlignment.center, children: [
@@ -1712,10 +1745,9 @@ class _ReviewsSection extends StatelessWidget {
         stream: ReviewService.reviewsStream(doctorId, limit: 5),
         builder: (context, snap) {
           if (snap.connectionState == ConnectionState.waiting) {
-            return const Padding(
-              padding: EdgeInsets.all(16),
-              child: Center(child: CircularProgressIndicator()),
-            );
+            return Column(children: const [
+              SkeletonListTile(), SkeletonListTile(), SkeletonListTile(),
+            ]);
           }
           final reviews = snap.data ?? [];
           if (reviews.isEmpty) {
@@ -1728,7 +1760,7 @@ class _ReviewsSection extends StatelessWidget {
               child: Column(children: [
                 Container(width: 56, height: 56,
                   decoration: BoxDecoration(
-                    color: Colors.amber.withOpacity(0.1), shape: BoxShape.circle),
+                    color: Colors.amber.withValues(alpha:0.1), shape: BoxShape.circle),
                   child: const Icon(Icons.rate_review_outlined, size: 28, color: Colors.amber)),
                 const SizedBox(height: 12),
                 Text('No Reviews Yet', style: AppTextStyles.labelLarge.copyWith(color: AppColors.textSecondary)),
@@ -1761,7 +1793,7 @@ class _ReviewCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 12, offset: const Offset(0, 4))],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:0.05), blurRadius: 12, offset: const Offset(0, 4))],
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
@@ -1769,7 +1801,7 @@ class _ReviewCard extends StatelessWidget {
             width: 42, height: 42,
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [AppColors.primary.withOpacity(0.8), AppColors.secondary.withOpacity(0.8)],
+                colors: [AppColors.primary.withValues(alpha:0.8), AppColors.secondary.withValues(alpha:0.8)],
                 begin: Alignment.topLeft, end: Alignment.bottomRight,
               ),
               shape: BoxShape.circle,
@@ -1785,8 +1817,8 @@ class _ReviewCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                 decoration: BoxDecoration(
-                  color: AppColors.accent.withOpacity(0.1), borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: AppColors.accent.withOpacity(0.2)),
+                  color: AppColors.accent.withValues(alpha:0.1), borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: AppColors.accent.withValues(alpha:0.2)),
                 ),
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
                   const Icon(Icons.verified_rounded, size: 10, color: AppColors.accent),
@@ -1827,9 +1859,9 @@ class _ReviewCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.07),
+              color: AppColors.primary.withValues(alpha:0.07),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: AppColors.primary.withOpacity(0.15)),
+              border: Border.all(color: AppColors.primary.withValues(alpha:0.15)),
             ),
             child: Text(review.consultationType, style: AppTextStyles.caption.copyWith(
                 color: AppColors.primary, fontWeight: FontWeight.w600)),

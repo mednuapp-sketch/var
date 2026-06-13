@@ -204,11 +204,11 @@ class _SOSScreenState extends State<SOSScreen> with TickerProviderStateMixin {
                         color: const Color(0xFFE53935),
                         boxShadow: [
                           BoxShadow(
-                              color: const Color(0xFFE53935).withOpacity(0.6),
+                              color: const Color(0xFFE53935).withValues(alpha:0.6),
                               blurRadius: 40,
                               spreadRadius: 20),
                           BoxShadow(
-                              color: const Color(0xFFE53935).withOpacity(0.3),
+                              color: const Color(0xFFE53935).withValues(alpha:0.3),
                               blurRadius: 80,
                               spreadRadius: 40),
                         ],
@@ -267,7 +267,7 @@ class _SOSScreenState extends State<SOSScreen> with TickerProviderStateMixin {
                     color: const Color(0xFF2E7D32),
                     boxShadow: [
                       BoxShadow(
-                          color: const Color(0xFF2E7D32).withOpacity(0.5),
+                          color: const Color(0xFF2E7D32).withValues(alpha:0.5),
                           blurRadius: 30,
                           spreadRadius: 10)
                     ],
@@ -289,7 +289,7 @@ class _SOSScreenState extends State<SOSScreen> with TickerProviderStateMixin {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.1),
+                    color: Colors.white.withValues(alpha:0.1),
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Column(
@@ -316,7 +316,7 @@ class _SOSScreenState extends State<SOSScreen> with TickerProviderStateMixin {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.15),
+                        color: Colors.white.withValues(alpha:0.15),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: const Row(children: [
@@ -340,7 +340,7 @@ class _SOSScreenState extends State<SOSScreen> with TickerProviderStateMixin {
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.07),
+                      color: Colors.white.withValues(alpha:0.07),
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(color: Colors.white24, style: BorderStyle.solid),
                     ),
@@ -443,16 +443,16 @@ class _ContactChip extends StatelessWidget {
         width: 72,
         padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.12),
+          color: Colors.white.withValues(alpha:0.12),
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.white.withOpacity(0.2)),
+          border: Border.all(color: Colors.white.withValues(alpha:0.2)),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             CircleAvatar(
               radius: 16,
-              backgroundColor: const Color(0xFFE53935).withOpacity(0.4),
+              backgroundColor: const Color(0xFFE53935).withValues(alpha:0.4),
               child: Text(
                 contact.name.isNotEmpty ? contact.name[0].toUpperCase() : '?',
                 style: const TextStyle(
@@ -489,9 +489,9 @@ class _EmergencyContact extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(vertical: 12),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.1),
+              color: Colors.white.withValues(alpha:0.1),
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: Colors.white.withOpacity(0.2)),
+              border: Border.all(color: Colors.white.withValues(alpha:0.2)),
             ),
             child: Column(children: [
               Text(emoji, style: const TextStyle(fontSize: 22)),

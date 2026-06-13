@@ -129,7 +129,7 @@ class _SpecialtyCard extends StatelessWidget {
           border: Border.all(color: AppColors.divider),
           boxShadow: [
             BoxShadow(
-              color: item.color.withOpacity(0.06),
+              color: item.color.withValues(alpha:0.06),
               blurRadius: 10,
               offset: const Offset(0, 3),
             ),
@@ -192,7 +192,7 @@ class _DoctorCountBadge extends StatelessWidget {
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
           decoration: BoxDecoration(
-            color: AppColors.primary.withOpacity(0.08),
+            color: AppColors.primary.withValues(alpha:0.08),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Text(
@@ -276,7 +276,7 @@ class _PopularNowSection extends StatelessWidget {
                                 width: 46,
                                 height: 46,
                                 decoration: BoxDecoration(
-                                  color: AppColors.primary.withOpacity(0.1),
+                                  color: AppColors.primary.withValues(alpha:0.1),
                                   shape: BoxShape.circle,
                                 ),
                                 child: photo.isNotEmpty

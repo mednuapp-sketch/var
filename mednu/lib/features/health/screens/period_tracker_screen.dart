@@ -261,9 +261,9 @@ class _CycleCard extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
               _CycleStat('Day', '${state.cycleDay}', 'of ${state.avgCycleLength}'),
-              Container(width: 1, height: 50, color: Colors.white.withOpacity(0.3)),
+              Container(width: 1, height: 50, color: Colors.white.withValues(alpha:0.3)),
               _CycleStat('Phase', state.currentPhase, 'window'),
-              Container(width: 1, height: 50, color: Colors.white.withOpacity(0.3)),
+              Container(width: 1, height: 50, color: Colors.white.withValues(alpha:0.3)),
               _CycleStat('Next Period', '${state.daysToNextPeriod}', 'days away'),
             ],
           ),
@@ -290,7 +290,7 @@ class _CycleCard extends StatelessWidget {
                 child: LinearProgressIndicator(
                   value: state.cycleDay / state.avgCycleLength,
                   minHeight: 14,
-                  backgroundColor: Colors.white.withOpacity(0.2),
+                  backgroundColor: Colors.white.withValues(alpha:0.2),
                   valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
                 ),
               ),
@@ -410,7 +410,7 @@ class _SymptomsSection extends StatelessWidget {
                     const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 decoration: BoxDecoration(
                   color: selected
-                      ? const Color(0xFFE91E8C).withOpacity(0.1)
+                      ? const Color(0xFFE91E8C).withValues(alpha:0.1)
                       : Colors.white,
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
@@ -495,7 +495,7 @@ class _MoodSection extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(vertical: 10),
                   decoration: BoxDecoration(
                     color: selected
-                        ? const Color(0xFFE91E8C).withOpacity(0.1)
+                        ? const Color(0xFFE91E8C).withValues(alpha:0.1)
                         : Colors.white,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
@@ -769,7 +769,7 @@ void _showLogPeriodSheet(BuildContext context, PeriodTrackerNotifier notifier) {
                   const Color(0xFF1565C0), notifier, context),
               _FlowOption('Medium', '💧💧', const Color(0xFFFCE4EC),
                   const Color(0xFFE91E8C), notifier, context),
-              _FlowOption('Heavy', '💧💧💧', const Color(0xFF880E4F).withOpacity(0.1),
+              _FlowOption('Heavy', '💧💧💧', const Color(0xFF880E4F).withValues(alpha:0.1),
                   const Color(0xFF880E4F), notifier, context),
             ],
           ),
@@ -811,7 +811,7 @@ class _FlowOption extends StatelessWidget {
         decoration: BoxDecoration(
           color: bg,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: border.withOpacity(0.4), width: 1.5),
+          border: Border.all(color: border.withValues(alpha:0.4), width: 1.5),
         ),
         child: Column(
           children: [
@@ -889,7 +889,7 @@ void _showCycleHistory(BuildContext context, PeriodTrackerState state) {
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 8, vertical: 4),
                               decoration: BoxDecoration(
-                                color: const Color(0xFFE91E8C).withOpacity(0.1),
+                                color: const Color(0xFFE91E8C).withValues(alpha:0.1),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: const Text('Current',

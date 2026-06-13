@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
+import '../../../core/widgets/ux_widgets.dart';
 import '../../auth/services/doctor_auth_service.dart';
 
 class LiveChatScreen extends StatefulWidget {
@@ -226,7 +227,7 @@ class _LiveChatScreenState extends State<LiveChatScreen> {
           Container(
             width: 38, height: 38,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
+              color: Colors.white.withValues(alpha:0.2),
               shape: BoxShape.circle,
             ),
             child: const Icon(Icons.support_agent_rounded,
@@ -271,13 +272,13 @@ class _LiveChatScreenState extends State<LiveChatScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
                 color: status == 'resolved'
-                    ? Colors.white.withOpacity(0.15)
-                    : AppColors.success.withOpacity(0.2),
+                    ? Colors.white.withValues(alpha:0.15)
+                    : AppColors.success.withValues(alpha:0.2),
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
                   color: status == 'resolved'
                       ? Colors.white30
-                      : Colors.white.withOpacity(0.4),
+                      : Colors.white.withValues(alpha:0.4),
                 ),
               ),
               child: Text(
@@ -308,7 +309,13 @@ class _LiveChatScreenState extends State<LiveChatScreen> {
           .snapshots(),
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return ListView(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            children: List.generate(5, (_) => const Padding(
+              padding: EdgeInsets.only(bottom: 10),
+              child: SkeletonListTile(),
+            )),
+          );
         }
         final docs = snap.data?.docs ?? [];
         if (docs.isEmpty) {
@@ -363,7 +370,7 @@ class _LiveChatScreenState extends State<LiveChatScreen> {
             Container(
               width: 72, height: 72,
               decoration: BoxDecoration(
-                color: AppColors.secondary.withOpacity(0.1),
+                color: AppColors.secondary.withValues(alpha:0.1),
                 shape: BoxShape.circle,
               ),
               child: const Icon(Icons.chat_bubble_outline_rounded,
@@ -390,7 +397,7 @@ class _LiveChatScreenState extends State<LiveChatScreen> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
           decoration: BoxDecoration(
-            color: Colors.black.withOpacity(0.08),
+            color: Colors.black.withValues(alpha:0.08),
             borderRadius: BorderRadius.circular(20),
           ),
           child: Text(
@@ -447,7 +454,7 @@ class _LiveChatScreenState extends State<LiveChatScreen> {
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.06),
+                    color: Colors.black.withValues(alpha:0.06),
                     blurRadius: 6,
                     offset: const Offset(0, 2),
                   ),
@@ -555,7 +562,7 @@ class _LiveChatScreenState extends State<LiveChatScreen> {
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
+                      color: Colors.black.withValues(alpha:0.05),
                       blurRadius: 4,
                     ),
                   ],
@@ -585,7 +592,7 @@ class _LiveChatScreenState extends State<LiveChatScreen> {
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.06),
+            color: Colors.black.withValues(alpha:0.06),
             blurRadius: 10,
             offset: const Offset(0, -3),
           ),
@@ -599,7 +606,7 @@ class _LiveChatScreenState extends State<LiveChatScreen> {
             child: Container(
               width: 42, height: 42,
               decoration: BoxDecoration(
-                color: AppColors.secondary.withOpacity(0.1),
+                color: AppColors.secondary.withValues(alpha:0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: _uploading
@@ -701,7 +708,7 @@ class _TypingDotsState extends State<_TypingDots>
               width: 5, height: 5,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: AppColors.textHint.withOpacity(opacity),
+                color: AppColors.textHint.withValues(alpha:opacity),
               ),
             );
           }),

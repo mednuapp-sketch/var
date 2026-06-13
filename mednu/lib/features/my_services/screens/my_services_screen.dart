@@ -143,7 +143,7 @@ class _StatsChip extends ConsumerWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.2),
+        color: Colors.white.withValues(alpha:0.2),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: Colors.white30),
       ),
@@ -236,7 +236,7 @@ class _BookingCard extends StatelessWidget {
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(isDark ? 0.15 : 0.05),
+              color: Colors.black.withValues(alpha:isDark ? 0.15 : 0.05),
               blurRadius: 12,
               offset: const Offset(0, 3),
             ),
@@ -362,8 +362,8 @@ class _ActiveCardActions extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(14, 8, 14, 12),
       decoration: BoxDecoration(
         color: isDark
-            ? AppColors.primary.withOpacity(0.07)
-            : AppColors.primary.withOpacity(0.04),
+            ? AppColors.primary.withValues(alpha:0.07)
+            : AppColors.primary.withValues(alpha:0.04),
         borderRadius:
             const BorderRadius.vertical(bottom: Radius.circular(18)),
       ),
@@ -379,7 +379,7 @@ class _ActiveCardActions extends StatelessWidget {
               label: const Text('Track'),
               style: OutlinedButton.styleFrom(
                 foregroundColor: AppColors.primary,
-                side: BorderSide(color: AppColors.primary.withOpacity(0.4)),
+                side: BorderSide(color: AppColors.primary.withValues(alpha:0.4)),
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 textStyle: const TextStyle(
                   fontFamily: 'Poppins',
@@ -595,7 +595,7 @@ class _EmptyState extends StatelessWidget {
                 borderRadius: BorderRadius.circular(28),
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.primary.withOpacity(0.2),
+                    color: AppColors.primary.withValues(alpha:0.2),
                     blurRadius: 24,
                     offset: const Offset(0, 8),
                   ),
@@ -687,7 +687,7 @@ class _ErrorState extends ConsumerWidget {
               width: 72,
               height: 72,
               decoration: BoxDecoration(
-                color: AppColors.error.withOpacity(0.1),
+                color: AppColors.error.withValues(alpha:0.1),
                 shape: BoxShape.circle,
               ),
               child:
@@ -771,7 +771,7 @@ class _ShimmerCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final base = Colors.grey.withOpacity(opacity);
+    final base = Colors.grey.withValues(alpha:opacity);
     return Container(
       height: 100,
       decoration: BoxDecoration(

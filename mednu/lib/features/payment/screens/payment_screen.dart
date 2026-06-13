@@ -189,7 +189,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
                   color: _useWallet
-                      ? AppColors.primary.withOpacity(0.3)
+                      ? AppColors.primary.withValues(alpha:0.3)
                       : AppColors.divider,
                 ),
               ),
@@ -242,7 +242,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                   margin: const EdgeInsets.only(bottom: 10),
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: selected ? color.withOpacity(0.05) : Colors.white,
+                    color: selected ? color.withValues(alpha:0.05) : Colors.white,
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(
                       color: selected ? color : AppColors.border,
@@ -255,7 +255,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                         width: 44,
                         height: 44,
                         decoration: BoxDecoration(
-                          color: color.withOpacity(0.1),
+                          color: color.withValues(alpha:0.1),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Icon(method['icon'] as IconData,

@@ -420,7 +420,7 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
               ? null
               : [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.04),
+                    color: Colors.black.withValues(alpha:0.04),
                     blurRadius: 8,
                     offset: const Offset(0, 2),
                   ),
@@ -463,7 +463,7 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
               fontFamily: 'Poppins', fontSize: 13, color: Colors.grey.shade400),
           filled: true,
           fillColor: isDark
-              ? Colors.white.withOpacity(0.05)
+              ? Colors.white.withValues(alpha:0.05)
               : const Color(0xFFF8F9FA),
           border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
@@ -472,7 +472,7 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
               borderRadius: BorderRadius.circular(10),
               borderSide: BorderSide(
                   color: isDark
-                      ? Colors.white.withOpacity(0.08)
+                      ? Colors.white.withValues(alpha:0.08)
                       : Colors.grey.shade200)),
           focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
@@ -515,7 +515,7 @@ class _LabelChip extends StatelessWidget {
           color: selected
               ? AppColors.primary
               : Theme.of(context).brightness == Brightness.dark
-                  ? Colors.white.withOpacity(0.06)
+                  ? Colors.white.withValues(alpha:0.06)
                   : const Color(0xFFF2F3F7),
           borderRadius: BorderRadius.circular(12),
           border: selected

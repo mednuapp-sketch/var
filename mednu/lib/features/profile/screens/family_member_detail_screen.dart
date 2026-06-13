@@ -132,7 +132,7 @@ class _FamilyMemberDetailScreenState extends ConsumerState<FamilyMemberDetailScr
               background: Container(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [color, color.withOpacity(0.65)],
+                    colors: [color, color.withValues(alpha:0.65)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
@@ -141,10 +141,10 @@ class _FamilyMemberDetailScreenState extends ConsumerState<FamilyMemberDetailScr
                   children: [
                     Positioned(right: -30, top: -30,
                         child: Container(width: 140, height: 140,
-                            decoration: BoxDecoration(color: Colors.white.withOpacity(0.07), shape: BoxShape.circle))),
+                            decoration: BoxDecoration(color: Colors.white.withValues(alpha:0.07), shape: BoxShape.circle))),
                     Positioned(left: -20, bottom: -20,
                         child: Container(width: 100, height: 100,
-                            decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), shape: BoxShape.circle))),
+                            decoration: BoxDecoration(color: Colors.white.withValues(alpha:0.05), shape: BoxShape.circle))),
                     SafeArea(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -153,7 +153,7 @@ class _FamilyMemberDetailScreenState extends ConsumerState<FamilyMemberDetailScr
                           Container(
                             width: 80, height: 80,
                             decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.22),
+                              color: Colors.white.withValues(alpha:0.22),
                               shape: BoxShape.circle,
                               border: Border.all(color: Colors.white, width: 3),
                             ),
@@ -325,7 +325,7 @@ class _SectionCard extends StatelessWidget {
         Row(children: [
           Container(
             width: 28, height: 28,
-            decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
+            decoration: BoxDecoration(color: color.withValues(alpha:0.12), borderRadius: BorderRadius.circular(8)),
             child: Icon(icon, color: color, size: 16),
           ),
           const SizedBox(width: 8),
@@ -383,9 +383,9 @@ class _ActionButton extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.08),
+          color: color.withValues(alpha:0.08),
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: color.withOpacity(0.2)),
+          border: Border.all(color: color.withValues(alpha:0.2)),
         ),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Icon(icon, color: color, size: 24),
@@ -418,7 +418,7 @@ class _RecordTile extends StatelessWidget {
         child: Row(children: [
           Container(
             width: 36, height: 36,
-            decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+            decoration: BoxDecoration(color: color.withValues(alpha:0.1), borderRadius: BorderRadius.circular(10)),
             child: Icon(icon, color: color, size: 18),
           ),
           const SizedBox(width: 12),

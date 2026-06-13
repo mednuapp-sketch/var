@@ -6,6 +6,7 @@ import '../../../../core/constants/app_text_styles.dart';
 import '../../../../core/router/app_router.dart';
 import '../providers/nutrition_provider.dart';
 import '../models/nutritionist_model.dart';
+import '../../../../core/widgets/ux_widgets.dart';
 
 class NutritionistProfileScreen extends ConsumerWidget {
   final String nutritionistId;
@@ -16,9 +17,25 @@ class NutritionistProfileScreen extends ConsumerWidget {
     final nutritionistAsync = ref.watch(nutritionistDetailProvider(nutritionistId));
 
     return nutritionistAsync.when(
-      loading: () => const Scaffold(
+      loading: () => Scaffold(
         backgroundColor: AppColors.background,
-        body: Center(child: CircularProgressIndicator()),
+        body: SingleChildScrollView(
+          physics: const NeverScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(16),
+          child: Column(children: [
+            const SizedBox(height: 40),
+            const Center(child: SkeletonCircle(size: 96)),
+            const SizedBox(height: 16),
+            const SkeletonBox(width: 180, height: 20, radius: 10),
+            const SizedBox(height: 8),
+            const SkeletonBox(width: 120, height: 14, radius: 7),
+            const SizedBox(height: 24),
+            ...List.generate(4, (_) => const Padding(
+              padding: EdgeInsets.only(bottom: 12),
+              child: SkeletonBox(width: double.infinity, height: 64, radius: 16),
+            )),
+          ]),
+        ),
       ),
       error: (e, _) => Scaffold(
         appBar: AppBar(
@@ -29,21 +46,7 @@ class NutritionistProfileScreen extends ConsumerWidget {
           elevation: 0,
         ),
         backgroundColor: AppColors.background,
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.error_outline_rounded, size: 56, color: Colors.grey[300]),
-                const SizedBox(height: 16),
-                Text('Failed to load profile', style: AppTextStyles.labelLarge.copyWith(color: AppColors.textSecondary)),
-                const SizedBox(height: 8),
-                Text('Please check your connection and try again.', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textHint), textAlign: TextAlign.center),
-              ],
-            ),
-          ),
-        ),
+        body: const AppErrorState(),
       ),
       data: (nutritionist) {
         if (nutritionist == null) {
@@ -103,7 +106,7 @@ class _ProfileBody extends StatelessWidget {
           leading: IconButton(
             icon: Container(
               padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(color: Colors.black.withOpacity(0.3), shape: BoxShape.circle),
+              decoration: BoxDecoration(color: Colors.black.withValues(alpha:0.3), shape: BoxShape.circle),
               child: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 18),
             ),
             onPressed: () => context.pop(),
@@ -210,7 +213,7 @@ class _BigAvatar extends StatelessWidget {
       width: 90,
       height: 90,
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.25),
+        color: Colors.white.withValues(alpha:0.25),
         borderRadius: BorderRadius.circular(20),
       ),
       alignment: Alignment.center,
@@ -397,9 +400,9 @@ class _Chip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
+        color: color.withValues(alpha:0.08),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.2)),
+        border: Border.all(color: color.withValues(alpha:0.2)),
       ),
       child: Text(label, style: TextStyle(fontFamily: 'Poppins', fontSize: 11, fontWeight: FontWeight.w600, color: color)),
     );

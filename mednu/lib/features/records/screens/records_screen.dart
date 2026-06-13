@@ -11,6 +11,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
 import '../../health/screens/prescription_viewer_screen.dart' show sharePrescription;
+import '../../../core/widgets/ux_widgets.dart';
 
 class RecordsScreen extends StatefulWidget {
   final String? memberId;
@@ -347,7 +348,7 @@ class _RecordsScreenState extends State<RecordsScreen>
                 borderRadius: BorderRadius.circular(30),
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.primary.withOpacity(0.35),
+                    color: AppColors.primary.withValues(alpha:0.35),
                     blurRadius: 14,
                     offset: const Offset(0, 5),
                   ),
@@ -379,7 +380,13 @@ class _RecordsScreenState extends State<RecordsScreen>
   // ── Prescriptions Tab ──────────────────────────────────────────────────────
 
   Widget _buildPrescriptionsTab() {
-    if (_prescLoading) return const Center(child: CircularProgressIndicator());
+    if (_prescLoading) {
+      return ListView(
+        physics: const NeverScrollableScrollPhysics(),
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        children: List.generate(5, (_) => const SkeletonListTile()),
+      );
+    }
 
     if (_prescriptions.isEmpty) {
       return Center(
@@ -387,7 +394,7 @@ class _RecordsScreenState extends State<RecordsScreen>
           Container(
             width: 80, height: 80,
             decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.08), shape: BoxShape.circle),
+                color: AppColors.primary.withValues(alpha:0.08), shape: BoxShape.circle),
             child: const Icon(Icons.receipt_long_rounded, size: 40, color: AppColors.primary),
           ),
           const SizedBox(height: 16),
@@ -414,7 +421,7 @@ class _RecordsScreenState extends State<RecordsScreen>
             color: Colors.white,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: AppColors.divider),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
+            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:0.04), blurRadius: 8, offset: const Offset(0, 2))],
           ),
           child: Material(
             color: Colors.transparent,
@@ -427,7 +434,7 @@ class _RecordsScreenState extends State<RecordsScreen>
                 child: Row(children: [
                   Container(
                     width: 46, height: 46,
-                    decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+                    decoration: BoxDecoration(color: color.withValues(alpha:0.1), borderRadius: BorderRadius.circular(12)),
                     child: Icon(Icons.receipt_long_rounded, color: color, size: 24),
                   ),
                   const SizedBox(width: 12),
@@ -463,7 +470,13 @@ class _RecordsScreenState extends State<RecordsScreen>
   // ── Reports Tab ────────────────────────────────────────────────────────────
 
   Widget _buildReportsTab() {
-    if (_reportsLoading) return const Center(child: CircularProgressIndicator());
+    if (_reportsLoading) {
+      return ListView(
+        physics: const NeverScrollableScrollPhysics(),
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        children: List.generate(5, (_) => const SkeletonListTile()),
+      );
+    }
 
     if (_reports.isEmpty) {
       return Center(
@@ -471,7 +484,7 @@ class _RecordsScreenState extends State<RecordsScreen>
           Container(
             width: 80, height: 80,
             decoration: BoxDecoration(
-                color: const Color(0xFF0097A7).withOpacity(0.08), shape: BoxShape.circle),
+                color: const Color(0xFF0097A7).withValues(alpha:0.08), shape: BoxShape.circle),
             child: const Icon(Icons.science_rounded, size: 40, color: Color(0xFF0097A7)),
           ),
           const SizedBox(height: 16),
@@ -515,7 +528,7 @@ class _RecordsScreenState extends State<RecordsScreen>
             color: Colors.white,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: AppColors.divider),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
+            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:0.04), blurRadius: 8, offset: const Offset(0, 2))],
           ),
           child: Material(
             color: Colors.transparent,
@@ -542,7 +555,7 @@ class _RecordsScreenState extends State<RecordsScreen>
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: statusColor.withOpacity(0.1),
+                      color: statusColor.withValues(alpha:0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(status,
@@ -564,7 +577,7 @@ class _RecordsScreenState extends State<RecordsScreen>
   static Widget _reportIcon() => Container(
     width: 46, height: 46,
     decoration: BoxDecoration(
-        color: const Color(0xFF0097A7).withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+        color: const Color(0xFF0097A7).withValues(alpha:0.1), borderRadius: BorderRadius.circular(12)),
     child: const Icon(Icons.science_rounded, color: Color(0xFF0097A7), size: 24),
   );
 
@@ -616,13 +629,19 @@ class _RecordsScreenState extends State<RecordsScreen>
   // ── Consultations Tab ──────────────────────────────────────
 
   Widget _buildConsultationsTab() {
-    if (_consultLoading) return const Center(child: CircularProgressIndicator());
+    if (_consultLoading) {
+      return ListView(
+        physics: const NeverScrollableScrollPhysics(),
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        children: List.generate(5, (_) => const SkeletonListTile()),
+      );
+    }
 
     if (_consultations.isEmpty) {
       return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
         Container(
           width: 80, height: 80,
-          decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.08), shape: BoxShape.circle),
+          decoration: BoxDecoration(color: AppColors.primary.withValues(alpha:0.08), shape: BoxShape.circle),
           child: const Icon(Icons.video_call_rounded, size: 40, color: AppColors.primary),
         ),
         const SizedBox(height: 16),
@@ -650,12 +669,12 @@ class _RecordsScreenState extends State<RecordsScreen>
             color: Colors.white,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: AppColors.divider),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
+            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:0.04), blurRadius: 8, offset: const Offset(0, 2))],
           ),
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Container(
               width: 48, height: 48,
-              decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(14)),
+              decoration: BoxDecoration(color: color.withValues(alpha:0.1), borderRadius: BorderRadius.circular(14)),
               child: Icon(icon, color: color, size: 24),
             ),
             const SizedBox(width: 12),
@@ -683,7 +702,7 @@ class _RecordsScreenState extends State<RecordsScreen>
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                  color: const Color(0xFF2E7D32).withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                  color: const Color(0xFF2E7D32).withValues(alpha:0.1), borderRadius: BorderRadius.circular(8)),
               child: const Text('Completed',
                   style: TextStyle(fontFamily: 'Poppins', fontSize: 11,
                       fontWeight: FontWeight.w600, color: Color(0xFF2E7D32))),
@@ -719,9 +738,9 @@ class _SourcePicker extends StatelessWidget {
               child: Container(
                 padding: const EdgeInsets.symmetric(vertical: 22),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF2E7D32).withOpacity(0.07),
+                  color: const Color(0xFF2E7D32).withValues(alpha:0.07),
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFF2E7D32).withOpacity(0.3)),
+                  border: Border.all(color: const Color(0xFF2E7D32).withValues(alpha:0.3)),
                 ),
                 child: const Column(mainAxisAlignment: MainAxisAlignment.center, children: [
                   Icon(Icons.camera_alt_rounded, color: Color(0xFF2E7D32), size: 32),
@@ -739,9 +758,9 @@ class _SourcePicker extends StatelessWidget {
               child: Container(
                 padding: const EdgeInsets.symmetric(vertical: 22),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1565C0).withOpacity(0.07),
+                  color: const Color(0xFF1565C0).withValues(alpha:0.07),
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFF1565C0).withOpacity(0.3)),
+                  border: Border.all(color: const Color(0xFF1565C0).withValues(alpha:0.3)),
                 ),
                 child: const Column(mainAxisAlignment: MainAxisAlignment.center, children: [
                   Icon(Icons.photo_library_rounded, color: Color(0xFF1565C0), size: 32),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/router/app_router.dart';
 import '../data/pregnancy_week_data.dart';
 import '../providers/pregnancy_provider.dart';
 
@@ -17,14 +18,14 @@ class _PregnancyJournalScreenState
     extends ConsumerState<PregnancyJournalScreen> {
   final List<String> _symptoms = [];
   String _mood = 'Calm';
-  final _weightCtrl = TextEditingController();
-  final _bpSCtrl = TextEditingController();
-  final _bpDCtrl = TextEditingController();
-  final _sugarCtrl = TextEditingController();
+  final _weightCtrl    = TextEditingController();
+  final _bpSCtrl       = TextEditingController();
+  final _bpDCtrl       = TextEditingController();
+  final _sugarCtrl     = TextEditingController();
   final _movementsCtrl = TextEditingController();
-  final _sleepCtrl = TextEditingController();
-  final _waterCtrl = TextEditingController();
-  final _notesCtrl = TextEditingController();
+  final _sleepCtrl     = TextEditingController();
+  final _waterCtrl     = TextEditingController();
+  final _notesCtrl     = TextEditingController();
   bool _saving = false;
 
   @override
@@ -67,14 +68,69 @@ class _PregnancyJournalScreenState
       context.pop();
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to save. Please try again.')),
+        const SnackBar(
+          content: Text('Failed to save. Check your connection and try again.'),
+          backgroundColor: Color(0xFFEF5350),
+        ),
       );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final profile = ref.watch(pregnancyProvider).profile;
+    final state = ref.watch(pregnancyProvider);
+    final profile = state.profile;
+
+    // Guard: no profile → redirect to onboarding
+    if (!state.isLoading && profile == null) {
+      return Scaffold(
+        backgroundColor: const Color(0xFFFFF0F5),
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.close_rounded, color: AppColors.textPrimary),
+            onPressed: () => context.pop(),
+          ),
+          title: const Text('Today\'s Journal',
+              style: TextStyle(color: Color(0xFF1A1A2E), fontWeight: FontWeight.w700, fontSize: 16)),
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.pregnant_woman_rounded,
+                    size: 64, color: AppColors.primary),
+                const SizedBox(height: 16),
+                const Text('No Pregnancy Profile',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 8),
+                const Text(
+                  'Set up your pregnancy profile first to start logging your daily health journal.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: AppColors.textHint, fontSize: 13, height: 1.6),
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton(
+                  onPressed: () => context.push(AppRoutes.pregnancyOnboarding),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: const Text('Set Up Profile',
+                      style: TextStyle(fontWeight: FontWeight.w700)),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     final week = profile?.currentWeek ?? 1;
     final weekData = getWeekData(week);
 
@@ -91,18 +147,25 @@ class _PregnancyJournalScreenState
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text('Today\'s Journal',
-                style: TextStyle(color: Color(0xFF1A1A2E), fontWeight: FontWeight.w700, fontSize: 16)),
-            Text('Week $week', style: const TextStyle(color: AppColors.textHint, fontSize: 12)),
+                style: TextStyle(
+                    color: Color(0xFF1A1A2E), fontWeight: FontWeight.w700, fontSize: 16)),
+            Text('Week $week',
+                style: const TextStyle(color: AppColors.textHint, fontSize: 12)),
           ],
         ),
         actions: [
           TextButton(
             onPressed: _saving ? null : _save,
             child: _saving
-                ? const SizedBox(width: 20, height: 20,
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
                     child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary))
-                : const Text('Save', style: TextStyle(
-                    color: AppColors.primary, fontWeight: FontWeight.w700, fontSize: 15)),
+                : const Text('Save',
+                    style: TextStyle(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15)),
           ),
         ],
       ),
@@ -111,11 +174,12 @@ class _PregnancyJournalScreenState
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Tip from weekly data
+            // Weekly tip
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                gradient: const LinearGradient(colors: [Color(0xFFFCE4EC), Color(0xFFF3E5F5)]),
+                gradient: const LinearGradient(
+                    colors: [Color(0xFFFCE4EC), Color(0xFFF3E5F5)]),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Row(
@@ -124,7 +188,8 @@ class _PregnancyJournalScreenState
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(weekData.weeklyTip,
-                        style: const TextStyle(fontSize: 12, color: Color(0xFF880E4F), height: 1.5)),
+                        style: const TextStyle(
+                            fontSize: 12, color: Color(0xFF880E4F), height: 1.5)),
                   ),
                 ],
               ),
@@ -146,7 +211,8 @@ class _PregnancyJournalScreenState
                     decoration: BoxDecoration(
                       color: sel ? AppColors.primary : Colors.white,
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: sel ? AppColors.primary : AppColors.border),
+                      border: Border.all(
+                          color: sel ? AppColors.primary : AppColors.border),
                     ),
                     child: Text(
                       '${_moodEmoji(m)} $m',
@@ -171,18 +237,19 @@ class _PregnancyJournalScreenState
               children: kAllSymptoms.map((s) {
                 final sel = _symptoms.contains(s);
                 return FilterChip(
-                  label: Text(s, style: TextStyle(
-                    fontSize: 11,
-                    color: sel ? Colors.white : AppColors.textPrimary,
-                  )),
+                  label: Text(s,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: sel ? Colors.white : AppColors.textPrimary,
+                      )),
                   selected: sel,
                   selectedColor: const Color(0xFF7B1FA2),
                   backgroundColor: Colors.white,
                   checkmarkColor: Colors.white,
-                  side: BorderSide(color: sel ? const Color(0xFF7B1FA2) : AppColors.border),
+                  side: BorderSide(
+                      color: sel ? const Color(0xFF7B1FA2) : AppColors.border),
                   onSelected: (v) => setState(() {
-                    if (v) _symptoms.add(s);
-                    else _symptoms.remove(s);
+                    if (v) { _symptoms.add(s); } else { _symptoms.remove(s); }
                   }),
                 );
               }).toList(),
@@ -211,9 +278,21 @@ class _PregnancyJournalScreenState
             const SizedBox(height: 10),
             Row(
               children: [
-                Expanded(child: _field(ctrl: _sleepCtrl, label: 'Sleep (hours)', keyboardType: TextInputType.number)),
+                Expanded(
+                  child: _field(
+                    ctrl: _sleepCtrl,
+                    label: 'Sleep (hours)',
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  ),
+                ),
                 const SizedBox(width: 12),
-                Expanded(child: _field(ctrl: _waterCtrl, label: 'Water (glasses)', keyboardType: TextInputType.number)),
+                Expanded(
+                  child: _field(
+                    ctrl: _waterCtrl,
+                    label: 'Water (glasses)',
+                    keyboardType: TextInputType.number,
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 20),
@@ -253,20 +332,44 @@ class _PregnancyJournalScreenState
     decoration: BoxDecoration(
       color: Colors.white,
       borderRadius: BorderRadius.circular(12),
-      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8)],
+      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8)],
     ),
     child: Column(
       children: [
         Row(children: [
-          Expanded(child: _field(ctrl: _weightCtrl, label: 'Weight (kg)', keyboardType: TextInputType.number)),
+          Expanded(
+            child: _field(
+              ctrl: _weightCtrl,
+              label: 'Weight (kg)',
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            ),
+          ),
           const SizedBox(width: 10),
-          Expanded(child: _field(ctrl: _sugarCtrl, label: 'Sugar (mg/dL)', keyboardType: TextInputType.number)),
+          Expanded(
+            child: _field(
+              ctrl: _sugarCtrl,
+              label: 'Sugar (mg/dL)',
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            ),
+          ),
         ]),
         const SizedBox(height: 10),
         Row(children: [
-          Expanded(child: _field(ctrl: _bpSCtrl, label: 'BP Systolic', keyboardType: TextInputType.number)),
+          Expanded(
+            child: _field(
+              ctrl: _bpSCtrl,
+              label: 'BP Systolic',
+              keyboardType: TextInputType.number,
+            ),
+          ),
           const SizedBox(width: 10),
-          Expanded(child: _field(ctrl: _bpDCtrl, label: 'BP Diastolic', keyboardType: TextInputType.number)),
+          Expanded(
+            child: _field(
+              ctrl: _bpDCtrl,
+              label: 'BP Diastolic',
+              keyboardType: TextInputType.number,
+            ),
+          ),
         ]),
       ],
     ),
@@ -304,8 +407,8 @@ class _PregnancyJournalScreenState
     children: [
       Icon(icon, color: color, size: 18),
       const SizedBox(width: 8),
-      Text(title, style: TextStyle(
-          fontWeight: FontWeight.w700, fontSize: 14, color: color)),
+      Text(title,
+          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: color)),
     ],
   );
 

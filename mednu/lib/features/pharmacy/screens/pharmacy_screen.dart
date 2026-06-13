@@ -113,9 +113,9 @@ class PharmacyScreen extends StatelessWidget {
                               width: R.w(context, 56),
                               height: R.w(context, 56),
                               decoration: BoxDecoration(
-                                color: catColor.withOpacity(0.1),
+                                color: catColor.withValues(alpha:0.1),
                                 borderRadius: BorderRadius.circular(R.r(context, 16)),
-                                border: Border.all(color: catColor.withOpacity(0.2)),
+                                border: Border.all(color: catColor.withValues(alpha:0.2)),
                               ),
                               child: Icon(cat['icon'] as IconData, color: catColor, size: R.w(context, 28)),
                             ),
@@ -180,7 +180,7 @@ class _PharmacyCard extends StatelessWidget {
                 width: R.w(context, 52),
                 height: R.w(context, 52),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1565C0).withOpacity(0.1),
+                  color: const Color(0xFF1565C0).withValues(alpha:0.1),
                   borderRadius: BorderRadius.circular(R.r(context, 14)),
                 ),
                 child: Icon(Icons.local_pharmacy_rounded, color: const Color(0xFF1565C0), size: R.w(context, 28)),
@@ -214,7 +214,7 @@ class _PharmacyCard extends StatelessWidget {
               Container(
                 padding: EdgeInsets.symmetric(horizontal: R.p(context, 10), vertical: R.p(context, 4)),
                 decoration: BoxDecoration(
-                  color: statusColor.withOpacity(0.1),
+                  color: statusColor.withValues(alpha:0.1),
                   borderRadius: BorderRadius.circular(R.r(context, 8)),
                 ),
                 child: Text(

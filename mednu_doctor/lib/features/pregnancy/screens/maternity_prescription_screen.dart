@@ -166,7 +166,7 @@ class _MaternityPrescriptionScreenState
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.1),
+                  color: AppColors.primary.withValues(alpha:0.1),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text('Week ${widget.pregnancyWeek}',
@@ -208,9 +208,9 @@ class _MaternityPrescriptionScreenState
                   margin: const EdgeInsets.only(right: 8),
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.08),
+                    color: AppColors.primary.withValues(alpha:0.08),
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+                    border: Border.all(color: AppColors.primary.withValues(alpha:0.2)),
                   ),
                   child: Text('+ $t', style: const TextStyle(fontSize: 11, color: AppColors.primary, fontWeight: FontWeight.w500)),
                 ),
@@ -250,7 +250,7 @@ class _MaternityPrescriptionScreenState
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8)],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:0.05), blurRadius: 8)],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

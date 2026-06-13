@@ -166,9 +166,9 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                 Container(
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF1565C0).withOpacity(0.06),
+                    color: const Color(0xFF1565C0).withValues(alpha:0.06),
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: const Color(0xFF1565C0).withOpacity(0.2)),
+                    border: Border.all(color: const Color(0xFF1565C0).withValues(alpha:0.2)),
                   ),
                   child: Row(children: [
                     const Icon(Icons.access_time_rounded, color: Color(0xFF1565C0), size: 20),
@@ -216,7 +216,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFE65100).withOpacity(0.1),
+                      color: const Color(0xFFE65100).withValues(alpha:0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text('${_filtered.length} items', style: AppTextStyles.caption.copyWith(color: const Color(0xFFE65100), fontWeight: FontWeight.w600)),
@@ -247,11 +247,11 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(14),
                         border: Border.all(
-                          color: isExpanded ? const Color(0xFFE65100).withOpacity(0.4) : AppColors.divider,
+                          color: isExpanded ? const Color(0xFFE65100).withValues(alpha:0.4) : AppColors.divider,
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.03),
+                            color: Colors.black.withValues(alpha:0.03),
                             blurRadius: 8,
                             offset: const Offset(0, 2),
                           ),
@@ -267,7 +267,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                               Container(
                                 width: 28, height: 28,
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFFE65100).withOpacity(0.1),
+                                  color: const Color(0xFFE65100).withValues(alpha:0.1),
                                   shape: BoxShape.circle,
                                 ),
                                 child: const Center(
@@ -361,12 +361,12 @@ class _ContactCard extends StatelessWidget {
           color: Colors.white,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: AppColors.divider),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:0.04), blurRadius: 8, offset: const Offset(0, 2))],
         ),
         child: Column(children: [
           Container(
             width: 40, height: 40,
-            decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle),
+            decoration: BoxDecoration(color: color.withValues(alpha:0.1), shape: BoxShape.circle),
             child: Icon(icon, color: color, size: 20),
           ),
           const SizedBox(height: 6),
