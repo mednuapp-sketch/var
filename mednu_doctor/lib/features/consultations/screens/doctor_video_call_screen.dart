@@ -49,6 +49,7 @@ class _DoctorVideoCallScreenState extends State<DoctorVideoCallScreen>
   // Patient info loaded from the consultation document
   String? _patientId;
   String _consultPatientName = 'Patient';
+  String? _appointmentId;
 
   late AgoraCallService _agora;
   final _notesCtrl = TextEditingController();
@@ -131,6 +132,12 @@ class _DoctorVideoCallScreenState extends State<DoctorVideoCallScreen>
             _patientId = pid;
             _consultPatientName = pname;
           });
+        }
+      }
+      if (_appointmentId == null) {
+        final apptId = data['appointmentId'] as String?;
+        if (apptId != null && apptId.isNotEmpty) {
+          setState(() => _appointmentId = apptId);
         }
       }
 
@@ -717,6 +724,7 @@ class _DoctorVideoCallScreenState extends State<DoctorVideoCallScreen>
         'patientId': _patientId ?? '',
         'patientName': _consultPatientName,
         'consultationId': widget.consultationId,
+        'appointmentId': _appointmentId,
         'sessionValidated': true,
       });
     } else {

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as dev;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -23,7 +24,7 @@ class FcmService {
     final messaging = FirebaseMessaging.instance;
 
     // Request permission (required on iOS; shows dialog on Android 13+).
-    await messaging.requestPermission(
+    final settings = await messaging.requestPermission(
       alert: true,
       badge: true,
       sound: true,
@@ -32,6 +33,15 @@ class FcmService {
       carPlay: false,
       provisional: false,
     );
+
+    final granted = settings.authorizationStatus == AuthorizationStatus.authorized
+        || settings.authorizationStatus == AuthorizationStatus.provisional;
+    dev.log('[FCM] Permission status: ${settings.authorizationStatus}', name: 'FcmService');
+
+    if (!granted) {
+      dev.log('[FCM] Notifications denied — skipping token registration', name: 'FcmService');
+      return;
+    }
 
     // Save token when the user is already signed in at startup.
     final uid = FirebaseAuth.instance.currentUser?.uid;
@@ -90,13 +100,11 @@ class FcmService {
           .doc(uid)
           .update({'fcmToken': token});
     } catch (_) {
-      // Use set with merge in case the doc doesn't exist yet (new registration).
-      try {
-        await FirebaseFirestore.instance
-            .collection('doctors')
-            .doc(uid)
-            .set({'fcmToken': token}, SetOptions(merge: true));
-      } catch (_) {}
+      // Doc doesn't exist yet (new registration in progress) — the token will
+      // be included in saveProfile() when the doctor document is first created.
+      // Do NOT create the doc here; a premature partial doc causes the
+      // subsequent saveProfile() set(merge:true) to be treated as an update,
+      // which is blocked by Firestore rules because it sets the 'status' field.
     }
   }
 }

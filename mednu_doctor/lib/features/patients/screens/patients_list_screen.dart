@@ -159,6 +159,8 @@ class _PatientsListScreenState extends State<PatientsListScreen> {
             ? FirebaseFirestore.instance
                 .collection('appointments')
                 .where('doctorId', isEqualTo: uid)
+                .orderBy('createdAt', descending: true)
+                .limit(500)
                 .snapshots()
             : const Stream.empty(),
         builder: (context, snap) {

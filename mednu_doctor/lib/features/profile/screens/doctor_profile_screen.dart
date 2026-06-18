@@ -231,9 +231,20 @@ class _DoctorProfileEditScreenState extends State<DoctorProfileEditScreen> {
     final uid = DoctorAuthService.currentUid;
     if (uid == null) return;
 
-    final File? file = source == ImageSource.gallery
-        ? await ImageUploadService.pickFromGallery()
-        : await ImageUploadService.pickFromCamera();
+    File? file;
+    try {
+      file = source == ImageSource.gallery
+          ? await ImageUploadService.pickFromGallery()
+          : await ImageUploadService.pickFromCamera();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Could not open picker: ${e.toString().replaceAll('Exception: ', '')}'),
+        backgroundColor: AppColors.error,
+        behavior: SnackBarBehavior.floating,
+      ));
+      return;
+    }
 
     if (file == null || !mounted) return;
 

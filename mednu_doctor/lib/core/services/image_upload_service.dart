@@ -7,31 +7,23 @@ class ImageUploadService {
   static final _storage = FirebaseStorage.instance;
 
   static Future<File?> pickFromGallery() async {
-    try {
-      final xFile = await _picker.pickImage(
-        source: ImageSource.gallery,
-        maxWidth: 800,
-        maxHeight: 800,
-        imageQuality: 75,
-      );
-      return xFile != null ? File(xFile.path) : null;
-    } catch (_) {
-      return null;
-    }
+    final xFile = await _picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 800,
+      maxHeight: 800,
+      imageQuality: 75,
+    );
+    return xFile != null ? File(xFile.path) : null;
   }
 
   static Future<File?> pickFromCamera() async {
-    try {
-      final xFile = await _picker.pickImage(
-        source: ImageSource.camera,
-        maxWidth: 800,
-        maxHeight: 800,
-        imageQuality: 75,
-      );
-      return xFile != null ? File(xFile.path) : null;
-    } catch (_) {
-      return null;
-    }
+    final xFile = await _picker.pickImage(
+      source: ImageSource.camera,
+      maxWidth: 800,
+      maxHeight: 800,
+      imageQuality: 75,
+    );
+    return xFile != null ? File(xFile.path) : null;
   }
 
   /// Uploads to `doctors/{uid}/profile.jpg` and returns the download URL.
@@ -68,28 +60,20 @@ class ImageUploadService {
 
   /// Picks a document image from gallery (higher quality for readability).
   static Future<File?> pickDocument() async {
-    try {
-      final xFile = await _picker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 90,
-      );
-      return xFile != null ? File(xFile.path) : null;
-    } catch (_) {
-      return null;
-    }
+    final xFile = await _picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 90,
+    );
+    return xFile != null ? File(xFile.path) : null;
   }
 
   /// Picks an image from camera (for photographing physical documents).
   static Future<File?> pickDocumentFromCamera() async {
-    try {
-      final xFile = await _picker.pickImage(
-        source: ImageSource.camera,
-        imageQuality: 90,
-      );
-      return xFile != null ? File(xFile.path) : null;
-    } catch (_) {
-      return null;
-    }
+    final xFile = await _picker.pickImage(
+      source: ImageSource.camera,
+      imageQuality: 90,
+    );
+    return xFile != null ? File(xFile.path) : null;
   }
 
   /// Uploads to `doctors/{uid}/docs/{docType}.jpg` and returns the download URL.

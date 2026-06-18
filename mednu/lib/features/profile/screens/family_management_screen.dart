@@ -179,7 +179,12 @@ void showAddFamilyMemberSheet(
         );
       },
     ),
-  );
+  ).whenComplete(() {
+    nameCtrl.dispose();
+    relationCtrl.dispose();
+    ageCtrl.dispose();
+    phoneCtrl.dispose();
+  });
 }
 
 TextField _field(TextEditingController ctrl, String label, {

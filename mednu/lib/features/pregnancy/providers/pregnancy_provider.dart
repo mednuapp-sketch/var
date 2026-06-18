@@ -471,7 +471,7 @@ final pregnancyProvider =
 // Real-time stream for profile (detects doctor assignments, high-risk updates)
 final pregnancyProfileStreamProvider = StreamProvider.autoDispose<PregnancyProfile?>((ref) {
   final uid = _currentUid;
-  if (uid == null) return const Stream.empty();
+  if (uid == null) return Stream.value(null);
   return _db
       .collection(_kProfiles)
       .where('patientId', isEqualTo: uid)
@@ -486,7 +486,7 @@ final pregnancyProfileStreamProvider = StreamProvider.autoDispose<PregnancyProfi
 // Real-time stream for checkups
 final pregnancyCheckupsStreamProvider = StreamProvider.autoDispose<List<PregnancyCheckup>>((ref) {
   final uid = _currentUid;
-  if (uid == null) return const Stream.empty();
+  if (uid == null) return Stream.value(const []);
   return _db
       .collection(_kCheckups)
       .where('patientId', isEqualTo: uid)
@@ -503,7 +503,7 @@ final pregnancyCheckupsStreamProvider = StreamProvider.autoDispose<List<Pregnanc
 // Real-time stream for doctor notes
 final pregnancyDoctorNotesStreamProvider = StreamProvider.autoDispose<List<PregnancyDoctorNote>>((ref) {
   final uid = _currentUid;
-  if (uid == null) return const Stream.empty();
+  if (uid == null) return Stream.value(const []);
   return _db
       .collection(_kNotes)
       .where('patientId', isEqualTo: uid)
@@ -517,7 +517,7 @@ final pregnancyDoctorNotesStreamProvider = StreamProvider.autoDispose<List<Pregn
 // Real-time stream for medicines
 final pregnancyMedicinesStreamProvider = StreamProvider.autoDispose<List<PregnancyMedicine>>((ref) {
   final uid = _currentUid;
-  if (uid == null) return const Stream.empty();
+  if (uid == null) return Stream.value(const []);
   return _db
       .collection(_kMeds)
       .where('patientId', isEqualTo: uid)

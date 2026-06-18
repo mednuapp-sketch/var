@@ -88,7 +88,8 @@ class _MapLocationPickerScreenState
     if (mounted) setState(() => _phase = _Phase.checking);
 
     // 1. Connectivity
-    final results = await Connectivity().checkConnectivity();
+    final result = await Connectivity().checkConnectivity();
+    final results = result is List ? result as List : [result];
     final isOnline = results.any((r) => r != ConnectivityResult.none);
     if (!isOnline) {
       if (mounted) setState(() => _phase = _Phase.offline);
@@ -290,7 +291,7 @@ class _MapLocationPickerScreenState
 
     return Scaffold(
       backgroundColor:
-          isDark ? AppColors.darkBackground : const Color(0xFFF5F5F5),
+          isDark ? AppColors.darkBase : const Color(0xFFF5F5F5),
       body: _buildBody(isDark),
     );
   }

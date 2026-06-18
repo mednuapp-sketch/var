@@ -6,7 +6,6 @@ import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
-import '../../doctors/services/review_service.dart';
 import '../../../core/widgets/ux_widgets.dart';
 
 // Converts "09:00 AM" / "02:30 PM" to total minutes since midnight for sorting.
@@ -523,6 +522,7 @@ class _AppointmentScreenState extends State<AppointmentScreen>
       ),
     );
     if (confirm == true) {
+      if (!mounted) return;
       await FirebaseFirestore.instance
           .collection('appointments')
           .doc(docId)

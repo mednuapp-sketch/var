@@ -469,8 +469,11 @@ class _FindBodyState extends ConsumerState<_FindBody> {
   String _selectedSpec = 'All';
 
   static const _specFilters = [
-    'All', 'General', 'Cardiology', 'Dermatology',
-    'Gynaecology', 'Paediatrics', 'ENT', 'Orthopaedics', 'Neurology',
+    'All', 'General', 'Cardiology', 'Endocrinology',
+    'Gastroenterology', 'Nephrology', 'Urology', 'Neurology',
+    'Pulmonology', 'Gynaecology', 'Dermatology', 'General Surgery',
+    'Orthopaedics', 'Ophthalmology', 'ENT', 'Paediatrics',
+    'Psychiatry', 'Dental', 'Rheumatology', 'Oncology',
   ];
 
 
@@ -1554,7 +1557,6 @@ class _ProfileHeader extends StatelessWidget {
     required this.onSettingsTap,
   });
 
-  static const double _avatarSize = 88.0;
   static const double _avatarHalf = 44.0;
 
   @override

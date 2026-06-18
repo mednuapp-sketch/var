@@ -40,6 +40,11 @@
     <!-- USE_EXACT_ALARM is granted automatically on Android 13+ for alarm apps;
          SCHEDULE_EXACT_ALARM covers the manual-grant path for older versions -->
 
+    <!-- Battery optimization exemption — keeps the FCM listener alive on
+         aggressive OEM battery managers (MIUI, ColorOS, FuntouchOS, OneUI)
+         so push notifications still arrive after the app is swiped away. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
     <!-- ── Foreground service (for incoming consultation calls) ── -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
@@ -78,7 +83,7 @@
         <!-- Google Maps API Key -->
         <meta-data
             android:name="com.google.android.geo.API_KEY"
-            android:value="AIzaSyBh_sDZlUDbE-u-c_4-sWsT1gxvfTYqoco"/>
+            android:value="AIzaSyBTt8cnzrKMOxMJpAnFgTiZxJSaqxE3aj8"/>
 
         <!-- Firebase Cloud Messaging default channel -->
         <meta-data
@@ -140,6 +145,11 @@
         <intent>
             <action android:name="android.intent.action.SEND"/>
             <data android:mimeType="text/plain"/>
+        </intent>
+        <!-- UPI intent — allows Razorpay to discover GPay, PhonePe, BHIM, Paytm etc. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="upi"/>
         </intent>
     </queries>
 

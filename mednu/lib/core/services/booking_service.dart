@@ -19,7 +19,8 @@ class BookingService {
     String notes = '',
     Map<String, dynamic> serviceDetails = const {},
   }) async {
-    final uid = _auth.currentUser?.uid ?? '';
+    final uid = _auth.currentUser?.uid;
+    if (uid == null || uid.isEmpty) throw Exception('User not authenticated');
 
     await OperationLogger.logPending(
       action: OpAction.bookingCreated,

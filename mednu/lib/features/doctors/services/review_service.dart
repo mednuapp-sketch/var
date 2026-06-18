@@ -18,7 +18,8 @@ class ReviewService {
         await _db.collection('appointments').doc(appointmentId).get();
     if (!apptSnap.exists) return null;
 
-    final appt = apptSnap.data()!;
+    final appt = apptSnap.data();
+    if (appt == null) return null;
     if (appt['patientId'] != uid) return null;
     if (appt['status'] != 'completed') return null;
 
@@ -42,6 +43,8 @@ class ReviewService {
     required ReviewCategories categories,
     required String consultationType,
   }) async {
+    if (appointmentId.trim().isEmpty) throw Exception('Invalid appointment ID');
+    if (doctorId.trim().isEmpty) throw Exception('Invalid doctor ID');
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw Exception('Not authenticated');
 

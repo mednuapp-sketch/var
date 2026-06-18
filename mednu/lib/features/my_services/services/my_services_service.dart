@@ -29,7 +29,8 @@ class MyServicesService {
     final col = _collectionFor(booking.source);
     return _db.collection(col).doc(booking.id).snapshots().map((snap) {
       if (!snap.exists) return null;
-      final d = snap.data()!;
+      final d = snap.data();
+      if (d == null) return null;
       switch (booking.source) {
         case BookingSource.appointment:
           return UnifiedBooking.fromAppointment(d, snap.id);
@@ -145,12 +146,23 @@ class MyServicesService {
       List<Stream<List<UnifiedBooking>>> streams) {
     final latest = List<List<UnifiedBooking>>.filled(
         streams.length, const [], growable: false);
-    final ctrl = StreamController<List<UnifiedBooking>>.broadcast();
     int pendingCount = streams.length;
+    final subs = <StreamSubscription<List<UnifiedBooking>>>[];
+    late StreamController<List<UnifiedBooking>> ctrl;
+
+    ctrl = StreamController<List<UnifiedBooking>>.broadcast(
+      onCancel: () {
+        for (final s in subs) {
+          s.cancel();
+        }
+        subs.clear();
+        if (!ctrl.isClosed) ctrl.close();
+      },
+    );
 
     for (int i = 0; i < streams.length; i++) {
       final idx = i;
-      streams[idx].listen(
+      subs.add(streams[idx].listen(
         (list) {
           if (pendingCount > 0 && latest[idx].isEmpty) pendingCount--;
           latest[idx] = list;
@@ -161,7 +173,7 @@ class MyServicesService {
           _emit(ctrl, latest);
         },
         cancelOnError: false,
-      );
+      ));
     }
 
     return ctrl.stream;

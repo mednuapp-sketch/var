@@ -70,6 +70,7 @@ class OperationLogger {
         'metadata':     metadata ?? {},
         'errorDetails': errorDetails,
         'timestamp':    FieldValue.serverTimestamp(),
+        'expiresAt':    Timestamp.fromDate(DateTime.now().add(const Duration(days: 730))),
       });
     } catch (_) {
       // Logging must never crash the app — silently swallow.

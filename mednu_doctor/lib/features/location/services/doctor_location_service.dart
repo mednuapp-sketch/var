@@ -9,6 +9,9 @@ class DoctorLocationService {
   static StreamSubscription<ServiceStatus>? _serviceStatusSub;
   static String? _trackingUid;
   static void Function()? _onLocationDisabledCallback;
+  // Minimum gap between Firestore writes to prevent write storms on fast movement.
+  static const _kMinWriteInterval = Duration(seconds: 30);
+  static DateTime? _lastWriteTime;
 
   // ── Geohash (no external package needed) ───────────────────────────────
   static String geohash(double lat, double lng, {int precision = 9}) {
@@ -117,6 +120,13 @@ class DoctorLocationService {
       ),
     ).listen(
       (pos) async {
+        // Rate-limit Firestore writes: skip if last write was < 30 s ago.
+        final now = DateTime.now();
+        if (_lastWriteTime != null &&
+            now.difference(_lastWriteTime!) < _kMinWriteInterval) {
+          return;
+        }
+        _lastWriteTime = now;
         try {
           final gh = geohash(pos.latitude, pos.longitude);
           await _db.collection('doctors').doc(uid).update({
@@ -145,6 +155,7 @@ class DoctorLocationService {
   static Future<void> stopTracking() async {
     _trackingUid = null;
     _onLocationDisabledCallback = null;
+    _lastWriteTime = null;
     await _positionSub?.cancel();
     await _serviceStatusSub?.cancel();
     _positionSub = null;

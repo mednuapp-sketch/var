@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_text_styles.dart';
+import '../../../../core/router/app_router.dart';
 import '../providers/nutrition_provider.dart';
 import '../../../../core/widgets/ux_widgets.dart';
 
@@ -95,6 +96,20 @@ class _BookNutritionAppointmentScreenState
       );
       return;
     }
+
+    // ── Payment gate ──────────────────────────────────────
+    if (_fee > 0) {
+      final paid = await context.push<bool>(
+        AppRoutes.payment,
+        extra: {
+          'amount':      _fee.toInt().toString(),
+          'description': 'Nutrition Consultation with $_nutritionistName',
+        },
+      );
+      if (!mounted) return;
+      if (paid != true) return;
+    }
+    // ─────────────────────────────────────────────────────
 
     final success = await ref.read(nutritionBookingProvider.notifier).bookAppointment(
           nutritionistId: _nutritionistId,

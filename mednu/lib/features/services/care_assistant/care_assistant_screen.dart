@@ -38,6 +38,8 @@ class CareAssistantScreen extends StatelessWidget {
       serviceName: task['name'] as String,
       themeColor: _themeColor,
       priceLabel: '${task['priceLabel']} per visit',
+      amount: (task['price'] as num?)?.toInt() ?? 0,
+      paymentDescription: 'Care Assistant: ${task['name']}',
       serviceDetails: {
         'taskType': task['name'],
         'taskDesc': task['description'],

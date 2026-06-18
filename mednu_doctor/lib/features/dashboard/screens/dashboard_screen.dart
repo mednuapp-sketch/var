@@ -347,12 +347,19 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
   @override
   void initState() {
     super.initState();
-    final uid = DoctorAuthService.currentUid ?? '';
-    _upcomingStream = FirebaseFirestore.instance
-        .collection('appointments')
-        .where('doctorId', isEqualTo: uid)
-        .where('status', isEqualTo: 'booked')
-        .snapshots();
+    final uid = DoctorAuthService.currentUid;
+    // Filter to yesterday onwards so the stream only loads recent/future
+    // appointments instead of the doctor's entire career history.
+    final yesterday = DateFormat('yyyy-MM-dd')
+        .format(DateTime.now().subtract(const Duration(days: 1)));
+    _upcomingStream = uid == null || uid.isEmpty
+        ? const Stream.empty()
+        : FirebaseFirestore.instance
+            .collection('appointments')
+            .where('doctorId', isEqualTo: uid)
+            .where('status', isEqualTo: 'booked')
+            .where('date', isGreaterThanOrEqualTo: yesterday)
+            .snapshots();
   }
 
   @override
@@ -376,15 +383,20 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                     final name = data?['name'] as String? ?? 'Doctor';
                     final specialty = data?['specialty'] as String? ?? 'General Physician';
                     final photoUrl = data?['photoUrl'] as String?;
+                    final isVerified = data?['isVerified'] as bool? ?? false;
                     return Row(children: [
                       _DoctorAvatar(photoUrl: photoUrl, size: 40, iconSize: 22),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                           Text(name, style: AppTextStyles.labelLarge),
-                          Text('$specialty • MCI Verified ✓',
-                              style: AppTextStyles.caption.copyWith(color: AppColors.success),
-                              overflow: TextOverflow.ellipsis),
+                          Text(
+                            isVerified ? '$specialty • MCI Verified ✓' : specialty,
+                            style: AppTextStyles.caption.copyWith(
+                              color: isVerified ? AppColors.success : AppColors.textSecondary,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ]),
                       ),
                       Stack(children: [
@@ -1155,6 +1167,9 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
   Timer? _refreshTimer;
   // Tracks appointments for which the auto-connect dialog has already been shown.
   final Set<String> _autoAlertedIds = {};
+  // Tracks appointments for which local reminders have already been scheduled
+  // this session. Prevents re-scheduling on every Firestore stream emission.
+  final Set<String> _scheduledReminderIds = {};
 
   @override
   void initState() {
@@ -1241,9 +1256,12 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
               if (mounted) _checkAutoConnect(upcoming);
             });
 
-            // Schedule local reminders for all upcoming appointments.
-            // Idempotent: scheduling the same notification ID again just updates it.
+            // Schedule local reminders for upcoming appointments.
+            // Guarded by _scheduledReminderIds so we only call the notification
+            // plugin once per appointment ID per session, not on every stream event.
             for (final appt in upcoming) {
+              if (_scheduledReminderIds.contains(appt.id)) continue;
+              _scheduledReminderIds.add(appt.id);
               final d = appt.data();
               AppointmentReminderService.scheduleReminders(
                 appointmentId: appt.id,
@@ -1489,7 +1507,7 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
                           padding: const EdgeInsets.symmetric(vertical: 11),
                           textStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w700),
                         ),
-                        onPressed: () => _startCallForAppointment(context, docId, data),
+                        onPressed: () => _startCallForAppointment(docId, data),
                       ),
                     ),
                   ),
@@ -1582,13 +1600,12 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
       builder: (_) => _AutoConnectDialog(
         patientName:     data['patientName'] as String? ?? 'Patient',
         appointmentTime: data['time']        as String? ?? '',
-        onJoin: () => _startCallForAppointment(context, apptId, data),
+        onJoin: () => _startCallForAppointment(apptId, data),
       ),
     );
   }
 
   Future<void> _startCallForAppointment(
-    BuildContext ctx,
     String appointmentId,
     Map<String, dynamic> data,
   ) async {
@@ -1598,7 +1615,8 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
     if (consultationId == null || consultationId.isEmpty) {
       final uid = FirebaseAuth.instance.currentUser?.uid;
       if (uid == null) return;
-      FeedbackService.showLoading(ctx, 'Starting call…');
+      if (!mounted) return;
+      FeedbackService.showLoading(context, 'Starting call…');
       try {
         final db          = FirebaseFirestore.instance;
         final patientId   = data['patientId']   as String? ?? '';
@@ -1654,22 +1672,21 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
           'consultationId': consultationId,
         });
 
-        if (mounted) FeedbackService.dismiss(ctx);
+        if (!mounted) return;
+        FeedbackService.dismiss(context);
       } catch (e) {
-        if (mounted) {
-          FeedbackService.dismiss(ctx);
-          FeedbackService.showError(ctx, 'Failed to start call. Please try again.');
-        }
+        if (!mounted) return;
+        FeedbackService.dismiss(context);
+        FeedbackService.showError(context, 'Failed to start call. Please try again.');
         return;
       }
     }
 
-    if (mounted) {
-      ctx.push(AppRoutes.videoCall, extra: {
-        'consultationId': consultationId,
-        'patientName': data['patientName'] ?? 'Patient',
-      });
-    }
+    if (!mounted) return;
+    context.push(AppRoutes.videoCall, extra: {
+      'consultationId': consultationId,
+      'patientName': data['patientName'] ?? 'Patient',
+    });
   }
 
   Future<void> _cancelAppointment(String docId) async {
@@ -1692,7 +1709,7 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
         ],
       ),
     );
-    if (confirm == true) {
+    if (confirm == true && mounted) {
       FeedbackService.showLoading(context, 'Cancelling appointment...');
       try {
         await FirebaseFirestore.instance

@@ -36,11 +36,28 @@ class AppointmentReminderService {
 
   static Future<void> init() async {
     if (_initialised) return;
-    // Load timezone database (bundled with the timezone package).
+    // Load the full timezone database so tz.local resolves to the device's
+    // IANA timezone (e.g. "Asia/Kolkata") on Android/iOS.
     tz_data.initializeTimeZones();
-    // We use UTC-based scheduling; exact wall-clock is computed by the device.
-    // For per-device local time, call tz.setLocalLocation() with the device's
-    // IANA timezone name obtained via flutter_timezone or similar.
+    // Sync tz.local with the platform timezone so scheduled notifications fire
+    // at the correct wall-clock time regardless of the device's UTC offset.
+    final platformTz = DateTime.now().timeZoneName;
+    try {
+      tz.setLocalLocation(tz.getLocation(platformTz));
+    } catch (_) {
+      // timeZoneName may be an abbreviation (e.g. "IST") rather than IANA name.
+      // Fall back to offset-based lookup: find any zone whose current offset matches.
+      final offsetMinutes = DateTime.now().timeZoneOffset.inMinutes;
+      for (final loc in tz.timeZoneDatabase.locations.values) {
+        try {
+          final tzNow = tz.TZDateTime.now(loc);
+          if (tzNow.timeZoneOffset.inMinutes == offsetMinutes) {
+            tz.setLocalLocation(loc);
+            break;
+          }
+        } catch (_) {}
+      }
+    }
 
     await _plugin.initialize(
       const InitializationSettings(
@@ -111,7 +128,7 @@ class AppointmentReminderService {
         id,
         title,
         body,
-        tz.TZDateTime.from(when, tz.UTC),
+        tz.TZDateTime.from(when, tz.local),
         _notifDetails,
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         uiLocalNotificationDateInterpretation:

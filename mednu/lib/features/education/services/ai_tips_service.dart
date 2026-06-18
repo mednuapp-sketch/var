@@ -102,10 +102,25 @@ class AiTipsService {
         },
       },
     );
-    final candidates = response.data['candidates'] as List<dynamic>;
-    final content = (candidates.first as Map<String, dynamic>)['content'];
-    final parts = (content as Map<String, dynamic>)['parts'] as List<dynamic>;
-    return (parts.first as Map<String, dynamic>)['text'] as String;
+    final data = response.data;
+    if (data is! Map) throw Exception('Unexpected API response format');
+    final candidates = data['candidates'];
+    if (candidates is! List || candidates.isEmpty) {
+      // Gemini may return a promptFeedback block with BLOCK_REASON instead of candidates.
+      final reason = (data['promptFeedback'] as Map?)?['blockReason'] as String?;
+      throw Exception(reason != null
+          ? 'Content blocked: $reason'
+          : 'No candidates in API response');
+    }
+    final first = candidates.first;
+    if (first is! Map) throw Exception('Malformed candidate');
+    final content = first['content'];
+    if (content is! Map) throw Exception('Malformed content');
+    final parts = content['parts'];
+    if (parts is! List || parts.isEmpty) throw Exception('Empty parts in response');
+    final text = (parts.first as Map?)?['text'];
+    if (text is! String) throw Exception('No text in response');
+    return text;
   }
 
   static String fallbackFor(String category) =>

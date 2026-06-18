@@ -46,3 +46,6 @@ AuthKey_*.p8
 # Admin node modules
 mednu-admin/node_modules/
 mednu-admin/.next/
+
+# Flutter SDK (local installation)
+flutter/

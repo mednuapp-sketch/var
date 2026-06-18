@@ -306,7 +306,9 @@ class _PregnancyPatientDetailScreenState
     final symptoms = List<String>.from(d['symptoms'] as List? ?? []);
     final mood = d['mood'] as String? ?? '';
     final week = d['pregnancyWeek'] as int? ?? 0;
-    final bp = d['bpSystolic'] != null ? '${d['bpSystolic']}/${d['bpDiastolic']}' : null;
+    final bp = (d['bpSystolic'] != null && d['bpDiastolic'] != null)
+        ? '${d['bpSystolic']}/${d['bpDiastolic']}'
+        : null;
     final weight = d['weightKg'];
     final movements = d['babyMovements'];
 
@@ -571,6 +573,20 @@ class _PregnancyPatientDetailScreenState
     final recCtrl = TextEditingController();
     final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
 
+    // Fetch the doctor's real name before opening the dialog.
+    String doctorName = 'Doctor';
+    if (uid.isNotEmpty) {
+      try {
+        final snap = await FirebaseFirestore.instance
+            .collection('doctors')
+            .doc(uid)
+            .get();
+        final fetched = snap.data()?['name'] as String?;
+        if (fetched != null && fetched.isNotEmpty) doctorName = fetched;
+      } catch (_) {}
+    }
+
+    if (!context.mounted) return;
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -616,7 +632,7 @@ class _PregnancyPatientDetailScreenState
                   await FirebaseFirestore.instance.collection('pregnancy_doctor_notes').add({
                     'patientId': widget.patientId,
                     'doctorId': uid,
-                    'doctorName': 'Doctor',
+                    'doctorName': doctorName,
                     'content': contentCtrl.text.trim(),
                     'recommendation': recCtrl.text.trim().isEmpty ? null : recCtrl.text.trim(),
                     'pregnancyWeek': week,

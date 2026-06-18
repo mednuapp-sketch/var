@@ -32,6 +32,20 @@ class SpecialitiesScreen extends StatelessWidget {
         Icons.science_rounded, Color(0xFF558B2F), Color(0xFFF1F8E9)),
     _SpecialtyData('Gastroenterologist', 'Gastroenterology',
         Icons.monitor_heart_rounded, Color(0xFFE65100), Color(0xFFFBE9E7)),
+    _SpecialtyData('Nephrologist', 'Nephrology',
+        Icons.water_drop_rounded, Color(0xFF283593), Color(0xFFE8EAF6)),
+    _SpecialtyData('Urologist', 'Urology',
+        Icons.health_and_safety_rounded, Color(0xFF7B1FA2), Color(0xFFF3E5F5)),
+    _SpecialtyData('Pulmonologist', 'Pulmonology',
+        Icons.air_rounded, Color(0xFF006064), Color(0xFFE0F7FA)),
+    _SpecialtyData('General Surgeon', 'General Surgery',
+        Icons.cut_rounded, Color(0xFF4E342E), Color(0xFFEFEBE9)),
+    _SpecialtyData('Dentist', 'Dental',
+        Icons.mood_rounded, Color(0xFF00838F), Color(0xFFE0F2F1)),
+    _SpecialtyData('Rheumatologist', 'Rheumatology',
+        Icons.elderly_rounded, Color(0xFF827717), Color(0xFFF9FBE7)),
+    _SpecialtyData('Oncologist', 'Oncology',
+        Icons.biotech_rounded, Color(0xFFBF360C), Color(0xFFFBE9E7)),
   ];
 
   @override

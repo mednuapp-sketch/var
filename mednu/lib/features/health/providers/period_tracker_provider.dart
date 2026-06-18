@@ -144,7 +144,8 @@ class PeriodTrackerNotifier extends StateNotifier<PeriodTrackerState> {
     try {
       final snap = await _settingsRef!.get();
       if (!snap.exists) return;
-      final d = snap.data()!;
+      final d = snap.data();
+      if (d == null) return;
       state = state.copyWith(
         avgCycleLength: d['avgCycleLength'] as int? ?? 28,
         remindersEnabled: d['remindersEnabled'] as bool? ?? false,
@@ -165,7 +166,7 @@ class PeriodTrackerNotifier extends StateNotifier<PeriodTrackerState> {
         final d = doc.data();
         return PeriodCycle(
           id: doc.id,
-          startDate: (d['startDate'] as Timestamp).toDate(),
+          startDate: (d['startDate'] as Timestamp?)?.toDate() ?? DateTime.now(),
           endDate: (d['endDate'] as Timestamp?)?.toDate(),
           flowLevel: d['flowLevel'] as String? ?? 'Medium',
         );
@@ -179,7 +180,8 @@ class PeriodTrackerNotifier extends StateNotifier<PeriodTrackerState> {
     try {
       final snap = await _todayDailyRef!.get();
       if (!snap.exists) return;
-      final d = snap.data()!;
+      final d = snap.data();
+      if (d == null) return;
       state = state.copyWith(
         todaySymptoms: List<String>.from(d['symptoms'] as List? ?? []),
         todayMood: d['mood'] as String?,

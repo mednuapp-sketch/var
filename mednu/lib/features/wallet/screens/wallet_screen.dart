@@ -164,7 +164,7 @@ class WalletScreen extends ConsumerWidget {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _AddMoneySheet(ref: ref),
+      builder: (_) => const _AddMoneySheet(),
     );
   }
 
@@ -173,7 +173,7 @@ class WalletScreen extends ConsumerWidget {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _TransferSheet(ref: ref),
+      builder: (_) => const _TransferSheet(),
     );
   }
 
@@ -182,7 +182,7 @@ class WalletScreen extends ConsumerWidget {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _StatementSheet(ref: ref),
+      builder: (_) => const _StatementSheet(),
     );
   }
 
@@ -860,8 +860,7 @@ class _ErrorState extends StatelessWidget {
 
 // ── Add Money Sheet ───────────────────────────────────────
 class _AddMoneySheet extends ConsumerStatefulWidget {
-  final WidgetRef ref;
-  const _AddMoneySheet({required this.ref});
+  const _AddMoneySheet();
 
   @override
   ConsumerState<_AddMoneySheet> createState() => _AddMoneySheetState();
@@ -894,10 +893,12 @@ class _AddMoneySheetState extends ConsumerState<_AddMoneySheet> {
     try {
       await ref.read(walletServiceProvider).addMoney(amount);
       if (!mounted) return;
+      // Capture ScaffoldMessenger and Navigator synchronously before pop
+      // so we never reference context across an async gap.
+      final messenger = ScaffoldMessenger.of(context);
       final nav = Navigator.of(context);
-      final parentCtx = context;
       nav.pop();
-      _showSuccess(amount, parentCtx);
+      _showSuccess(amount, messenger);
     } catch (e) {
       setState(() {
         _loading = false;
@@ -906,50 +907,24 @@ class _AddMoneySheetState extends ConsumerState<_AddMoneySheet> {
     }
   }
 
-  void _showSuccess(double amount, BuildContext parentCtx) {
-    showModalBottomSheet(
-      context: parentCtx,
-      backgroundColor: Colors.transparent,
-      isDismissible: false,
-      builder: (sheetCtx) => Container(
-        padding: const EdgeInsets.all(28),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+  void _showSuccess(double amount, ScaffoldMessengerState messenger) {
+    messenger.showSnackBar(SnackBar(
+      content: Row(children: [
+        const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            '₹${amount.toStringAsFixed(0)} added to wallet successfully',
+            style: const TextStyle(
+                fontFamily: 'Poppins', fontWeight: FontWeight.w600),
+          ),
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 72, height: 72,
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                    colors: [Color(0xFF2E7D32), Color(0xFF66BB6A)]),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.check_rounded,
-                  color: Colors.white, size: 38),
-            ),
-            const SizedBox(height: 16),
-            Text('₹${NumberFormat('#,##,##0.00').format(amount)} Added!',
-                style: AppTextStyles.h3),
-            const SizedBox(height: 6),
-            Text('Your wallet has been updated.',
-                style: AppTextStyles.bodyMedium
-                    .copyWith(color: AppColors.textSecondary)),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () => Navigator.pop(sheetCtx),
-                child: const Text('Done'),
-              ),
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
+      ]),
+      backgroundColor: const Color(0xFF2E7D32),
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      duration: const Duration(seconds: 3),
+    ));
   }
 
   @override
@@ -1064,8 +1039,7 @@ class _AddMoneySheetState extends ConsumerState<_AddMoneySheet> {
 
 // ── Transfer Sheet ────────────────────────────────────────
 class _TransferSheet extends ConsumerStatefulWidget {
-  final WidgetRef ref;
-  const _TransferSheet({required this.ref});
+  const _TransferSheet();
 
   @override
   ConsumerState<_TransferSheet> createState() => _TransferSheetState();
@@ -1258,8 +1232,7 @@ class _TransferSheetState extends ConsumerState<_TransferSheet> {
 
 // ── Statement Sheet ───────────────────────────────────────
 class _StatementSheet extends ConsumerStatefulWidget {
-  final WidgetRef ref;
-  const _StatementSheet({required this.ref});
+  const _StatementSheet();
 
   @override
   ConsumerState<_StatementSheet> createState() => _StatementSheetState();

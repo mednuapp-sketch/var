@@ -30,6 +30,11 @@
     <!-- Exact alarms for appointment reminders (Android 12+) -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <!-- Battery optimization exemption — keeps the FCM listener alive on
+         aggressive OEM battery managers (MIUI, ColorOS, FuntouchOS, OneUI)
+         so push notifications (incoming consultations, reminders) still
+         arrive after the app is swiped away. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <application
         android:label="MedNU Doctor"

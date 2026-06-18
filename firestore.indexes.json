@@ -338,6 +338,14 @@
       ]
     },
     {
+      "collectionGroup": "items",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "dedupKey",  "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "saved_addresses",
       "queryScope": "COLLECTION",
       "fields": [

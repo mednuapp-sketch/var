@@ -38,6 +38,8 @@ class PhysioScreen extends StatelessWidget {
       serviceName: svc['name'] as String,
       themeColor: _themeColor,
       priceLabel: svc['priceLabel'] as String,
+      amount: (svc['price'] as num?)?.toInt() ?? 0,
+      paymentDescription: 'Physiotherapy: ${svc['name']}',
       serviceDetails: {
         'sessionType': svc['name'],
         'title':       svc['name'],

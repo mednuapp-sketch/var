@@ -1,4 +1,4 @@
-package com.example.mednu
+package com.mednu.mednu
 
 import io.flutter.embedding.android.FlutterFragmentActivity
 

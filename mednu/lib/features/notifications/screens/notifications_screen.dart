@@ -99,7 +99,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
         headerSliverBuilder: (_, __) => [
           SliverAppBar(
             pinned: true,
-            expandedHeight: 140,
+            expandedHeight: 200,
             backgroundColor: AppColors.primary,
             foregroundColor: Colors.white,
             leading: IconButton(
@@ -290,7 +290,7 @@ class _HeaderBackground extends StatelessWidget {
           ),
           SafeArea(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 52, 20, 8),
+              padding: const EdgeInsets.fromLTRB(20, 60, 20, 16),
               child: Row(
                 children: [
                   Container(

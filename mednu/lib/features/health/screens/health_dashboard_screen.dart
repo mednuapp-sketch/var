@@ -72,7 +72,7 @@ class _FullPageLoader extends StatelessWidget {
           ),
         ),
         body: SingleChildScrollView(
-          physics: const NeverScrollableScrollPhysics(),
+          physics: const ClampingScrollPhysics(),
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1291,7 +1291,7 @@ class _BMICard extends StatelessWidget {
       builder: (_) => StatefulBuilder(
         builder: (ctx, set) => Padding(
           padding: EdgeInsets.only(
-              bottom: MediaQuery.of(context).viewInsets.bottom),
+              bottom: MediaQuery.of(ctx).viewInsets.bottom),
           child: Container(
             padding: const EdgeInsets.fromLTRB(20, 14, 20, 28),
             decoration: const BoxDecoration(

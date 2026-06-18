@@ -19,6 +19,7 @@ class _SOSScreenState extends State<SOSScreen> with TickerProviderStateMixin {
   List<EmergencyContact> _contacts = [];
   bool _sosSent = false;
   bool _sending = false;
+  bool _sosCancelled = false;
   int _countdown = 5;
   List<String> _sentTo = [];
 
@@ -50,10 +51,11 @@ class _SOSScreenState extends State<SOSScreen> with TickerProviderStateMixin {
       _showNoContactsDialog();
       return;
     }
+    _sosCancelled = false;
     setState(() => _countdown = 5);
     Future.doWhile(() async {
       await Future.delayed(const Duration(seconds: 1));
-      if (!mounted) return false;
+      if (!mounted || _sosCancelled) return false;
       setState(() => _countdown--);
       if (_countdown <= 0) {
         await _sendAlerts();
@@ -238,7 +240,7 @@ class _SOSScreenState extends State<SOSScreen> with TickerProviderStateMixin {
                   ),
                   const SizedBox(height: 12),
                   OutlinedButton(
-                    onPressed: () => setState(() => _countdown = 5),
+                    onPressed: () => setState(() { _sosCancelled = true; _countdown = 5; }),
                     style: OutlinedButton.styleFrom(
                         side: const BorderSide(color: Colors.white30),
                         foregroundColor: Colors.white),

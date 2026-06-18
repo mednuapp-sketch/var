@@ -2,7 +2,21 @@
   "permissions": {
     "allow": [
       "Bash(grep -E \"\\\\.dart$|/$\")",
-      "Bash(flutter analyze *)"
+      "Bash(flutter analyze *)",
+      "Bash(flutter pub *)",
+      "PowerShell(flutter --version 2>&1)",
+      "PowerShell(Get-ChildItem \"$env:USERPROFILE\" -Filter \"flutter\" -Recurse -Depth 4 -ErrorAction SilentlyContinue | Select-Object -First 5 FullName; Get-ChildItem \"C:\\\\src\", \"C:\\\\flutter\", \"C:\\\\tools\" -ErrorAction SilentlyContinue | Select-Object FullName)",
+      "PowerShell(& \"C:\\\\flutter\\\\bin\\\\flutter.bat\" pub get 2>&1)",
+      "Bash(command -v flutter)",
+      "Bash(find /c /d /e -name \"flutter\" -type f)",
+      "Bash(\"c:\\\\var\\\\var\\\\flutter\\\\bin\\\\flutter.bat\" create *)",
+      "PowerShell(adb devices 2>&1)",
+      "PowerShell(Get-ChildItem -Path \"$env:LOCALAPPDATA\\\\Android\\\\Sdk\\\\platform-tools\\\\adb.exe\" -ErrorAction SilentlyContinue; Get-ChildItem -Path \"C:\\\\Android\\\\platform-tools\\\\adb.exe\" -ErrorAction SilentlyContinue; Get-ChildItem -Path \"$env:ProgramFiles\\\\Android\\\\platform-tools\\\\adb.exe\" -ErrorAction SilentlyContinue)",
+      "PowerShell(Get-ChildItem -Recurse -Path \"$env:LOCALAPPDATA\\\\Android\" -Filter \"adb.exe\" -ErrorAction SilentlyContinue | Select-Object FullName)",
+      "Read(//c/flutter/bin/**)",
+      "Bash(\"c:\\\\var\\\\var\\\\flutter\\\\bin\\\\flutter.bat\" pub *)",
+      "Bash(\"c:\\\\var\\\\var\\\\flutter\\\\bin\\\\flutter.bat\" run *)",
+      "Bash(awk '{if \\($3 == \"22324\" || $4 == \"22324\"\\) print}')"
     ]
   }
 }

@@ -217,7 +217,7 @@ class PregnancyNutritionScreen extends ConsumerWidget {
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: (info.$3 as Color).withValues(alpha:0.06),
+        color: info.$3.withValues(alpha:0.06),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
@@ -228,7 +228,7 @@ class PregnancyNutritionScreen extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(nutrient, style: TextStyle(fontWeight: FontWeight.w600, color: info.$3 as Color, fontSize: 13)),
+                Text(nutrient, style: TextStyle(fontWeight: FontWeight.w600, color: info.$3, fontSize: 13)),
                 Text(info.$2, style: const TextStyle(fontSize: 11, color: AppColors.textHint)),
               ],
             ),

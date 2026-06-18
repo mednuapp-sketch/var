@@ -54,6 +54,8 @@ class _CaregiversScreenState extends State<CaregiversScreen> {
       themeColor:  c['color'] as Color,
       priceLabel:  '${c['rate']} • ${c['exp']} experience'
           '${(c['rating'] as double) > 0 ? ' • ⭐ ${(c['rating'] as double).toStringAsFixed(1)}' : ''}',
+      amount: (c['rateNum'] as num?)?.toInt() ?? 0,
+      paymentDescription: 'Caregiver: ${c['name']} – ${c['specialty']}',
       serviceDetails: {
         'caregiverName': c['name'],
         'specialty':     c['specialty'],

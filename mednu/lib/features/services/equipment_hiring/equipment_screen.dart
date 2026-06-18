@@ -52,6 +52,8 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
       serviceName: eq['name'] as String,
       themeColor: eq['color'] as Color,
       priceLabel: '${eq['priceLabel']} rental • $depositStr',
+      amount: (eq['price'] as num?)?.toInt() ?? 0,
+      paymentDescription: '${eq['name']} Equipment Rental',
       serviceDetails: {
         'equipmentName': eq['name'],
         'weeklyPrice':   eq['price'],

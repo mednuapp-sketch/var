@@ -188,7 +188,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
       if (!mounted) return;
       setState(() {
         _bookedScheduleTimes = snap.docs
-            .map((d) => (d.data() as Map<String, dynamic>)['time'] as String? ?? '')
+            .map((d) => d.data()['time'] as String? ?? '')
             .where((t) => t.isNotEmpty)
             .toSet();
       });
@@ -489,6 +489,9 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
     final ref = FirebaseFirestore.instance.collection('consultations').doc();
     final now = FieldValue.serverTimestamp();
     try {
+      final fee = (doctor['fee'] as String? ?? '')
+          .replaceAll('₹', '')
+          .trim();
       await ref.set({
         'channelName': ref.id,
         'status': 'pending',
@@ -500,6 +503,8 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
         'doctorName': doctor['name'],
         'doctorSpecialty': doctor['specialty'],
         'consultationType': 'Video',
+        'fee': int.tryParse(fee) ?? 0,
+        'chiefComplaint': '',
         'createdAt': now,
         'updatedAt': now,
       });
@@ -1338,6 +1343,13 @@ class _BookingConfirmSheet extends StatefulWidget {
 
 class _BookingConfirmSheetState extends State<_BookingConfirmSheet> {
   bool _isLoading = false;
+  final _chiefComplaintCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _chiefComplaintCtrl.dispose();
+    super.dispose();
+  }
 
   Future<void> _confirmAndPay() async {
     setState(() => _isLoading = true);
@@ -1363,6 +1375,7 @@ class _BookingConfirmSheetState extends State<_BookingConfirmSheet> {
         'consultationType': widget.type,
         'fee': totalFee,
         'status': 'booked',
+        'chiefComplaint': _chiefComplaintCtrl.text.trim(),
         'createdAt': now,
         'updatedAt': now,
       });
@@ -1442,6 +1455,28 @@ class _BookingConfirmSheetState extends State<_BookingConfirmSheet> {
           _ConfirmRow(Icons.video_call_rounded, 'Type', '${widget.type} Consultation'),
           _ConfirmRow(Icons.currency_rupee_rounded, 'Total',
               '₹${(int.tryParse(widget.doctor['fee'].replaceAll('₹', '').trim()) ?? 0) + 20}'),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _chiefComplaintCtrl,
+            maxLines: 2,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: InputDecoration(
+              labelText: 'Reason for visit (optional)',
+              hintText: 'e.g. Fever for 2 days, headache...',
+              prefixIcon: const Icon(Icons.notes_rounded),
+              filled: true,
+              fillColor: AppColors.background,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: AppColors.primary),
+              ),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            ),
+          ),
           const SizedBox(height: 24),
           SizedBox(
             width: double.infinity,

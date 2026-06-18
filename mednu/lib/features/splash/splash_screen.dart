@@ -94,35 +94,58 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     final prefs     = await SharedPreferences.getInstance();
     final onboarded = prefs.getBool('onboarded') ?? false;
 
-    // Firebase Auth is the authoritative session source.
-    // currentUser is synchronously available after Firebase.initializeApp().
     final firebaseUser = FirebaseAuth.instance.currentUser;
 
     if (firebaseUser != null) {
+      final uid = firebaseUser.uid;
+      final db  = FirebaseFirestore.instance;
+
+      // ── Step 1: Cache check (instant, offline) ───────────────────────────
       try {
-        final doc = await FirebaseFirestore.instance
+        final cached = await db
             .collection('users')
-            .doc(firebaseUser.uid)
-            .get();
+            .doc(uid)
+            .get(const GetOptions(source: Source.cache));
         if (!mounted) return;
-        if (doc.exists) {
-          // Existing user with complete profile → straight to home.
-          context.go(AppRoutes.home);
+        if (cached.exists) {
+          final data = cached.data() ?? {};
+          if (data['mpinHash'] != null) {
+            context.go(AppRoutes.home);
+          } else {
+            context.go(AppRoutes.createMpin, extra: {'mode': 'setup'});
+          }
           return;
         }
-        // Firebase session exists but Firestore doc is missing (incomplete
-        // registration). Fall through to login so user can complete signup.
+      } on FirebaseException catch (_) {
+        // Cache miss — continue to network check
+      }
+
+      // ── Step 2: Network check ────────────────────────────────────────────
+      try {
+        final doc = await db.collection('users').doc(uid).get();
+        if (!mounted) return;
+        if (doc.exists) {
+          final data = doc.data() ?? {};
+          if (data['mpinHash'] != null) {
+            context.go(AppRoutes.home);
+          } else {
+            context.go(AppRoutes.createMpin, extra: {'mode': 'setup'});
+          }
+          return;
+        }
+        // Firebase session exists but no Firestore doc — sign out cleanly
+        // so the user starts a fresh phone auth on the login screen.
+        await FirebaseAuth.instance.signOut();
       } catch (_) {
-        // Firestore unavailable (offline) → fall through to login.
+        // Network failure — if cache was also empty, fall back to login
+        if (!mounted) return;
+        context.go(onboarded ? AppRoutes.login : AppRoutes.onboarding);
+        return;
       }
     }
 
     if (!mounted) return;
-    if (!onboarded) {
-      context.go(AppRoutes.onboarding);
-    } else {
-      context.go(AppRoutes.login);
-    }
+    context.go(onboarded ? AppRoutes.login : AppRoutes.onboarding);
   }
 
   @override

@@ -282,6 +282,7 @@ class _MedicineScreenState extends ConsumerState<MedicineScreen> {
                       onPressed: () async {
                         final address = await _collectDeliveryAddress(context);
                         if (address == null) return;
+                        if (!mounted) return;
                         Navigator.pop(context);
                         final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
                         final orderId = 'ORD-${DateTime.now().millisecondsSinceEpoch.toString().substring(5)}';
@@ -314,7 +315,7 @@ class _MedicineScreenState extends ConsumerState<MedicineScreen> {
                               .doc(orderId)
                               .set(orderData);
                         }
-                        if (context.mounted) {
+                        if (mounted) {
                           context.push(AppRoutes.orderTracking, extra: {
                             ...orderData,
                             'createdAt': null,

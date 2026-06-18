@@ -1,4 +1,4 @@
-import 'dart:math';
+import 'dart:math' show sin, pi;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -6,7 +6,6 @@ import 'package:flutter_svg/flutter_svg.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
-import '../providers/auth_provider.dart';
 import '../../legal/screens/privacy_policy_screen.dart';
 import '../../legal/screens/terms_of_service_screen.dart';
 
@@ -65,36 +64,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   }
 
   Future<void> _googleSignIn() async {
-    setState(() => _isLoading = true);
-    try {
-      final isNew = await ref.read(authProvider.notifier).signInWithGoogle();
-      if (!mounted) return;
-      if (isNew) {
-        context.go(AppRoutes.register);
-      } else {
-        context.go(AppRoutes.home);
-      }
-    } catch (e) {
-      if (!mounted) return;
-      final msg = e.toString().replaceFirst('Exception: ', '');
-      if (!msg.contains('cancelled')) {
-        _showError(msg);
-      }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: AppColors.error,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      ),
-    );
+    // Replaced by phone+MPIN auth — redirect to phone entry
+    if (!mounted) return;
+    context.go(AppRoutes.login);
   }
 
   @override

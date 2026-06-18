@@ -759,7 +759,6 @@ class NotificationStrip extends ConsumerStatefulWidget {
 
 class _NotificationStripState extends ConsumerState<NotificationStrip> {
   int _current = 0;
-  bool _done = false;
 
   static const _periodStrip = _Strip(
     icon: Icons.favorite_rounded,
@@ -806,16 +805,16 @@ class _NotificationStripState extends ConsumerState<NotificationStrip> {
     return GestureDetector(
       onHorizontalDragEnd: (d) {
         if (d.primaryVelocity! < 0) {
-          setState(() { _current = (safeIndex + 1) % strips.length; _done = false; });
+          setState(() { _current = (safeIndex + 1) % strips.length; });
         } else {
-          setState(() { _current = (safeIndex - 1 + strips.length) % strips.length; _done = false; });
+          setState(() { _current = (safeIndex - 1 + strips.length) % strips.length; });
         }
       },
       child: AnimatedSwitcher(
         duration: const Duration(milliseconds: 300),
         child: _StripTile(
           strip: strips[safeIndex],
-          onDone: () => setState(() => _done = true),
+          onDone: () {},
           key: ValueKey(safeIndex),
         ),
       ),

@@ -1,12 +1,16 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/services/feedback_service.dart';
+import '../../../core/services/image_upload_service.dart';
 import '../../../core/services/operation_logger.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../../auth/providers/auth_provider.dart';
@@ -25,6 +29,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   String _gender = 'Female';
   bool _populated = false;
 
+  // Photo upload state
+  File?   _localImage;
+  bool    _uploading      = false;
+  double  _uploadProgress = 0;
+  String? _currentPhotoUrl;
+
   @override
   void dispose() {
     _nameCtrl.dispose();
@@ -40,7 +50,181 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     _dobCtrl.text = data['dob'] as String? ?? '';
     final g = data['gender'] as String? ?? 'Female';
     _gender = ['Female', 'Male', 'Other'].contains(g) ? g : 'Female';
+    _currentPhotoUrl = data['photoUrl'] as String?;
     _populated = true;
+  }
+
+  void _showPhotoOptions() {
+    final hasPhoto =
+        (_currentPhotoUrl != null && _currentPhotoUrl!.isNotEmpty) ||
+        _localImage != null;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40, height: 4,
+                margin: const EdgeInsets.only(bottom: 20),
+                decoration: BoxDecoration(
+                  color: AppColors.divider,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const Text('Profile Photo',
+                  style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700)),
+              const SizedBox(height: 20),
+              _SheetOption(
+                icon: Icons.photo_library_rounded,
+                label: 'Choose from Gallery',
+                color: AppColors.primary,
+                onTap: () {
+                  Navigator.pop(context);
+                  _pickAndUpload(ImageSource.gallery);
+                },
+              ),
+              const SizedBox(height: 12),
+              _SheetOption(
+                icon: Icons.camera_alt_rounded,
+                label: 'Take a Photo',
+                color: AppColors.secondary,
+                onTap: () {
+                  Navigator.pop(context);
+                  _pickAndUpload(ImageSource.camera);
+                },
+              ),
+              if (hasPhoto) ...[
+                const SizedBox(height: 12),
+                _SheetOption(
+                  icon: Icons.delete_outline_rounded,
+                  label: 'Remove Photo',
+                  color: AppColors.error,
+                  onTap: () {
+                    Navigator.pop(context);
+                    _removePhoto();
+                  },
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickAndUpload(ImageSource source) async {
+    final uid = ref.read(authProvider).user?.uid;
+    if (uid == null) return;
+
+    File? file;
+    try {
+      file = source == ImageSource.gallery
+          ? await ImageUploadService.pickFromGallery()
+          : await ImageUploadService.pickFromCamera();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Could not open picker: ${e.toString().replaceAll('Exception: ', '')}'),
+        backgroundColor: AppColors.error,
+        behavior: SnackBarBehavior.floating,
+      ));
+      return;
+    }
+
+    if (file == null || !mounted) return;
+
+    setState(() {
+      _localImage     = file;
+      _uploading      = true;
+      _uploadProgress = 0;
+    });
+
+    try {
+      final url = await ImageUploadService.uploadUserProfileImage(
+        imageFile: file,
+        uid: uid,
+        onProgress: (p) {
+          if (mounted) setState(() => _uploadProgress = p);
+        },
+      );
+      if (!mounted) return;
+      await ref.read(authProvider.notifier).updatePhotoUrl(url);
+      if (!mounted) return;
+      setState(() {
+        _currentPhotoUrl = url;
+        _uploading       = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: const Text('Profile photo updated!'),
+        backgroundColor: AppColors.success,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _uploading   = false;
+        _localImage  = null;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Upload failed: ${_uploadError(e)}'),
+        backgroundColor: AppColors.error,
+        behavior: SnackBarBehavior.floating,
+      ));
+    }
+  }
+
+  Future<void> _removePhoto() async {
+    final uid = ref.read(authProvider).user?.uid;
+    if (uid == null) return;
+
+    setState(() => _uploading = true);
+    try {
+      await ImageUploadService.deleteUserProfileImage(uid);
+      await ref.read(authProvider.notifier).updatePhotoUrl('');
+      if (!mounted) return;
+      setState(() {
+        _currentPhotoUrl = '';
+        _localImage      = null;
+        _uploading       = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: const Text('Profile photo removed.'),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _uploading = false);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Remove failed: ${e.toString().replaceAll('Exception: ', '')}'),
+        backgroundColor: AppColors.error,
+        behavior: SnackBarBehavior.floating,
+      ));
+    }
+  }
+
+  String _uploadError(Object e) {
+    final s = e.toString();
+    if (s.contains('network') || s.contains('socket') || s.contains('connection')) {
+      return 'Network error. Check your connection.';
+    }
+    if (s.contains('not-authorized') || s.contains('unauthorized') || s.contains('permission-denied')) {
+      return 'Storage permission denied. Check Firebase Storage rules.';
+    }
+    if (s.contains('quota')) return 'Storage quota exceeded.';
+    return s.replaceAll('Exception: ', '');
   }
 
   Future<void> _save() async {
@@ -155,38 +339,87 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         padding: const EdgeInsets.fromLTRB(20, 52, 20, 16),
                         child: Row(
                           children: [
-                            Stack(children: [
-                              Container(
-                                width: 64,
-                                height: 64,
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha:0.18),
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: Colors.white.withValues(alpha:0.35),
-                                    width: 2,
+                            GestureDetector(
+                              onTap: _uploading ? null : _showPhotoOptions,
+                              child: Stack(
+                                alignment: Alignment.center,
+                                children: [
+                                  Container(
+                                    width: 64,
+                                    height: 64,
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withValues(alpha: 0.18),
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: Colors.white.withValues(alpha: 0.35),
+                                        width: 2,
+                                      ),
+                                    ),
+                                    child: ClipOval(
+                                      child: _localImage != null
+                                          ? Image.file(_localImage!, fit: BoxFit.cover)
+                                          : (_currentPhotoUrl != null && _currentPhotoUrl!.isNotEmpty)
+                                              ? CachedNetworkImage(
+                                                  imageUrl: _currentPhotoUrl!,
+                                                  fit: BoxFit.cover,
+                                                  placeholder: (_, __) => const Icon(
+                                                      Icons.person_rounded,
+                                                      size: 34,
+                                                      color: Colors.white),
+                                                  errorWidget: (_, __, ___) => const Icon(
+                                                      Icons.person_rounded,
+                                                      size: 34,
+                                                      color: Colors.white),
+                                                )
+                                              : const Icon(Icons.person_rounded,
+                                                  size: 34, color: Colors.white),
+                                    ),
                                   ),
-                                ),
-                                child: const Icon(Icons.person_rounded,
-                                    size: 34, color: Colors.white),
+                                  if (_uploading)
+                                    Container(
+                                      width: 64,
+                                      height: 64,
+                                      decoration: BoxDecoration(
+                                        color: Colors.black.withValues(alpha: 0.45),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Center(
+                                        child: SizedBox(
+                                          width: 28,
+                                          height: 28,
+                                          child: CircularProgressIndicator(
+                                            value: _uploadProgress > 0
+                                                ? _uploadProgress
+                                                : null,
+                                            color: Colors.white,
+                                            strokeWidth: 2.5,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  if (!_uploading)
+                                    Positioned(
+                                      bottom: 0,
+                                      right: 0,
+                                      child: Container(
+                                        width: 22,
+                                        height: 22,
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          shape: BoxShape.circle,
+                                          border: Border.all(
+                                              color: AppColors.primary,
+                                              width: 1.5),
+                                        ),
+                                        child: const Icon(
+                                            Icons.camera_alt_rounded,
+                                            size: 11,
+                                            color: AppColors.primary),
+                                      ),
+                                    ),
+                                ],
                               ),
-                              Positioned(
-                                bottom: 0,
-                                right: 0,
-                                child: Container(
-                                  width: 22,
-                                  height: 22,
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                        color: AppColors.primary, width: 1.5),
-                                  ),
-                                  child: const Icon(Icons.camera_alt_rounded,
-                                      size: 11, color: AppColors.primary),
-                                ),
-                              ),
-                            ]),
+                            ),
                             const SizedBox(width: 14),
                             Expanded(
                               child: Column(
@@ -624,4 +857,51 @@ class _ReferralEntryCard extends ConsumerWidget {
       ),
     );
   }
+}
+
+// ── Bottom-sheet option tile ──────────────────────────────
+class _SheetOption extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+  const _SheetOption({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.06),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Row(children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: color, size: 20),
+            ),
+            const SizedBox(width: 14),
+            Text(
+              label,
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: color,
+              ),
+            ),
+          ]),
+        ),
+      );
 }

@@ -48,6 +48,8 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
     'Psychiatry',
     'Urology',
     'Gastroenterology',
+    'General Surgery',
+    'Dental',
     'Radiology',
     'Oncology',
     'Nephrology',

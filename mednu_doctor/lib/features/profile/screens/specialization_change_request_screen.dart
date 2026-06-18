@@ -23,9 +23,9 @@ class _SpecializationChangeRequestScreenState
   static const _specializations = [
     'General Physician', 'Cardiology', 'Dermatology', 'Gynaecology',
     'Paediatrics', 'Orthopaedics', 'Neurology', 'ENT', 'Oncology',
-    'Psychiatry', 'Ophthalmology', 'Urology', 'Radiology', 'Anaesthesiology',
-    'Gastroenterology', 'Nephrology', 'Endocrinology', 'Pulmonology',
-    'Rheumatology', 'Other',
+    'Psychiatry', 'Ophthalmology', 'Urology', 'General Surgery', 'Dental',
+    'Radiology', 'Anaesthesiology', 'Gastroenterology', 'Nephrology',
+    'Endocrinology', 'Pulmonology', 'Rheumatology', 'Other',
   ];
 
   String  _currentSpec    = '';

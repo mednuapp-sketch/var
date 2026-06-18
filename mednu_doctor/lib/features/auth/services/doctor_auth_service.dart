@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 class DoctorAuthService {
   static final _auth = FirebaseAuth.instance;
@@ -63,6 +64,11 @@ class DoctorAuthService {
     String registrationNumber = '',
     Map<String, String> documentUrls = const {},
   }) async {
+    String? fcmToken;
+    try {
+      fcmToken = await FirebaseMessaging.instance.getToken();
+    } catch (_) {}
+
     await _db.collection('doctors').doc(uid).set({
       'uid': uid,
       'name': name,
@@ -83,7 +89,8 @@ class DoctorAuthService {
       'documents': documentUrls,
       'declarationAccepted': true,
       'createdAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+      if (fcmToken != null) 'fcmToken': fcmToken,
+    });
   }
 
   static Future<Map<String, dynamic>?> getProfile(String uid) async {

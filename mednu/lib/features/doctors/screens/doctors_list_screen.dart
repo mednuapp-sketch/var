@@ -95,10 +95,11 @@ class _DoctorsListScreenState extends ConsumerState<DoctorsListScreen>
   late TabController _tabController;
 
   static const _specialties = [
-    'All', 'General', 'Cardiology', 'Dermatology',
-    'Gynaecology', 'Paediatrics', 'ENT', 'Orthopaedics',
-    'Neurology', 'Ophthalmology', 'Psychiatry',
-    'Endocrinology', 'Gastroenterology',
+    'All', 'General', 'Cardiology', 'Endocrinology',
+    'Gastroenterology', 'Nephrology', 'Urology', 'Neurology',
+    'Pulmonology', 'Gynaecology', 'Dermatology', 'General Surgery',
+    'Orthopaedics', 'Ophthalmology', 'ENT', 'Paediatrics',
+    'Psychiatry', 'Dental', 'Rheumatology', 'Oncology',
   ];
 
   @override
@@ -1268,6 +1269,7 @@ class _LocationChangeSheet extends ConsumerStatefulWidget {
 
 class _LocationChangeSheetState extends ConsumerState<_LocationChangeSheet> {
   final _ctrl = TextEditingController();
+  final _dio = Dio();
   List<LocationSuggestion> _results = [];
   bool _loading = false;
   Timer? _debounce;
@@ -1283,6 +1285,7 @@ class _LocationChangeSheetState extends ConsumerState<_LocationChangeSheet> {
     _debounce?.cancel();
     _ctrl.removeListener(_onChange);
     _ctrl.dispose();
+    _dio.close(force: true);
     super.dispose();
   }
 
@@ -1305,7 +1308,7 @@ class _LocationChangeSheetState extends ConsumerState<_LocationChangeSheet> {
     if (!mounted) return;
     setState(() => _loading = true);
     try {
-      final res = await Dio().get(
+      final res = await _dio.get(
         'https://nominatim.openstreetmap.org/search',
         queryParameters: {
           'q': q, 'format': 'json',

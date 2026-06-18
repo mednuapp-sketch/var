@@ -304,6 +304,8 @@ class _NotifTile extends StatelessWidget {
         return AppRoutes.earnings;
       case NotifType.appointment:
         return AppRoutes.schedule;
+      case NotifType.emergencyRequest:
+        return AppRoutes.incomingRequest;
       case NotifType.review:
       case NotifType.summary:
       case NotifType.patientFollowup:
@@ -326,6 +328,7 @@ class _NotifTile extends StatelessWidget {
   _NotifMeta _meta(NotifType type) {
     switch (type) {
       case NotifType.consultationRequest:
+      case NotifType.emergencyRequest:
         return _NotifMeta(Icons.video_call_rounded, AppColors.primary);
       case NotifType.review:
         return _NotifMeta(Icons.star_rounded, Colors.amber);

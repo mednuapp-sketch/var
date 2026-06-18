@@ -10,6 +10,7 @@ import 'core/theme/app_theme.dart';
 import 'core/router/app_router.dart';
 import 'core/providers/theme_provider.dart';
 import 'core/services/call_notification_service.dart';
+import 'core/services/battery_optimization_service.dart';
 import 'features/security/services/biometric_service.dart';
 import 'features/security/screens/lock_screen.dart';
 import 'features/health/services/health_notification_service.dart';
@@ -61,6 +62,13 @@ class _MedNUAppState extends ConsumerState<MedNUApp>
       // ── Save FCM token for this patient ─────────────────────────────────
       _saveFcmToken(user.uid);
 
+      // ── Battery optimization whitelist prompt (Android, once ever) ──────
+      // Delayed so it never collides with the biometric lock screen or
+      // other startup dialogs.
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted) BatteryOptimizationService.promptIfNeeded(context);
+      });
+
       // ── General notification pop-ups ────────────────────────────────────
       _notifSub = FirebaseFirestore.instance
           .collection('patient_notifications')
@@ -77,7 +85,7 @@ class _MedNUAppState extends ConsumerState<MedNUApp>
         for (final change in snap.docChanges) {
           if (change.type != DocumentChangeType.added) continue;
           final data =
-              change.doc.data() as Map<String, dynamic>? ?? {};
+              change.doc.data() ?? {};
           if (data['isRead'] == true) continue;
           final title = data['title'] as String? ?? 'MedNU';
           final body = data['body'] as String? ?? '';
@@ -134,12 +142,16 @@ class _MedNUAppState extends ConsumerState<MedNUApp>
       final token = await FirebaseMessaging.instance.getToken();
       if (token == null) return;
       final db = FirebaseFirestore.instance;
-      // Save to both collections: patients (used by consultation creation) and
-      // users (used by Cloud Function fallback for doctor-initiated calls).
-      await Future.wait([
-        db.collection('patients').doc(uid).set({'fcmToken': token}, SetOptions(merge: true)),
-        db.collection('users').doc(uid).set({'fcmToken': token}, SetOptions(merge: true)),
-      ]);
+      // patients: always safe to create/merge (no role-protection rule).
+      // users: use update() so we NEVER create a stub doc before completeRegistration().
+      // If the doc doesn't exist yet (new user mid-registration), update() throws
+      // "not-found" which we swallow — completeRegistration() includes fcmToken.
+      await db.collection('patients').doc(uid).set({'fcmToken': token}, SetOptions(merge: true));
+      try {
+        await db.collection('users').doc(uid).update({'fcmToken': token});
+      } on FirebaseException catch (e) {
+        if (e.code != 'not-found') rethrow;
+      }
     } catch (e) {
       debugPrint('[App] FCM token save failed: $e');
     }
@@ -151,10 +163,12 @@ class _MedNUAppState extends ConsumerState<MedNUApp>
         FirebaseMessaging.instance.onTokenRefresh.listen((newToken) async {
       try {
         final db = FirebaseFirestore.instance;
-        await Future.wait([
-          db.collection('patients').doc(uid).set({'fcmToken': newToken}, SetOptions(merge: true)),
-          db.collection('users').doc(uid).set({'fcmToken': newToken}, SetOptions(merge: true)),
-        ]);
+        await db.collection('patients').doc(uid).set({'fcmToken': newToken}, SetOptions(merge: true));
+        try {
+          await db.collection('users').doc(uid).update({'fcmToken': newToken});
+        } on FirebaseException catch (e) {
+          if (e.code != 'not-found') rethrow;
+        }
       } catch (e) {
         debugPrint('[App] FCM token refresh save failed: $e');
       }

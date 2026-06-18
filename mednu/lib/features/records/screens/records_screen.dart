@@ -152,8 +152,9 @@ class _RecordsScreenState extends State<RecordsScreen>
 
   String _callDuration(dynamic createdAt, dynamic endedAt) {
     if (createdAt == null || endedAt == null) return '';
-    final start = (createdAt as Timestamp).toDate();
-    final end = (endedAt as Timestamp).toDate();
+    if (createdAt is! Timestamp || endedAt is! Timestamp) return '';
+    final start = createdAt.toDate();
+    final end = endedAt.toDate();
     final diff = end.difference(start);
     if (diff.inMinutes < 1) return '< 1 min';
     return '${diff.inMinutes} min';
@@ -186,32 +187,37 @@ class _RecordsScreenState extends State<RecordsScreen>
   Future<void> _uploadReport() async {
     // 1. Ask report name first
     final nameCtrl = TextEditingController();
-    final reportName = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Report Name',
-            style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
-        content: TextField(
-          controller: nameCtrl,
-          autofocus: true,
-          decoration: InputDecoration(
-            hintText: 'e.g. Blood Test, X-Ray...',
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+    String? reportName;
+    try {
+      reportName = await showDialog<String>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text('Report Name',
+              style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
+          content: TextField(
+            controller: nameCtrl,
+            autofocus: true,
+            decoration: InputDecoration(
+              hintText: 'e.g. Blood Test, X-Ray...',
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            ),
           ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            ElevatedButton(
+              onPressed: () {
+                if (nameCtrl.text.trim().isEmpty) return;
+                Navigator.pop(ctx, nameCtrl.text.trim());
+              },
+              child: const Text('Continue'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () {
-              if (nameCtrl.text.trim().isEmpty) return;
-              Navigator.pop(ctx, nameCtrl.text.trim());
-            },
-            child: const Text('Continue'),
-          ),
-        ],
-      ),
-    );
+      );
+    } finally {
+      nameCtrl.dispose();
+    }
     if (reportName == null || !mounted) return;
 
     // 2. Choose source

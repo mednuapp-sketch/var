@@ -48,7 +48,6 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
   late Animation<double> _successScale;
   late Animation<double> _successOpacity;
   late AnimationController _checkCtrl;
-  late Animation<double> _checkAnim;
   Timer? _navTimer;
 
   bool get _isImmediate => widget.type == 'immediate';
@@ -81,8 +80,6 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
       vsync: this,
       duration: const Duration(milliseconds: 1200),
     );
-    _checkAnim = CurvedAnimation(parent: _checkCtrl, curve: Curves.easeInOut);
-
     _checkAlreadySubmitted();
   }
 
@@ -263,7 +260,9 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
           });
         }
       });
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[PostConsultation] Rating update failed: $e');
+    }
   }
 
   // ── Build ─────────────────────────────────────────────────────────────────

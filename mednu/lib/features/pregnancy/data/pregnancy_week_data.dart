@@ -637,6 +637,14 @@ WeeklyPregnancyData getWeekData(int week) {
   if (kPregnancyWeekData.containsKey(week)) return kPregnancyWeekData[week]!;
   // Return nearest lower week's data with the actual week number
   final keys = kPregnancyWeekData.keys.toList()..sort();
+  if (keys.isEmpty) {
+    return WeeklyPregnancyData(
+      week: week,
+      babySize: '', babySizeComparison: '', babyLength: '', babyWeight: '',
+      development: '', commonSymptoms: [], foodsToEat: [], foodsToAvoid: [],
+      nutritionTip: '', weeklyTip: '', motherChanges: '', keyNutrients: [],
+    );
+  }
   WeeklyPregnancyData nearest = kPregnancyWeekData[keys.first]!;
   for (final k in keys) {
     if (k <= week) nearest = kPregnancyWeekData[k]!;

@@ -14,7 +14,19 @@ class NotificationService {
           .orderBy('createdAt', descending: true)
           .limit(50)
           .snapshots()
-          .map((s) => s.docs.map(NotificationModel.fromDoc).toList());
+          .map((s) {
+        final now = Timestamp.now();
+        return s.docs
+            .where((doc) {
+              // Support scheduled delivery: hide notifications whose deliverAt
+              // is in the future. Documents without deliverAt are shown immediately.
+              final deliverAt = doc.data()['deliverAt'];
+              if (deliverAt is Timestamp) return deliverAt.compareTo(now) <= 0;
+              return true;
+            })
+            .map(NotificationModel.fromDoc)
+            .toList();
+      });
 
   static Future<void> markRead(String uid, String notifId) =>
       _doctorNotifs(uid).doc(notifId).update({'isRead': true});
@@ -40,6 +52,9 @@ class NotificationService {
       'title':     title,
       'body':      body,
       'createdAt': FieldValue.serverTimestamp(),
+      // deliverAt = now so the client-side filter shows this immediately.
+      // Admin-scheduled broadcasts override this field with a future timestamp.
+      'deliverAt': FieldValue.serverTimestamp(),
       'isRead':    false,
       'payload':   payload,
     });

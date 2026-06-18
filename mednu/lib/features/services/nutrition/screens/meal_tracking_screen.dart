@@ -5,7 +5,6 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_text_styles.dart';
 import '../providers/nutrition_provider.dart';
 import '../models/meal_log_model.dart';
-import '../services/nutrition_service.dart';
 import '../../../../core/widgets/ux_widgets.dart';
 
 class MealTrackingScreen extends ConsumerStatefulWidget {
@@ -16,7 +15,6 @@ class MealTrackingScreen extends ConsumerStatefulWidget {
 }
 
 class _MealTrackingScreenState extends ConsumerState<MealTrackingScreen> {
-  static const _mealTypes = ['breakfast', 'lunch', 'dinner', 'snack'];
   String _selectedType = 'breakfast';
 
   void _openAddMeal() {
@@ -34,7 +32,7 @@ class _MealTrackingScreenState extends ConsumerState<MealTrackingScreen> {
           fat: fat,
           notes: notes,
         );
-        if (!mounted) return;
+        if (!ctx.mounted) return;
         Navigator.pop(ctx);
         if (!ok) {
           ScaffoldMessenger.of(context).showSnackBar(

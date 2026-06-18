@@ -100,7 +100,8 @@ class WaterTrackerNotifier extends StateNotifier<WaterTrackerState> {
     try {
       final snap = await _settingsRef!.get();
       if (!snap.exists) return;
-      final d = snap.data()!;
+      final d = snap.data();
+      if (d == null) return;
       state = state.copyWith(
         goalGlasses: d['goalGlasses'] as int? ?? 8,
         glassSizeMl: d['glassSizeMl'] as int? ?? 250,
@@ -131,11 +132,13 @@ class WaterTrackerNotifier extends StateNotifier<WaterTrackerState> {
 
   Future<void> logWater() async {
     if (_uid == null || state.goalReached) return;
+    final ref = _todayLogRef;
+    if (ref == null) return;
     final newLog = WaterLog(loggedAt: DateTime.now(), amountMl: state.glassSizeMl);
     final updated = [...state.todayLogs, newLog];
     state = state.copyWith(todayLogs: updated);
     try {
-      await _todayLogRef!.set({
+      await ref.set({
         'date': _today,
         'logs': updated
             .map((l) => {

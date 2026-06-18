@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>MedNu – ISO 27001 Information Security Compliance</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      font-size: 12px;
+      color: #1a1a1a;
+      background: #fff;
+      line-height: 1.6;
+    }
+
+    /* ── Cover Page ── */
+    .cover {
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #C2185B 0%, #880E4F 100%);
+      color: #fff;
+      text-align: center;
+      page-break-after: always;
+      padding: 60px;
+    }
+    .cover .logo-text {
+      font-size: 48px;
+      font-weight: 800;
+      letter-spacing: 2px;
+      margin-bottom: 8px;
+    }
+    .cover .logo-sub {
+      font-size: 14px;
+      letter-spacing: 4px;
+      opacity: 0.85;
+      margin-bottom: 60px;
+      text-transform: uppercase;
+    }
+    .cover h1 {
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 16px;
+      line-height: 1.3;
+    }
+    .cover .subtitle {
+      font-size: 14px;
+      opacity: 0.85;
+      margin-bottom: 60px;
+    }
+    .cover .meta-box {
+      background: rgba(255,255,255,0.15);
+      border: 1px solid rgba(255,255,255,0.3);
+      border-radius: 12px;
+      padding: 24px 48px;
+      display: inline-block;
+    }
+    .cover .meta-box p {
+      font-size: 13px;
+      margin: 4px 0;
+      opacity: 0.9;
+    }
+    .cover .meta-box p strong {
+      opacity: 1;
+    }
+
+    /* ── Page layout ── */
+    .page {
+      max-width: 780px;
+      margin: 0 auto;
+      padding: 50px 60px;
+    }
+
+    /* ── Header (repeated on content pages) ── */
+    .page-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 2px solid #C2185B;
+      padding-bottom: 10px;
+      margin-bottom: 30px;
+    }
+    .page-header .brand {
+      font-size: 16px;
+      font-weight: 800;
+      color: #C2185B;
+      letter-spacing: 1px;
+    }
+    .page-header .doc-title {
+      font-size: 10px;
+      color: #777;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    /* ── Section title ── */
+    .section-title {
+      background: linear-gradient(135deg, #C2185B, #E91E8C);
+      color: #fff;
+      padding: 10px 18px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 700;
+      margin: 30px 0 14px 0;
+      letter-spacing: 0.5px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .section-title .q-num {
+      background: rgba(255,255,255,0.25);
+      border-radius: 50%;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 800;
+      flex-shrink: 0;
+    }
+
+    /* ── Answer blocks ── */
+    .answer-block {
+      background: #fafafa;
+      border-left: 4px solid #C2185B;
+      border-radius: 0 8px 8px 0;
+      padding: 16px 20px;
+      margin-bottom: 10px;
+    }
+
+    .bullet-list {
+      list-style: none;
+      padding: 0;
+    }
+    .bullet-list li {
+      padding: 5px 0 5px 18px;
+      position: relative;
+      border-bottom: 1px solid #f0f0f0;
+      font-size: 11.5px;
+    }
+    .bullet-list li:last-child { border-bottom: none; }
+    .bullet-list li::before {
+      content: '▸';
+      color: #C2185B;
+      position: absolute;
+      left: 0;
+      font-size: 10px;
+      top: 6px;
+    }
+    .bullet-list li strong {
+      color: #222;
+    }
+
+    /* ── Tables ── */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0;
+      font-size: 11px;
+    }
+    thead tr {
+      background: #C2185B;
+      color: #fff;
+    }
+    thead th {
+      padding: 8px 12px;
+      text-align: left;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+    }
+    tbody tr:nth-child(even) { background: #fdf0f5; }
+    tbody tr:nth-child(odd)  { background: #fff; }
+    tbody td {
+      padding: 7px 12px;
+      border-bottom: 1px solid #f0e0e8;
+      vertical-align: top;
+    }
+    .badge-pass {
+      background: #e8f5e9;
+      color: #2e7d32;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 10px;
+      font-weight: 600;
+    }
+    .badge-warn {
+      background: #fff3e0;
+      color: #e65100;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 10px;
+      font-weight: 600;
+    }
+
+    /* ── Info box ── */
+    .info-box {
+      background: #e8f5e9;
+      border: 1px solid #a5d6a7;
+      border-radius: 8px;
+      padding: 14px 18px;
+      margin: 14px 0;
+      font-size: 11.5px;
+      color: #1b5e20;
+    }
+    .info-box strong { color: #1b5e20; }
+
+    .warn-box {
+      background: #fff8e1;
+      border: 1px solid #ffe082;
+      border-radius: 8px;
+      padding: 14px 18px;
+      margin: 14px 0;
+      font-size: 11.5px;
+      color: #5d4037;
+    }
+
+    /* ── Footer ── */
+    .page-footer {
+      margin-top: 40px;
+      border-top: 1px solid #eee;
+      padding-top: 10px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 9px;
+      color: #aaa;
+    }
+
+    /* ── Print / PDF ── */
+    @media print {
+      body { font-size: 11px; }
+      .cover { height: 100vh; }
+      .page { padding: 30px 40px; }
+      .section-title { break-inside: avoid; }
+      .answer-block { break-inside: avoid; }
+      table { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════ COVER PAGE ═══════════════════════════════ -->
+<div class="cover">
+  <div class="logo-text">MedNu</div>
+  <div class="logo-sub">Healthcare Services Private Limited</div>
+  <h1>Information Security Compliance<br/>ISO 27001 — Security Questionnaire</h1>
+  <div class="subtitle">Official Responses to Information Security Audit Queries</div>
+  <div class="meta-box">
+    <p><strong>Document Type:</strong> ISO 27001 Security Compliance Response</p>
+    <p><strong>Prepared By:</strong> MedNu Healthcare Services Pvt. Ltd.</p>
+    <p><strong>Platform:</strong> MedNu Patient App &amp; MedNu Doctor App</p>
+    <p><strong>Technology Stack:</strong> Flutter · Firebase · Google Cloud Platform</p>
+    <p><strong>Date:</strong> June 17, 2026</p>
+    <p><strong>Version:</strong> 1.0</p>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ CONTENT ═══════════════════════════════ -->
+<div class="page">
+
+  <div class="page-header">
+    <div class="brand">MedNu Healthcare</div>
+    <div class="doc-title">ISO 27001 Information Security Compliance</div>
+  </div>
+
+  <!-- ── Overview Table ── -->
+  <div class="section-title" style="background: #37474f; margin-top:0;">
+    &nbsp;&nbsp;Overview — Security Controls Summary
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>Query</th>
+        <th>Topic</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>Query 1</td><td>Internal Data Security</td><td><span class="badge-pass">IMPLEMENTED</span></td></tr>
+      <tr><td>Query 2</td><td>Data Breach &amp; Cyber Fraud Controls</td><td><span class="badge-pass">IMPLEMENTED</span></td></tr>
+      <tr><td>Query 3</td><td>Cloud Services Information Security</td><td><span class="badge-pass">IMPLEMENTED</span></td></tr>
+      <tr><td>Query 4</td><td>Access to Source Code</td><td><span class="badge-pass">IMPLEMENTED</span></td></tr>
+      <tr><td>Query 5</td><td>Data Storage, Retention &amp; Deletion</td><td><span class="badge-pass">IMPLEMENTED</span></td></tr>
+      <tr><td>Query 6</td><td>Web Filtering</td><td><span class="badge-pass">IMPLEMENTED</span></td></tr>
+      <tr><td>Query 7</td><td>Configuration Management</td><td><span class="badge-pass">IMPLEMENTED</span></td></tr>
+      <tr><td>Query 8</td><td>Online SOPs</td><td><span class="badge-pass">IMPLEMENTED</span></td></tr>
+    </tbody>
+  </table>
+
+  <!-- ════════════════════ Q1 ════════════════════ -->
+  <div class="section-title">
+    <span class="q-num">1</span>
+    How is Internal Data Secured? (ISO Query)
+  </div>
+  <div class="answer-block">
+    <ul class="bullet-list">
+      <li><strong>Firebase Authentication:</strong> All data access requires a valid authenticated session. Every Firestore Security Rule begins with <code>isAuth()</code> — unauthenticated requests are denied at the database infrastructure level before reaching any data.</li>
+      <li><strong>Role-Based Access Control (RBAC):</strong> Three enforced roles — <code>isAdmin()</code>, <code>isDoctor()</code>, <code>isPatient()</code> — each with precisely scoped read/write permissions defined in Firestore Security Rules.</li>
+      <li><strong>Data Ownership Enforcement:</strong> Every record is owner-scoped. A patient cannot read another patient's health records, prescriptions, wallet transactions, or personal data. This is enforced at the database rule level, not application level.</li>
+      <li><strong>Field-Level Protection:</strong> Sensitive fields such as <code>role</code>, <code>earnings</code>, <code>verificationStatus</code>, and <code>createdAt</code> are write-protected via <code>doesNotModify()</code> rules — clients cannot tamper with them even if authenticated.</li>
+      <li><strong>Immutable Audit Logs:</strong> <code>operation_logs</code>, <code>login_audit</code> events, wallet transactions, and chat messages are strictly append-only. The Firestore rule <code>update, delete: if false</code> is applied — no one can alter records after creation.</li>
+      <li><strong>Payment Security:</strong> Razorpay payment signatures are verified server-side using HMAC-SHA256 in Cloud Functions. Firebase App Check is enforced on both payment endpoints — only verified MedNu app binaries can invoke them.</li>
+      <li><strong>Firebase App Check:</strong> Activated on both MedNu Patient and MedNu Doctor apps using Play Integrity (Android) and App Attest (iOS) in production. Debug providers used only in development builds.</li>
+      <li><strong>Encryption in Transit:</strong> All Firebase SDK communication uses TLS 1.2+ by default. No plain-text communication channels are used.</li>
+      <li><strong>Biometric Lock Screen:</strong> Both apps enforce biometric/MPIN re-authentication when returning from background, preventing unauthorised physical access.</li>
+      <li><strong>Deny-by-Default:</strong> Firestore Security Rules include an explicit catch-all rule — <code>match /&#123;document=**&#125; &#123; allow read, write: if false; &#125;</code> — blocking any collection not explicitly covered by rules.</li>
+    </ul>
+  </div>
+
+  <!-- ════════════════════ Q2 ════════════════════ -->
+  <div class="section-title">
+    <span class="q-num">2</span>
+    Data Breach &amp; Cyber Fraud — What Steps Are Taken?
+  </div>
+  <div class="answer-block">
+    <ul class="bullet-list">
+      <li><strong>Login Audit Trail:</strong> Every login attempt (success and failure) is recorded in the <code>login_audit</code> Firestore collection with timestamp, authentication method, and result. Records have a 1-year automated TTL expiry.</li>
+      <li><strong>Account Lockout:</strong> After 5 consecutive failed MPIN attempts, the account is automatically locked for 30 minutes. Lock state is enforced both client-side and written to Firestore.</li>
+      <li><strong>MPIN Hashing:</strong> MPIN is stored as <code>SHA-256(uid:mpin:MEDNU_V1)</code> — a per-user salted hash. The plain-text MPIN is never stored anywhere in the system.</li>
+      <li><strong>Operation Logs:</strong> Every significant action (booking, payment, cancellation, profile update) is written to <code>operation_logs</code> — append-only, admin-read-only, with a 2-year automated TTL retention policy.</li>
+      <li><strong>Payment Fraud Prevention:</strong> Razorpay payment signature is verified server-side via HMAC-SHA256 before any order is marked as complete. Firebase App Check blocks unofficial clients from calling payment Cloud Functions.</li>
+      <li><strong>Emergency Request Throttling:</strong> Emergency doctor requests are deduplicated per patient per 5 minutes — preventing abuse and denial-of-service on the emergency broadcast system.</li>
+      <li><strong>Serious Complaint Escalation:</strong> A dedicated <code>serious_complaints</code> collection triggers an instant Cloud Function that creates an admin alert for immediate human review.</li>
+      <li><strong>Deny-All Fallback:</strong> The Firestore catch-all rule <code>allow read, write: if false</code> ensures any uncovered collection or data access attempt is blocked entirely.</li>
+      <li><strong>Crashlytics Monitoring:</strong> Firebase Crashlytics monitors all runtime errors, uncaught exceptions, and fatal crashes in real time. User identifiers are attached for incident tracing.</li>
+    </ul>
+  </div>
+
+  <!-- ════════════════════ Q3 ════════════════════ -->
+  <div class="section-title">
+    <span class="q-num">3</span>
+    How is Information Security Maintained for Cloud Services?
+  </div>
+  <div class="answer-block">
+    <p style="margin-bottom:10px; font-size:11.5px;">MedNu uses <strong>Google Firebase (Google Cloud Platform)</strong> as its sole cloud infrastructure provider. The following security controls are in place:</p>
+    <ul class="bullet-list">
+      <li><strong>Cloud Firestore:</strong> Serverless NoSQL database with fine-grained Security Rules enforced at Google's infrastructure level — not in application code. Rules are version-controlled and deployed via Firebase CLI.</li>
+      <li><strong>Firebase Authentication:</strong> OTP-based phone number authentication. MedNu never stores raw passwords. Session tokens are managed entirely by Firebase/Google.</li>
+      <li><strong>Firebase App Check:</strong> Cryptographically verifies that API calls originate from legitimate MedNu app binaries only. Uses Play Integrity (Android) and App Attest (iOS) in production.</li>
+      <li><strong>Firebase Cloud Functions:</strong> All sensitive operations (payment verification, emergency alerts, weekly quality reports) execute server-side only — the client never has access to business logic or secret keys.</li>
+      <li><strong>Environment Secrets:</strong> Razorpay API key and secret are stored in Firebase environment variables / Google Secret Manager — never hardcoded in source code or client apps.</li>
+      <li><strong>Firestore TTL Policies:</strong> Active TTL policies on <code>operation_logs</code>, <code>login_audit/events</code>, <code>patient_notifications/items</code>, and <code>doctor_notifications/items</code> — data is automatically deleted after its defined retention period.</li>
+      <li><strong>Firebase Cloud Messaging (FCM):</strong> Secure push notification delivery over Google's infrastructure. Notifications are device-token gated — no open broadcast endpoints.</li>
+      <li><strong>Google Cloud Compliance:</strong> Firebase/GCP infrastructure holds ISO 27001, SOC 2 Type II, GDPR, and HIPAA-eligible certifications at the infrastructure level.</li>
+    </ul>
+  </div>
+
+  <!-- ════════════════════ Q4 ════════════════════ -->
+  <div class="section-title">
+    <span class="q-num">4</span>
+    Access to Source Code
+  </div>
+  <div class="answer-block">
+    <ul class="bullet-list">
+      <li><strong>Private Repository:</strong> All source code is hosted in a private GitHub repository under <code>mednuapp-sketch</code> organisation. The repository is not publicly accessible.</li>
+      <li><strong>Role-Based Contributor Access:</strong> Repository access is granted per-developer via GitHub permission levels (Read / Write / Admin). Access is reviewed and revoked when team membership changes.</li>
+      <li><strong>No Credentials in Code:</strong> Razorpay API keys are in Firebase environment variables. Firebase configuration is in <code>google-services.json</code> (Android) and <code>GoogleService-Info.plist</code> (iOS), which are access-controlled and not publicly exposed.</li>
+      <li><strong>Firebase Console Access:</strong> Firestore rules, Cloud Functions, and database configurations are managed via Firebase Console with Google account authentication. Multi-factor authentication is recommended for all console accounts.</li>
+      <li><strong>Admin Panel Access:</strong> The <code>mednu-admin</code> panel is deployed on Firebase Hosting with <code>isAdmin()</code> Firestore rule enforced — only verified admin accounts can read or write admin data.</li>
+      <li><strong>Dependency Security:</strong> An <code>npm run audit</code> script is configured in Cloud Functions to detect vulnerable dependencies before every deployment. Runs <code>npm audit --audit-level=moderate</code>.</li>
+      <li><strong>Version Control:</strong> All security-relevant files (Firestore rules, indexes, Cloud Functions) are version-controlled in Git with full change history maintained.</li>
+    </ul>
+  </div>
+
+  <!-- ════════════════════ Q5 ════════════════════ -->
+  <div class="section-title">
+    <span class="q-num">5</span>
+    Data Storage, Retention &amp; Accidental Deletion Protection
+  </div>
+  <div class="answer-block">
+    <p style="margin-bottom:10px; font-size:11.5px;"><strong>Data Retention Policy (enforced via Firestore TTL):</strong></p>
+    <table>
+      <thead><tr><th>Data Category</th><th>Collection</th><th>Retention Period</th><th>Mechanism</th></tr></thead>
+      <tbody>
+        <tr><td>Operation Audit Logs</td><td>operation_logs</td><td>2 Years</td><td>Firestore TTL (expiresAt)</td></tr>
+        <tr><td>Login Audit Events</td><td>login_audit/events</td><td>1 Year</td><td>Firestore TTL (expiresAt)</td></tr>
+        <tr><td>Patient Notifications</td><td>patient_notifications/items</td><td>90 Days</td><td>Firestore TTL (expiresAt)</td></tr>
+        <tr><td>Doctor Notifications</td><td>doctor_notifications/items</td><td>90 Days</td><td>Firestore TTL (expiresAt)</td></tr>
+        <tr><td>Medical Records &amp; Prescriptions</td><td>health_records, prescriptions</td><td>Indefinite</td><td>Medical compliance</td></tr>
+        <tr><td>Payment Records</td><td>payments, wallet_transactions</td><td>Indefinite</td><td>Financial compliance</td></tr>
+        <tr><td>Appointments</td><td>appointments</td><td>Indefinite</td><td>Medical compliance</td></tr>
+      </tbody>
+    </table>
+    <p style="margin-top:12px; margin-bottom:8px; font-size:11.5px;"><strong>Accidental Deletion Protection:</strong></p>
+    <ul class="bullet-list">
+      <li><strong>Transaction Immutability:</strong> <code>wallet_transactions</code> and all chat messages have <code>update, delete: if false</code> in Firestore rules — even admins cannot delete them via client SDK.</li>
+      <li><strong>No Client-Side Mass Delete:</strong> No collection permits bulk deletion from the client. All deletes require admin role and go through the Firebase Console or Cloud Functions.</li>
+      <li><strong>Account Deletion Workflow:</strong> Patients cannot self-delete. They submit a <code>deletion_request</code> document. Actual deletion is processed by Cloud Functions only — not directly from the client app.</li>
+      <li><strong>TTL-Only Expiry:</strong> Automated data expiry happens exclusively via Firestore TTL policies configured in Google Cloud Console — not via any client-accessible delete operation.</li>
+    </ul>
+  </div>
+
+  <!-- ════════════════════ Q6 ════════════════════ -->
+  <div class="section-title">
+    <span class="q-num">6</span>
+    How Web Filtering is Done
+  </div>
+  <div class="answer-block">
+    <ul class="bullet-list">
+      <li><strong>Firestore Security Rules (Primary Filter):</strong> Every read and write operation is evaluated against Security Rules before reaching the database. This is enforced at Google's infrastructure level — bypassing it from the client is not possible.</li>
+      <li><strong>Firebase App Check (API Filter):</strong> Only cryptographically verified MedNu app binaries (Play Integrity on Android, App Attest on iOS) can access any Firebase service. Web scrapers, bots, API abuse tools, and unofficial clients are blocked at the SDK attestation level.</li>
+      <li><strong>App Check Enforced on Payment Endpoints:</strong> <code>createRazorpayOrder</code> and <code>verifyRazorpayPayment</code> Cloud Functions both have <code>enforceAppCheck: true</code> — any call without a valid App Check token is rejected before the function body executes.</li>
+      <li><strong>Cloud Function Input Validation:</strong> <code>createRazorpayOrder</code> validates that amount ≥ 100 paise, is of correct numeric type, and all required fields are present. Invalid requests receive <code>HttpsError('invalid-argument')</code>.</li>
+      <li><strong>Notification Deduplication:</strong> The same notification cannot be sent twice within 30 seconds for the same booking — preventing notification spam and flood attacks.</li>
+      <li><strong>FCM Token-Gated Notifications:</strong> Push notifications are sent only to registered device FCM tokens. There are no open broadcast HTTP endpoints accessible externally.</li>
+      <li><strong>Admin Panel Domain Restriction:</strong> The admin panel is served exclusively via Firebase Hosting with Firebase Auth enforced. Admin data is only accessible to accounts verified in the <code>admins</code> Firestore collection.</li>
+    </ul>
+  </div>
+
+  <!-- ════════════════════ Q7 ════════════════════ -->
+  <div class="section-title">
+    <span class="q-num">7</span>
+    How and by Whom is Configuration Management Done?
+  </div>
+  <div class="answer-block">
+    <p style="margin-bottom:10px; font-size:11.5px;"><strong>Responsible Party:</strong> MedNu Healthcare Services Pvt. Ltd. — development and operations team manages all configuration.</p>
+    <table>
+      <thead><tr><th>Configuration Item</th><th>Location</th><th>Managed By</th><th>Deployment Method</th></tr></thead>
+      <tbody>
+        <tr><td>Firestore Security Rules</td><td>firestore.rules (Git)</td><td>Dev team</td><td>Firebase CLI</td></tr>
+        <tr><td>Firestore Indexes</td><td>firestore.indexes.json (Git)</td><td>Dev team</td><td>Firebase CLI</td></tr>
+        <tr><td>TTL Policies</td><td>Google Cloud Console</td><td>Dev team</td><td>Cloud Console UI</td></tr>
+        <tr><td>Cloud Functions</td><td>functions/index.js (Git)</td><td>Dev team</td><td>Firebase CLI</td></tr>
+        <tr><td>Function Dependencies</td><td>functions/package.json (Git)</td><td>Dev team</td><td>npm + npm audit</td></tr>
+        <tr><td>Flutter App Config</td><td>firebase_options.dart (Git)</td><td>Dev team</td><td>Flutter build</td></tr>
+        <tr><td>Environment Secrets</td><td>Firebase Secret Manager</td><td>Project owner</td><td>Firebase Console</td></tr>
+        <tr><td>App Check Providers</td><td>Firebase Console</td><td>Project owner</td><td>Console UI</td></tr>
+        <tr><td>Admin Panel</td><td>mednu-admin/ (Git)</td><td>Dev team</td><td>Firebase Hosting CLI</td></tr>
+      </tbody>
+    </table>
+    <div class="info-box" style="margin-top:12px;">
+      <strong>Version Control:</strong> All configuration files are tracked in Git with full change history. Any modification to security rules or Cloud Functions is committed with a descriptive message before deployment.
+    </div>
+  </div>
+
+  <!-- ════════════════════ Q8 ════════════════════ -->
+  <div class="section-title">
+    <span class="q-num">8</span>
+    Online SOPs (Standard Operating Procedures)
+  </div>
+  <div class="answer-block">
+    <p style="margin-bottom:10px; font-size:11.5px;">MedNu has the following <strong>automated SOPs embedded and enforced by the system</strong>:</p>
+    <table>
+      <thead><tr><th>SOP</th><th>Trigger</th><th>Automated Action</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>Emergency Doctor Request</strong></td>
+          <td>Patient taps Emergency</td>
+          <td>Broadcasts FCM to all active doctors, creates admin alert, deduplicates within 5 minutes</td>
+        </tr>
+        <tr>
+          <td><strong>Weekly Quality Review</strong></td>
+          <td>Every Monday 8:00 AM IST</td>
+          <td>Cloud Function aggregates 7-day consultation feedback, ratings, cancellations into quality report</td>
+        </tr>
+        <tr>
+          <td><strong>Stale Consultation Expiry</strong></td>
+          <td>Every 2 minutes (scheduled)</td>
+          <td>Pending consultations older than 90 seconds are auto-marked as missed</td>
+        </tr>
+        <tr>
+          <td><strong>Payment Verification</strong></td>
+          <td>Every payment completion</td>
+          <td>Server-side HMAC-SHA256 signature verification before order is confirmed</td>
+        </tr>
+        <tr>
+          <td><strong>Account Lockout</strong></td>
+          <td>5 failed MPIN attempts</td>
+          <td>Account automatically locked for 30 minutes, written to Firestore</td>
+        </tr>
+        <tr>
+          <td><strong>Account Deletion</strong></td>
+          <td>Patient requests deletion</td>
+          <td>deletion_request created → admin reviews → Cloud Function processes deletion</td>
+        </tr>
+        <tr>
+          <td><strong>Serious Complaint Escalation</strong></td>
+          <td>Complaint submitted</td>
+          <td>Cloud Function instantly creates admin_alerts entry for human review</td>
+        </tr>
+        <tr>
+          <td><strong>Data Retention Enforcement</strong></td>
+          <td>Continuous (Firestore TTL)</td>
+          <td>Logs auto-deleted after 2 years, login audit after 1 year, notifications after 90 days</td>
+        </tr>
+        <tr>
+          <td><strong>Rating Aggregation</strong></td>
+          <td>New review submitted</td>
+          <td>Atomic Firestore transaction updates doctor rating summary in real time</td>
+        </tr>
+        <tr>
+          <td><strong>Login Audit Logging</strong></td>
+          <td>Every login attempt</td>
+          <td>Success/failure logged to login_audit with timestamp and 1-year TTL</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ════════════════════ FOOTER ════════════════════ -->
+  <div class="page-footer">
+    <span>MedNu Healthcare Services Pvt. Ltd. — Confidential</span>
+    <span>ISO 27001 Security Compliance Response — June 2026</span>
+    <span>Version 1.0</span>
+  </div>
+
+</div>
+</body>
+</html>

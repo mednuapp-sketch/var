@@ -63,7 +63,8 @@ class NutritionService {
   }) async {
     final uid = _uid;
     if (uid == null) throw Exception('Not authenticated');
-    final user = _auth.currentUser!;
+    final user = _auth.currentUser;
+    if (user == null) throw Exception('Not authenticated');
     final ref = await _db.collection('nutrition_appointments').add({
       'userId': uid,
       'userName': user.displayName ?? 'Patient',

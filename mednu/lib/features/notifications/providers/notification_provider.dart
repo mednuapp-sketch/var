@@ -6,7 +6,7 @@ import '../services/notification_service.dart';
 final patientNotificationsProvider =
     StreamProvider.autoDispose<List<NotificationModel>>((ref) {
   final uid = FirebaseAuth.instance.currentUser?.uid;
-  if (uid == null) return const Stream.empty();
+  if (uid == null) return Stream.value([]);
   return PatientNotificationService.streamForPatient(uid);
 });
 

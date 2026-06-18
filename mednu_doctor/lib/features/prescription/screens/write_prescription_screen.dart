@@ -55,6 +55,7 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen> {
 
   String? _patientAge;
   String? _patientGender;
+  String? _patientBloodGroup;
 
   /// True when prescription writing is allowed.
   /// Either from a validated session OR confirmed offline mode.
@@ -90,8 +91,9 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen> {
           .get();
       if (!mounted || !doc.exists) return;
       final data = doc.data()!;
-      final dob    = data['dob']    as String? ?? '';
-      final gender = data['gender'] as String? ?? '';
+      final dob        = data['dob']        as String? ?? '';
+      final gender     = data['gender']     as String? ?? '';
+      final bloodGroup = data['bloodGroup'] as String? ?? '';
       String age = '--';
       if (dob.isNotEmpty) {
         try {
@@ -103,8 +105,9 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen> {
         } catch (_) {}
       }
       setState(() {
-        _patientAge    = age;
-        _patientGender = gender;
+        _patientAge        = age;
+        _patientGender     = gender;
+        _patientBloodGroup = bloodGroup.isNotEmpty ? bloodGroup : null;
       });
     } catch (_) {}
   }
@@ -170,7 +173,7 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen> {
         'patientName':     widget.patientName,
         'patientAge':      _patientAge ?? '--',
         'patientGender':   _patientGender ?? '--',
-        'patientBloodGroup': '--',
+        'patientBloodGroup': _patientBloodGroup ?? '--',
         'diagnosis':       _diagnosisCtrl.text.trim(),
         'advice':          adviceLines,
         'medicines':       _medicines.map((m) => {
@@ -618,7 +621,7 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen> {
                 Switch(
                   value: _followUpRequired,
                   onChanged: (v) => setState(() => _followUpRequired = v),
-                  activeColor: AppColors.primary,
+                  activeThumbColor: AppColors.primary,
                 ),
               ]),
               if (_followUpRequired) ...[
@@ -747,7 +750,7 @@ class _MedicineCard extends StatelessWidget {
         const SizedBox(height: 8),
         Row(children: [
           Expanded(child: DropdownButtonFormField<String>(
-            value: medicine['frequency'] as String,
+            initialValue: medicine['frequency'] as String,
             decoration: const InputDecoration(contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10)),
             items: ['Once daily', 'Twice daily', 'Three times daily', 'Four times daily', 'As needed']
                 .map((f) => DropdownMenuItem(value: f, child: Text(f, style: const TextStyle(fontFamily: 'Poppins', fontSize: 12))))
@@ -756,7 +759,7 @@ class _MedicineCard extends StatelessWidget {
           )),
           const SizedBox(width: 8),
           Expanded(child: DropdownButtonFormField<String>(
-            value: medicine['timing'] as String,
+            initialValue: medicine['timing'] as String,
             decoration: const InputDecoration(contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10)),
             items: ['Before food', 'After food', 'With food', 'Empty stomach', 'At bedtime']
                 .map((t) => DropdownMenuItem(value: t, child: Text(t, style: const TextStyle(fontFamily: 'Poppins', fontSize: 12))))

@@ -5,11 +5,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:go_router/go_router.dart';
 import '../services/booking_service.dart';
 import '../services/feedback_service.dart';
 import '../services/places_service.dart';
 import '../constants/app_colors.dart';
 import '../constants/app_text_styles.dart';
+import '../router/app_router.dart';
 import '../../features/home/providers/location_provider.dart';
 import '../../features/location/providers/saved_addresses_provider.dart';
 import '../../features/location/models/saved_address.dart';
@@ -21,6 +23,8 @@ class ServiceBookingSheet extends ConsumerStatefulWidget {
   final Color themeColor;
   final Map<String, dynamic> serviceDetails;
   final String? priceLabel;
+  final int amount;
+  final String paymentDescription;
 
   const ServiceBookingSheet({
     super.key,
@@ -29,6 +33,8 @@ class ServiceBookingSheet extends ConsumerStatefulWidget {
     required this.themeColor,
     this.serviceDetails = const {},
     this.priceLabel,
+    this.amount = 0,
+    this.paymentDescription = '',
   });
 
   static Future<void> show(
@@ -38,6 +44,8 @@ class ServiceBookingSheet extends ConsumerStatefulWidget {
     required Color themeColor,
     Map<String, dynamic> serviceDetails = const {},
     String? priceLabel,
+    int amount = 0,
+    String paymentDescription = '',
   }) {
     return showModalBottomSheet(
       context: context,
@@ -51,6 +59,8 @@ class ServiceBookingSheet extends ConsumerStatefulWidget {
           themeColor: themeColor,
           serviceDetails: serviceDetails,
           priceLabel: priceLabel,
+          amount: amount,
+          paymentDescription: paymentDescription,
         ),
       ),
     );
@@ -584,6 +594,20 @@ class _ServiceBookingSheetState extends ConsumerState<ServiceBookingSheet> {
       FeedbackService.showWarning(context, 'Please select or enter your address');
       return;
     }
+
+    // ── Payment gate ──────────────────────────────────────
+    if (widget.amount > 0) {
+      final desc = widget.paymentDescription.isNotEmpty
+          ? widget.paymentDescription
+          : 'Booking: ${widget.serviceName}';
+      final paid = await context.push<bool>(
+        AppRoutes.payment,
+        extra: {'amount': widget.amount.toString(), 'description': desc},
+      );
+      if (!mounted) return;
+      if (paid != true) return;
+    }
+    // ─────────────────────────────────────────────────────
 
     setState(() => _busy = true);
     FeedbackService.showLoading(context, 'Booking ${widget.serviceName}...');

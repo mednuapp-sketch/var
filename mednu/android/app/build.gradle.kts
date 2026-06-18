@@ -16,10 +16,7 @@ if (keyPropertiesFile.exists()) {
 }
 
 android {
-    // TODO(Play Store): Change to a proper bundle ID (e.g. com.mednu.app).
-    // Steps: 1) Register new ID in Firebase Console, 2) download updated google-services.json,
-    // 3) update namespace + applicationId here + re-register SHA-1 for Google Sign-In.
-    namespace = "com.example.mednu"
+    namespace = "com.mednu.mednu"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -34,7 +31,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.mednu"  // TODO: update alongside namespace above
+        applicationId = "com.mednu.mednu"
         minSdk = 26
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode

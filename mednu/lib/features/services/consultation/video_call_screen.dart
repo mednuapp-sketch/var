@@ -134,17 +134,13 @@ class _VideoCallScreenState extends State<VideoCallScreen>
       if (_ending) return;
       switch (status) {
         case 'ended':
-          _ending = true;
           _doEndCall(fromRemote: true);
         case 'declined':
         case 'rejected':
-          _ending = true;
           _doEndCall(fromRemote: true, reason: 'Call was declined by the doctor.');
         case 'missed':
-          _ending = true;
           _doEndCall(fromRemote: true, reason: 'No answer — missed call.');
         case 'cancelled':
-          _ending = true;
           _doEndCall(fromRemote: true, reason: 'Consultation was cancelled.');
         default:
           break;
@@ -287,6 +283,9 @@ class _VideoCallScreenState extends State<VideoCallScreen>
           ],
         ),
       );
+    }
+    if (!_engineReady) {
+      return const Center(child: CircularProgressIndicator(color: Colors.white54));
     }
     return Stack(
       fit: StackFit.expand,
@@ -648,7 +647,6 @@ class _VideoCallScreenState extends State<VideoCallScreen>
           ElevatedButton(
             onPressed: () {
               Navigator.pop(context);
-              _ending = true;
               _doEndCall();
             },
             style: ElevatedButton.styleFrom(
@@ -664,6 +662,8 @@ class _VideoCallScreenState extends State<VideoCallScreen>
     bool fromRemote = false,
     String? reason,
   }) async {
+    if (_ending) return;
+    _ending = true;
     if (!fromRemote && widget.callId.isNotEmpty) {
       try {
         await FirebaseFirestore.instance

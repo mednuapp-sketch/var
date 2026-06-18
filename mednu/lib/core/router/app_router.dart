@@ -3,9 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../features/splash/splash_screen.dart';
 import '../../features/onboarding/onboarding_screen.dart';
-import '../../features/auth/screens/login_screen.dart';
+import '../../features/auth/screens/phone_entry_screen.dart';
 import '../../features/auth/screens/otp_screen.dart';
 import '../../features/auth/screens/register_screen.dart';
+import '../../features/auth/screens/mpin_screen.dart';
+import '../../features/auth/screens/create_mpin_screen.dart';
 import '../../features/home/screens/home_screen.dart';
 import '../../features/services/consultation/consultation_screen.dart';
 import '../../features/services/consultation/video_call_screen.dart';
@@ -78,9 +80,11 @@ import '../../features/my_services/models/unified_booking.dart';
 class AppRoutes {
   static const splash             = '/';
   static const onboarding         = '/onboarding';
-  static const login              = '/login';
+  static const login              = '/login';   // PhoneEntryScreen
   static const otp                = '/otp';
   static const register           = '/register';
+  static const mpin               = '/mpin';
+  static const createMpin         = '/create-mpin';
   static const home               = '/home';
   static const doctors            = '/doctors';
   static const doctorProfile      = '/doctors/:id';
@@ -174,23 +178,44 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     initialLocation: AppRoutes.splash,
     debugLogDiagnostics: false,
     routes: [
-      GoRoute(path: AppRoutes.splash,             builder: (c, s) => const SplashScreen()),
-      GoRoute(path: AppRoutes.onboarding,         builder: (c, s) => const OnboardingScreen()),
-      GoRoute(path: AppRoutes.login,              builder: (c, s) => const LoginScreen()),
+      GoRoute(path: AppRoutes.splash,     builder: (c, s) => const SplashScreen()),
+      GoRoute(path: AppRoutes.onboarding, builder: (c, s) => const OnboardingScreen()),
+      GoRoute(path: AppRoutes.login,      builder: (c, s) => const PhoneEntryScreen()),
       GoRoute(
         path: AppRoutes.otp,
         builder: (c, s) {
-          final extra = s.extra;
-          if (extra is Map<String, dynamic>) {
-            return OtpScreen(
-              phone: extra['phone'] as String? ?? '',
-              signupData: extra,
-            );
-          }
-          return OtpScreen(phone: extra as String? ?? '');
+          final extra = s.extra as Map<String, dynamic>? ?? {};
+          return OtpScreen(
+            phone:          extra['phone']          as String? ?? '',
+            isExistingUser: extra['isExistingUser'] as bool?   ?? false,
+            mode:           extra['mode']           as String? ?? '',
+          );
         },
       ),
-      GoRoute(path: AppRoutes.register,           builder: (c, s) => const RegisterScreen()),
+      GoRoute(
+        path: AppRoutes.register,
+        builder: (c, s) {
+          final extra = s.extra as Map<String, dynamic>? ?? {};
+          return RegisterScreen(phone: extra['phone'] as String? ?? '');
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.mpin,
+        builder: (c, s) {
+          final extra = s.extra as Map<String, dynamic>? ?? {};
+          return MPINScreen(
+            phone: extra['phone'] as String? ?? '',
+            mode:  extra['mode']  as String? ?? 'unlock',
+          );
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.createMpin,
+        builder: (c, s) {
+          final extra = s.extra as Map<String, dynamic>? ?? {};
+          return CreateMPINScreen(mode: extra['mode'] as String? ?? 'setup');
+        },
+      ),
       GoRoute(path: AppRoutes.home,               builder: (c, s) => const HomeScreen()),
       GoRoute(path: AppRoutes.consultation,       builder: (c, s) => const ConsultationScreen()),
       GoRoute(
@@ -272,7 +297,13 @@ GoRoute(
 ),
 GoRoute(path: AppRoutes.prescriptionViewer, builder: (c, s) => PrescriptionViewerScreen(data: s.extra as Map<String, dynamic>?)),
 GoRoute(path: AppRoutes.orderTracking,      builder: (c, s) => OrderTrackingScreen(orderData: s.extra as Map<String, dynamic>?)),
-GoRoute(path: AppRoutes.payment,            builder: (c, s) => PaymentScreen(amount: s.extra?.toString() ?? '520')),
+GoRoute(path: AppRoutes.payment, builder: (c, s) {
+  final extra = s.extra as Map<String, dynamic>?;
+  return PaymentScreen(
+    amount:      extra?['amount']?.toString()      ?? '520',
+    description: extra?['description'] as String? ?? 'Consultation with MedNU',
+  );
+}),
 GoRoute(path: AppRoutes.referral,           builder: (c, s) => const ReferralScreen()),
       // Location
       GoRoute(path: AppRoutes.addressBook,        builder: (c, s) => const AddressBookScreen()),

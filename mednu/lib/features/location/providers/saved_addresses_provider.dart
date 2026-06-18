@@ -40,10 +40,12 @@ class SavedAddressesNotifier extends StateNotifier<AsyncValue<List<SavedAddress>
   }
 
   Future<void> deleteAddress(String id) async {
+    if (id.isEmpty) return;
     await _col?.doc(id).delete();
   }
 
   Future<void> setDefault(String id) async {
+    if (id.isEmpty) return;
     final col = _col;
     if (col == null) return;
     await _clearDefaults(col);

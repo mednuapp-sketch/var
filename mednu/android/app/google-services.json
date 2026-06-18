@@ -29,6 +29,56 @@
       "api_key": [
         {
           "current_key": "AIzaSyBTt8cnzrKMOxMJpAnFgTiZxJSaqxE3aj8"
+        },
+        {
+          "current_key": "AIzaSyC_kvto0jcwTLky6m5A2Ex6K-7JFlwT1Uk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1056867138858-lgfemtdvpo1u6qs8pqgstskr7auai71k.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "1056867138858-jluol08jfqu2b4f8lgm63utg8msmfpdd.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.mednu.mednuDoctor"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1056867138858:android:14bc94e3d737fe7d45b253",
+        "android_client_info": {
+          "package_name": "com.mednu.mednu"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1056867138858-a2vi3294ip14q7g4gq2sf0jrg7nq152k.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.mednu.mednu",
+            "certificate_hash": "29eff4d15cb462cb5245e8e85b6301b8344d8698"
+          }
+        },
+        {
+          "client_id": "1056867138858-lgfemtdvpo1u6qs8pqgstskr7auai71k.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBTt8cnzrKMOxMJpAnFgTiZxJSaqxE3aj8"
+        },
+        {
+          "current_key": "AIzaSyC_kvto0jcwTLky6m5A2Ex6K-7JFlwT1Uk"
         }
       ],
       "services": {
@@ -58,6 +108,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "1056867138858-5d3e2bmmapfmsuc490udl3045sqsijub.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.mednu.mednu_doctor",
+            "certificate_hash": "29eff4d15cb462cb5245e8e85b6301b8344d8698"
+          }
+        },
+        {
           "client_id": "1056867138858-lgfemtdvpo1u6qs8pqgstskr7auai71k.apps.googleusercontent.com",
           "client_type": 3
         }
@@ -65,6 +123,9 @@
       "api_key": [
         {
           "current_key": "AIzaSyBTt8cnzrKMOxMJpAnFgTiZxJSaqxE3aj8"
+        },
+        {
+          "current_key": "AIzaSyC_kvto0jcwTLky6m5A2Ex6K-7JFlwT1Uk"
         }
       ],
       "services": {

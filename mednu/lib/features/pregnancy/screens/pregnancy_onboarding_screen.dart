@@ -52,18 +52,15 @@ class _PregnancyOnboardingScreenState
   DateTime _calcDueDate(DateTime lmp) => lmp.add(const Duration(days: 280));
 
   void _nextPage() {
-    bool valid = true;
     if (_currentPage == 0) {
-      valid = (_formKey1.currentState?.validate() ?? false) && _lmpDate != null;
-      if (_lmpDate == null && valid == false) {
+      if (_lmpDate == null) {
         _showSnack('Please select your last menstrual period date.');
         return;
       }
       if (!(_formKey1.currentState?.validate() ?? false)) return;
     } else if (_currentPage == 1) {
-      valid = _formKey2.currentState?.validate() ?? true;
+      if (!(_formKey2.currentState?.validate() ?? false)) return;
     }
-    if (!valid) return;
     if (_currentPage < 2) {
       _pageController.nextPage(
           duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);

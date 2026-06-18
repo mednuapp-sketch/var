@@ -307,8 +307,9 @@ class LocationNotifier extends StateNotifier<LocationState> {
     );
     try {
       // Check connectivity first — skip GPS if offline
-      final conn = await Connectivity().checkConnectivity();
-      final isOnline = conn.any((r) => r != ConnectivityResult.none);
+      final connResult = await Connectivity().checkConnectivity();
+      final connList = connResult is List ? connResult as List : [connResult];
+      final isOnline = connList.any((r) => r != ConnectivityResult.none);
 
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {

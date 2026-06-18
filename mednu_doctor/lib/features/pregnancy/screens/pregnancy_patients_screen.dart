@@ -213,6 +213,7 @@ class _PregnancyPatientsScreenState extends State<PregnancyPatientsScreen>
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('pregnancy_alerts')
+          .where('assignedDoctorId', isEqualTo: doctorId)
           .where('isResolved', isEqualTo: false)
           .orderBy('reportedAt', descending: true)
           .snapshots(),

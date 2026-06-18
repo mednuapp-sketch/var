@@ -564,7 +564,7 @@ service cloud.firestore {
     match /operation_logs/{logId} {
       allow create: if isAuth()
         && request.resource.data.userId == request.auth.uid
-        && request.resource.data.keys().hasAll(['userId', 'userType', 'action', 'status', 'timestamp']);
+        && request.resource.data.keys().hasAll(['userId', 'userType', 'action', 'status', 'timestamp', 'expiresAt']);
       allow read:   if isAdmin();
       allow update, delete: if false;
     }
@@ -789,6 +789,46 @@ service cloud.firestore {
       // Patients can delete their own lock (slot freed on cancellation).
       allow delete: if isAuth() && (resource.data.patientId == request.auth.uid || isAdmin());
       allow update: if false;
+    }
+
+    // ── Patient wallet ────────────────────────────────────────────────────────
+    match /wallet/{uid} {
+      allow read:   if isOwner(uid) || isAdmin();
+      allow create: if isOwner(uid);
+      allow update: if isOwner(uid) || isAdmin();
+      allow delete: if false;
+    }
+
+    // ── Patient profiles ──────────────────────────────────────────────────────
+    match /patient_profiles/{uid} {
+      allow read:   if isOwner(uid) || isAdmin() || isDoctor();
+      allow create: if isOwner(uid);
+      allow update: if isOwner(uid) || isAdmin();
+      allow delete: if false;
+    }
+
+    // ── Notification counters (root-level per-user doc) ───────────────────────
+    match /notifications/{uid} {
+      allow read:   if isOwner(uid) || isAdmin();
+      allow create: if isOwner(uid);
+      allow update: if isOwner(uid) || isAdmin();
+      allow delete: if false;
+    }
+
+    // ── Reward history ────────────────────────────────────────────────────────
+    match /reward_history/{uid} {
+      allow read:   if isOwner(uid) || isAdmin();
+      allow create: if isOwner(uid);
+      allow update: if isOwner(uid) || isAdmin();
+      allow delete: if false;
+    }
+
+    // ── Login audit log ───────────────────────────────────────────────────────
+    match /login_audit/{uid}/events/{eventId} {
+      allow create: if isOwner(uid)
+        && request.resource.data.keys().hasAll(['success', 'method', 'timestamp', 'expiresAt']);
+      allow read:   if isAdmin();
+      allow update, delete: if false;
     }
 
     // ── Deny everything else ──────────────────────────────────────────────────

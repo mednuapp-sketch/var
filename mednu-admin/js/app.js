@@ -606,6 +606,7 @@ function loadLiveActivityFeed() {
 function renderPendingList(docs) {
   const el = document.getElementById('pending-doctors-list');
   if (!el) return;
+  _pendingDoctorsCache = docs.map(doc => ({ id: doc.id, ...doc.data() }));
   if (!docs.length) {
     el.innerHTML = `<div class="empty-state" style="padding:24px 0;">
       <div class="empty-icon"><i class="ti ti-circle-check" style="color:#1e8e3e;"></i></div>
@@ -624,11 +625,19 @@ function renderPendingList(docs) {
         <div class="user-name" style="font-size:13px;">${escHtml(d.name || 'Unknown')}</div>
         <div class="user-sub">${escHtml(d.specialty || d.specialisation || 'General')}</div>
       </div>
-      <button class="btn btn-approve" style="font-size:11px;padding:5px 10px;" onclick="approveDoctor('${escHtml(doc.id)}', this)">
-        <i class="ti ti-check"></i> Approve
+      <button class="btn btn-outline" style="font-size:11px;padding:5px 10px;" onclick="reviewPendingDoctor('${escHtml(doc.id)}')">
+        <i class="ti ti-eye"></i> Review
       </button>
     </div>`;
   }).join('');
+}
+
+let _pendingDoctorsCache = [];
+
+function reviewPendingDoctor(id) {
+  const d = _pendingDoctorsCache.find(x => x.id === id);
+  if (!d) return;
+  showDoctorModal(d);
 }
 
 // ============================================
@@ -672,49 +681,12 @@ function renderDoctorsTable(doctors) {
       <td>${(d.totalReviews > 0 && d.rating > 0) ? `â­ ${escHtml(d.rating.toFixed(1))} <span style="font-size:11px;color:#9E9E9E;">(${d.totalReviews})</span>` : '<span style="color:#BDBDBD;font-size:12px;">No reviews</span>'}</td>
       <td><span class="pill pill-${escHtml(safeStatus)}">${escHtml(capitalize(d.status || 'Pending'))}</span></td>
       <td>
-        ${(!d.status || d.status === 'pending') ? `
-          <button class="btn btn-approve" onclick="approveDoctor('${escHtml(d.id)}', this)">Approve</button>
-          <button class="btn btn-reject" style="margin-left:4px;" onclick="rejectDoctor('${escHtml(d.id)}', this)">Reject</button>
-        ` : `<button class="btn btn-outline" onclick="viewDoctor('${escHtml(d.id)}')">View</button>`}
+        <button class="btn btn-outline" onclick="viewDoctor('${escHtml(d.id)}')">
+          ${(!d.status || d.status === 'pending') ? '<i class="ti ti-eye"></i> Review Documents' : 'View'}
+        </button>
       </td>
     </tr>`;
   }).join('');
-}
-
-async function approveDoctor(id, btn) {
-  withCooldown(`approve-${id}`, async () => {
-    btn.disabled = true; btn.textContent = '...';
-    try {
-      await db.collection('doctors').doc(id).update({
-        status: 'active',
-        approvedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      });
-      showToast('Doctor approved successfully!');
-      loadDoctors(); loadOverview();
-    } catch (err) {
-      console.error('approveDoctor error:', err);
-      btn.disabled = false; btn.textContent = 'Approve';
-      showToast('Failed to approve doctor. Please try again.');
-    }
-  });
-}
-
-async function rejectDoctor(id, btn) {
-  withCooldown(`reject-${id}`, async () => {
-    btn.disabled = true; btn.textContent = '...';
-    try {
-      await db.collection('doctors').doc(id).update({
-        status: 'suspended',
-        rejectedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      });
-      showToast('Doctor rejected.');
-      loadDoctors();
-    } catch (err) {
-      console.error('rejectDoctor error:', err);
-      btn.disabled = false; btn.textContent = 'Reject';
-      showToast('Failed to reject doctor. Please try again.');
-    }
-  });
 }
 
 function viewDoctor(id) {

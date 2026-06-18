@@ -1,6 +1,6 @@
 import 'package:dio/dio.dart';
 
-const _kApiKey = 'AIzaSyBh_sDZlUDbE-u-c_4-sWsT1gxvfTYqoco';
+const _kApiKey = 'AIzaSyBTt8cnzrKMOxMJpAnFgTiZxJSaqxE3aj8';
 
 class PlacesSuggestion {
   final String placeId;

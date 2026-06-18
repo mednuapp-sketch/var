@@ -60,7 +60,7 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
 
       showDialog(
         context: context,
-        builder: (_) => AlertDialog(
+        builder: (dialogCtx) => AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: const Row(children: [
             Icon(Icons.medical_services_rounded, color: Color(0xFF6A1B9A)),
@@ -72,10 +72,10 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
             style: TextStyle(fontFamily: 'Poppins', fontSize: 13, height: 1.5),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Stay Here')),
+            TextButton(onPressed: () => Navigator.pop(dialogCtx), child: const Text('Stay Here')),
             ElevatedButton(
               onPressed: () {
-                Navigator.pop(context);
+                Navigator.pop(dialogCtx);
                 context.push(AppRoutes.consultation);
               },
               style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6A1B9A)),
@@ -322,6 +322,22 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
                             child: CircularProgressIndicator(
                               color: Color(0xFFE53935), strokeWidth: 3),
                           ),
+                        );
+                      }
+                      if (snapshot.hasError) {
+                        return Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: AppColors.divider),
+                          ),
+                          child: const Row(children: [
+                            Icon(Icons.wifi_off_rounded, color: AppColors.textHint),
+                            SizedBox(width: 10),
+                            Expanded(child: Text('Could not load emergency services. Check your connection.',
+                                style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: AppColors.textHint))),
+                          ]),
                         );
                       }
                       final hospitals = snapshot.data ?? [];

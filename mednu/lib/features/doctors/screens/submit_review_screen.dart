@@ -105,6 +105,8 @@ class _SubmitReviewScreenState extends State<SubmitReviewScreen>
   }
 
   void _showSuccessDialog() {
+    _animController.reset();
+    _animController.forward();
     showDialog(
       context: context,
       barrierDismissible: false,

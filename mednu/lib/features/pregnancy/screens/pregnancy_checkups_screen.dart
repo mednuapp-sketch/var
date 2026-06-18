@@ -299,11 +299,12 @@ class _PregnancyCheckupsScreenState
   }
 
   Future<void> _confirmComplete(PregnancyCheckup c) async {
-    final notes = await showDialog<String>(
-      context: context,
-      builder: (ctx) {
-        final ctrl = TextEditingController();
-        return AlertDialog(
+    final ctrl = TextEditingController();
+    String? notes;
+    try {
+      notes = await showDialog<String>(
+        context: context,
+        builder: (ctx) => AlertDialog(
           title: const Text('Mark as Completed'),
           content: TextField(
             controller: ctrl,
@@ -321,9 +322,11 @@ class _PregnancyCheckupsScreenState
               child: const Text('Confirm', style: TextStyle(color: Colors.white)),
             ),
           ],
-        );
-      },
-    );
+        ),
+      );
+    } finally {
+      ctrl.dispose();
+    }
     if (notes == null || !mounted) return;
     final ok = await ref.read(pregnancyProvider.notifier)
         .markCheckupComplete(c.id, notes: notes.isEmpty ? null : notes);

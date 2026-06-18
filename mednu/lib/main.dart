@@ -315,8 +315,8 @@ void main() {
       // cut cold-start time by ~600-900 ms.
       await Future.wait([
         FirebaseAppCheck.instance.activate(
-          androidProvider: AndroidProvider.playIntegrity,
-          appleProvider: AppleProvider.appAttest,
+          androidProvider: kDebugMode ? AndroidProvider.debug : AndroidProvider.playIntegrity,
+          appleProvider: kDebugMode ? AppleProvider.debug : AppleProvider.appAttest,
         ),
         _initFCM(),
         CallNotificationService.init(),

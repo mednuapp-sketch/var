@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../auth/services/doctor_auth_service.dart';
@@ -32,6 +33,20 @@ class _AvailabilityScreenState extends State<AvailabilityScreen> {
   int _slotDuration = 30;
   bool _loading = true;
   bool _saving = false;
+
+  /// Real calendar date for each weekday of the current week (Mon-Sun),
+  /// so the schedule always reflects "this week" in real time.
+  late final Map<String, DateTime> _weekDates = _buildWeekDates();
+
+  Map<String, DateTime> _buildWeekDates() {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    // DateTime.weekday: Mon=1 .. Sun=7, matching _days order.
+    final monday = today.subtract(Duration(days: today.weekday - 1));
+    return {
+      for (var i = 0; i < _days.length; i++) _days[i]: monday.add(Duration(days: i)),
+    };
+  }
 
   @override
   void initState() {
@@ -163,6 +178,9 @@ class _AvailabilityScreenState extends State<AvailabilityScreen> {
     final period = t.period == DayPeriod.am ? 'AM' : 'PM';
     return '$h:$m $period';
   }
+
+  bool _isSameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
 
   int _slotsForDay(String day) {
     if (_enabled[day] != true) return 0;
@@ -364,17 +382,23 @@ class _AvailabilityScreenState extends State<AvailabilityScreen> {
 
                 Text('Weekly Schedule', style: AppTextStyles.h4),
                 const SizedBox(height: 12),
-                ..._days.map((day) => _DayCard(
-                  day: day,
-                  enabled: _enabled[day]!,
-                  start: _startTimes[day]!,
-                  end: _endTimes[day]!,
-                  slotCount: _slotsForDay(day),
-                  onToggle: (v) => setState(() => _enabled[day] = v),
-                  onPickStart: () => _pickTime(day, true),
-                  onPickEnd: () => _pickTime(day, false),
-                  formatTime: _formatDisplay,
-                )),
+                ..._days.map((day) {
+                  final date = _weekDates[day]!;
+                  final isToday = _isSameDay(date, DateTime.now());
+                  return _DayCard(
+                    day: day,
+                    date: date,
+                    isToday: isToday,
+                    enabled: _enabled[day]!,
+                    start: _startTimes[day]!,
+                    end: _endTimes[day]!,
+                    slotCount: _slotsForDay(day),
+                    onToggle: (v) => setState(() => _enabled[day] = v),
+                    onPickStart: () => _pickTime(day, true),
+                    onPickEnd: () => _pickTime(day, false),
+                    formatTime: _formatDisplay,
+                  );
+                }),
                 const SizedBox(height: 20),
                     ],
                   ),
@@ -387,6 +411,8 @@ class _AvailabilityScreenState extends State<AvailabilityScreen> {
 
 class _DayCard extends StatelessWidget {
   final String day;
+  final DateTime date;
+  final bool isToday;
   final bool enabled;
   final TimeOfDay start;
   final TimeOfDay end;
@@ -398,6 +424,8 @@ class _DayCard extends StatelessWidget {
 
   const _DayCard({
     required this.day,
+    required this.date,
+    required this.isToday,
     required this.enabled,
     required this.start,
     required this.end,
@@ -418,6 +446,7 @@ class _DayCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: enabled ? AppColors.primary.withValues(alpha:0.3) : AppColors.divider,
+          width: isToday ? 1.6 : 1,
         ),
         boxShadow: [
           BoxShadow(
@@ -431,11 +460,40 @@ class _DayCard extends StatelessWidget {
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          Text(
-            day,
-            style: AppTextStyles.labelLarge.copyWith(
-              color: enabled ? AppColors.textPrimary : AppColors.textSecondary,
-            ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Text(
+                day,
+                style: AppTextStyles.labelLarge.copyWith(
+                  color: enabled ? AppColors.textPrimary : AppColors.textSecondary,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                DateFormat('MMM d').format(date),
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: enabled ? AppColors.primary.withValues(alpha:0.7) : AppColors.textSecondary.withValues(alpha:0.7),
+                ),
+              ),
+              if (isToday) ...[
+                const SizedBox(width: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Text(
+                    'Today',
+                    style: TextStyle(fontFamily: 'Poppins', fontSize: 9, fontWeight: FontWeight.w700, color: Colors.white),
+                  ),
+                ),
+              ],
+            ],
           ),
           const Spacer(),
           if (enabled && slotCount > 0)
@@ -451,7 +509,25 @@ class _DayCard extends StatelessWidget {
                 style: const TextStyle(fontFamily: 'Poppins', fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.success),
               ),
             ),
-          Switch(value: enabled, onChanged: onToggle, activeColor: AppColors.primary),
+          GestureDetector(
+            onTap: () => onToggle(!enabled),
+            behavior: HitTestBehavior.opaque,
+            child: Row(
+              children: [
+                Text(
+                  enabled ? 'Available' : 'Off',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: enabled ? AppColors.success : AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Switch(value: enabled, onChanged: onToggle, activeColor: AppColors.primary),
+              ],
+            ),
+          ),
         ]),
         if (enabled) ...[
           const SizedBox(height: 8),

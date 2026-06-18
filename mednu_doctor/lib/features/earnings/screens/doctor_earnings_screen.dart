@@ -19,12 +19,18 @@ class DoctorEarningsScreen extends StatelessWidget {
       );
     }
 
+    // Load only the last 365 days so a high-volume doctor with thousands
+    // of historical appointments doesn't cause a full-collection read.
+    final oneYearAgo = Timestamp.fromDate(
+        DateTime.now().subtract(const Duration(days: 365)));
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: FirebaseFirestore.instance
             .collection('appointments')
             .where('doctorId', isEqualTo: uid)
+            .where('createdAt', isGreaterThan: oneYearAgo)
             .snapshots(),
         builder: (context, snap) {
           if (snap.connectionState == ConnectionState.waiting && !snap.hasData) {
@@ -135,7 +141,7 @@ class _GradientAppBar extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
                         const Text(
-                          'Lifetime Earnings',
+                          'Earnings (Last 12 Months)',
                           style: TextStyle(
                             fontFamily: 'Poppins',
                             fontSize: 12,
@@ -438,10 +444,11 @@ class _EarningsBody extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Wallet Section (StreamBuilder on wallets/{uid})
+// Wallet Section — driven by appointment-derived earnings (no dead Firestore read)
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _WalletSection extends StatelessWidget {
+  // uid retained for future payout-request deep links; not used for Firestore reads.
   final String uid;
   final num pendingEarnings;
 
@@ -449,105 +456,84 @@ class _WalletSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
-          .collection('wallets')
-          .doc(uid)
-          .snapshots(),
-      builder: (context, snap) {
-        final data = snap.data?.data();
-        final balance = (data?['balance'] as num?) ?? 0;
-        final pending = (data?['pendingPayout'] as num?) ?? pendingEarnings;
-        final totalWithdrawn = (data?['totalWithdrawn'] as num?) ?? 0;
+    final pending = pendingEarnings;
 
-        return Container(
-          padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFF1565C0), Color(0xFF0D47A1)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF1565C0), Color(0xFF0D47A1)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF1565C0).withValues(alpha: 0.25),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(children: [
+            Icon(Icons.account_balance_wallet_rounded,
+                color: Colors.white, size: 20),
+            SizedBox(width: 8),
+            Text(
+              'Wallet & Payouts',
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
             ),
-            borderRadius: BorderRadius.circular(18),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF1565C0).withValues(alpha:0.25),
-                blurRadius: 12,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(children: [
-                const Icon(Icons.account_balance_wallet_rounded,
-                    color: Colors.white, size: 20),
-                const SizedBox(width: 8),
-                const Text(
-                  'Wallet & Payouts',
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
-                  ),
-                ),
-                const Spacer(),
-                if (snap.connectionState == ConnectionState.waiting)
-                  const SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white54,
-                    ),
-                  ),
-              ]),
-              const SizedBox(height: 16),
-              Row(children: [
-                _WalletStat('₹${_formatAmount(balance)}', 'Wallet Balance',
-                    Icons.savings_rounded),
-                _walletDivider(),
-                _WalletStat('₹${_formatAmount(pending)}', 'Pending Payout',
-                    Icons.pending_rounded),
-                _walletDivider(),
-                _WalletStat('₹${_formatAmount(totalWithdrawn)}', 'Withdrawn',
-                    Icons.south_rounded),
-              ]),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: pending > 0
-                      ? () => _showWithdrawDialog(context, pending)
-                      : null,
-                  icon: const Icon(Icons.send_rounded, size: 16),
-                  label: Text(
-                    pending > 0
-                        ? 'Request Withdrawal  ₹${_formatAmount(pending)}'
-                        : 'No Pending Payout',
-                    style: const TextStyle(
-                      fontFamily: 'Poppins',
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13,
-                    ),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: const Color(0xFF1565C0),
-                    disabledBackgroundColor: Colors.white30,
-                    disabledForegroundColor: Colors.white60,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10)),
-                  ),
+          ]),
+          const SizedBox(height: 16),
+          Row(children: [
+            _WalletStat('₹${_formatAmount(pending)}', 'This Month',
+                Icons.pending_rounded),
+            _walletDivider(),
+            const _WalletStat('Coming soon', 'Wallet Balance',
+                Icons.savings_rounded),
+            _walletDivider(),
+            const _WalletStat('Coming soon', 'Withdrawn',
+                Icons.south_rounded),
+          ]),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: pending > 0
+                  ? () => _showWithdrawDialog(context, pending)
+                  : null,
+              icon: const Icon(Icons.send_rounded, size: 16),
+              label: Text(
+                pending > 0
+                    ? 'Request Withdrawal  ₹${_formatAmount(pending)}'
+                    : 'No Pending Payout',
+                style: const TextStyle(
+                  fontFamily: 'Poppins',
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
                 ),
               ),
-            ],
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: const Color(0xFF1565C0),
+                disabledBackgroundColor: Colors.white30,
+                disabledForegroundColor: Colors.white60,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
           ),
-        );
-      },
+        ],
+      ),
     );
   }
 

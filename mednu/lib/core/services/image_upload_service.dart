@@ -7,31 +7,23 @@ class ImageUploadService {
   static final _storage = FirebaseStorage.instance;
 
   static Future<File?> pickFromGallery() async {
-    try {
-      final xFile = await _picker.pickImage(
-        source: ImageSource.gallery,
-        maxWidth: 800,
-        maxHeight: 800,
-        imageQuality: 75,
-      );
-      return xFile != null ? File(xFile.path) : null;
-    } catch (_) {
-      return null;
-    }
+    final xFile = await _picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 800,
+      maxHeight: 800,
+      imageQuality: 75,
+    );
+    return xFile != null ? File(xFile.path) : null;
   }
 
   static Future<File?> pickFromCamera() async {
-    try {
-      final xFile = await _picker.pickImage(
-        source: ImageSource.camera,
-        maxWidth: 800,
-        maxHeight: 800,
-        imageQuality: 75,
-      );
-      return xFile != null ? File(xFile.path) : null;
-    } catch (_) {
-      return null;
-    }
+    final xFile = await _picker.pickImage(
+      source: ImageSource.camera,
+      maxWidth: 800,
+      maxHeight: 800,
+      imageQuality: 75,
+    );
+    return xFile != null ? File(xFile.path) : null;
   }
 
   /// Uploads to `users/{uid}/profile.jpg` and returns the download URL.

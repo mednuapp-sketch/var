@@ -181,7 +181,7 @@ class ReferralService {
     if (trimmed.isEmpty) {
       return const ReferralValidationResult(isValid: false);
     }
-    if (trimmed == _uid.substring(0, trimmed.length.clamp(1, 8))) {
+    if (_uid.isNotEmpty && trimmed == _uid.substring(0, trimmed.length.clamp(1, _uid.length.clamp(1, 8)))) {
       return const ReferralValidationResult(
         isValid: false, error: 'You cannot use your own referral code.',
       );
@@ -325,6 +325,7 @@ class ReferralService {
     required double referrerReward,
     required double referredReward,
   }) async {
+    if (referrerId.isEmpty || newUserId.isEmpty) return;
     final batch = _db.batch();
 
     if (referrerReward > 0) {

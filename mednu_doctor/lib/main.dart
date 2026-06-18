@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:ui';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -17,6 +18,7 @@ import 'core/services/appointment_reminder_service.dart';
 import 'core/services/call_notification_service.dart';
 import 'core/services/fcm_service.dart';
 import 'core/services/presence_service.dart';
+import 'core/services/battery_optimization_service.dart';
 import 'core/theme/app_theme.dart';
 import 'features/security/services/biometric_service.dart';
 import 'features/security/screens/lock_screen.dart';
@@ -104,8 +106,8 @@ void main() {
     // to cut cold-start time by ~500-800 ms.
     await Future.wait([
       FirebaseAppCheck.instance.activate(
-        androidProvider: AndroidProvider.playIntegrity,
-        appleProvider: AppleProvider.appAttest,
+        androidProvider: kDebugMode ? AndroidProvider.debug : AndroidProvider.playIntegrity,
+        appleProvider: kDebugMode ? AppleProvider.debug : AppleProvider.appAttest,
       ),
       CallNotificationService.init(),
       FcmService.init(),
@@ -188,7 +190,21 @@ class _MedNUDoctorAppState extends ConsumerState<MedNUDoctorApp>
     await _loadAlertedId();
     if (!mounted) return;
     _authStateSub = FirebaseAuth.instance.authStateChanges().listen((user) {
-      if (user != null) _setupCallListener();
+      if (user != null) {
+        _setupCallListener();
+
+        // ── Battery optimization whitelist prompt (Android, once ever) ────
+        // Delayed so it never collides with the biometric lock screen or
+        // other startup dialogs.
+        Future.delayed(const Duration(seconds: 2), () {
+          if (mounted) BatteryOptimizationService.promptIfNeeded(context);
+        });
+      } else {
+        // User signed out — cancel the per-UID listener immediately so we
+        // don't keep a live Firestore stream open for the previous account.
+        _callSub?.cancel();
+        _callSub = null;
+      }
     });
   }
 

@@ -66,15 +66,17 @@ class _PrescriptionViewerScreenState extends State<PrescriptionViewerScreen> {
 
   Map<String, dynamic> get _d => widget.data ?? {};
 
-  String get _doctorName    => _d['doctorName']    as String? ?? 'Dr. Priya Sharma';
-  String get _specialty     => _d['doctorSpecialty'] as String? ?? 'Gynaecology';
-  String get _regNo         => _d['doctorRegNo']   as String? ?? 'MCI-12345';
+  String get _doctorName    => _d['doctorName']    as String? ?? 'Doctor';
+  String get _specialty     => _d['doctorSpecialty'] as String? ?? '';
+  String get _regNo         => _d['doctorRegNo']   as String? ?? '';
   String get _patientName   => _d['patientName']   as String? ?? 'Patient';
   String get _patientAge    => _d['patientAge']    as String? ?? '--';
   String get _patientGender => _d['patientGender'] as String? ?? '--';
   String get _bloodGroup    => _d['patientBloodGroup'] as String? ?? '--';
-  String get _diagnosis     => _d['diagnosis']     as String? ?? 'Acute Upper Respiratory Tract Infection (URI) with mild fever.';
+  String get _diagnosis     => _d['diagnosis']     as String? ?? '';
   String get _rxId          => _d['rxId']          as String? ?? (_d['id'] as String? ?? 'RX-0000');
+  bool   get _followUpRequired => _d['followUpRequired'] as bool? ?? false;
+  int    get _followUpDays     => (_d['followUpDays'] as num?)?.toInt() ?? 7;
 
   String get _dateStr {
     final ts = _d['createdAt'];
@@ -90,27 +92,13 @@ class _PrescriptionViewerScreenState extends State<PrescriptionViewerScreen> {
 
   List<Map<String, dynamic>> get _medicines {
     final raw = _d['medicines'];
-    if (raw == null) {
-      return [
-        {'name': 'Paracetamol 500mg', 'dosage': '1 tablet',  'frequency': 'Twice daily',       'duration': '5 days',  'timing': 'After food'},
-        {'name': 'Amoxicillin 250mg', 'dosage': '1 capsule', 'frequency': 'Three times daily',  'duration': '7 days',  'timing': 'After food'},
-        {'name': 'Omeprazole 20mg',   'dosage': '1 capsule', 'frequency': 'Once daily',          'duration': '14 days', 'timing': 'Before food'},
-      ];
-    }
+    if (raw == null) return [];
     return (raw as List).map((m) => Map<String, dynamic>.from(m as Map)).toList();
   }
 
   List<String> get _advice {
     final raw = _d['advice'];
-    if (raw == null) {
-      return [
-        'Take complete rest for 2-3 days',
-        'Drink plenty of fluids (3+ litres/day)',
-        'Avoid cold foods & drinks',
-        'Monitor temperature twice daily',
-        'Follow-up after 5 days if no improvement',
-      ];
-    }
+    if (raw == null) return [];
     return (raw as List).map((e) => e.toString()).toList();
   }
 
@@ -456,6 +444,11 @@ class _PrescriptionViewerScreenState extends State<PrescriptionViewerScreen> {
                 ),
               ]),
               const SizedBox(height: 12),
+              if (_medicines.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: Text('No medicines prescribed.', style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: AppColors.textHint)),
+                ),
               ..._medicines.asMap().entries.map((e) {
                 final m = e.value;
                 final color = medColorPalette[e.key % medColorPalette.length];
@@ -490,16 +483,42 @@ class _PrescriptionViewerScreenState extends State<PrescriptionViewerScreen> {
             _card(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text("Doctor's Advice", style: AppTextStyles.h4),
               const SizedBox(height: 10),
-              ..._advice.map((a) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const Icon(Icons.check_circle_outline_rounded, size: 16, color: AppColors.primary),
-                  const SizedBox(width: 8),
-                  Expanded(child: Text(a, style: AppTextStyles.bodyMedium)),
-                ]),
-              )),
+              if (_advice.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: Text('No specific advice provided.', style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: AppColors.textHint)),
+                )
+              else
+                ..._advice.map((a) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    const Icon(Icons.check_circle_outline_rounded, size: 16, color: AppColors.primary),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(a, style: AppTextStyles.bodyMedium)),
+                  ]),
+                )),
             ])),
             const SizedBox(height: 16),
+
+            // Follow-up reminder
+            if (_followUpRequired)
+              _card(child: Row(children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF3E0),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.event_repeat_rounded, color: Color(0xFFE65100), size: 22),
+                ),
+                const SizedBox(width: 12),
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Text('Follow-up Required', style: TextStyle(fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFFE65100))),
+                  Text('Please schedule a follow-up appointment in $_followUpDays days.',
+                      style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: AppColors.textSecondary, height: 1.4)),
+                ])),
+              ])),
+            if (_followUpRequired) const SizedBox(height: 16),
 
             // Digital signature
             _card(child: Column(children: [

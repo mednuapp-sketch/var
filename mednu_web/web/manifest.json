@@ -1,0 +1,35 @@
+{
+    "name": "MedNu — Your Healthcare Companion",
+    "short_name": "MedNu",
+    "start_url": ".",
+    "display": "standalone",
+    "background_color": "#FFF5F9",
+    "theme_color": "#C2185B",
+    "description": "India's premium healthcare platform. Book verified doctors, manage prescriptions, and access 24/7 support.",
+    "orientation": "any",
+    "prefer_related_applications": false,
+    "icons": [
+        {
+            "src": "icons/Icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "icons/Icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        },
+        {
+            "src": "icons/Icon-maskable-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "maskable"
+        },
+        {
+            "src": "icons/Icon-maskable-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "maskable"
+        }
+    ]
+}

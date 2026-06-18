@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <base href="$FLUTTER_BASE_HREF">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Primary SEO -->
+  <title>MedNu — Your Healthcare Companion | Book Doctors Online</title>
+  <meta name="description" content="MedNu is India's premium healthcare platform. Book verified doctors online, access digital prescriptions, manage appointments, and get 24/7 emergency support.">
+  <meta name="keywords" content="book doctor online, healthcare app India, online doctor consultation, prescription delivery, medical appointments, MedNu">
+  <meta name="author" content="MedNu Healthcare Services Pvt. Ltd.">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://mednu.in/">
+
+  <!-- Open Graph / Facebook -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://mednu.in/">
+  <meta property="og:title" content="MedNu — Your Healthcare Companion">
+  <meta property="og:description" content="Book verified doctors, access prescriptions, and manage your family's health — all in one secure platform.">
+  <meta property="og:image" content="https://mednu.in/og-image.jpg">
+
+  <!-- Twitter -->
+  <meta property="twitter:card" content="summary_large_image">
+  <meta property="twitter:url" content="https://mednu.in/">
+  <meta property="twitter:title" content="MedNu — Your Healthcare Companion">
+  <meta property="twitter:description" content="Book verified doctors, access prescriptions, and manage your family's health — all in one secure platform.">
+  <meta property="twitter:image" content="https://mednu.in/og-image.jpg">
+
+  <!-- Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "MedicalOrganization",
+    "name": "MedNu Healthcare",
+    "url": "https://mednu.in",
+    "description": "India's premium healthcare platform connecting patients with verified doctors and hospitals.",
+    "telephone": "+91-93907-58684",
+    "address": {
+      "@type": "PostalAddress",
+      "addressLocality": "Visakhapatnam",
+      "addressRegion": "Andhra Pradesh",
+      "addressCountry": "IN"
+    }
+  }
+  </script>
+
+  <!-- iOS -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="MedNu">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <!-- Theme -->
+  <meta name="theme-color" content="#C2185B">
+
+  <!-- Favicon — SVG for modern browsers, PNG fallback -->
+  <link rel="icon" type="image/svg+xml" href="favicon.svg"/>
+  <link rel="icon" type="image/png" href="favicon.png"/>
+  <link rel="manifest" href="manifest.json">
+
+  <!-- Preconnect Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      background: #F7F4F8;
+      font-family: 'Poppins', sans-serif;
+      overscroll-behavior-y: none;
+      overflow: hidden;
+      height: 100%;
+      width: 100%;
+    }
+    #loading {
+      position: fixed; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      background: linear-gradient(135deg, #FFF5F9, #F5EEFF);
+      z-index: 9999;
+    }
+    .loader-logo {
+      width: 72px; height: 72px;
+      background: linear-gradient(135deg, #C2185B, #7B1FA2);
+      border-radius: 20px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 36px; font-weight: 800; color: white;
+      margin-bottom: 20px;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+    .loader-title {
+      font-size: 26px; font-weight: 800;
+      background: linear-gradient(135deg, #C2185B, #7B1FA2);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .loader-subtitle { font-size: 13px; color: #9E9E9E; margin-top: 8px; }
+    .loader-bar {
+      width: 200px; height: 3px;
+      background: #F0E6FF; border-radius: 2px;
+      margin-top: 24px; overflow: hidden;
+    }
+    .loader-progress {
+      height: 100%;
+      background: linear-gradient(90deg, #C2185B, #7B1FA2);
+      border-radius: 2px;
+      animation: load 2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); box-shadow: 0 8px 24px rgba(194,24,91,0.3); }
+      50% { transform: scale(1.05); box-shadow: 0 12px 32px rgba(194,24,91,0.5); }
+    }
+    @keyframes load {
+      0% { width: 0; } 70% { width: 100%; } 100% { width: 100%; opacity: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div id="loading">
+    <div class="loader-logo">M</div>
+    <div class="loader-title">MedNu</div>
+    <div class="loader-subtitle">Your Healthcare Companion</div>
+    <div class="loader-bar"><div class="loader-progress"></div></div>
+  </div>
+
+  <script src="flutter_bootstrap.js" async></script>
+
+  <script>
+    window.addEventListener('flutter-first-frame', function() {
+      const loader = document.getElementById('loading');
+      if (loader) {
+        loader.style.opacity = '0';
+        loader.style.transition = 'opacity 0.5s ease';
+        setTimeout(() => loader.remove(), 500);
+      }
+    });
+  </script>
+</body>
+</html>

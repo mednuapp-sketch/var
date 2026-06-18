@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_colors.dart';
@@ -92,163 +91,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
-  Future<void> _handleDeleteAccount() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Row(
-          children: [
-            Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 28),
-            SizedBox(width: 10),
-            Text('Delete Account?'),
-          ],
-        ),
-        content: const Text(
-          'This action is permanent and cannot be undone.\n\n'
-          'Deleting your account will:\n'
-          '• Remove all your personal data\n'
-          '• Cancel any pending appointments\n'
-          '• Delete your health records\n'
-          '• Remove your wallet balance\n\n'
-          'Are you absolutely sure you want to proceed?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
-            child: const Text('Delete Account', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true || !mounted) return;
-
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
-    final phoneController = TextEditingController();
-    final reauthed = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Verify Your Identity'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'For security, we need to verify your identity before deleting your account.',
-              style: TextStyle(fontSize: 13, color: Colors.grey),
-            ),
-            const SizedBox(height: 12),
-            const Text('Confirm your phone number:',
-                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-            const SizedBox(height: 8),
-            TextField(
-              controller: phoneController,
-              keyboardType: TextInputType.phone,
-              decoration: InputDecoration(
-                hintText: user.phoneNumber ?? 'Your registered phone',
-                prefixIcon: const Icon(Icons.phone_rounded),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
-            child: const Text('Confirm Delete',
-                style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-
-    if (reauthed != true || !mounted) return;
-
-    _showLoadingDialog('Deleting your account...');
-
-    try {
-      final uid = user.uid;
-      final db = FirebaseFirestore.instance;
-
-      await db.collection('users').doc(uid).update({
-        'accountStatus': 'deleted',
-        'deletedAt': FieldValue.serverTimestamp(),
-        'deletionRequested': true,
-      });
-
-      await db.collection('deletion_requests').doc(uid).set({
-        'userId': uid,
-        'requestedAt': FieldValue.serverTimestamp(),
-        'collections': [
-          'patient_notifications',
-          'appointments',
-          'health_records',
-          'wallet_transactions',
-          'family_members',
-        ],
-        'status': 'pending',
-      });
-
-      await user.delete();
-
-      if (mounted) {
-        Navigator.of(context).pop();
-        context.go(AppRoutes.login);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Account deleted. We\'re sorry to see you go.'),
-            backgroundColor: AppColors.textSecondary,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    } on FirebaseAuthException catch (e) {
-      if (mounted) {
-        Navigator.of(context).pop();
-        String message = 'Failed to delete account. Please try again.';
-        if (e.code == 'requires-recent-login') {
-          message = 'Please log out and log back in before deleting your account.';
-        }
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(message),
-            backgroundColor: AppColors.error,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    } catch (_) {
-      if (mounted) {
-        Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Something went wrong. Please contact support.'),
-            backgroundColor: AppColors.error,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    }
-  }
-
+  // ignore: unused_element — kept for future use (account deletion flow)
   void _showLoadingDialog(String message) {
     showDialog(
       context: context,
@@ -534,14 +377,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   _NavTile(Icons.card_giftcard_rounded, 'Referral & Rewards',
                       'Invite friends and earn rewards',
                       () => context.push(AppRoutes.referral)),
-                  const Divider(height: 1, indent: 62),
-                  _NavTile(
-                    Icons.delete_forever_rounded,
-                    'Delete Account',
-                    'Permanently remove your account and all data',
-                    _handleDeleteAccount,
-                    isDestructive: true,
-                  ),
                 ]),
 
                 const SizedBox(height: 20),
@@ -620,7 +455,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       );
                       if (confirm == true && mounted) {
                         await FirebaseAuth.instance.signOut();
-                        if (mounted) context.go(AppRoutes.login);
+                        if (!mounted) return;
+                        context.go(AppRoutes.login);
                       }
                     },
                     icon: const Icon(Icons.logout_rounded, size: 18),
@@ -771,10 +607,9 @@ class _NavTile extends StatelessWidget {
   final IconData icon;
   final String title, subtitle;
   final VoidCallback onTap;
-  final bool isDestructive;
   final bool showChevron;
   const _NavTile(this.icon, this.title, this.subtitle, this.onTap,
-      {this.isDestructive = false, this.showChevron = true});
+      {this.showChevron = true});
 
   @override
   Widget build(BuildContext context) => ListTile(
@@ -784,26 +619,19 @@ class _NavTile extends StatelessWidget {
           width: 38,
           height: 38,
           decoration: BoxDecoration(
-            color: (isDestructive ? AppColors.error : AppColors.primary)
-                .withValues(alpha:0.1),
+            color: AppColors.primary.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(11),
           ),
-          child: Icon(icon,
-              color: isDestructive ? AppColors.error : AppColors.primary,
-              size: 20),
+          child: Icon(icon, color: AppColors.primary, size: 20),
         ),
-        title: Text(
-          title,
-          style: AppTextStyles.labelLarge.copyWith(
-              color: isDestructive ? AppColors.error : null),
-        ),
+        title: Text(title, style: AppTextStyles.labelLarge),
         subtitle: Text(subtitle, style: AppTextStyles.caption),
         trailing: showChevron
             ? Icon(Icons.chevron_right_rounded,
                 color: Theme.of(context)
                     .colorScheme
                     .onSurface
-                    .withValues(alpha:0.3),
+                    .withValues(alpha: 0.3),
                 size: 20)
             : null,
       );

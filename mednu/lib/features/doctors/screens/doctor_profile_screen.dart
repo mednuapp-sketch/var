@@ -54,6 +54,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
   List<String> _supportedModes = ['Video', 'Audio', 'In-Person', 'Chat'];
 
   StreamSubscription<DocumentSnapshot>? _docSub;
+  StreamSubscription<DocumentSnapshot>? _favSub;
   Timer? _slotTimer;
 
   @override
@@ -62,7 +63,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
     final today = DateTime.now();
     _dates = List.generate(10, (i) => today.add(Duration(days: i)));
     _subscribeDoctor();
-    _loadFavouriteState();
+    _subscribeFavouriteState();
     _slotTimer = Timer.periodic(const Duration(minutes: 1), (_) { if (mounted) setState(() {}); });
   }
 
@@ -117,17 +118,20 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
     });
   }
 
-  Future<void> _loadFavouriteState() async {
+  // ── Realtime favourite-state subscription ─────────────
+  void _subscribeFavouriteState() {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) { setState(() => _loadingFav = false); return; }
-    try {
-      final doc = await FirebaseFirestore.instance
-          .collection('users').doc(uid)
-          .collection('favourite_doctors').doc(widget.doctorId).get();
-      if (mounted) setState(() { _isFavourite = doc.exists; _loadingFav = false; });
-    } catch (_) {
+    _favSub = FirebaseFirestore.instance
+        .collection('users').doc(uid)
+        .collection('favourite_doctors').doc(widget.doctorId)
+        .snapshots()
+        .listen((doc) {
+      if (!mounted) return;
+      setState(() { _isFavourite = doc.exists; _loadingFav = false; });
+    }, onError: (_) {
       if (mounted) setState(() => _loadingFav = false);
-    }
+    });
   }
 
   Future<void> _toggleFavourite() async {
@@ -259,32 +263,34 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
       }
       return;
     }
+
     setState(() => _booking = true);
+
+    final patient = FirebaseAuth.instance.currentUser;
+    final uid = patient?.uid;
+    if (uid == null) {
+      setState(() => _booking = false);
+      return;
+    }
+
+    final dateKey = _selectedDateKey;
+    final slot    = _selectedSlot!;
+    final db      = FirebaseFirestore.instance;
+
+    // ── Resolve patient name ─────────────────────────────────────────────────
+    String patientName;
     try {
-      final patient = FirebaseAuth.instance.currentUser;
-      final uid = patient?.uid;
-      if (uid == null) throw Exception('Not authenticated');
+      final userSnap = await db.collection('users').doc(uid).get();
+      final fsName = (userSnap.data()?['name'] as String?)?.trim() ?? '';
+      patientName = fsName.isNotEmpty
+          ? fsName
+          : patient?.displayName ?? patient?.phoneNumber ?? 'Patient';
+    } catch (_) {
+      patientName = patient?.displayName ?? patient?.phoneNumber ?? 'Patient';
+    }
 
-      final dateKey   = _selectedDateKey;
-      final slot      = _selectedSlot!;
-      final db        = FirebaseFirestore.instance;
-
-      // Resolve patient name from Firestore so it stays consistent
-      // with whatever the user set in their profile (auth displayName
-      // is only set at Google sign-in and never updated by us).
-      String patientName;
-      try {
-        final userSnap = await db.collection('users').doc(uid).get();
-        final fsName = (userSnap.data()?['name'] as String?)?.trim() ?? '';
-        patientName = fsName.isNotEmpty
-            ? fsName
-            : patient?.displayName ?? patient?.phoneNumber ?? 'Patient';
-      } catch (_) {
-        patientName = patient?.displayName ?? patient?.phoneNumber ?? 'Patient';
-      }
-
-      // Pre-flight: check if slot is already booked (uses the existing
-      // `allow list: if isAuth()` rule — no separate collection needed).
+    // ── Pre-flight: confirm the slot is still free ───────────────────────────
+    try {
       final existing = await db.collection('appointments')
           .where('doctorId', isEqualTo: widget.doctorId)
           .where('date', isEqualTo: dateKey)
@@ -293,7 +299,38 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
           .limit(1)
           .get();
       if (existing.docs.isNotEmpty) throw Exception('slot_taken');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _booking = false);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(e.toString().contains('slot_taken')
+            ? 'This slot was just taken. Please choose another time.'
+            : 'Could not verify slot. Please try again.'),
+        backgroundColor: AppColors.error, behavior: SnackBarBehavior.floating,
+      ));
+      return;
+    }
 
+    setState(() => _booking = false);
+
+    // ── Open PaymentScreen — the slot is free, now collect payment ───────────
+    // PaymentScreen pops with `true` only after Razorpay verifies the payment
+    // server-side (HMAC-SHA256 via Cloud Function). We write to Firestore only
+    // after that confirmation so we never create a booking without a real payment.
+    if (!mounted) return;
+    final paid = await context.push<bool>(
+      AppRoutes.payment,
+      extra: {
+        'amount':      doc.fee.toString(),
+        'description': 'Appointment with Dr. ${doc.name} · $slot · ${DateFormat('d MMM').format(_dates[_selectedDateIndex])}',
+      },
+    );
+
+    if (paid != true || !mounted) return;
+
+    // ── Payment verified — write appointment + payment record ────────────────
+    setState(() => _booking = true);
+    try {
       final apptRef = db.collection('appointments').doc();
       final payRef  = db.collection('payments').doc();
       final now     = Timestamp.now();
@@ -320,12 +357,13 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
         'amount':        doc.fee,
         'type':          'appointment',
         'status':        'paid',
+        'gateway':       'razorpay',
         'createdAt':     now,
       });
       await batch.commit();
 
       if (mounted) {
-        final bookedSlot = _selectedSlot!;
+        final bookedSlot = slot;
         final bookedDate = _dates[_selectedDateIndex];
         setState(() { _selectedSlot = null; _booking = false; });
         _showBookingConfirmation(doc, bookedSlot, bookedDate);
@@ -333,11 +371,8 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _booking = false);
-        final isSlotTaken = e.toString().contains('slot_taken');
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(isSlotTaken
-              ? 'This slot was just taken. Please choose another time.'
-              : 'Booking failed. Please try again.'),
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Payment received but booking failed. Please contact support.'),
           backgroundColor: AppColors.error, behavior: SnackBarBehavior.floating,
         ));
       }
@@ -422,6 +457,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
   @override
   void dispose() {
     _docSub?.cancel();
+    _favSub?.cancel();
     _slotTimer?.cancel();
     super.dispose();
   }
@@ -588,7 +624,8 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                 child: Container(width: 60, height: 60, decoration: BoxDecoration(
                   shape: BoxShape.circle, color: Colors.white.withValues(alpha:0.04)))),
 
-              SafeArea(
+              Positioned.fill(
+                child: SafeArea(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Column(
@@ -697,6 +734,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                       ),
                     ],
                   ),
+                ),
                 ),
               ),
             ],
@@ -1369,8 +1407,8 @@ class _TrustStatsRow extends StatelessWidget {
       builder: (context, snap) {
         final summary = snap.data;
         final hasRating = summary != null && summary.totalReviews > 0;
-        final displayRating = hasRating ? summary!.averageRating.toStringAsFixed(1) : (doc.rating > 0 ? doc.rating.toStringAsFixed(1) : '—');
-        final reviewCount = hasRating ? '${summary!.totalReviews}' : (doc.reviews > 0 ? '${doc.reviews}' : '—');
+        final displayRating = hasRating ? summary.averageRating.toStringAsFixed(1) : (doc.rating > 0 ? doc.rating.toStringAsFixed(1) : '—');
+        final reviewCount = hasRating ? '${summary.totalReviews}' : (doc.reviews > 0 ? '${doc.reviews}' : '—');
 
         return Container(
           padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 8),
@@ -1642,12 +1680,20 @@ class _LegendDot extends StatelessWidget {
 // ──────────────────────────────────────────────────────────
 // REVIEWS SECTION
 // ──────────────────────────────────────────────────────────
-class _ReviewsSection extends StatelessWidget {
+class _ReviewsSection extends StatefulWidget {
   final String doctorId;
   const _ReviewsSection({required this.doctorId});
 
   @override
+  State<_ReviewsSection> createState() => _ReviewsSectionState();
+}
+
+class _ReviewsSectionState extends State<_ReviewsSection> {
+  bool _showReviews = false;
+
+  @override
   Widget build(BuildContext context) {
+    final doctorId = widget.doctorId;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       StreamBuilder<DoctorRatingSummary>(
         stream: ReviewService.ratingSummaryStream(doctorId),
@@ -1737,10 +1783,46 @@ class _ReviewsSection extends StatelessWidget {
                 ]),
               ),
               const SizedBox(height: 16),
+              if (!_showReviews)
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () => setState(() => _showReviews = true),
+                    icon: const Icon(Icons.rate_review_outlined, size: 18),
+                    label: const Text('View Reviews'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.primary,
+                      side: BorderSide(color: AppColors.primary.withValues(alpha:0.4)),
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                  ),
+                ),
             ],
+            if (total == 0)
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.white, borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: AppColors.divider),
+                ),
+                child: Column(children: [
+                  Container(width: 56, height: 56,
+                    decoration: BoxDecoration(
+                      color: Colors.amber.withValues(alpha:0.1), shape: BoxShape.circle),
+                    child: const Icon(Icons.rate_review_outlined, size: 28, color: Colors.amber)),
+                  const SizedBox(height: 12),
+                  Text('No Reviews Yet', style: AppTextStyles.labelLarge.copyWith(color: AppColors.textSecondary)),
+                  const SizedBox(height: 4),
+                  Text('Be the first to review after your consultation',
+                      style: AppTextStyles.caption.copyWith(color: AppColors.textHint),
+                      textAlign: TextAlign.center),
+                ]),
+              ),
           ]);
         },
       ),
+      if (_showReviews)
       StreamBuilder<List<DoctorReview>>(
         stream: ReviewService.reviewsStream(doctorId, limit: 5),
         builder: (context, snap) {

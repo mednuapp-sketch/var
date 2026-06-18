@@ -45,6 +45,8 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
       serviceName: test['name'] as String,
       themeColor: _themeColor,
       priceLabel: '₹${test['price']} • Reports in ${test['duration']}',
+      amount: (test['price'] as num?)?.toInt() ?? 0,
+      paymentDescription: 'Lab Test: ${test['name']}',
       serviceDetails: {
         'testName': test['name'],
         'price': test['price'],

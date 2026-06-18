@@ -2,9 +2,12 @@
 const { onDocumentCreated } = require("firebase-functions/v2/firestore");
 const { onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
+const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore, FieldValue, Timestamp } = require("firebase-admin/firestore");
 const { getMessaging } = require("firebase-admin/messaging");
+const Razorpay = require("razorpay");
+const crypto = require("crypto");
 
 initializeApp();
 
@@ -899,6 +902,7 @@ exports.onEmergencyDoctorRequest = onDocumentCreated(
           latitude: data.latitude || null,
           longitude: data.longitude || null,
         },
+        expiresAt: Timestamp.fromDate(new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)),
       });
       opCount++;
     }
@@ -1040,6 +1044,7 @@ async function _sendPatientNotification(db, messaging, patientId, opts) {
     deliverAt,
     isRead: false,
     data: extraData,
+    expiresAt: Timestamp.fromDate(new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)),
   };
   if (bookingId) notifDoc.dedupKey = `${type}_${bookingId}`;
 
@@ -1515,3 +1520,83 @@ exports.onPregnancyCheckupStatusChange = onDocumentUpdated(
     });
   }
 );
+
+// ── Razorpay: Create Order ────────────────────────────────────────────────────
+//
+// Called from the Flutter app before opening the Razorpay checkout modal.
+// Creates an order on Razorpay's servers and returns the order_id so the
+// client can include it in the checkout options (required for Standard Checkout).
+//
+// Request data: { amount: number (paise), currency?: string, receipt?: string }
+// Response:     { order_id: string, amount: number, currency: string }
+exports.createRazorpayOrder = onCall({ enforceAppCheck: true }, async (request) => {
+  const { amount, currency = "INR", receipt } = request.data || {};
+
+  if (!amount || typeof amount !== "number" || amount < 100) {
+    throw new HttpsError("invalid-argument", "Amount must be a number ≥ 100 paise.");
+  }
+
+  const razorpay = new Razorpay({
+    key_id: process.env.RAZORPAY_KEY_ID,
+    key_secret: process.env.RAZORPAY_KEY_SECRET,
+  });
+
+  try {
+    const order = await razorpay.orders.create({
+      amount: Math.round(amount),
+      currency,
+      receipt: receipt || `rcpt_${Date.now()}`,
+    });
+    return {
+      order_id: order.id,
+      amount: order.amount,
+      currency: order.currency,
+    };
+  } catch (err) {
+    console.error("Razorpay createOrder error:", err);
+    throw new HttpsError("internal", "Failed to create Razorpay order.");
+  }
+});
+
+// ── Razorpay: Verify Payment Signature ───────────────────────────────────────
+//
+// Called from the Flutter app after Razorpay returns a successful payment.
+// Verifies the HMAC-SHA256 signature using the KEY_SECRET so the server — not
+// the client — confirms authenticity before marking the payment as successful.
+//
+// Request data: { razorpay_order_id, razorpay_payment_id, razorpay_signature }
+// Response:     { verified: true }  — throws HttpsError on failure.
+exports.verifyRazorpayPayment = onCall({ enforceAppCheck: true }, async (request) => {
+  const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = request.data || {};
+
+  if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+    throw new HttpsError("invalid-argument", "Missing payment verification fields.");
+  }
+
+  const body = `${razorpay_order_id}|${razorpay_payment_id}`;
+  const expectedSignature = crypto
+    .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+    .update(body)
+    .digest("hex");
+
+  if (expectedSignature !== razorpay_signature) {
+    console.warn(`Signature mismatch for order ${razorpay_order_id}`);
+    throw new HttpsError("unauthenticated", "Payment signature verification failed.");
+  }
+
+  // Optionally record the verified payment in Firestore for audit trail.
+  const db = getFirestore();
+  try {
+    await db.collection("razorpay_payments").add({
+      orderId: razorpay_order_id,
+      paymentId: razorpay_payment_id,
+      verifiedAt: FieldValue.serverTimestamp(),
+      patientId: request.auth?.uid || null,
+    });
+  } catch (err) {
+    // Non-fatal — signature already verified; just log and continue.
+    console.error("Failed to write payment audit record:", err);
+  }
+
+  return { verified: true };
+});

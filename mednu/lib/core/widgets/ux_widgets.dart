@@ -4,7 +4,6 @@
 //  Animated buttons · Page transitions · Form helpers
 // ============================================================
 
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../constants/app_colors.dart';
 import '../constants/app_text_styles.dart';
@@ -179,18 +178,18 @@ class SkeletonDoctorCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(height: 14, color: const Color(0xFFE8E8E8),
-                      decoration: BoxDecoration(borderRadius: BorderRadius.circular(7))),
+                  Container(height: 14,
+                      decoration: BoxDecoration(color: const Color(0xFFE8E8E8), borderRadius: BorderRadius.circular(7))),
                   const SizedBox(height: 8),
-                  Container(height: 12, width: 120, color: const Color(0xFFE8E8E8),
-                      decoration: BoxDecoration(borderRadius: BorderRadius.circular(6))),
+                  Container(height: 12, width: 120,
+                      decoration: BoxDecoration(color: const Color(0xFFE8E8E8), borderRadius: BorderRadius.circular(6))),
                   const SizedBox(height: 10),
                   Row(children: [
-                    Container(width: 60, height: 10, color: const Color(0xFFE8E8E8),
-                        decoration: BoxDecoration(borderRadius: BorderRadius.circular(5))),
+                    Container(width: 60, height: 10,
+                        decoration: BoxDecoration(color: const Color(0xFFE8E8E8), borderRadius: BorderRadius.circular(5))),
                     const SizedBox(width: 12),
-                    Container(width: 50, height: 10, color: const Color(0xFFE8E8E8),
-                        decoration: BoxDecoration(borderRadius: BorderRadius.circular(5))),
+                    Container(width: 50, height: 10,
+                        decoration: BoxDecoration(color: const Color(0xFFE8E8E8), borderRadius: BorderRadius.circular(5))),
                   ]),
                 ],
               ),
@@ -231,13 +230,12 @@ class SkeletonNotificationTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(height: 13, color: const Color(0xFFE8E8E8),
-                      decoration: BoxDecoration(borderRadius: BorderRadius.circular(6))),
+                  Container(height: 13,
+                      decoration: BoxDecoration(color: const Color(0xFFE8E8E8), borderRadius: BorderRadius.circular(6))),
                   const SizedBox(height: 7),
                   Container(height: 11,
                       width: MediaQuery.of(context).size.width * 0.55,
-                      color: const Color(0xFFE8E8E8),
-                      decoration: BoxDecoration(borderRadius: BorderRadius.circular(5))),
+                      decoration: BoxDecoration(color: const Color(0xFFE8E8E8), borderRadius: BorderRadius.circular(5))),
                 ],
               ),
             ),
@@ -404,7 +402,7 @@ class AppErrorState extends StatelessWidget {
 // 4. ANIMATED BUTTON
 // ──────────────────────────────────────────────────────────────
 
-enum _BtnState { idle, loading, success, error }
+enum _BtnState { idle, loading, success }
 
 class AppButton extends StatefulWidget {
   final String label;

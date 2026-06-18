@@ -36,15 +36,17 @@ class HelpSupportScreen extends StatelessWidget {
   ];
 
   Future<void> _launchPhone(BuildContext context) async {
-    final uri = Uri(scheme: 'tel', path: '+911800MEDHELP');
+    // Update this with the real support number before production release.
+    const supportPhone = '+918000000000';
+    final uri = Uri(scheme: 'tel', path: supportPhone);
     try {
       if (await canLaunchUrl(uri)) {
         await launchUrl(uri);
       } else {
-        _showFallback(context, 'Helpline', '+91 1800-MED-HELP');
+        _showFallback(context, 'Helpline', supportPhone);
       }
     } catch (_) {
-      _showFallback(context, 'Helpline', '+91 1800-MED-HELP');
+      _showFallback(context, 'Helpline', supportPhone);
     }
   }
 
