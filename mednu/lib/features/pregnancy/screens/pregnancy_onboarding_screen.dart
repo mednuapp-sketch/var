@@ -17,33 +17,52 @@ class PregnancyOnboardingScreen extends ConsumerStatefulWidget {
 }
 
 class _PregnancyOnboardingScreenState
-    extends ConsumerState<PregnancyOnboardingScreen> {
+    extends ConsumerState<PregnancyOnboardingScreen>
+    with TickerProviderStateMixin {
   final _pageController = PageController();
   int _currentPage = 0;
+  late final AnimationController _progressAnim;
 
-  // Form data
+  // ── Page 1 — Basic Info ───────────────────────────────────────────────────
   DateTime? _lmpDate;
   DateTime? _dueDate;
-  String _bloodGroup = 'O+';
-  final _weightCtrl   = TextEditingController();
-  final _heightCtrl   = TextEditingController();
-  final _ageCtrl      = TextEditingController();
-  final _emergencyNameCtrl  = TextEditingController();
-  final _emergencyPhoneCtrl = TextEditingController();
-  final List<String> _medicalConditions = [];
+  final _weightCtrl = TextEditingController();
+  final _heightCtrl = TextEditingController();
+  final _ageCtrl    = TextEditingController();
+  final _formKey1   = GlobalKey<FormState>();
+
+  // ── Page 2 — Health History ───────────────────────────────────────────────
   int _previousPregnancies = 0;
   int _previousLiveBirths  = 0;
+  int _previousAbortions   = 0;
+  int _previousCSections   = 0;
+  final List<String> _medicalConditions = [];
+  final _gynNotesCtrl = TextEditingController();
+  final _formKey2     = GlobalKey<FormState>();
 
-  final _formKey1 = GlobalKey<FormState>();
-  final _formKey2 = GlobalKey<FormState>();
-  final _formKey3 = GlobalKey<FormState>();
+  // ── Page 3 — Emergency ────────────────────────────────────────────────────
+  final _emergencyNameCtrl  = TextEditingController();
+  final _emergencyPhoneCtrl = TextEditingController();
+  final _formKey3           = GlobalKey<FormState>();
+
+  @override
+  void initState() {
+    super.initState();
+    _progressAnim = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 400),
+      value: 0,
+    );
+  }
 
   @override
   void dispose() {
     _pageController.dispose();
+    _progressAnim.dispose();
     _weightCtrl.dispose();
     _heightCtrl.dispose();
     _ageCtrl.dispose();
+    _gynNotesCtrl.dispose();
     _emergencyNameCtrl.dispose();
     _emergencyPhoneCtrl.dispose();
     super.dispose();
@@ -63,7 +82,7 @@ class _PregnancyOnboardingScreenState
     }
     if (_currentPage < 2) {
       _pageController.nextPage(
-          duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+          duration: const Duration(milliseconds: 350), curve: Curves.easeInOut);
     } else {
       _submit();
     }
@@ -80,22 +99,27 @@ class _PregnancyOnboardingScreenState
       _showSnack('Authentication error. Please log in again.');
       return;
     }
+    final isHighRisk = _medicalConditions.isNotEmpty ||
+        _previousPregnancies >= 3 ||
+        _previousCSections >= 2;
     final profile = PregnancyProfile(
       id: '',
       patientId: uid,
       pregnancyStartDate: _lmpDate!,
       lmpDate: _lmpDate!,
       dueDate: _dueDate ?? _calcDueDate(_lmpDate!),
-      bloodGroup: _bloodGroup,
       weightKg: double.tryParse(_weightCtrl.text) ?? 0,
       heightCm: double.tryParse(_heightCtrl.text),
       ageYears: int.tryParse(_ageCtrl.text) ?? 0,
       medicalConditions: List.from(_medicalConditions),
       previousPregnancies: _previousPregnancies,
       previousLiveBirths: _previousLiveBirths,
+      previousAbortions: _previousAbortions,
+      previousCSections: _previousCSections,
+      gynecologyNotes: _gynNotesCtrl.text.trim(),
       emergencyContactName: _emergencyNameCtrl.text.trim(),
       emergencyContactPhone: _emergencyPhoneCtrl.text.trim(),
-      isHighRisk: _medicalConditions.isNotEmpty || _previousPregnancies >= 3,
+      isHighRisk: isHighRisk,
       isActive: true,
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
@@ -110,8 +134,11 @@ class _PregnancyOnboardingScreenState
   }
 
   void _showSnack(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(msg)));
   }
+
+  // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -121,7 +148,7 @@ class _PregnancyOnboardingScreenState
         child: Column(
           children: [
             _buildHeader(),
-            _buildProgressBar(),
+            _buildProgressIndicator(),
             Expanded(
               child: PageView(
                 controller: _pageController,
@@ -153,7 +180,7 @@ class _PregnancyOnboardingScreenState
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(12),
-              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:0.06), blurRadius: 8)],
+              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 8)],
             ),
             child: const Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: Color(0xFF880E4F)),
           ),
@@ -164,20 +191,32 @@ class _PregnancyOnboardingScreenState
           children: const [
             Text('Pregnancy Profile',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFF1A1A2E))),
-            Text('Set up your maternity care', style: TextStyle(fontSize: 13, color: Color(0xFF616161))),
+            Text('Set up your maternity care',
+                style: TextStyle(fontSize: 13, color: Color(0xFF616161))),
           ],
+        ),
+        const Spacer(),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: AppColors.primary.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Text('${_currentPage + 1}/3',
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primary)),
         ),
       ],
     ),
   );
 
-  Widget _buildProgressBar() {
-    final labels = ['Basic Info', 'Health History', 'Emergency'];
+  Widget _buildProgressIndicator() {
+    const labels = ['Basic Info', 'Health History', 'Emergency'];
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
       child: Row(
         children: List.generate(3, (i) {
           final active = i <= _currentPage;
+          final isCurrent = i == _currentPage;
           return Expanded(
             child: Row(
               children: [
@@ -185,11 +224,17 @@ class _PregnancyOnboardingScreenState
                   child: Column(
                     children: [
                       AnimatedContainer(
-                        duration: const Duration(milliseconds: 300),
-                        height: 4,
+                        duration: const Duration(milliseconds: 350),
+                        height: isCurrent ? 5 : 4,
                         decoration: BoxDecoration(
-                          color: active ? AppColors.primary : AppColors.border,
-                          borderRadius: BorderRadius.circular(2),
+                          gradient: active
+                              ? const LinearGradient(colors: [Color(0xFFC2185B), Color(0xFF7B1FA2)])
+                              : null,
+                          color: active ? null : AppColors.border,
+                          borderRadius: BorderRadius.circular(3),
+                          boxShadow: isCurrent ? [
+                            BoxShadow(color: AppColors.primary.withValues(alpha: 0.3), blurRadius: 6)
+                          ] : null,
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -210,6 +255,8 @@ class _PregnancyOnboardingScreenState
     );
   }
 
+  // ── Page 1: Basic Info ────────────────────────────────────────────────────
+
   Widget _buildPage1() => SingleChildScrollView(
     padding: const EdgeInsets.symmetric(horizontal: 20),
     child: Form(
@@ -224,6 +271,7 @@ class _PregnancyOnboardingScreenState
               _datePicker(
                 label: 'Last Menstrual Period (LMP) *',
                 value: _lmpDate,
+                icon: Icons.calendar_today_rounded,
                 onTap: () async {
                   final d = await showDatePicker(
                     context: context,
@@ -231,11 +279,19 @@ class _PregnancyOnboardingScreenState
                     firstDate: DateTime.now().subtract(const Duration(days: 280)),
                     lastDate: DateTime.now(),
                     helpText: 'Select LMP Date',
+                    builder: (ctx, child) => Theme(
+                      data: Theme.of(ctx).copyWith(
+                        colorScheme: const ColorScheme.light(primary: AppColors.primary),
+                      ),
+                      child: child!,
+                    ),
                   );
-                  if (d != null) setState(() {
-                    _lmpDate = d;
-                    _dueDate = _calcDueDate(d);
-                  });
+                  if (d != null) {
+                    setState(() {
+                      _lmpDate = d;
+                      _dueDate = _calcDueDate(d);
+                    });
+                  }
                 },
               ),
               if (_lmpDate == null)
@@ -248,6 +304,7 @@ class _PregnancyOnboardingScreenState
               _datePicker(
                 label: 'Expected Due Date (auto-calculated)',
                 value: _dueDate,
+                icon: Icons.event_rounded,
                 onTap: () async {
                   final d = await showDatePicker(
                     context: context,
@@ -255,6 +312,12 @@ class _PregnancyOnboardingScreenState
                     firstDate: DateTime.now(),
                     lastDate: DateTime.now().add(const Duration(days: 300)),
                     helpText: 'Adjust Due Date',
+                    builder: (ctx, child) => Theme(
+                      data: Theme.of(ctx).copyWith(
+                        colorScheme: const ColorScheme.light(primary: AppColors.primary),
+                      ),
+                      child: child!,
+                    ),
                   );
                   if (d != null) setState(() => _dueDate = d);
                 },
@@ -269,36 +332,41 @@ class _PregnancyOnboardingScreenState
               _fieldRow([
                 _buildField(
                   controller: _weightCtrl,
-                  label: 'Weight (kg)',
-                  keyboardType: TextInputType.number,
-                  validator: (v) => (v == null || v.isEmpty) ? 'Required' : null,
+                  label: 'Current Weight (kg) *',
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  validator: (v) {
+                    if (v == null || v.isEmpty) return 'Required';
+                    if ((double.tryParse(v) ?? 0) <= 0) return 'Enter valid weight';
+                    return null;
+                  },
                 ),
                 _buildField(
                   controller: _heightCtrl,
                   label: 'Height (cm)',
-                  keyboardType: TextInputType.number,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 ),
               ]),
               const SizedBox(height: 12),
               _buildField(
                 controller: _ageCtrl,
-                label: 'Age (years)',
+                label: 'Age (years) *',
                 keyboardType: TextInputType.number,
-                validator: (v) => (v == null || v.isEmpty) ? 'Required' : null,
-              ),
-              const SizedBox(height: 12),
-              _buildDropdown(
-                label: 'Blood Group',
-                value: _bloodGroup,
-                items: ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'],
-                onChanged: (v) => setState(() => _bloodGroup = v!),
+                validator: (v) {
+                  if (v == null || v.isEmpty) return 'Required';
+                  final age = int.tryParse(v) ?? 0;
+                  if (age < 10 || age > 60) return 'Enter valid age';
+                  return null;
+                },
               ),
             ],
           ),
+          const SizedBox(height: 20),
         ],
       ),
     ),
   );
+
+  // ── Page 2: Health History ────────────────────────────────────────────────
 
   Widget _buildPage2() => SingleChildScrollView(
     padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -309,19 +377,25 @@ class _PregnancyOnboardingScreenState
         children: [
           _sectionCard(
             icon: Icons.history_rounded,
-            title: 'Previous Pregnancies',
+            title: 'Previous Pregnancy History',
             children: [
               _counterRow('Previous Pregnancies', _previousPregnancies,
                   (v) => setState(() => _previousPregnancies = v)),
-              const SizedBox(height: 12),
+              const Divider(height: 20, color: AppColors.divider),
               _counterRow('Previous Live Births', _previousLiveBirths,
                   (v) => setState(() => _previousLiveBirths = v)),
+              const Divider(height: 20, color: AppColors.divider),
+              _counterRow('Abortions / Miscarriages', _previousAbortions,
+                  (v) => setState(() => _previousAbortions = v)),
+              const Divider(height: 20, color: AppColors.divider),
+              _counterRow('Previous C-Sections', _previousCSections,
+                  (v) => setState(() => _previousCSections = v)),
             ],
           ),
           const SizedBox(height: 16),
           _sectionCard(
             icon: Icons.medical_information_rounded,
-            title: 'Medical Conditions',
+            title: 'Known Medical Conditions',
             subtitle: 'Select all that apply',
             children: [
               Wrap(
@@ -329,8 +403,8 @@ class _PregnancyOnboardingScreenState
                 runSpacing: 8,
                 children: [
                   'Diabetes', 'Hypertension', 'Thyroid', 'Anemia',
-                  'Heart Disease', 'Asthma', 'PCOD/PCOS', 'Multiple pregnancy',
-                  'Previous C-Section', 'Preeclampsia history',
+                  'Heart Disease', 'Asthma', 'PCOD/PCOS',
+                  'Multiple pregnancy', 'Preeclampsia history',
                 ].map((c) {
                   final selected = _medicalConditions.contains(c);
                   return FilterChip(
@@ -350,35 +424,72 @@ class _PregnancyOnboardingScreenState
                   );
                 }).toList(),
               ),
-              if (_medicalConditions.isNotEmpty) ...[
+              if (_medicalConditions.isNotEmpty || _previousCSections >= 2) ...[
                 const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFF3E0),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: const Color(0xFFFF9800).withValues(alpha:0.4)),
-                  ),
-                  child: const Row(
-                    children: [
-                      Icon(Icons.warning_amber_rounded, color: Color(0xFFE65100), size: 14),
-                      SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          'You will be marked as high-risk pregnancy. Your doctor will provide extra care.',
-                          style: TextStyle(fontSize: 11, color: Color(0xFFE65100)),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+                _highRiskBanner(),
               ],
             ],
           ),
+          const SizedBox(height: 16),
+          _sectionCard(
+            icon: Icons.note_alt_rounded,
+            title: 'Gynecology & Health Notes',
+            subtitle: 'PCOS, thyroid, fibroids, medications, complications…',
+            children: [
+              TextFormField(
+                controller: _gynNotesCtrl,
+                maxLines: 5,
+                minLines: 3,
+                decoration: InputDecoration(
+                  hintText: 'E.g. Diagnosed with PCOS, on Metformin 500mg. Had a previous C-section in 2021. No current complications.',
+                  hintStyle: const TextStyle(fontSize: 12, color: AppColors.textHint),
+                  filled: true,
+                  fillColor: const Color(0xFFF7F4F8),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: AppColors.border),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: AppColors.border),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                  ),
+                  contentPadding: const EdgeInsets.all(12),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
         ],
       ),
     ),
   );
+
+  Widget _highRiskBanner() => Container(
+    padding: const EdgeInsets.all(10),
+    decoration: BoxDecoration(
+      color: const Color(0xFFFFF3E0),
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(color: const Color(0xFFFF9800).withValues(alpha: 0.4)),
+    ),
+    child: const Row(
+      children: [
+        Icon(Icons.warning_amber_rounded, color: Color(0xFFE65100), size: 14),
+        SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            'You may be marked as high-risk. Your care team will provide extra monitoring.',
+            style: TextStyle(fontSize: 11, color: Color(0xFFE65100)),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  // ── Page 3: Emergency Contact ─────────────────────────────────────────────
 
   Widget _buildPage3() => SingleChildScrollView(
     padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -404,7 +515,9 @@ class _PregnancyOnboardingScreenState
                 keyboardType: TextInputType.phone,
                 validator: (v) {
                   if (v == null || v.isEmpty) return 'Required';
-                  if (v.replaceAll(RegExp(r'\D'), '').length < 10) return 'Enter valid phone number';
+                  if (v.replaceAll(RegExp(r'\D'), '').length < 10) {
+                    return 'Enter valid phone number';
+                  }
                   return null;
                 },
               ),
@@ -418,7 +531,7 @@ class _PregnancyOnboardingScreenState
                 colors: [Color(0xFFFCE4EC), Color(0xFFF3E5F5)],
               ),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.primary.withValues(alpha:0.2)),
+              border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
             ),
             child: Row(
               children: [
@@ -428,11 +541,13 @@ class _PregnancyOnboardingScreenState
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: const [
-                      Text('You\'re almost ready!',
+                      Text("You're almost ready!",
                           style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF880E4F))),
                       SizedBox(height: 4),
-                      Text('MedNu will guide you through every step of your beautiful journey.',
-                          style: TextStyle(fontSize: 12, color: Color(0xFF616161))),
+                      Text(
+                        'MedNu will guide you through every step of your beautiful journey.',
+                        style: TextStyle(fontSize: 12, color: Color(0xFF616161), height: 1.5),
+                      ),
                     ],
                   ),
                 ),
@@ -445,11 +560,16 @@ class _PregnancyOnboardingScreenState
     ),
   );
 
+  // ── Bottom Bar ────────────────────────────────────────────────────────────
+
   Widget _buildBottomBar() => Container(
     padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
     decoration: BoxDecoration(
       color: Colors.white,
-      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:0.06), blurRadius: 8, offset: const Offset(0, -2))],
+      boxShadow: [BoxShadow(
+          color: Colors.black.withValues(alpha: 0.06),
+          blurRadius: 8,
+          offset: const Offset(0, -2))],
     ),
     child: Row(
       children: [
@@ -458,13 +578,14 @@ class _PregnancyOnboardingScreenState
             flex: 1,
             child: OutlinedButton(
               onPressed: () => _pageController.previousPage(
-                  duration: const Duration(milliseconds: 300), curve: Curves.easeInOut),
+                  duration: const Duration(milliseconds: 350), curve: Curves.easeInOut),
               style: OutlinedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 side: const BorderSide(color: AppColors.primary),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
-              child: const Text('Back', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600)),
+              child: const Text('Back',
+                  style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600)),
             ),
           ),
         if (_currentPage > 0) const SizedBox(width: 12),
@@ -482,10 +603,15 @@ class _PregnancyOnboardingScreenState
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
               child: loading
-                  ? const SizedBox(height: 20, width: 20,
-                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                  : Text(_currentPage < 2 ? 'Continue' : 'Start Journey',
-                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                    )
+                  : Text(
+                      _currentPage < 2 ? 'Continue' : 'Start Journey',
+                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                    ),
             );
           }),
         ),
@@ -507,7 +633,7 @@ class _PregnancyOnboardingScreenState
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:0.05), blurRadius: 10)],
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10)],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -516,20 +642,23 @@ class _PregnancyOnboardingScreenState
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha:0.1),
+                  color: AppColors.primary.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(icon, color: AppColors.primary, size: 20),
               ),
               const SizedBox(width: 10),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: const TextStyle(
-                      fontWeight: FontWeight.w700, fontSize: 14, color: Color(0xFF1A1A2E))),
-                  if (subtitle != null)
-                    Text(subtitle, style: const TextStyle(fontSize: 11, color: Color(0xFF616161))),
-                ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: const TextStyle(
+                        fontWeight: FontWeight.w700, fontSize: 14, color: Color(0xFF1A1A2E))),
+                    if (subtitle != null)
+                      Text(subtitle,
+                          style: const TextStyle(fontSize: 11, color: Color(0xFF616161))),
+                  ],
+                ),
               ),
             ]),
             const SizedBox(height: 14),
@@ -538,7 +667,12 @@ class _PregnancyOnboardingScreenState
         ),
       );
 
-  Widget _datePicker({required String label, DateTime? value, required VoidCallback onTap}) =>
+  Widget _datePicker({
+    required String label,
+    DateTime? value,
+    required IconData icon,
+    required VoidCallback onTap,
+  }) =>
       GestureDetector(
         onTap: onTap,
         child: Container(
@@ -546,10 +680,11 @@ class _PregnancyOnboardingScreenState
           decoration: BoxDecoration(
             color: const Color(0xFFF7F4F8),
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: AppColors.border),
+            border: Border.all(
+                color: value != null ? AppColors.primary.withValues(alpha: 0.4) : AppColors.border),
           ),
           child: Row(children: [
-            const Icon(Icons.calendar_today_rounded, size: 18, color: AppColors.primary),
+            Icon(icon, size: 18, color: AppColors.primary),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
@@ -603,38 +738,17 @@ class _PregnancyOnboardingScreenState
     return Row(children: items);
   }
 
-  Widget _buildDropdown({
-    required String label,
-    required String value,
-    required List<String> items,
-    required void Function(String?) onChanged,
-  }) =>
-      DropdownButtonFormField<String>(
-        value: value,
-        onChanged: onChanged,
-        decoration: InputDecoration(
-          labelText: label,
-          labelStyle: const TextStyle(fontSize: 13),
-          filled: true,
-          fillColor: const Color(0xFFF7F4F8),
-          border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: AppColors.border)),
-          enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: AppColors.border)),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        ),
-        items: items.map((i) => DropdownMenuItem(value: i, child: Text(i))).toList(),
-      );
-
   Widget _counterRow(String label, int value, void Function(int) onChanged) => Row(
     children: [
-      Expanded(child: Text(label, style: const TextStyle(fontSize: 13, color: AppColors.textPrimary))),
+      Expanded(
+          child: Text(label,
+              style: const TextStyle(fontSize: 13, color: AppColors.textPrimary))),
       _counterBtn(Icons.remove_rounded, () { if (value > 0) onChanged(value - 1); }),
       Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        child: Text('$value', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Text('$value',
+            style: const TextStyle(
+                fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
       ),
       _counterBtn(Icons.add_rounded, () => onChanged(value + 1)),
     ],
@@ -646,7 +760,7 @@ class _PregnancyOnboardingScreenState
       width: 32,
       height: 32,
       decoration: BoxDecoration(
-        color: AppColors.primary.withValues(alpha:0.1),
+        color: AppColors.primary.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Icon(icon, size: 18, color: AppColors.primary),

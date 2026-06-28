@@ -34,35 +34,29 @@ class _PatientsListScreenState extends State<PatientsListScreen> {
   String _search = '';
   String _debouncedSearch = '';
   Timer? _searchDebounce;
-
-  static const _avatarColors = [
-    Color(0xFFC2185B),
-    Color(0xFF7B1FA2),
-    Color(0xFF1565C0),
-    Color(0xFF2E7D32),
-    Color(0xFFE65100),
-    Color(0xFF00695C),
-    Color(0xFF6A1B9A),
-    Color(0xFF0277BD),
-  ];
+  final _searchCtrl = TextEditingController();
 
   void _onSearchChanged(String v) {
+    setState(() => _search = v);
     _searchDebounce?.cancel();
-    _searchDebounce = Timer(const Duration(milliseconds: 320), () {
+    _searchDebounce = Timer(const Duration(milliseconds: 280), () {
       if (mounted) setState(() => _debouncedSearch = v);
+    });
+  }
+
+  void _clearSearch() {
+    _searchCtrl.clear();
+    setState(() {
+      _search = '';
+      _debouncedSearch = '';
     });
   }
 
   @override
   void dispose() {
     _searchDebounce?.cancel();
+    _searchCtrl.dispose();
     super.dispose();
-  }
-
-  // Safe: guards against empty string → no codeUnitAt(0) crash
-  Color _colorFor(String name) {
-    if (name.isEmpty) return _avatarColors[0];
-    return _avatarColors[name.codeUnitAt(0) % _avatarColors.length];
   }
 
   @override
@@ -72,320 +66,211 @@ class _PatientsListScreenState extends State<PatientsListScreen> {
       backgroundColor: AppColors.background,
       body: NestedScrollView(
         headerSliverBuilder: (_, __) => [
-          SliverAppBar(
-            pinned: true,
-            expandedHeight: 130,
-            backgroundColor: AppColors.primary,
-            foregroundColor: Colors.white,
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-              onPressed: () => context.pop(),
-            ),
-            flexibleSpace: FlexibleSpaceBar(
-              collapseMode: CollapseMode.pin,
-              background: Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Color(0xFF880E4F), Color(0xFFC2185B), Color(0xFF7B1FA2)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                ),
-                child: Stack(
-                  children: [
-                    Positioned(
-                      top: -20,
-                      right: -20,
-                      child: Container(
-                        width: 110,
-                        height: 110,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.white.withValues(alpha:0.06),
-                        ),
-                      ),
-                    ),
-                    SafeArea(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 52, 20, 16),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 40,
-                              height: 40,
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha:0.18),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: const Icon(Icons.people_rounded,
-                                  color: Colors.white, size: 22),
-                            ),
-                            const SizedBox(width: 12),
-                            const Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  'My Patients',
-                                  style: TextStyle(
-                                    fontFamily: 'Poppins',
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                                Text(
-                                  'All your consultation history',
-                                  style: TextStyle(
-                                    fontFamily: 'Poppins',
-                                    fontSize: 12,
-                                    color: Colors.white70,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+          GradientSliverAppBar(
+            headerIcon: Icons.people_rounded,
+            title: 'My Patients',
+            subtitle: 'All consultation history',
           ),
         ],
         body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: uid.isNotEmpty
-            ? FirebaseFirestore.instance
-                .collection('appointments')
-                .where('doctorId', isEqualTo: uid)
-                .orderBy('createdAt', descending: true)
-                .limit(500)
-                .snapshots()
-            : const Stream.empty(),
-        builder: (context, snap) {
-          if (snap.connectionState == ConnectionState.waiting) {
-            return _buildSkeletonLoader();
-          }
-          if (snap.hasError) {
-            debugPrint('[MyPatients] Firestore error: ${snap.error}');
-            return AppErrorState(
-              onRetry: () => setState(() {}),
-            );
-          }
-
-          final docs = snap.data?.docs ?? [];
-
-          final Map<String, _PatientSummary> seen = {};
-          for (final doc in docs) {
-            final d = doc.data();
-
-            // Safely extract patientId — never trust Firestore field blindly
-            final rawPid = (d['patientId'] as String? ?? '').trim();
-            final pid = rawPid.isNotEmpty ? rawPid : doc.id;
-
-            // Safely extract name — coalesce null AND empty string
-            final rawName = (d['patientName'] as String? ?? '').trim();
-            final name = rawName.isNotEmpty ? rawName : 'Patient';
-
-            final condition =
-                (d['consultationType'] as String? ?? '').trim().isNotEmpty
-                    ? d['consultationType'] as String
-                    : 'Consultation';
-            final dateStr = d['date'] as String? ?? '';
-
-            if (!seen.containsKey(pid)) {
-              seen[pid] = _PatientSummary(
-                patientId: pid,
-                name: name,
-                visitCount: 1,
-                lastVisitDate: dateStr,
-                lastCondition: condition,
-              );
-            } else {
-              final existing = seen[pid]!;
-              final isNewer = dateStr.compareTo(existing.lastVisitDate) > 0;
-              seen[pid] = _PatientSummary(
-                patientId: pid,
-                name: name,
-                visitCount: existing.visitCount + 1,
-                lastVisitDate: isNewer ? dateStr : existing.lastVisitDate,
-                lastCondition: isNewer ? condition : existing.lastCondition,
-              );
+          stream: uid.isNotEmpty
+              ? FirebaseFirestore.instance
+                  .collection('appointments')
+                  .where('doctorId', isEqualTo: uid)
+                  .orderBy('createdAt', descending: true)
+                  .limit(500)
+                  .snapshots()
+              : const Stream.empty(),
+          builder: (context, snap) {
+            if (snap.connectionState == ConnectionState.waiting) {
+              return _buildSkeleton();
             }
-          }
+            if (snap.hasError) {
+              return AppErrorState(onRetry: () => setState(() {}));
+            }
 
-          var patients = seen.values.toList()
-            ..sort((a, b) => b.lastVisitDate.compareTo(a.lastVisitDate));
+            final docs = snap.data?.docs ?? [];
+            final Map<String, _PatientSummary> seen = {};
 
-          if (_debouncedSearch.isNotEmpty) {
-            final q = _debouncedSearch.toLowerCase();
-            patients =
-                patients.where((p) => p.name.toLowerCase().contains(q)).toList();
-          }
+            for (final doc in docs) {
+              final d = doc.data();
+              final rawPid = (d['patientId'] as String? ?? '').trim();
+              final pid = rawPid.isNotEmpty ? rawPid : doc.id;
+              final rawName = (d['patientName'] as String? ?? '').trim();
+              final name = rawName.isNotEmpty ? rawName : 'Patient';
+              final condition =
+                  (d['consultationType'] as String? ?? '').trim().isNotEmpty
+                      ? d['consultationType'] as String
+                      : 'Consultation';
+              final dateStr = d['date'] as String? ?? '';
 
-          return Column(children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: TextField(
-                onChanged: _onSearchChanged,
-                decoration: const InputDecoration(
-                  hintText: 'Search patients...',
-                  prefixIcon:
-                      Icon(Icons.search_rounded, color: AppColors.textHint),
+              if (!seen.containsKey(pid)) {
+                seen[pid] = _PatientSummary(
+                  patientId: pid,
+                  name: name,
+                  visitCount: 1,
+                  lastVisitDate: dateStr,
+                  lastCondition: condition,
+                );
+              } else {
+                final existing = seen[pid]!;
+                final isNewer = dateStr.compareTo(existing.lastVisitDate) > 0;
+                seen[pid] = _PatientSummary(
+                  patientId: pid,
+                  name: name,
+                  visitCount: existing.visitCount + 1,
+                  lastVisitDate:
+                      isNewer ? dateStr : existing.lastVisitDate,
+                  lastCondition:
+                      isNewer ? condition : existing.lastCondition,
+                );
+              }
+            }
+
+            var patients = seen.values.toList()
+              ..sort((a, b) => b.lastVisitDate.compareTo(a.lastVisitDate));
+
+            if (_debouncedSearch.isNotEmpty) {
+              final q = _debouncedSearch.toLowerCase();
+              patients = patients
+                  .where((p) => p.name.toLowerCase().contains(q))
+                  .toList();
+            }
+
+            final totalVisits =
+                patients.fold(0, (s, p) => s + p.visitCount);
+
+            return Column(children: [
+              // ── Stats Banner ───────────────────────────────
+              FadeInSlide(
+                child: _StatsBanner(
+                  totalPatients: seen.values.length,
+                  totalVisits: docs.length,
+                  repeatPatients: seen.values
+                      .where((p) => p.visitCount > 1)
+                      .length,
                 ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-              child: Row(children: [
-                Text(
-                  '${patients.length} Patient${patients.length == 1 ? '' : 's'}',
-                  style: AppTextStyles.h4,
+
+              // ── Search Bar ────────────────────────────────
+              FadeInSlide(
+                delay: const Duration(milliseconds: 60),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+                  child: TextField(
+                    controller: _searchCtrl,
+                    onChanged: _onSearchChanged,
+                    decoration: InputDecoration(
+                      hintText: 'Search by patient name...',
+                      prefixIcon: const Icon(Icons.search_rounded,
+                          color: AppColors.textHint),
+                      suffixIcon: _search.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.close_rounded,
+                                  color: AppColors.textHint, size: 18),
+                              onPressed: _clearSearch,
+                            )
+                          : null,
+                    ),
+                  ),
                 ),
-                const Spacer(),
-                Text(
-                  'Total Visits: ${patients.fold(0, (s, p) => s + p.visitCount)}',
-                  style: AppTextStyles.bodySmall,
-                ),
-              ]),
-            ),
-            if (patients.isEmpty)
-              Expanded(
-                child: AppEmptyState(
-                  icon: Icons.people_outline_rounded,
-                  title: 'No Patients Yet',
-                  message: 'Your patient list will appear here once you complete appointments.',
-                ),
-              )
-            else
-              Expanded(
-                child: ListView.builder(
+              ),
+
+              const SizedBox(height: 12),
+
+              // ── Count Row ─────────────────────────────────
+              FadeInSlide(
+                delay: const Duration(milliseconds: 80),
+                child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemCount: patients.length,
-                  itemBuilder: (_, i) {
-                    // Safe index — we know i < patients.length from itemCount
-                    final p = patients[i];
-                    final color = _colorFor(p.name);
-                    String displayDate = p.lastVisitDate;
-                    try {
-                      final dt = DateTime.parse(p.lastVisitDate);
-                      const months = [
-                        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-                        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-                      ];
-                      displayDate =
-                          '${dt.day} ${months[dt.month - 1]} ${dt.year}';
-                    } catch (_) {}
-
-                    return FadeInSlide(
-                      delay: Duration(milliseconds: i * 35),
-                      child: TapScale(
-                      onTap: () => context.push(
-                        AppRoutes.patientDetail,
-                        extra: {
-                          'patientId': p.patientId,
-                          'patientName': p.name,
-                        },
-                      ),
-                      child: Container(
-                        margin: const EdgeInsets.only(bottom: 10),
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: AppColors.divider),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha:0.04),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Row(children: [
-                          Container(
-                            width: 52,
-                            height: 52,
-                            decoration: BoxDecoration(
-                              color: color.withValues(alpha:0.15),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Center(
-                              child: Text(
-                                p.name.isNotEmpty
-                                    ? p.name[0].toUpperCase()
-                                    : '?',
-                                style: TextStyle(
-                                  fontFamily: 'Poppins',
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w800,
-                                  color: color,
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(p.name, style: AppTextStyles.labelLarge),
-                                  Text(p.lastCondition,
-                                      style: AppTextStyles.bodySmall),
-                                  Text('Last visit: $displayDate',
-                                      style: AppTextStyles.caption),
-                                ]),
-                          ),
-                          Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 8, vertical: 3),
-                                  decoration: BoxDecoration(
-                                    color: color.withValues(alpha:0.1),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Text(
-                                    '${p.visitCount} visit${p.visitCount == 1 ? '' : 's'}',
-                                    style: TextStyle(
-                                      fontFamily: 'Poppins',
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w700,
-                                      color: color,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                const Icon(Icons.chevron_right_rounded,
-                                    color: AppColors.textHint, size: 18),
-                              ]),
-                        ]),
-                      ),
-                    ));
-                  },
+                  child: Row(children: [
+                    Text(
+                      '${patients.length} Patient${patients.length == 1 ? '' : 's'}',
+                      style: AppTextStyles.h4,
+                    ),
+                    const Spacer(),
+                    InfoChip(
+                      icon: Icons.repeat_rounded,
+                      label: '$totalVisits total visits',
+                      color: AppColors.secondary,
+                    ),
+                  ]),
                 ),
               ),
-          ]);
-        },
-      ),
+              const SizedBox(height: 12),
+
+              // ── List ──────────────────────────────────────
+              if (patients.isEmpty)
+                Expanded(
+                  child: AppEmptyState(
+                    icon: Icons.people_outline_rounded,
+                    title: _debouncedSearch.isNotEmpty
+                        ? 'No results found'
+                        : 'No Patients Yet',
+                    message: _debouncedSearch.isNotEmpty
+                        ? 'No patients match "$_debouncedSearch".'
+                        : 'Your patient list appears once you complete appointments.',
+                  ),
+                )
+              else
+                Expanded(
+                  child: ListView.builder(
+                    padding:
+                        const EdgeInsets.fromLTRB(16, 0, 16, 32),
+                    itemCount: patients.length,
+                    itemBuilder: (_, i) {
+                      final p = patients[i];
+                      String displayDate = p.lastVisitDate;
+                      try {
+                        final dt = DateTime.parse(p.lastVisitDate);
+                        const months = [
+                          'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                          'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+                        ];
+                        displayDate =
+                            '${dt.day} ${months[dt.month - 1]} ${dt.year}';
+                      } catch (_) {}
+
+                      return FadeInSlide(
+                        delay: Duration(milliseconds: i * 35),
+                        child: _PatientCard(
+                          patient: p,
+                          displayDate: displayDate,
+                          onTap: () => context.push(
+                            AppRoutes.patientDetail,
+                            extra: {
+                              'patientId': p.patientId,
+                              'patientName': p.name,
+                            },
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+            ]);
+          },
+        ),
       ),
     );
   }
 
-  Widget _buildSkeletonLoader() {
+  Widget _buildSkeleton() {
     return Column(children: [
       const Padding(
-        padding: EdgeInsets.all(16),
+        padding: EdgeInsets.fromLTRB(16, 12, 16, 12),
+        child: SkeletonBox(width: double.infinity, height: 80, radius: 16),
+      ),
+      const Padding(
+        padding: EdgeInsets.fromLTRB(16, 0, 16, 12),
         child: SkeletonBox(width: double.infinity, height: 52, radius: 14),
       ),
       const Padding(
         padding: EdgeInsets.fromLTRB(16, 0, 16, 12),
         child: Row(children: [
-          SkeletonBox(width: 100, height: 14, radius: 7),
+          SkeletonBox(width: 120, height: 14, radius: 7),
           Spacer(),
-          SkeletonBox(width: 80, height: 12, radius: 6),
+          SkeletonBox(width: 90, height: 12, radius: 6),
         ]),
       ),
       Expanded(
@@ -395,12 +280,192 @@ class _PatientsListScreenState extends State<PatientsListScreen> {
           itemCount: 6,
           itemBuilder: (_, __) => const Padding(
             padding: EdgeInsets.only(bottom: 10),
-            child: SkeletonListTile(),
+            child: SkeletonCard(height: 76),
           ),
         ),
       ),
     ]);
   }
+}
 
-  // _buildEmptyState and _buildErrorState removed — replaced by AppEmptyState/AppErrorState
+// ──────────────────────────────────────────────────────────────
+// Stats Banner
+// ──────────────────────────────────────────────────────────────
+
+class _StatsBanner extends StatelessWidget {
+  final int totalPatients;
+  final int totalVisits;
+  final int repeatPatients;
+
+  const _StatsBanner({
+    required this.totalPatients,
+    required this.totalVisits,
+    required this.repeatPatients,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF880E4F), Color(0xFFC2185B), Color(0xFF7B1FA2)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: 0.3),
+            blurRadius: 14,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Row(children: [
+        _StatItem(
+          value: '$totalPatients',
+          label: 'Patients',
+          icon: Icons.people_rounded,
+        ),
+        _Divider(),
+        _StatItem(
+          value: '$totalVisits',
+          label: 'Consultations',
+          icon: Icons.video_call_rounded,
+        ),
+        _Divider(),
+        _StatItem(
+          value: repeatPatients > 0 ? '$repeatPatients' : '—',
+          label: 'Returning',
+          icon: Icons.repeat_rounded,
+        ),
+      ]),
+    );
+  }
+}
+
+class _StatItem extends StatelessWidget {
+  final String value;
+  final String label;
+  final IconData icon;
+  const _StatItem(
+      {required this.value, required this.label, required this.icon});
+
+  @override
+  Widget build(BuildContext context) => Expanded(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: Colors.white70, size: 18),
+            const SizedBox(height: 6),
+            Text(
+              value,
+              style: const TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+                height: 1,
+              ),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              label,
+              style: const TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 10,
+                color: Colors.white60,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      );
+}
+
+class _Divider extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) => Container(
+        width: 1,
+        height: 40,
+        color: Colors.white.withValues(alpha: 0.2),
+      );
+}
+
+// ──────────────────────────────────────────────────────────────
+// Patient Card
+// ──────────────────────────────────────────────────────────────
+
+class _PatientCard extends StatelessWidget {
+  final _PatientSummary patient;
+  final String displayDate;
+  final VoidCallback onTap;
+
+  const _PatientCard({
+    required this.patient,
+    required this.displayDate,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return PremiumCard(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      radius: 16,
+      onTap: onTap,
+      child: Row(children: [
+        AppAvatar(name: patient.name, size: 52),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(patient.name, style: AppTextStyles.labelLarge),
+              const SizedBox(height: 2),
+              Text(
+                patient.lastCondition,
+                style: AppTextStyles.bodySmall,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 4),
+              Row(children: [
+                const Icon(Icons.calendar_today_outlined,
+                    size: 11, color: AppColors.textHint),
+                const SizedBox(width: 4),
+                Text(
+                  'Last visit: $displayDate',
+                  style: AppTextStyles.caption,
+                ),
+              ]),
+            ],
+          ),
+        ),
+        Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+          Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              '${patient.visitCount} visit${patient.visitCount == 1 ? '' : 's'}',
+              style: const TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: AppColors.primary,
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          const Icon(Icons.chevron_right_rounded,
+              color: AppColors.textHint, size: 18),
+        ]),
+      ]),
+    );
+  }
 }

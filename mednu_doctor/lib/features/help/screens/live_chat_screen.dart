@@ -215,9 +215,18 @@ class _LiveChatScreenState extends State<LiveChatScreen> {
 
   PreferredSizeWidget _buildAppBar(String uid) {
     return AppBar(
-      backgroundColor: AppColors.primary,
+      backgroundColor: Colors.transparent,
       foregroundColor: Colors.white,
       elevation: 0,
+      flexibleSpace: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFF880E4F), Color(0xFFC2185B), Color(0xFF7B1FA2)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+      ),
       leading: IconButton(
         icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
         onPressed: () => context.pop(),

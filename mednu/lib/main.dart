@@ -12,6 +12,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:go_router/go_router.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'firebase_options.dart';
 import 'app.dart';
 import 'core/router/app_router.dart';
@@ -28,16 +29,58 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
         options: DefaultFirebaseOptions.currentPlatform);
   }
 
+  final type  = message.data['type'] as String? ?? '';
+  final title = message.notification?.title ?? message.data['title'] as String? ?? '';
+  final body  = message.notification?.body  ?? message.data['body']  as String? ?? '';
+
   // Incoming call from doctor — show full-screen call UI even when killed.
-  if (message.data['type'] == 'incoming_doctor_call') {
+  if (type == 'incoming_doctor_call') {
     await CallNotificationService.init();
     await CallNotificationService.showIncomingCall(
       doctorName: message.data['doctorName'] ?? 'Doctor',
       specialty:  message.data['doctorSpecialty'] ?? '',
     );
+    return;
   }
-  // All other types are handled by the FCM system tray notification automatically.
-  // The Firestore stream will pick up the in-app notification when the app opens.
+
+  // All other types: show a local heads-up notification so the user is
+  // alerted even when the FCM message has no top-level notification payload
+  // (e.g. data-only messages from Cloud Functions or admin broadcasts).
+  if (title.isNotEmpty || body.isNotEmpty) {
+    await _localNotifications.initialize(
+      const InitializationSettings(
+        android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+        iOS: DarwinInitializationSettings(),
+      ),
+    );
+    await _localNotifications
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(const AndroidNotificationChannel(
+          'mednu_default_channel',
+          'MedNU Notifications',
+          importance: Importance.high,
+        ));
+    await _localNotifications.show(
+      type.hashCode,
+      title.isNotEmpty ? title : 'MedNu',
+      body,
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'mednu_default_channel',
+          'MedNU Notifications',
+          importance: Importance.high,
+          priority: Priority.high,
+          icon: '@mipmap/ic_launcher',
+        ),
+        iOS: DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+        ),
+      ),
+    );
+  }
 }
 
 // Local notifications plugin instance
@@ -61,6 +104,7 @@ void _handleFcmNavigation(Map<String, dynamic> data) {
       'doctorName':      data['doctorName']      ?? 'Doctor',
       'doctorSpecialty': data['doctorSpecialty'] ?? '',
       'consultationId':  data['consultationId']  ?? '',
+      'doctorPhotoUrl':  data['doctorPhotoUrl']  ?? '',
     });
     return;
   }
@@ -167,6 +211,16 @@ Future<void> _initFCM() async {
     sound: true,
     provisional: false,
   );
+
+  // On Android, request battery optimization exemption so that OEM power
+  // managers (MIUI, ColorOS, FuntouchOS, OneUI, etc.) do not block FCM
+  // wake-ups when the app is swiped away or killed by the system.
+  // The system dialog only appears if the user hasn't granted it yet.
+  if (defaultTargetPlatform == TargetPlatform.android) {
+    if (!await Permission.ignoreBatteryOptimizations.isGranted) {
+      await Permission.ignoreBatteryOptimizations.request();
+    }
+  }
 
   // Register background handler
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
@@ -314,10 +368,13 @@ void main() {
       // are independent of each other — run them concurrently to
       // cut cold-start time by ~600-900 ms.
       await Future.wait([
-        FirebaseAppCheck.instance.activate(
-          androidProvider: kDebugMode ? AndroidProvider.debug : AndroidProvider.playIntegrity,
-          appleProvider: kDebugMode ? AppleProvider.debug : AppleProvider.appAttest,
-        ),
+        if (!kDebugMode)
+          FirebaseAppCheck.instance.activate(
+            androidProvider: AndroidProvider.playIntegrity,
+            appleProvider: AppleProvider.appAttest,
+          )
+        else
+          Future.value(),
         _initFCM(),
         CallNotificationService.init(),
         HealthNotificationService.init(),

@@ -80,8 +80,8 @@ class _PregnancyCheckupsScreenState
       return checkups.when(
         loading: () => ListView(
           physics: const NeverScrollableScrollPhysics(),
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          children: List.generate(5, (_) => const SkeletonListTile()),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
+          children: List.generate(5, (_) => const _CheckupCardSkeleton()),
         ),
         error: (e, _) => const AppErrorState(),
         data: (list) {
@@ -500,7 +500,10 @@ class _PregnancyCheckupsScreenState
                       firstDate: DateTime.now(),
                       lastDate: DateTime.now().add(const Duration(days: 300)),
                     );
-                    if (d != null) setModal(() => date = d);
+                    if (d != null) {
+                      if (!ctx.mounted) return;
+                      setModal(() => date = d);
+                    }
                   },
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
@@ -670,6 +673,37 @@ class _AddCheckupButtonState extends ConsumerState<_AddCheckupButton> {
                 width: 20,
                 child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
             : const Text('Add Checkup', style: TextStyle(fontWeight: FontWeight.w700)),
+      ),
+    );
+  }
+}
+
+class _CheckupCardSkeleton extends StatelessWidget {
+  const _CheckupCardSkeleton();
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: const [BoxShadow(color: Color(0x0A000000), blurRadius: 8)],
+      ),
+      child: const AppShimmer(
+        child: Row(children: [
+          SkeletonBox(width: 48, height: 48, radius: 12),
+          SizedBox(width: 12),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            SkeletonBox(width: double.infinity, height: 14, radius: 4),
+            SizedBox(height: 6),
+            SkeletonBox(width: 180, height: 11, radius: 4),
+            SizedBox(height: 6),
+            SkeletonBox(width: 140, height: 11, radius: 4),
+          ])),
+          SizedBox(width: 10),
+          SkeletonBox(width: 68, height: 24, radius: 12),
+        ]),
       ),
     );
   }

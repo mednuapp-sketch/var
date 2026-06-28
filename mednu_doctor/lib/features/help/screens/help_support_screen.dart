@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/widgets/ux_widgets.dart';
 
 class HelpSupportScreen extends StatelessWidget {
   const HelpSupportScreen({super.key});
@@ -294,16 +295,13 @@ class HelpSupportScreen extends StatelessWidget {
                               color: AppColors.textSecondary),
                         ),
                         const SizedBox(height: 12),
-                        SizedBox(
+                        GradientButton(
+                          label: 'Send Report',
+                          icon: Icons.send_rounded,
                           width: double.infinity,
-                          child: ElevatedButton.icon(
-                            icon: const Icon(Icons.send_rounded, size: 16),
-                            label: const Text('Send Report'),
-                            style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.error),
-                            onPressed: () =>
-                                context.push(AppRoutes.reportProblem),
-                          ),
+                          height: 48,
+                          colors: [AppColors.error, const Color(0xFFB71C1C)],
+                          onTap: () => context.push(AppRoutes.reportProblem),
                         ),
                       ]),
                 ),

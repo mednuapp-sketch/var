@@ -8,7 +8,6 @@ class DoctorLocationService {
   static StreamSubscription<Position>? _positionSub;
   static StreamSubscription<ServiceStatus>? _serviceStatusSub;
   static String? _trackingUid;
-  static void Function()? _onLocationDisabledCallback;
   // Minimum gap between Firestore writes to prevent write storms on fast movement.
   static const _kMinWriteInterval = Duration(seconds: 30);
   static DateTime? _lastWriteTime;
@@ -92,7 +91,6 @@ class DoctorLocationService {
     required void Function() onLocationDisabled,
   }) async {
     _trackingUid = uid;
-    _onLocationDisabledCallback = onLocationDisabled;
 
     // Monitor GPS on/off — triggers auto-offline
     _serviceStatusSub?.cancel();
@@ -154,7 +152,6 @@ class DoctorLocationService {
 
   static Future<void> stopTracking() async {
     _trackingUid = null;
-    _onLocationDisabledCallback = null;
     _lastWriteTime = null;
     await _positionSub?.cancel();
     await _serviceStatusSub?.cancel();

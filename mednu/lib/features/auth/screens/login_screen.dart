@@ -333,33 +333,26 @@ class _LogoSection extends StatelessWidget {
                 ]),
               ),
             ),
-            // Icon container
+            // Logo
             Container(
               width: 80,
               height: 80,
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFFC2185B), Color(0xFF7B1FA2)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
                 borderRadius: BorderRadius.circular(22),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFFC2185B)
+                    color: const Color(0xFF7B1FA2)
                         .withValues(alpha:0.35 + pulse * 0.15),
                     blurRadius: 24,
                     offset: const Offset(0, 8),
                   ),
                 ],
               ),
-              padding: const EdgeInsets.all(18),
-              child: SvgPicture.asset(
-                'assets/icons/med-nu-icon-stethoscope.svg',
-                fit: BoxFit.contain,
-                colorFilter: const ColorFilter.mode(
-                  Colors.white,
-                  BlendMode.srcIn,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(22),
+                child: SvgPicture.asset(
+                  'assets/icons/mednu_logo.svg',
+                  fit: BoxFit.contain,
                 ),
               ),
             ),

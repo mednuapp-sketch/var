@@ -13,6 +13,8 @@
     <!-- ── Camera & Media ── -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
 
@@ -37,18 +39,21 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
-    <!-- USE_EXACT_ALARM is granted automatically on Android 13+ for alarm apps;
-         SCHEDULE_EXACT_ALARM covers the manual-grant path for older versions -->
+    <!-- USE_EXACT_ALARM: auto-granted on Android 13+ (API 33+) without user prompt.
+         Covers medicine reminders, appointment alerts, and period/water tracker alarms. -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
 
     <!-- Battery optimization exemption — keeps the FCM listener alive on
          aggressive OEM battery managers (MIUI, ColorOS, FuntouchOS, OneUI)
          so push notifications still arrive after the app is swiped away. -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
-    <!-- ── Foreground service (for incoming consultation calls) ── -->
+    <!-- ── Foreground service (for incoming + active consultation calls) ── -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <!-- Camera foreground service type required for active video call service (Android 10+) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
 
     <!-- ── Incoming call full-screen intent (Android 14+) ── -->
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
@@ -111,14 +116,13 @@
             android:exported="false"
             android:directBootAware="false" />
 
-        <!-- FCM service (required for custom notification handling) -->
+        <!-- Active call foreground service — keeps the Agora session alive when
+             the user swipes the app from recents during a consultation. -->
         <service
-            android:name="com.google.firebase.messaging.FirebaseMessagingService"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="com.google.firebase.MESSAGING_EVENT" />
-            </intent-filter>
-        </service>
+            android:name=".CallForegroundService"
+            android:foregroundServiceType="camera|microphone"
+            android:exported="false" />
+
 
     </application>
 

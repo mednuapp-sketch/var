@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -55,7 +56,11 @@ class ImageUploadService {
       );
     }
 
-    return await ref.getDownloadURL();
+    // Permanent token-free URL — profile.jpg is publicly readable so the
+    // stored URL never expires when the auth session changes.
+    final signedUrl = await ref.getDownloadURL();
+    final uri = Uri.parse(signedUrl);
+    return uri.replace(queryParameters: {'alt': 'media'}).toString();
   }
 
   /// Picks a document image from gallery (higher quality for readability).
@@ -100,6 +105,20 @@ class ImageUploadService {
     final snapshot = await task;
     if (snapshot.state != TaskState.success) {
       throw Exception('Upload failed for $docType. Check Storage rules.');
+    }
+    return await ref.getDownloadURL();
+  }
+
+  /// Uploads signature PNG bytes to `doctors/{uid}/signature.png` and returns the download URL.
+  static Future<String> uploadDoctorSignatureBytes({
+    required Uint8List bytes,
+    required String uid,
+  }) async {
+    final ref = _storage.ref().child('doctors/$uid/signature.png');
+    final task = ref.putData(bytes, SettableMetadata(contentType: 'image/png'));
+    final snapshot = await task;
+    if (snapshot.state != TaskState.success) {
+      throw Exception('Signature upload failed. Check Storage rules.');
     }
     return await ref.getDownloadURL();
   }

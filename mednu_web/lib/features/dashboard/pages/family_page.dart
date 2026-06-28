@@ -1,46 +1,20 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/responsive.dart';
 import '../../../core/widgets/gradient_button.dart';
 
-class FamilyPage extends StatefulWidget {
+final String _uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+
+class FamilyPage extends StatelessWidget {
   const FamilyPage({super.key});
 
-  @override
-  State<FamilyPage> createState() => _FamilyPageState();
-}
-
-class _FamilyPageState extends State<FamilyPage> {
-  static final List<Map<String, String>> _members = [
-    {
-      'name': 'You',
-      'relation': 'Primary Account',
-      'dob': '1990-06-15',
-      'blood': 'B+',
-      'age': '36',
-      'emoji': '👤',
-      'gender': 'Male',
-    },
-    {
-      'name': 'Ananya',
-      'relation': 'Wife',
-      'dob': '1993-03-22',
-      'blood': 'O+',
-      'age': '33',
-      'emoji': '👩',
-      'gender': 'Female',
-    },
-    {
-      'name': 'Arjun',
-      'relation': 'Son',
-      'dob': '2018-11-05',
-      'blood': 'B+',
-      'age': '7',
-      'emoji': '👦',
-      'gender': 'Male',
-    },
-  ];
+  Stream<DocumentSnapshot<Map<String, dynamic>>> get _stream {
+    if (_uid.isEmpty) return const Stream.empty();
+    return FirebaseFirestore.instance.collection('users').doc(_uid).snapshots();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -50,35 +24,78 @@ class _FamilyPageState extends State<FamilyPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Family Members',
-                        style: GoogleFonts.poppins(
-                            fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-                    Text('Manage health profiles for your loved ones',
-                        style: GoogleFonts.poppins(fontSize: 13, color: AppColors.textSecondary)),
-                  ],
-                ),
-              ),
-              GradientButton(
-                label: '+ Add Member',
-                onTap: () => _showAddMemberSheet(context),
-                height: 40,
-                fontSize: 13,
-                width: 130,
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ],
-          ),
+          Row(children: [
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('Family Members',
+                    style: GoogleFonts.poppins(
+                        fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                Text('Manage health profiles for your loved ones',
+                    style: GoogleFonts.poppins(fontSize: 13, color: AppColors.textSecondary)),
+              ]),
+            ),
+            GradientButton(
+              label: '+ Add Member',
+              onTap: () => _showAddMemberSheet(context),
+              height: 40,
+              fontSize: 13,
+              width: 130,
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ]),
           const SizedBox(height: 24),
-          _MemberGrid(members: _members, isMobile: isMobile),
-          const SizedBox(height: 28),
-          _HealthSummarySection(isMobile: isMobile),
+          _uid.isEmpty
+              ? _emptyState(context)
+              : StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                  stream: _stream,
+                  builder: (context, snap) {
+                    if (snap.connectionState == ConnectionState.waiting) {
+                      return const Center(
+                          child: Padding(
+                              padding: EdgeInsets.all(40),
+                              child: CircularProgressIndicator()));
+                    }
+                    final data = snap.data?.data() ?? {};
+                    final rawList = data['familyMembers'];
+                    final members = rawList is List
+                        ? rawList
+                            .whereType<Map>()
+                            .map((e) => Map<String, dynamic>.from(e))
+                            .toList()
+                        : <Map<String, dynamic>>[];
+
+                    if (members.isEmpty) return _emptyState(context);
+
+                    return _MemberGrid(members: members, isMobile: isMobile);
+                  },
+                ),
         ],
+      ),
+    );
+  }
+
+  Widget _emptyState(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 48),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Text('👨‍👩‍👧‍👦', style: TextStyle(fontSize: 56)),
+          const SizedBox(height: 16),
+          Text('No family members added',
+              style: GoogleFonts.poppins(
+                  fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+          const SizedBox(height: 8),
+          Text('Add your family members to manage their health',
+              style: GoogleFonts.poppins(fontSize: 13, color: AppColors.textSecondary)),
+          const SizedBox(height: 20),
+          GradientButton(
+            label: '+ Add Member',
+            onTap: () => _showAddMemberSheet(context),
+            height: 44,
+            fontSize: 13,
+            width: 160,
+          ),
+        ]),
       ),
     );
   }
@@ -89,17 +106,16 @@ class _FamilyPageState extends State<FamilyPage> {
       isScrollControlled: true,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (_) => const _AddMemberSheet(),
     );
   }
 }
 
-// ─── Member Grid ─────────────────────────────────────────────────────────────
+// ─── Member Grid ──────────────────────────────────────────────────────────────
 
 class _MemberGrid extends StatelessWidget {
-  final List<Map<String, String>> members;
+  final List<Map<String, dynamic>> members;
   final bool isMobile;
   const _MemberGrid({required this.members, required this.isMobile});
 
@@ -115,15 +131,15 @@ class _MemberGrid extends StatelessWidget {
         childAspectRatio: isMobile ? 2.4 : 1.3,
       ),
       itemCount: members.length,
-      itemBuilder: (context, i) => _MemberCard(member: members[i], isPrimary: i == 0),
+      itemBuilder: (context, i) =>
+          _MemberCard(member: members[i]),
     );
   }
 }
 
 class _MemberCard extends StatefulWidget {
-  final Map<String, String> member;
-  final bool isPrimary;
-  const _MemberCard({required this.member, required this.isPrimary});
+  final Map<String, dynamic> member;
+  const _MemberCard({required this.member});
 
   @override
   State<_MemberCard> createState() => _MemberCardState();
@@ -135,6 +151,13 @@ class _MemberCardState extends State<_MemberCard> {
   @override
   Widget build(BuildContext context) {
     final m = widget.member;
+    final name = m['name'] as String? ?? '';
+    final relation = m['relation'] as String? ?? '';
+    final gender = m['gender'] as String? ?? '';
+    final dob = m['dob'] as String? ?? '';
+    final age = _calcAge(dob);
+    final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
+
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
@@ -146,10 +169,9 @@ class _MemberCardState extends State<_MemberCard> {
           color: Colors.white,
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
-            color: widget.isPrimary
-                ? AppColors.primary.withValues(alpha: 0.3)
-                : (_hovered ? AppColors.primary.withValues(alpha: 0.2) : AppColors.border),
-            width: widget.isPrimary ? 1.5 : 1,
+            color: _hovered
+                ? AppColors.primary.withValues(alpha: 0.2)
+                : AppColors.border,
           ),
           boxShadow: [
             BoxShadow(
@@ -165,90 +187,59 @@ class _MemberCardState extends State<_MemberCard> {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Row(
-              children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    gradient: widget.isPrimary
-                        ? AppColors.primaryGradient
-                        : const LinearGradient(
-                            colors: [Color(0xFFE8F4FD), Color(0xFFD0E8FA)],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Center(
-                    child: Text(m['emoji']!,
-                        style: const TextStyle(fontSize: 22)),
-                  ),
+            Row(children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  gradient: AppColors.primaryGradient,
+                  borderRadius: BorderRadius.circular(14),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(m['name']!,
-                          style: GoogleFonts.poppins(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.textPrimary)),
-                      Text(m['relation']!,
-                          style: GoogleFonts.poppins(
-                              fontSize: 12, color: AppColors.textSecondary)),
-                    ],
-                  ),
+                child: Center(
+                  child: Text(initial,
+                      style: GoogleFonts.poppins(
+                          fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white)),
                 ),
-                if (widget.isPrimary)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      gradient: AppColors.primaryGradient,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text('You',
-                        style: GoogleFonts.poppins(
-                            fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white)),
-                  ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(name,
+                      style: GoogleFonts.poppins(
+                          fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                      overflow: TextOverflow.ellipsis),
+                  Text(relation,
+                      style: GoogleFonts.poppins(
+                          fontSize: 12, color: AppColors.textSecondary)),
+                ]),
+              ),
+            ]),
             const SizedBox(height: 14),
-            Row(
-              children: [
-                _InfoChip(label: '${m['age']!} yrs'),
-                const SizedBox(width: 8),
-                _InfoChip(label: m['blood']!),
-                const SizedBox(width: 8),
-                _InfoChip(label: m['gender']!),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: _CardAction(
-                    icon: Icons.calendar_today_rounded,
-                    label: 'Book',
-                    color: AppColors.primary,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _CardAction(
-                    icon: Icons.folder_outlined,
-                    label: 'Records',
-                    color: AppColors.info,
-                  ),
-                ),
-              ],
-            ),
+            Wrap(spacing: 6, runSpacing: 6, children: [
+              if (age != null) _InfoChip(label: '$age yrs'),
+              if (gender.isNotEmpty) _InfoChip(label: gender),
+            ]),
           ],
         ),
       ),
     );
   }
+}
+
+int? _calcAge(String dob) {
+  if (dob.isEmpty) return null;
+  try {
+    // try DD/MM/YYYY
+    final parts = dob.split('/');
+    if (parts.length == 3) {
+      final d = DateTime(int.parse(parts[2]), int.parse(parts[1]), int.parse(parts[0]));
+      final today = DateTime.now();
+      int age = today.year - d.year;
+      if (today.month < d.month || (today.month == d.month && today.day < d.day)) age--;
+      return age;
+    }
+  } catch (_) {}
+  return null;
 }
 
 class _InfoChip extends StatelessWidget {
@@ -271,144 +262,6 @@ class _InfoChip extends StatelessWidget {
   }
 }
 
-class _CardAction extends StatefulWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-  const _CardAction({required this.icon, required this.label, required this.color});
-
-  @override
-  State<_CardAction> createState() => _CardActionState();
-}
-
-class _CardActionState extends State<_CardAction> {
-  bool _hovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        decoration: BoxDecoration(
-          color: _hovered ? widget.color.withValues(alpha: 0.1) : AppColors.background,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-              color: _hovered ? widget.color.withValues(alpha: 0.3) : AppColors.border),
-        ),
-        child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(widget.icon, size: 13, color: widget.color),
-          const SizedBox(width: 5),
-          Text(widget.label,
-              style: GoogleFonts.poppins(
-                  fontSize: 11, fontWeight: FontWeight.w600, color: widget.color)),
-        ]),
-      ),
-    );
-  }
-}
-
-// ─── Health Summary Section ───────────────────────────────────────────────────
-
-class _HealthSummarySection extends StatelessWidget {
-  final bool isMobile;
-  const _HealthSummarySection({required this.isMobile});
-
-  static const _summary = [
-    {'name': 'You', 'emoji': '👤', 'appointments': '2', 'prescriptions': '3', 'status': 'Good'},
-    {'name': 'Ananya', 'emoji': '👩', 'appointments': '1', 'prescriptions': '1', 'status': 'Good'},
-    {'name': 'Arjun', 'emoji': '👦', 'appointments': '0', 'prescriptions': '0', 'status': 'Healthy'},
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.border),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8)],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Family Health Summary',
-              style: GoogleFonts.poppins(
-                  fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-          const SizedBox(height: 4),
-          Text('Quick overview of all members',
-              style: GoogleFonts.poppins(fontSize: 12, color: AppColors.textSecondary)),
-          const SizedBox(height: 16),
-          const Divider(height: 1),
-          ..._summary.map((m) => _SummaryRow(data: m)),
-        ],
-      ),
-    );
-  }
-}
-
-class _SummaryRow extends StatelessWidget {
-  final Map<String, String> data;
-  const _SummaryRow({required this.data});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Row(children: [
-        Container(
-          width: 38,
-          height: 38,
-          decoration: BoxDecoration(
-            color: AppColors.background,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Center(child: Text(data['emoji']!, style: const TextStyle(fontSize: 18))),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Text(data['name']!,
-              style: GoogleFonts.poppins(
-                  fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
-        ),
-        _MiniStat(icon: Icons.calendar_today_rounded, value: data['appointments']!, color: AppColors.info),
-        const SizedBox(width: 16),
-        _MiniStat(icon: Icons.medication_rounded, value: data['prescriptions']!, color: AppColors.primary),
-        const SizedBox(width: 16),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          decoration: BoxDecoration(
-            color: AppColors.success.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Text(data['status']!,
-              style: GoogleFonts.poppins(
-                  fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.success)),
-        ),
-      ]),
-    );
-  }
-}
-
-class _MiniStat extends StatelessWidget {
-  final IconData icon;
-  final String value;
-  final Color color;
-  const _MiniStat({required this.icon, required this.value, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(mainAxisSize: MainAxisSize.min, children: [
-      Icon(icon, size: 13, color: color),
-      const SizedBox(width: 4),
-      Text(value, style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
-    ]);
-  }
-}
-
 // ─── Add Member Bottom Sheet ──────────────────────────────────────────────────
 
 class _AddMemberSheet extends StatefulWidget {
@@ -422,16 +275,51 @@ class _AddMemberSheetState extends State<_AddMemberSheet> {
   final _nameController = TextEditingController();
   String _selectedRelation = 'Spouse';
   String _selectedGender = 'Male';
-  String _selectedBlood = 'B+';
+  bool _saving = false;
 
   static const _relations = ['Spouse', 'Child', 'Parent', 'Sibling', 'Other'];
   static const _genders = ['Male', 'Female', 'Other'];
-  static const _bloodGroups = ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'];
 
   @override
   void dispose() {
     _nameController.dispose();
     super.dispose();
+  }
+
+  Future<void> _save() async {
+    final name = _nameController.text.trim();
+    if (name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a name'), behavior: SnackBarBehavior.floating),
+      );
+      return;
+    }
+    if (_uid.isEmpty) return;
+    setState(() => _saving = true);
+    try {
+      final member = {
+        'id': DateTime.now().millisecondsSinceEpoch.toString(),
+        'name': name,
+        'relation': _selectedRelation,
+        'gender': _selectedGender,
+      };
+      await FirebaseFirestore.instance.collection('users').doc(_uid).update({
+        'familyMembers': FieldValue.arrayUnion([member]),
+      });
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to add member: $e'),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   @override
@@ -455,14 +343,16 @@ class _AddMemberSheetState extends State<_AddMemberSheet> {
             GestureDetector(
               onTap: () => Navigator.pop(context),
               child: Container(
-                width: 32, height: 32,
-                decoration: BoxDecoration(color: AppColors.background, borderRadius: BorderRadius.circular(8)),
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                    color: AppColors.background, borderRadius: BorderRadius.circular(8)),
                 child: const Icon(Icons.close_rounded, size: 16, color: AppColors.textSecondary),
               ),
             ),
           ]),
           const SizedBox(height: 20),
-          _SheetField(label: 'Full Name', controller: _nameController, hint: 'Enter name'),
+          _SheetField(label: 'Full Name *', controller: _nameController, hint: 'Enter name'),
           const SizedBox(height: 14),
           _SheetDropdown(
             label: 'Relation',
@@ -471,29 +361,16 @@ class _AddMemberSheetState extends State<_AddMemberSheet> {
             onChanged: (v) => setState(() => _selectedRelation = v!),
           ),
           const SizedBox(height: 14),
-          Row(children: [
-            Expanded(
-              child: _SheetDropdown(
-                label: 'Gender',
-                value: _selectedGender,
-                items: _genders,
-                onChanged: (v) => setState(() => _selectedGender = v!),
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: _SheetDropdown(
-                label: 'Blood Group',
-                value: _selectedBlood,
-                items: _bloodGroups,
-                onChanged: (v) => setState(() => _selectedBlood = v!),
-              ),
-            ),
-          ]),
+          _SheetDropdown(
+            label: 'Gender',
+            value: _selectedGender,
+            items: _genders,
+            onChanged: (v) => setState(() => _selectedGender = v!),
+          ),
           const SizedBox(height: 22),
           GradientButton(
-            label: 'Add Member',
-            onTap: () => Navigator.pop(context),
+            label: _saving ? 'Adding…' : 'Add Member',
+            onTap: _saving ? null : _save,
             height: 48,
             fontSize: 14,
           ),
@@ -513,7 +390,8 @@ class _SheetField extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text(label,
-          style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+          style: GoogleFonts.poppins(
+              fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
       const SizedBox(height: 6),
       TextField(
         controller: controller,
@@ -525,17 +403,14 @@ class _SheetField extends StatelessWidget {
           filled: true,
           fillColor: AppColors.background,
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: AppColors.border),
-          ),
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppColors.border)),
           enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: AppColors.border),
-          ),
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppColors.border)),
           focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
-          ),
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppColors.primary, width: 1.5)),
         ),
       ),
     ]);
@@ -558,7 +433,8 @@ class _SheetDropdown extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text(label,
-          style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+          style: GoogleFonts.poppins(
+              fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
       const SizedBox(height: 6),
       Container(
         padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -572,9 +448,7 @@ class _SheetDropdown extends StatelessWidget {
             value: value,
             isExpanded: true,
             style: GoogleFonts.poppins(fontSize: 14, color: AppColors.textPrimary),
-            items: items
-                .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-                .toList(),
+            items: items.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
             onChanged: onChanged,
           ),
         ),

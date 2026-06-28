@@ -129,6 +129,54 @@ class CallNotificationService {
     await startRinging();
   }
 
+  /// Shows a high-priority alert when a patient has entered the scheduled
+  /// appointment waiting room. Wakes the device and plays one ringtone burst
+  /// (not looping) since the doctor doesn't need to accept/decline — they
+  /// simply open the dashboard and tap "Join Patient" on the appointment card.
+  static Future<void> showPatientWaiting({
+    required String patientName,
+  }) async {
+    final body = '$patientName is in the waiting room — tap to join now';
+    await _plugin.show(
+      _notifId++,
+      '🟢 Patient is waiting for you',
+      body,
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          _callChannelId,
+          _callChannelName,
+          importance: Importance.max,
+          priority: Priority.max,
+          enableVibration: true,
+          vibrationPattern:
+              Int64List.fromList([0, 600, 200, 600, 200, 600]),
+          playSound: true,
+          fullScreenIntent: true,
+          category: AndroidNotificationCategory.call,
+          autoCancel: true,
+          styleInformation: BigTextStyleInformation(body),
+        ),
+        iOS: const DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+          interruptionLevel: InterruptionLevel.timeSensitive,
+        ),
+      ),
+    );
+    // Single ringtone burst — stops after one play.
+    try {
+      await WakelockPlus.enable();
+      await _ringtonePlayer.play(
+        android: AndroidSounds.ringtone,
+        ios: IosSounds.electronic,
+        looping: false,
+        volume: 1.0,
+        asAlarm: false,
+      );
+    } catch (_) {}
+  }
+
   /// Shows a high-priority emergency alert notification (not a call UI).
   /// Plays a short alert tone once instead of looping the ringtone.
   static Future<void> showEmergencyAlert({
@@ -207,6 +255,38 @@ class CallNotificationService {
       await _ringtonePlayer.stop();
       await WakelockPlus.disable();
     } catch (_) {}
+  }
+
+  /// Shows a plain heads-up notification for any FCM message type that is
+  /// not an incoming call or emergency alert (e.g. appointment reminders,
+  /// broadcast messages). Used by the background handler as a fallback so
+  /// data-only messages are never silently dropped.
+  static Future<void> showGenericNotification({
+    required String title,
+    required String body,
+    String type = '',
+  }) async {
+    if (!_initialized) await init();
+    await _plugin.show(
+      _notifId++,
+      title.isNotEmpty ? title : 'MedNu Doctor',
+      body,
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'incoming_call',
+          'Incoming Consultations',
+          importance: Importance.high,
+          priority: Priority.high,
+          icon: '@mipmap/ic_launcher',
+          autoCancel: true,
+        ),
+        iOS: DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+        ),
+      ),
+    );
   }
 
   // ── Cancel all ────────────────────────────────────────────────────────────

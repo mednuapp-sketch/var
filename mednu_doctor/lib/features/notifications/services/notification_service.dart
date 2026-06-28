@@ -133,6 +133,8 @@ class NotificationService {
     await batch.commit();
   }
 
-  static String _firstName(String fullName) =>
-      fullName.trim().split(' ').first;
+  static String _firstName(String fullName) {
+    final parts = fullName.trim().split(' ').where((p) => p.isNotEmpty).toList();
+    return parts.isNotEmpty ? parts.first : fullName.trim();
+  }
 }

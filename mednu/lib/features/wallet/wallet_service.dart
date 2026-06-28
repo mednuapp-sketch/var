@@ -9,6 +9,8 @@ class WalletTransaction {
   final String category;
   final String? description;
   final DateTime timestamp;
+  // 'main' = regular wallet, 'mednu_money' = bonus credits (non-withdrawable)
+  final String walletType;
 
   const WalletTransaction({
     required this.id,
@@ -18,6 +20,7 @@ class WalletTransaction {
     required this.category,
     this.description,
     required this.timestamp,
+    this.walletType = 'main',
   });
 
   factory WalletTransaction.fromDoc(DocumentSnapshot doc) {
@@ -30,6 +33,7 @@ class WalletTransaction {
       category: data['category'] as String? ?? 'payment',
       description: data['description'] as String?,
       timestamp: (data['timestamp'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      walletType: data['walletType'] as String? ?? 'main',
     );
   }
 
@@ -40,9 +44,11 @@ class WalletTransaction {
         'category': category,
         if (description != null) 'description': description,
         'timestamp': FieldValue.serverTimestamp(),
+        'walletType': walletType,
       };
 
   bool get isCredit => type == 'credit';
+  bool get isMednuMoney => walletType == 'mednu_money';
 }
 
 class WalletService {
@@ -63,6 +69,27 @@ class WalletService {
       if (raw is num) return raw.toDouble();
       return 0.0;
     });
+  }
+
+  Stream<double> mednuMoneyBalanceStream() {
+    if (_uid.isEmpty) return Stream.value(0.0);
+    return _userRef.snapshots().map((snap) {
+      if (!snap.exists) return 0.0;
+      final data = snap.data() as Map<String, dynamic>?;
+      final raw = data?['mednuMoneyBalance'];
+      if (raw is num) return raw.toDouble();
+      return 0.0;
+    });
+  }
+
+  Stream<List<WalletTransaction>> mednuMoneyTransactionsStream() {
+    if (_uid.isEmpty) return Stream.value([]);
+    return _txRef
+        .where('walletType', isEqualTo: 'mednu_money')
+        .orderBy('timestamp', descending: true)
+        .limit(50)
+        .snapshots()
+        .map((snap) => snap.docs.map(WalletTransaction.fromDoc).toList());
   }
 
   Stream<int> referralPointsStream() {
@@ -174,6 +201,73 @@ class WalletService {
     });
   }
 
+  Future<void> addMednuMoney({
+    required double amount,
+    required String title,
+    required String category,
+    String? description,
+  }) async {
+    if (_uid.isEmpty) throw Exception('Not authenticated');
+    if (amount <= 0) throw Exception('Amount must be positive');
+    await _db.runTransaction((tx) async {
+      final snap = await tx.get(_userRef);
+      final current = _parseMednuMoneyBalance(snap);
+      tx.set(
+        _userRef,
+        {'mednuMoneyBalance': current + amount},
+        SetOptions(merge: true),
+      );
+      final txDoc = _txRef.doc();
+      tx.set(
+        txDoc,
+        WalletTransaction(
+          id: txDoc.id,
+          title: title,
+          amount: amount,
+          type: 'credit',
+          category: category,
+          description: description,
+          timestamp: DateTime.now(),
+          walletType: 'mednu_money',
+        ).toMap(),
+      );
+    });
+  }
+
+  Future<void> deductMednuMoney({
+    required double amount,
+    required String title,
+    String category = 'payment',
+    String? description,
+  }) async {
+    if (_uid.isEmpty) throw Exception('Not authenticated');
+    if (amount <= 0) throw Exception('Amount must be positive');
+    await _db.runTransaction((tx) async {
+      final snap = await tx.get(_userRef);
+      final current = _parseMednuMoneyBalance(snap);
+      if (current < amount) throw Exception('Insufficient MedNu Money balance');
+      tx.set(
+        _userRef,
+        {'mednuMoneyBalance': current - amount},
+        SetOptions(merge: true),
+      );
+      final txDoc = _txRef.doc();
+      tx.set(
+        txDoc,
+        WalletTransaction(
+          id: txDoc.id,
+          title: title,
+          amount: amount,
+          type: 'debit',
+          category: category,
+          description: description,
+          timestamp: DateTime.now(),
+          walletType: 'mednu_money',
+        ).toMap(),
+      );
+    });
+  }
+
   Future<void> transferToUser({
     required String recipientPhone,
     required double amount,
@@ -242,6 +336,14 @@ class WalletService {
     if (!snap.exists) return 0.0;
     final data = snap.data() as Map<String, dynamic>?;
     final raw = data?['walletBalance'];
+    if (raw is num) return raw.toDouble();
+    return 0.0;
+  }
+
+  double _parseMednuMoneyBalance(DocumentSnapshot snap) {
+    if (!snap.exists) return 0.0;
+    final data = snap.data() as Map<String, dynamic>?;
+    final raw = data?['mednuMoneyBalance'];
     if (raw is num) return raw.toDouble();
     return 0.0;
   }

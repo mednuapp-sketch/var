@@ -36,7 +36,6 @@ class _IncomingRequestScreenState extends State<IncomingRequestScreen>
   String _patientName = 'Patient';
   String _chiefComplaint = '';
   String _consultationType = 'Video';
-  String _patientId = '';
 
   StreamSubscription<QuerySnapshot>? _sub;
 
@@ -145,7 +144,6 @@ class _IncomingRequestScreenState extends State<IncomingRequestScreen>
         _patientName = data['patientName'] as String? ?? 'Patient';
         _chiefComplaint = data['chiefComplaint'] as String? ?? '';
         _consultationType = data['consultationType'] as String? ?? 'Video';
-        _patientId = data['patientId'] as String? ?? '';
         _loading = false;
         if (isNewCall) {
           _countdown = 30;
@@ -159,6 +157,9 @@ class _IncomingRequestScreenState extends State<IncomingRequestScreen>
         CallNotificationService.startRinging();
       }
       _startCountdown();
+    }, onError: (e) {
+      debugPrint('[IncomingRequest] Consultation stream error: $e');
+      if (mounted) setState(() => _loading = true);
     });
   }
 
@@ -376,7 +377,7 @@ class _IncomingRequestScreenState extends State<IncomingRequestScreen>
           _RippleRing(controller: _ripple1, delay: 0.0),
           _RippleRing(controller: _ripple2, delay: 0.33),
           _RippleRing(controller: _ripple3, delay: 0.66),
-          // Pulsing avatar
+          // Pulsing avatar with patient initials
           ScaleTransition(
             scale: _pulseAnim,
             child: Container(
@@ -387,14 +388,32 @@ class _IncomingRequestScreenState extends State<IncomingRequestScreen>
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.primary.withValues(alpha:0.55),
+                    color: AppColors.primary.withValues(alpha: 0.55),
                     blurRadius: 30,
                     spreadRadius: 8,
                   ),
                 ],
               ),
-              child: const Icon(Icons.person_rounded,
-                  color: Colors.white, size: 58),
+              child: Center(
+                child: _patientName.isNotEmpty
+                    ? Text(
+                        _patientName
+                            .trim()
+                            .split(' ')
+                            .take(2)
+                            .map((w) => w.isNotEmpty ? w[0].toUpperCase() : '')
+                            .join(),
+                        style: const TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 38,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                          height: 1,
+                        ),
+                      )
+                    : const Icon(Icons.person_rounded,
+                        color: Colors.white, size: 58),
+              ),
             ),
           ),
         ],

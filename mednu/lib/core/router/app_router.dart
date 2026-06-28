@@ -65,6 +65,7 @@ import '../../features/pregnancy/screens/pregnancy_checkups_screen.dart';
 import '../../features/pregnancy/screens/pregnancy_medicines_screen.dart';
 import '../../features/pregnancy/screens/pregnancy_nutrition_screen.dart';
 import '../../features/pregnancy/screens/pregnancy_emergency_screen.dart';
+import '../../features/pregnancy/screens/pregnancy_weight_tracker_screen.dart';
 import '../../features/location/screens/address_book_screen.dart';
 import '../../features/location/screens/add_edit_address_screen.dart';
 import '../../features/location/screens/map_location_picker_screen.dart';
@@ -139,14 +140,15 @@ class AppRoutes {
   static const mapPicker          = '/location/map-picker';
 
   // Pregnancy
-  static const pregnancy          = '/pregnancy';
+  static const pregnancy           = '/pregnancy';
   static const pregnancyOnboarding = '/pregnancy/setup';
-  static const pregnancyJournal   = '/pregnancy/journal';
-  static const pregnancyWeekly    = '/pregnancy/weekly';
-  static const pregnancyCheckups  = '/pregnancy/checkups';
-  static const pregnancyMedicines = '/pregnancy/medicines';
-  static const pregnancyNutrition = '/pregnancy/nutrition';
-  static const pregnancyEmergency = '/pregnancy/emergency';
+  static const pregnancyJournal    = '/pregnancy/journal';
+  static const pregnancyWeekly     = '/pregnancy/weekly';
+  static const pregnancyCheckups   = '/pregnancy/checkups';
+  static const pregnancyMedicines  = '/pregnancy/medicines';
+  static const pregnancyNutrition  = '/pregnancy/nutrition';
+  static const pregnancyEmergency  = '/pregnancy/emergency';
+  static const pregnancyWeight     = '/pregnancy/weight';
 
   // Reviews
   static const submitReview = '/review/submit';
@@ -259,7 +261,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: AppRoutes.doctors,            builder: (c, s) => DoctorsListScreen(initialSpecialty: s.uri.queryParameters['specialty'], initialMode: s.uri.queryParameters['mode'])),
       GoRoute(path: AppRoutes.specialities,       builder: (c, s) => const SpecialitiesScreen()),
       GoRoute(path: AppRoutes.doctorProfile,      builder: (c, s) => DoctorProfileScreen(doctorId: s.pathParameters['id'] ?? '')),
-      GoRoute(path: AppRoutes.hospitals,          builder: (c, s) => const HospitalsScreen()),
+      GoRoute(path: AppRoutes.hospitals,          builder: (c, s) => HospitalsScreen(initialQuery: s.uri.queryParameters['q'])),
       GoRoute(path: AppRoutes.pharmacy,           builder: (c, s) => const PharmacyScreen()),
       GoRoute(path: AppRoutes.records, builder: (c, s) {
         final extra = s.extra as Map<String, dynamic>?;
@@ -326,6 +328,7 @@ GoRoute(path: AppRoutes.referral,           builder: (c, s) => const ReferralScr
       GoRoute(path: AppRoutes.pregnancyMedicines, builder: (c, s) => const PregnancyMedicinesScreen()),
       GoRoute(path: AppRoutes.pregnancyNutrition, builder: (c, s) => const PregnancyNutritionScreen()),
       GoRoute(path: AppRoutes.pregnancyEmergency, builder: (c, s) => const PregnancyEmergencyScreen()),
+      GoRoute(path: AppRoutes.pregnancyWeight,    builder: (c, s) => const PregnancyWeightTrackerScreen()),
       GoRoute(path: AppRoutes.privacyPolicy,   builder: (c, s) => const PrivacyPolicyScreen()),
       GoRoute(path: AppRoutes.termsOfService,  builder: (c, s) => const TermsOfServiceScreen()),
       GoRoute(path: AppRoutes.helpSupport,     builder: (c, s) => const HelpSupportScreen()),
@@ -351,6 +354,8 @@ GoRoute(path: AppRoutes.referral,           builder: (c, s) => const ReferralScr
             consultationId:  extra['consultationId']  as String? ?? '',
             doctorName:      extra['doctorName']      as String? ?? 'Doctor',
             doctorSpecialty: extra['doctorSpecialty'] as String? ?? '',
+            doctorPhotoUrl:  extra['doctorPhotoUrl']  as String? ?? '',
+            isScheduled:     extra['isScheduled']     as bool?   ?? false,
           );
         },
       ),
@@ -363,6 +368,7 @@ GoRoute(path: AppRoutes.referral,           builder: (c, s) => const ReferralScr
             doctorName:       extra['doctorName']       as String? ?? 'Doctor',
             doctorSpecialty:  extra['doctorSpecialty']  as String? ?? '',
             consultationType: extra['consultationType'] as String? ?? 'Video',
+            doctorPhotoUrl:   extra['doctorPhotoUrl']   as String? ?? '',
           );
         },
       ),

@@ -202,7 +202,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                     suffixIcon: _query.isNotEmpty
                         ? IconButton(
                             icon: const Icon(Icons.clear_rounded, color: AppColors.textHint),
-                            onPressed: () { _searchController.clear(); setState(() { _query = ''; }); },
+                            onPressed: () { _searchController.clear(); setState(() { _query = ''; _expandedIndex = null; }); },
                           )
                         : null,
                   ),

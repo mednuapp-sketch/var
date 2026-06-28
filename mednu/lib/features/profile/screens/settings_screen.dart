@@ -3,12 +3,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/providers/theme_provider.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/services/booking_reminder_service.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../../my_services/services/my_services_service.dart';
 import '../../security/services/biometric_service.dart';
 import '../../legal/screens/privacy_policy_screen.dart';
 import '../../legal/screens/terms_of_service_screen.dart';
@@ -24,6 +27,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _waterReminder = true;
   bool _periodTracker = true;
   bool _medicineReminder = true;
+  bool _appointmentReminder = true;
+  int  _appointmentReminderMinutes = 15;
   bool _biometric = false;
   bool _biometricSupported = false;
   bool _locationAccess = true;
@@ -35,6 +40,78 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     super.initState();
     _loadBiometricState();
     _loadAppVersion();
+    _loadReminderSettings();
+  }
+
+  Future<void> _loadReminderSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted) {
+      setState(() {
+        _appointmentReminder = prefs.getBool('booking_reminder_enabled') ?? true;
+        _appointmentReminderMinutes = prefs.getInt('booking_reminder_minutes') ?? 15;
+      });
+    }
+  }
+
+  Future<void> _toggleAppointmentReminder(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('booking_reminder_enabled', value);
+    if (mounted) setState(() => _appointmentReminder = value);
+    if (!value) {
+      await BookingReminderService.cancelAllReminders();
+    } else {
+      try {
+        final bookings = await MyServicesService.allBookingsStream().first;
+        await BookingReminderService.syncReminders(bookings, _appointmentReminderMinutes);
+      } catch (_) {}
+    }
+  }
+
+  Future<void> _setReminderMinutes(int minutes) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('booking_reminder_minutes', minutes);
+    if (mounted) setState(() => _appointmentReminderMinutes = minutes);
+    try {
+      final bookings = await MyServicesService.allBookingsStream().first;
+      await BookingReminderService.syncReminders(bookings, minutes);
+    } catch (_) {}
+  }
+
+  void _showTimingPicker(BuildContext context) {
+    const options = [5, 10, 15, 30, 60];
+    showDialog<int>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          'Remind me before',
+          style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 16),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: options.map((m) {
+            final label = m >= 60 ? '1 hour' : '$m minutes';
+            final selected = _appointmentReminderMinutes == m;
+            return ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              title: Text(label,
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    color: selected ? AppColors.primary : null,
+                  )),
+              trailing: selected
+                  ? Icon(Icons.check_circle_rounded, color: AppColors.primary, size: 20)
+                  : null,
+              onTap: () => Navigator.pop(ctx, m),
+            );
+          }).toList(),
+        ),
+      ),
+    ).then((picked) {
+      if (picked != null) _setReminderMinutes(picked);
+    });
   }
 
   Future<void> _loadBiometricState() async {
@@ -293,6 +370,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   _SwitchTile(Icons.medication_rounded, 'Medicine Reminders',
                       'Alerts for prescribed medicines', _medicineReminder,
                       (v) => setState(() => _medicineReminder = v)),
+                  const Divider(height: 1, indent: 62),
+                  _SwitchTile(
+                    Icons.alarm_rounded,
+                    'Appointment Reminders',
+                    'Get notified before upcoming appointments & services',
+                    _appointmentReminder,
+                    _toggleAppointmentReminder,
+                    iconColor: const Color(0xFF00897B),
+                  ),
+                  if (_appointmentReminder) ...[
+                    const Divider(height: 1, indent: 62),
+                    _ReminderTimingTile(
+                      minutes: _appointmentReminderMinutes,
+                      onTap: () => _showTimingPicker(context),
+                    ),
+                  ],
                 ]),
 
                 const SizedBox(height: 20),
@@ -635,4 +728,35 @@ class _NavTile extends StatelessWidget {
                 size: 20)
             : null,
       );
+}
+
+// ── Reminder timing tile ──────────────────────────────────────────────────────
+class _ReminderTimingTile extends StatelessWidget {
+  final int minutes;
+  final VoidCallback onTap;
+  const _ReminderTimingTile({required this.minutes, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final label = minutes >= 60 ? '1 hour before' : '$minutes minutes before';
+    return ListTile(
+      onTap: onTap,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      leading: Container(
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          color: const Color(0xFF00897B).withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(11),
+        ),
+        child: const Icon(Icons.schedule_rounded,
+            color: Color(0xFF00897B), size: 20),
+      ),
+      title: Text('Reminder Timing', style: AppTextStyles.labelLarge),
+      subtitle: Text(label, style: AppTextStyles.caption),
+      trailing: Icon(Icons.chevron_right_rounded,
+          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
+          size: 20),
+    );
+  }
 }

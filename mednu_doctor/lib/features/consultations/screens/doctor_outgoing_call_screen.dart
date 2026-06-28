@@ -18,11 +18,13 @@ import '../../../core/router/app_router.dart';
 class DoctorOutgoingCallScreen extends StatefulWidget {
   final String patientId;
   final String patientName;
+  final String patientPhotoUrl;
 
   const DoctorOutgoingCallScreen({
     super.key,
     required this.patientId,
     required this.patientName,
+    this.patientPhotoUrl = '',
   });
 
   @override
@@ -87,9 +89,10 @@ class _DoctorOutgoingCallScreenState extends State<DoctorOutgoingCallScreen>
       return;
     }
 
-    // Load doctor's own profile to get name and specialty
+    // Load doctor's own profile to get name, specialty, and photo
     String doctorName = 'Doctor';
     String doctorSpecialty = '';
+    String doctorPhotoUrl = '';
     try {
       final doc = await FirebaseFirestore.instance
           .collection('doctors')
@@ -97,6 +100,7 @@ class _DoctorOutgoingCallScreenState extends State<DoctorOutgoingCallScreen>
           .get();
       doctorName = doc.data()?['name'] as String? ?? 'Doctor';
       doctorSpecialty = doc.data()?['specialty'] as String? ?? '';
+      doctorPhotoUrl = doc.data()?['photoUrl'] as String? ?? '';
     } catch (_) {}
 
     // Fetch patient FCM token (for Cloud Function to notify patient).
@@ -122,8 +126,10 @@ class _DoctorOutgoingCallScreenState extends State<DoctorOutgoingCallScreen>
         'doctorId': uid,
         'doctorName': doctorName,
         'doctorSpecialty': doctorSpecialty,
+        'doctorPhotoUrl': doctorPhotoUrl,
         'patientId': widget.patientId,
         'patientName': widget.patientName,
+        'patientPhotoUrl': widget.patientPhotoUrl,
         'patientFcmToken': patientFcmToken,
         'consultationType': 'Video',
         'createdAt': FieldValue.serverTimestamp(),
@@ -148,6 +154,8 @@ class _DoctorOutgoingCallScreenState extends State<DoctorOutgoingCallScreen>
       if (!snap.exists || !mounted || _navigated) return;
       final status = snap.data()?['status'] as String? ?? '';
       _handleStatus(status);
+    }, onError: (e) {
+      debugPrint('[OutgoingCall] Consultation watch error: $e');
     });
   }
 
@@ -242,7 +250,7 @@ class _DoctorOutgoingCallScreenState extends State<DoctorOutgoingCallScreen>
   Widget build(BuildContext context) {
     return PopScope(
       canPop: false,
-      onPopInvoked: (_) async => _cancelCall(),
+      onPopInvokedWithResult: (didPop, _) { if (!didPop) _cancelCall(); },
       child: Scaffold(
         backgroundColor: Colors.transparent,
         body: Container(
@@ -329,36 +337,55 @@ class _DoctorOutgoingCallScreenState extends State<DoctorOutgoingCallScreen>
           ],
           ScaleTransition(
             scale: _pulseAnim,
-            child: Container(
-              width: 110,
-              height: 110,
-              decoration: BoxDecoration(
-                gradient: _callState == _CallState.calling
-                    ? AppColors.primaryGradient
-                    : RadialGradient(colors: [
-                        glowColor.withValues(alpha:0.9),
-                        glowColor.withValues(alpha:0.5),
-                      ]),
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: glowColor.withValues(alpha:0.55),
-                    blurRadius: 32,
-                    spreadRadius: 10,
-                  ),
-                ],
-              ),
-              child: Icon(
-                _callState == _CallState.declined
-                    ? Icons.call_end_rounded
-                    : Icons.person_rounded,
-                color: Colors.white,
-                size: 52,
-              ),
-            ),
+            child: _buildPatientAvatarCircle(glowColor),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildPatientAvatarCircle(Color glowColor) {
+    final isDeclined = _callState == _CallState.declined;
+    final hasPhoto = widget.patientPhotoUrl.isNotEmpty && !isDeclined;
+
+    return Container(
+      width: 110,
+      height: 110,
+      decoration: BoxDecoration(
+        gradient: hasPhoto
+            ? null
+            : _callState == _CallState.calling
+                ? AppColors.primaryGradient
+                : RadialGradient(colors: [
+                    glowColor.withValues(alpha: 0.9),
+                    glowColor.withValues(alpha: 0.5),
+                  ]),
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: glowColor.withValues(alpha: 0.55),
+            blurRadius: 32,
+            spreadRadius: 10,
+          ),
+        ],
+      ),
+      child: hasPhoto
+          ? ClipOval(
+              child: Image.network(
+                widget.patientPhotoUrl,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Icon(
+                  isDeclined ? Icons.call_end_rounded : Icons.person_rounded,
+                  color: Colors.white,
+                  size: 52,
+                ),
+              ),
+            )
+          : Icon(
+              isDeclined ? Icons.call_end_rounded : Icons.person_rounded,
+              color: Colors.white,
+              size: 52,
+            ),
     );
   }
 

@@ -12,6 +12,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
 import '../providers/location_provider.dart';
+import '../providers/home_nav_provider.dart';
 import '../widgets/home_widgets.dart';
 import '../../auth/providers/auth_provider.dart';
 
@@ -32,7 +33,6 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen>
     with WidgetsBindingObserver {
-  int _currentIndex = 0;
   bool _exitDialogOpen = false;
 
   @override
@@ -59,8 +59,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     // Guard against double-open while dialog is awaiting.
     if (_exitDialogOpen) return true;
     // Non-home tab → switch to Home first.
-    if (_currentIndex != 0) {
-      if (mounted) setState(() => _currentIndex = 0);
+    if (ref.read(bottomNavIndexProvider) != 0) {
+      if (mounted) ref.read(bottomNavIndexProvider.notifier).state = 0;
       return true;
     }
     // Already on Home tab → ask to exit.
@@ -96,19 +96,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
   @override
   Widget build(BuildContext context) {
+    final currentIndex = ref.watch(bottomNavIndexProvider);
     return Scaffold(
       body: IndexedStack(
-        index: _currentIndex,
+        index: currentIndex,
         children: const [
           _HomeBody(),
-          DoctorsListScreen(showBackButton: false),
+          DoctorsListScreen(),
           MyServicesScreen(),
           _ProfileBody(),
         ],
       ),
       bottomNavigationBar: _MedNUBottomNav(
-        currentIndex: _currentIndex,
-        onTap: (i) => setState(() => _currentIndex = i),
+        currentIndex: currentIndex,
+        onTap: (i) => ref.read(bottomNavIndexProvider.notifier).state = i,
       ),
     );
   }

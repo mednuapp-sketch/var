@@ -35,7 +35,6 @@ class _SpecializationChangeRequestScreenState
 
   // Existing pending request (if any)
   Map<String, dynamic>? _existingRequest;
-  String? _existingRequestId;
 
   // Uploaded documents list: {name, file, url, uploading, progress}
   final List<Map<String, dynamic>> _documents = [];
@@ -73,8 +72,7 @@ class _SpecializationChangeRequestScreenState
         .get();
 
     if (snap.docs.isNotEmpty) {
-      _existingRequestId = snap.docs.first.id;
-      _existingRequest   = snap.docs.first.data();
+      _existingRequest = snap.docs.first.data();
     }
 
     if (mounted) setState(() => _loading = false);
@@ -121,7 +119,7 @@ class _SpecializationChangeRequestScreenState
       });
     });
 
-    await _uploadDocument(index, file!, name);
+    await _uploadDocument(index, file, name);
   }
 
   Future<void> _uploadDocument(int index, File file, String name) async {
@@ -299,9 +297,22 @@ class _SpecializationChangeRequestScreenState
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Specialization Change'),
+        title: const Text('Specialization Change',
+            style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 18, color: Colors.white)),
+        backgroundColor: Colors.transparent,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFF880E4F), Color(0xFFC2185B), Color(0xFF7B1FA2)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
           onPressed: () => context.pop(),
         ),
       ),
@@ -634,33 +645,14 @@ class _SpecializationChangeRequestScreenState
         const SizedBox(height: 24),
 
         // Submit button
-        SizedBox(
+        GradientButton(
+          label: 'Submit Request for Review',
+          icon: Icons.send_rounded,
+          width: double.infinity,
           height: 52,
-          child: ElevatedButton(
-            onPressed: canSubmit ? _submitRequest : null,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              disabledBackgroundColor: AppColors.primary.withValues(alpha:0.4),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              elevation: 0,
-            ),
-            child: _submitting
-                ? const SizedBox(
-                    width: 22, height: 22,
-                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
-                  )
-                : const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.send_rounded, size: 18),
-                      SizedBox(width: 8),
-                      Text('Submit Request for Review',
-                          style: TextStyle(fontFamily: 'Poppins', fontSize: 15,
-                              fontWeight: FontWeight.w700)),
-                    ],
-                  ),
-          ),
+          isLoading: _submitting,
+          colors: canSubmit ? null : [AppColors.divider, AppColors.divider],
+          onTap: canSubmit ? _submitRequest : () {},
         ),
         const SizedBox(height: 40),
       ],

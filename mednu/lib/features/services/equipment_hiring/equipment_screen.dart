@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/widgets/service_booking_sheet.dart';
+import '../../../core/widgets/ux_widgets.dart';
 
 class EquipmentScreen extends StatefulWidget {
   const EquipmentScreen({super.key});
@@ -205,53 +206,36 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
   }
 
   Widget _buildSkeleton() {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Container(width: 160, height: 16, margin: const EdgeInsets.only(bottom: 12),
-            decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(8))),
-        GridView.count(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisCount: 2,
-          childAspectRatio: 0.82,
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-          children: List.generate(4, (_) => Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.divider),
-            ),
-          )),
-        ),
-      ]),
+    return AppShimmer(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Container(width: 160, height: 16, margin: const EdgeInsets.only(bottom: 12),
+              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8))),
+          GridView.count(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisCount: 2,
+            childAspectRatio: 0.82,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+            children: List.generate(4, (_) => Container(
+              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+            )),
+          ),
+        ]),
+      ),
     );
   }
 
-  Widget _buildError(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(32),
-      child: Column(children: [
-        Icon(Icons.wifi_off_rounded, size: 48, color: Colors.grey[300]),
-        const SizedBox(height: 12),
-        Text('Could not load equipment', style: AppTextStyles.bodyMedium),
-        const SizedBox(height: 8),
-        TextButton(onPressed: () => setState(() => _retryKey++), child: const Text('Retry')),
-      ]),
-    );
-  }
+  Widget _buildError(BuildContext context) => AppErrorState(
+    message: 'Could not load equipment. Please try again.',
+    onRetry: () => setState(() => _retryKey++),
+  );
 
-  Widget _buildEmpty() {
-    return Padding(
-      padding: const EdgeInsets.all(40),
-      child: Column(children: [
-        Icon(Icons.medical_services_outlined, size: 64, color: Colors.grey[300]),
-        const SizedBox(height: 16),
-        Text('No equipment listed yet', style: AppTextStyles.bodyMedium, textAlign: TextAlign.center),
-        const SizedBox(height: 8),
-        Text('Equipment will appear here once added by the team', style: AppTextStyles.bodySmall, textAlign: TextAlign.center),
-      ]),
-    );
-  }
+  Widget _buildEmpty() => const AppEmptyState(
+    icon: Icons.medical_services_outlined,
+    title: 'No Equipment Listed',
+    message: 'Medical equipment will appear here once added.',
+  );
 }

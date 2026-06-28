@@ -45,9 +45,18 @@ class _PatientFeedbackScreenState extends State<PatientFeedbackScreen>
             fontSize: 18,
           ),
         ),
-        backgroundColor: AppColors.primary,
+        backgroundColor: Colors.transparent,
         foregroundColor: Colors.white,
         elevation: 0,
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFF880E4F), Color(0xFFC2185B), Color(0xFF7B1FA2)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
         bottom: TabBar(
           controller: _tab,
           labelColor: Colors.white,

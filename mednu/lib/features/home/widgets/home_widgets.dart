@@ -468,13 +468,16 @@ class SpecialtiesSection extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        SizedBox(
-          height: 104,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            itemCount: _specs.length,
-            itemBuilder: (_, i) => _SpecChip(spec: _specs[i]),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: GridView.count(
+            crossAxisCount: 5,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            mainAxisSpacing: 10,
+            crossAxisSpacing: 6,
+            childAspectRatio: 0.75,
+            children: _specs.map((s) => _SpecChip(spec: s)).toList(),
           ),
         ),
       ],
@@ -498,48 +501,44 @@ class _SpecChip extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return GestureDetector(
       onTap: () => context.push('${AppRoutes.doctors}?specialty=${spec.label}'),
-      child: Container(
-        width: 72,
-        margin: const EdgeInsets.only(right: 12),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 56, height: 56,
-              decoration: BoxDecoration(
-                color: isDark
-                    ? spec.color.withValues(alpha:0.15)
-                    : spec.color.withValues(alpha:0.10),
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(
-                  color: spec.color.withValues(alpha:isDark ? 0.35 : 0.20),
-                  width: 1,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 50, height: 50,
+            decoration: BoxDecoration(
+              color: isDark
+                  ? spec.color.withValues(alpha:0.15)
+                  : spec.color.withValues(alpha:0.10),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: spec.color.withValues(alpha:isDark ? 0.35 : 0.20),
+                width: 1,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: spec.color.withValues(alpha:isDark ? 0.25 : 0.12),
+                  blurRadius: isDark ? 14 : 8,
+                  offset: const Offset(0, 3),
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color: spec.color.withValues(alpha:isDark ? 0.25 : 0.12),
-                    blurRadius: isDark ? 14 : 8,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
-              ),
-              child: Icon(spec.icon, color: spec.color, size: 28),
+              ],
             ),
-            const SizedBox(height: 8),
-            Text(
-              spec.label,
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: AppTextStyles.caption.copyWith(
-                fontWeight: FontWeight.w600,
-                fontSize: 10,
-                color: Theme.of(context).colorScheme.onSurface.withValues(alpha:0.75),
-                height: 1.3,
-              ),
+            child: Icon(spec.icon, color: spec.color, size: 24),
+          ),
+          const SizedBox(height: 5),
+          Text(
+            spec.label,
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: AppTextStyles.caption.copyWith(
+              fontWeight: FontWeight.w600,
+              fontSize: 9,
+              color: Theme.of(context).colorScheme.onSurface.withValues(alpha:0.75),
+              height: 1.2,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -939,9 +938,8 @@ class _ServiceGridState extends State<ServiceGrid> {
 
   static final _services = [
     _Service('Emergency',   Icons.emergency_rounded,         AppColors.emergencyGrad,   AppRoutes.emergency,     null,      'Immediate 24/7 help for medical emergencies',  'Call Now'),
-    _Service('Appointment', Icons.calendar_month_rounded,    AppColors.appointmentGrad, AppRoutes.appointment,   'FAST',    'Book with top specialists near you instantly',  'Book Slot'),
+    _Service('Consult',     Icons.video_call_rounded,        AppColors.consultGrad,     AppRoutes.consultation,  null,      'Book & consult with top specialists near you',  'Book Now'),
     _Service('Medicine',    Icons.medication_liquid_rounded, AppColors.medicineGrad,    AppRoutes.medicine,      '20% OFF', 'Order medicines delivered to your doorstep',    'Order Now'),
-    _Service('Consult',     Icons.video_call_rounded,        AppColors.consultGrad,     AppRoutes.consultation,  null,      'Video & chat consultations with doctors',        'Connect'),
     _Service('Pregnancy',   Icons.pregnant_woman_rounded,    AppColors.pregnancyGrad,   AppRoutes.pregnancy,     'NEW',     'Track your pregnancy journey week by week',      'Track Now'),
     _Service('Diagnostics', Icons.science_rounded,           AppColors.diagnosticGrad,  AppRoutes.diagnostics,   null,      'Book lab tests & home sample collection',        'Book Test'),
     _Service('Care Assist', Icons.support_agent_rounded,     AppColors.careAssistGrad,  AppRoutes.careAssistant, null,      'AI-powered health assistant at your service',    'Try Now'),

@@ -77,6 +77,9 @@ dependencies:
   # ── Cryptography ──────────────────────────────────────
   crypto: ^3.0.3
 
+  # ── Security ──────────────────────────────────────────
+  screen_protector: ^1.5.2          # prevent screenshot/recording during video calls
+
   # ── Utilities ─────────────────────────────────────────
   intl: ^0.20.0
   shared_preferences: ^2.2.2

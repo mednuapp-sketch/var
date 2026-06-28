@@ -23,11 +23,13 @@ class DoctorNotificationsScreen extends ConsumerWidget {
       backgroundColor: AppColors.background,
       body: CustomScrollView(
         slivers: [
+          // ── Gradient App Bar ─────────────────────────────
           SliverAppBar(
             pinned: true,
             expandedHeight: 130,
             backgroundColor: AppColors.primary,
             foregroundColor: Colors.white,
+            elevation: 0,
             leading: IconButton(
               icon: const Icon(Icons.arrow_back_ios_new_rounded,
                   color: Colors.white),
@@ -38,19 +40,17 @@ class DoctorNotificationsScreen extends ConsumerWidget {
                 data: (list) {
                   final hasUnread = list.any((n) => !n.isRead);
                   if (!hasUnread) return const SizedBox.shrink();
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: TextButton(
-                      onPressed: () =>
-                          NotificationService.markAllRead(uid),
-                      child: const Text(
-                        'Mark all read',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontFamily: 'Poppins',
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                        ),
+                  return TextButton.icon(
+                    onPressed: () => NotificationService.markAllRead(uid),
+                    icon: const Icon(Icons.done_all_rounded,
+                        color: Colors.white, size: 16),
+                    label: const Text(
+                      'All read',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontFamily: 'Poppins',
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   );
@@ -61,99 +61,20 @@ class DoctorNotificationsScreen extends ConsumerWidget {
             ],
             flexibleSpace: FlexibleSpaceBar(
               collapseMode: CollapseMode.pin,
-              background: Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      Color(0xFF880E4F),
-                      Color(0xFFC2185B),
-                      Color(0xFF7B1FA2)
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                ),
-                child: Stack(
-                  children: [
-                    Positioned(
-                      top: -20,
-                      right: -20,
-                      child: Container(
-                        width: 110,
-                        height: 110,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.white.withValues(alpha:0.06),
-                        ),
-                      ),
-                    ),
-                    SafeArea(
-                      child: Padding(
-                        padding:
-                            const EdgeInsets.fromLTRB(20, 52, 20, 16),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 40,
-                              height: 40,
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha:0.18),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: const Icon(
-                                  Icons.notifications_rounded,
-                                  color: Colors.white,
-                                  size: 22),
-                            ),
-                            const SizedBox(width: 12),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Text(
-                                  'Notifications',
-                                  style: TextStyle(
-                                    fontFamily: 'Poppins',
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                                notifAsync.when(
-                                  data: (list) {
-                                    final unread =
-                                        list.where((n) => !n.isRead).length;
-                                    return Text(
-                                      unread > 0
-                                          ? '$unread unread'
-                                          : 'All caught up',
-                                      style: const TextStyle(
-                                        fontFamily: 'Poppins',
-                                        fontSize: 12,
-                                        color: Colors.white70,
-                                      ),
-                                    );
-                                  },
-                                  loading: () => const SizedBox.shrink(),
-                                  error: (_, __) => const SizedBox.shrink(),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              background: _NotifHeader(notifAsync: notifAsync),
             ),
           ),
+
+          // ── Content ──────────────────────────────────────
           notifAsync.when(
             loading: () => SliverPadding(
-              padding: const EdgeInsets.symmetric(vertical: 10),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
               sliver: SliverList(
                 delegate: SliverChildBuilderDelegate(
-                  (_, __) => const SkeletonListTile(),
+                  (_, i) => Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: SkeletonCard(height: 72),
+                  ),
                   childCount: 7,
                 ),
               ),
@@ -165,28 +86,43 @@ class DoctorNotificationsScreen extends ConsumerWidget {
             ),
             data: (notifications) {
               if (notifications.isEmpty) {
-                return SliverFillRemaining(
+                return const SliverFillRemaining(
                   child: FadeInSlide(
                     child: AppEmptyState(
                       icon: Icons.notifications_none_rounded,
-                      title: 'No notifications yet',
-                      message: 'You\'re all caught up!',
+                      title: 'All caught up!',
+                      message:
+                          "You're up to date. New alerts will appear here.",
                     ),
                   ),
                 );
               }
+
+              // Group by date label
+              final grouped = _groupByDate(notifications);
+
               return SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
                 sliver: SliverList(
                   delegate: SliverChildBuilderDelegate(
-                    (_, i) => FadeInSlide(
-                      delay: Duration(milliseconds: i * 40),
-                      child: _NotifTile(
-                        notif: notifications[i],
-                        doctorUid: uid,
-                      ),
-                    ),
-                    childCount: notifications.length,
+                    (_, i) {
+                      final item = grouped[i];
+                      if (item is String) {
+                        return FadeInSlide(
+                          delay: Duration(milliseconds: i * 30),
+                          child: DateSectionLabel(label: item),
+                        );
+                      }
+                      final notif = item as NotificationModel;
+                      return FadeInSlide(
+                        delay: Duration(milliseconds: i * 30),
+                        child: _NotifTile(
+                          notif: notif,
+                          doctorUid: uid,
+                        ),
+                      );
+                    },
+                    childCount: grouped.length,
                   ),
                 ),
               );
@@ -196,7 +132,164 @@ class DoctorNotificationsScreen extends ConsumerWidget {
       ),
     );
   }
+
+  List<Object> _groupByDate(List<NotificationModel> notifications) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    final thisWeek = today.subtract(const Duration(days: 7));
+
+    final result = <Object>[];
+    String? lastLabel;
+
+    for (final n in notifications) {
+      final d = DateTime(
+          n.createdAt.year, n.createdAt.month, n.createdAt.day);
+      final String label;
+      if (d == today) {
+        label = 'Today';
+      } else if (d == yesterday) {
+        label = 'Yesterday';
+      } else if (d.isAfter(thisWeek)) {
+        label = 'This Week';
+      } else {
+        label = 'Earlier';
+      }
+      if (label != lastLabel) {
+        result.add(label);
+        lastLabel = label;
+      }
+      result.add(n);
+    }
+    return result;
+  }
 }
+
+// ──────────────────────────────────────────────────────────────
+// Gradient Header Widget
+// ──────────────────────────────────────────────────────────────
+
+class _NotifHeader extends StatelessWidget {
+  final AsyncValue<List<NotificationModel>> notifAsync;
+
+  const _NotifHeader({required this.notifAsync});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFF880E4F), Color(0xFFC2185B), Color(0xFF7B1FA2)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            top: -28,
+            right: -28,
+            child: Container(
+              width: 130,
+              height: 130,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.05),
+              ),
+            ),
+          ),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 48, 20, 16),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.18),
+                      borderRadius: BorderRadius.circular(13),
+                    ),
+                    child: const Icon(Icons.notifications_rounded,
+                        color: Colors.white, size: 22),
+                  ),
+                  const SizedBox(width: 14),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        'Notifications',
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                          letterSpacing: -0.2,
+                        ),
+                      ),
+                      notifAsync.when(
+                        data: (list) {
+                          final unread =
+                              list.where((n) => !n.isRead).length;
+                          return Text(
+                            unread > 0
+                                ? '$unread unread message${unread > 1 ? 's' : ''}'
+                                : 'All caught up',
+                            style: const TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 12,
+                              color: Colors.white70,
+                            ),
+                          );
+                        },
+                        loading: () => const SizedBox.shrink(),
+                        error: (_, __) => const SizedBox.shrink(),
+                      ),
+                    ],
+                  ),
+                  const Spacer(),
+                  notifAsync.when(
+                    data: (list) {
+                      final unread = list.where((n) => !n.isRead).length;
+                      if (unread == 0) return const SizedBox.shrink();
+                      return Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.2),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Center(
+                          child: Text(
+                            '$unread',
+                            style: const TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                    loading: () => const SizedBox.shrink(),
+                    error: (_, __) => const SizedBox.shrink(),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ──────────────────────────────────────────────────────────────
+// Notification Tile
+// ──────────────────────────────────────────────────────────────
 
 class _NotifTile extends StatelessWidget {
   final NotificationModel notif;
@@ -212,69 +305,110 @@ class _NotifTile extends StatelessWidget {
       onTap: () => _onTap(context),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        margin: const EdgeInsets.only(bottom: 10),
+        margin: const EdgeInsets.only(bottom: 8),
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: notif.isRead
               ? Colors.white
-              : AppColors.primary.withValues(alpha:0.04),
+              : AppColors.primary.withValues(alpha: 0.04),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: notif.isRead
                 ? AppColors.divider
-                : AppColors.primary.withValues(alpha:0.2),
+                : AppColors.primary.withValues(alpha: 0.18),
+            width: notif.isRead ? 1 : 1.2,
           ),
           boxShadow: notif.isRead
-              ? []
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.03),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  )
+                ]
               : [
                   BoxShadow(
-                    color: AppColors.primary.withValues(alpha:0.06),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
+                    color: AppColors.primary.withValues(alpha: 0.08),
+                    blurRadius: 10,
+                    offset: const Offset(0, 3),
+                  )
                 ],
         ),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: meta.color.withValues(alpha:0.12),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(meta.icon, color: meta.color, size: 22),
+          // Icon badge
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: meta.color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(13),
+                ),
+                child: Icon(meta.icon, color: meta.color, size: 22),
+              ),
+              if (!notif.isRead)
+                Positioned(
+                  top: -3,
+                  right: -3,
+                  child: Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      color: AppColors.primary,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 1.5),
+                    ),
+                  ),
+                ),
+            ],
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [
-                Expanded(
-                  child: Text(notif.title, style: AppTextStyles.labelLarge),
-                ),
-                if (!notif.isRead)
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration: const BoxDecoration(
-                      color: AppColors.primary,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-              ]),
+            child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+              Text(
+                notif.title,
+                style: notif.isRead
+                    ? AppTextStyles.labelMedium
+                    : AppTextStyles.labelLarge,
+              ),
               const SizedBox(height: 3),
-              Text(notif.body, style: AppTextStyles.bodySmall),
+              Text(
+                notif.body,
+                style: AppTextStyles.bodySmall.copyWith(height: 1.4),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
               const SizedBox(height: 6),
               Row(children: [
-                Text(_formatTime(notif.createdAt), style: AppTextStyles.caption),
+                Icon(Icons.access_time_rounded,
+                    size: 11, color: AppColors.textHint),
+                const SizedBox(width: 4),
+                Text(
+                  _formatTime(notif.createdAt),
+                  style: AppTextStyles.caption,
+                ),
                 const Spacer(),
                 if (!notif.isRead)
                   GestureDetector(
-                    onTap: () => NotificationService.markRead(doctorUid, notif.id),
-                    child: Text(
-                      'Mark read',
-                      style: AppTextStyles.caption.copyWith(
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.w600,
+                    onTap: () =>
+                        NotificationService.markRead(doctorUid, notif.id),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        'Mark read',
+                        style: AppTextStyles.caption.copyWith(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                   ),
@@ -292,7 +426,9 @@ class _NotifTile extends StatelessWidget {
     }
     final route = _routeFor(notif);
     if (route != null) {
-      context.push(route, extra: notif.payload.isNotEmpty ? notif.payload : null);
+      context.push(route,
+          extra:
+              notif.payload.isNotEmpty ? notif.payload : null);
     }
   }
 
@@ -309,6 +445,8 @@ class _NotifTile extends StatelessWidget {
       case NotifType.review:
       case NotifType.summary:
       case NotifType.patientFollowup:
+      case NotifType.accountApproved:
+      case NotifType.accountRejected:
       case NotifType.unknown:
         return null;
     }
@@ -318,10 +456,10 @@ class _NotifTile extends StatelessWidget {
     final now = DateTime.now();
     final diff = now.difference(dt);
     if (diff.inMinutes < 1) return 'Just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes} mins ago';
-    if (diff.inHours < 24) return '${diff.inHours} hr ago';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
     if (diff.inDays == 1) return 'Yesterday';
-    if (diff.inDays < 7) return '${diff.inDays} days ago';
+    if (diff.inDays < 7) return '${diff.inDays}d ago';
     return DateFormat('d MMM').format(dt);
   }
 
@@ -331,17 +469,25 @@ class _NotifTile extends StatelessWidget {
       case NotifType.emergencyRequest:
         return _NotifMeta(Icons.video_call_rounded, AppColors.primary);
       case NotifType.review:
-        return _NotifMeta(Icons.star_rounded, Colors.amber);
+        return _NotifMeta(Icons.star_rounded, Colors.amber.shade600);
       case NotifType.payment:
-        return _NotifMeta(Icons.account_balance_wallet_rounded, AppColors.success);
+        return _NotifMeta(
+            Icons.account_balance_wallet_rounded, AppColors.success);
       case NotifType.appointment:
-        return _NotifMeta(Icons.calendar_month_rounded, AppColors.secondary);
+        return _NotifMeta(
+            Icons.calendar_month_rounded, AppColors.secondary);
       case NotifType.summary:
         return _NotifMeta(Icons.verified_rounded, AppColors.info);
       case NotifType.patientFollowup:
-        return _NotifMeta(Icons.favorite_rounded, const Color(0xFFE91E63));
+        return _NotifMeta(
+            Icons.favorite_rounded, const Color(0xFFE91E63));
+      case NotifType.accountApproved:
+        return _NotifMeta(Icons.verified_rounded, AppColors.success);
+      case NotifType.accountRejected:
+        return _NotifMeta(Icons.cancel_rounded, AppColors.error);
       case NotifType.unknown:
-        return _NotifMeta(Icons.notifications_rounded, AppColors.textSecondary);
+        return _NotifMeta(
+            Icons.notifications_rounded, AppColors.textSecondary);
     }
   }
 }
@@ -351,4 +497,3 @@ class _NotifMeta {
   final Color color;
   const _NotifMeta(this.icon, this.color);
 }
-

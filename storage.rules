@@ -25,14 +25,24 @@ service firebase.storage {
     }
 
     // ── Patient profile photos: users/{uid}/profile.jpg ─────────────────────
+    // Public read so the permanent token-free URL never expires.
     match /users/{uid}/{allPaths=**} {
-      allow read:  if isAuth();
+      allow read:  if true;
       allow write: if isOwner(uid)
                    && request.resource.size < 5 * 1024 * 1024
                    && isImage();
     }
 
-    // ── Doctor profile photos + verification docs: doctors/{uid}/... ─────────
+    // ── Doctor profile photo: doctors/{uid}/profile.jpg ──────────────────────
+    // Public read so patients can see doctor avatars without an expiring token.
+    match /doctors/{uid}/profile.jpg {
+      allow read:  if true;
+      allow write: if isOwner(uid)
+                   && request.resource.size < 5 * 1024 * 1024
+                   && isImage();
+    }
+
+    // ── Doctor verification docs + signature: doctors/{uid}/docs/... etc. ────
     match /doctors/{uid}/{allPaths=**} {
       allow read: if isAuth();
       allow write: if isOwner(uid)
@@ -50,6 +60,14 @@ service firebase.storage {
 
     // ── Prescription photos sent to pharmacy: prescriptions/{uid}/... ────────
     match /prescriptions/{uid}/{allPaths=**} {
+      allow read:  if isAuth() && (request.auth.uid == uid || isAdmin());
+      allow write: if isOwner(uid)
+                   && request.resource.size < 10 * 1024 * 1024
+                   && isDocument();
+    }
+
+    // ── Specialization change request documents ───────────────────────────────
+    match /spec_requests/{uid}/{allPaths=**} {
       allow read:  if isAuth() && (request.auth.uid == uid || isAdmin());
       allow write: if isOwner(uid)
                    && request.resource.size < 10 * 1024 * 1024

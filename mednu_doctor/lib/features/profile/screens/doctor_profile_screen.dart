@@ -427,14 +427,34 @@ class _DoctorProfileEditScreenState extends State<DoctorProfileEditScreen> {
     );
   }
 
-  Widget _defaultAvatar() => Container(
-        width: 90, height: 90,
-        decoration: const BoxDecoration(
-          gradient: AppColors.primaryGradient,
-          shape: BoxShape.circle,
-        ),
-        child: const Icon(Icons.person_rounded, size: 50, color: Colors.white),
-      );
+  Widget _defaultAvatar() {
+    final name = _nameCtrl.text.trim();
+    final initials = name.isNotEmpty
+        ? name.split(' ').take(2).map((w) => w.isNotEmpty ? w[0].toUpperCase() : '').join()
+        : '';
+    return Container(
+      width: 90,
+      height: 90,
+      decoration: const BoxDecoration(
+        gradient: AppColors.primaryGradient,
+        shape: BoxShape.circle,
+      ),
+      child: Center(
+        child: initials.isNotEmpty
+            ? Text(
+                initials,
+                style: const TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 32,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white,
+                  height: 1,
+                ),
+              )
+            : const Icon(Icons.person_rounded, size: 50, color: Colors.white),
+      ),
+    );
+  }
 
   // ── Build ─────────────────────────────────────────────────
 
@@ -443,22 +463,62 @@ class _DoctorProfileEditScreenState extends State<DoctorProfileEditScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Edit Profile'),
+        title: const Text(
+          'Edit Profile',
+          style: TextStyle(
+            fontFamily: 'Poppins',
+            fontSize: 17,
+            fontWeight: FontWeight.w600,
+            color: Colors.white,
+          ),
+        ),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFF880E4F), Color(0xFFC2185B), Color(0xFF7B1FA2)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
           onPressed: () => context.pop(),
         ),
         actions: [
           if (_saving)
             const Padding(
               padding: EdgeInsets.all(14),
-              child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+              child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: Colors.white)),
             )
           else
-            TextButton(
-              onPressed: _saveProfile,
-              child: const Text('Save',
-                  style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 16)),
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: TextButton(
+                onPressed: _saveProfile,
+                style: TextButton.styleFrom(
+                  backgroundColor: Colors.white.withValues(alpha: 0.15),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20)),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 6),
+                ),
+                child: const Text(
+                  'Save',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
             ),
         ],
       ),
@@ -479,7 +539,7 @@ class _DoctorProfileEditScreenState extends State<DoctorProfileEditScreen> {
               padding: const EdgeInsets.all(16),
               children: [
                 // ── Avatar ──
-                Center(child: _buildAvatar()),
+                FadeInSlide(child: Center(child: _buildAvatar())),
                 const SizedBox(height: 20),
 
                 _SectionCard('Personal Info', [
@@ -612,16 +672,51 @@ class _DoctorProfileEditScreenState extends State<DoctorProfileEditScreen> {
 }
 
 Widget _SectionCard(String title, List<Widget> children) => Container(
-      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.divider),
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(title, style: AppTextStyles.h4),
-        const SizedBox(height: 14),
-        ...children,
+        Container(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFFFCE4EC), Color(0xFFF3E5F5)],
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+            ),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+          ),
+          child: Row(children: [
+            Container(
+              width: 4,
+              height: 16,
+              margin: const EdgeInsets.only(right: 10),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [AppColors.primary, AppColors.secondary],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Text(title, style: AppTextStyles.h4),
+          ]),
+        ),
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: children),
+        ),
       ]),
     );
 

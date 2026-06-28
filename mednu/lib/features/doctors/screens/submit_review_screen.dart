@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../models/doctor_review.dart';
@@ -83,7 +84,10 @@ class _SubmitReviewScreenState extends State<SubmitReviewScreen>
         consultationType: widget.consultationType,
       );
 
-      if (mounted) _showSuccessDialog();
+      if (mounted) {
+        setState(() => _submitting = false);
+        _showSuccessDialog();
+      }
     } catch (e) {
       if (mounted) {
         setState(() => _submitting = false);
@@ -161,10 +165,16 @@ class _SubmitReviewScreenState extends State<SubmitReviewScreen>
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Rate Your Experience'),
+        title: const Text(
+          'Rate Your Experience',
+          style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, color: Colors.white, fontSize: 18),
+        ),
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+        elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.close_rounded),
-          onPressed: () => Navigator.pop(context),
+          icon: const Icon(Icons.close_rounded, color: Colors.white),
+          onPressed: () => context.pop(),
         ),
       ),
       body: SingleChildScrollView(
@@ -342,17 +352,32 @@ class _SubmitReviewScreenState extends State<SubmitReviewScreen>
           const SizedBox(height: 32),
 
           // Submit button
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: (_overallRating == 0 || _submitting) ? null : _submit,
-              child: _submitting
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                          color: Colors.white, strokeWidth: 2))
-                  : const Text('Submit Review'),
+          GestureDetector(
+            onTap: (_overallRating == 0 || _submitting) ? null : _submit,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: double.infinity,
+              height: 54,
+              decoration: BoxDecoration(
+                gradient: (_overallRating == 0 || _submitting)
+                    ? const LinearGradient(colors: [Color(0xFFCCCCCC), Color(0xFFCCCCCC)])
+                    : AppColors.primaryGradient,
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: (_overallRating > 0 && !_submitting)
+                    ? [BoxShadow(color: AppColors.primary.withValues(alpha: 0.3), blurRadius: 12, offset: const Offset(0, 5))]
+                    : null,
+              ),
+              child: Center(
+                child: _submitting
+                    ? const SizedBox(
+                        width: 22, height: 22,
+                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
+                    : const Row(mainAxisSize: MainAxisSize.min, children: [
+                        Icon(Icons.star_rounded, color: Colors.white, size: 18),
+                        SizedBox(width: 8),
+                        Text('Submit Review', style: TextStyle(fontFamily: 'Poppins', fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white)),
+                      ]),
+              ),
             ),
           ),
           const SizedBox(height: 16),

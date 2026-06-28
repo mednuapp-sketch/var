@@ -170,8 +170,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (c, s) {
           final extra = s.extra as Map<String, dynamic>? ?? {};
           return DoctorOutgoingCallScreen(
-            patientId:   extra['patientId']   as String? ?? '',
-            patientName: extra['patientName'] as String? ?? 'Patient',
+            patientId:      extra['patientId']      as String? ?? '',
+            patientName:    extra['patientName']    as String? ?? 'Patient',
+            patientPhotoUrl: extra['patientPhotoUrl'] as String? ?? '',
           );
         },
       ),

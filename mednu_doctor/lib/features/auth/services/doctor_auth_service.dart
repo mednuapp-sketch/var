@@ -63,11 +63,16 @@ class DoctorAuthService {
     String gender = 'Male',
     String registrationNumber = '',
     Map<String, String> documentUrls = const {},
+    String signatureUrl = '',
   }) async {
     String? fcmToken;
     try {
       fcmToken = await FirebaseMessaging.instance.getToken();
     } catch (_) {}
+
+    // The profile_photo document doubles as the initial avatar.
+    // Later edits via updatePhotoUrl upload to doctors/{uid}/profile.jpg.
+    final profilePhotoUrl = documentUrls['profile_photo'] ?? '';
 
     await _db.collection('doctors').doc(uid).set({
       'uid': uid,
@@ -80,6 +85,7 @@ class DoctorAuthService {
       'fee': fee,
       'gender': gender,
       'registrationNumber': registrationNumber,
+      'photoUrl': profilePhotoUrl,
       'isOnline': false,
       'isVerified': false,
       'status': 'pending',
@@ -87,6 +93,7 @@ class DoctorAuthService {
       'totalReviews': 0,
       'totalConsultations': 0,
       'documents': documentUrls,
+      'signatureUrl': signatureUrl,
       'declarationAccepted': true,
       'createdAt': FieldValue.serverTimestamp(),
       if (fcmToken != null) 'fcmToken': fcmToken,

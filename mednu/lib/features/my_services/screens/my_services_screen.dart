@@ -7,6 +7,7 @@ import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
 import '../models/unified_booking.dart';
 import '../providers/my_services_provider.dart';
+import '../../home/providers/home_nav_provider.dart';
 
 class MyServicesScreen extends ConsumerStatefulWidget {
   const MyServicesScreen({super.key});
@@ -41,7 +42,7 @@ class _MyServicesScreenState extends ConsumerState<MyServicesScreen>
     return Scaffold(
       backgroundColor: AppColors.background,
       body: NestedScrollView(
-        headerSliverBuilder: (_, __) => [_buildAppBar(isDark)],
+        headerSliverBuilder: (ctx, __) => [_buildAppBar(ctx, isDark)],
         body: TabBarView(
           controller: _tab,
           children: [
@@ -55,11 +56,20 @@ class _MyServicesScreenState extends ConsumerState<MyServicesScreen>
     );
   }
 
-  SliverAppBar _buildAppBar(bool isDark) {
+  SliverAppBar _buildAppBar(BuildContext context, bool isDark) {
     return SliverAppBar(
       pinned: true,
       expandedHeight: 160,
-      automaticallyImplyLeading: false,
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
+        onPressed: () {
+          if (context.canPop()) {
+            context.pop();
+          } else {
+            ref.read(bottomNavIndexProvider.notifier).state = 0;
+          }
+        },
+      ),
       flexibleSpace: FlexibleSpaceBar(
         collapseMode: CollapseMode.pin,
         background: Container(
@@ -222,6 +232,8 @@ class _BookingCard extends StatelessWidget {
     final cardColor = isDark ? AppColors.darkCard : Colors.white;
     final info = _ServiceInfo.from(booking);
 
+    final statusColor = _statusAccentColor(booking.status);
+
     return GestureDetector(
       onTap: () => context.push(
         AppRoutes.serviceDetail,
@@ -236,13 +248,31 @@ class _BookingCard extends StatelessWidget {
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha:isDark ? 0.15 : 0.05),
+              color: Colors.black.withValues(alpha: isDark ? 0.15 : 0.05),
               blurRadius: 12,
               offset: const Offset(0, 3),
             ),
           ],
         ),
-        child: Column(
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(18),
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Colored left accent border by status
+                Container(
+                  width: 4,
+                  decoration: BoxDecoration(
+                    color: statusColor,
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(18),
+                      bottomLeft: Radius.circular(18),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Column(
           children: [
             // ── Card Header ───────────────────────────────────────
             Padding(
@@ -333,9 +363,39 @@ class _BookingCard extends StatelessWidget {
             if (booking.isActive)
               _ActiveCardActions(booking: booking),
           ],
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
+  }
+
+  static Color _statusAccentColor(BookingStatus status) {
+    switch (status) {
+      case BookingStatus.pending:
+      case BookingStatus.requested:
+        return const Color(0xFFE65100);
+      case BookingStatus.confirmed:
+        return const Color(0xFF1565C0);
+      case BookingStatus.assigned:
+        return const Color(0xFF6A1B9A);
+      case BookingStatus.onTheWay:
+        return const Color(0xFF2E7D32);
+      case BookingStatus.inProgress:
+      case BookingStatus.consultationStarted:
+        return const Color(0xFF00838F);
+      case BookingStatus.sampleCollected:
+      case BookingStatus.delivered:
+      case BookingStatus.completed:
+        return AppColors.success;
+      case BookingStatus.cancelled:
+        return AppColors.error;
+      case BookingStatus.rescheduled:
+        return const Color(0xFFF57F17);
+    }
   }
 
   String _formatDate(String raw) {

@@ -368,8 +368,6 @@ class _SOSScreenState extends State<SOSScreen> with TickerProviderStateMixin {
               const SizedBox(height: 12),
               // Fixed emergency numbers
               Row(children: [
-                _EmergencyContact('108', '🚑', 'Ambulance'),
-                const SizedBox(width: 10),
                 _EmergencyContact('100', '👮', 'Police'),
                 const SizedBox(width: 10),
                 _EmergencyContact('101', '🚒', 'Fire'),

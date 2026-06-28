@@ -125,11 +125,6 @@ class _CalorieRingCard extends StatelessWidget {
               fit: StackFit.expand,
               children: [
                 CircularProgressIndicator(
-                  value: 1,
-                  strokeWidth: 10,
-                  color: const Color(0xFFE8F5E9),
-                ),
-                CircularProgressIndicator(
                   value: progress,
                   strokeWidth: 10,
                   backgroundColor: const Color(0xFFE8F5E9),
@@ -377,7 +372,7 @@ class _MealsList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return meals.when(
-      loading: () => Column(children: List.generate(3, (_) => const SkeletonListTile())),
+      loading: () => Column(children: List.generate(3, (_) => const _MealGroupSkeleton())),
       error: (_, __) => const SizedBox.shrink(),
       data: (list) {
         if (list.isEmpty) {
@@ -609,6 +604,44 @@ class _ActiveGoalCard extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _MealGroupSkeleton extends StatelessWidget {
+  const _MealGroupSkeleton();
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: const [BoxShadow(color: Color(0x08000000), blurRadius: 6)],
+      ),
+      child: const AppShimmer(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            SkeletonBox(width: 40, height: 40, radius: 10),
+            SizedBox(width: 10),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              SkeletonBox(width: 120, height: 13, radius: 4),
+              SizedBox(height: 5),
+              SkeletonBox(width: 80, height: 11, radius: 4),
+            ])),
+            SkeletonBox(width: 54, height: 22, radius: 8),
+          ]),
+          SizedBox(height: 12),
+          Row(children: [
+            SkeletonBox(width: 32, height: 32, radius: 8),
+            SizedBox(width: 8),
+            Expanded(child: SkeletonBox(width: double.infinity, height: 11, radius: 4)),
+            SizedBox(width: 8),
+            SkeletonBox(width: 44, height: 11, radius: 4),
+          ]),
+        ]),
+      ),
     );
   }
 }

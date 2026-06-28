@@ -25,8 +25,11 @@ class PregnancyMedicinesScreen extends ConsumerWidget {
             style: TextStyle(color: Color(0xFF1A1A2E), fontWeight: FontWeight.w700, fontSize: 16)),
       ),
       body: ref.watch(pregnancyMedicinesStreamProvider).when(
-        loading: () => ListView(physics: const NeverScrollableScrollPhysics(), padding: const EdgeInsets.symmetric(vertical: 8),
-          children: List.generate(5, (_) => const SkeletonListTile())),
+        loading: () => ListView(
+          physics: const NeverScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
+          children: List.generate(5, (_) => const _MedicineCardSkeleton()),
+        ),
         error: (e, _) => const AppErrorState(),
         data: (meds) {
           if (meds.isEmpty) {
@@ -233,5 +236,42 @@ class PregnancyMedicinesScreen extends ConsumerWidget {
       case 'injection': return Icons.vaccines_rounded;
       default: return Icons.medication_rounded;
     }
+  }
+}
+
+class _MedicineCardSkeleton extends StatelessWidget {
+  const _MedicineCardSkeleton();
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: const [BoxShadow(color: Color(0x0A000000), blurRadius: 6)],
+      ),
+      child: const AppShimmer(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            SkeletonBox(width: 40, height: 40, radius: 10),
+            SizedBox(width: 10),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              SkeletonBox(width: double.infinity, height: 14, radius: 4),
+              SizedBox(height: 5),
+              SkeletonBox(width: 140, height: 11, radius: 4),
+            ])),
+            SizedBox(width: 8),
+            SkeletonBox(width: 72, height: 26, radius: 13),
+          ]),
+          SizedBox(height: 10),
+          Row(children: [
+            SkeletonBox(width: 80, height: 18, radius: 6),
+            SizedBox(width: 8),
+            SkeletonBox(width: 100, height: 18, radius: 6),
+          ]),
+        ]),
+      ),
+    );
   }
 }

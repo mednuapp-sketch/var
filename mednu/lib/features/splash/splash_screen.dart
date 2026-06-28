@@ -211,7 +211,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
             ),
 
             // Main animated content — single AnimatedBuilder reads both clocks
-            AnimatedBuilder(
+            Positioned.fill(
+            child: AnimatedBuilder(
               animation: Listenable.merge([_intro, _loop]),
               builder: (_, __) {
                 final t    = _intro.value;           // 0 → 1 over 2 s
@@ -227,14 +228,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                 // Shimmer: sweeps left to right across the M
                 final shimmerX = _ivRaw(t, 0.38, 0.75, Curves.easeInOut,
                     -size.width * 0.5, size.width * 1.2);
-
-                // Accent line: grows from 0 → full width
-                final lineW = _iv(t, 0.44, 0.62, Curves.easeOut);
-
-                // Wordmark
-                final wordFade  = _iv(t, 0.52, 0.72, Curves.easeOut);
-                final wordSlide = _ivRaw(t, 0.52, 0.72, Curves.easeOut,
-                    26.0, 0.0);
 
                 // Tagline
                 final tagFade = _iv(t, 0.66, 0.84, Curves.easeOut);
@@ -252,7 +245,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                     children: [
                       SizedBox(height: size.height * 0.18),
 
-                      // ── M ───────────────────────────────────────────────
+                      // ── Logo ────────────────────────────────────────────
                       Opacity(
                         opacity: mFade,
                         child: Transform.scale(
@@ -260,38 +253,41 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                           child: Stack(
                             alignment: Alignment.center,
                             children: [
-                              // Pulsing radial glow
+                              // Pulsing radial glow behind logo
                               Opacity(
                                 opacity: mFade * (0.12 + pulse * 0.14),
                                 child: Container(
-                                  width:  size.width * 0.84,
-                                  height: size.width * 0.84,
+                                  width:  size.width * 0.90,
+                                  height: size.width * 0.90,
                                   decoration: BoxDecoration(
                                     shape: BoxShape.circle,
                                     gradient: RadialGradient(colors: [
-                                      const Color(0xFFF2A8D8).withValues(alpha:0.40),
+                                      const Color(0xFFF2A8D8).withValues(alpha:0.35),
                                       Colors.transparent,
                                     ]),
                                   ),
                                 ),
                               ),
 
-                              // The bold M
-                              Text(
-                                'M',
-                                style: TextStyle(
-                                  fontFamily: 'Poppins',
-                                  fontSize:   size.width * 0.68,
-                                  fontWeight: FontWeight.w900,
-                                  color:      Colors.white,
-                                  height:     0.88,
-                                  letterSpacing: -4,
+                              // MedNu logo
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(
+                                    size.width * 0.58 * 110 / 512),
+                                child: Image.asset(
+                                  'assets/icons/mednu_logo.png',
+                                  width:  size.width * 0.58,
+                                  height: size.width * 0.58,
+                                  fit: BoxFit.cover,
                                 ),
                               ),
 
                               // Diagonal shimmer sweep
-                              Positioned.fill(
-                                child: ClipRect(
+                              SizedBox(
+                                width:  size.width * 0.58,
+                                height: size.width * 0.58,
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(
+                                      size.width * 0.58 * 110 / 512),
                                   child: OverflowBox(
                                     maxWidth: double.infinity,
                                     child: Transform.translate(
@@ -303,7 +299,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                                           decoration: BoxDecoration(
                                             gradient: LinearGradient(colors: [
                                               Colors.white.withValues(alpha:0.00),
-                                              Colors.white.withValues(alpha:0.26),
+                                              Colors.white.withValues(alpha:0.22),
                                               Colors.white.withValues(alpha:0.00),
                                             ]),
                                           ),
@@ -318,71 +314,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                         ),
                       ),
 
-                      SizedBox(height: size.height * 0.006),
-
-                      // ── Accent line grows from centre ────────────────────
-                      SizedBox(
-                        height: 5,
-                        child: Center(
-                          child: SizedBox(
-                            width:  size.width * 0.44 * lineW,
-                            height: 3.5,
-                            child: DecoratedBox(
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(4),
-                                gradient: const LinearGradient(
-                                  colors: [
-                                    Colors.transparent,
-                                    Color(0xFFF2A8D8),
-                                    Color(0xFFF2A8D8),
-                                    Colors.transparent,
-                                  ],
-                                  stops: [0, 0.22, 0.78, 1],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-
-                      SizedBox(height: size.height * 0.026),
-
-                      // Thin divider
-                      Opacity(
-                        opacity: wordFade,
-                        child: Container(
-                          width: size.width * 0.72, height: 1,
-                          color: Colors.white.withValues(alpha:0.10),
-                        ),
-                      ),
-
-                      SizedBox(height: size.height * 0.020),
-
-                      // ── med-NU wordmark ───────────────────────────────────
-                      Opacity(
-                        opacity: wordFade,
-                        child: Transform.translate(
-                          offset: Offset(0, wordSlide),
-                          child: RichText(
-                            text: TextSpan(
-                              style: TextStyle(
-                                fontFamily: 'Poppins',
-                                fontSize:   size.width * 0.115,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 1.5,
-                              ),
-                              children: const [
-                                TextSpan(text: 'med',
-                                    style: TextStyle(color: Colors.white)),
-                                TextSpan(text: '-NU',
-                                    style: TextStyle(color: Color(0xFFF2A8D8))),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-
-                      SizedBox(height: size.height * 0.010),
+                      SizedBox(height: size.height * 0.036),
 
                       // ── Tagline ───────────────────────────────────────────
                       Opacity(
@@ -437,6 +369,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                   ),
                 );
               },
+            ),
             ),
           ],
         ),

@@ -5,9 +5,11 @@ import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:go_router/go_router.dart';
+import 'package:screen_protector/screen_protector.dart';
 import 'agora_call_service.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/services/active_call_service.dart';
 
 /// Patient-side video call screen.
 ///
@@ -50,6 +52,7 @@ class _VideoCallScreenState extends State<VideoCallScreen>
 
   // Captured from Firestore so post-call screen gets correct doctor info
   String? _doctorId;
+  String? _appointmentId;
 
   final _notesCtrl = TextEditingController();
 
@@ -62,6 +65,7 @@ class _VideoCallScreenState extends State<VideoCallScreen>
   void initState() {
     super.initState();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    _enableScreenProtection();
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 1),
@@ -102,10 +106,47 @@ class _VideoCallScreenState extends State<VideoCallScreen>
     _initAgora();
   }
 
+  Future<void> _enableScreenProtection() async {
+    try {
+      // Android: FLAG_SECURE — blocks both screenshots and screen recordings at OS level
+      await ScreenProtector.protectDataLeakageOn();
+      // iOS: show a solid black overlay whenever the screen is being captured/recorded
+      await ScreenProtector.protectDataLeakageWithColor(Colors.black);
+      // Both platforms: prevent screenshots
+      await ScreenProtector.preventScreenshotOn();
+      // iOS: fire a warning snackbar if a screenshot is still attempted
+      ScreenProtector.addListener(
+        () {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Screenshots are not allowed during consultations'),
+              backgroundColor: Colors.red,
+              duration: Duration(seconds: 3),
+            ),
+          );
+        },
+        (isRecording) {
+          debugPrint('[VideoCall] Screen recording detected: $isRecording');
+        },
+      );
+    } catch (e) {
+      debugPrint('[VideoCall] Screen protection error: $e');
+    }
+  }
+
   Future<void> _initAgora() async {
     await _agora.initialize();
     if (!mounted) return;
     setState(() => _engineReady = true);
+    // Start the foreground service + cache the Flutter engine so Android does
+    // not kill the process (or the Dart VM) if the user swipes from recents.
+    await ActiveCallService.start(
+      callId: widget.callId,
+      callerName: widget.doctorName ?? 'Doctor',
+    );
+    // Handle "End Call" tapped in the persistent notification while in background.
+    ActiveCallService.setEndCallFromNotificationHandler(() => _doEndCall());
     _watchConsultation();
   }
 
@@ -119,10 +160,14 @@ class _VideoCallScreenState extends State<VideoCallScreen>
       final data = snap.data() ?? {};
       final status = data['status'] as String? ?? '';
 
-      // Eagerly capture doctor ID for post-call navigation
+      // Eagerly capture doctor ID and appointment ID for post-call use
       if (_doctorId == null) {
         final did = data['doctorId'] as String?;
         if (did != null && did.isNotEmpty) _doctorId = did;
+      }
+      if (_appointmentId == null) {
+        final apptId = data['appointmentId'] as String?;
+        if (apptId != null && apptId.isNotEmpty) _appointmentId = apptId;
       }
 
       // Doctor joined Agora → patient should join too
@@ -198,27 +243,50 @@ class _VideoCallScreenState extends State<VideoCallScreen>
 
   @override
   void dispose() {
+    // Always detach the notification handler — the widget is gone.
+    // We do NOT stop the foreground service here because dispose() is also
+    // called when the Activity is destroyed by swipe-from-recents. The service
+    // (and the cached Flutter engine) keep Agora alive. The service is stopped
+    // only in _doEndCall() when the call is intentionally ended.
+    ActiveCallService.clearEndCallFromNotificationHandler();
     _consultSub?.cancel();
     _pulseController.dispose();
     _notesCtrl.dispose();
     _agora.dispose();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    ScreenProtector.preventScreenshotOff();
+    ScreenProtector.protectDataLeakageOff();
+    ScreenProtector.protectDataLeakageWithColorOff();
+    ScreenProtector.removeListener();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: Stack(
-        children: [
-          _buildRemoteView(),
-          _buildLocalPip(),
-          _buildTopBar(),
-          if (_isReconnecting) _buildReconnectBanner(),
-          if (_agoraError != null) _buildAgoraErrorBanner(),
-          _buildBottomControls(),
-        ],
+    return PopScope(
+      // During an active call, back button minimizes the app (like WhatsApp)
+      // so the call continues via the foreground service notification.
+      // Once _ending is true the call is over and normal back-navigation works.
+      canPop: _ending,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && !_ending) {
+          // Move app to background — the foreground service notification
+          // stays visible so the user can return to the call at any time.
+          SystemNavigator.pop();
+        }
+      },
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        body: Stack(
+          children: [
+            _buildRemoteView(),
+            _buildLocalPip(),
+            _buildTopBar(),
+            if (_isReconnecting) _buildReconnectBanner(),
+            if (_agoraError != null) _buildAgoraErrorBanner(),
+            _buildBottomControls(),
+          ],
+        ),
       ),
     );
   }
@@ -664,6 +732,9 @@ class _VideoCallScreenState extends State<VideoCallScreen>
   }) async {
     if (_ending) return;
     _ending = true;
+    // Stop foreground service + release engine cache so the next cold start
+    // creates a fresh Flutter engine (no stale call state).
+    await ActiveCallService.stop();
     if (!fromRemote && widget.callId.isNotEmpty) {
       try {
         await FirebaseFirestore.instance
@@ -675,6 +746,21 @@ class _VideoCallScreenState extends State<VideoCallScreen>
         });
       } catch (e) {
         debugPrint('[VideoCall] End-call status update failed: $e');
+      }
+    }
+    // Always mark the linked appointment completed — idempotent even if doctor
+    // side writes it at the same time.
+    if (_appointmentId != null && _appointmentId!.isNotEmpty) {
+      try {
+        await FirebaseFirestore.instance
+            .collection('appointments')
+            .doc(_appointmentId!)
+            .update({
+          'status': 'completed',
+          'completedAt': FieldValue.serverTimestamp(),
+        });
+      } catch (e) {
+        debugPrint('[VideoCall] Appointment complete failed: $e');
       }
     }
     if (mounted) setState(() { _engineReady = false; _remoteJoined = false; });

@@ -39,7 +39,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
     super.dispose();
   }
 
-  void _callPatient(BuildContext context, String resolvedName) {
+  void _callPatient(BuildContext context, String resolvedName, String photoUrl) {
     final uid = DoctorAuthService.currentUid;
     if (uid == null || widget.patientId.isEmpty) return;
     context.push(
@@ -47,6 +47,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
       extra: {
         'patientId': widget.patientId,
         'patientName': resolvedName,
+        'patientPhotoUrl': photoUrl,
       },
     );
   }
@@ -65,6 +66,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
       builder: (context, userSnap) {
         final userData = userSnap.data?.data() ?? {};
         final name = userData['name'] as String? ?? widget.patientName;
+        final patientPhotoUrl = userData['photoUrl'] as String? ?? '';
         final dob = userData['dob'] as String? ?? '';
         final gender = userData['gender'] as String? ?? '';
 
@@ -115,16 +117,36 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
                       // Avatar + name + chips
                       const SizedBox(height: 4),
                       Container(
-                        width: 72,
-                        height: 72,
+                        width: 78,
+                        height: 78,
                         decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha:0.2),
+                          color: Colors.white.withValues(alpha: 0.18),
                           shape: BoxShape.circle,
                           border: Border.all(
-                              color: Colors.white.withValues(alpha:0.4), width: 2),
+                              color: Colors.white.withValues(alpha: 0.4),
+                              width: 2.5),
                         ),
-                        child: const Icon(Icons.person_rounded,
-                            size: 38, color: Colors.white),
+                        child: Center(
+                          child: name.isNotEmpty
+                              ? Text(
+                                  name
+                                      .trim()
+                                      .split(' ')
+                                      .take(2)
+                                      .map((w) =>
+                                          w.isNotEmpty ? w[0].toUpperCase() : '')
+                                      .join(),
+                                  style: const TextStyle(
+                                    fontFamily: 'Poppins',
+                                    fontSize: 28,
+                                    fontWeight: FontWeight.w800,
+                                    color: Colors.white,
+                                    height: 1,
+                                  ),
+                                )
+                              : const Icon(Icons.person_rounded,
+                                  size: 38, color: Colors.white),
+                        ),
                       ),
                       const SizedBox(height: 8),
                       Text(
@@ -210,36 +232,38 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
                   // Call Patient button
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: () => _callPatient(context, name),
+                      onPressed: () => _callPatient(context, name, patientPhotoUrl),
                       icon: const Icon(Icons.video_call_rounded, size: 18),
                       label: const Text('Call Now'),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: AppColors.primary,
-                        side: const BorderSide(color: AppColors.primary),
+                        side: const BorderSide(
+                            color: AppColors.primary, width: 1.5),
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14)),
+                            borderRadius: BorderRadius.circular(16)),
+                        textStyle: const TextStyle(
+                          fontFamily: 'Poppins',
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                        ),
                       ),
                     ),
                   ),
                   const SizedBox(width: 12),
                   // Write Prescription button
                   Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: () => context.push(
+                    child: GradientButton(
+                      label: 'Prescribe',
+                      icon: Icons.receipt_long_rounded,
+                      height: 50,
+                      onTap: () => context.push(
                         AppRoutes.prescription,
                         extra: {
                           'patientId': widget.patientId,
                           'patientName': name,
                           'allowOffline': true,
                         },
-                      ),
-                      icon: const Icon(Icons.receipt_long_rounded, size: 18),
-                      label: const Text('Prescribe'),
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14)),
                       ),
                     ),
                   ),
@@ -295,21 +319,12 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
             final mName = member['name'] as String? ?? 'Member';
             final relation = member['relation'] as String? ?? '';
             final mAge = member['age']?.toString() ?? '';
-            return Container(
+            return PremiumCard(
               margin: const EdgeInsets.only(bottom: 8),
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              decoration: _cardDecoration(),
+              radius: 16,
               child: Row(children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    gradient: AppColors.primaryGradient,
-                    shape: BoxShape.circle,
-                  ),
-                  child:
-                      const Icon(Icons.person_rounded, color: Colors.white, size: 20),
-                ),
+                AppAvatar(name: mName, size: 44),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -318,7 +333,10 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
                         Text(mName, style: AppTextStyles.labelMedium),
                         if (relation.isNotEmpty || mAge.isNotEmpty)
                           Text(
-                            [if (relation.isNotEmpty) relation, if (mAge.isNotEmpty) '$mAge yrs'].join(' • '),
+                            [
+                              if (relation.isNotEmpty) relation,
+                              if (mAge.isNotEmpty) '$mAge yrs'
+                            ].join(' • '),
                             style: AppTextStyles.caption,
                           ),
                       ]),
@@ -327,12 +345,12 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
                   padding:
                       const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha:0.08),
+                    color: AppColors.primary.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
                     relation.isNotEmpty ? relation : 'Member',
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontFamily: 'Poppins',
                       fontSize: 10,
                       fontWeight: FontWeight.w600,
@@ -453,20 +471,27 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
               if (status == 'completed') statusColor = AppColors.success;
               if (status == 'cancelled') statusColor = AppColors.error;
 
-              return Container(
+              return PremiumCard(
                 margin: const EdgeInsets.only(bottom: 10),
                 padding: const EdgeInsets.all(14),
-                decoration: _cardDecoration(),
+                radius: 16,
                 child: Row(children: [
                   Container(
                     width: 46,
                     height: 46,
                     decoration: BoxDecoration(
-                      color: AppColors.primary.withValues(alpha:0.08),
-                      borderRadius: BorderRadius.circular(12),
+                      gradient: LinearGradient(
+                        colors: [
+                          AppColors.primary.withValues(alpha: 0.15),
+                          AppColors.secondary.withValues(alpha: 0.08),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(13),
                     ),
                     child: Icon(
-                      type == 'Video'
+                      type.toLowerCase().contains('video')
                           ? Icons.video_call_rounded
                           : Icons.medical_services_rounded,
                       color: AppColors.primary,
@@ -489,11 +514,13 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
                     padding:
                         const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: statusColor.withValues(alpha:0.1),
+                      color: statusColor.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
-                      status.isEmpty ? '—' : status[0].toUpperCase() + status.substring(1),
+                      status.isEmpty
+                          ? '—'
+                          : status[0].toUpperCase() + status.substring(1),
                       style: TextStyle(
                         fontFamily: 'Poppins',
                         fontSize: 10,
@@ -551,17 +578,24 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
               if (createdAt != null) {
                 dateStr = DateFormat('d MMM yyyy').format(createdAt);
               }
-              return Container(
+              return PremiumCard(
                 margin: const EdgeInsets.only(bottom: 10),
                 padding: const EdgeInsets.all(14),
-                decoration: _cardDecoration(),
+                radius: 16,
                 child: Row(children: [
                   Container(
                     width: 46,
                     height: 46,
                     decoration: BoxDecoration(
-                      color: AppColors.secondary.withValues(alpha:0.1),
-                      borderRadius: BorderRadius.circular(12),
+                      gradient: LinearGradient(
+                        colors: [
+                          AppColors.secondary.withValues(alpha: 0.15),
+                          AppColors.primary.withValues(alpha: 0.08),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(13),
                     ),
                     child: const Icon(Icons.receipt_long_rounded,
                         color: AppColors.secondary, size: 22),
@@ -646,14 +680,31 @@ class _SectionTitle extends StatelessWidget {
   const _SectionTitle(this.title);
 
   @override
-  Widget build(BuildContext context) => Text(
-        title,
-        style: const TextStyle(
-          fontFamily: 'Poppins',
-          fontSize: 14,
-          fontWeight: FontWeight.w700,
-          color: AppColors.textPrimary,
-        ),
+  Widget build(BuildContext context) => Row(
+        children: [
+          Container(
+            width: 3,
+            height: 18,
+            margin: const EdgeInsets.only(right: 8),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [AppColors.primary, AppColors.secondary],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          Text(
+            title,
+            style: const TextStyle(
+              fontFamily: 'Poppins',
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textPrimary,
+            ),
+          ),
+        ],
       );
 }
 
@@ -716,15 +767,22 @@ class _EmptyState extends StatelessWidget {
             padding: const EdgeInsets.all(32),
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               Container(
-                width: 72,
-                height: 72,
+                width: 76,
+                height: 76,
                 decoration: BoxDecoration(
-                  color: AppColors.textHint.withValues(alpha:0.1),
+                  gradient: LinearGradient(
+                    colors: [
+                      AppColors.primary.withValues(alpha: 0.1),
+                      AppColors.secondary.withValues(alpha: 0.05),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
                   shape: BoxShape.circle,
                 ),
-                child: Icon(icon, size: 36, color: AppColors.textHint),
+                child: Icon(icon, size: 36, color: AppColors.primary.withValues(alpha: 0.5)),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 18),
               Text(title,
                   style: const TextStyle(
                     fontFamily: 'Poppins',
@@ -732,14 +790,14 @@ class _EmptyState extends StatelessWidget {
                     fontWeight: FontWeight.w600,
                     color: AppColors.textSecondary,
                   )),
-              const SizedBox(height: 6),
+              const SizedBox(height: 8),
               Text(subtitle,
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     fontFamily: 'Poppins',
                     fontSize: 12,
                     color: AppColors.textHint,
-                    height: 1.5,
+                    height: 1.6,
                   )),
             ]),
           ),

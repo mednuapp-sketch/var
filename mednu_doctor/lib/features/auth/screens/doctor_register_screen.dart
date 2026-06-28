@@ -1,5 +1,9 @@
 import 'dart:io';
+import 'dart:math';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/doctor_auth_service.dart';
@@ -7,6 +11,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/services/image_upload_service.dart';
+import '../../../core/widgets/ux_widgets.dart';
 
 class DoctorRegisterScreen extends StatefulWidget {
   const DoctorRegisterScreen({super.key});
@@ -67,6 +72,9 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
   File? _renewalCertFile;
   File? _profilePhotoFile;
 
+  // ── Signature ─────────────────────────────────────────────────────────────
+  final _sigController = _SignatureController();
+
   // ── Step 4: Declaration ───────────────────────────────────────────────────
   bool _declarationAccepted = false;
   bool _termsAccepted       = false;
@@ -100,7 +108,8 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
       _specCertFile    != null &&
       _mbbsRegCertFile != null &&
       _renewalCertFile != null &&
-      _profilePhotoFile != null;
+      _profilePhotoFile != null &&
+      _sigController.hasSignature;
 
   void _nextPage() => _pageController.nextPage(
       duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
@@ -117,8 +126,14 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
   }
 
   bool _validatePage2() {
-    if (_selectedSpec == 'Other' && _otherSpecCtrl.text.trim().isEmpty) {
-      _snack('Please specify your specialization'); return false;
+    if (_selectedSpec == 'Other') {
+      final customSpec = _otherSpecCtrl.text.trim();
+      if (customSpec.isEmpty) {
+        _snack('Please specify your specialization'); return false;
+      }
+      if (customSpec.length > 100) {
+        _snack('Specialization must be under 100 characters'); return false;
+      }
     }
     if (_regNoCtrl.text.trim().isEmpty) {
       _snack('Please enter your registration number'); return false;
@@ -195,6 +210,17 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
     setState(() { _isLoading = true; _uploadStatus = 'Uploading documents…'; });
 
     try {
+      // Export signature as PNG bytes
+      if (mounted) setState(() => _uploadStatus = 'Exporting signature…');
+      final sigBytes = await _sigController.toBytes();
+      if (sigBytes == null) {
+        if (mounted) {
+          setState(() { _isLoading = false; _uploadStatus = ''; });
+          _snack('Could not export signature. Please redraw and try again.');
+        }
+        return;
+      }
+
       // Upload all 5 documents to Firebase Storage
       final uploads = <String, Future<String>>{
         'mbbs_degree':    ImageUploadService.uploadDoctorDocument(file: _mbbsDegreeFile!,  uid: uid, docType: 'mbbs_degree'),
@@ -209,6 +235,12 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
         if (mounted) setState(() => _uploadStatus = 'Uploading ${_docLabel(entry.key)}…');
         urls[entry.key] = await entry.value;
       }
+
+      if (mounted) setState(() => _uploadStatus = 'Uploading signature…');
+      final signatureUrl = await ImageUploadService.uploadDoctorSignatureBytes(
+        bytes: sigBytes,
+        uid: uid,
+      );
 
       if (mounted) setState(() => _uploadStatus = 'Saving profile…');
 
@@ -226,6 +258,7 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
         gender:             _selectedGender,
         registrationNumber: _regNoCtrl.text.trim(),
         documentUrls:       urls,
+        signatureUrl:       signatureUrl,
       );
 
       if (mounted) context.go(AppRoutes.verificationPending);
@@ -252,20 +285,31 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Doctor Registration'),
+        title: const Text('Doctor Registration',
+            style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 18, color: Colors.white)),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
           onPressed: () {
             if (_currentPage > 0) {
               _pageController.previousPage(
                   duration: const Duration(milliseconds: 300),
                   curve: Curves.easeInOut);
             } else {
-              context.pop();
+              context.canPop() ? context.pop() : context.go(AppRoutes.login);
             }
           },
         ),
+        backgroundColor: Colors.transparent,
         elevation: 0,
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFF880E4F), Color(0xFFC2185B), Color(0xFF7B1FA2)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
       ),
       body: Column(
         children: [
@@ -293,8 +337,14 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
   // ── Step progress bar ─────────────────────────────────────────────────────
 
   Widget _buildStepBar() => Container(
-    color: Colors.white,
-    padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+    decoration: const BoxDecoration(
+      gradient: LinearGradient(
+        colors: [Color(0xFF7B1FA2), Color(0xFFC2185B)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ),
+    ),
+    padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
     child: Row(
       children: List.generate(4, (i) {
         final isActive = i == _currentPage;
@@ -307,14 +357,23 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
                   duration: const Duration(milliseconds: 250),
                   width: 32, height: 32,
                   decoration: BoxDecoration(
-                    color: isDone ? AppColors.success
-                        : isActive ? AppColors.primary
-                        : AppColors.divider,
+                    color: isDone
+                        ? AppColors.success
+                        : isActive
+                            ? Colors.white
+                            : Colors.white.withValues(alpha: 0.25),
                     shape: BoxShape.circle,
+                    boxShadow: isActive ? [
+                      BoxShadow(color: Colors.black.withValues(alpha: 0.18), blurRadius: 8, offset: const Offset(0, 2)),
+                    ] : null,
                   ),
                   child: Icon(
                     isDone ? Icons.check_rounded : _stepIcons[i],
-                    color: (isDone || isActive) ? Colors.white : AppColors.textHint,
+                    color: isDone
+                        ? Colors.white
+                        : isActive
+                            ? AppColors.primary
+                            : Colors.white.withValues(alpha: 0.7),
                     size: 16,
                   ),
                 ),
@@ -324,8 +383,8 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
                   style: TextStyle(
                     fontFamily: 'Poppins',
                     fontSize: 9,
-                    fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
-                    color: isActive ? AppColors.primary : AppColors.textHint,
+                    fontWeight: isActive ? FontWeight.w700 : FontWeight.w400,
+                    color: isActive ? Colors.white : Colors.white.withValues(alpha: 0.65),
                   ),
                 ),
               ]),
@@ -336,7 +395,7 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
                   duration: const Duration(milliseconds: 250),
                   height: 2,
                   margin: const EdgeInsets.only(bottom: 18),
-                  color: isDone ? AppColors.success : AppColors.divider,
+                  color: isDone ? AppColors.success : Colors.white.withValues(alpha: 0.3),
                 ),
               ),
           ]),
@@ -559,18 +618,99 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
         onTap: () => _pickDoc('Profile Photo', (f) => _profilePhotoFile = f),
       ),
       const SizedBox(height: 20),
+
+      // ── Doctor Signature ──────────────────────────────────────────────
+      Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Container(
+              width: 40, height: 40,
+              decoration: BoxDecoration(
+                gradient: AppColors.primaryGradient,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.draw_rounded, color: Colors.white, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Doctor Signature *', style: AppTextStyles.labelLarge),
+              Text('Sign in the box below using your finger',
+                  style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
+            ])),
+            TextButton.icon(
+              onPressed: () {
+                _sigController.clear();
+                setState(() {});
+              },
+              icon: const Icon(Icons.refresh_rounded, size: 14),
+              label: const Text('Clear', style: TextStyle(fontFamily: 'Poppins', fontSize: 12)),
+            ),
+          ]),
+          const SizedBox(height: 12),
+          Container(
+            height: 160,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF9F9FF),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: _sigController.hasSignature
+                    ? AppColors.success
+                    : AppColors.primary.withValues(alpha: 0.4),
+                width: 1.5,
+              ),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(9),
+              child: _SignaturePad(controller: _sigController, onChanged: () => setState(() {})),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(children: [
+            Icon(
+              _sigController.hasSignature ? Icons.check_circle_rounded : Icons.info_outline_rounded,
+              size: 14,
+              color: _sigController.hasSignature ? AppColors.success : AppColors.textHint,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              _sigController.hasSignature
+                  ? 'Signature captured'
+                  : 'This signature will appear on every prescription',
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 11,
+                color: _sigController.hasSignature ? AppColors.success : AppColors.textHint,
+              ),
+            ),
+          ]),
+        ]),
+      ),
+      const SizedBox(height: 16),
+
       // Progress indicator
       _DocsProgressBar(
         uploaded: [_mbbsDegreeFile, _specCertFile, _mbbsRegCertFile, _renewalCertFile, _profilePhotoFile]
             .where((f) => f != null).length,
         total: 5,
+        signatureDone: _sigController.hasSignature,
       ),
       const SizedBox(height: 24),
       _NextButton(
         label: 'Next: Declaration',
         icon: Icons.arrow_forward_rounded,
         enabled: _allDocsUploaded,
-        onTap: _allDocsUploaded ? _nextPage : () => _snack('Please upload all 5 required documents'),
+        onTap: _allDocsUploaded
+            ? _nextPage
+            : () => _snack(
+                !_sigController.hasSignature
+                    ? 'Please draw your signature'
+                    : 'Please upload all 5 required documents'),
       ),
     ]),
   );
@@ -713,26 +853,15 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
 
       const SizedBox(height: 24),
 
-      // Submit button
-      SizedBox(
+      GradientButton(
+        label: 'Submit for Admin Approval',
+        icon: Icons.send_rounded,
         width: double.infinity,
-        child: ElevatedButton(
-          onPressed: (_declarationAccepted && _termsAccepted) ? _submit : null,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.primary,
-            disabledBackgroundColor: AppColors.divider,
-            foregroundColor: Colors.white,
-            elevation: 0,
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          ),
-          child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-            Icon(Icons.send_rounded, size: 18),
-            SizedBox(width: 8),
-            Text('Submit for Admin Approval',
-                style: TextStyle(fontFamily: 'Poppins', fontSize: 15, fontWeight: FontWeight.w700)),
-          ]),
-        ),
+        height: 54,
+        colors: (_declarationAccepted && _termsAccepted)
+            ? null
+            : [AppColors.divider, AppColors.divider],
+        onTap: (_declarationAccepted && _termsAccepted) ? _submit : () => _snack('Please accept the declaration and terms to proceed'),
       ),
       const SizedBox(height: 12),
       Center(child: Text(
@@ -779,24 +908,13 @@ class _NextButton extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) => SizedBox(
+  Widget build(BuildContext context) => GradientButton(
+    label: label,
+    icon: icon,
     width: double.infinity,
-    child: ElevatedButton(
-      onPressed: enabled ? onTap : null,
-      style: ElevatedButton.styleFrom(
-        backgroundColor: AppColors.primary,
-        disabledBackgroundColor: AppColors.divider,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        padding: const EdgeInsets.symmetric(vertical: 15),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      ),
-      child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-        Text(label, style: const TextStyle(fontFamily: 'Poppins', fontSize: 15, fontWeight: FontWeight.w600)),
-        const SizedBox(width: 8),
-        Icon(icon, size: 18),
-      ]),
-    ),
+    height: 52,
+    colors: enabled ? null : [AppColors.divider, AppColors.divider],
+    onTap: onTap,
   );
 }
 
@@ -883,12 +1001,15 @@ class _DocUploadTile extends StatelessWidget {
 
 class _DocsProgressBar extends StatelessWidget {
   final int uploaded, total;
-  const _DocsProgressBar({required this.uploaded, required this.total});
+  final bool signatureDone;
+  const _DocsProgressBar({required this.uploaded, required this.total, this.signatureDone = false});
 
   @override
   Widget build(BuildContext context) {
-    final pct = uploaded / total;
-    final allDone = uploaded == total;
+    final steps = total + 1; // docs + signature
+    final done = uploaded + (signatureDone ? 1 : 0);
+    final pct = done / steps;
+    final allDone = done == steps;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -903,7 +1024,7 @@ class _DocsProgressBar extends StatelessWidget {
               color: allDone ? AppColors.success : AppColors.warning, size: 18),
           const SizedBox(width: 8),
           Text(
-            allDone ? 'All documents uploaded!' : '$uploaded of $total documents uploaded',
+            allDone ? 'All documents & signature done!' : '$done of $steps steps complete',
             style: TextStyle(
                 fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w600,
                 color: allDone ? AppColors.success : AppColors.warning),
@@ -939,6 +1060,125 @@ class _DeclText extends StatelessWidget {
     ),
   );
 }
+
+// ── Signature Pad ─────────────────────────────────────────────────────────────
+
+class _SignatureController {
+  _SignaturePadState? _state;
+
+  bool get hasSignature => _state?._isEmpty == false;
+
+  void clear() => _state?._clear();
+
+  Future<Uint8List?> toBytes() async {
+    return _state?._toBytes();
+  }
+}
+
+class _SignaturePad extends StatefulWidget {
+  final _SignatureController controller;
+  final VoidCallback onChanged;
+  const _SignaturePad({required this.controller, required this.onChanged});
+
+  @override
+  State<_SignaturePad> createState() => _SignaturePadState();
+}
+
+class _SignaturePadState extends State<_SignaturePad> {
+  final _repaintKey = GlobalKey();
+  final List<List<Offset>> _strokes = [];
+  List<Offset>? _current;
+
+  bool get _isEmpty => _strokes.isEmpty || _strokes.every((s) => s.isEmpty);
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller._state = this;
+  }
+
+  void _clear() {
+    setState(() => _strokes.clear());
+    widget.onChanged();
+  }
+
+  Future<Uint8List?> _toBytes() async {
+    final boundary = _repaintKey.currentContext?.findRenderObject()
+        as RenderRepaintBoundary?;
+    if (boundary == null) return null;
+    final image = await boundary.toImage(pixelRatio: 3.0);
+    final data = await image.toByteData(format: ui.ImageByteFormat.png);
+    return data?.buffer.asUint8List();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return RepaintBoundary(
+      key: _repaintKey,
+      child: GestureDetector(
+        onPanStart: (d) {
+          setState(() {
+            _current = [d.localPosition];
+            _strokes.add(_current!);
+          });
+        },
+        onPanUpdate: (d) {
+          setState(() => _current?.add(d.localPosition));
+          widget.onChanged();
+        },
+        onPanEnd: (_) => _current = null,
+        child: CustomPaint(
+          painter: _SignaturePainter(_strokes),
+          child: Container(
+            color: const Color(0xFFF9F9FF),
+            child: _isEmpty
+                ? const Center(
+                    child: Text(
+                      'Sign here',
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 13,
+                        color: Color(0xFFBBBBCC),
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  )
+                : null,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SignaturePainter extends CustomPainter {
+  final List<List<Offset>> strokes;
+  _SignaturePainter(this.strokes);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = const Color(0xFF1A1A2E)
+      ..strokeWidth = 2.5
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..style = PaintingStyle.stroke;
+
+    for (final stroke in strokes) {
+      if (stroke.length < 2) continue;
+      final path = Path()..moveTo(stroke.first.dx, stroke.first.dy);
+      for (int i = 1; i < stroke.length; i++) {
+        path.lineTo(stroke[i].dx, stroke[i].dy);
+      }
+      canvas.drawPath(path, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _SignaturePainter old) => true;
+}
+
+// ── Field ─────────────────────────────────────────────────────────────────────
 
 Widget _Field(String label, TextEditingController ctrl, String hint,
     {TextInputType type = TextInputType.text}) =>

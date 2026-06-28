@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/widgets/service_booking_sheet.dart';
+import '../../../core/widgets/ux_widgets.dart';
 
 class PhysioScreen extends StatelessWidget {
   const PhysioScreen({super.key});
@@ -175,38 +176,21 @@ class PhysioScreen extends StatelessWidget {
   }
 
   Widget _buildSkeleton() {
-    return Column(children: List.generate(3, (_) => Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      height: 90,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.divider),
-      ),
-    )));
-  }
-
-  Widget _buildError() {
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(children: [
-        Icon(Icons.wifi_off_rounded, size: 40, color: Colors.grey[300]),
-        const SizedBox(height: 10),
-        Text('Could not load services', style: AppTextStyles.bodyMedium),
-      ]),
+    return AppShimmer(
+      child: Column(children: List.generate(3, (_) => Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        height: 82,
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+      ))),
     );
   }
 
-  Widget _buildEmpty() {
-    return Padding(
-      padding: const EdgeInsets.all(32),
-      child: Column(children: [
-        Icon(Icons.fitness_center_outlined, size: 56, color: Colors.grey[300]),
-        const SizedBox(height: 12),
-        Text('No services available yet', style: AppTextStyles.bodyMedium, textAlign: TextAlign.center),
-        const SizedBox(height: 6),
-        Text('Physiotherapy services will appear here once added', style: AppTextStyles.bodySmall, textAlign: TextAlign.center),
-      ]),
-    );
-  }
+  Widget _buildError() => AppErrorState(message: 'Could not load services. Please try again.');
+
+  Widget _buildEmpty() => AppEmptyState(
+    icon: Icons.fitness_center_outlined,
+    title: 'No Services Available',
+    message: 'Physiotherapy services will appear here once added.',
+    iconColor: _themeColor,
+  );
 }

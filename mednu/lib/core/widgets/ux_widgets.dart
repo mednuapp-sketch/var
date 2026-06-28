@@ -5,6 +5,7 @@
 // ============================================================
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import '../constants/app_colors.dart';
 import '../constants/app_text_styles.dart';
 
@@ -553,10 +554,10 @@ class _AppButtonState extends State<AppButton>
   }
 
   Color _darken(Color c, double amount) => Color.fromARGB(
-      c.alpha,
-      (c.red * (1 - amount)).round().clamp(0, 255),
-      (c.green * (1 - amount)).round().clamp(0, 255),
-      (c.blue * (1 - amount)).round().clamp(0, 255));
+      (c.a * 255).round().clamp(0, 255),
+      (c.r * 255 * (1 - amount)).round().clamp(0, 255),
+      (c.g * 255 * (1 - amount)).round().clamp(0, 255),
+      (c.b * 255 * (1 - amount)).round().clamp(0, 255));
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -679,7 +680,7 @@ class GradientAppBar extends StatelessWidget implements PreferredSizeWidget {
           ? IconButton(
               icon: const Icon(Icons.arrow_back_ios_new_rounded,
                   color: Colors.white, size: 20),
-              onPressed: () => Navigator.of(context).maybePop(),
+              onPressed: () => context.pop(),
             )
           : leading,
       title: Text(title,
@@ -858,7 +859,7 @@ class StatusBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: EdgeInsets.symmetric(
-          horizontal: icon != null || dot ? 10 : 10, vertical: 4),
+          horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
         color: color.withValues(alpha:0.12),
         borderRadius: BorderRadius.circular(20),

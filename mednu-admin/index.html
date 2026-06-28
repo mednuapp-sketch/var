@@ -140,7 +140,14 @@
         <i class="ti ti-clipboard-list nav-icon" aria-hidden="true"></i> Requests
         <span class="nav-badge nav-badge-red" id="nav-requests-count" style="display:none;">0</span>
       </div>
+      <div class="nav-item" data-tab="caregivers" data-title="Caregivers Management">
+        <i class="ti ti-heart-handshake nav-icon" aria-hidden="true"></i> Caregivers
+        <span class="nav-badge nav-badge-green" id="nav-caregivers-count" style="display:none;">0</span>
+      </div>
       <div class="nav-section-label">Logs &amp; Audit</div>
+      <div class="nav-item" data-tab="prescriptions" data-title="Prescription Lookup">
+        <i class="ti ti-file-description nav-icon" aria-hidden="true"></i> Prescriptions
+      </div>
       <div class="nav-item" data-tab="operation-logs" data-title="Operation Logs">
         <i class="ti ti-activity nav-icon" aria-hidden="true"></i> Operation Logs
         <span class="nav-badge nav-badge-red" id="nav-error-logs-count" style="display:none;">0</span>
@@ -2283,6 +2290,111 @@
 
       </div><!-- /tab-broadcast -->
 
+      <!-- ===== PRESCRIPTIONS TAB ===== -->
+      <div id="tab-prescriptions" class="tab-section">
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-header">
+            <span class="card-title" style="display:flex;align-items:center;gap:8px;">
+              <i class="ti ti-file-description" style="color:#C2185B;"></i> Prescription Lookup
+            </span>
+          </div>
+          <div class="card-body">
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;">
+              Enter a prescription Rx ID (e.g. <strong>MN-20260628-A3F2KR</strong>) to view full prescription details.
+            </p>
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+              <input id="rx-lookup-input" class="form-input" placeholder="Enter Rx ID…"
+                style="flex:1;min-width:200px;max-width:380px;font-family:'Poppins',sans-serif;"
+                onkeydown="if(event.key==='Enter') lookupPrescription()" />
+              <button class="btn btn-primary" onclick="lookupPrescription()" style="height:40px;padding:0 20px;">
+                <i class="ti ti-search"></i> Lookup
+              </button>
+              <button class="btn" onclick="clearPrescriptionLookup()" style="height:40px;padding:0 14px;background:var(--bg-alt);border:1px solid var(--border);">
+                Clear
+              </button>
+            </div>
+            <div id="rx-lookup-status" style="margin-top:12px;font-size:13px;color:var(--text-muted);"></div>
+          </div>
+        </div>
+
+        <!-- Result Card -->
+        <div id="rx-result-card" style="display:none;">
+          <div class="card">
+            <div class="card-header" style="background:linear-gradient(135deg,#C2185B,#7B1FA2);border-radius:12px 12px 0 0;">
+              <span class="card-title" style="color:#fff;display:flex;align-items:center;gap:10px;">
+                <i class="ti ti-file-check"></i>
+                <span id="rx-result-id" style="font-size:14px;letter-spacing:0.5px;"></span>
+              </span>
+              <span id="rx-result-status-pill" class="pill" style="margin-left:auto;"></span>
+            </div>
+            <div class="card-body" style="padding:20px;">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
+                <div style="background:var(--bg-alt);border-radius:10px;padding:14px;">
+                  <div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:1px;margin-bottom:6px;">DOCTOR</div>
+                  <div id="rx-doctor-name" style="font-weight:700;font-size:14px;color:var(--text-primary);"></div>
+                  <div id="rx-doctor-spec" style="font-size:12px;color:var(--text-muted);margin-top:2px;"></div>
+                  <div id="rx-doctor-reg" style="font-size:11px;color:var(--text-muted);margin-top:2px;"></div>
+                  <div id="rx-doctor-hospital" style="font-size:11px;color:var(--text-muted);margin-top:2px;"></div>
+                </div>
+                <div style="background:var(--bg-alt);border-radius:10px;padding:14px;">
+                  <div style="font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:1px;margin-bottom:6px;">PATIENT</div>
+                  <div id="rx-patient-name" style="font-weight:700;font-size:14px;color:var(--text-primary);"></div>
+                  <div id="rx-patient-info" style="font-size:12px;color:var(--text-muted);margin-top:2px;"></div>
+                  <div id="rx-patient-phone" style="font-size:11px;color:var(--text-muted);margin-top:2px;"></div>
+                </div>
+              </div>
+              <div style="margin-bottom:16px;font-size:12px;color:var(--text-muted);">
+                <i class="ti ti-calendar"></i> Issued: <span id="rx-date"></span>
+              </div>
+              <div style="margin-bottom:16px;">
+                <div style="font-size:11px;font-weight:700;color:#2E7D32;letter-spacing:1px;margin-bottom:6px;">DIAGNOSIS</div>
+                <div id="rx-diagnosis" style="font-size:14px;font-weight:600;color:var(--text-primary);background:#f0faf0;border-radius:8px;padding:10px 14px;border:1px solid #c8e6c9;"></div>
+              </div>
+              <div id="rx-complaints-wrap" style="margin-bottom:16px;display:none;">
+                <div style="font-size:11px;font-weight:700;color:#C62828;letter-spacing:1px;margin-bottom:6px;">CHIEF COMPLAINTS</div>
+                <div id="rx-complaints" style="font-size:13px;color:var(--text-secondary);background:#fff5f5;border-radius:8px;padding:10px 14px;border:1px solid #ffcdd2;"></div>
+              </div>
+              <div style="margin-bottom:16px;">
+                <div style="font-size:11px;font-weight:700;color:#C2185B;letter-spacing:1px;margin-bottom:8px;">Rx — MEDICINES</div>
+                <div id="rx-medicines" style="overflow-x:auto;">
+                  <table style="width:100%;border-collapse:collapse;font-size:12px;">
+                    <thead>
+                      <tr style="background:#C2185B;color:#fff;">
+                        <th style="padding:7px 10px;text-align:left;">#</th>
+                        <th style="padding:7px 10px;text-align:left;">Medicine</th>
+                        <th style="padding:7px 10px;text-align:left;">Strength</th>
+                        <th style="padding:7px 10px;text-align:left;">Dose</th>
+                        <th style="padding:7px 10px;text-align:left;">Duration</th>
+                        <th style="padding:7px 10px;text-align:left;">Food</th>
+                      </tr>
+                    </thead>
+                    <tbody id="rx-medicines-tbody"></tbody>
+                  </table>
+                </div>
+              </div>
+              <div id="rx-investigations-wrap" style="margin-bottom:16px;display:none;">
+                <div style="font-size:11px;font-weight:700;color:#00838F;letter-spacing:1px;margin-bottom:8px;">INVESTIGATIONS</div>
+                <div id="rx-investigations" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+              </div>
+              <div id="rx-instructions-wrap" style="margin-bottom:16px;display:none;">
+                <div style="font-size:11px;font-weight:700;color:#E65100;letter-spacing:1px;margin-bottom:6px;">SPECIAL INSTRUCTIONS</div>
+                <div id="rx-instructions" style="font-size:12px;color:var(--text-secondary);background:#fff8f0;border-radius:8px;padding:10px 14px;border:1px solid #ffe0b2;"></div>
+              </div>
+              <div id="rx-followup-wrap" style="display:none;margin-bottom:8px;">
+                <div style="background:#fff3e0;border:1px solid #ffcc80;border-radius:8px;padding:10px 14px;font-size:12px;color:#E65100;">
+                  <i class="ti ti-calendar-event"></i> <strong>Follow-up:</strong> <span id="rx-followup-days"></span>
+                </div>
+              </div>
+              <div id="rx-signature-wrap" style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);display:none;">
+                <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;">DOCTOR SIGNATURE</div>
+                <img id="rx-signature-img" src="" alt="Doctor Signature"
+                  style="max-height:70px;max-width:220px;object-fit:contain;border:1px solid var(--border);border-radius:6px;padding:4px;background:#f9f9ff;" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div><!-- /tab-prescriptions -->
+
       <!-- ===== OPERATION LOGS TAB ===== -->
       <div id="tab-operation-logs" class="tab-section">
         <!-- Filter Bar -->
@@ -2706,6 +2818,121 @@
           <button class="btn-primary" id="nutr-modal-save-btn" onclick="saveNutritionist()">
             <i class="ti ti-device-floppy"></i> Save Nutritionist
           </button>
+        </div>
+      </div>
+
+      <!-- ===== CAREGIVERS TAB ===== -->
+      <div id="tab-caregivers" class="tab-section">
+
+        <!-- Add / Edit Caregiver -->
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-header">
+            <span class="card-title" id="caregiver-form-title">Add Caregiver</span>
+            <button class="btn btn-outline" id="cancel-caregiver-btn" style="display:none;" onclick="cancelCaregiverEdit()">
+              <i class="ti ti-x"></i> Cancel
+            </button>
+          </div>
+          <div class="banner-form-grid">
+            <div class="form-group">
+              <label class="form-label">Full Name <span style="color:var(--danger)">*</span></label>
+              <input id="cg-name" type="text" class="form-input" placeholder="e.g. Sunita Devi" maxlength="100" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Role / Type <span style="color:var(--danger)">*</span></label>
+              <select id="cg-type" class="filter-select" style="width:100%;padding:10px 12px;height:auto;">
+                <option value="Nurse">Nurse</option>
+                <option value="Maid">Maid</option>
+                <option value="Attendant">Attendant</option>
+                <option value="Physiotherapist">Physiotherapist</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Gender <span style="color:var(--danger)">*</span></label>
+              <select id="cg-gender" class="filter-select" style="width:100%;padding:10px 12px;height:auto;">
+                <option value="Female">Female</option>
+                <option value="Male">Male</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Location / City <span style="color:var(--danger)">*</span></label>
+              <input id="cg-location" type="text" class="form-input" placeholder="e.g. Hyderabad" maxlength="100" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Specialty / Focus Area</label>
+              <input id="cg-specialty" type="text" class="form-input" placeholder="e.g. Elderly Care, Post-Surgery Care" maxlength="120" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Experience</label>
+              <input id="cg-experience" type="text" class="form-input" placeholder="e.g. 5 years" maxlength="50" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Rate (₹) <span style="color:var(--danger)">*</span></label>
+              <input id="cg-rate" type="number" class="form-input" placeholder="e.g. 600" min="0" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Rate Unit</label>
+              <select id="cg-rate-unit" class="filter-select" style="width:100%;padding:10px 12px;height:auto;">
+                <option value="per_day">Per Day</option>
+                <option value="per_hour">Per Hour</option>
+                <option value="per_week">Per Week</option>
+                <option value="per_month">Per Month</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Rating (0–5)</label>
+              <input id="cg-rating" type="number" class="form-input" placeholder="e.g. 4.8" min="0" max="5" step="0.1" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Phone Number</label>
+              <input id="cg-phone" type="tel" class="form-input" placeholder="e.g. 9876543210" maxlength="15" />
+            </div>
+          </div>
+          <div class="form-group" style="padding:0 0 12px 0;">
+            <label class="form-label">About / Bio</label>
+            <textarea id="cg-bio" class="form-input" rows="2" placeholder="Brief description about the caregiver..." maxlength="400" style="resize:vertical;"></textarea>
+          </div>
+          <div class="banner-form-footer">
+            <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:center;flex:1;">
+              <label class="toggle-label">
+                <input type="checkbox" id="cg-active" checked />
+                <span class="toggle-switch"></span>
+                <span class="toggle-text">Active &amp; visible in app</span>
+              </label>
+            </div>
+            <button id="save-caregiver-btn" class="btn-publish" onclick="saveCaregiver()">
+              <i class="ti ti-device-floppy"></i> Save Caregiver
+            </button>
+          </div>
+        </div>
+
+        <!-- Caregivers List -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">All Caregivers</span>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <input id="caregiver-search" type="text" class="search-input" placeholder="Search name, location..." oninput="filterCaregivers()" />
+              <select id="caregiver-type-filter" class="filter-select" onchange="filterCaregivers()">
+                <option value="all">All Types</option>
+                <option value="Nurse">Nurse</option>
+                <option value="Maid">Maid</option>
+                <option value="Attendant">Attendant</option>
+                <option value="Physiotherapist">Physiotherapist</option>
+              </select>
+              <select id="caregiver-gender-filter" class="filter-select" onchange="filterCaregivers()">
+                <option value="all">All Genders</option>
+                <option value="Female">Female</option>
+                <option value="Male">Male</option>
+                <option value="Other">Other</option>
+              </select>
+              <select id="caregiver-status-filter" class="filter-select" onchange="filterCaregivers()">
+                <option value="all">All</option>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </select>
+            </div>
+          </div>
+          <div id="caregivers-list"><div class="loading">Loading caregivers…</div></div>
         </div>
       </div>
 

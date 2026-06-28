@@ -78,13 +78,13 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen>
       if (_history.length > 8) _history = _history.sublist(0, 8);
     });
     final prefs = await SharedPreferences.getInstance();
-    prefs.setStringList('mednu_search_history', _history);
+    await prefs.setStringList('mednu_search_history', _history);
   }
 
   Future<void> _clearHistory() async {
     setState(() => _history = []);
     final prefs = await SharedPreferences.getInstance();
-    prefs.remove('mednu_search_history');
+    await prefs.remove('mednu_search_history');
   }
 
   // ── Search Logic ───────────────────────────────────────────────────────────
@@ -163,9 +163,17 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen>
       final specialty = item.extra!['specialty'] as String? ?? '';
       ctx.push(
           '${AppRoutes.doctors}?specialty=${Uri.encodeComponent(specialty)}&mode=filter');
+    } else if (item.category == SearchCategory.hospital && _query.isNotEmpty) {
+      ctx.push('${item.route}?q=${Uri.encodeComponent(_query)}');
     } else {
       ctx.push(item.route);
     }
+  }
+
+  void _openHospitalsSearch() {
+    _saveToHistory(_query);
+    context.push(
+        '${AppRoutes.hospitals}?q=${Uri.encodeComponent(_query)}');
   }
 
   void _navigateDoctor(BuildContext ctx, Map<String, dynamic> doc) {
@@ -204,7 +212,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen>
       titleSpacing: 0,
       leading: IconButton(
         icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
-        onPressed: () => Navigator.of(context).pop(),
+        onPressed: () => context.pop(),
       ),
       title: TextField(
         controller: _ctrl,
@@ -219,7 +227,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen>
           if (v.trim().isNotEmpty) _saveToHistory(v.trim());
         },
         decoration: InputDecoration(
-          hintText: 'Doctors, hospitals, lab tests...',
+          hintText: 'Doctors, reports, hospitals, labs...',
           border: InputBorder.none,
           hintStyle: AppTextStyles.bodyLarge.copyWith(
             color: AppColors.textHint,
@@ -287,7 +295,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen>
                           setState(() => _history.remove(h));
                           final prefs =
                               await SharedPreferences.getInstance();
-                          prefs.setStringList(
+                          await prefs.setStringList(
                               'mednu_search_history', _history);
                         },
                       ))
@@ -324,12 +332,12 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen>
           ),
           const SizedBox(height: 12),
           GridView.count(
-            crossAxisCount: 2,
+            crossAxisCount: 3,
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             mainAxisSpacing: 10,
             crossAxisSpacing: 10,
-            childAspectRatio: 2.4,
+            childAspectRatio: 1.6,
             children: _quickItems
                 .map((item) => _QuickAccessTile(
                       item: item,
@@ -395,6 +403,26 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen>
       keywords: [],
     ),
     SearchResult(
+      id: '_q_reports',
+      title: 'Health Reports',
+      subtitle: '',
+      route: AppRoutes.records,
+      icon: Icons.folder_special_rounded,
+      color: Color(0xFF1565C0),
+      category: SearchCategory.service,
+      keywords: [],
+    ),
+    SearchResult(
+      id: '_q_bookings',
+      title: 'My Bookings',
+      subtitle: '',
+      route: AppRoutes.myServices,
+      icon: Icons.bookmark_added_rounded,
+      color: Color(0xFF0288D1),
+      category: SearchCategory.service,
+      keywords: [],
+    ),
+    SearchResult(
       id: '_q_emergency',
       title: 'Emergency',
       subtitle: '',
@@ -407,6 +435,16 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen>
   ];
 
   static const _browseItems = [
+    SearchResult(
+      id: '_b_reports',
+      title: 'Reports',
+      subtitle: '',
+      route: AppRoutes.records,
+      icon: Icons.folder_special_rounded,
+      color: Color(0xFF1565C0),
+      category: SearchCategory.service,
+      keywords: [],
+    ),
     SearchResult(
       id: '_b_ambulance',
       title: 'Ambulance',
@@ -484,6 +522,46 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen>
       route: AppRoutes.nutrition,
       icon: Icons.restaurant_menu_rounded,
       color: Color(0xFF558B2F),
+      category: SearchCategory.service,
+      keywords: [],
+    ),
+    SearchResult(
+      id: '_b_wallet',
+      title: 'Wallet',
+      subtitle: '',
+      route: AppRoutes.wallet,
+      icon: Icons.account_balance_wallet_rounded,
+      color: Color(0xFF2E7D32),
+      category: SearchCategory.service,
+      keywords: [],
+    ),
+    SearchResult(
+      id: '_b_referral',
+      title: 'Refer & Earn',
+      subtitle: '',
+      route: AppRoutes.referral,
+      icon: Icons.card_giftcard_rounded,
+      color: Color(0xFFE91E63),
+      category: SearchCategory.service,
+      keywords: [],
+    ),
+    SearchResult(
+      id: '_b_premium',
+      title: 'Premium',
+      subtitle: '',
+      route: AppRoutes.premium,
+      icon: Icons.workspace_premium_rounded,
+      color: Color(0xFFFF8F00),
+      category: SearchCategory.service,
+      keywords: [],
+    ),
+    SearchResult(
+      id: '_b_family',
+      title: 'Family',
+      subtitle: '',
+      route: AppRoutes.family,
+      icon: Icons.family_restroom_rounded,
+      color: Color(0xFF7B1FA2),
       category: SearchCategory.service,
       keywords: [],
     ),
@@ -600,7 +678,15 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen>
               ],
 
               if (_isLoadingFirestore && _firestoreDoctors.isEmpty)
-                ...List.generate(4, (_) => const SkeletonListTile()),
+                ...List.generate(4, (_) => const _SearchResultSkeleton()),
+
+              // Always show a "Search in hospitals" shortcut
+              if (_activeFilter == 'All' || _activeFilter == 'Services')
+                _HospitalSearchTile(
+                  query: _query,
+                  isDark: isDark,
+                  onTap: _openHospitalsSearch,
+                ),
             ],
           ),
         ),
@@ -1378,6 +1464,105 @@ class _BrowseChip extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// =============================================================================
+// Hospital Search Suggestion Tile
+// =============================================================================
+
+class _HospitalSearchTile extends StatelessWidget {
+  final String query;
+  final bool isDark;
+  final VoidCallback onTap;
+
+  const _HospitalSearchTile({
+    required this.query,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const blue = Color(0xFF1565C0);
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: isDark
+              ? blue.withValues(alpha: 0.12)
+              : blue.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: blue.withValues(alpha: isDark ? 0.25 : 0.15),
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: blue.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.local_hospital_rounded,
+                  color: blue, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Search hospitals for "$query"',
+                    style: AppTextStyles.labelLarge.copyWith(
+                      color: isDark ? Colors.white : AppColors.textPrimary,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Find nearby hospitals matching your search',
+                    style: AppTextStyles.bodySmall
+                        .copyWith(color: AppColors.textSecondary),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Icon(Icons.arrow_forward_ios_rounded,
+                size: 14, color: blue),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SearchResultSkeleton extends StatelessWidget {
+  const _SearchResultSkeleton();
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.symmetric(vertical: 8),
+      child: AppShimmer(
+        child: Row(children: [
+          SkeletonCircle(size: 44),
+          SizedBox(width: 12),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            SkeletonBox(width: double.infinity, height: 14, radius: 4),
+            SizedBox(height: 5),
+            SkeletonBox(width: 160, height: 11, radius: 4),
+          ])),
+          SizedBox(width: 8),
+          SkeletonBox(width: 36, height: 36, radius: 10),
+        ]),
       ),
     );
   }

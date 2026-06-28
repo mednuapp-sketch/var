@@ -15,8 +15,8 @@ class OtpPage extends ConsumerStatefulWidget {
 }
 
 class _OtpPageState extends ConsumerState<OtpPage> {
-  final List<TextEditingController> _ctrls = List.generate(6, (_) => TextEditingController());
-  final List<FocusNode> _nodes = List.generate(6, (_) => FocusNode());
+  final List<TextEditingController> _ctrls = List.generate(4, (_) => TextEditingController());
+  final List<FocusNode> _nodes = List.generate(4, (_) => FocusNode());
   int _timerKey = 0;
 
   Stream<int> get _timer =>
@@ -32,23 +32,22 @@ class _OtpPageState extends ConsumerState<OtpPage> {
   }
 
   void _onDigit(int index, String value) {
-    if (value.isNotEmpty && index < 5) {
+    if (value.isNotEmpty && index < 3) {
       _nodes[index + 1].requestFocus();
     }
     if (value.isEmpty && index > 0) {
       _nodes[index - 1].requestFocus();
     }
-    // Use microtask so all controller texts are settled before reading _otp
     if (value.isNotEmpty) {
       Future.microtask(() {
-        if (_otp.length == 6 && mounted) _verify();
+        if (_otp.length == 4 && mounted) _verify();
       });
     }
   }
 
   void _verify() {
     final otp = _otp;
-    if (otp.length != 6) return;
+    if (otp.length != 4) return;
     ref.read(authNotifierProvider.notifier).verifyOtp(otp);
   }
 
@@ -87,18 +86,19 @@ class _OtpPageState extends ConsumerState<OtpPage> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'We\'ve sent a 6-digit OTP to\n+91 ${widget.phone}',
+                  'We\'ve sent a 4-digit OTP to\n+91 ${widget.phone}',
                   textAlign: TextAlign.center,
                   style: GoogleFonts.poppins(fontSize: 14, color: AppColors.textSecondary, height: 1.6),
                 ),
                 const SizedBox(height: 36),
                 Row(
+                  key: ValueKey('otp_row_$_timerKey'),
                   mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(6, (i) => _OtpBox(
+                  children: List.generate(4, (i) => _OtpBox(
                     controller: _ctrls[i],
                     focusNode: _nodes[i],
                     onChanged: (v) => _onDigit(i, v),
-                    autoFocus: i == 0,
+                    autoFocus: i == 0 && _timerKey == 0,
                   )),
                 ),
                 const SizedBox(height: 12),
@@ -137,7 +137,7 @@ class _OtpPageState extends ConsumerState<OtpPage> {
                           ),
                           child: Center(
                             child: Text(
-                              'Enter all 6 digits to verify automatically',
+                              'Enter all 4 digits to verify automatically',
                               style: GoogleFonts.poppins(fontSize: 13, color: AppColors.textHint),
                             ),
                           ),
@@ -156,7 +156,11 @@ class _OtpPageState extends ConsumerState<OtpPage> {
                           onTap: () {
                             setState(() => _timerKey++);
                             for (final c in _ctrls) c.clear();
-                            _nodes[0].requestFocus();
+                            // Defer focus until after the frame rebuild so the
+                            // first box's FocusNode is fully re-attached.
+                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                              if (mounted) _nodes[0].requestFocus();
+                            });
                             ref.read(authNotifierProvider.notifier).sendOtp(widget.phone);
                           },
                           child: Text('Resend OTP', style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary)),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../models/saved_address.dart';
 import '../providers/saved_addresses_provider.dart';
@@ -169,7 +170,7 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () => context.pop(),
         ),
         title: Text(
           _isEdit ? 'Edit Address' : 'Add New Address',

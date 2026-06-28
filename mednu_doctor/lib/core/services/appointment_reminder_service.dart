@@ -1,12 +1,16 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest_all.dart' as tz_data;
 
-/// Schedules and cancels local appointment-reminder notifications.
+const _kReminderMinutes = 'appt_reminder_minutes';
+const _kDefaultMinutes  = 15;
+
+/// Schedules and cancels local appointment-reminder notifications for doctors.
 ///
-/// Two reminders are fired per upcoming appointment:
-///   • T-10 min  — "Consultation starting in 10 minutes"
-///   • T-5  min  — "Patient may already be waiting — Start now"
+/// Two notifications are fired per upcoming appointment:
+///   • T-N min  — configurable (default 15), stored in SharedPreferences
+///   • T-0 min  — fires at the exact slot time as a "starting now" alert
 ///
 /// Must call [init] once during app startup before any other method.
 class AppointmentReminderService {
@@ -32,21 +36,27 @@ class AppointmentReminderService {
 
   static const _notifDetails = NotificationDetails(android: _androidDetails);
 
+  // ── Reminder preference ─────────────────────────────────────────────────────
+
+  static Future<int> getReminderMinutes() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_kReminderMinutes) ?? _kDefaultMinutes;
+  }
+
+  static Future<void> setReminderMinutes(int minutes) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_kReminderMinutes, minutes);
+  }
+
   // ── Initialisation ─────────────────────────────────────────────────────────
 
   static Future<void> init() async {
     if (_initialised) return;
-    // Load the full timezone database so tz.local resolves to the device's
-    // IANA timezone (e.g. "Asia/Kolkata") on Android/iOS.
     tz_data.initializeTimeZones();
-    // Sync tz.local with the platform timezone so scheduled notifications fire
-    // at the correct wall-clock time regardless of the device's UTC offset.
     final platformTz = DateTime.now().timeZoneName;
     try {
       tz.setLocalLocation(tz.getLocation(platformTz));
     } catch (_) {
-      // timeZoneName may be an abbreviation (e.g. "IST") rather than IANA name.
-      // Fall back to offset-based lookup: find any zone whose current offset matches.
       final offsetMinutes = DateTime.now().timeZoneOffset.inMinutes;
       for (final loc in tz.timeZoneDatabase.locations.values) {
         try {
@@ -85,23 +95,25 @@ class AppointmentReminderService {
     if (slotTime == null) return;
 
     final now = DateTime.now();
+    final minutes = await getReminderMinutes();
+    final timeLabel = minutes >= 60
+        ? '${minutes ~/ 60} hour${minutes >= 120 ? 's' : ''}'
+        : '$minutes minute${minutes != 1 ? 's' : ''}';
 
-    final fiveMinBefore = slotTime.subtract(const Duration(minutes: 5));
-
-    if (fiveMinBefore.isAfter(now)) {
+    final reminderTime = slotTime.subtract(Duration(minutes: minutes));
+    if (reminderTime.isAfter(now)) {
       await _schedule(
-        id:    _notifId(appointmentId, 5),
-        title: '⏰ Consultation in 5 minutes',
-        body:  '$patientName is waiting. Tap to get ready.',
-        when:  fiveMinBefore,
+        id:    _reminderNotifId(appointmentId),
+        title: 'Appointment in $timeLabel',
+        body:  '$patientName — tap to get ready.',
+      when:  reminderTime,
       );
     }
 
-    // T=0 alert — fires at the exact appointment time to trigger auto-connect.
     if (slotTime.isAfter(now)) {
       await _schedule(
-        id:    _notifId(appointmentId, 0),
-        title: '🔴 Consultation Starting NOW',
+        id:    _startNotifId(appointmentId),
+        title: 'Consultation Starting NOW',
         body:  'Your appointment with $patientName is starting. Tap to join.',
         when:  slotTime,
       );
@@ -111,8 +123,8 @@ class AppointmentReminderService {
   // ── Cancel reminders (e.g. appointment cancelled) ─────────────────────────
 
   static Future<void> cancelReminders(String appointmentId) async {
-    await _plugin.cancel(_notifId(appointmentId, 5));
-    await _plugin.cancel(_notifId(appointmentId, 0));
+    await _plugin.cancel(_reminderNotifId(appointmentId));
+    await _plugin.cancel(_startNotifId(appointmentId));
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────
@@ -135,12 +147,10 @@ class AppointmentReminderService {
             UILocalNotificationDateInterpretation.absoluteTime,
       );
     } catch (_) {
-      // Exact alarm permission denied on some Android 12+ devices; silently
-      // fall back rather than crashing the app.
+      // Exact alarm permission denied on some Android 12+ devices; silently skip.
     }
   }
 
-  /// Converts the Firestore date + time-slot strings into a [DateTime].
   static DateTime? _parseSlot(String dateStr, String timeStr) {
     try {
       final date  = DateTime.parse(dateStr);
@@ -156,8 +166,11 @@ class AppointmentReminderService {
     }
   }
 
-  /// Deterministic integer notification ID derived from the Firestore doc ID
-  /// and the reminder offset in minutes.  Stays within the 32-bit int range.
-  static int _notifId(String appointmentId, int minutesBefore) =>
-      (appointmentId.hashCode.abs() % 1000000) * 100 + minutesBefore;
+  /// Stable notification ID for the pre-appointment reminder.
+  static int _reminderNotifId(String appointmentId) =>
+      (appointmentId.hashCode.abs() % 1000000) * 10 + 1;
+
+  /// Stable notification ID for the "starting now" alert.
+  static int _startNotifId(String appointmentId) =>
+      (appointmentId.hashCode.abs() % 1000000) * 10 + 2;
 }

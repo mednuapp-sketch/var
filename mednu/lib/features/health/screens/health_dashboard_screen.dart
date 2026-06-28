@@ -68,7 +68,7 @@ class _FullPageLoader extends StatelessWidget {
           leading: IconButton(
             icon:
                 const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-            onPressed: () => Navigator.of(context).maybePop(),
+            onPressed: () => context.pop(),
           ),
         ),
         body: SingleChildScrollView(
@@ -87,10 +87,7 @@ class _FullPageLoader extends StatelessWidget {
               const SizedBox(height: 16),
               const SkeletonBox(width: double.infinity, height: 200, radius: 20),
               const SizedBox(height: 16),
-              ...List.generate(3, (_) => const Padding(
-                padding: EdgeInsets.only(bottom: 12),
-                child: SkeletonListTile(),
-              )),
+              ...List.generate(3, (_) => const _HealthItemSkeleton()),
             ],
           ),
         ),
@@ -114,7 +111,7 @@ class _NotSignedIn extends StatelessWidget {
           leading: IconButton(
             icon:
                 const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-            onPressed: () => Navigator.of(context).maybePop(),
+            onPressed: () => context.pop(),
           ),
         ),
         body: Center(
@@ -346,21 +343,25 @@ class _SecHead extends StatelessWidget {
   Widget build(BuildContext context) => Row(
         children: [
           Container(
-            width: 30,
-            height: 30,
+            width: 36,
+            height: 36,
             decoration: BoxDecoration(
-                color: color.withValues(alpha:0.1),
-                borderRadius: BorderRadius.circular(9)),
-            child: Icon(icon, size: 15, color: color),
+              color: color.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(11),
+            ),
+            child: Icon(icon, size: 18, color: color),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 10),
           Expanded(
-            child: Text(title,
-                style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: color)),
+            child: Text(
+              title,
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
+              ),
+            ),
           ),
           if (btn != null) btn!,
         ],
@@ -416,19 +417,8 @@ class _VitalsSection extends StatelessWidget {
         mainAxisSpacing: 10,
         children: List.generate(
           4,
-          (_) => Container(
-            decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: AppColors.divider)),
-            child: const Center(
-              child: SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: CircularProgressIndicator(
-                      strokeWidth: 2, color: AppColors.primary)),
-            ),
-          ),
+          (_) => const SkeletonBox(
+              width: double.infinity, height: double.infinity, radius: 16),
         ),
       );
 }
@@ -855,7 +845,7 @@ class _ApptTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final doctor     = data['doctorName'] as String? ?? 'Doctor';
-    final speciality = data['speciality'] as String? ?? '';
+    final speciality = data['doctorSpecialty'] as String? ?? '';
     final date       = data['date'] as String? ?? '';
     final time       = data['time'] as String? ?? '';
 
@@ -1212,9 +1202,9 @@ class _BMICard extends StatelessWidget {
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: AppColors.divider)),
           child: Column(children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: const [
+            const Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
                 _BMICat('Under\nweight', '< 18.5', Color(0xFF1565C0)),
                 _BMICat('Normal',       '18.5–24.9', Color(0xFF2E7D32)),
                 _BMICat('Over\nweight', '25–29.9', Color(0xFFE65100)),
@@ -1367,26 +1357,44 @@ class _BMICat extends StatelessWidget {
   const _BMICat(this.label, this.range, this.color);
 
   @override
-  Widget build(BuildContext context) => Column(children: [
-        Container(
-            width: 10,
-            height: 10,
-            decoration:
-                BoxDecoration(color: color, shape: BoxShape.circle)),
-        const SizedBox(height: 4),
-        Text(label,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
+  Widget build(BuildContext context) => Expanded(
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 3),
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: color.withValues(alpha: 0.2)),
+          ),
+          child: Column(children: [
+            Container(
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+            ),
+            const SizedBox(height: 5),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: color,
+              ),
+            ),
+            Text(
+              range,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
                 fontFamily: 'Poppins',
                 fontSize: 9,
-                fontWeight: FontWeight.w600)),
-        Text(range,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 8,
-                color: AppColors.textHint)),
-      ]);
+                color: AppColors.textHint,
+              ),
+            ),
+          ]),
+        ),
+      );
 }
 
 // â”€â”€â”€ Log Vitals sheet â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -1427,8 +1435,9 @@ class _LogVitalsSheetState extends State<_LogVitalsSheet> {
           {bool decimal = false}) {
         final t = c.text.trim();
         if (t.isEmpty) return;
-        vitals[key] =
-            decimal ? (double.tryParse(t) ?? 0.0) : (int.tryParse(t) ?? 0);
+        final parsed = decimal ? double.tryParse(t) : int.tryParse(t);
+        if (parsed == null) return;
+        vitals[key] = parsed;
       }
       add('heartRate', _hr);
       add('bpSystolic', _bpS);
@@ -1651,17 +1660,34 @@ class _InfoCard extends StatelessWidget {
       );
 }
 
-Widget _loadingCard(double height) => Container(
-      height: height,
+Widget _loadingCard(double height) =>
+    SkeletonBox(width: double.infinity, height: height, radius: 14);
+
+class _HealthItemSkeleton extends StatelessWidget {
+  const _HealthItemSkeleton();
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.divider)),
-      child: const Center(
-        child: SizedBox(
-            width: 22,
-            height: 22,
-            child: CircularProgressIndicator(
-                strokeWidth: 2, color: AppColors.primary)),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: const [BoxShadow(color: Color(0x08000000), blurRadius: 6)],
+      ),
+      child: const AppShimmer(
+        child: Row(children: [
+          SkeletonBox(width: 44, height: 44, radius: 12),
+          SizedBox(width: 12),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            SkeletonBox(width: double.infinity, height: 13, radius: 4),
+            SizedBox(height: 6),
+            SkeletonBox(width: 160, height: 11, radius: 4),
+          ])),
+          SizedBox(width: 8),
+          SkeletonBox(width: 50, height: 22, radius: 8),
+        ]),
       ),
     );
+  }
+}

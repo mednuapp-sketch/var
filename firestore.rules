@@ -650,6 +650,9 @@ service cloud.firestore {
     // ── Health data (vitals, health dashboard) ────────────────────────────────
     match /health_data/{userId} {
       allow read, write: if isOwner(userId) || isAdmin() || isDoctor();
+      match /{subcollection}/{docId} {
+        allow read, write: if isOwner(userId) || isAdmin() || isDoctor();
+      }
     }
 
     match /vitals/{docId} {
@@ -829,6 +832,21 @@ service cloud.firestore {
         && request.resource.data.keys().hasAll(['success', 'method', 'timestamp', 'expiresAt']);
       allow read:   if isAdmin();
       allow update, delete: if false;
+    }
+
+    // ── Phone index (MPIN-first login detection) ─────────────────────────────
+    // Publicly readable so the login screen can check whether a phone has MPIN
+    // before sending OTP. Only stores {hasMpin: bool, uid: string} — no PII.
+    match /phone_index/{phone} {
+      allow read:   if true;           // pre-auth check on login screen
+      allow create, update: if isAuth();
+      allow delete: if false;
+    }
+
+    // ── Prescription drafts (auto-save while doctor is writing) ─────────────
+    // Each doctor owns exactly one draft document keyed by their UID.
+    match /prescription_drafts/{doctorId} {
+      allow read, write: if isOwner(doctorId) || isAdmin();
     }
 
     // ── Deny everything else ──────────────────────────────────────────────────

@@ -16,7 +16,11 @@
       "Read(//c/flutter/bin/**)",
       "Bash(\"c:\\\\var\\\\var\\\\flutter\\\\bin\\\\flutter.bat\" pub *)",
       "Bash(\"c:\\\\var\\\\var\\\\flutter\\\\bin\\\\flutter.bat\" run *)",
-      "Bash(awk '{if \\($3 == \"22324\" || $4 == \"22324\"\\) print}')"
+      "Bash(awk '{if \\($3 == \"22324\" || $4 == \"22324\"\\) print}')",
+      "PowerShell(cd c:\\\\var\\\\var\\\\mednu; dart analyze lib/features/services/appointment/appointment_screen.dart 2>&1 | Where-Object { $_ -match \"error|warning\" })",
+      "PowerShell(cd c:\\\\var\\\\var\\\\mednu; dart analyze lib/features/services/appointment/appointment_screen.dart lib/features/health/screens/prescription_viewer_screen.dart lib/features/hospitals/screens/hospitals_screen.dart lib/features/doctors/screens/submit_review_screen.dart 2>&1 | Where-Object { $_ -match \"error|warning\" })",
+      "PowerShell(cd c:\\\\var\\\\var\\\\mednu; dart analyze lib/ 2>&1 | Where-Object { $_ -match \"error\" } | Select-Object -First 20)",
+      "Bash(git -C \"c:/var/var/mednu-admin\" push)"
     ]
   }
 }

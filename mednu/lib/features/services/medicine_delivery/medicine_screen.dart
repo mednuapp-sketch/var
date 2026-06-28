@@ -10,6 +10,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/widgets/ux_widgets.dart';
 import '../../home/providers/location_provider.dart';
 import '../../location/screens/map_location_picker_screen.dart';
 
@@ -551,7 +552,7 @@ class _MedicineScreenState extends ConsumerState<MedicineScreen> {
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     const Icon(Icons.medication_liquid_rounded, color: Colors.white, size: 36),
                     const SizedBox(height: 8),
-                    Text('Medicine Delivery', style: AppTextStyles.onPrimaryH2),
+                    Text('Pharmacy Delivery', style: AppTextStyles.onPrimaryH2),
                     Text('Delivered in 2–4 hours  •  Genuine medicines', style: AppTextStyles.onPrimaryBody),
                   ]),
                 )),
@@ -688,7 +689,7 @@ class _MedicineScreenState extends ConsumerState<MedicineScreen> {
 
               // Loading state
               if (_catalogueLoading)
-                ..._buildSkeletonCards()
+                _buildSkeletonCards()
               else if (_catalogue.isEmpty)
                 _buildEmptyState()
               else if (_filteredMeds.isEmpty)
@@ -752,25 +753,18 @@ class _MedicineScreenState extends ConsumerState<MedicineScreen> {
     );
   }
 
-  List<Widget> _buildSkeletonCards() => List.generate(5, (_) => Container(
-    margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-    height: 90,
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(16),
-      border: Border.all(color: AppColors.divider),
-    ),
-  ));
+  Widget _buildSkeletonCards() => AppShimmer(
+    child: Column(children: List.generate(5, (_) => Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      height: 90,
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+    ))),
+  );
 
-  Widget _buildEmptyState() => Padding(
-    padding: const EdgeInsets.all(40),
-    child: Column(children: [
-      Icon(Icons.medication_outlined, size: 64, color: Colors.grey[300]),
-      const SizedBox(height: 16),
-      Text('No medicines available yet', style: AppTextStyles.bodyMedium, textAlign: TextAlign.center),
-      const SizedBox(height: 8),
-      Text('Medicine catalogue will appear here once added by the pharmacy team', style: AppTextStyles.bodySmall, textAlign: TextAlign.center),
-    ]),
+  Widget _buildEmptyState() => const AppEmptyState(
+    icon: Icons.medication_outlined,
+    title: 'No Medicines Available',
+    message: 'The medicine catalogue will appear here once added by the pharmacy team.',
   );
 }
 

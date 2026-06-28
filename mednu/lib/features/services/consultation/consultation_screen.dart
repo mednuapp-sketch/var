@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/widgets/ux_widgets.dart';
 
 class ConsultationScreen extends ConsumerStatefulWidget {
   const ConsultationScreen({super.key});
@@ -123,6 +124,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
       'uid': doc.id,
       'name': d['name'] as String? ?? 'Doctor',
       'specialty': specialty,
+      'photoUrl': d['photoUrl'] as String? ?? '',
       'rating': (d['rating'] as num?)?.toDouble() ?? 0.0,
       'experience': '${d['experience'] ?? '–'} yrs',
       'fee': '₹${d['fee'] ?? '0'}',
@@ -437,30 +439,27 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
           Text('Available Now', style: AppTextStyles.h4),
           const SizedBox(height: 12),
           if (_quickConnectLoading) ...[
-            const SizedBox(height: 40),
-            const Center(child: CircularProgressIndicator()),
-          ] else if (_onlineDoctors.isEmpty) ...[
-            const SizedBox(height: 20),
-            Center(
+            AppShimmer(
               child: Column(
-                children: [
-                  Icon(Icons.hourglass_empty_rounded,
-                      size: 48, color: AppColors.textHint),
-                  const SizedBox(height: 12),
-                  Text('No doctors online right now',
-                      style: AppTextStyles.bodyMedium
-                          .copyWith(color: AppColors.textSecondary)),
-                  const SizedBox(height: 4),
-                  Text('Ask a doctor to go online in the MedNU Doctor app',
-                      style: AppTextStyles.bodySmall,
-                      textAlign: TextAlign.center),
-                  const SizedBox(height: 8),
-                  TextButton(
-                    onPressed: () => _tabController.animateTo(1),
-                    child: const Text('Schedule an appointment instead'),
+                children: List.generate(3, (_) => Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  height: 90,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
                   ),
-                ],
+                )),
               ),
+            ),
+          ] else if (_onlineDoctors.isEmpty) ...[
+            const SizedBox(height: 8),
+            AppEmptyState(
+              icon: Icons.hourglass_empty_rounded,
+              title: 'No doctors online right now',
+              message: 'Ask a doctor to go online, or schedule an appointment instead.',
+              iconColor: AppColors.textSecondary,
+              actionLabel: 'Schedule Appointment',
+              onAction: () => _tabController.animateTo(1),
             ),
           ] else
             ..._onlineDoctors.map((doctor) => _QuickConnectCard(
@@ -502,6 +501,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
         'doctorId': doctor['uid'] ?? '',
         'doctorName': doctor['name'],
         'doctorSpecialty': doctor['specialty'],
+        'doctorPhotoUrl': doctor['photoUrl'] ?? '',
         'consultationType': 'Video',
         'fee': int.tryParse(fee) ?? 0,
         'chiefComplaint': '',
@@ -529,6 +529,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
         'consultationId': ref.id,
         'doctorName': doctor['name'] as String? ?? 'Doctor',
         'doctorSpecialty': doctor['specialty'] as String? ?? '',
+        'doctorPhotoUrl': doctor['photoUrl'] as String? ?? '',
       },
     );
   }
@@ -1357,11 +1358,24 @@ class _BookingConfirmSheetState extends State<_BookingConfirmSheet> {
       final user = FirebaseAuth.instance.currentUser;
       final uid = user?.uid;
       if (uid == null) throw Exception('Not authenticated');
-      final totalFee = (int.tryParse(widget.doctor['fee'].replaceAll('₹', '').trim()) ?? 0) + 20;
+
+      // Parse fee robustly — handles int and double values stored in Firestore
+      final feeStr = widget.doctor['fee']?.toString().replaceAll('₹', '').trim() ?? '0';
+      final consultFee = int.tryParse(feeStr) ?? (double.tryParse(feeStr)?.toInt() ?? 0);
+      final totalFee = consultFee + 20;
+
       final db = FirebaseFirestore.instance;
       final apptRef = db.collection('appointments').doc();
       final payRef  = db.collection('payments').doc();
-      final now = FieldValue.serverTimestamp();
+      final now = Timestamp.now();
+
+      // Resolve patient name from Firestore (phone-auth users have no displayName)
+      String patientName = user?.displayName ?? user?.phoneNumber ?? 'Patient';
+      try {
+        final userSnap = await db.collection('users').doc(uid).get();
+        final fsName = (userSnap.data()?['name'] as String?)?.trim() ?? '';
+        if (fsName.isNotEmpty) patientName = fsName;
+      } catch (_) {}
 
       final batch = db.batch();
       batch.set(apptRef, {
@@ -1369,7 +1383,7 @@ class _BookingConfirmSheetState extends State<_BookingConfirmSheet> {
         'doctorName': widget.doctor['name'],
         'doctorSpecialty': widget.doctor['specialty'],
         'patientId': uid,
-        'patientName': user?.displayName ?? user?.email ?? 'Patient',
+        'patientName': patientName,
         'date': widget.date,
         'time': widget.time,
         'consultationType': widget.type,
@@ -1386,13 +1400,18 @@ class _BookingConfirmSheetState extends State<_BookingConfirmSheet> {
         'amount': totalFee,
         'type': 'appointment',
         'status': 'paid',
-        'createdAt': now,
+        'createdAt': Timestamp.now(),
       });
       await batch.commit();
 
       if (!mounted) return;
-      Navigator.pop(context); // close confirm sheet
-      ScaffoldMessenger.of(context).showSnackBar(
+      // Capture messenger and router BEFORE Navigator.pop() — after pop the
+      // sheet's context is deactivated and ScaffoldMessenger.of() would throw,
+      // which would be silently caught and shown as a booking failure.
+      final messenger = ScaffoldMessenger.of(context);
+      final router = GoRouter.of(context);
+      Navigator.pop(context);
+      messenger.showSnackBar(
         SnackBar(
           content: const Row(
             children: [
@@ -1406,13 +1425,13 @@ class _BookingConfirmSheetState extends State<_BookingConfirmSheet> {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       );
-      // Navigate to My Appointments so the user sees their new booking
-      if (context.mounted) context.go(AppRoutes.appointment);
+      router.go(AppRoutes.appointment);
     } catch (e) {
+      debugPrint('Booking error: $e');
       if (!mounted) return;
       setState(() => _isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        const SnackBar(
           content: Text('Booking failed. Please try again.'),
           backgroundColor: Colors.red,
           behavior: SnackBarBehavior.floating,

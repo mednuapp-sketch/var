@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/widgets/ux_widgets.dart';
 
 class MaternityPrescriptionScreen extends StatefulWidget {
   final String patientId;
@@ -117,9 +118,18 @@ class _MaternityPrescriptionScreenState
     return Scaffold(
       backgroundColor: const Color(0xFFF7F4F8),
       appBar: AppBar(
-        backgroundColor: AppColors.primary,
+        backgroundColor: Colors.transparent,
         foregroundColor: Colors.white,
         elevation: 0,
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFF880E4F), Color(0xFFC2185B), Color(0xFF7B1FA2)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
         leading: IconButton(
           icon: const Icon(Icons.close_rounded, color: Colors.white),
           onPressed: () => context.pop(),
@@ -224,15 +234,12 @@ class _MaternityPrescriptionScreenState
               children: [
                 ..._items.asMap().entries.map((e) => _itemCard(e.key, e.value)),
                 const SizedBox(height: 8),
-                OutlinedButton.icon(
-                  onPressed: _addItem,
-                  icon: const Icon(Icons.add_rounded, color: AppColors.primary),
-                  label: const Text('Add Medicine', style: TextStyle(color: AppColors.primary)),
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: AppColors.primary),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
+                GradientButton(
+                  label: 'Add Medicine',
+                  icon: Icons.add_rounded,
+                  width: double.infinity,
+                  height: 48,
+                  onTap: _addItem,
                 ),
                 const SizedBox(height: 40),
               ],

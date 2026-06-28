@@ -5,16 +5,19 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class PregnancyProfile {
   final String id;
   final String patientId;
+  final String? familyMemberId;
   final DateTime pregnancyStartDate;
   final DateTime lmpDate;
   final DateTime dueDate;
-  final String bloodGroup;
   final double weightKg;
   final double? heightCm;
   final int ageYears;
   final List<String> medicalConditions;
   final int previousPregnancies;
   final int previousLiveBirths;
+  final int previousAbortions;
+  final int previousCSections;
+  final String gynecologyNotes;
   final String emergencyContactName;
   final String emergencyContactPhone;
   final String? assignedDoctorId;
@@ -27,16 +30,19 @@ class PregnancyProfile {
   const PregnancyProfile({
     required this.id,
     required this.patientId,
+    this.familyMemberId,
     required this.pregnancyStartDate,
     required this.lmpDate,
     required this.dueDate,
-    required this.bloodGroup,
     required this.weightKg,
     this.heightCm,
     required this.ageYears,
     required this.medicalConditions,
     required this.previousPregnancies,
     required this.previousLiveBirths,
+    this.previousAbortions = 0,
+    this.previousCSections = 0,
+    this.gynecologyNotes = '',
     required this.emergencyContactName,
     required this.emergencyContactPhone,
     this.assignedDoctorId,
@@ -46,6 +52,22 @@ class PregnancyProfile {
     required this.createdAt,
     required this.updatedAt,
   });
+
+  double? get bmi {
+    if (heightCm == null || heightCm! <= 0 || weightKg <= 0) return null;
+    final h = heightCm! / 100;
+    return weightKg / (h * h);
+  }
+
+  /// IOM 2009 recommended total weight gain range in kg
+  (double min, double max) get recommendedWeightGain {
+    final b = bmi;
+    if (b == null) return (11.5, 16.0);
+    if (b < 18.5) return (12.5, 18.0);
+    if (b < 25.0) return (11.5, 16.0);
+    if (b < 30.0) return (7.0, 11.5);
+    return (5.0, 9.0);
+  }
 
   // Bug fix: clamp to 40, not 42
   int get currentWeek {
@@ -72,16 +94,19 @@ class PregnancyProfile {
 
   Map<String, dynamic> toMap() => {
     'patientId': patientId,
+    'familyMemberId': familyMemberId,
     'pregnancyStartDate': Timestamp.fromDate(pregnancyStartDate),
     'lmpDate': Timestamp.fromDate(lmpDate),
     'dueDate': Timestamp.fromDate(dueDate),
-    'bloodGroup': bloodGroup,
     'weightKg': weightKg,
     'heightCm': heightCm,
     'ageYears': ageYears,
     'medicalConditions': medicalConditions,
     'previousPregnancies': previousPregnancies,
     'previousLiveBirths': previousLiveBirths,
+    'previousAbortions': previousAbortions,
+    'previousCSections': previousCSections,
+    'gynecologyNotes': gynecologyNotes,
     'emergencyContactName': emergencyContactName,
     'emergencyContactPhone': emergencyContactPhone,
     'assignedDoctorId': assignedDoctorId,
@@ -96,16 +121,19 @@ class PregnancyProfile {
       PregnancyProfile(
         id: id,
         patientId: d['patientId'] as String? ?? '',
+        familyMemberId: d['familyMemberId'] as String?,
         pregnancyStartDate: (d['pregnancyStartDate'] as Timestamp?)?.toDate() ?? DateTime.now(),
         lmpDate: (d['lmpDate'] as Timestamp?)?.toDate() ?? DateTime.now(),
         dueDate: (d['dueDate'] as Timestamp?)?.toDate() ?? DateTime.now().add(const Duration(days: 280)),
-        bloodGroup: d['bloodGroup'] as String? ?? '',
         weightKg: (d['weightKg'] as num?)?.toDouble() ?? 0,
         heightCm: (d['heightCm'] as num?)?.toDouble(),
         ageYears: d['ageYears'] as int? ?? 0,
         medicalConditions: List<String>.from(d['medicalConditions'] as List? ?? []),
         previousPregnancies: d['previousPregnancies'] as int? ?? 0,
         previousLiveBirths: d['previousLiveBirths'] as int? ?? 0,
+        previousAbortions: d['previousAbortions'] as int? ?? 0,
+        previousCSections: d['previousCSections'] as int? ?? 0,
+        gynecologyNotes: d['gynecologyNotes'] as String? ?? '',
         emergencyContactName: d['emergencyContactName'] as String? ?? '',
         emergencyContactPhone: d['emergencyContactPhone'] as String? ?? '',
         assignedDoctorId: d['assignedDoctorId'] as String?,
@@ -119,16 +147,19 @@ class PregnancyProfile {
   PregnancyProfile copyWith({
     String? id,
     String? patientId,
+    String? familyMemberId,
     DateTime? pregnancyStartDate,
     DateTime? lmpDate,
     DateTime? dueDate,
-    String? bloodGroup,
     double? weightKg,
     double? heightCm,
     int? ageYears,
     List<String>? medicalConditions,
     int? previousPregnancies,
     int? previousLiveBirths,
+    int? previousAbortions,
+    int? previousCSections,
+    String? gynecologyNotes,
     String? emergencyContactName,
     String? emergencyContactPhone,
     String? assignedDoctorId,
@@ -140,16 +171,19 @@ class PregnancyProfile {
   }) => PregnancyProfile(
     id: id ?? this.id,
     patientId: patientId ?? this.patientId,
+    familyMemberId: familyMemberId ?? this.familyMemberId,
     pregnancyStartDate: pregnancyStartDate ?? this.pregnancyStartDate,
     lmpDate: lmpDate ?? this.lmpDate,
     dueDate: dueDate ?? this.dueDate,
-    bloodGroup: bloodGroup ?? this.bloodGroup,
     weightKg: weightKg ?? this.weightKg,
     heightCm: heightCm ?? this.heightCm,
     ageYears: ageYears ?? this.ageYears,
     medicalConditions: medicalConditions ?? this.medicalConditions,
     previousPregnancies: previousPregnancies ?? this.previousPregnancies,
     previousLiveBirths: previousLiveBirths ?? this.previousLiveBirths,
+    previousAbortions: previousAbortions ?? this.previousAbortions,
+    previousCSections: previousCSections ?? this.previousCSections,
+    gynecologyNotes: gynecologyNotes ?? this.gynecologyNotes,
     emergencyContactName: emergencyContactName ?? this.emergencyContactName,
     emergencyContactPhone: emergencyContactPhone ?? this.emergencyContactPhone,
     assignedDoctorId: assignedDoctorId ?? this.assignedDoctorId,
@@ -584,5 +618,71 @@ class PregnancyDoctorNote {
     recommendation: recommendation ?? this.recommendation,
     pregnancyWeek: pregnancyWeek ?? this.pregnancyWeek,
     createdAt: createdAt ?? this.createdAt,
+  );
+}
+
+// ─── Pregnancy Weight Log ─────────────────────────────────────────────────────
+
+class PregnancyWeightLog {
+  final String id;
+  final String patientId;
+  final String? familyMemberId;
+  final String date; // yyyy-MM-dd
+  final int pregnancyWeek;
+  final double weightKg;
+  final String notes;
+  final DateTime loggedAt;
+
+  const PregnancyWeightLog({
+    required this.id,
+    required this.patientId,
+    this.familyMemberId,
+    required this.date,
+    required this.pregnancyWeek,
+    required this.weightKg,
+    this.notes = '',
+    required this.loggedAt,
+  });
+
+  Map<String, dynamic> toMap() => {
+    'patientId': patientId,
+    'familyMemberId': familyMemberId,
+    'date': date,
+    'pregnancyWeek': pregnancyWeek,
+    'weightKg': weightKg,
+    'notes': notes,
+    'loggedAt': Timestamp.fromDate(loggedAt),
+  };
+
+  factory PregnancyWeightLog.fromMap(String id, Map<String, dynamic> d) =>
+      PregnancyWeightLog(
+        id: id,
+        patientId: d['patientId'] as String? ?? '',
+        familyMemberId: d['familyMemberId'] as String?,
+        date: d['date'] as String? ?? '',
+        pregnancyWeek: d['pregnancyWeek'] as int? ?? 1,
+        weightKg: (d['weightKg'] as num?)?.toDouble() ?? 0,
+        notes: d['notes'] as String? ?? '',
+        loggedAt: (d['loggedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      );
+
+  PregnancyWeightLog copyWith({
+    String? id,
+    String? patientId,
+    String? familyMemberId,
+    String? date,
+    int? pregnancyWeek,
+    double? weightKg,
+    String? notes,
+    DateTime? loggedAt,
+  }) => PregnancyWeightLog(
+    id: id ?? this.id,
+    patientId: patientId ?? this.patientId,
+    familyMemberId: familyMemberId ?? this.familyMemberId,
+    date: date ?? this.date,
+    pregnancyWeek: pregnancyWeek ?? this.pregnancyWeek,
+    weightKg: weightKg ?? this.weightKg,
+    notes: notes ?? this.notes,
+    loggedAt: loggedAt ?? this.loggedAt,
   );
 }

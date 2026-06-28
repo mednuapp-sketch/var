@@ -1,8 +1,12 @@
 import 'package:dio/dio.dart';
 
 class AiTipsService {
-  // Get a free key at: https://aistudio.google.com/app/apikey
-  static const String _apiKey = 'AIzaSyAUK46gRgthH-vxhZkFP8SM4UqSmpRbJsE';
+  // Injected via --dart-define=GEMINI_API_KEY=... at build time.
+  // Restrict this key in Google Cloud Console to package com.mednu.mednu + release SHA-1.
+  static const String _apiKey = String.fromEnvironment(
+    'GEMINI_API_KEY',
+    defaultValue: 'AIzaSyAUK46gRgthH-vxhZkFP8SM4UqSmpRbJsE',
+  );
   static const String _apiUrl =
       'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
 
@@ -64,20 +68,15 @@ class AiTipsService {
       return await _callApi(question);
     } on DioException catch (e) {
       final status = e.response?.statusCode;
-      // Extract Gemini's error message for easier debugging
-      final geminiError = e.response?.data?['error']?['message'] as String? ?? e.message ?? 'unknown';
       if (status == 429) {
-        return "Rate limit hit (429): $geminiError\n\nPlease wait a minute and try again.";
+        return 'Our health assistant is busy right now. Please wait a moment and try again.';
       }
-      if (status == 400) {
-        return "Bad request (400): $geminiError";
+      if (status == 403 || status == 400) {
+        return 'Health assistant is temporarily unavailable. Please try again later.';
       }
-      if (status == 403) {
-        return "API key error (403): $geminiError";
-      }
-      return "Network error ($status): $geminiError";
-    } catch (e) {
-      return "Unexpected error: $e";
+      return 'Unable to connect right now. Please check your internet connection and try again.';
+    } catch (_) {
+      return 'Something went wrong. Please try again.';
     }
   }
 

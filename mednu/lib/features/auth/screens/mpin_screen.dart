@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -30,6 +31,7 @@ class _MPINScreenState extends ConsumerState<MPINScreen>
   String _entered = '';
   bool _isLoading = false;
   bool _isLocked = false;
+  bool _awaitingAuth = false;
   String? _errorMsg;
 
   late AnimationController _shakeCtrl;
@@ -82,36 +84,133 @@ class _MPINScreenState extends ConsumerState<MPINScreen>
 
   Future<void> _verify() async {
     setState(() => _isLoading = true);
+    final phone = widget.phone;
+
+    // ── Case 1: Firebase Auth already active ─────────────────────────────────
+    if (ref.read(authProvider).user != null) {
+      final ok = await ref.read(authProvider.notifier).verifyMpin(_entered);
+      if (!mounted) return;
+      if (ok) { HapticFeedback.mediumImpact(); context.go(AppRoutes.home); }
+      else     { _onWrongMpin(authState: ref.read(authProvider)); }
+      return;
+    }
+
+    // ── Case 2: MPIN-first flow — no Firebase session yet ────────────────────
+
+    // Same-device fast path: verify locally (instant, no network)
+    final sameDevice =
+        await ref.read(authProvider.notifier).hasLocalMpin(phone);
+    if (sameDevice) {
+      final localOk =
+          await ref.read(authProvider.notifier).verifyMpinLocal(_entered, phone);
+      if (!mounted) return;
+      if (!localOk) {
+        _onWrongMpin(localMessage: 'Incorrect MPIN.');
+        return;
+      }
+      // MPIN correct — get Firebase auth from auto-OTP
+      setState(() { _awaitingAuth = true; _isLoading = false; });
+      final signedIn = await _waitForFirebaseAuth();
+      if (!mounted) return;
+      setState(() { _awaitingAuth = false; });
+      if (signedIn) {
+        HapticFeedback.mediumImpact();
+        context.go(AppRoutes.home);
+      } else {
+        context.push(AppRoutes.otp,
+            extra: {'phone': phone, 'mode': 'completeLogin'});
+      }
+      return;
+    }
+
+    // Different device — wait for Firebase auto-OTP first, then verify server
+    setState(() { _awaitingAuth = true; _isLoading = false; });
+    final signedIn = await _waitForFirebaseAuth();
+    if (!mounted) return;
+    setState(() { _awaitingAuth = false; });
+
+    if (!signedIn) {
+      context.push(AppRoutes.otp,
+          extra: {'phone': phone, 'mode': 'completeLogin'});
+      return;
+    }
+
+    // Firebase auth obtained — server-side MPIN verify (with lockout tracking)
+    setState(() => _isLoading = true);
     final ok = await ref.read(authProvider.notifier).verifyMpin(_entered);
     if (!mounted) return;
+    if (ok) { HapticFeedback.mediumImpact(); context.go(AppRoutes.home); }
+    else     { _onWrongMpin(authState: ref.read(authProvider)); }
+  }
 
-    if (ok) {
-      HapticFeedback.mediumImpact();
-      context.go(AppRoutes.home);
-    } else {
-      HapticFeedback.heavyImpact();
-      _shakeCtrl.forward(from: 0);
-      final authState = ref.read(authProvider);
-      setState(() {
-        _entered = '';
-        _isLoading = false;
-        _errorMsg = authState.error;
-        _isLocked = authState.lockedUntil != null &&
-            DateTime.now().isBefore(authState.lockedUntil!);
+  Future<bool> _waitForFirebaseAuth() async {
+    bool signedIn =
+        await ref.read(authProvider.notifier).signInSilentlyIfPossible();
+    if (signedIn) return true;
+
+    final completer = Completer<bool>();
+    StreamSubscription<User?>? sub;
+    try {
+      sub = FirebaseAuth.instance.authStateChanges().listen((u) {
+        if (u != null && !completer.isCompleted) completer.complete(true);
       });
+      Future.delayed(const Duration(seconds: 2), () async {
+        if (!mounted || completer.isCompleted) return;
+        final ok =
+            await ref.read(authProvider.notifier).signInSilentlyIfPossible();
+        if (ok && !completer.isCompleted) completer.complete(true);
+      });
+      Future.delayed(const Duration(seconds: 8),
+          () { if (!completer.isCompleted) completer.complete(false); });
+      return await completer.future;
+    } finally {
+      await sub?.cancel();
     }
   }
 
-  void _forgotMpin() {
-    // Re-send OTP to reset MPIN — route to OTP screen in reset mode
+  void _onWrongMpin({AuthState? authState, String? localMessage}) {
+    HapticFeedback.heavyImpact();
+    _shakeCtrl.forward(from: 0);
+    setState(() {
+      _entered = '';
+      _isLoading = false;
+      _awaitingAuth = false;
+      _errorMsg = localMessage ?? authState?.error;
+      _isLocked = authState?.lockedUntil != null &&
+          DateTime.now().isBefore(authState!.lockedUntil!);
+    });
+  }
+
+  Future<void> _forgotMpin() async {
     final phone = widget.phone.isNotEmpty
         ? widget.phone
         : ref.read(authProvider).user?.phoneNumber ?? '';
-    context.push(AppRoutes.otp, extra: {
-      'phone': phone,
-      'isExistingUser': true,
-      'mode': 'resetMpin',
-    });
+    if (phone.isEmpty) return;
+
+    setState(() => _isLoading = true);
+    try {
+      await ref.read(authProvider.notifier).sendOtp(phone);
+      if (!mounted) return;
+      context.push(AppRoutes.otp, extra: {
+        'phone': phone,
+        'isExistingUser': true,
+        'mode': 'resetMpin',
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(
+          e.toString().replaceFirst('Exception: ', ''),
+          style: const TextStyle(color: Colors.white, fontFamily: 'Poppins'),
+        ),
+        backgroundColor: const Color(0xFFB00020),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+      ));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -125,9 +224,9 @@ class _MPINScreenState extends ConsumerState<MPINScreen>
       body: Stack(
         children: [
           // ── Gradient background ──────────────────────────────────────────
-          Positioned.fill(
+          const Positioned.fill(
             child: DecoratedBox(
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
@@ -147,7 +246,7 @@ class _MPINScreenState extends ConsumerState<MPINScreen>
                     children: [
                       if (widget.mode == 'login')
                         GestureDetector(
-                          onTap: () => context.pop(),
+                          onTap: () => context.canPop() ? context.pop() : context.go(AppRoutes.login),
                           child: Container(
                             padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
@@ -161,8 +260,10 @@ class _MPINScreenState extends ConsumerState<MPINScreen>
                       const Spacer(),
                       GestureDetector(
                         onTap: () async {
+                          final router = GoRouter.of(context);
                           await ref.read(authProvider.notifier).signOut();
-                          if (mounted) context.go(AppRoutes.login);
+                          if (!mounted) return;
+                          router.go(AppRoutes.login);
                         },
                         child: Container(
                           padding: const EdgeInsets.symmetric(
@@ -255,22 +356,51 @@ class _MPINScreenState extends ConsumerState<MPINScreen>
 
                 const SizedBox(height: 16),
 
-                // ── Error / lock message ───────────────────────────────────
-                AnimatedOpacity(
-                  opacity: _errorMsg != null ? 1 : 0,
-                  duration: const Duration(milliseconds: 200),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 32),
-                    child: Text(
-                      _errorMsg ?? '',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: Color(0xFFFF6B6B),
-                        fontSize: 13,
-                        fontFamily: 'Poppins',
-                      ),
-                    ),
-                  ),
+                // ── Status / error message ────────────────────────────────
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 250),
+                  child: _awaitingAuth
+                      ? Row(
+                          key: const ValueKey('awaiting'),
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            SizedBox(
+                              width: 13, height: 13,
+                              child: CircularProgressIndicator(
+                                color: const Color(0xFFF2A8D8)
+                                    .withValues(alpha: 0.8),
+                                strokeWidth: 1.8,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Completing sign-in…',
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.6),
+                                fontSize: 13,
+                                fontFamily: 'Poppins',
+                              ),
+                            ),
+                          ],
+                        )
+                      : AnimatedOpacity(
+                          key: const ValueKey('error'),
+                          opacity: _errorMsg != null ? 1 : 0,
+                          duration: const Duration(milliseconds: 200),
+                          child: Padding(
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: 32),
+                            child: Text(
+                              _errorMsg ?? '',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                color: Color(0xFFFF6B6B),
+                                fontSize: 13,
+                                fontFamily: 'Poppins',
+                              ),
+                            ),
+                          ),
+                        ),
                 ),
 
                 const Spacer(),

@@ -5,7 +5,6 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../core/constants/app_colors.dart';
 import 'auth_provider.dart';
 
-const _kBloodGroups = ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'];
 const _kGenders = ['Male', 'Female', 'Other'];
 
 class RegisterPage extends ConsumerStatefulWidget {
@@ -24,7 +23,6 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
   final _cityCtrl = TextEditingController();
 
   String _selectedGender = 'Male';
-  String? _selectedBloodGroup;
 
   @override
   void dispose() {
@@ -59,7 +57,6 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
           dob: _dobCtrl.text.trim().isEmpty ? null : _dobCtrl.text.trim(),
           gender: _selectedGender,
           city: _cityCtrl.text.trim().isEmpty ? null : _cityCtrl.text.trim(),
-          bloodGroup: _selectedBloodGroup,
         );
   }
 
@@ -180,19 +177,6 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                     )).toList(),
                   ),
                   const SizedBox(height: 16),
-
-                  _Label('Blood Group (optional)'),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8, runSpacing: 8,
-                    children: _kBloodGroups.map((bg) => _Chip(
-                      label: bg,
-                      width: 64,
-                      selected: _selectedBloodGroup == bg,
-                      onTap: () => setState(() => _selectedBloodGroup = _selectedBloodGroup == bg ? null : bg),
-                    )).toList(),
-                  ),
-                  const SizedBox(height: 12),
 
                   if (authState.error != null) ...[
                     const SizedBox(height: 8),

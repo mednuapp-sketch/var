@@ -73,6 +73,7 @@ class _PregnancyDashboardScreenState
                 children: [
                   _buildWeekCard(state.profile!),
                   _buildQuickActions(context),
+                  _buildWeightSummaryCard(state),
                   _buildWeeklyDevCard(state.profile!),
                   _buildUpcomingCheckups(state.checkups),
                   _buildMedicinesCard(state.medicines),
@@ -313,15 +314,31 @@ class _PregnancyDashboardScreenState
 
   Widget _buildQuickActions(BuildContext context) => Padding(
     padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-    child: Row(
+    child: Column(
       children: [
-        _quickAction(context, Icons.medical_services_rounded, 'Medicines', AppRoutes.pregnancyMedicines, const Color(0xFF66BB6A)),
-        const SizedBox(width: 8),
-        _quickAction(context, Icons.calendar_month_rounded, 'Checkups', AppRoutes.pregnancyCheckups, const Color(0xFF42A5F5)),
-        const SizedBox(width: 8),
-        _quickAction(context, Icons.restaurant_rounded, 'Nutrition', AppRoutes.pregnancyNutrition, const Color(0xFFFFA726)),
-        const SizedBox(width: 8),
-        _quickAction(context, Icons.crisis_alert_rounded, 'Emergency', AppRoutes.pregnancyEmergency, const Color(0xFFEF5350)),
+        Row(
+          children: [
+            _quickAction(context, Icons.medical_services_rounded, 'Medicines', AppRoutes.pregnancyMedicines, const Color(0xFF66BB6A)),
+            const SizedBox(width: 8),
+            _quickAction(context, Icons.calendar_month_rounded, 'Checkups', AppRoutes.pregnancyCheckups, const Color(0xFF42A5F5)),
+            const SizedBox(width: 8),
+            _quickAction(context, Icons.restaurant_rounded, 'Nutrition', AppRoutes.pregnancyNutrition, const Color(0xFFFFA726)),
+            const SizedBox(width: 8),
+            _quickAction(context, Icons.crisis_alert_rounded, 'Emergency', AppRoutes.pregnancyEmergency, const Color(0xFFEF5350)),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            _quickAction(context, Icons.monitor_weight_rounded, 'Weight', AppRoutes.pregnancyWeight, const Color(0xFF7B1FA2)),
+            const SizedBox(width: 8),
+            _quickAction(context, Icons.auto_graph_rounded, 'Weekly', AppRoutes.pregnancyWeekly, const Color(0xFFC2185B)),
+            const SizedBox(width: 8),
+            _quickAction(context, Icons.book_rounded, 'Journal', AppRoutes.pregnancyJournal, const Color(0xFF26C6DA)),
+            const SizedBox(width: 8),
+            const Expanded(child: SizedBox()),
+          ],
+        ),
       ],
     ),
   );
@@ -355,6 +372,101 @@ class _PregnancyDashboardScreenState
           ),
         ),
       );
+
+  Widget _buildWeightSummaryCard(PregnancyState state) {
+    final profile = state.profile!;
+    final startWeight = profile.weightKg;
+    final currentWeight = state.currentWeightKg;
+    final gain = state.weightGainKg;
+    final (minGain, maxGain) = profile.recommendedWeightGain;
+    final hasLogs = state.weightLogs.isNotEmpty;
+    final lastLog = state.latestWeightLog;
+
+    return GestureDetector(
+      onTap: () => context.push(AppRoutes.pregnancyWeight),
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10)],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(7),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF7B1FA2).withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.monitor_weight_rounded, color: Color(0xFF7B1FA2), size: 18),
+                ),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text('Weight Tracker',
+                      style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: Color(0xFF1A1A2E))),
+                ),
+                const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.textHint),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                _weightChip('Start', '${startWeight.toStringAsFixed(1)} kg', const Color(0xFF7B1FA2)),
+                const SizedBox(width: 8),
+                _weightChip('Current',
+                    hasLogs ? '${currentWeight.toStringAsFixed(1)} kg' : '— kg',
+                    const Color(0xFFC2185B)),
+                const SizedBox(width: 8),
+                _weightChip('Gained',
+                    gain > 0 ? '+${gain.toStringAsFixed(1)} kg' : '0.0 kg',
+                    gain > maxGain ? const Color(0xFFEF5350) : const Color(0xFF66BB6A)),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                const Icon(Icons.info_outline_rounded, size: 13, color: AppColors.textHint),
+                const SizedBox(width: 4),
+                Text(
+                  'Recommended gain: ${minGain.toStringAsFixed(1)}–${maxGain.toStringAsFixed(1)} kg',
+                  style: const TextStyle(fontSize: 11, color: AppColors.textHint),
+                ),
+                const Spacer(),
+                if (lastLog != null)
+                  Text(
+                    'Updated ${DateFormat('dd MMM').format(lastLog.loggedAt)}',
+                    style: const TextStyle(fontSize: 10, color: AppColors.textHint),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _weightChip(String label, String value, Color color) => Expanded(
+    child: Container(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        children: [
+          Text(value,
+              style: TextStyle(color: color, fontWeight: FontWeight.w800, fontSize: 13)),
+          const SizedBox(height: 2),
+          Text(label, style: const TextStyle(fontSize: 10, color: AppColors.textHint)),
+        ],
+      ),
+    ),
+  );
 
   Widget _buildWeeklyDevCard(PregnancyProfile profile) {
     final data = getWeekData(profile.currentWeek);

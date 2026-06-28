@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import '../../../core/constants/app_colors.dart';
 import '../services/biometric_service.dart';
 
@@ -64,8 +65,7 @@ class _LockScreenState extends State<LockScreen> {
                   width: 90,
                   height: 90,
                   decoration: BoxDecoration(
-                    gradient: AppColors.primaryGradient,
-                    shape: BoxShape.circle,
+                    borderRadius: BorderRadius.circular(24),
                     boxShadow: [
                       BoxShadow(
                         color: AppColors.primary.withValues(alpha:0.35),
@@ -74,7 +74,13 @@ class _LockScreenState extends State<LockScreen> {
                       ),
                     ],
                   ),
-                  child: const Icon(Icons.local_hospital_rounded, size: 48, color: Colors.white),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(24),
+                    child: SvgPicture.asset(
+                      'assets/icons/mednu_logo.svg',
+                      fit: BoxFit.contain,
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 28),
                 const Text(

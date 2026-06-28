@@ -228,7 +228,7 @@ class UnifiedBooking {
       case 'equipment':
       case 'equipment_hiring':   return 'Equipment Rental';
       case 'medicine':
-      case 'medicine_delivery':  return 'Medicine Delivery';
+      case 'medicine_delivery':  return 'Pharmacy Delivery';
       case 'lab_test':           return 'Lab Test';
       case 'home_sample':        return 'Home Sample Collection';
       case 'pregnancy':          return 'Pregnancy Checkup';

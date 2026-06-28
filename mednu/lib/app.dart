@@ -6,11 +6,15 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'core/theme/app_theme.dart';
 import 'core/router/app_router.dart';
 import 'core/providers/theme_provider.dart';
 import 'core/services/call_notification_service.dart';
 import 'core/services/battery_optimization_service.dart';
+import 'core/services/booking_reminder_service.dart';
+import 'features/my_services/services/my_services_service.dart';
+import 'features/my_services/models/unified_booking.dart';
 import 'features/security/services/biometric_service.dart';
 import 'features/security/screens/lock_screen.dart';
 import 'features/health/services/health_notification_service.dart';
@@ -33,6 +37,7 @@ class _MedNUAppState extends ConsumerState<MedNUApp>
   StreamSubscription<QuerySnapshot>? _notifSub;
   StreamSubscription<QuerySnapshot>? _incomingCallSub;
   StreamSubscription<String>? _tokenRefreshSub;
+  StreamSubscription<List<UnifiedBooking>>? _bookingReminderSub;
   bool _initialNotifLoad = true;
 
   String? _lastAlertedCallId;
@@ -49,6 +54,7 @@ class _MedNUAppState extends ConsumerState<MedNUApp>
     _authSub = FirebaseAuth.instance.authStateChanges().listen((user) {
       _notifSub?.cancel();
       _incomingCallSub?.cancel();
+      _bookingReminderSub?.cancel();
       _initialNotifLoad = true;
       _lastAlertedCallId = null;
 
@@ -56,6 +62,7 @@ class _MedNUAppState extends ConsumerState<MedNUApp>
         FirebaseCrashlytics.instance.setUserIdentifier('');
         return;
       }
+
 
       FirebaseCrashlytics.instance.setUserIdentifier(user.uid);
 
@@ -116,6 +123,7 @@ class _MedNUAppState extends ConsumerState<MedNUApp>
         final specialty = data['doctorSpecialty'] as String? ?? '';
         final consultationType =
             data['consultationType'] as String? ?? 'Video';
+        final doctorPhotoUrl = data['doctorPhotoUrl'] as String? ?? '';
 
         // Show OS notification + ringtone
         CallNotificationService.showIncomingCall(
@@ -131,8 +139,25 @@ class _MedNUAppState extends ConsumerState<MedNUApp>
             'doctorName': doctorName,
             'doctorSpecialty': specialty,
             'consultationType': consultationType,
+            'doctorPhotoUrl': doctorPhotoUrl,
           },
         );
+      });
+
+      // ── Booking reminders ───────────────────────────────────────────────────
+      _bookingReminderSub = MyServicesService.allBookingsStream().listen((bookings) async {
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          final enabled = prefs.getBool('booking_reminder_enabled') ?? true;
+          if (!enabled) {
+            for (final b in bookings) {
+              await BookingReminderService.cancelReminder(b.id);
+            }
+            return;
+          }
+          final minutes = prefs.getInt('booking_reminder_minutes') ?? 15;
+          await BookingReminderService.syncReminders(bookings, minutes);
+        } catch (_) {}
       });
     });
   }
@@ -181,6 +206,7 @@ class _MedNUAppState extends ConsumerState<MedNUApp>
     _notifSub?.cancel();
     _incomingCallSub?.cancel();
     _tokenRefreshSub?.cancel();
+    _bookingReminderSub?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }

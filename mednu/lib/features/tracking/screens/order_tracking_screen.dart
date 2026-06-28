@@ -587,10 +587,7 @@ class _OrderSupportChatState extends State<_OrderSupportChat> {
               if (snap.connectionState == ConnectionState.waiting) {
                 return ListView(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  children: List.generate(4, (_) => const Padding(
-                    padding: EdgeInsets.only(bottom: 8),
-                    child: SkeletonListTile(),
-                  )),
+                  children: List.generate(4, (_) => const _ChatBubbleSkeleton()),
                 );
               }
               final docs = snap.data?.docs ?? [];
@@ -779,4 +776,44 @@ class _RoutePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter _) => false;
+}
+
+class _ChatBubbleSkeleton extends StatelessWidget {
+  const _ChatBubbleSkeleton();
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: AppShimmer(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Container(
+            margin: const EdgeInsets.only(right: 60),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade200,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              SkeletonBox(width: double.infinity, height: 12, radius: 4),
+              SizedBox(height: 5),
+              SkeletonBox(width: 160, height: 12, radius: 4),
+            ]),
+          ),
+          const SizedBox(height: 6),
+          Align(
+            alignment: Alignment.centerRight,
+            child: Container(
+              margin: const EdgeInsets.only(left: 60),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade200,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: const SkeletonBox(width: 140, height: 12, radius: 4),
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
 }

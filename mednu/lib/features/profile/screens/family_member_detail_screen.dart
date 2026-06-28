@@ -105,7 +105,6 @@ class _FamilyMemberDetailScreenState extends ConsumerState<FamilyMemberDetailScr
     final relation = widget.member['relation'] as String? ?? '';
     final age      = widget.member['age'];
     final gender   = widget.member['gender']   as String? ?? '';
-    final blood    = widget.member['blood']    as String? ?? '';
     final phone    = widget.member['phone']    as String? ?? '';
     final color    = _colorFor(name);
     final initial  = name.isNotEmpty ? name[0].toUpperCase() : '?';
@@ -191,13 +190,6 @@ class _FamilyMemberDetailScreenState extends ConsumerState<FamilyMemberDetailScr
                       const Divider(height: 1, indent: 48),
                       _InfoRow(icon: Icons.wc_rounded, label: 'Gender',
                           value: gender.isNotEmpty ? gender : 'Not set'),
-                      const Divider(height: 1, indent: 48),
-                      _InfoRow(
-                        icon: Icons.water_drop_rounded,
-                        label: 'Blood Group',
-                        value: blood.isNotEmpty ? blood : 'Not set',
-                        valueColor: blood.isNotEmpty ? const Color(0xFFB71C1C) : null,
-                      ),
                       const Divider(height: 1, indent: 48),
                       _InfoRow(icon: Icons.phone_rounded, label: 'Phone',
                           value: phone.isNotEmpty ? phone : 'Not set'),

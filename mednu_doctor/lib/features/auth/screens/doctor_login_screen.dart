@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import '../services/doctor_auth_service.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/widgets/ux_widgets.dart';
 
 class DoctorLoginScreen extends StatefulWidget {
   const DoctorLoginScreen({super.key});
@@ -114,13 +116,22 @@ class _DoctorLoginScreenState extends State<DoctorLoginScreen>
                                 width: 64,
                                 height: 64,
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha:0.2),
                                   borderRadius: BorderRadius.circular(18),
-                                  border: Border.all(
-                                      color: Colors.white.withValues(alpha:0.3)),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.30),
+                                      blurRadius: 16,
+                                      offset: const Offset(0, 6),
+                                    ),
+                                  ],
                                 ),
-                                child: const Icon(Icons.medical_services_rounded,
-                                    color: Colors.white, size: 32),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(18),
+                                  child: SvgPicture.asset(
+                                    'assets/icons/mednu_logo.svg',
+                                    fit: BoxFit.contain,
+                                  ),
+                                ),
                               ),
                               const SizedBox(height: 20),
                               const Text(
@@ -259,34 +270,12 @@ class _DoctorLoginScreenState extends State<DoctorLoginScreen>
                             const SizedBox(height: 28),
 
                             // ── Send OTP button ──────────────────────────
-                            SizedBox(
+                            GradientButton(
+                              label: 'Send OTP',
+                              isLoading: _isLoading,
                               width: double.infinity,
-                              child: ElevatedButton(
-                                onPressed:
-                                    _isLoading ? null : () => _sendOTP(context),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppColors.primary,
-                                  foregroundColor: Colors.white,
-                                  elevation: 0,
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 16),
-                                  shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(16)),
-                                  textStyle: const TextStyle(
-                                    fontFamily: 'Poppins',
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                child: _isLoading
-                                    ? const SizedBox(
-                                        width: 22,
-                                        height: 22,
-                                        child: CircularProgressIndicator(
-                                            color: Colors.white,
-                                            strokeWidth: 2.5))
-                                    : const Text('Send OTP'),
-                              ),
+                              height: 54,
+                              onTap: _isLoading ? () {} : () => _sendOTP(context),
                             ),
                             const SizedBox(height: 22),
 
@@ -396,14 +385,14 @@ class _DoctorLoginScreenState extends State<DoctorLoginScreen>
         setState(() => _isLoading = false);
         try {
           final exists = await DoctorAuthService.profileExists(uid);
-          if (!mounted) return;
           if (!exists) {
+            if (!mounted) return;
             context.go(AppRoutes.register);
             return;
           }
           final profile = await DoctorAuthService.getProfile(uid);
-          if (!mounted) return;
           final status = profile?['status'] as String?;
+          if (!mounted) return;
           context.go(status == 'active' ? AppRoutes.dashboard : AppRoutes.verificationPending);
         } catch (_) {
           if (!mounted) return;

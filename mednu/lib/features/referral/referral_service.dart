@@ -331,7 +331,7 @@ class ReferralService {
     if (referrerReward > 0) {
       final ref = _db.collection('users').doc(referrerId);
       batch.update(ref, {
-        'walletBalance': FieldValue.increment(referrerReward),
+        'mednuMoneyBalance': FieldValue.increment(referrerReward),
         'referralPoints': FieldValue.increment(1),
       });
       batch.set(ref.collection('transactions').doc(), {
@@ -339,6 +339,7 @@ class ReferralService {
         'amount': referrerReward,
         'type': 'credit',
         'category': 'referral',
+        'walletType': 'mednu_money',
         'description': 'Your friend joined using your referral code',
         'timestamp': FieldValue.serverTimestamp(),
       });
@@ -347,14 +348,15 @@ class ReferralService {
     if (referredReward > 0) {
       final ref = _db.collection('users').doc(newUserId);
       batch.update(ref, {
-        'walletBalance': FieldValue.increment(referredReward),
+        'mednuMoneyBalance': FieldValue.increment(referredReward),
       });
       batch.set(ref.collection('transactions').doc(), {
         'title': 'Welcome Bonus',
         'amount': referredReward,
         'type': 'credit',
         'category': 'referral',
-        'description': 'Joined via referral code',
+        'walletType': 'mednu_money',
+        'description': 'Joined via referral code — use as MedNu Money for bookings',
         'timestamp': FieldValue.serverTimestamp(),
       });
     }
@@ -372,7 +374,7 @@ class ReferralService {
         'type': 'referral_reward',
         'title': 'Referral Reward Earned! 🎉',
         'body':
-            'You earned ₹${referrerReward.toStringAsFixed(0)} because a friend joined MedNu using your referral code. Check your wallet!',
+            'You earned ₹${referrerReward.toStringAsFixed(0)} MedNu Money because a friend joined MedNu using your referral code. Use it for your next booking!',
         'createdAt': now,
         'deliverAt': now,
         'isRead': false,
@@ -388,7 +390,7 @@ class ReferralService {
         'type': 'welcome_bonus',
         'title': 'Welcome Bonus Added! 🎁',
         'body':
-            '₹${referredReward.toStringAsFixed(0)} has been added to your MedNu wallet as a welcome gift for joining via referral.',
+            '₹${referredReward.toStringAsFixed(0)} MedNu Money has been added as a welcome gift! Use it for any MedNu booking.',
         'createdAt': now,
         'deliverAt': now,
         'isRead': false,

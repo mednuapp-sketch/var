@@ -43,7 +43,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
     {'icon': Icons.video_call_rounded, 'title': 'Unlimited Video Consultations', 'desc': 'Consult any doctor anytime, unlimited times', 'free': false},
     {'icon': Icons.speed_rounded, 'title': 'Priority Booking', 'desc': 'Get appointment slots 2 hours before others', 'free': false},
     {'icon': Icons.family_restroom_rounded, 'title': 'Family Coverage', 'desc': 'Cover upto 5 family members', 'free': false},
-    {'icon': Icons.local_shipping_rounded, 'title': 'Free Medicine Delivery', 'desc': 'No delivery charges on all orders', 'free': false},
+    {'icon': Icons.local_shipping_rounded, 'title': 'Free Pharmacy Delivery', 'desc': 'No delivery charges on all orders', 'free': false},
     {'icon': Icons.science_rounded, 'title': 'Discounted Lab Tests', 'desc': 'Upto 30% off on all diagnostic tests', 'free': false},
     {'icon': Icons.folder_rounded, 'title': 'Health Records Storage', 'desc': 'Unlimited secure document storage', 'free': true},
     {'icon': Icons.notifications_rounded, 'title': 'Smart Health Reminders', 'desc': 'AI-powered personalized health alerts', 'free': true},

@@ -418,7 +418,7 @@ class _FeaturedNutritionists extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return nutritionists.when(
-      loading: () => Column(children: List.generate(3, (_) => const SkeletonListTile())),
+      loading: () => Column(children: List.generate(3, (_) => const _NutritionistHomeSkeleton())),
       error: (e, _) => const AppErrorState(),
       data: (list) {
         if (list.isEmpty) {
@@ -624,6 +624,37 @@ class _HealthGoalsSection extends StatelessWidget {
           }).toList(),
         ),
       ],
+    );
+  }
+}
+
+class _NutritionistHomeSkeleton extends StatelessWidget {
+  const _NutritionistHomeSkeleton();
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: const [BoxShadow(color: Color(0x08000000), blurRadius: 6)],
+      ),
+      child: const AppShimmer(
+        child: Row(children: [
+          SkeletonCircle(size: 50),
+          SizedBox(width: 12),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            SkeletonBox(width: double.infinity, height: 13, radius: 4),
+            SizedBox(height: 6),
+            SkeletonBox(width: 150, height: 11, radius: 4),
+            SizedBox(height: 6),
+            SkeletonBox(width: 90, height: 11, radius: 4),
+          ])),
+          SizedBox(width: 8),
+          SkeletonBox(width: 60, height: 30, radius: 10),
+        ]),
+      ),
     );
   }
 }

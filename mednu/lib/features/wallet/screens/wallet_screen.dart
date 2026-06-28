@@ -46,11 +46,12 @@ class WalletScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final balanceAsync  = ref.watch(walletBalanceProvider);
-    final pointsAsync   = ref.watch(walletReferralPointsProvider);
-    final txAsync       = ref.watch(walletTransactionsProvider);
-    final configAsync   = ref.watch(referralConfigProvider);
-    final screenWidth   = MediaQuery.of(context).size.width;
+    final balanceAsync      = ref.watch(walletBalanceProvider);
+    final mednuMoneyAsync   = ref.watch(mednuMoneyBalanceProvider);
+    final pointsAsync       = ref.watch(walletReferralPointsProvider);
+    final txAsync           = ref.watch(walletTransactionsProvider);
+    final configAsync       = ref.watch(referralConfigProvider);
+    final screenWidth       = MediaQuery.of(context).size.width;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -76,6 +77,7 @@ class WalletScreen extends ConsumerWidget {
               collapseMode: CollapseMode.pin,
               background: _HeaderCard(
                 balanceAsync: balanceAsync,
+                mednuMoneyAsync: mednuMoneyAsync,
                 onAddMoney: () => _showAddMoneySheet(context, ref),
                 screenWidth: screenWidth,
               ),
@@ -89,6 +91,10 @@ class WalletScreen extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // MedNu Money card
+                  _MednuMoneyCard(mednuMoneyAsync: mednuMoneyAsync),
+                  const SizedBox(height: 14),
+
                   // Referral points banner
                   _ReferralBanner(
                     pointsAsync: pointsAsync,
@@ -221,11 +227,13 @@ class WalletScreen extends ConsumerWidget {
 // ── Header Card ───────────────────────────────────────────
 class _HeaderCard extends StatelessWidget {
   final AsyncValue<double> balanceAsync;
+  final AsyncValue<double> mednuMoneyAsync;
   final VoidCallback onAddMoney;
   final double screenWidth;
 
   const _HeaderCard({
     required this.balanceAsync,
+    required this.mednuMoneyAsync,
     required this.onAddMoney,
     required this.screenWidth,
   });
@@ -236,7 +244,7 @@ class _HeaderCard extends StatelessWidget {
       decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
       child: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 56, 20, 24),
+          padding: const EdgeInsets.fromLTRB(20, 56, 20, 16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -246,7 +254,7 @@ class _HeaderCard extends StatelessWidget {
                   Container(
                     width: 40, height: 40,
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha:0.15),
+                      color: Colors.white.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: const Icon(Icons.account_balance_wallet_rounded,
@@ -263,20 +271,20 @@ class _HeaderCard extends StatelessWidget {
                       Text('Available Balance',
                           style: TextStyle(
                               fontFamily: 'Poppins', fontSize: 11,
-                              color: Colors.white.withValues(alpha:0.5))),
+                              color: Colors.white.withValues(alpha: 0.5))),
                     ],
                   ),
                 ],
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 10),
 
-              // Balance
+              // Main wallet balance
               balanceAsync.when(
                 loading: () => Shimmer.fromColors(
                   baseColor: Colors.white24,
                   highlightColor: Colors.white38,
                   child: Container(
-                    width: 180, height: 44,
+                    width: 180, height: 40,
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(8),
@@ -285,7 +293,7 @@ class _HeaderCard extends StatelessWidget {
                 ),
                 error: (_, __) => const Text('₹—',
                     style: TextStyle(
-                        fontFamily: 'Poppins', fontSize: 36,
+                        fontFamily: 'Poppins', fontSize: 34,
                         fontWeight: FontWeight.w800, color: Colors.white)),
                 data: (balance) => FittedBox(
                   fit: BoxFit.scaleDown,
@@ -293,16 +301,195 @@ class _HeaderCard extends StatelessWidget {
                   child: Text(
                     '₹${NumberFormat('#,##,##0.00').format(balance)}',
                     style: const TextStyle(
-                        fontFamily: 'Poppins', fontSize: 38,
+                        fontFamily: 'Poppins', fontSize: 36,
                         fontWeight: FontWeight.w800, color: Colors.white,
                         letterSpacing: -1),
                   ),
                 ),
               ),
+              const SizedBox(height: 12),
+
+              // MedNu Money pill
+              mednuMoneyAsync.maybeWhen(
+                data: (mm) => Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.stars_rounded,
+                          color: Colors.amber, size: 15),
+                      const SizedBox(width: 6),
+                      Text(
+                        'MedNu Money  ₹${NumberFormat('#,##,##0.00').format(mm)}',
+                        style: const TextStyle(
+                            fontFamily: 'Poppins', fontSize: 12,
+                            fontWeight: FontWeight.w600, color: Colors.white),
+                      ),
+                    ],
+                  ),
+                ),
+                orElse: () => const SizedBox.shrink(),
+              ),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+// ── MedNu Money Card ──────────────────────────────────────
+class _MednuMoneyCard extends StatelessWidget {
+  final AsyncValue<double> mednuMoneyAsync;
+  const _MednuMoneyCard({required this.mednuMoneyAsync});
+
+  @override
+  Widget build(BuildContext context) {
+    final balance = mednuMoneyAsync.valueOrNull ?? 0.0;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF6A1B9A), Color(0xFFAB47BC)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF6A1B9A).withValues(alpha: 0.25),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 38, height: 38,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.stars_rounded,
+                    color: Colors.amber, size: 20),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('MedNu Money',
+                        style: TextStyle(
+                            fontFamily: 'Poppins', fontSize: 13,
+                            fontWeight: FontWeight.w700, color: Colors.white)),
+                    Text('Bonus credits for MedNu bookings only',
+                        style: TextStyle(
+                            fontFamily: 'Poppins', fontSize: 10,
+                            color: Colors.white70)),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text('Non-withdrawable',
+                    style: TextStyle(
+                        fontFamily: 'Poppins', fontSize: 9,
+                        fontWeight: FontWeight.w600, color: Colors.white70)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          mednuMoneyAsync.when(
+            loading: () => Shimmer.fromColors(
+              baseColor: Colors.white24,
+              highlightColor: Colors.white38,
+              child: Container(
+                width: 140, height: 32,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+              ),
+            ),
+            error: (_, __) => const Text('₹—',
+                style: TextStyle(fontFamily: 'Poppins', fontSize: 28,
+                    fontWeight: FontWeight.w800, color: Colors.white)),
+            data: (mm) => Text(
+              '₹${NumberFormat('#,##,##0.00').format(mm)}',
+              style: const TextStyle(
+                  fontFamily: 'Poppins', fontSize: 28,
+                  fontWeight: FontWeight.w800, color: Colors.white,
+                  letterSpacing: -0.5),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              _MednuMoneyBullet(Icons.check_circle_outline_rounded,
+                  'Use for consultations & bookings'),
+              const SizedBox(width: 16),
+              _MednuMoneyBullet(Icons.block_rounded, 'Cannot transfer or withdraw'),
+            ],
+          ),
+          if (balance > 0) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.info_outline_rounded,
+                      color: Colors.white70, size: 14),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Apply at checkout to save ₹${NumberFormat('#,##,##0').format(balance)}',
+                    style: const TextStyle(
+                        fontFamily: 'Poppins', fontSize: 11,
+                        color: Colors.white, fontWeight: FontWeight.w500),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _MednuMoneyBullet extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  const _MednuMoneyBullet(this.icon, this.label);
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 12, color: Colors.white60),
+        const SizedBox(width: 4),
+        Text(label,
+            style: const TextStyle(
+                fontFamily: 'Poppins', fontSize: 10, color: Colors.white70)),
+      ],
     );
   }
 }

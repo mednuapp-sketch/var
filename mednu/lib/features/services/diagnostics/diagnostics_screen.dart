@@ -7,6 +7,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/widgets/service_booking_sheet.dart';
+import '../../../core/widgets/ux_widgets.dart';
 import '../../my_services/models/unified_booking.dart';
 
 class DiagnosticsScreen extends StatefulWidget {
@@ -173,40 +174,26 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
   }
 
   Widget _buildSkeleton() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Column(children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(0, 0, 0, 12),
-          child: Row(children: [
-            Container(width: 120, height: 16, decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(8))),
-          ]),
-        ),
-        ...List.generate(5, (_) => Container(
-          margin: const EdgeInsets.only(bottom: 10),
-          height: 78,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.divider),
-          ),
-        )),
-      ]),
+    return AppShimmer(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Column(children: [
+          Container(width: 120, height: 16, margin: const EdgeInsets.only(bottom: 12),
+              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8))),
+          ...List.generate(5, (_) => Container(
+            margin: const EdgeInsets.only(bottom: 10),
+            height: 78,
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+          )),
+        ]),
+      ),
     );
   }
 
-  Widget _buildError() {
-    return Padding(
-      padding: const EdgeInsets.all(32),
-      child: Column(children: [
-        Icon(Icons.wifi_off_rounded, size: 48, color: Colors.grey[300]),
-        const SizedBox(height: 12),
-        Text('Could not load tests', style: AppTextStyles.bodyMedium),
-        const SizedBox(height: 8),
-        TextButton(onPressed: () => setState(() {}), child: const Text('Retry')),
-      ]),
-    );
-  }
+  Widget _buildError() => AppErrorState(
+    message: 'Could not load tests. Please try again.',
+    onRetry: () => setState(() {}),
+  );
 
   Widget _buildList(List<QueryDocumentSnapshot> docs) {
     final allTests = docs.asMap().entries.map((e) {

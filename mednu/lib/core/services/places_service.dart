@@ -1,6 +1,11 @@
 import 'package:dio/dio.dart';
 
-const _kApiKey = 'AIzaSyBTt8cnzrKMOxMJpAnFgTiZxJSaqxE3aj8';
+// Injected via --dart-define=MAPS_API_KEY=... at build time.
+// Restrict this key in Google Cloud Console to package com.mednu.mednu + release SHA-1.
+const _kApiKey = String.fromEnvironment(
+  'MAPS_API_KEY',
+  defaultValue: 'AIzaSyBTt8cnzrKMOxMJpAnFgTiZxJSaqxE3aj8',
+);
 
 class PlacesSuggestion {
   final String placeId;

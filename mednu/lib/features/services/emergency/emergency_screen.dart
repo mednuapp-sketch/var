@@ -303,7 +303,6 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
                     crossAxisSpacing: 12,
                     mainAxisSpacing: 12,
                     children: const [
-                      _EmergencyCard('🚑', 'Ambulance', '108', Color(0xFFE53935)),
                       _EmergencyCard('👮', 'Police', '100', Color(0xFF1565C0)),
                       _EmergencyCard('🚒', 'Fire', '101', Color(0xFFE65100)),
                       _EmergencyCard('🏥', 'Hospital', '104', Color(0xFF2E7D32)),

@@ -17,6 +17,7 @@ class IncomingCallScreen extends StatefulWidget {
   final String doctorName;
   final String doctorSpecialty;
   final String consultationType;
+  final String doctorPhotoUrl;
 
   const IncomingCallScreen({
     super.key,
@@ -24,6 +25,7 @@ class IncomingCallScreen extends StatefulWidget {
     required this.doctorName,
     required this.doctorSpecialty,
     this.consultationType = 'Video',
+    this.doctorPhotoUrl = '',
   });
 
   @override
@@ -268,18 +270,32 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
               width: 110,
               height: 110,
               decoration: BoxDecoration(
-                gradient: AppColors.primaryGradient,
+                gradient: widget.doctorPhotoUrl.isEmpty
+                    ? AppColors.primaryGradient
+                    : null,
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.primary.withValues(alpha:0.55),
+                    color: AppColors.primary.withValues(alpha: 0.55),
                     blurRadius: 30,
                     spreadRadius: 8,
                   ),
                 ],
               ),
-              child: const Icon(Icons.medical_services_rounded,
-                  color: Colors.white, size: 52),
+              child: widget.doctorPhotoUrl.isNotEmpty
+                  ? ClipOval(
+                      child: Image.network(
+                        widget.doctorPhotoUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => const Icon(
+                          Icons.medical_services_rounded,
+                          color: Colors.white,
+                          size: 52,
+                        ),
+                      ),
+                    )
+                  : const Icon(Icons.medical_services_rounded,
+                      color: Colors.white, size: 52),
             ),
           ),
         ],

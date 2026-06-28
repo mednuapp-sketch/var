@@ -389,27 +389,16 @@ class _RecordsScreenState extends State<RecordsScreen>
     if (_prescLoading) {
       return ListView(
         physics: const NeverScrollableScrollPhysics(),
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        children: List.generate(5, (_) => const SkeletonListTile()),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+        children: List.generate(5, (_) => const _PrescriptionCardSkeleton()),
       );
     }
 
     if (_prescriptions.isEmpty) {
-      return Center(
-        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Container(
-            width: 80, height: 80,
-            decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha:0.08), shape: BoxShape.circle),
-            child: const Icon(Icons.receipt_long_rounded, size: 40, color: AppColors.primary),
-          ),
-          const SizedBox(height: 16),
-          Text('No prescriptions yet',
-              style: AppTextStyles.h4.copyWith(color: AppColors.textPrimary)),
-          const SizedBox(height: 6),
-          Text('Prescriptions from your doctors\nwill appear here after consultations',
-              style: AppTextStyles.bodySmall, textAlign: TextAlign.center),
-        ]),
+      return const AppEmptyState(
+        icon: Icons.receipt_long_rounded,
+        title: 'No prescriptions yet',
+        message: 'Prescriptions from your doctors will appear here after consultations.',
       );
     }
 
@@ -479,34 +468,19 @@ class _RecordsScreenState extends State<RecordsScreen>
     if (_reportsLoading) {
       return ListView(
         physics: const NeverScrollableScrollPhysics(),
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        children: List.generate(5, (_) => const SkeletonListTile()),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+        children: List.generate(5, (_) => const _ReportCardSkeleton()),
       );
     }
 
     if (_reports.isEmpty) {
-      return Center(
-        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Container(
-            width: 80, height: 80,
-            decoration: BoxDecoration(
-                color: const Color(0xFF0097A7).withValues(alpha:0.08), shape: BoxShape.circle),
-            child: const Icon(Icons.science_rounded, size: 40, color: Color(0xFF0097A7)),
-          ),
-          const SizedBox(height: 16),
-          Text('No reports uploaded yet',
-              style: AppTextStyles.h4.copyWith(color: AppColors.textPrimary)),
-          const SizedBox(height: 6),
-          Text('Tap "Upload Report" to add your lab reports,\nX-rays, or scans',
-              style: AppTextStyles.bodySmall, textAlign: TextAlign.center),
-          const SizedBox(height: 16),
-          if (!widget.isMemberView)
-            ElevatedButton.icon(
-              onPressed: _uploading ? null : _uploadReport,
-              icon: const Icon(Icons.upload_file_rounded),
-              label: const Text('Upload Report'),
-            ),
-        ]),
+      return AppEmptyState(
+        icon: Icons.science_rounded,
+        title: 'No reports uploaded yet',
+        message: 'Upload your lab reports, X-rays, or scans for easy access.',
+        iconColor: const Color(0xFF0097A7),
+        actionLabel: widget.isMemberView ? null : 'Upload Report',
+        onAction: (widget.isMemberView || _uploading) ? null : _uploadReport,
       );
     }
 
@@ -598,7 +572,7 @@ class _RecordsScreenState extends State<RecordsScreen>
         initialChildSize: 0.85,
         maxChildSize: 0.95,
         minChildSize: 0.5,
-        builder: (_, ctrl) => Container(
+        builder: (sheetCtx, ctrl) => Container(
           decoration: const BoxDecoration(
               color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
           child: Column(children: [
@@ -609,7 +583,7 @@ class _RecordsScreenState extends State<RecordsScreen>
               child: Row(children: [
                 Text(name, style: AppTextStyles.h4),
                 const Spacer(),
-                IconButton(icon: const Icon(Icons.close_rounded), onPressed: () => Navigator.pop(context)),
+                IconButton(icon: const Icon(Icons.close_rounded), onPressed: () => Navigator.pop(sheetCtx)),
               ]),
             ),
             const SizedBox(height: 12),
@@ -638,23 +612,17 @@ class _RecordsScreenState extends State<RecordsScreen>
     if (_consultLoading) {
       return ListView(
         physics: const NeverScrollableScrollPhysics(),
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        children: List.generate(5, (_) => const SkeletonListTile()),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+        children: List.generate(5, (_) => const _ConsultationCardSkeleton()),
       );
     }
 
     if (_consultations.isEmpty) {
-      return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-        Container(
-          width: 80, height: 80,
-          decoration: BoxDecoration(color: AppColors.primary.withValues(alpha:0.08), shape: BoxShape.circle),
-          child: const Icon(Icons.video_call_rounded, size: 40, color: AppColors.primary),
-        ),
-        const SizedBox(height: 16),
-        Text('No consultations yet', style: AppTextStyles.h4.copyWith(color: AppColors.textPrimary)),
-        const SizedBox(height: 6),
-        Text('Video call history will appear here', style: AppTextStyles.bodySmall, textAlign: TextAlign.center),
-      ]));
+      return const AppEmptyState(
+        icon: Icons.video_call_rounded,
+        title: 'No consultations yet',
+        message: 'Video call history will appear here after your first consultation.',
+      );
     }
 
     return ListView.builder(
@@ -779,6 +747,110 @@ class _SourcePicker extends StatelessWidget {
           ),
         ]),
       ]),
+    );
+  }
+}
+
+class _PrescriptionCardSkeleton extends StatelessWidget {
+  const _PrescriptionCardSkeleton();
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFEEEEEE)),
+        boxShadow: const [BoxShadow(color: Color(0x0A000000), blurRadius: 8, offset: Offset(0, 2))],
+      ),
+      child: const Padding(
+        padding: EdgeInsets.all(16),
+        child: AppShimmer(
+          child: Row(children: [
+            SkeletonBox(width: 46, height: 46, radius: 12),
+            SizedBox(width: 12),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              SkeletonBox(width: double.infinity, height: 14, radius: 4),
+              SizedBox(height: 5),
+              SkeletonBox(width: 160, height: 11, radius: 4),
+              SizedBox(height: 5),
+              SkeletonBox(width: 120, height: 11, radius: 4),
+              SizedBox(height: 5),
+              SkeletonBox(width: 140, height: 11, radius: 4),
+            ])),
+            SizedBox(width: 8),
+            Column(mainAxisSize: MainAxisSize.min, children: [
+              SkeletonBox(width: 32, height: 32, radius: 8),
+              SizedBox(height: 8),
+              SkeletonBox(width: 32, height: 32, radius: 8),
+            ]),
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
+class _ReportCardSkeleton extends StatelessWidget {
+  const _ReportCardSkeleton();
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFEEEEEE)),
+        boxShadow: const [BoxShadow(color: Color(0x0A000000), blurRadius: 8, offset: Offset(0, 2))],
+      ),
+      child: const Padding(
+        padding: EdgeInsets.all(16),
+        child: AppShimmer(
+          child: Row(children: [
+            SkeletonBox(width: 46, height: 46, radius: 12),
+            SizedBox(width: 12),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              SkeletonBox(width: double.infinity, height: 14, radius: 4),
+              SizedBox(height: 6),
+              SkeletonBox(width: 120, height: 11, radius: 4),
+            ])),
+            SizedBox(width: 8),
+            SkeletonBox(width: 60, height: 24, radius: 8),
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
+class _ConsultationCardSkeleton extends StatelessWidget {
+  const _ConsultationCardSkeleton();
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFEEEEEE)),
+        boxShadow: const [BoxShadow(color: Color(0x0A000000), blurRadius: 8, offset: Offset(0, 2))],
+      ),
+      child: const AppShimmer(
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          SkeletonBox(width: 48, height: 48, radius: 14),
+          SizedBox(width: 12),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            SkeletonBox(width: double.infinity, height: 14, radius: 4),
+            SizedBox(height: 6),
+            SkeletonBox(width: 180, height: 11, radius: 4),
+            SizedBox(height: 6),
+            SkeletonBox(width: 120, height: 11, radius: 4),
+            SizedBox(height: 10),
+            SkeletonBox(width: 100, height: 28, radius: 8),
+          ])),
+        ]),
+      ),
     );
   }
 }

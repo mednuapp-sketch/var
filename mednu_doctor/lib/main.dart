@@ -29,11 +29,31 @@ import 'features/security/screens/lock_screen.dart';
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   await CallNotificationService.init();
-  if (message.data['type'] == 'incoming_consultation') {
+
+  final type = message.data['type'] as String? ?? '';
+
+  if (type == 'incoming_consultation') {
     await CallNotificationService.showIncomingCall(
       patientName: message.data['patientName'] ?? 'Patient',
       complaint:   message.data['complaint']   ?? '',
     );
+    return;
+  }
+
+  if (type == 'emergency_doctor_request') {
+    await CallNotificationService.showEmergencyAlert(
+      patientName: message.data['patientName'] ?? 'Patient',
+      requestId:   message.data['requestId']   ?? '',
+    );
+    return;
+  }
+
+  // All other types: show a local notification for any remaining
+  // data-only FCM messages that don't carry an android.notification payload.
+  final title = message.notification?.title ?? message.data['title'] as String? ?? '';
+  final body  = message.notification?.body  ?? message.data['body']  as String? ?? '';
+  if (title.isNotEmpty || body.isNotEmpty) {
+    await CallNotificationService.showGenericNotification(title: title, body: body, type: type);
   }
 }
 
@@ -147,6 +167,7 @@ class _MedNUDoctorAppState extends ConsumerState<MedNUDoctorApp>
   bool _isAuthenticating  = false;
 
   StreamSubscription<QuerySnapshot>? _callSub;
+  StreamSubscription<QuerySnapshot>? _scheduledWaitingSub;
   StreamSubscription<User?>?         _authStateSub;
   String? _lastAlertedConsultId;
 
@@ -200,10 +221,12 @@ class _MedNUDoctorAppState extends ConsumerState<MedNUDoctorApp>
           if (mounted) BatteryOptimizationService.promptIfNeeded(context);
         });
       } else {
-        // User signed out — cancel the per-UID listener immediately so we
-        // don't keep a live Firestore stream open for the previous account.
+        // User signed out — cancel all per-UID listeners immediately so we
+        // don't keep live Firestore streams open for the previous account.
         _callSub?.cancel();
         _callSub = null;
+        _scheduledWaitingSub?.cancel();
+        _scheduledWaitingSub = null;
       }
     });
   }
@@ -229,16 +252,19 @@ class _MedNUDoctorAppState extends ConsumerState<MedNUDoctorApp>
     }
   }
 
-  // ── Global Firestore call listener ─────────────────────────────────────────
-  // A consultation is considered "fresh" only if it was created within the
-  // last 90 seconds. Older pending docs are stale leftovers from previous
-  // sessions and must never trigger the incoming call screen.
+  // ── Global Firestore call listeners ───────────────────────────────────────
+  // Quick-connect pending calls expire after 90 s — stale docs from a previous
+  // session must never re-alert the doctor on relaunch.
   static const _kFreshWindowSeconds = 90;
+  // Scheduled-waiting consultations live for the full join window (30 min
+  // after the slot) plus a small drift buffer.
+  static const _kScheduledFreshWindowSeconds = 2400; // 40 min
 
   void _setupCallListener() {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
 
+    // ── Quick-connect / instant calls (callerType: patient, status: pending) ─
     _callSub?.cancel();
     _callSub = FirebaseFirestore.instance
         .collection('consultations')
@@ -298,11 +324,53 @@ class _MedNUDoctorAppState extends ConsumerState<MedNUDoctorApp>
       );
       ref.read(appRouterProvider).go(AppRoutes.incomingRequest);
     });
+
+    // ── Scheduled appointments: patient entered waiting room ───────────────
+    // Fires when the patient joins within the time window and creates a
+    // consultation with status = 'scheduled_waiting'. The doctor is notified
+    // regardless of which screen they are on and is taken to the dashboard
+    // where the appointment card shows the "Patient is waiting" banner.
+    _scheduledWaitingSub?.cancel();
+    _scheduledWaitingSub = FirebaseFirestore.instance
+        .collection('consultations')
+        .where('doctorId', isEqualTo: uid)
+        .where('status',   isEqualTo: 'scheduled_waiting')
+        .orderBy('createdAt', descending: true)
+        .limit(1)
+        .snapshots(includeMetadataChanges: true)
+        .listen((snap) {
+      if (!mounted || snap.metadata.isFromCache) return;
+      if (snap.docs.isEmpty) return;
+
+      final doc  = snap.docs.first;
+      final data = doc.data();
+
+      // Freshness guard — covers the full 30-min appointment window.
+      final createdAt = data['createdAt'];
+      if (createdAt != null) {
+        try {
+          final created = (createdAt as Timestamp).toDate();
+          if (DateTime.now().difference(created).inSeconds >
+              _kScheduledFreshWindowSeconds) { return; }
+        } catch (_) {}
+      }
+
+      // De-duplicate — same logic as the quick-connect listener.
+      if (doc.id == _lastAlertedConsultId) return;
+      _saveAlertedId(doc.id);
+
+      final patientName = data['patientName'] as String? ?? 'Patient';
+      CallNotificationService.showPatientWaiting(patientName: patientName);
+      // Go to dashboard — the appointment card will show the
+      // "Patient is in the waiting room" banner in real-time.
+      ref.read(appRouterProvider).go(AppRoutes.dashboard);
+    });
   }
 
   @override
   void dispose() {
     _callSub?.cancel();
+    _scheduledWaitingSub?.cancel();
     _authStateSub?.cancel();
     PresenceService.instance.dispose();
     WidgetsBinding.instance.removeObserver(this);

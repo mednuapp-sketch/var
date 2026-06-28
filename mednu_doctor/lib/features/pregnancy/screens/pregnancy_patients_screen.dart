@@ -38,20 +38,31 @@ class _PregnancyPatientsScreenState extends State<PregnancyPatientsScreen>
     return Scaffold(
       backgroundColor: const Color(0xFFF7F4F8),
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textPrimary),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
           onPressed: () => context.pop(),
         ),
         title: const Text('Maternity Patients',
-            style: TextStyle(color: Color(0xFF1A1A2E), fontWeight: FontWeight.w700, fontSize: 16)),
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16, fontFamily: 'Poppins')),
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFF880E4F), Color(0xFFC2185B), Color(0xFF7B1FA2)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
         bottom: TabBar(
           controller: _tab,
-          labelColor: AppColors.primary,
-          unselectedLabelColor: AppColors.textHint,
-          indicatorColor: AppColors.primary,
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white60,
+          indicatorColor: Colors.white,
           indicatorSize: TabBarIndicatorSize.label,
+          labelStyle: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 13),
+          unselectedLabelStyle: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w500, fontSize: 13),
           tabs: const [
             Tab(text: 'My Patients'),
             Tab(text: 'Alerts'),
@@ -335,29 +346,10 @@ class _PregnancyPatientsScreenState extends State<PregnancyPatientsScreen>
     ],
   );
 
-  Widget _emptyState(String title, String subtitle) => Center(
-    child: Padding(
-      padding: const EdgeInsets.all(32),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 72,
-            height: 72,
-            decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha:0.08),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.pregnant_woman_rounded, size: 36, color: AppColors.primary),
-          ),
-          const SizedBox(height: 16),
-          Text(title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-          const SizedBox(height: 8),
-          Text(subtitle,
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: AppColors.textHint, fontSize: 13, height: 1.6)),
-        ],
-      ),
-    ),
+  Widget _emptyState(String title, String subtitle) => AppEmptyState(
+    icon: Icons.pregnant_woman_rounded,
+    title: title,
+    message: subtitle,
+    iconColor: AppColors.primary,
   );
 }

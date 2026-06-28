@@ -10,6 +10,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../../home/providers/location_provider.dart';
+import '../../home/providers/home_nav_provider.dart';
 
 double _haversineKm(double lat1, double lng1, double lat2, double lng2) {
   const r = 6371.0;
@@ -226,8 +227,10 @@ class _DoctorsListScreenState extends ConsumerState<DoctorsListScreen>
   Widget build(BuildContext context) {
     final locState = ref.watch(locationProvider);
     final isInPerson = _consultationMode == 'inperson';
+    final keyboardInset = MediaQuery.of(context).viewInsets.bottom;
 
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text(
@@ -245,7 +248,13 @@ class _DoctorsListScreenState extends ConsumerState<DoctorsListScreen>
         leading: widget.showBackButton
             ? IconButton(
                 icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-                onPressed: () => context.pop(),
+                onPressed: () {
+                  if (context.canPop()) {
+                    context.pop();
+                  } else {
+                    ref.read(bottomNavIndexProvider.notifier).state = 0;
+                  }
+                },
               )
             : null,
         actions: [
@@ -403,7 +412,7 @@ class _DoctorsListScreenState extends ConsumerState<DoctorsListScreen>
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Video consultations available globally — no location needed',
+                    'Video consultations available globally to India',
                     style: AppTextStyles.caption
                         .copyWith(color: Colors.teal.shade700),
                     maxLines: 1,
@@ -424,13 +433,17 @@ class _DoctorsListScreenState extends ConsumerState<DoctorsListScreen>
             itemCount: _specialties.length,
             itemBuilder: (_, i) {
               final selected = _selectedSpecialty == _specialties[i];
+              final isNotAll = _specialties[i] != 'All';
               return GestureDetector(
                 onTap: () =>
                     setState(() => _selectedSpecialty = _specialties[i]),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 180),
                   margin: const EdgeInsets.only(right: 8),
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  padding: EdgeInsets.only(
+                    left: 14,
+                    right: selected && isNotAll ? 8 : 14,
+                  ),
                   decoration: BoxDecoration(
                     gradient: selected ? AppColors.primaryGradient : null,
                     color: selected ? null : Colors.white,
@@ -441,16 +454,32 @@ class _DoctorsListScreenState extends ConsumerState<DoctorsListScreen>
                             : AppColors.border),
                   ),
                   child: Center(
-                    child: Text(
-                      _specialties[i],
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: selected
-                            ? Colors.white
-                            : AppColors.textSecondary,
-                      ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _specialties[i],
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: selected
+                                ? Colors.white
+                                : AppColors.textSecondary,
+                          ),
+                        ),
+                        if (selected && isNotAll) ...[
+                          const SizedBox(width: 5),
+                          GestureDetector(
+                            onTap: () => setState(() => _selectedSpecialty = 'All'),
+                            child: const Icon(
+                              Icons.close_rounded,
+                              size: 14,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                 ),
@@ -506,7 +535,9 @@ class _DoctorsListScreenState extends ConsumerState<DoctorsListScreen>
 
         // ── Doctor list ────────────────────────────────────────
         Expanded(
-          child: TabBarView(
+          child: Padding(
+            padding: EdgeInsets.only(bottom: keyboardInset),
+            child: TabBarView(
             controller: _tabController,
             children: [
               // Video / Online tab — global, no location filter
@@ -534,10 +565,11 @@ class _DoctorsListScreenState extends ConsumerState<DoctorsListScreen>
                           search: _debouncedSearch,
                           filters: _filters,
                           locationMode: _LocationMode.nearby(
-                              locState.lat!, locState.lng!),
+                              locState.lat ?? 0, locState.lng ?? 0),
                           isInPerson: true,
                         ),
             ],
+          ),
           ),
         ),
       ]),
@@ -815,12 +847,8 @@ class _DoctorCard extends StatelessWidget {
     final qual = data['qualifications'] as String? ?? '';
     final ratingNum = (data['rating'] as num?)?.toDouble() ?? 0;
     final totalReviews = (data['totalReviews'] as num?)?.toInt() ?? 0;
-    // Only show rating when there are real verified reviews; never show seeded defaults
-    final rating = (ratingNum > 0 && totalReviews > 0) ? ratingNum.toStringAsFixed(1) : '–';
-    final expRaw = data['experience'];
-    final exp = expRaw is int
-        ? expRaw
-        : int.tryParse(expRaw?.toString() ?? '') ?? 0;
+    final hasRating = ratingNum > 0 && totalReviews > 0;
+    final rating = hasRating ? ratingNum.toStringAsFixed(1) : '–';
     final feeRaw = data['fee'];
     final fee = feeRaw is int
         ? feeRaw
@@ -829,137 +857,215 @@ class _DoctorCard extends StatelessWidget {
     final photoUrl = data['photoUrl'] as String? ?? '';
     final hospital = data['hospital'] as String? ??
         data['hospitalAffiliation'] as String? ?? '';
+    final isVerified = data['verified'] as bool? ?? true;
 
     return TapScale(
       onTap: () => context.push('/doctors/$docId'),
       child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
+        margin: const EdgeInsets.only(bottom: 14),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: AppColors.divider),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isOnline
+                ? AppColors.accent.withValues(alpha: 0.2)
+                : AppColors.divider,
+          ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha:0.03),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
+              color: isOnline
+                  ? AppColors.accent.withValues(alpha: 0.06)
+                  : Colors.black.withValues(alpha: 0.04),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
             ),
           ],
         ),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                // Photo
-                Stack(children: [
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(14),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                // ── Photo ──────────────────────────────────────────
+                Stack(clipBehavior: Clip.none, children: [
                   Container(
-                    width: 66,
-                    height: 66,
+                    width: 72,
+                    height: 72,
                     decoration: BoxDecoration(
-                      color: AppColors.primary.withValues(alpha:0.10),
-                      borderRadius: BorderRadius.circular(16),
+                      gradient: LinearGradient(
+                        colors: [
+                          AppColors.primary.withValues(alpha: 0.12),
+                          AppColors.secondary.withValues(alpha: 0.08),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(18),
                     ),
                     child: photoUrl.isNotEmpty
                         ? ClipRRect(
-                            borderRadius: BorderRadius.circular(16),
+                            borderRadius: BorderRadius.circular(18),
                             child: CachedNetworkImage(
                               imageUrl: photoUrl,
                               fit: BoxFit.cover,
                               placeholder: (_, __) => const SkeletonBox(
-                                  width: 66, height: 66, radius: 16),
-                              errorWidget: (_, __, ___) =>
-                                  const Icon(Icons.person_rounded,
-                                      size: 36, color: AppColors.primary),
+                                  width: 72, height: 72, radius: 18),
+                              errorWidget: (_, __, ___) => const Icon(
+                                  Icons.person_rounded,
+                                  size: 38,
+                                  color: AppColors.primary),
                             ),
                           )
                         : const Icon(Icons.person_rounded,
-                            size: 36, color: AppColors.primary),
+                            size: 38, color: AppColors.primary),
                   ),
+                  // Online indicator
                   if (isOnline)
                     Positioned(
-                      bottom: 4, right: 4,
+                      bottom: -2, right: -2,
                       child: Container(
-                        width: 11,
-                        height: 11,
+                        width: 18,
+                        height: 18,
                         decoration: BoxDecoration(
                           color: AppColors.accent,
                           shape: BoxShape.circle,
-                          border:
-                              Border.all(color: Colors.white, width: 1.5),
+                          border: Border.all(color: Colors.white, width: 2),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.accent.withValues(alpha: 0.4),
+                              blurRadius: 6,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
                         ),
+                        child: const Icon(Icons.circle,
+                            size: 8, color: Colors.white),
                       ),
                     ),
                 ]),
-                const SizedBox(width: 12),
+                const SizedBox(width: 14),
+
+                // ── Info ──────────────────────────────────────────
                 Expanded(
                   child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                    Row(children: [
-                      Expanded(
-                        child: Text(name,
-                            style: AppTextStyles.labelLarge,
-                            overflow: TextOverflow.ellipsis),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: (isOnline ? AppColors.accent : Colors.grey)
-                              .withValues(alpha:0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          isOnline ? 'Online' : 'Offline',
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            color: isOnline ? AppColors.accent : Colors.grey,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Name + badges row
+                      Row(children: [
+                        Expanded(
+                          child: Text(
+                            name,
+                            style: const TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textPrimary,
+                            ),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
+                        const SizedBox(width: 6),
+                        // Online/Offline badge
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 9, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: isOnline
+                                ? AppColors.accent.withValues(alpha: 0.12)
+                                : Colors.grey.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: isOnline
+                                  ? AppColors.accent.withValues(alpha: 0.3)
+                                  : Colors.grey.withValues(alpha: 0.2),
+                            ),
+                          ),
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [
+                            Container(
+                              width: 6,
+                              height: 6,
+                              decoration: BoxDecoration(
+                                color: isOnline
+                                    ? AppColors.accent
+                                    : Colors.grey,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              isOnline ? 'Online' : 'Offline',
+                              style: TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: isOnline
+                                    ? AppColors.accent
+                                    : Colors.grey.shade600,
+                              ),
+                            ),
+                          ]),
+                        ),
+                      ]),
+
+                      const SizedBox(height: 2),
+
+                      // Specialty + qualification
+                      Row(children: [
+                        Expanded(
+                          child: Text(
+                            qual.isNotEmpty ? '$specialty · $qual' : specialty,
+                            style: AppTextStyles.bodySmall.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                          ),
+                        ),
+                        if (isVerified) ...[
+                          const SizedBox(width: 6),
+                          const Icon(Icons.verified_rounded,
+                              size: 15, color: Color(0xFF1565C0)),
+                        ],
+                      ]),
+
+                      const SizedBox(height: 8),
+
+                      // Stats row
+                      Wrap(
+                        spacing: 12,
+                        children: [
+                          if (hasRating) ...[
+                            _statChip(
+                              icon: Icons.star_rounded,
+                              label: '$rating ($totalReviews)',
+                              color: const Color(0xFFF9A825),
+                            ),
+                          ],
+                          _statChip(
+                            icon: Icons.currency_rupee_rounded,
+                            label: fee > 0 ? '$fee' : 'Free',
+                            color: AppColors.primary,
+                            bold: true,
+                          ),
+                        ],
                       ),
-                    ]),
-                    Text(
-                      qual.isNotEmpty ? '$specialty · $qual' : specialty,
-                      style: AppTextStyles.bodySmall,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 6),
-                    Row(children: [
-                      if (ratingNum > 0 && totalReviews > 0) ...[
-                        const Icon(Icons.star_rounded,
-                            size: 13, color: Colors.amber),
-                        const SizedBox(width: 3),
-                        Text(rating, style: AppTextStyles.labelSmall),
-                        const SizedBox(width: 10),
-                      ],
-                      if (exp > 0) ...[
-                        const Icon(Icons.work_outline_rounded,
-                            size: 13, color: AppColors.textHint),
-                        const SizedBox(width: 3),
-                        Text('$exp yrs', style: AppTextStyles.labelSmall),
-                        const SizedBox(width: 10),
-                      ],
-                      const Spacer(),
-                      Text(
-                        fee > 0 ? '₹$fee' : 'Free',
-                        style: AppTextStyles.labelLarge
-                            .copyWith(color: AppColors.primary),
-                      ),
-                    ]),
-                  ]),
+                    ],
+                  ),
                 ),
               ]),
+            ),
 
-              // Hospital & distance row
-              if (hospital.isNotEmpty || distanceKm != null) ...[
-                const SizedBox(height: 8),
-                const Divider(height: 1),
-                const SizedBox(height: 8),
-                Row(children: [
+            // ── Hospital & distance row ──────────────────────────
+            if (hospital.isNotEmpty || distanceKm != null) ...[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 0, 14, 0),
+                child: Divider(
+                    height: 1, color: AppColors.divider.withValues(alpha: 0.6)),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 8, 14, 0),
+                child: Row(children: [
                   if (hospital.isNotEmpty) ...[
                     const Icon(Icons.local_hospital_rounded,
                         size: 13, color: AppColors.textHint),
@@ -972,27 +1078,136 @@ class _DoctorCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                  ] else const Spacer(),
+                  ] else
+                    const Spacer(),
                   if (distanceKm != null) ...[
-                    const Icon(Icons.near_me_rounded,
-                        size: 13, color: AppColors.primary),
-                    const SizedBox(width: 3),
-                    Text(
-                      distanceKm! < 1
-                          ? '${(distanceKm! * 1000).toInt()} m away'
-                          : '${distanceKm!.toStringAsFixed(1)} km away',
-                      style: AppTextStyles.caption
-                          .copyWith(color: AppColors.primary),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.07),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        const Icon(Icons.near_me_rounded,
+                            size: 11, color: AppColors.primary),
+                        const SizedBox(width: 3),
+                        Text(
+                          distanceKm! < 1
+                              ? '${(distanceKm! * 1000).toInt()} m'
+                              : '${distanceKm!.toStringAsFixed(1)} km',
+                          style: AppTextStyles.caption.copyWith(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w700),
+                        ),
+                      ]),
                     ),
                   ],
                 ]),
-              ],
+              ),
             ],
-          ),
+
+            // ── Action buttons ───────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
+              child: Row(children: [
+                // Quick Connect button
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => context.push('/doctors/$docId',
+                        extra: {'mode': 'quickConnect'}),
+                    child: Container(
+                      height: 38,
+                      decoration: BoxDecoration(
+                        border: Border.all(color: AppColors.primary),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.flash_on_rounded,
+                              size: 15, color: AppColors.primary),
+                          SizedBox(width: 5),
+                          Text(
+                            'Quick Connect',
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                // Book Appointment button
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => context.push('/doctors/$docId'),
+                    child: Container(
+                      height: 38,
+                      decoration: BoxDecoration(
+                        gradient: AppColors.primaryGradient,
+                        borderRadius: BorderRadius.circular(10),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.primary.withValues(alpha: 0.25),
+                            blurRadius: 8,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
+                      ),
+                      child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.calendar_month_rounded,
+                              size: 15, color: Colors.white),
+                          SizedBox(width: 5),
+                          Text(
+                            'Book Now',
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ]),
+            ),
+          ],
         ),
       ),
     );
   }
+
+  Widget _statChip({
+    required IconData icon,
+    required String label,
+    required Color color,
+    bool bold = false,
+  }) =>
+      Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(icon, size: 13, color: color),
+        const SizedBox(width: 3),
+        Text(
+          label,
+          style: TextStyle(
+            fontFamily: 'Poppins',
+            fontSize: 12,
+            fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
+            color: bold ? color : AppColors.textSecondary,
+          ),
+        ),
+      ]);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -1409,7 +1624,7 @@ class _LocationChangeSheetState extends ConsumerState<_LocationChangeSheet> {
           ),
           const SizedBox(height: 12),
           if (_loading)
-            Column(children: List.generate(3, (_) => const SkeletonListTile()))
+            Column(children: List.generate(3, (_) => const _LocationResultSkeleton()))
           else
             Flexible(
               child: ListView.separated(
@@ -1523,6 +1738,27 @@ class _LocationRequiredView extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _LocationResultSkeleton extends StatelessWidget {
+  const _LocationResultSkeleton();
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.symmetric(vertical: 8),
+      child: AppShimmer(
+        child: Row(children: [
+          SkeletonBox(width: 36, height: 36, radius: 10),
+          SizedBox(width: 12),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            SkeletonBox(width: double.infinity, height: 13, radius: 4),
+            SizedBox(height: 5),
+            SkeletonBox(width: 200, height: 11, radius: 4),
+          ])),
+        ]),
       ),
     );
   }

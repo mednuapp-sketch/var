@@ -8,6 +8,7 @@ import 'dart:io';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../auth/services/doctor_auth_service.dart';
+import '../../../core/widgets/ux_widgets.dart';
 
 class ReportProblemScreen extends StatefulWidget {
   const ReportProblemScreen({super.key});
@@ -130,19 +131,23 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
       appBar: AppBar(
         title: const Text(
           'Report a Problem',
-          style: TextStyle(
-            fontFamily: 'Poppins',
-            fontWeight: FontWeight.w700,
-            color: Colors.white,
-            fontSize: 18,
-          ),
+          style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, color: Colors.white, fontSize: 18),
         ),
-        backgroundColor: AppColors.primary,
+        backgroundColor: Colors.transparent,
         foregroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
           onPressed: () => context.pop(),
+        ),
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFF880E4F), Color(0xFFC2185B), Color(0xFF7B1FA2)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
         ),
       ),
       body: _ticketId != null ? _buildSuccessState() : _buildForm(),
@@ -190,18 +195,12 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
               style: AppTextStyles.bodySmall.copyWith(height: 1.6),
             ),
             const SizedBox(height: 32),
-            SizedBox(
+            GradientButton(
+              label: 'Back to Help',
+              icon: Icons.arrow_back_rounded,
               width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () => context.pop(),
-                icon: const Icon(Icons.arrow_back_rounded, size: 18),
-                label: const Text('Back to Help'),
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
-                ),
-              ),
+              height: 52,
+              onTap: () => context.pop(),
             ),
           ],
         ),
@@ -341,37 +340,14 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
           ),
           const SizedBox(height: 28),
 
-          SizedBox(
+          GradientButton(
+            label: 'Submit Report',
+            icon: Icons.send_rounded,
             width: double.infinity,
             height: 52,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: _submitting
-                    ? null
-                    : const LinearGradient(
-                        colors: [Color(0xFFB71C1C), Color(0xFFC2185B)],
-                        begin: Alignment.centerLeft,
-                        end: Alignment.centerRight,
-                      ),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: ElevatedButton.icon(
-                onPressed: _submitting ? null : _submit,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.transparent,
-                  shadowColor: Colors.transparent,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
-                ),
-                icon: _submitting
-                    ? const SizedBox(
-                        width: 18, height: 18,
-                        child: CircularProgressIndicator(
-                            color: Colors.white, strokeWidth: 2.5))
-                    : const Icon(Icons.send_rounded, size: 18),
-                label: Text(_submitting ? 'Submitting…' : 'Submit Report'),
-              ),
-            ),
+            isLoading: _submitting,
+            colors: const [Color(0xFFB71C1C), Color(0xFFC2185B)],
+            onTap: _submitting ? () {} : _submit,
           ),
           const SizedBox(height: 40),
         ],

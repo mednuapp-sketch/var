@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
+import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
@@ -83,6 +84,10 @@ class _SosScreenState extends State<SosScreen> {
       );
 
       if (picked == null || !mounted) return;
+      if (picked.phones.isEmpty) {
+        _showSnack('Selected contact has no phone number.', isError: true);
+        return;
+      }
 
       final phone = picked.phones.first.number.replaceAll(RegExp(r'\s+'), '');
       await SosService.addContact(
@@ -207,7 +212,7 @@ class _SosScreenState extends State<SosScreen> {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () => context.pop(),
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
@@ -519,7 +524,7 @@ class _ContactPickerSheetState extends State<_ContactPickerSheet> {
                     itemCount: _filtered.length,
                     itemBuilder: (_, i) {
                       final c = _filtered[i];
-                      final phone = c.phones.first.number;
+                      final phone = c.phones.isNotEmpty ? c.phones.first.number : '';
                       final initial = c.displayName.isNotEmpty ? c.displayName[0].toUpperCase() : '?';
                       return ListTile(
                         onTap: () => Navigator.pop(context, c),

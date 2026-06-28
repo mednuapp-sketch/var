@@ -1174,7 +1174,7 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 3, vsync: this);
+    _tab = TabController(length: 4, vsync: this);
     // Force a rebuild every 30 s so the "JOIN NOW" badge and auto-connect check
     // stay current even without a new Firestore event.
     _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
@@ -1297,6 +1297,8 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
                     color: Colors.white,
                     child: TabBar(
                       controller: _tab,
+                      isScrollable: true,
+                      tabAlignment: TabAlignment.start,
                       labelColor: AppColors.primary,
                       unselectedLabelColor: AppColors.textHint,
                       indicatorColor: AppColors.primary,
@@ -1307,6 +1309,7 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
                         Tab(text: 'Upcoming (${upcoming.length})'),
                         Tab(text: 'Done (${completed.length})'),
                         const Tab(text: 'Cancelled'),
+                        const Tab(text: 'Quick Connect'),
                       ],
                     ),
                   ),
@@ -1318,6 +1321,7 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
                   _buildList(context, upcoming, 'booked'),
                   _buildList(context, completed, 'completed'),
                   _buildList(context, cancelled, 'cancelled'),
+                  _buildQuickConnectTab(context, uid),
                 ],
               ),
             );
@@ -1470,48 +1474,11 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
 
             // ── Action buttons for upcoming ───────────────
             if (isUpcoming)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
-                child: Row(children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      icon: const Icon(Icons.close_rounded, size: 15),
-                      label: const Text('Cancel'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.error,
-                        side: BorderSide(color: AppColors.error.withValues(alpha:0.45)),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        padding: const EdgeInsets.symmetric(vertical: 11),
-                        textStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w600),
-                      ),
-                      onPressed: () => _cancelAppointment(docId),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    flex: 2,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: AppColors.primaryGradient,
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [BoxShadow(color: AppColors.primary.withValues(alpha:0.3), blurRadius: 8, offset: const Offset(0, 3))],
-                      ),
-                      child: ElevatedButton.icon(
-                        icon: const Icon(Icons.videocam_rounded, size: 18),
-                        label: const Text('Start Call'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.transparent,
-                          shadowColor: Colors.transparent,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          padding: const EdgeInsets.symmetric(vertical: 11),
-                          textStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w700),
-                        ),
-                        onPressed: () => _startCallForAppointment(docId, data),
-                      ),
-                    ),
-                  ),
-                ]),
+              _DoctorScheduledCallSection(
+                appointmentId: docId,
+                data: data,
+                onCancel: () => _cancelAppointment(docId),
+                onStart: () => _startCallForAppointment(docId, data),
               ),
 
             // ── Action buttons for completed ──────────────
@@ -1534,6 +1501,7 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
                         'patientId': patientId,
                         'patientName': patientName,
                         'appointmentId': docId,
+                        'allowOffline': true,
                       }),
                     ),
                   ),
@@ -1574,6 +1542,228 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
     );
   }
 
+  Widget _buildQuickConnectTab(BuildContext context, String uid) {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('consultations')
+          .where('doctorId', isEqualTo: uid)
+          .where('status', isEqualTo: 'ended')
+          .orderBy('createdAt', descending: true)
+          .limit(50)
+          .snapshots(),
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
+          return AppShimmer(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(children: List.generate(4, (_) => Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                height: 80,
+                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+              ))),
+            ),
+          );
+        }
+        // Only pure quick-connects (no linked appointment)
+        final docs = (snap.data?.docs ?? []).where((d) {
+          final apptId = d.data()['appointmentId'] as String?;
+          return apptId == null || apptId.isEmpty;
+        }).toList();
+
+        if (docs.isEmpty) {
+          return const AppEmptyState(
+            icon: Icons.flash_on_rounded,
+            title: 'No quick connect sessions yet',
+            message: 'Completed quick consultations will appear here.',
+          );
+        }
+
+        return ListView.builder(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+          itemCount: docs.length,
+          itemBuilder: (_, i) {
+            final data = docs[i].data();
+            final docId = docs[i].id;
+
+            final patientName = ((data['patientName'] as String?) ?? 'Patient').trim();
+            final patientId = data['patientId'] as String? ?? '';
+            final complaint = data['chiefComplaint'] as String? ?? '';
+            final type = data['consultationType'] as String? ?? 'Video';
+            final createdAt = data['createdAt'] as Timestamp?;
+            final prescriptionWritten = data['prescriptionWritten'] as bool? ?? false;
+            final initial = patientName.isNotEmpty ? patientName[0].toUpperCase() : '?';
+
+            String timeLabel = '';
+            if (createdAt != null) {
+              final dt = createdAt.toDate();
+              final now = DateTime.now();
+              final diff = now.difference(dt);
+              if (diff.inDays == 0) {
+                timeLabel = 'Today  ·  ${DateFormat('hh:mm a').format(dt)}';
+              } else if (diff.inDays == 1) {
+                timeLabel = 'Yesterday  ·  ${DateFormat('hh:mm a').format(dt)}';
+              } else {
+                timeLabel = DateFormat('d MMM  ·  hh:mm a').format(dt);
+              }
+            }
+
+            final typeIcon = type == 'Video' ? Icons.videocam_rounded : Icons.chat_bubble_rounded;
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 14, offset: const Offset(0, 4))],
+              ),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+                  child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Container(
+                      width: 52, height: 52,
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(colors: [Color(0xFF00B4DB), Color(0xFF0083B0)]),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Center(child: Text(initial,
+                        style: const TextStyle(fontFamily: 'Poppins', fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white),
+                      )),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text(patientName,
+                          style: const TextStyle(fontFamily: 'Poppins', fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                          maxLines: 1, overflow: TextOverflow.ellipsis,
+                        ),
+                        if (timeLabel.isNotEmpty) ...[
+                          const SizedBox(height: 3),
+                          Row(children: [
+                            const Icon(Icons.access_time_rounded, size: 13, color: AppColors.textHint),
+                            const SizedBox(width: 4),
+                            Flexible(child: Text(timeLabel,
+                              style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: AppColors.textSecondary),
+                              overflow: TextOverflow.ellipsis,
+                            )),
+                          ]),
+                        ],
+                        if (complaint.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(complaint,
+                            maxLines: 1, overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: AppColors.textSecondary),
+                          ),
+                        ],
+                        const SizedBox(height: 6),
+                        Row(children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF0083B0).withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Row(mainAxisSize: MainAxisSize.min, children: [
+                              Icon(typeIcon, size: 12, color: const Color(0xFF0083B0)),
+                              const SizedBox(width: 4),
+                              Text(type,
+                                style: const TextStyle(fontFamily: 'Poppins', fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF0083B0))),
+                            ]),
+                          ),
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                              Icon(Icons.flash_on_rounded, size: 12, color: AppColors.primary),
+                              SizedBox(width: 4),
+                              Text('Quick Connect',
+                                style: TextStyle(fontFamily: 'Poppins', fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.primary)),
+                            ]),
+                          ),
+                        ]),
+                      ]),
+                    ),
+                    const SizedBox(width: 8),
+                    Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppColors.success.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: const Text('COMPLETED',
+                          style: TextStyle(fontFamily: 'Poppins', fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.success, letterSpacing: 0.4),
+                        ),
+                      ),
+                      if (prescriptionWritten) ...[
+                        const SizedBox(height: 4),
+                        const Icon(Icons.check_circle_rounded, size: 16, color: AppColors.success),
+                      ],
+                    ]),
+                  ]),
+                ),
+                const Divider(height: 1, thickness: 1, color: AppColors.divider),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+                  child: Row(children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        icon: const Icon(Icons.receipt_long_rounded, size: 15),
+                        label: Text(prescriptionWritten ? 'View Rx' : 'Prescription'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.primary,
+                          side: BorderSide(color: AppColors.primary.withValues(alpha: 0.45)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          padding: const EdgeInsets.symmetric(vertical: 11),
+                          textStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w600),
+                        ),
+                        onPressed: () => context.push(AppRoutes.prescription, extra: {
+                          'patientId': patientId,
+                          'patientName': patientName,
+                          'consultationId': docId,
+                          'allowOffline': true,
+                        }),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: AppColors.primaryGradient,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: ElevatedButton.icon(
+                          icon: const Icon(Icons.person_rounded, size: 15),
+                          label: const Text('Patient'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.transparent,
+                            shadowColor: Colors.transparent,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            padding: const EdgeInsets.symmetric(vertical: 11),
+                            textStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w700),
+                          ),
+                          onPressed: () => context.push(AppRoutes.patientDetail, extra: {
+                            'patientId': patientId,
+                            'patientName': patientName,
+                          }),
+                        ),
+                      ),
+                    ),
+                  ]),
+                ),
+              ]),
+            );
+          },
+        );
+      },
+    );
+  }
+
   void _checkAutoConnect(
       List<QueryDocumentSnapshot<Map<String, dynamic>>> upcoming) {
     if (!mounted) return;
@@ -1609,42 +1799,98 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
     String appointmentId,
     Map<String, dynamic> data,
   ) async {
-    // Re-use an existing consultation linked to this appointment if one exists.
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    if (!mounted) return;
+
+    final db          = FirebaseFirestore.instance;
+    final patientId   = data['patientId']   as String? ?? '';
+    final patientName = data['patientName'] as String? ?? 'Patient';
+    final doctorName  = data['doctorName']  as String? ?? '';
+
+    // Re-read the appointment to get the freshest consultationId.
     String? consultationId = data['consultationId'] as String?;
+    String? existingStatus;
 
-    if (consultationId == null || consultationId.isEmpty) {
-      final uid = FirebaseAuth.instance.currentUser?.uid;
-      if (uid == null) return;
-      if (!mounted) return;
-      FeedbackService.showLoading(context, 'Starting call…');
+    FeedbackService.showLoading(context, 'Starting consultation…');
+
+    try {
+      // Always fetch the latest appointment state to avoid stale cached data.
+      final apptSnap = await db.collection('appointments').doc(appointmentId).get();
+      final freshConsultId =
+          (apptSnap.data()?['consultationId'] as String?)?.trim() ?? '';
+      if (freshConsultId.isNotEmpty) {
+        consultationId = freshConsultId;
+        final cSnap = await db.collection('consultations').doc(consultationId).get();
+        existingStatus = cSnap.data()?['status'] as String?;
+      }
+    } catch (_) {}
+
+    // ── Patient already waiting (scheduled_waiting) ─────────────────────────
+    // Set status to 'active' — the patient's OutgoingCallScreen transitions
+    // automatically, and the doctor navigates to DoctorVideoCallScreen.
+    if (consultationId != null &&
+        consultationId.isNotEmpty &&
+        existingStatus == 'scheduled_waiting') {
       try {
-        final db          = FirebaseFirestore.instance;
-        final patientId   = data['patientId']   as String? ?? '';
-        final patientName = data['patientName'] as String? ?? 'Patient';
-        final doctorName  = data['doctorName']  as String? ?? '';
+        await db.collection('consultations').doc(consultationId).update({
+          'status':    'active',
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+        if (!mounted) return;
+        FeedbackService.dismiss(context);
+        context.push(AppRoutes.videoCall, extra: {
+          'consultationId': consultationId,
+          'patientName':    patientName,
+        });
+      } catch (e) {
+        if (!mounted) return;
+        FeedbackService.dismiss(context);
+        FeedbackService.showError(context, 'Failed to start call. Please try again.');
+      }
+      return;
+    }
 
+    // ── Consultation already active (e.g., re-tap after brief disconnect) ───
+    if (consultationId != null &&
+        consultationId.isNotEmpty &&
+        existingStatus == 'active') {
+      if (!mounted) return;
+      FeedbackService.dismiss(context);
+      context.push(AppRoutes.videoCall, extra: {
+        'consultationId': consultationId,
+        'patientName':    patientName,
+      });
+      return;
+    }
+
+    // ── No consultation yet — doctor initiates (patient gets IncomingCallScreen) ─
+    if (consultationId == null || consultationId.isEmpty) {
+      try {
         final consultRef = db.collection('consultations').doc();
         final now        = FieldValue.serverTimestamp();
-
-        // Write consultation doc + patient notification atomically.
-        final batch = db.batch();
+        final batch      = db.batch();
 
         batch.set(consultRef, {
           'appointmentId':   appointmentId,
+          'channelName':     appointmentId, // stable channel = appointment ID
           'doctorId':        uid,
           'patientId':       patientId,
           'patientName':     patientName,
           'doctorName':      doctorName,
+          'doctorSpecialty': data['doctorSpecialty'] ?? '',
+          'doctorPhotoUrl':  data['doctorPhotoUrl']  ?? '',
           'consultationType': data['consultationType'] ?? 'Video',
           'chiefComplaint':  data['chiefComplaint'] ?? '',
           'callerType':      'doctor',
+          'isScheduled':     true,
           'status':          'pending',
           'createdAt':       now,
           'updatedAt':       now,
         });
 
-        // Notify the patient so their app can surface the incoming call banner
-        // even if they missed the Firestore listener (e.g. notification history).
+        // Patient notification so their background listener fires
+        // and shows the incoming call screen.
         if (patientId.isNotEmpty) {
           final notifRef = db
               .collection('patient_notifications')
@@ -1653,7 +1899,7 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
               .doc();
           batch.set(notifRef, {
             'type':           'incoming_doctor_call',
-            'title':          'Dr. $doctorName is calling you',
+            'title':          'Dr. $doctorName is calling',
             'body':           'Tap to join your scheduled consultation',
             'consultationId': consultRef.id,
             'doctorId':       uid,
@@ -1664,16 +1910,12 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
         }
 
         await batch.commit();
-
         consultationId = consultRef.id;
 
-        // Persist the link so future taps reuse the same consultation doc.
+        // Persist so future taps reuse this consultation.
         await db.collection('appointments').doc(appointmentId).update({
           'consultationId': consultationId,
         });
-
-        if (!mounted) return;
-        FeedbackService.dismiss(context);
       } catch (e) {
         if (!mounted) return;
         FeedbackService.dismiss(context);
@@ -1683,9 +1925,10 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
     }
 
     if (!mounted) return;
+    FeedbackService.dismiss(context);
     context.push(AppRoutes.videoCall, extra: {
       'consultationId': consultationId,
-      'patientName': data['patientName'] ?? 'Patient',
+      'patientName':    patientName,
     });
   }
 
@@ -1961,48 +2204,6 @@ class _QuickEarnCard extends StatelessWidget {
 class _ProfileTab extends StatelessWidget {
   const _ProfileTab();
 
-  Future<void> _pickPatientThenPrescribe(BuildContext context) async {
-    final uid = DoctorAuthService.currentUid ?? '';
-
-    // Fetch distinct patients from this doctor's appointments
-    final snap = await FirebaseFirestore.instance
-        .collection('appointments')
-        .where('doctorId', isEqualTo: uid)
-        .orderBy('date', descending: true)
-        .limit(100)
-        .get();
-
-    // Deduplicate by patientId
-    final seen = <String>{};
-    final patients = <Map<String, String>>[];
-    for (final doc in snap.docs) {
-      final d = doc.data();
-      final pid  = d['patientId']   as String? ?? '';
-      final pname = d['patientName'] as String? ?? 'Patient';
-      if (pid.isNotEmpty && seen.add(pid)) {
-        patients.add({'id': pid, 'name': pname});
-      }
-    }
-
-    if (!context.mounted) return;
-
-    final selected = await showModalBottomSheet<Map<String, String>>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (_) => _PatientPickerSheet(patients: patients),
-    );
-
-    if (selected == null || !context.mounted) return;
-    context.push(AppRoutes.prescription, extra: {
-      'patientId':   selected['id'],
-      'patientName': selected['name'],
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final uid = DoctorAuthService.currentUid;
@@ -2096,27 +2297,6 @@ class _ProfileTab extends StatelessWidget {
               ]),
             ),
           )),
-
-          // Write Prescription — dedicated tile that triggers patient picker first
-          GestureDetector(
-            onTap: () => _pickPatientThenPrescribe(context),
-            child: Container(
-              margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.divider)),
-              child: Row(children: [
-                Container(
-                  width: 40, height: 40,
-                  decoration: BoxDecoration(color: const Color(0xFF7B1FA2).withValues(alpha:0.1), borderRadius: BorderRadius.circular(10)),
-                  child: const Icon(Icons.receipt_long_rounded, color: Color(0xFF7B1FA2), size: 20),
-                ),
-                const SizedBox(width: 14),
-                Text('Write Prescription', style: AppTextStyles.labelLarge),
-                const Spacer(),
-                const Icon(Icons.chevron_right_rounded, color: AppColors.textHint),
-              ]),
-            ),
-          ),
           const SizedBox(height: 8),
           OutlinedButton.icon(
             onPressed: () async {
@@ -2144,115 +2324,6 @@ class _ProfStat extends StatelessWidget {
   ]);
 }
 
-// ── Patient picker bottom sheet (for "Write Prescription" from profile) ──────
-class _PatientPickerSheet extends StatefulWidget {
-  final List<Map<String, String>> patients;
-  const _PatientPickerSheet({required this.patients});
-
-  @override
-  State<_PatientPickerSheet> createState() => _PatientPickerSheetState();
-}
-
-class _PatientPickerSheetState extends State<_PatientPickerSheet> {
-  String _query = '';
-
-  @override
-  Widget build(BuildContext context) {
-    final filtered = widget.patients
-        .where((p) => p['name']!.toLowerCase().contains(_query.toLowerCase()))
-        .toList();
-
-    return DraggableScrollableSheet(
-      expand: false,
-      initialChildSize: 0.65,
-      minChildSize: 0.4,
-      maxChildSize: 0.92,
-      builder: (_, scrollCtrl) => Column(
-        children: [
-          // Handle
-          Container(
-            width: 40, height: 4,
-            margin: const EdgeInsets.symmetric(vertical: 12),
-            decoration: BoxDecoration(color: AppColors.divider, borderRadius: BorderRadius.circular(2)),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Select Patient', style: AppTextStyles.h3),
-              const SizedBox(height: 4),
-              Text(
-                'Choose the patient to write a prescription for',
-                style: AppTextStyles.bodySmall.copyWith(color: AppColors.textHint),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                autofocus: true,
-                onChanged: (v) => setState(() => _query = v),
-                decoration: InputDecoration(
-                  hintText: 'Search patient name...',
-                  prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textHint),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-              ),
-              const SizedBox(height: 12),
-            ]),
-          ),
-          Expanded(
-            child: filtered.isEmpty
-                ? Center(
-                    child: Column(mainAxisSize: MainAxisSize.min, children: [
-                      const Icon(Icons.person_search_rounded, size: 48, color: AppColors.textHint),
-                      const SizedBox(height: 10),
-                      Text(
-                        widget.patients.isEmpty
-                            ? 'No patients yet.\nPatients appear after appointments.'
-                            : 'No patient matches "$_query"',
-                        textAlign: TextAlign.center,
-                        style: AppTextStyles.bodySmall.copyWith(color: AppColors.textHint),
-                      ),
-                    ]),
-                  )
-                : ListView.builder(
-                    controller: scrollCtrl,
-                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-                    itemCount: filtered.length,
-                    itemBuilder: (_, i) {
-                      final p = filtered[i];
-                      final initial = p['name']!.isNotEmpty ? p['name']![0].toUpperCase() : '?';
-                      return GestureDetector(
-                        onTap: () => Navigator.of(context).pop(p),
-                        child: Container(
-                          margin: const EdgeInsets.only(bottom: 10),
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: AppColors.divider),
-                          ),
-                          child: Row(children: [
-                            Container(
-                              width: 44, height: 44,
-                              decoration: const BoxDecoration(gradient: AppColors.primaryGradient, shape: BoxShape.circle),
-                              child: Center(child: Text(
-                                initial,
-                                style: const TextStyle(fontFamily: 'Poppins', fontSize: 18, fontWeight: FontWeight.w800, color: Colors.white),
-                              )),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(child: Text(p['name']!, style: AppTextStyles.labelLarge)),
-                            const Icon(Icons.chevron_right_rounded, color: AppColors.textHint),
-                          ]),
-                        ),
-                      );
-                    },
-                  ),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 // ── Reusable doctor avatar widgets ────────────────────────
 
@@ -2476,4 +2547,357 @@ class _AutoConnectDialogState extends State<_AutoConnectDialog> {
       ),
     );
   }
+}
+
+// ── Doctor scheduled call section ─────────────────────────────────────────────
+//
+// Replaces the static "Start Call" button with a time-aware, real-time widget.
+//
+// Join window: 10 min before slot → 30 min after.
+// • Outside window  → locked chip showing when the join button opens.
+// • Approaching     → countdown chip (15 min out).
+// • In window       → "Start Consultation" (or "Patient Waiting!" if patient joined).
+// • Patient waiting → pulsing green "Join Patient" button + badge.
+//
+class _DoctorScheduledCallSection extends StatefulWidget {
+  final String appointmentId;
+  final Map<String, dynamic> data;
+  final VoidCallback onCancel;
+  final VoidCallback onStart;
+
+  const _DoctorScheduledCallSection({
+    required this.appointmentId,
+    required this.data,
+    required this.onCancel,
+    required this.onStart,
+  });
+
+  @override
+  State<_DoctorScheduledCallSection> createState() =>
+      _DoctorScheduledCallSectionState();
+}
+
+class _DoctorScheduledCallSectionState
+    extends State<_DoctorScheduledCallSection>
+    with SingleTickerProviderStateMixin {
+  Timer? _ticker;
+  late AnimationController _pulseCtrl;
+
+  static const _openBeforeMin  = 10;
+  static const _closeAfterMin  = 30;
+  static const _alertBeforeMin = 15;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 850),
+    )..repeat(reverse: true);
+    _ticker = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    _pulseCtrl.dispose();
+    super.dispose();
+  }
+
+  static DateTime? _parseSlot(String dateStr, String timeStr) {
+    if (dateStr.isEmpty || timeStr.isEmpty) return null;
+    try {
+      DateTime? date;
+      try { date = DateTime.parse(dateStr); } catch (_) {
+        for (final fmt in [
+          DateFormat('EEE, d MMM yyyy'),
+          DateFormat('d MMM yyyy'),
+        ]) {
+          try { date = fmt.parse(dateStr); break; } catch (_) {}
+        }
+      }
+      if (date == null) return null;
+      final parts = timeStr.trim().split(' ');
+      final hm    = parts[0].split(':');
+      int h       = int.parse(hm[0]);
+      final m     = int.parse(hm[1]);
+      if (parts.length > 1 && parts[1].toUpperCase() == 'PM' && h != 12) h += 12;
+      if (parts.length > 1 && parts[1].toUpperCase() == 'AM' && h == 12) h = 0;
+      return DateTime(date.year, date.month, date.day, h, m);
+    } catch (_) { return null; }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final dateStr = widget.data['date'] as String? ?? '';
+    final timeStr = widget.data['time'] as String? ?? '';
+    final type    = widget.data['consultationType'] as String? ?? 'Video';
+
+    // Non-video — always show static buttons.
+    if (type != 'Video' && type != 'Audio') {
+      return _buildButtons(context, inWindow: true, label: 'Start Visit');
+    }
+
+    final slot   = _parseSlot(dateStr, timeStr);
+    final now    = DateTime.now();
+    if (slot == null) return _buildButtons(context, inWindow: true);
+
+    final diffMin = slot.difference(now).inMinutes;
+
+    // ── In join window ────────────────────────────────────────────────────
+    if (diffMin >= -_closeAfterMin && diffMin <= _openBeforeMin) {
+      final consultationId =
+          (widget.data['consultationId'] as String?)?.trim() ?? '';
+      if (consultationId.isEmpty) {
+        return _buildButtons(context, inWindow: true);
+      }
+      return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+        key: ValueKey(consultationId),
+        stream: FirebaseFirestore.instance
+            .collection('consultations')
+            .doc(consultationId)
+            .snapshots(),
+        builder: (context, snap) {
+          final cData   = snap.data?.data();
+          final cStatus = cData?['status'] as String?;
+
+          if (cStatus == 'scheduled_waiting') {
+            // Patient is in the waiting room — show a highlighted "Join Patient" banner.
+            return Column(children: [
+              // "Patient is waiting" alert strip
+              Container(
+                margin: const EdgeInsets.fromLTRB(14, 0, 14, 10),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF43A047).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                      color: const Color(0xFF43A047).withValues(alpha: 0.4)),
+                ),
+                child: Row(children: [
+                  AnimatedBuilder(
+                    animation: _pulseCtrl,
+                    builder: (_, __) => Container(
+                      width: 8, height: 8,
+                      decoration: BoxDecoration(
+                        color: Color.lerp(
+                          const Color(0xFF43A047),
+                          Colors.white,
+                          _pulseCtrl.value * 0.3,
+                        ),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'Patient is in the waiting room',
+                    style: TextStyle(
+                      fontFamily: 'Poppins', fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF2E7D32),
+                    ),
+                  ),
+                ]),
+              ),
+              _buildPatientWaitingButtons(context),
+            ]);
+          }
+
+          if (cStatus == 'active') {
+            return _buildButtons(context,
+                inWindow: true, label: 'Rejoin Call');
+          }
+
+          return _buildButtons(context, inWindow: true);
+        },
+      );
+    }
+
+    // ── Approaching ───────────────────────────────────────────────────────
+    if (diffMin > _openBeforeMin && diffMin <= _alertBeforeMin) {
+      return _buildCountdownButtons(context, diffMin);
+    }
+
+    // ── Far out ───────────────────────────────────────────────────────────
+    return _buildLockedButtons(context, slot);
+  }
+
+  // ── Sub-builders ──────────────────────────────────────────────────────────
+
+  Widget _buildButtons(BuildContext context, {
+    required bool inWindow,
+    String label = 'Start Consultation',
+  }) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+      child: Row(children: [
+        Expanded(child: _cancelBtn()),
+        const SizedBox(width: 10),
+        Expanded(
+          flex: 2,
+          child: AnimatedBuilder(
+            animation: _pulseCtrl,
+            builder: (_, child) => Transform.scale(
+              scale: inWindow ? (1.0 + _pulseCtrl.value * 0.025) : 1.0,
+              child: child,
+            ),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: AppColors.primaryGradient,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: inWindow
+                    ? [BoxShadow(
+                        color: AppColors.primary.withValues(alpha: 0.35),
+                        blurRadius: 12, offset: const Offset(0, 4))]
+                    : null,
+              ),
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.videocam_rounded, size: 18),
+                label: Text(label),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.transparent,
+                  shadowColor: Colors.transparent,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                  padding: const EdgeInsets.symmetric(vertical: 11),
+                  textStyle: const TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700),
+                ),
+                onPressed: inWindow ? widget.onStart : null,
+              ),
+            ),
+          ),
+        ),
+      ]),
+    );
+  }
+
+  Widget _buildPatientWaitingButtons(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+      child: Row(children: [
+        Expanded(child: _cancelBtn()),
+        const SizedBox(width: 10),
+        Expanded(
+          flex: 2,
+          child: AnimatedBuilder(
+            animation: _pulseCtrl,
+            builder: (_, child) => Transform.scale(
+              scale: 1.0 + _pulseCtrl.value * 0.03,
+              child: child,
+            ),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                    colors: [Color(0xFF43A047), Color(0xFF1B5E20)]),
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [BoxShadow(
+                  color: const Color(0xFF43A047).withValues(alpha: 0.45),
+                  blurRadius: 14, offset: const Offset(0, 4),
+                )],
+              ),
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.waving_hand_rounded, size: 16),
+                label: const Text('Join Patient'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.transparent,
+                  shadowColor: Colors.transparent,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                  padding: const EdgeInsets.symmetric(vertical: 11),
+                  textStyle: const TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700),
+                ),
+                onPressed: widget.onStart,
+              ),
+            ),
+          ),
+        ),
+      ]),
+    );
+  }
+
+  Widget _buildCountdownButtons(BuildContext context, int diffMin) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+      child: Row(children: [
+        Expanded(child: _cancelBtn()),
+        const SizedBox(width: 10),
+        Expanded(
+          flex: 2,
+          child: Container(
+            height: 44,
+            decoration: BoxDecoration(
+              color: Colors.orange.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.orange.withValues(alpha: 0.35)),
+            ),
+            child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              const Icon(Icons.timer_rounded, size: 15, color: Colors.orange),
+              const SizedBox(width: 6),
+              Text('Opens in $diffMin min',
+                  style: const TextStyle(
+                    fontFamily: 'Poppins', fontSize: 12,
+                    fontWeight: FontWeight.w600, color: Colors.orange)),
+            ]),
+          ),
+        ),
+      ]),
+    );
+  }
+
+  Widget _buildLockedButtons(BuildContext context, DateTime slot) {
+    final opensAt = DateFormat('h:mm a').format(
+        slot.subtract(const Duration(minutes: _openBeforeMin)));
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+      child: Row(children: [
+        Expanded(child: _cancelBtn()),
+        const SizedBox(width: 10),
+        Expanded(
+          flex: 2,
+          child: Container(
+            height: 44,
+            decoration: BoxDecoration(
+              color: AppColors.background,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              const Icon(Icons.lock_clock_rounded,
+                  size: 14, color: AppColors.textHint),
+              const SizedBox(width: 6),
+              Text('Opens at $opensAt',
+                  style: const TextStyle(
+                    fontFamily: 'Poppins', fontSize: 11,
+                    fontWeight: FontWeight.w500, color: AppColors.textHint)),
+            ]),
+          ),
+        ),
+      ]),
+    );
+  }
+
+  Widget _cancelBtn() => OutlinedButton.icon(
+    icon: const Icon(Icons.close_rounded, size: 15),
+    label: const Text('Cancel'),
+    style: OutlinedButton.styleFrom(
+      foregroundColor: AppColors.error,
+      side: BorderSide(color: AppColors.error.withValues(alpha: 0.45)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      padding: const EdgeInsets.symmetric(vertical: 11),
+      textStyle: const TextStyle(
+          fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w600),
+    ),
+    onPressed: widget.onCancel,
+  );
 }

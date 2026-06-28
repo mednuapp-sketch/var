@@ -35,6 +35,7 @@ class _MealTrackingScreenState extends ConsumerState<MealTrackingScreen> {
         if (!ctx.mounted) return;
         Navigator.pop(ctx);
         if (!ok) {
+          if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Failed to log meal'), backgroundColor: Colors.red),
           );
@@ -74,7 +75,10 @@ class _MealTrackingScreenState extends ConsumerState<MealTrackingScreen> {
           ),
           Expanded(
             child: meals.when(
-              loading: () => Column(children: List.generate(4, (_) => const SkeletonListTile())),
+              loading: () => Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                child: Column(children: List.generate(4, (_) => const _MealTileSkeleton())),
+              ),
               error: (e, _) => const AppErrorState(),
               data: (list) {
                 final filtered = list.where((m) => m.mealType == _selectedType).toList();
@@ -538,6 +542,39 @@ class _Field extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _MealTileSkeleton extends StatelessWidget {
+  const _MealTileSkeleton();
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: const [BoxShadow(color: Color(0x08000000), blurRadius: 6)],
+      ),
+      child: const AppShimmer(
+        child: Row(children: [
+          SkeletonBox(width: 44, height: 44, radius: 12),
+          SizedBox(width: 12),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            SkeletonBox(width: double.infinity, height: 13, radius: 4),
+            SizedBox(height: 6),
+            SkeletonBox(width: 120, height: 11, radius: 4),
+          ])),
+          SizedBox(width: 8),
+          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            SkeletonBox(width: 50, height: 13, radius: 4),
+            SizedBox(height: 5),
+            SkeletonBox(width: 40, height: 11, radius: 4),
+          ]),
+        ]),
+      ),
     );
   }
 }

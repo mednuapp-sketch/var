@@ -606,7 +606,6 @@ function loadLiveActivityFeed() {
 function renderPendingList(docs) {
   const el = document.getElementById('pending-doctors-list');
   if (!el) return;
-  _pendingDoctorsCache = docs.map(doc => ({ id: doc.id, ...doc.data() }));
   if (!docs.length) {
     el.innerHTML = `<div class="empty-state" style="padding:24px 0;">
       <div class="empty-icon"><i class="ti ti-circle-check" style="color:#1e8e3e;"></i></div>
@@ -625,19 +624,11 @@ function renderPendingList(docs) {
         <div class="user-name" style="font-size:13px;">${escHtml(d.name || 'Unknown')}</div>
         <div class="user-sub">${escHtml(d.specialty || d.specialisation || 'General')}</div>
       </div>
-      <button class="btn btn-outline" style="font-size:11px;padding:5px 10px;" onclick="reviewPendingDoctor('${escHtml(doc.id)}')">
-        <i class="ti ti-eye"></i> Review
+      <button class="btn btn-approve" style="font-size:11px;padding:5px 10px;" onclick="approveDoctor('${escHtml(doc.id)}', this)">
+        <i class="ti ti-check"></i> Approve
       </button>
     </div>`;
   }).join('');
-}
-
-let _pendingDoctorsCache = [];
-
-function reviewPendingDoctor(id) {
-  const d = _pendingDoctorsCache.find(x => x.id === id);
-  if (!d) return;
-  showDoctorModal(d);
 }
 
 // ============================================
@@ -681,12 +672,49 @@ function renderDoctorsTable(doctors) {
       <td>${(d.totalReviews > 0 && d.rating > 0) ? `â­ ${escHtml(d.rating.toFixed(1))} <span style="font-size:11px;color:#9E9E9E;">(${d.totalReviews})</span>` : '<span style="color:#BDBDBD;font-size:12px;">No reviews</span>'}</td>
       <td><span class="pill pill-${escHtml(safeStatus)}">${escHtml(capitalize(d.status || 'Pending'))}</span></td>
       <td>
-        <button class="btn btn-outline" onclick="viewDoctor('${escHtml(d.id)}')">
-          ${(!d.status || d.status === 'pending') ? '<i class="ti ti-eye"></i> Review Documents' : 'View'}
-        </button>
+        ${(!d.status || d.status === 'pending') ? `
+          <button class="btn btn-approve" onclick="approveDoctor('${escHtml(d.id)}', this)">Approve</button>
+          <button class="btn btn-reject" style="margin-left:4px;" onclick="rejectDoctor('${escHtml(d.id)}', this)">Reject</button>
+        ` : `<button class="btn btn-outline" onclick="viewDoctor('${escHtml(d.id)}')">View</button>`}
       </td>
     </tr>`;
   }).join('');
+}
+
+async function approveDoctor(id, btn) {
+  withCooldown(`approve-${id}`, async () => {
+    btn.disabled = true; btn.textContent = '...';
+    try {
+      await db.collection('doctors').doc(id).update({
+        status: 'active',
+        approvedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+      showToast('Doctor approved successfully!');
+      loadDoctors(); loadOverview();
+    } catch (err) {
+      console.error('approveDoctor error:', err);
+      btn.disabled = false; btn.textContent = 'Approve';
+      showToast('Failed to approve doctor. Please try again.');
+    }
+  });
+}
+
+async function rejectDoctor(id, btn) {
+  withCooldown(`reject-${id}`, async () => {
+    btn.disabled = true; btn.textContent = '...';
+    try {
+      await db.collection('doctors').doc(id).update({
+        status: 'suspended',
+        rejectedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+      showToast('Doctor rejected.');
+      loadDoctors();
+    } catch (err) {
+      console.error('rejectDoctor error:', err);
+      btn.disabled = false; btn.textContent = 'Reject';
+      showToast('Failed to reject doctor. Please try again.');
+    }
+  });
 }
 
 function viewDoctor(id) {
@@ -1266,6 +1294,130 @@ function renderMedicinesTable(sorted) {
       </div>
     </td>
   </tr>`).join('');
+}
+
+// ============================================
+//   PRESCRIPTION LOOKUP
+// ============================================
+
+async function lookupPrescription() {
+  const input = document.getElementById('rx-lookup-input');
+  const statusEl = document.getElementById('rx-lookup-status');
+  const resultCard = document.getElementById('rx-result-card');
+
+  const rxId = (input?.value || '').trim().toUpperCase();
+  if (!rxId) { if (statusEl) statusEl.textContent = 'Please enter an Rx ID.'; return; }
+
+  if (statusEl) statusEl.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 1s linear infinite;"></i> Searching…';
+  if (resultCard) resultCard.style.display = 'none';
+
+  try {
+    const snap = await db.collection('prescriptions').where('rxId', '==', rxId).limit(1).get();
+    if (snap.empty) {
+      if (statusEl) statusEl.innerHTML =
+        '<span style="color:var(--danger);"><i class="ti ti-circle-x"></i> No prescription found with Rx ID: <strong>' + escHtml(rxId) + '</strong></span>';
+      return;
+    }
+    if (statusEl) statusEl.innerHTML =
+      '<span style="color:var(--success);"><i class="ti ti-circle-check"></i> Prescription found.</span>';
+    renderPrescriptionResult(snap.docs[0].data());
+  } catch (e) {
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--danger);">Error: ' + escHtml(String(e)) + '</span>';
+  }
+}
+
+function clearPrescriptionLookup() {
+  const input = document.getElementById('rx-lookup-input');
+  const statusEl = document.getElementById('rx-lookup-status');
+  const resultCard = document.getElementById('rx-result-card');
+  if (input) input.value = '';
+  if (statusEl) statusEl.textContent = '';
+  if (resultCard) resultCard.style.display = 'none';
+}
+
+function renderPrescriptionResult(rx) {
+  const resultCard = document.getElementById('rx-result-card');
+  const rxIdEl = document.getElementById('rx-result-id');
+  if (rxIdEl) rxIdEl.textContent = 'Rx  ' + (rx.rxId || '—');
+
+  const pill = document.getElementById('rx-result-status-pill');
+  if (pill) {
+    pill.className = 'pill ' + (rx.status === 'active' ? 'pill-active' : 'pill-pending');
+    pill.textContent = rx.status || 'active';
+  }
+
+  setText('rx-doctor-name', 'Dr. ' + (rx.doctorName || '—'));
+  setText('rx-doctor-spec', rx.doctorSpecialty || '');
+  setText('rx-doctor-reg', rx.doctorRegNo ? 'Reg. No: ' + rx.doctorRegNo : '');
+  setText('rx-doctor-hospital', rx.doctorHospital || '');
+  setText('rx-patient-name', rx.patientName || '—');
+  const info = [rx.patientAge, rx.patientGender].filter(Boolean).join('  •  ');
+  setText('rx-patient-info', info);
+  setText('rx-patient-phone', rx.patientPhone ? '📞 ' + rx.patientPhone : '');
+
+  const dateEl = document.getElementById('rx-date');
+  if (dateEl) dateEl.textContent = rx.createdAt ? formatDate(rx.createdAt) : '—';
+
+  setText('rx-diagnosis', rx.diagnosis || '—');
+
+  const cWrap = document.getElementById('rx-complaints-wrap');
+  if (cWrap) { cWrap.style.display = rx.chiefComplaints ? 'block' : 'none'; setText('rx-complaints', rx.chiefComplaints || ''); }
+
+  const tbody = document.getElementById('rx-medicines-tbody');
+  if (tbody) {
+    const meds = rx.medicines || [];
+    if (!meds.length) {
+      tbody.innerHTML = '<tr><td colspan="6" style="padding:10px;color:var(--text-muted);">No medicines</td></tr>';
+    } else {
+      tbody.innerHTML = meds.map((m, i) => {
+        const name = (m.medicineName || m.name || '').toUpperCase();
+        const strength = m.strength || m.dosage || '';
+        const dose = [m.morning && 'M', m.afternoon && 'A', m.night && 'N'].filter(Boolean).join('-') || m.frequency || '';
+        const bg = i % 2 === 1 ? 'background:#fafafa;' : '';
+        return `<tr style="${bg}">
+          <td style="padding:7px 10px;">${i + 1}</td>
+          <td style="padding:7px 10px;font-weight:600;">${escHtml(name)}</td>
+          <td style="padding:7px 10px;">${escHtml(strength)}</td>
+          <td style="padding:7px 10px;">${escHtml(dose)}</td>
+          <td style="padding:7px 10px;">${escHtml(m.duration || '')}</td>
+          <td style="padding:7px 10px;">${escHtml(m.foodTiming || m.timing || '')}</td>
+        </tr>`;
+      }).join('');
+    }
+  }
+
+  const invWrap = document.getElementById('rx-investigations-wrap');
+  const invEl = document.getElementById('rx-investigations');
+  const invs = rx.investigations || [];
+  if (invWrap && invEl) {
+    invWrap.style.display = invs.length ? 'block' : 'none';
+    invEl.innerHTML = invs.map(inv =>
+      `<span style="background:#e0f7fa;color:#00838F;border:1px solid #b2ebf2;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;">${escHtml(inv)}</span>`
+    ).join('');
+  }
+
+  const instrWrap = document.getElementById('rx-instructions-wrap');
+  if (instrWrap) { instrWrap.style.display = rx.specialInstructions ? 'block' : 'none'; setText('rx-instructions', rx.specialInstructions || ''); }
+
+  const fuWrap = document.getElementById('rx-followup-wrap');
+  if (fuWrap) {
+    fuWrap.style.display = rx.followUpRequired ? 'block' : 'none';
+    setText('rx-followup-days', rx.followUpDays ? 'Visit after ' + rx.followUpDays + ' days' : '');
+  }
+
+  const sigWrap = document.getElementById('rx-signature-wrap');
+  const sigImg = document.getElementById('rx-signature-img');
+  if (sigWrap && sigImg) {
+    if (rx.doctorSignatureUrl) { sigImg.src = rx.doctorSignatureUrl; sigWrap.style.display = 'block'; }
+    else { sigWrap.style.display = 'none'; }
+  }
+
+  if (resultCard) resultCard.style.display = 'block';
+}
+
+function setText(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = value;
 }
 
 // ============================================
@@ -2170,9 +2322,6 @@ function viewRequestDetail(id) {
         ` : ''}
         ${status === 'in_progress' ? `
           <button class="btn btn-approve" style="flex:1;" onclick="updateRequestStatus('${r.id}','completed',this);document.getElementById('req-detail-modal').remove();">Mark Completed</button>
-        ` : ''}
-        ${r.patientId ? `
-          <button class="btn btn-outline" style="color:var(--primary);" onclick="document.getElementById('req-detail-modal').remove();openNotifyPatientModal('${escHtml(r.patientId)}','${escHtml(r.patientName||'Patient')}');">Notify Patient</button>
         ` : ''}
         <button class="btn btn-outline" onclick="document.getElementById('req-detail-modal').remove()">Close</button>
       </div>
@@ -3480,6 +3629,7 @@ function initDashboard() {
   // so the strip counter and nav badge update in realtime from the first login.
   initLiveCallsListener();
   _liveCallsInited = true;
+  initCaregiversListener();
 }
 
 function updateAdminDisplayName() {
@@ -6454,197 +6604,217 @@ function rerunSearch(query) {
   runSearch(query);
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// ADMIN NOTIFICATION UTILITIES
-// ═══════════════════════════════════════════════════════════════════════════════
-//
-// NOTE: Status-change notifications (appointment accepted/rejected, ambulance
-// dispatched, lab booked, etc.) are sent automatically by Firebase Cloud
-// Functions that listen to Firestore writes. No manual step is required from
-// the admin when changing a booking status — just update the status field and
-// the Cloud Function fires within 1-2 seconds.
-//
-// These helpers are for CUSTOM / MANUAL notifications that the admin wants to
-// send outside of the standard status-change flow.
-// ═══════════════════════════════════════════════════════════════════════════════
+// ============================================
+//   CAREGIVERS MANAGEMENT — FULL CRUD
+// ============================================
 
-/**
- * Writes a notification directly into patient_notifications/{patientId}/items.
- * The patient's Firestore stream picks it up in realtime (no FCM call needed
- * from the admin panel — FCM is handled by Cloud Functions on status changes).
- * For manual messages, the in-app notification is sufficient.
- *
- * @param {string} patientId
- * @param {{ title: string, body: string, type?: string, serviceType?: string,
- *           bookingId?: string, actionType?: string }} opts
- */
-async function adminSendNotification(patientId, opts) {
-  const {
-    title, body,
-    type        = 'admin_message',
-    serviceType = 'general',
-    bookingId   = '',
-    actionType  = 'open_notifications',
-  } = opts;
+let _allCaregivers      = [];
+let _editingCaregiverId = null;
+let _caregiversListener = null;
 
-  if (!patientId || !title || !body) return;
+const CG_RATE_UNIT_LABELS = {
+  per_day:   'Per Day',
+  per_hour:  'Per Hour',
+  per_week:  'Per Week',
+  per_month: 'Per Month',
+};
 
-  try {
-    // deliverAt is set 90 s in the past so the Flutter query
-    // (deliverAt ≤ Timestamp.now()) resolves immediately.
-    const deliverAt = firebase.firestore.Timestamp.fromDate(
-      new Date(Date.now() - 90_000)
-    );
+const CG_TYPE_COLORS = {
+  Nurse:            { bg: '#e3f2fd', fg: '#1565c0' },
+  Maid:             { bg: '#fce4ec', fg: '#c2185b' },
+  Attendant:        { bg: '#e8f5e9', fg: '#2e7d32' },
+  Physiotherapist:  { bg: '#fff3e0', fg: '#e65100' },
+};
 
-    await db
-      .collection('patient_notifications')
-      .doc(patientId)
-      .collection('items')
-      .add({
-        type,
-        title,
-        body,
-        serviceType,
-        bookingId,
-        actionType,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-        deliverAt,
-        isRead: false,
-        source: 'admin',
-      });
-
-    console.log(`[Admin] Notification sent to patient ${patientId}: "${title}"`);
-  } catch (err) {
-    console.error('[Admin] adminSendNotification failed:', err);
-    throw err;
-  }
+function initCaregiversListener() {
+  if (_caregiversListener) _caregiversListener();
+  _caregiversListener = db.collection('caregivers')
+    .orderBy('createdAt', 'desc')
+    .onSnapshot(snap => {
+      _allCaregivers = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      filterCaregivers();
+      const activeCount = _allCaregivers.filter(c => c.isActive).length;
+      const badge = document.getElementById('nav-caregivers-count');
+      if (badge) {
+        badge.textContent = activeCount;
+        badge.style.display = activeCount > 0 ? 'inline' : 'none';
+      }
+    }, err => console.error('[Caregivers]', err));
 }
 
-/**
- * Opens a modal that lets the admin compose and send a custom in-app
- * notification to a specific patient.
- *
- * @param {string} patientId
- * @param {string} patientName
- * @param {string} [bookingId]   Optional — pre-fills the booking reference.
- * @param {string} [serviceType] Optional — pre-fills the service context.
- */
-function openNotifyPatientModal(patientId, patientName, bookingId = '', serviceType = 'general') {
-  document.getElementById('notify-patient-modal')?.remove();
+function filterCaregivers() {
+  const q          = (document.getElementById('caregiver-search')?.value || '').toLowerCase();
+  const typeFilter = document.getElementById('caregiver-type-filter')?.value || 'all';
+  const genderFilter = document.getElementById('caregiver-gender-filter')?.value || 'all';
+  const statusFilter = document.getElementById('caregiver-status-filter')?.value || 'all';
 
-  const safeId   = escHtml(patientId);
-  const safeName = escHtml(patientName || 'this patient');
-  const safeSvc  = escHtml(serviceType);
-  const safeBook = escHtml(bookingId);
+  let list = _allCaregivers;
+  if (typeFilter !== 'all')   list = list.filter(c => c.type === typeFilter);
+  if (genderFilter !== 'all') list = list.filter(c => c.gender === genderFilter);
+  if (statusFilter === 'active')   list = list.filter(c => c.isActive);
+  if (statusFilter === 'inactive') list = list.filter(c => !c.isActive);
+  if (q) list = list.filter(c =>
+    (c.name || '').toLowerCase().includes(q) ||
+    (c.location || '').toLowerCase().includes(q) ||
+    (c.specialty || '').toLowerCase().includes(q)
+  );
+  renderCaregiversList(list);
+}
 
-  const modal = document.createElement('div');
-  modal.id = 'notify-patient-modal';
-  modal.style.cssText = [
-    'position:fixed;inset:0;background:rgba(0,0,0,0.5);',
-    'z-index:9999;display:flex;align-items:center;',
-    'justify-content:center;padding:16px;',
-  ].join('');
-
-  modal.innerHTML = `
-    <div style="background:#fff;border-radius:20px;width:100%;max-width:440px;padding:28px;
-                box-shadow:0 20px 60px rgba(0,0,0,0.2);">
-
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
-        <div>
-          <h2 style="font-size:17px;font-weight:700;margin:0 0 2px;">Notify Patient</h2>
-          <div style="font-size:12px;color:#888;">Sending to <strong>${safeName}</strong></div>
+function renderCaregiversList(list) {
+  const el = document.getElementById('caregivers-list');
+  if (!el) return;
+  if (!list.length) {
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon">🧑‍⚕️</div><p>No caregivers found. Add one above.</p></div>';
+    return;
+  }
+  const rateUnitLabel = u => CG_RATE_UNIT_LABELS[u] || (u || 'Per Day');
+  el.innerHTML = list.map(c => {
+    const tc      = CG_TYPE_COLORS[c.type] || { bg: '#f3e5f5', fg: '#6a1b9a' };
+    const rateStr = c.ratePerDay != null
+      ? `₹${Number(c.ratePerDay).toLocaleString('en-IN')} <span style="font-size:11px;font-weight:400;color:var(--text-muted);">/ ${rateUnitLabel(c.rateUnit)}</span>`
+      : '<span style="color:var(--text-muted);font-size:12px;">Rate not set</span>';
+    const rating = c.rating ? `⭐ ${parseFloat(c.rating).toFixed(1)}` : '';
+    return `
+    <div class="service-card" id="cg-card-${c.id}">
+      <div class="service-thumb-placeholder" style="background:${tc.bg};color:${tc.fg};font-size:22px;">🧑‍⚕️</div>
+      <div class="service-info">
+        <div class="service-name">${escHtml(c.name || '—')}</div>
+        <div class="service-meta">
+          ${escHtml(c.specialty || '')}
+          ${c.experience ? ' · ' + escHtml(c.experience) : ''}
+          ${c.location ? ' · 📍 ' + escHtml(c.location) : ''}
         </div>
-        <button onclick="document.getElementById('notify-patient-modal').remove()"
-          style="border:none;background:#f5f5f5;border-radius:50%;width:32px;height:32px;
-                 cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;">
-          &times;
-        </button>
-      </div>
-
-      <div style="margin-bottom:14px;">
-        <label style="font-size:11px;font-weight:700;color:#999;letter-spacing:.5px;display:block;margin-bottom:5px;">
-          NOTIFICATION TITLE
-        </label>
-        <input id="np-title" type="text" maxlength="80"
-          placeholder="e.g. Your appointment is confirmed"
-          style="width:100%;padding:11px 13px;border:1.5px solid #e8e8e8;border-radius:11px;
-                 font-size:14px;font-family:inherit;box-sizing:border-box;outline:none;
-                 transition:border-color .2s;"
-          onfocus="this.style.borderColor='var(--primary)'"
-          onblur="this.style.borderColor='#e8e8e8'">
-      </div>
-
-      <div style="margin-bottom:14px;">
-        <label style="font-size:11px;font-weight:700;color:#999;letter-spacing:.5px;display:block;margin-bottom:5px;">
-          MESSAGE BODY
-        </label>
-        <textarea id="np-body" rows="3" maxlength="220"
-          placeholder="Write a clear, helpful message for the patient…"
-          style="width:100%;padding:11px 13px;border:1.5px solid #e8e8e8;border-radius:11px;
-                 font-size:14px;font-family:inherit;resize:none;box-sizing:border-box;outline:none;
-                 transition:border-color .2s;"
-          onfocus="this.style.borderColor='var(--primary)'"
-          onblur="this.style.borderColor='#e8e8e8'"></textarea>
-        <div style="font-size:11px;color:#aaa;text-align:right;margin-top:3px;">
-          <span id="np-char-count">0</span>/220
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center;">
+          <span class="svc-type-badge" style="background:${tc.bg};color:${tc.fg};">${escHtml(c.type || 'Caregiver')}</span>
+          ${c.gender ? `<span class="svc-type-badge" style="background:#f3e5f5;color:#6a1b9a;">${escHtml(c.gender)}</span>` : ''}
+          <span class="service-price">${rateStr}</span>
+          ${rating ? `<span class="banner-cta-chip">${escHtml(rating)}</span>` : ''}
+          ${c.isActive ? '<span class="pill pill-active">Active</span>' : '<span class="pill pill-suspended">Inactive</span>'}
         </div>
       </div>
-
-      <div style="margin-bottom:20px;">
-        <label style="font-size:11px;font-weight:700;color:#999;letter-spacing:.5px;display:block;margin-bottom:5px;">
-          TYPE (optional)
+      <div class="service-actions">
+        <label class="toggle-label" title="${c.isActive ? 'Deactivate' : 'Activate'}">
+          <input type="checkbox" ${c.isActive ? 'checked' : ''} onchange="toggleCaregiver('${c.id}', this.checked)" />
+          <span class="toggle-switch"></span>
         </label>
-        <select id="np-action" style="width:100%;padding:10px 13px;border:1.5px solid #e8e8e8;
-                border-radius:11px;font-size:13px;font-family:inherit;box-sizing:border-box;
-                background:#fff;outline:none;">
-          <option value="open_notifications">General (opens notifications)</option>
-          <option value="open_appointment">Appointment</option>
-          <option value="open_order">Medicine Order</option>
-          <option value="open_diagnostics">Lab / Diagnostics</option>
-          <option value="open_ambulance">Ambulance</option>
-          <option value="open_pregnancy">Pregnancy</option>
-          <option value="open_service">Other Service</option>
-        </select>
-      </div>
-
-      <div style="display:flex;gap:10px;">
-        <button class="btn btn-approve" style="flex:1;padding:12px;"
-          onclick="
-            const t = document.getElementById('np-title').value.trim();
-            const b = document.getElementById('np-body').value.trim();
-            const a = document.getElementById('np-action').value;
-            if (!t) { showToast('Please enter a title.'); return; }
-            if (!b) { showToast('Please enter a message.'); return; }
-            this.disabled = true; this.textContent = 'Sending…';
-            adminSendNotification('${safeId}', {
-              title: t, body: b,
-              type: 'admin_message',
-              serviceType: '${safeSvc}',
-              bookingId:   '${safeBook}',
-              actionType:  a,
-            }).then(() => {
-              showToast('Notification sent ✓');
-              document.getElementById('notify-patient-modal').remove();
-            }).catch(err => {
-              showToast('Failed to send: ' + err.message);
-              this.disabled = false; this.textContent = 'Send Notification';
-            });
-          ">
-          Send Notification
+        <button class="btn btn-outline" onclick="editCaregiver('${c.id}')" title="Edit">
+          <i class="ti ti-edit"></i>
         </button>
-        <button class="btn btn-outline" onclick="document.getElementById('notify-patient-modal').remove()">
-          Cancel
+        <button class="btn btn-reject" onclick="deleteCaregiver('${c.id}', this)" title="Delete">
+          <i class="ti ti-trash"></i>
         </button>
       </div>
     </div>`;
+  }).join('');
+}
 
-  // Character counter
-  modal.querySelector('#np-body').addEventListener('input', function () {
-    modal.querySelector('#np-char-count').textContent = this.value.length;
-  });
+async function saveCaregiver() {
+  const name       = document.getElementById('cg-name')?.value.trim();
+  const type       = document.getElementById('cg-type')?.value;
+  const gender     = document.getElementById('cg-gender')?.value;
+  const location   = document.getElementById('cg-location')?.value.trim();
+  const specialty  = document.getElementById('cg-specialty')?.value.trim();
+  const experience = document.getElementById('cg-experience')?.value.trim();
+  const rateRaw    = document.getElementById('cg-rate')?.value;
+  const rateUnit   = document.getElementById('cg-rate-unit')?.value;
+  const ratingRaw  = document.getElementById('cg-rating')?.value;
+  const phone      = document.getElementById('cg-phone')?.value.trim();
+  const bio        = document.getElementById('cg-bio')?.value.trim();
+  const isActive   = document.getElementById('cg-active')?.checked !== false;
 
-  document.body.appendChild(modal);
-  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
-  setTimeout(() => modal.querySelector('#np-title')?.focus(), 80);
+  if (!name)     { showToast('Name is required'); return; }
+  if (!location) { showToast('Location is required'); return; }
+  if (!rateRaw)  { showToast('Rate is required'); return; }
+
+  const btn = document.getElementById('save-caregiver-btn');
+  btn.disabled = true;
+
+  // Build display rate string for the app
+  const rateNum  = parseFloat(rateRaw);
+  const unitMap  = { per_day: 'day', per_hour: 'hr', per_week: 'week', per_month: 'month' };
+  const rateLabel = `₹${rateNum.toLocaleString('en-IN')}/${unitMap[rateUnit] || 'day'}`;
+
+  const data = {
+    name, type, gender, location,
+    specialty:   specialty   || null,
+    experience:  experience  || null,
+    ratePerDay:  rateNum,
+    rateUnit:    rateUnit    || 'per_day',
+    rate:        rateLabel,
+    rating:      ratingRaw   ? parseFloat(ratingRaw) : null,
+    phone:       phone       || null,
+    bio:         bio         || null,
+    isActive,
+    updatedAt:   firebase.firestore.FieldValue.serverTimestamp(),
+    updatedBy:   auth.currentUser?.email || 'admin',
+  };
+
+  try {
+    if (_editingCaregiverId) {
+      await db.collection('caregivers').doc(_editingCaregiverId).update(data);
+      showToast('Caregiver updated ✔');
+    } else {
+      data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+      await db.collection('caregivers').add(data);
+      showToast('Caregiver added ✔');
+    }
+    cancelCaregiverEdit();
+  } catch (err) {
+    showToast('Save failed: ' + err.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function editCaregiver(id) {
+  const c = _allCaregivers.find(x => x.id === id);
+  if (!c) return;
+  _editingCaregiverId = id;
+  document.getElementById('cg-name').value        = c.name       || '';
+  document.getElementById('cg-type').value        = c.type       || 'Nurse';
+  document.getElementById('cg-gender').value      = c.gender     || 'Female';
+  document.getElementById('cg-location').value    = c.location   || '';
+  document.getElementById('cg-specialty').value   = c.specialty  || '';
+  document.getElementById('cg-experience').value  = c.experience || '';
+  document.getElementById('cg-rate').value        = c.ratePerDay != null ? c.ratePerDay : '';
+  document.getElementById('cg-rate-unit').value   = c.rateUnit   || 'per_day';
+  document.getElementById('cg-rating').value      = c.rating     != null ? c.rating : '';
+  document.getElementById('cg-phone').value       = c.phone      || '';
+  document.getElementById('cg-bio').value         = c.bio        || '';
+  document.getElementById('cg-active').checked    = c.isActive   !== false;
+  document.getElementById('caregiver-form-title').textContent = 'Edit Caregiver';
+  document.getElementById('cancel-caregiver-btn').style.display = 'inline-flex';
+  document.getElementById('cg-name').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function cancelCaregiverEdit() {
+  _editingCaregiverId = null;
+  ['cg-name','cg-location','cg-specialty','cg-experience','cg-rate','cg-rating','cg-phone','cg-bio']
+    .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  document.getElementById('cg-type').value        = 'Nurse';
+  document.getElementById('cg-gender').value      = 'Female';
+  document.getElementById('cg-rate-unit').value   = 'per_day';
+  document.getElementById('cg-active').checked    = true;
+  document.getElementById('caregiver-form-title').textContent = 'Add Caregiver';
+  document.getElementById('cancel-caregiver-btn').style.display = 'none';
+}
+
+async function toggleCaregiver(id, isActive) {
+  try {
+    await db.collection('caregivers').doc(id).update({ isActive, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+  } catch (e) { showToast('Update failed: ' + e.message); }
+}
+
+async function deleteCaregiver(id, btn) {
+  if (!confirm('Delete this caregiver? This cannot be undone.')) return;
+  btn.disabled = true;
+  try {
+    await db.collection('caregivers').doc(id).delete();
+    showToast('Caregiver deleted');
+  } catch (e) {
+    showToast('Delete failed: ' + e.message);
+    btn.disabled = false;
+  }
 }
 

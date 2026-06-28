@@ -12,7 +12,22 @@
       "Bash(sed -n '1190,1200p' c:/Users/nuday/Desktop/var/mednu/lib/features/health/screens/health_dashboard_screen.dart)",
       "Bash(sed -n '1210,1220p' c:/Users/nuday/Desktop/var/mednu/lib/features/health/screens/health_dashboard_screen.dart)",
       "Bash(xargs grep -l \"async\\\\|await\\\\|Future\")",
-      "Bash(xargs -I{} sh -c \"grep -n 'await\\\\|setState' {} | grep -v 'if \\(mounted\\)\\\\|if \\(!mounted\\)\\\\|mounted &&' | grep -A1 'await' | grep 'setState'\")"
+      "Bash(xargs -I{} sh -c \"grep -n 'await\\\\|setState' {} | grep -v 'if \\(mounted\\)\\\\|if \\(!mounted\\)\\\\|mounted &&' | grep -A1 'await' | grep 'setState'\")",
+      "Bash(flutter devices *)",
+      "Bash(flutter doctor *)",
+      "Bash(flutter clean *)",
+      "Bash(flutter run *)",
+      "Bash(adb -s ZD2232MJXK install -r \"c:/var/var/mednu/build/app/outputs/flutter-apk/app-debug.apk\")",
+      "Bash(adb -s ZD2232MJXK shell am start -n com.mednu.mednu/.MainActivity)",
+      "Bash(adb -s ZD2232MJXK logcat -s flutter)",
+      "Bash(adb -s ZD2232MJXK logcat -s flutter,FirebaseAuth,FA -v time)",
+      "Bash(gcloud run *)",
+      "PowerShell(gcloud run services add-iam-policy-binding msg91sendotp --region=us-central1 --member=allUsers --role=roles/run.invoker --project=mednu-healthcare-app 2>&1)",
+      "PowerShell(gcloud run services add-iam-policy-binding msg91verifyotp --region=us-central1 --member=allUsers --role=roles/run.invoker --project=mednu-healthcare-app 2>&1)",
+      "PowerShell($gcloud = Get-Command gcloud -ErrorAction SilentlyContinue; if \\($gcloud\\) { $gcloud.Source } else { Get-ChildItem \"C:\\\\Users\\\\user\\\\AppData\\\\Local\\\\Google\\\\Cloud SDK\" -Recurse -Filter \"gcloud.cmd\" -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName })",
+      "Bash(grep -E \"\\\\.\\(dart\\)$\")",
+      "Read(//c/Users/user/**)",
+      "Bash(xargs grep -l \"appointment\\\\|Appointment\")"
     ]
   }
 }

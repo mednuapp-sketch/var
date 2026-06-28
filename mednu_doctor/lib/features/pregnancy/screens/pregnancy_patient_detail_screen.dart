@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/widgets/ux_widgets.dart';
 
 class PregnancyPatientDetailScreen extends StatefulWidget {
   final String profileId;
@@ -62,7 +63,7 @@ class _PregnancyPatientDetailScreenState
               SliverAppBar(
                 expandedHeight: 200,
                 pinned: true,
-                backgroundColor: AppColors.primary,
+                backgroundColor: const Color(0xFFC2185B),
                 foregroundColor: Colors.white,
                 leading: IconButton(
                   icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
@@ -188,11 +189,9 @@ class _PregnancyPatientDetailScreenState
   );
 
   Widget _buildOverview(Map<String, dynamic> profile, int week) {
-    final bloodGroup = profile['bloodGroup'] as String? ?? '';
     final weight = profile['weightKg'] as num? ?? 0;
     final age = profile['ageYears'] as int? ?? 0;
     final conditions = List<String>.from(profile['medicalConditions'] as List? ?? []);
-    final prevPregnancies = profile['previousPregnancies'] as int? ?? 0;
     final emergencyName = profile['emergencyContactName'] as String? ?? '';
     final emergencyPhone = profile['emergencyContactPhone'] as String? ?? '';
 
@@ -203,8 +202,6 @@ class _PregnancyPatientDetailScreenState
           // Key stats
           Row(children: [
             _statCard('Week', '$week/40', const Color(0xFFC2185B), Icons.pregnant_woman_rounded),
-            const SizedBox(width: 8),
-            _statCard('Blood', bloodGroup, const Color(0xFFEF5350), Icons.bloodtype_rounded),
             const SizedBox(width: 8),
             _statCard('Weight', '${weight}kg', const Color(0xFF7B1FA2), Icons.monitor_weight_rounded),
             const SizedBox(width: 8),
@@ -286,9 +283,26 @@ class _PregnancyPatientDetailScreenState
         .limit(20)
         .snapshots(),
     builder: (context, snap) {
+      if (snap.connectionState == ConnectionState.waiting) {
+        return AppShimmer(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(children: List.generate(4, (_) => Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              height: 80,
+              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+            ))),
+          ),
+        );
+      }
       final docs = snap.data?.docs ?? [];
       if (docs.isEmpty) {
-        return const Center(child: Text('No journal entries yet', style: TextStyle(color: AppColors.textHint)));
+        return const AppEmptyState(
+          icon: Icons.book_rounded,
+          title: 'No journal entries yet',
+          message: 'The patient\'s weekly health logs will appear here.',
+          iconColor: Color(0xFFC2185B),
+        );
       }
       return ListView.builder(
         padding: const EdgeInsets.all(16),
@@ -371,10 +385,26 @@ class _PregnancyPatientDetailScreenState
         .orderBy('scheduledDate')
         .snapshots(),
     builder: (context, snap) {
+      if (snap.connectionState == ConnectionState.waiting) {
+        return AppShimmer(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(children: List.generate(3, (_) => Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              height: 70,
+              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+            ))),
+          ),
+        );
+      }
       final docs = snap.data?.docs ?? [];
       if (docs.isEmpty) {
-        return const Center(
-            child: Text('No checkups scheduled', style: TextStyle(color: AppColors.textHint)));
+        return const AppEmptyState(
+          icon: Icons.event_available_rounded,
+          title: 'No checkups scheduled',
+          message: 'Prenatal checkup appointments will appear here.',
+          iconColor: Color(0xFFC2185B),
+        );
       }
       return ListView.builder(
         padding: const EdgeInsets.all(16),
@@ -432,19 +462,15 @@ class _PregnancyPatientDetailScreenState
     children: [
       Padding(
         padding: const EdgeInsets.all(16),
-        child: ElevatedButton.icon(
-          onPressed: () => context.push(AppRoutes.maternityPrescription, extra: {
+        child: GradientButton(
+          label: 'Add Prescription',
+          icon: Icons.add_rounded,
+          width: double.infinity,
+          height: 48,
+          onTap: () => context.push(AppRoutes.maternityPrescription, extra: {
             'patientId': widget.patientId,
             'patientName': widget.patientName,
           }),
-          icon: const Icon(Icons.add_rounded),
-          label: const Text('Add Prescription'),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.primary,
-            foregroundColor: Colors.white,
-            minimumSize: const Size(double.infinity, 46),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          ),
         ),
       ),
       Expanded(
@@ -456,9 +482,26 @@ class _PregnancyPatientDetailScreenState
               .orderBy('createdAt', descending: true)
               .snapshots(),
           builder: (context, snap) {
+            if (snap.connectionState == ConnectionState.waiting) {
+              return AppShimmer(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(children: List.generate(4, (_) => Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    height: 60,
+                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+                  ))),
+                ),
+              );
+            }
             final docs = snap.data?.docs ?? [];
             if (docs.isEmpty) {
-              return const Center(child: Text('No medicines prescribed', style: TextStyle(color: AppColors.textHint)));
+              return const AppEmptyState(
+                icon: Icons.medication_rounded,
+                title: 'No medicines prescribed',
+                message: 'Tap "Add Prescription" above to prescribe medicines for this patient.',
+                iconColor: Color(0xFF66BB6A),
+              );
             }
             return ListView.builder(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),

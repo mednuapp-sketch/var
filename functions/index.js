@@ -6,6 +6,7 @@ const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore, FieldValue, Timestamp } = require("firebase-admin/firestore");
 const { getMessaging } = require("firebase-admin/messaging");
+const { getAuth } = require("firebase-admin/auth");
 const Razorpay = require("razorpay");
 const crypto = require("crypto");
 
@@ -1521,6 +1522,120 @@ exports.onPregnancyCheckupStatusChange = onDocumentUpdated(
   }
 );
 
+// ── Admin Broadcast Push ─────────────────────────────────────────────────────
+//
+// Fires when the admin writes a document to the `broadcasts` collection.
+// Reads FCM tokens for the target audience and sends a push so that users
+// receive a notification even when the app is closed/terminated.
+// The in-app notification is written by the admin panel separately; this
+// function only handles the FCM push delivery.
+exports.onBroadcastCreated = onDocumentCreated(
+  "broadcasts/{broadcastId}",
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+
+    const data = snap.data();
+    const { target, title, body, type = "general", link, targetUserId } = data;
+
+    if (!title || !body) {
+      console.warn(`Broadcast ${event.params.broadcastId}: missing title or body — skipping.`);
+      return;
+    }
+
+    const db        = getFirestore();
+    const messaging = getMessaging();
+    const tokens    = [];
+
+    // ── Collect FCM tokens ───────────────────────────────────────────────────
+    if (target === "all_patients" || target === "all_users") {
+      // Paginate in pages of 500 to stay within Firestore read limits.
+      let lastDoc = null;
+      do {
+        let q = db.collection("users").select("fcmToken").limit(500);
+        if (lastDoc) q = q.startAfter(lastDoc);
+        const page = await q.get();
+        page.forEach((doc) => {
+          const t = doc.data().fcmToken;
+          if (t) tokens.push(t);
+        });
+        lastDoc = page.size === 500 ? page.docs[page.size - 1] : null;
+      } while (lastDoc);
+    }
+
+    if (target === "specific_user" && targetUserId) {
+      const userDoc = await db.collection("users").doc(targetUserId).get();
+      if (userDoc.exists) {
+        const t = userDoc.data().fcmToken;
+        if (t) tokens.push(t);
+      }
+    }
+
+    if (!tokens.length) {
+      console.log(`Broadcast ${event.params.broadcastId}: no FCM tokens — in-app only.`);
+      return;
+    }
+
+    // ── Build FCM message ────────────────────────────────────────────────────
+    const fcmData = { type: String(type || "general"), actionType: "open_notifications" };
+    if (link) fcmData.link = String(link);
+
+    let successCount = 0;
+    let failCount    = 0;
+
+    // Send in 500-token chunks (FCM sendEachForMulticast limit).
+    for (let i = 0; i < tokens.length; i += 500) {
+      const chunk = tokens.slice(i, i + 500);
+      const msg = {
+        tokens: chunk,
+        data:   fcmData,
+        android: {
+          priority: "high",
+          notification: {
+            channelId:             "mednu_default_channel",
+            title,
+            body,
+            sound:                 "default",
+            defaultVibrateTimings: true,
+          },
+        },
+        apns: {
+          headers: { "apns-priority": "5" },
+          payload: {
+            aps: {
+              alert: { title, body },
+              sound: "default",
+              badge: 1,
+            },
+          },
+        },
+      };
+
+      try {
+        const res = await messaging.sendEachForMulticast(msg);
+        successCount += res.successCount;
+        failCount    += res.failureCount;
+      } catch (err) {
+        console.error(`Broadcast chunk ${Math.floor(i / 500) + 1} FCM error:`, err);
+      }
+    }
+
+    // ── Mark broadcast as pushed ─────────────────────────────────────────────
+    try {
+      await snap.ref.update({
+        fcmSentAt:       FieldValue.serverTimestamp(),
+        fcmTokenCount:   tokens.length,
+        fcmSuccessCount: successCount,
+        fcmFailCount:    failCount,
+      });
+    } catch (_) {}
+
+    console.log(
+      `Broadcast ${event.params.broadcastId}: FCM ${successCount}/${tokens.length} sent, ${failCount} failed.`
+    );
+  }
+);
+
 // ── Razorpay: Create Order ────────────────────────────────────────────────────
 //
 // Called from the Flutter app before opening the Razorpay checkout modal.
@@ -1599,4 +1714,140 @@ exports.verifyRazorpayPayment = onCall({ enforceAppCheck: true }, async (request
   }
 
   return { verified: true };
+});
+
+// ── MSG91: Send OTP ───────────────────────────────────────────────────────────
+//
+// Called from Flutter before showing the OTP screen.
+// Sends a 6-digit OTP to the given phone via MSG91.
+// Auth key and widget/template ID are stored in Cloud Function environment
+// variables — never exposed to the client.
+//
+// Set via:
+//   firebase functions:secrets:set MSG91_AUTH_KEY
+//   firebase functions:config:set msg91.template_id="YOUR_TEMPLATE_ID"
+// Or add to functions/.env:
+//   MSG91_AUTH_KEY=your_auth_key
+//   MSG91_TEMPLATE_ID=your_template_or_widget_id
+//
+// Request:  { phone: "+919876543210" }
+// Response: { success: true }
+exports.msg91SendOtp = onCall({ invoker: "public" }, async (request) => {
+  const { phone } = request.data || {};
+
+  if (!phone || !/^\+91\d{10}$/.test(phone)) {
+    throw new HttpsError("invalid-argument", "Invalid phone number. Must be +91 followed by 10 digits.");
+  }
+
+  const authKey = process.env.MSG91_AUTH_KEY;
+  const templateId = process.env.MSG91_TEMPLATE_ID;
+
+  if (!authKey || !templateId) {
+    console.error("MSG91 credentials not configured in environment.");
+    throw new HttpsError("internal", "OTP service not configured.");
+  }
+
+  // MSG91 expects mobile without '+': 919876543210
+  const mobile = phone.replace("+", "");
+
+  try {
+    const res = await fetch("https://control.msg91.com/api/v5/otp", {
+      method: "POST",
+      headers: {
+        "authkey": authKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        template_id: templateId,
+        mobile,
+        otp_length: "4",
+        otp_expiry: "10",
+      }),
+    });
+
+    const data = await res.json();
+    console.log("MSG91 sendOtp response:", JSON.stringify(data));
+
+    if (data.type !== "success") {
+      throw new HttpsError("internal", data.message || "Failed to send OTP. Please try again.");
+    }
+
+    return { success: true };
+  } catch (err) {
+    if (err instanceof HttpsError) throw err;
+    console.error("MSG91 sendOtp error:", err);
+    throw new HttpsError("internal", "Failed to send OTP. Please try again.");
+  }
+});
+
+// ── MSG91: Verify OTP + Issue Firebase Custom Token ───────────────────────────
+//
+// Called from Flutter after the user enters the OTP.
+// 1. Verifies the OTP with MSG91.
+// 2. Finds or creates a Firebase Auth user by phone number.
+// 3. Returns a Firebase custom token for signInWithCustomToken().
+//
+// Request:  { phone: "+919876543210", otp: "123456" }
+// Response: { customToken: "<firebase-custom-token>" }
+exports.msg91VerifyOtp = onCall({ invoker: "public" }, async (request) => {
+  const { phone, otp } = request.data || {};
+
+  if (!phone || !/^\+91\d{10}$/.test(phone)) {
+    throw new HttpsError("invalid-argument", "Invalid phone number.");
+  }
+  if (!otp || !/^\d{4}$/.test(otp)) {
+    throw new HttpsError("invalid-argument", "Invalid OTP format.");
+  }
+
+  const authKey = process.env.MSG91_AUTH_KEY;
+  if (!authKey) {
+    throw new HttpsError("internal", "OTP service not configured.");
+  }
+
+  const mobile = phone.replace("+", "");
+
+  // ── Step 1: Verify OTP with MSG91 ─────────────────────────────────────────
+  try {
+    const res = await fetch(
+      `https://control.msg91.com/api/v5/otp/verify?otp=${otp}&mobile=${mobile}`,
+      {
+        method: "GET",
+        headers: { "authkey": authKey },
+      }
+    );
+
+    const data = await res.json();
+    console.log("MSG91 verifyOtp response:", JSON.stringify(data));
+
+    if (data.type !== "success") {
+      throw new HttpsError("unauthenticated", "Incorrect OTP. Please check and try again.");
+    }
+  } catch (err) {
+    if (err instanceof HttpsError) throw err;
+    console.error("MSG91 verifyOtp error:", err);
+    throw new HttpsError("internal", "OTP verification failed. Please try again.");
+  }
+
+  // ── Step 2: Find or create Firebase user by phone ─────────────────────────
+  const auth = getAuth();
+  let uid;
+
+  try {
+    const user = await auth.getUserByPhoneNumber(phone);
+    uid = user.uid;
+    console.log(`MSG91 auth: found existing Firebase user ${uid} for ${phone}`);
+  } catch (err) {
+    if (err.code === "auth/user-not-found") {
+      const newUser = await auth.createUser({ phoneNumber: phone });
+      uid = newUser.uid;
+      console.log(`MSG91 auth: created new Firebase user ${uid} for ${phone}`);
+    } else {
+      console.error("Firebase getUserByPhoneNumber error:", err);
+      throw new HttpsError("internal", "Authentication failed. Please try again.");
+    }
+  }
+
+  // ── Step 3: Issue Firebase custom token ────────────────────────────────────
+  const customToken = await auth.createCustomToken(uid);
+  return { customToken };
 });

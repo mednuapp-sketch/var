@@ -1,16 +1,29 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/responsive.dart';
+
+final String _uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+
 class ReferralsPage extends StatelessWidget {
   const ReferralsPage({super.key});
 
-  static const _referralHistory = [
-    {'name': 'Rahul Verma', 'date': 'Jun 5, 2026', 'status': 'Joined', 'earned': '₹100', 'avatar': 'RV'},
-    {'name': 'Priya Singh', 'date': 'May 20, 2026', 'status': 'Joined', 'earned': '₹100', 'avatar': 'PS'},
-    {'name': 'Anil Kumar', 'date': 'May 10, 2026', 'status': 'Joined', 'earned': '₹100', 'avatar': 'AK'},
-    {'name': 'Sunita Devi', 'date': 'Apr 28, 2026', 'status': 'Pending', 'earned': '₹0', 'avatar': 'SD'},
-  ];
+  Stream<DocumentSnapshot<Map<String, dynamic>>> get _userStream {
+    if (_uid.isEmpty) return const Stream.empty();
+    return FirebaseFirestore.instance.collection('users').doc(_uid).snapshots();
+  }
+
+  Stream<QuerySnapshot<Map<String, dynamic>>> get _referralsStream {
+    if (_uid.isEmpty) return const Stream.empty();
+    return FirebaseFirestore.instance
+        .collection('referrals')
+        .where('referrerId', isEqualTo: _uid)
+        .orderBy('createdAt', descending: true)
+        .snapshots();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -18,33 +31,124 @@ class ReferralsPage extends StatelessWidget {
     return SingleChildScrollView(
       padding: EdgeInsets.all(isMobile ? 16 : 28),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('Referrals', style: GoogleFonts.poppins(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-        Text('Invite friends and earn rewards', style: GoogleFonts.poppins(fontSize: 13, color: AppColors.textSecondary)),
+        Text('Referrals',
+            style: GoogleFonts.poppins(
+                fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+        Text('Invite friends and earn rewards',
+            style: GoogleFonts.poppins(fontSize: 13, color: AppColors.textSecondary)),
         const SizedBox(height: 24),
-        _ReferralCard(),
-        const SizedBox(height: 20),
-        isMobile
-            ? Column(children: [_StatCard(value: '4', label: 'Total Referrals', emoji: '👥'),
-                const SizedBox(height: 12),
-                _StatCard(value: '₹300', label: 'Total Earned', emoji: '💰'),
-                const SizedBox(height: 12),
-                _StatCard(value: '3', label: 'Successful', emoji: '✅'),
-              ])
-            : Row(children: [
-                Expanded(child: _StatCard(value: '4', label: 'Total Referrals', emoji: '👥')),
-                const SizedBox(width: 16),
-                Expanded(child: _StatCard(value: '₹300', label: 'Total Earned', emoji: '💰')),
-                const SizedBox(width: 16),
-                Expanded(child: _StatCard(value: '3', label: 'Successful', emoji: '✅')),
-              ]),
-        const SizedBox(height: 24),
-        _ReferralHistoryList(history: _referralHistory),
+        _uid.isEmpty
+            ? _emptyState()
+            : StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                stream: _userStream,
+                builder: (context, userSnap) {
+                  final userData = userSnap.data?.data() ?? {};
+                  final referralCode =
+                      userData['referralCode'] as String? ?? '—';
+                  final referralPoints =
+                      (userData['referralPoints'] as num?)?.toInt() ?? 0;
+
+                  return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                    stream: _referralsStream,
+                    builder: (context, refSnap) {
+                      final docs = refSnap.data?.docs ?? [];
+                      int total = docs.length;
+                      int rewarded = 0;
+                      double earned = 0.0;
+                      for (final doc in docs) {
+                        final d = doc.data();
+                        if (d['status'] == 'rewarded') {
+                          rewarded++;
+                          earned +=
+                              (d['referrerRewardAmount'] as num?)?.toDouble() ??
+                                  0.0;
+                        }
+                      }
+
+                      return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _ReferralCard(code: referralCode),
+                            const SizedBox(height: 20),
+                            isMobile
+                                ? Column(children: [
+                                    _StatCard(
+                                        value: '$total',
+                                        label: 'Total Referrals',
+                                        emoji: '👥'),
+                                    const SizedBox(height: 12),
+                                    _StatCard(
+                                        value: '₹${earned.toStringAsFixed(0)}',
+                                        label: 'Total Earned',
+                                        emoji: '💰'),
+                                    const SizedBox(height: 12),
+                                    _StatCard(
+                                        value: '$rewarded',
+                                        label: 'Successful',
+                                        emoji: '✅'),
+                                    const SizedBox(height: 12),
+                                    _StatCard(
+                                        value: '$referralPoints',
+                                        label: 'Reward Points',
+                                        emoji: '⭐'),
+                                  ])
+                                : Row(children: [
+                                    Expanded(
+                                        child: _StatCard(
+                                            value: '$total',
+                                            label: 'Total Referrals',
+                                            emoji: '👥')),
+                                    const SizedBox(width: 16),
+                                    Expanded(
+                                        child: _StatCard(
+                                            value:
+                                                '₹${earned.toStringAsFixed(0)}',
+                                            label: 'Total Earned',
+                                            emoji: '💰')),
+                                    const SizedBox(width: 16),
+                                    Expanded(
+                                        child: _StatCard(
+                                            value: '$rewarded',
+                                            label: 'Successful',
+                                            emoji: '✅')),
+                                    const SizedBox(width: 16),
+                                    Expanded(
+                                        child: _StatCard(
+                                            value: '$referralPoints',
+                                            label: 'Reward Points',
+                                            emoji: '⭐')),
+                                  ]),
+                            const SizedBox(height: 24),
+                            _ReferralHistoryList(docs: docs),
+                          ]);
+                    },
+                  );
+                },
+              ),
       ]),
+    );
+  }
+
+  Widget _emptyState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 48),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Text('🎁', style: TextStyle(fontSize: 56)),
+          const SizedBox(height: 16),
+          Text('Sign in to view referrals',
+              style: GoogleFonts.poppins(
+                  fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+        ]),
+      ),
     );
   }
 }
 
 class _ReferralCard extends StatelessWidget {
+  final String code;
+  const _ReferralCard({required this.code});
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -52,39 +156,67 @@ class _ReferralCard extends StatelessWidget {
       decoration: BoxDecoration(
         gradient: AppColors.primaryGradient,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [BoxShadow(color: AppColors.primary.withOpacity(0.3), blurRadius: 20, offset: const Offset(0, 8))],
+        boxShadow: [
+          BoxShadow(
+              color: AppColors.primary.withValues(alpha: 0.3),
+              blurRadius: 20,
+              offset: const Offset(0, 8))
+        ],
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Your Referral Code', style: GoogleFonts.poppins(fontSize: 13, color: Colors.white70)),
-            const SizedBox(height: 8),
-            Text('MEDNU2026', style: GoogleFonts.poppins(fontSize: 32, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: 4)),
-          ])),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Your Referral Code',
+                  style: GoogleFonts.poppins(fontSize: 13, color: Colors.white70)),
+              const SizedBox(height: 8),
+              Text(code,
+                  style: GoogleFonts.poppins(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                      letterSpacing: 3)),
+            ]),
+          ),
           const Text('🎁', style: TextStyle(fontSize: 48)),
         ]),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
         Text(
-          'Share your code and earn ₹100 for every friend who joins MedNu!',
+          'Share your code and earn rewards for every friend who joins MedNu!',
           style: GoogleFonts.poppins(fontSize: 13, color: Colors.white70, height: 1.5),
         ),
         const SizedBox(height: 20),
         Row(children: [
           Expanded(
             child: GestureDetector(
-              onTap: () {},
+              onTap: code == '—'
+                  ? null
+                  : () {
+                      Clipboard.setData(ClipboardData(text: code));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Referral code copied!',
+                              style: GoogleFonts.poppins(fontSize: 13)),
+                          backgroundColor: AppColors.success,
+                          behavior: SnackBarBehavior.floating,
+                          duration: const Duration(seconds: 2),
+                        ),
+                      );
+                    },
               child: Container(
                 height: 44,
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
+                  color: Colors.white.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.white.withOpacity(0.3)),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
                 ),
                 child: Center(
                   child: Row(mainAxisSize: MainAxisSize.min, children: [
                     const Icon(Icons.copy_rounded, color: Colors.white, size: 16),
                     const SizedBox(width: 8),
-                    Text('Copy Code', style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white)),
+                    Text('Copy Code',
+                        style: GoogleFonts.poppins(
+                            fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white)),
                   ]),
                 ),
               ),
@@ -93,7 +225,21 @@ class _ReferralCard extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(
             child: GestureDetector(
-              onTap: () {},
+              onTap: code == '—'
+                  ? null
+                  : () {
+                      Clipboard.setData(
+                          ClipboardData(text: 'Join MedNu with my referral code: $code'));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Share link copied!',
+                              style: GoogleFonts.poppins(fontSize: 13)),
+                          backgroundColor: AppColors.success,
+                          behavior: SnackBarBehavior.floating,
+                          duration: const Duration(seconds: 2),
+                        ),
+                      );
+                    },
               child: Container(
                 height: 44,
                 decoration: BoxDecoration(
@@ -104,7 +250,9 @@ class _ReferralCard extends StatelessWidget {
                   child: Row(mainAxisSize: MainAxisSize.min, children: [
                     Icon(Icons.share_rounded, color: AppColors.primary, size: 16),
                     const SizedBox(width: 8),
-                    Text('Share Link', style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary)),
+                    Text('Share Link',
+                        style: GoogleFonts.poppins(
+                            fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary)),
                   ]),
                 ),
               ),
@@ -130,14 +278,17 @@ class _StatCard extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.border),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 8)],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8)],
       ),
       child: Row(children: [
         Text(emoji, style: const TextStyle(fontSize: 28)),
         const SizedBox(width: 14),
         Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(value, style: GoogleFonts.poppins(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
-          Text(label, style: GoogleFonts.poppins(fontSize: 12, color: AppColors.textSecondary)),
+          Text(value,
+              style: GoogleFonts.poppins(
+                  fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+          Text(label,
+              style: GoogleFonts.poppins(fontSize: 12, color: AppColors.textSecondary)),
         ]),
       ]),
     );
@@ -145,8 +296,8 @@ class _StatCard extends StatelessWidget {
 }
 
 class _ReferralHistoryList extends StatelessWidget {
-  final List<Map<String, String>> history;
-  const _ReferralHistoryList({required this.history});
+  final List<QueryDocumentSnapshot<Map<String, dynamic>>> docs;
+  const _ReferralHistoryList({required this.docs});
 
   @override
   Widget build(BuildContext context) {
@@ -155,32 +306,57 @@ class _ReferralHistoryList extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.border),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 8)],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8)],
       ),
       child: Column(children: [
         Padding(
           padding: const EdgeInsets.all(20),
           child: Row(children: [
-            Text('Referral History', style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+            Text('Referral History',
+                style: GoogleFonts.poppins(
+                    fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
           ]),
         ),
         const Divider(height: 1),
-        ...history.asMap().entries.map((entry) => Column(children: [
-          _HistoryRow(item: entry.value),
-          if (entry.key < history.length - 1) const Divider(height: 1, indent: 68),
-        ])),
+        if (docs.isEmpty)
+          Padding(
+            padding: const EdgeInsets.all(28),
+            child: Center(
+              child: Text('No referrals yet. Share your code to get started!',
+                  style: GoogleFonts.poppins(fontSize: 13, color: AppColors.textSecondary)),
+            ),
+          )
+        else
+          ...docs.asMap().entries.map((entry) {
+            final i = entry.key;
+            final d = entry.value.data();
+            return Column(children: [
+              _HistoryRow(data: d),
+              if (i < docs.length - 1) const Divider(height: 1, indent: 68),
+            ]);
+          }),
       ]),
     );
   }
 }
 
 class _HistoryRow extends StatelessWidget {
-  final Map<String, String> item;
-  const _HistoryRow({required this.item});
+  final Map<String, dynamic> data;
+  const _HistoryRow({required this.data});
 
   @override
   Widget build(BuildContext context) {
-    final joined = item['status'] == 'Joined';
+    final status = data['status'] as String? ?? 'pending';
+    final isRewarded = status == 'rewarded';
+    final earned = (data['referrerRewardAmount'] as num?)?.toDouble() ?? 0.0;
+    final earnedStr = isRewarded ? '+₹${earned.toStringAsFixed(0)}' : '₹0';
+    final createdAt = data['createdAt'];
+    final dateStr =
+        createdAt is Timestamp ? _formatTs(createdAt) : '';
+    final referralCode = data['referralCode'] as String? ?? '';
+    // Show initials from referral code as avatar placeholder
+    final avatar = referralCode.length >= 2 ? referralCode.substring(0, 2) : '??';
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       child: Row(children: [
@@ -188,26 +364,54 @@ class _HistoryRow extends StatelessWidget {
           width: 44,
           height: 44,
           decoration: BoxDecoration(gradient: AppColors.primaryGradient, shape: BoxShape.circle),
-          child: Center(child: Text(item['avatar']!, style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white))),
+          child: Center(
+            child: Text(avatar,
+                style: GoogleFonts.poppins(
+                    fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white)),
+          ),
         ),
         const SizedBox(width: 14),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(item['name']!, style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
-          Text(item['date']!, style: GoogleFonts.poppins(fontSize: 11, color: AppColors.textSecondary)),
-        ])),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Referral • $referralCode',
+                style: GoogleFonts.poppins(
+                    fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+            Text(dateStr,
+                style: GoogleFonts.poppins(fontSize: 11, color: AppColors.textSecondary)),
+          ]),
+        ),
         Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
             decoration: BoxDecoration(
-              color: (joined ? AppColors.success : AppColors.warning).withOpacity(0.1),
+              color: (isRewarded ? AppColors.success : AppColors.warning).withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(20),
             ),
-            child: Text(item['status']!, style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.w700, color: joined ? AppColors.success : AppColors.warning)),
+            child: Text(
+              isRewarded ? 'Rewarded' : 'Pending',
+              style: GoogleFonts.poppins(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  color: isRewarded ? AppColors.success : AppColors.warning),
+            ),
           ),
           const SizedBox(height: 4),
-          Text(item['earned']!, style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w700, color: joined ? AppColors.success : AppColors.textHint)),
+          Text(earnedStr,
+              style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: isRewarded ? AppColors.success : AppColors.textHint)),
         ]),
       ]),
     );
   }
+}
+
+String _formatTs(Timestamp ts) {
+  final d = ts.toDate();
+  const months = [
+    '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+  ];
+  return '${d.day} ${months[d.month]} ${d.year}';
 }

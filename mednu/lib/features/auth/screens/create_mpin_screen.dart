@@ -41,8 +41,6 @@ class _CreateMPINScreenState extends ConsumerState<CreateMPINScreen>
 
   // Step slide transition
   late AnimationController _stepCtrl;
-  late Animation<Offset> _stepSlide;
-  late Animation<double> _stepFade;
 
   // Success glow
   late AnimationController _successCtrl;
@@ -70,9 +68,6 @@ class _CreateMPINScreenState extends ConsumerState<CreateMPINScreen>
 
     _stepCtrl = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 320));
-    _stepSlide = Tween(begin: const Offset(0.15, 0), end: Offset.zero).animate(
-        CurvedAnimation(parent: _stepCtrl, curve: Curves.easeOutCubic));
-    _stepFade = CurvedAnimation(parent: _stepCtrl, curve: Curves.easeOut);
 
     _successCtrl = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 500));
@@ -279,7 +274,7 @@ class _CreateMPINScreenState extends ConsumerState<CreateMPINScreen>
 
                     // ── Shield icon with glow ────────────────────────────────
                     ScaleTransition(
-                      scale: _isLoading ? _successScale : const AlwaysStoppedAnimation(1.0),
+                      scale: _successCtrl.value > 0 ? _successScale : const AlwaysStoppedAnimation(1.0),
                       child: AnimatedBuilder(
                         animation: _pulseCtrl,
                         builder: (_, child) => Stack(
@@ -431,7 +426,7 @@ class _CreateMPINScreenState extends ConsumerState<CreateMPINScreen>
                           final filled = i < _entered.length;
                           return AnimatedContainer(
                             duration: const Duration(milliseconds: 150),
-                            curve: Curves.easeOutBack,
+                            curve: Curves.easeOut,
                             margin: const EdgeInsets.symmetric(horizontal: 12),
                             width: filled ? 22 : 18,
                             height: filled ? 22 : 18,

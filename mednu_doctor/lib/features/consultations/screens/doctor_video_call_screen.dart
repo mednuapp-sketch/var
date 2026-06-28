@@ -5,9 +5,11 @@ import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:go_router/go_router.dart';
+import 'package:screen_protector/screen_protector.dart';
 import '../services/agora_call_service.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/services/active_call_service.dart';
 import '../../../features/notifications/services/notification_service.dart';
 
 class DoctorVideoCallScreen extends StatefulWidget {
@@ -59,6 +61,7 @@ class _DoctorVideoCallScreenState extends State<DoctorVideoCallScreen>
   void initState() {
     super.initState();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    _enableScreenProtection();
     _agora = AgoraCallService(
       onRemoteJoined: (uid) {
         if (!mounted) return;
@@ -100,6 +103,13 @@ class _DoctorVideoCallScreenState extends State<DoctorVideoCallScreen>
     await _agora.initialize();
     if (!mounted) return;
     setState(() => _engineReady = true);
+    // Start foreground service + cache the Flutter engine so Android does not
+    // kill the process (or Dart VM) if the doctor swipes from recents mid-call.
+    await ActiveCallService.start(
+      callId: widget.consultationId,
+      callerName: widget.patientName,
+    );
+    ActiveCallService.setEndCallFromNotificationHandler(() => _doEndCall());
     await _agora.joinChannel(widget.consultationId);
     // Signal the patient app to join by setting status to 'active'.
     // The patient's Firestore listener watches for this exact status change.
@@ -113,39 +123,75 @@ class _DoctorVideoCallScreenState extends State<DoctorVideoCallScreen>
     }
   }
 
+  Future<void> _enableScreenProtection() async {
+    try {
+      // Android: FLAG_SECURE — blocks both screenshots and screen recordings at OS level
+      await ScreenProtector.protectDataLeakageOn();
+      // iOS: show a solid black overlay whenever the screen is being captured/recorded
+      await ScreenProtector.protectDataLeakageWithColor(Colors.black);
+      // Both platforms: prevent screenshots
+      await ScreenProtector.preventScreenshotOn();
+      // iOS: fire a warning snackbar if a screenshot is still attempted
+      ScreenProtector.addListener(
+        () {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Screenshots are not allowed during consultations'),
+              backgroundColor: Colors.red,
+              duration: Duration(seconds: 3),
+            ),
+          );
+        },
+        (isRecording) {
+          debugPrint('[DoctorVideoCall] Screen recording detected: $isRecording');
+        },
+      );
+    } catch (e) {
+      debugPrint('[DoctorVideoCall] Screen protection error: $e');
+    }
+  }
+
   void _watchConsultation() {
     _consultSub = FirebaseFirestore.instance
         .collection('consultations')
         .doc(widget.consultationId)
         .snapshots()
         .listen((snap) {
-      if (!snap.exists || !mounted || _endCallLock) return;
+      if (!snap.exists || !mounted) return;
       final data = snap.data();
       if (data == null) return;
 
-      // Eagerly capture patient info so prescription screen gets the right patientId
+      // Always capture patient info — must happen regardless of _endCallLock
+      // so _patientId is ready before _doEndCall navigates.
       if (_patientId == null) {
         final pid = data['patientId'] as String?;
         final pname = data['patientName'] as String? ?? widget.patientName;
         if (pid != null && pid.isNotEmpty) {
-          setState(() {
-            _patientId = pid;
-            _consultPatientName = pname;
-          });
+          if (mounted) {
+            setState(() {
+              _patientId = pid;
+              _consultPatientName = pname;
+            });
+          }
         }
       }
       if (_appointmentId == null) {
         final apptId = data['appointmentId'] as String?;
         if (apptId != null && apptId.isNotEmpty) {
-          setState(() => _appointmentId = apptId);
+          if (mounted) {
+            setState(() => _appointmentId = apptId);
+          }
         }
       }
 
-      final status = data['status'] as String? ?? '';
       // Only react to remote 'ended' — ignore the echo of our own update
+      final status = data['status'] as String? ?? '';
       if (status == 'ended' && !_endCallLock) {
         _doEndCall(fromRemote: true);
       }
+    }, onError: (e) {
+      debugPrint('[VideoCall] Consultation watch error: $e');
     });
   }
 
@@ -166,28 +212,47 @@ class _DoctorVideoCallScreenState extends State<DoctorVideoCallScreen>
 
   @override
   void dispose() {
+    // Detach the notification handler — widget is gone.
+    // Do NOT stop the foreground service here: dispose() is also called when
+    // the Activity is destroyed by swipe-from-recents. The cached engine +
+    // service keep Agora alive. The service is stopped only in _doEndCall().
+    ActiveCallService.clearEndCallFromNotificationHandler();
     _consultSub?.cancel();
     _notesCtrl.dispose();
     // Only dispose Agora if _doEndCall hasn't already done it
     if (!_endCallLock) _agora.dispose();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    ScreenProtector.preventScreenshotOff();
+    ScreenProtector.protectDataLeakageOff();
+    ScreenProtector.protectDataLeakageWithColorOff();
+    ScreenProtector.removeListener();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: Stack(
-        children: [
-          _buildRemoteView(),
-          _buildLocalPip(),
-          if (_showNotes) _buildNotesPanel(),
-          _buildTopBar(context),
-          if (_isReconnecting) _buildReconnectBanner(),
-          if (_agoraError != null) _buildAgoraErrorBanner(),
-          _buildBottomControls(context),
-        ],
+    return PopScope(
+      // During an active call, back button minimizes the app (like WhatsApp).
+      // Once _endCallLock is true the call is over and normal navigation works.
+      canPop: _endCallLock,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && !_endCallLock) {
+          SystemNavigator.pop();
+        }
+      },
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        body: Stack(
+          children: [
+            _buildRemoteView(),
+            _buildLocalPip(),
+            if (_showNotes) _buildNotesPanel(),
+            _buildTopBar(context),
+            if (_isReconnecting) _buildReconnectBanner(),
+            if (_agoraError != null) _buildAgoraErrorBanner(),
+            _buildBottomControls(context),
+          ],
+        ),
       ),
     );
   }
@@ -685,6 +750,9 @@ class _DoctorVideoCallScreenState extends State<DoctorVideoCallScreen>
     // Re-entry guard: prevents double-disposal and double-navigation
     if (_endCallLock) return;
     _endCallLock = true;
+    // Stop foreground service + release engine cache so the next cold start
+    // creates a fresh Flutter engine (no stale call state).
+    await ActiveCallService.stop();
 
     final consultRef = FirebaseFirestore.instance
         .collection('consultations')
@@ -709,6 +777,22 @@ class _DoctorVideoCallScreenState extends State<DoctorVideoCallScreen>
       debugPrint('[DoctorVideoCall] End-call Firestore update failed: $e');
     }
 
+    // Always mark the linked appointment completed — idempotent even if patient
+    // side writes it at the same time.
+    if (_appointmentId != null && _appointmentId!.isNotEmpty) {
+      try {
+        await FirebaseFirestore.instance
+            .collection('appointments')
+            .doc(_appointmentId!)
+            .update({
+          'status': 'completed',
+          'completedAt': FieldValue.serverTimestamp(),
+        });
+      } catch (e) {
+        debugPrint('[DoctorVideoCall] Appointment complete failed: $e');
+      }
+    }
+
     // Fire-and-forget post-consultation notifications
     _sendPatientFollowups(consultRef);
 
@@ -718,17 +802,27 @@ class _DoctorVideoCallScreenState extends State<DoctorVideoCallScreen>
 
     if (!mounted) return;
 
-    if (_patientJoinedAtLeastOnce) {
-      // Valid consultation occurred — navigate to prescription
-      context.go(AppRoutes.prescription, extra: {
-        'patientId': _patientId ?? '',
-        'patientName': _consultPatientName,
-        'consultationId': widget.consultationId,
-        'appointmentId': _appointmentId,
-        'sessionValidated': true,
+    if (_patientJoinedAtLeastOnce && (_patientId?.isNotEmpty ?? false)) {
+      // Go to dashboard first (clears video-call from the stack), then push
+      // prescription on top so the back button returns to dashboard and the
+      // extra params are not subject to go_router's refreshListenable rebuild.
+      context.go(AppRoutes.dashboard);
+      final pid        = _patientId!;
+      final pname      = _consultPatientName;
+      final consultId  = widget.consultationId;
+      final apptId     = _appointmentId;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        context.push(AppRoutes.prescription, extra: {
+          'patientId':       pid,
+          'patientName':     pname,
+          'consultationId':  consultId,
+          'appointmentId':   apptId,
+          'sessionValidated': true,
+        });
       });
     } else {
-      // Patient never joined — go back to dashboard; no prescription needed
+      // Patient never joined, or patient ID unknown — go back to dashboard
       context.go(AppRoutes.dashboard);
     }
   }

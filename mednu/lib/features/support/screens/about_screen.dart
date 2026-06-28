@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -55,11 +56,22 @@ class _AboutScreenState extends State<AboutScreen> {
                       Container(
                         width: 80, height: 80,
                         decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha:0.15),
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white.withValues(alpha:0.3), width: 2),
+                          borderRadius: BorderRadius.circular(22),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.25),
+                              blurRadius: 16,
+                              offset: const Offset(0, 6),
+                            ),
+                          ],
                         ),
-                        child: const Icon(Icons.local_hospital_rounded, color: Colors.white, size: 40),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(22),
+                          child: SvgPicture.asset(
+                            'assets/icons/mednu_logo.svg',
+                            fit: BoxFit.contain,
+                          ),
+                        ),
                       ),
                       const SizedBox(height: 12),
                       const Text('MedNu', style: TextStyle(fontFamily: 'Poppins', fontSize: 24, fontWeight: FontWeight.w800, color: Colors.white)),
@@ -148,9 +160,7 @@ class _AboutScreenState extends State<AboutScreen> {
                   color: const Color(0xFF1565C0),
                   title: 'Company',
                   content: 'MedNu Healthcare Services Private Limited\n'
-                      'Registered in India under the Companies Act, 2013\n'
-                      'GST: 36AABCM1234A1Z5\n'
-                      'CIN: U85110TS2024PTC000000',
+                      'Registered in India under the Companies Act, 2013',
                 ),
 
                 const SizedBox(height: 16),
@@ -163,8 +173,8 @@ class _AboutScreenState extends State<AboutScreen> {
                   if (await canLaunchUrl(uri)) await launchUrl(uri);
                 }),
                 const SizedBox(height: 8),
-                _ContactRow(Icons.phone_rounded, '+91 90000 00000', () async {
-                  final uri = Uri(scheme: 'tel', path: '+919000000000');
+                _ContactRow(Icons.phone_rounded, '+91 99999 99999', () async {
+                  final uri = Uri(scheme: 'tel', path: '+919999999999');
                   if (await canLaunchUrl(uri)) await launchUrl(uri);
                 }),
                 const SizedBox(height: 8),
@@ -182,7 +192,34 @@ class _AboutScreenState extends State<AboutScreen> {
                 const SizedBox(height: 8),
                 _LegalTile('Terms of Service', () => context.push(AppRoutes.termsOfService)),
                 const SizedBox(height: 8),
-                _LegalTile('Medical Disclaimer', () {}),
+                _LegalTile('Medical Disclaimer', () {
+                  showDialog(
+                    context: context,
+                    builder: (dialogCtx) => AlertDialog(
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                      title: const Text('Medical Disclaimer',
+                          style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
+                      content: const SingleChildScrollView(
+                        child: Text(
+                          'The information provided in MedNu is for general informational and educational purposes only. '
+                          'It is not intended as a substitute for professional medical advice, diagnosis, or treatment.\n\n'
+                          'Always seek the advice of your physician or other qualified health provider with any questions '
+                          'you may have regarding a medical condition. Never disregard professional medical advice or delay '
+                          'in seeking it because of something you have read in this app.\n\n'
+                          'In case of a medical emergency, call your doctor or emergency services immediately.',
+                          style: TextStyle(fontFamily: 'Poppins', fontSize: 13, height: 1.6),
+                        ),
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(dialogCtx),
+                          child: const Text('Close',
+                              style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
 
                 const SizedBox(height: 24),
 
@@ -192,7 +229,7 @@ class _AboutScreenState extends State<AboutScreen> {
                     const Icon(Icons.favorite_rounded, size: 18, color: AppColors.primary),
                     const SizedBox(height: 8),
                     Text(
-                      '© 2025 MedNu Healthcare Services Pvt. Ltd.\nAll rights reserved.',
+                      '© 2024–2026 MedNu Healthcare Services Pvt. Ltd.\nAll rights reserved.',
                       textAlign: TextAlign.center,
                       style: AppTextStyles.caption.copyWith(color: AppColors.textHint, height: 1.6),
                     ),

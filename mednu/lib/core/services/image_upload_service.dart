@@ -72,7 +72,13 @@ class ImageUploadService {
       );
     }
 
-    return await ref.getDownloadURL();
+    // Build a permanent, token-free URL. Firebase embeds an access token in
+    // getDownloadURL() that can be revoked/invalidated over time. Since the
+    // profile image path is public, we drop the token so the stored URL never
+    // expires regardless of auth-session changes.
+    final signedUrl = await ref.getDownloadURL();
+    final uri = Uri.parse(signedUrl);
+    return uri.replace(queryParameters: {'alt': 'media'}).toString();
   }
 
   /// Deletes `users/{uid}/profile.jpg` from Storage. Silently ignores errors.

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 
@@ -13,7 +14,7 @@ class TermsOfServiceScreen extends StatelessWidget {
         title: const Text('Terms of Service'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded),
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () => context.pop(),
         ),
       ),
       body: SingleChildScrollView(
@@ -76,7 +77,7 @@ class TermsOfServiceScreen extends StatelessWidget {
               body: 'MedNU provides a healthcare facilitation platform including:\n\n'
                   '• Online doctor consultations (video and chat)\n'
                   '• Appointment booking with healthcare providers\n'
-                  '• Medicine delivery coordination\n'
+                  '• Pharmacy delivery coordination\n'
                   '• Diagnostic test booking\n'
                   '• Health tracking and records management\n'
                   '• Emergency service coordination\n\n'

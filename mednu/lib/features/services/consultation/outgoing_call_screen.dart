@@ -3,29 +3,36 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/router/app_router.dart';
 
-/// WhatsApp-style outgoing call screen shown to the patient while waiting
-/// for the doctor to accept the consultation.
+/// Outgoing call screen for both quick-connect and scheduled appointments.
 ///
-/// Watches the Firestore consultation document and transitions automatically:
-///   pending   → ringing  → shows "Doctor is joining..."
-///   active    → navigates to VideoCallScreen
-///   declined  → shows "Call Declined" then pops
-///   missed    → shows "Missed — No Answer" then pops
-///   cancelled → pops (patient cancelled themselves)
+/// Quick-connect status flow:
+///   pending   → "Calling..."  |  ongoing → "Connecting"  |  active → VideoCall
+///   declined/missed → feedback then pop  |  cancelled/ended → pop
+///
+/// Scheduled appointment status flow:
+///   scheduled_waiting → "Waiting for doctor"  |  active → VideoCall
+///   pending (doctor re-initiated) → "Doctor joining"  |  active → VideoCall
+///   cancelled/ended → pop
 class OutgoingCallScreen extends StatefulWidget {
   final String consultationId;
   final String doctorName;
   final String doctorSpecialty;
+  final String doctorPhotoUrl;
+  /// True when this is a scheduled appointment join (not an instant call).
+  final bool isScheduled;
 
   const OutgoingCallScreen({
     super.key,
     required this.consultationId,
     required this.doctorName,
     required this.doctorSpecialty,
+    this.doctorPhotoUrl = '',
+    this.isScheduled = false,
   });
 
   @override
@@ -48,7 +55,8 @@ class _OutgoingCallScreenState extends State<OutgoingCallScreen>
   int _callSeconds = 0;
   Timer? _elapsedTimer;
   Timer? _timeoutTimer;
-  static const _timeoutSeconds = 60;
+  // Scheduled appointments wait up to 15 min; quick-connect times out at 60 s.
+  int get _timeoutSeconds => widget.isScheduled ? 900 : 60;
 
   StreamSubscription<DocumentSnapshot>? _sub;
 
@@ -57,6 +65,7 @@ class _OutgoingCallScreenState extends State<OutgoingCallScreen>
     super.initState();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     _initAnimations();
+    WakelockPlus.enable();
     _watchConsultation();
     _startElapsedTimer();
     _startTimeoutTimer();
@@ -100,17 +109,26 @@ class _OutgoingCallScreenState extends State<OutgoingCallScreen>
 
   void _handleStatus(String status, Map<String, dynamic>? data) {
     switch (status) {
+      // ── Scheduled: patient is waiting, doctor hasn't joined yet ────────────
+      case 'scheduled_waiting':
+        if (_callState != _OutgoingState.calling) {
+          setState(() => _callState = _OutgoingState.calling);
+        }
+        break;
+      // ── Quick-connect: waiting for doctor to see the request ────────────────
       case 'pending':
         if (_callState != _OutgoingState.calling) {
           setState(() => _callState = _OutgoingState.calling);
         }
         break;
+      // ── Doctor accepted (quick-connect) or doctor initiated (scheduled) ─────
       case 'ongoing':
         if (_callState != _OutgoingState.ringing) {
           setState(() => _callState = _OutgoingState.ringing);
           HapticFeedback.lightImpact();
         }
         break;
+      // ── Both sides ready — navigate to video ───────────────────────────────
       case 'active':
         if (_navigated) return;
         _navigated = true;
@@ -147,7 +165,7 @@ class _OutgoingCallScreenState extends State<OutgoingCallScreen>
   }
 
   void _startTimeoutTimer() {
-    _timeoutTimer = Timer(const Duration(seconds: _timeoutSeconds), () {
+    _timeoutTimer = Timer(Duration(seconds: _timeoutSeconds), () {
       if (!mounted || _navigated ||
           _callState == _OutgoingState.declined ||
           _callState == _OutgoingState.missed) { return; }
@@ -171,8 +189,16 @@ class _OutgoingCallScreenState extends State<OutgoingCallScreen>
 
   String get _elapsedLabel {
     if (_callState == _OutgoingState.calling) {
+      if (widget.isScheduled) {
+        // Show elapsed wait time for scheduled, not a countdown
+        final m = _callSeconds ~/ 60;
+        final s = _callSeconds % 60;
+        return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+      }
       final remaining = (_timeoutSeconds - _callSeconds).clamp(0, _timeoutSeconds);
-      return '00:${remaining.toString().padLeft(2, '0')}';
+      final m = remaining ~/ 60;
+      final s = remaining % 60;
+      return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
     }
     final m = _callSeconds ~/ 60;
     final s = _callSeconds % 60;
@@ -232,6 +258,7 @@ class _OutgoingCallScreenState extends State<OutgoingCallScreen>
     _elapsedTimer?.cancel();
     _timeoutTimer?.cancel();
     _sub?.cancel();
+    WakelockPlus.disable();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();
   }
@@ -242,7 +269,7 @@ class _OutgoingCallScreenState extends State<OutgoingCallScreen>
   Widget build(BuildContext context) {
     return PopScope(
       canPop: false,
-      onPopInvoked: (_) async => _cancelCall(),
+      onPopInvokedWithResult: (didPop, _) { if (!didPop) _cancelCall(); },
       child: Scaffold(
         backgroundColor: Colors.transparent,
         body: Container(
@@ -279,8 +306,10 @@ class _OutgoingCallScreenState extends State<OutgoingCallScreen>
 
   Widget _buildStatusLabel() {
     final label = switch (_callState) {
-      _OutgoingState.calling  => 'Calling...',
-      _OutgoingState.ringing  => 'Doctor accepted — Connecting',
+      _OutgoingState.calling  => widget.isScheduled
+          ? 'Waiting for doctor to join...'
+          : 'Calling...',
+      _OutgoingState.ringing  => 'Doctor is joining — Connecting',
       _OutgoingState.declined => 'Call Declined',
       _OutgoingState.missed   => 'No Answer',
     };
@@ -337,39 +366,63 @@ class _OutgoingCallScreenState extends State<OutgoingCallScreen>
           ],
           ScaleTransition(
             scale: _pulseAnim,
-            child: Container(
-              width: 110,
-              height: 110,
-              decoration: BoxDecoration(
-                gradient: _callState == _OutgoingState.calling ||
-                        _callState == _OutgoingState.ringing
-                    ? AppColors.primaryGradient
-                    : RadialGradient(colors: [
-                        glowColor.withValues(alpha:0.9),
-                        glowColor.withValues(alpha:0.5),
-                      ]),
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: glowColor.withValues(alpha:0.55),
-                    blurRadius: 32,
-                    spreadRadius: 10,
-                  ),
-                ],
-              ),
-              child: Icon(
-                _callState == _OutgoingState.declined
-                    ? Icons.call_end_rounded
-                    : _callState == _OutgoingState.missed
-                        ? Icons.phone_missed_rounded
-                        : Icons.person_rounded,
-                color: Colors.white,
-                size: 52,
-              ),
-            ),
+            child: _buildAvatarCircle(glowColor),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildAvatarCircle(Color glowColor) {
+    final isActive = _callState == _OutgoingState.calling ||
+        _callState == _OutgoingState.ringing;
+    final IconData fallbackIcon = _callState == _OutgoingState.declined
+        ? Icons.call_end_rounded
+        : _callState == _OutgoingState.missed
+            ? Icons.phone_missed_rounded
+            : Icons.person_rounded;
+
+    final hasPhoto = widget.doctorPhotoUrl.isNotEmpty &&
+        _callState != _OutgoingState.declined &&
+        _callState != _OutgoingState.missed;
+
+    return Container(
+      width: 110,
+      height: 110,
+      decoration: BoxDecoration(
+        gradient: hasPhoto
+            ? null
+            : isActive
+                ? AppColors.primaryGradient
+                : RadialGradient(colors: [
+                    glowColor.withValues(alpha: 0.9),
+                    glowColor.withValues(alpha: 0.5),
+                  ]),
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: glowColor.withValues(alpha: 0.55),
+            blurRadius: 32,
+            spreadRadius: 10,
+          ),
+        ],
+      ),
+      child: hasPhoto
+          ? ClipOval(
+              child: Image.network(
+                widget.doctorPhotoUrl,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Container(
+                  decoration: BoxDecoration(
+                    gradient: isActive ? AppColors.primaryGradient : null,
+                    color: isActive ? null : glowColor,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(fallbackIcon, color: Colors.white, size: 52),
+                ),
+              ),
+            )
+          : Icon(fallbackIcon, color: Colors.white, size: 52),
     );
   }
 
@@ -407,6 +460,8 @@ class _OutgoingCallScreenState extends State<OutgoingCallScreen>
 
   Widget _buildCallTimer() {
     final isCountdown = _callState == _OutgoingState.calling;
+    // Scheduled appointments show elapsed wait time without a countdown bar.
+    final showProgressBar = isCountdown && !widget.isScheduled;
     return Column(
       children: [
         Text(
@@ -418,7 +473,18 @@ class _OutgoingCallScreenState extends State<OutgoingCallScreen>
             letterSpacing: 2,
           ),
         ),
-        if (isCountdown) ...[
+        if (widget.isScheduled && isCountdown) ...[
+          const SizedBox(height: 6),
+          Text(
+            'Your doctor will join shortly',
+            style: const TextStyle(
+              fontFamily: 'Poppins',
+              fontSize: 11,
+              color: Colors.white24,
+            ),
+          ),
+        ],
+        if (showProgressBar) ...[
           const SizedBox(height: 6),
           SizedBox(
             width: 120,

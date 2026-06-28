@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../core/constants/app_colors.dart';
@@ -215,6 +216,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     }
   }
 
+  // Migrates an old signed URL (with token) to a permanent token-free URL.
+  // Called when CachedNetworkImage fails to load, so existing users auto-heal.
+  Future<void> _refreshPhotoUrl(String uid) async {
+    try {
+      final ref = FirebaseStorage.instance.ref().child('users/$uid/profile.jpg');
+      final signedUrl = await ref.getDownloadURL();
+      final uri = Uri.parse(signedUrl);
+      final stableUrl = uri.replace(queryParameters: {'alt': 'media'}).toString();
+      await ref.read(authProvider.notifier).updatePhotoUrl(stableUrl);
+      if (mounted) setState(() => _currentPhotoUrl = stableUrl);
+    } catch (_) {}
+  }
+
   String _uploadError(Object e) {
     final s = e.toString();
     if (s.contains('network') || s.contains('socket') || s.contains('connection')) {
@@ -366,10 +380,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                                       Icons.person_rounded,
                                                       size: 34,
                                                       color: Colors.white),
-                                                  errorWidget: (_, __, ___) => const Icon(
-                                                      Icons.person_rounded,
-                                                      size: 34,
-                                                      color: Colors.white),
+                                                  errorWidget: (_, __, ___) {
+                                                    // Old signed URL expired — refresh to permanent URL
+                                                    final uid = ref.read(authProvider).user?.uid;
+                                                    if (uid != null) _refreshPhotoUrl(uid);
+                                                    return const Icon(Icons.person_rounded,
+                                                        size: 34, color: Colors.white);
+                                                  },
                                                 )
                                               : const Icon(Icons.person_rounded,
                                                   size: 34, color: Colors.white),

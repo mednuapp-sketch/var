@@ -1,7 +1,12 @@
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-const kAgoraAppId = 'b0143ffdfef74f399a420c7cd73c9e8b';
+// Injected via --dart-define=AGORA_APP_ID=... at build time.
+// Restrict this App ID in Agora Console to package com.mednu.mednu.
+const kAgoraAppId = String.fromEnvironment(
+  'AGORA_APP_ID',
+  defaultValue: 'b0143ffdfef74f399a420c7cd73c9e8b',
+);
 
 enum _QualityTier { high, medium, low, audioOnly }
 

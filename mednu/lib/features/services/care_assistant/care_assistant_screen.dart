@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/widgets/service_booking_sheet.dart';
+import '../../../core/widgets/ux_widgets.dart';
 
 class CareAssistantScreen extends StatelessWidget {
   const CareAssistantScreen({super.key});
@@ -184,38 +185,21 @@ class CareAssistantScreen extends StatelessWidget {
   }
 
   Widget _buildSkeleton() {
-    return Column(children: List.generate(4, (_) => Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      height: 80,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.divider),
-      ),
-    )));
-  }
-
-  Widget _buildError() {
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(children: [
-        Icon(Icons.wifi_off_rounded, size: 40, color: Colors.grey[300]),
-        const SizedBox(height: 10),
-        Text('Could not load tasks', style: AppTextStyles.bodyMedium),
-      ]),
+    return AppShimmer(
+      child: Column(children: List.generate(4, (_) => Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        height: 78,
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+      ))),
     );
   }
 
-  Widget _buildEmpty() {
-    return Padding(
-      padding: const EdgeInsets.all(32),
-      child: Column(children: [
-        Icon(Icons.support_agent_outlined, size: 56, color: Colors.grey[300]),
-        const SizedBox(height: 12),
-        Text('No tasks available yet', style: AppTextStyles.bodyMedium, textAlign: TextAlign.center),
-        const SizedBox(height: 6),
-        Text('Tasks will appear here once added by the team', style: AppTextStyles.bodySmall, textAlign: TextAlign.center),
-      ]),
-    );
-  }
+  Widget _buildError() => AppErrorState(message: 'Could not load tasks. Please try again.');
+
+  Widget _buildEmpty() => const AppEmptyState(
+    icon: Icons.support_agent_outlined,
+    title: 'No Tasks Available',
+    message: 'Care assistant tasks will appear here once added.',
+    iconColor: _themeColor,
+  );
 }

@@ -8,7 +8,6 @@ import '../../../core/services/image_upload_service.dart';
 import '../../referral/referral_service.dart';
 import '../providers/auth_provider.dart';
 
-const _bloodGroups = ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'];
 
 class RegisterScreen extends ConsumerStatefulWidget {
   final String phone;
@@ -28,7 +27,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
   final _referralCtrl = TextEditingController();
 
   String  _selectedGender    = 'Male';
-  String? _selectedBloodGroup;
   bool    _isLoading         = false;
   bool    _termsAccepted     = false;
   File?   _profileImage;
@@ -194,11 +192,20 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
       return;
     }
 
+    // Always use the Firebase-verified phone as the authoritative source
+    final authState = ref.read(authProvider);
+    final phone = authState.user?.phoneNumber ?? widget.phone;
+
+    if (phone.isEmpty) {
+      _showError('Phone number not verified. Please restart the sign-up process.');
+      return;
+    }
+
     setState(() => _isLoading = true);
     try {
       String? photoUrl;
       if (_profileImage != null) {
-        final uid = ref.read(authProvider).user?.uid ?? '';
+        final uid = authState.user?.uid ?? '';
         photoUrl = await ImageUploadService.uploadUserProfileImage(
           imageFile: _profileImage!,
           uid: uid,
@@ -208,19 +215,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
 
       await ref.read(authProvider.notifier).completeRegistration(
         name:         _nameCtrl.text.trim(),
-        phone:        widget.phone,
+        phone:        phone,
         dob:          _dobCtrl.text.trim(),
         gender:       _selectedGender,
         email:        _emailCtrl.text.trim().isEmpty ? null : _emailCtrl.text.trim(),
         city:         _cityCtrl.text.trim().isEmpty ? null : _cityCtrl.text.trim(),
-        bloodGroup:   _selectedBloodGroup,
         referralCode: _referralCtrl.text.trim().isEmpty ? null : _referralCtrl.text.trim(),
+        photoUrl:     photoUrl,
       );
-
-      // Update photo URL if uploaded
-      if (photoUrl != null && mounted) {
-        await ref.read(authProvider.notifier).updatePhotoUrl(photoUrl);
-      }
 
       if (!mounted) return;
       context.go(AppRoutes.createMpin, extra: {'mode': 'setup'});
@@ -244,6 +246,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Real-time verified phone from Firebase Auth — the authoritative source.
+    // Falls back to the nav param only if the auth state hasn't resolved yet.
+    final verifiedPhone =
+        ref.watch(authProvider).user?.phoneNumber ?? widget.phone;
+
     return Scaffold(
       backgroundColor: const Color(0xFF0D0520),
       body: Stack(
@@ -274,7 +281,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                     child: Row(
                       children: [
                         GestureDetector(
-                          onTap: () => context.pop(),
+                          onTap: () => context.canPop() ? context.pop() : context.go(AppRoutes.login),
                           child: Container(
                             padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
@@ -381,10 +388,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                         children: [
 
                           // ── Verified phone ────────────────────────────
-                          if (widget.phone.isNotEmpty) ...[
+                          if (verifiedPhone.isNotEmpty) ...[
                             _sectionLabel('Mobile Number'),
                             const SizedBox(height: 8),
-                            _VerifiedPhone(phone: widget.phone),
+                            _VerifiedPhone(phone: verifiedPhone),
                             const SizedBox(height: 20),
                           ],
 
@@ -471,22 +478,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                             controller: _cityCtrl,
                             hint: 'Your city',
                             prefix: Icons.location_city_outlined,
-                          ),
-
-                          const SizedBox(height: 20),
-
-                          // ══ Health Info ════════════════════════════════
-                          _SectionHeader(
-                              icon: Icons.favorite_rounded,
-                              label: 'Health Info'),
-                          const SizedBox(height: 12),
-
-                          _sectionLabel('Blood Group (optional)'),
-                          const SizedBox(height: 6),
-                          _BloodGroupPicker(
-                            selected: _selectedBloodGroup,
-                            onSelect: (v) =>
-                                setState(() => _selectedBloodGroup = v),
                           ),
 
                           const SizedBox(height: 20),
@@ -810,45 +801,82 @@ class _VerifiedPhone extends StatelessWidget {
   final String phone;
   const _VerifiedPhone({required this.phone});
 
+  String get _displayPhone {
+    // Format +919876543210 → 🇮🇳 +91  98765 43210
+    if (phone.startsWith('+91') && phone.length >= 13) {
+      final digits = phone.substring(3);
+      return '+91  ${digits.substring(0, 5)} ${digits.substring(5)}';
+    }
+    return phone;
+  }
+
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
     decoration: BoxDecoration(
-      color: const Color(0xFFF0FAF0),
+      color: const Color(0xFFF0FAF4),
       borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: const Color(0xFF2E7D32).withValues(alpha: 0.3)),
+      border: Border.all(color: const Color(0xFF2E7D32).withValues(alpha: 0.35)),
     ),
     child: Row(
       children: [
-        const Icon(Icons.phone_android_rounded,
-            color: Color(0xFF2E7D32), size: 18),
-        const SizedBox(width: 10),
-        Text(phone,
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF1A0A2E),
-              fontFamily: 'Poppins',
-            )),
-        const Spacer(),
+        // Flag + prefix badge
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-          decoration: BoxDecoration(
-            color: const Color(0xFF2E7D32).withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(6),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
+          decoration: const BoxDecoration(
+            color: Color(0xFFE6F4EC),
+            borderRadius: BorderRadius.horizontal(left: Radius.circular(12)),
           ),
           child: const Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.verified_rounded, size: 11, color: Color(0xFF2E7D32)),
-              SizedBox(width: 3),
-              Text('Verified',
-                  style: TextStyle(
-                    color: Color(0xFF2E7D32),
-                    fontSize: 11,
-                    fontFamily: 'Poppins',
-                    fontWeight: FontWeight.w600,
-                  )),
+              Text('🇮🇳', style: TextStyle(fontSize: 16)),
+            ],
+          ),
+        ),
+        Container(width: 1, height: 26,
+            color: const Color(0xFF2E7D32).withValues(alpha: 0.2)),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Text(
+            _displayPhone,
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF1A0A2E),
+              fontFamily: 'Poppins',
+              letterSpacing: 0.5,
+            ),
+          ),
+        ),
+        // Lock + verified badge
+        Padding(
+          padding: const EdgeInsets.only(right: 12),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2E7D32).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.lock_rounded, size: 11, color: Color(0xFF2E7D32)),
+                    SizedBox(width: 4),
+                    Icon(Icons.verified_rounded, size: 11, color: Color(0xFF2E7D32)),
+                    SizedBox(width: 3),
+                    Text('Verified',
+                        style: TextStyle(
+                          color: Color(0xFF2E7D32),
+                          fontSize: 11,
+                          fontFamily: 'Poppins',
+                          fontWeight: FontWeight.w700,
+                        )),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
@@ -911,50 +939,3 @@ class _GenderChip extends StatelessWidget {
   );
 }
 
-class _BloodGroupPicker extends StatelessWidget {
-  final String? selected;
-  final void Function(String?) onSelect;
-  const _BloodGroupPicker({required this.selected, required this.onSelect});
-
-  @override
-  Widget build(BuildContext context) => Wrap(
-    spacing: 8,
-    runSpacing: 8,
-    children: _bloodGroups.map((bg) {
-      final isSelected = selected == bg;
-      return GestureDetector(
-        onTap: () => onSelect(isSelected ? null : bg),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          width: 60, height: 44,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: isSelected ? const Color(0xFF7b2d6e) : const Color(0xFFF8F4FF),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: isSelected
-                  ? const Color(0xFF7b2d6e)
-                  : const Color(0xFF7b2d6e).withValues(alpha: 0.2),
-            ),
-            boxShadow: isSelected
-                ? [
-                    BoxShadow(
-                      color: const Color(0xFF7b2d6e).withValues(alpha: 0.25),
-                      blurRadius: 6,
-                      offset: const Offset(0, 2),
-                    ),
-                  ]
-                : null,
-          ),
-          child: Text(bg,
-              style: TextStyle(
-                color: isSelected ? Colors.white : const Color(0xFF7b2d6e),
-                fontWeight: FontWeight.w700,
-                fontFamily: 'Poppins',
-                fontSize: 13,
-              )),
-        ),
-      );
-    }).toList(),
-  );
-}

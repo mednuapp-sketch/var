@@ -28,7 +28,6 @@ void showAddFamilyMemberSheet(
   final ageCtrl      = TextEditingController(text: existing?['age']?.toString() ?? '');
   final phoneCtrl    = TextEditingController(text: existing?['phone']    ?? prefillPhone);
   String gender     = existing?['gender'] ?? 'Female';
-  String? bloodGroup = existing?['blood'] as String?;
 
   showModalBottomSheet(
     context: context,
@@ -87,25 +86,7 @@ void showAddFamilyMemberSheet(
             const SizedBox(height: 12),
             _field(relationCtrl, 'Relation (e.g. Mother, Father)', capitalWords: true),
             const SizedBox(height: 12),
-            Row(children: [
-              Expanded(child: _field(ageCtrl, 'Age', numeric: true)),
-              const SizedBox(width: 12),
-              Expanded(
-                child: DropdownButtonFormField<String>(
-                  value: bloodGroup,
-                  decoration: InputDecoration(
-                    labelText: 'Blood Group',
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-                  ),
-                  hint: const Text('Select'),
-                  items: ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-']
-                      .map((g) => DropdownMenuItem(value: g, child: Text(g)))
-                      .toList(),
-                  onChanged: (v) => setSheet(() => bloodGroup = v),
-                ),
-              ),
-            ]),
+            _field(ageCtrl, 'Age', numeric: true),
             const SizedBox(height: 12),
             _field(phoneCtrl, 'Phone Number', phone: true),
             const SizedBox(height: 12),
@@ -130,41 +111,52 @@ void showAddFamilyMemberSheet(
                     return;
                   }
                   final isEditing = existing != null;
-                  FeedbackService.showLoading(
-                    ctx,
-                    isEditing ? 'Updating family member...' : 'Adding family member...',
-                  );
+                  // Capture these before the async gap so they work even if ctx unmounts
+                  final nav = Navigator.of(ctx);
+                  final messenger = ScaffoldMessenger.of(ctx);
+                  messenger.clearSnackBars();
+                  messenger.showSnackBar(SnackBar(
+                    content: Row(children: [
+                      const SizedBox(width: 18, height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+                      const SizedBox(width: 10),
+                      Text(isEditing ? 'Updating family member...' : 'Adding family member...',
+                          style: const TextStyle(fontFamily: 'Poppins', fontSize: 13,
+                              fontWeight: FontWeight.w500, color: Colors.white, height: 1.4)),
+                    ]),
+                    backgroundColor: const Color(0xFF1A1A2E),
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                    duration: const Duration(seconds: 30),
+                    dismissDirection: DismissDirection.none,
+                  ));
                   final member = {
                     'name':     nameCtrl.text.trim(),
                     'relation': relationCtrl.text.trim(),
                     'age':      int.tryParse(ageCtrl.text.trim()) ?? 0,
-                    'blood':    bloodGroup ?? '',
                     'gender':   gender,
                     'phone':    phoneCtrl.text.trim(),
                   };
                   try {
                     if (isEditing) {
                       await ref.read(authProvider.notifier).updateFamilyMember(existing, member);
-                      await OperationLogger.logSuccess(
-                        action: OpAction.familyMemberUpdated,
-                        message: 'Family member updated: ${member['name']}',
-                      );
                     } else {
                       await ref.read(authProvider.notifier).addFamilyMember(member);
-                      await OperationLogger.logSuccess(
-                        action: OpAction.familyMemberAdded,
-                        message: 'Family member added: ${member['name']}',
-                      );
                     }
-                    if (ctx.mounted) {
-                      FeedbackService.dismiss(ctx);
-                      Navigator.pop(ctx);
-                    }
+                    messenger.clearSnackBars();
+                    nav.pop();
+                    // fire-and-forget — logging must not block the UI
+                    OperationLogger.logSuccess(
+                      action: isEditing ? OpAction.familyMemberUpdated : OpAction.familyMemberAdded,
+                      message: '${isEditing ? 'Updated' : 'Added'} family member: ${member['name']}',
+                    );
                   } catch (e) {
-                    await OperationLogger.logError(
+                    OperationLogger.logError(
                       action: isEditing ? OpAction.familyMemberUpdated : OpAction.familyMemberAdded,
                       errorDetails: e.toString(),
                     );
+                    messenger.clearSnackBars();
                     if (ctx.mounted) {
                       FeedbackService.showError(ctx, 'Failed to save family member. Try again.');
                     }
@@ -278,6 +270,17 @@ class _FamilyManagementScreenState extends ConsumerState<FamilyManagementScreen>
   String get _safeUid =>
       _uid ?? FirebaseAuth.instance.currentUser?.uid ?? ref.read(authProvider).user?.uid ?? '';
 
+  static const _maxMembers = 4;
+  bool get _atLimit => _members.length >= _maxMembers;
+
+  void _tryAdd(BuildContext context) {
+    if (_atLimit) {
+      FeedbackService.showWarning(context, 'You can only add up to $_maxMembers family members.');
+      return;
+    }
+    showAddFamilyMemberSheet(context, ref, _safeUid);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -295,7 +298,7 @@ class _FamilyManagementScreenState extends ConsumerState<FamilyManagementScreen>
               IconButton(
                 icon: const Icon(Icons.person_add_rounded, color: Colors.white),
                 tooltip: 'Add Member',
-                onPressed: () => showAddFamilyMemberSheet(context, ref, _safeUid),
+                onPressed: () => _tryAdd(context),
               ),
             ],
             flexibleSpace: FlexibleSpaceBar(
@@ -370,9 +373,9 @@ class _FamilyManagementScreenState extends ConsumerState<FamilyManagementScreen>
 
           if (_loading)
             SliverPadding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
               sliver: SliverList(delegate: SliverChildBuilderDelegate(
-                (_, __) => const SkeletonListTile(), childCount: 5)),
+                (_, __) => const _FamilyMemberSkeleton(), childCount: 4)),
             )
           else
             SliverPadding(
@@ -384,45 +387,49 @@ class _FamilyManagementScreenState extends ConsumerState<FamilyManagementScreen>
                     padding: const EdgeInsets.all(14),
                     margin: const EdgeInsets.only(bottom: 16),
                     decoration: BoxDecoration(
-                      color: AppColors.primary.withValues(alpha:0.07),
+                      color: _atLimit
+                          ? Colors.orange.withValues(alpha: 0.08)
+                          : AppColors.primary.withValues(alpha: 0.07),
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: AppColors.primary.withValues(alpha:0.18)),
+                      border: Border.all(
+                        color: _atLimit
+                            ? Colors.orange.withValues(alpha: 0.3)
+                            : AppColors.primary.withValues(alpha: 0.18),
+                      ),
                     ),
                     child: Row(children: [
-                      const Icon(Icons.info_outline_rounded, color: AppColors.primary, size: 18),
+                      Icon(
+                        _atLimit ? Icons.group_rounded : Icons.info_outline_rounded,
+                        color: _atLimit ? Colors.orange.shade700 : AppColors.primary,
+                        size: 18,
+                      ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
-                          'Add family members to manage their health records and book appointments for them.',
-                          style: AppTextStyles.bodySmall.copyWith(color: AppColors.primary, height: 1.5),
+                          _atLimit
+                              ? 'You\'ve reached the maximum of $_maxMembers family members.'
+                              : 'Add up to $_maxMembers family members to manage their health records and book appointments.',
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: _atLimit ? Colors.orange.shade700 : AppColors.primary,
+                            height: 1.5,
+                          ),
                         ),
                       ),
                     ]),
                   ),
 
                   if (_members.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 32),
-                      child: Column(children: [
-                        Container(
-                          width: 80, height: 80,
-                          decoration: BoxDecoration(
-                            color: AppColors.primary.withValues(alpha:0.08),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(Icons.family_restroom_rounded,
-                              size: 40, color: AppColors.primary),
-                        ),
-                        const SizedBox(height: 16),
-                        Text('No family members added yet',
-                            style: AppTextStyles.h4.copyWith(color: AppColors.textSecondary)),
-                        const SizedBox(height: 6),
-                        Text('Tap the + button above to add one',
-                            style: AppTextStyles.bodySmall.copyWith(color: AppColors.textHint)),
-                      ]),
+                    AppEmptyState(
+                      icon: Icons.family_restroom_rounded,
+                      title: 'No family members yet',
+                      message: 'Add up to $_maxMembers family members to manage their health records and book appointments.',
+                      actionLabel: 'Add Member',
+                      onAction: () => _tryAdd(context),
                     ),
 
-                  ..._members.map((m) {
+                  ..._members.asMap().entries.map((entry) {
+                    final idx = entry.key;
+                    final m = entry.value;
                     final name    = m['name']     as String? ?? '';
                     final relation= m['relation'] as String? ?? '';
                     final age     = m['age']?.toString() ?? '';
@@ -430,7 +437,9 @@ class _FamilyManagementScreenState extends ConsumerState<FamilyManagementScreen>
                     final blood   = m['blood']    as String? ?? '';
                     final color   = _colorFor(name);
 
-                    return GestureDetector(
+                    return FadeInSlide(
+                      delay: Duration(milliseconds: idx * 60),
+                      child: GestureDetector(
                       onTap: () => context.push(AppRoutes.familyMemberDetail, extra: m),
                       child: Container(
                         margin: const EdgeInsets.only(bottom: 12),
@@ -497,7 +506,7 @@ class _FamilyManagementScreenState extends ConsumerState<FamilyManagementScreen>
                               } else if (v == 'delete') {
                                 final confirm = await showDialog<bool>(
                                   context: context,
-                                  builder: (_) => AlertDialog(
+                                  builder: (dialogCtx) => AlertDialog(
                                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                                     title: const Text('Remove Member',
                                         style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
@@ -505,10 +514,10 @@ class _FamilyManagementScreenState extends ConsumerState<FamilyManagementScreen>
                                         style: const TextStyle(fontFamily: 'Poppins')),
                                     actions: [
                                       TextButton(
-                                          onPressed: () => Navigator.pop(context, false),
+                                          onPressed: () => Navigator.pop(dialogCtx, false),
                                           child: const Text('Cancel')),
                                       TextButton(
-                                          onPressed: () => Navigator.pop(context, true),
+                                          onPressed: () => Navigator.pop(dialogCtx, true),
                                           child: const Text('Remove',
                                               style: TextStyle(color: AppColors.error))),
                                     ],
@@ -538,61 +547,65 @@ class _FamilyManagementScreenState extends ConsumerState<FamilyManagementScreen>
                           ),
                         ]),
                       ),
-                    );
+                    ));
                   }),
 
                   const SizedBox(height: 16),
 
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFFC2185B), Color(0xFF7B1FA2)],
-                          begin: Alignment.centerLeft,
-                          end: Alignment.centerRight,
-                        ),
-                        borderRadius: BorderRadius.circular(14),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.primary.withValues(alpha:0.3),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
+                  if (!_atLimit) ...[
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFFC2185B), Color(0xFF7B1FA2)],
+                            begin: Alignment.centerLeft,
+                            end: Alignment.centerRight,
                           ),
-                        ],
+                          borderRadius: BorderRadius.circular(14),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.primary.withValues(alpha: 0.3),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: ElevatedButton.icon(
+                          onPressed: () => _tryAdd(context),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.transparent,
+                            shadowColor: Colors.transparent,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          ),
+                          icon: const Icon(Icons.person_add_rounded, color: Colors.white),
+                          label: Text(
+                            'Add Family Member (${_members.length}/$_maxMembers)',
+                            style: const TextStyle(color: Colors.white, fontFamily: 'Poppins', fontWeight: FontWeight.w600),
+                          ),
+                        ),
                       ),
-                      child: ElevatedButton.icon(
-                        onPressed: () => showAddFamilyMemberSheet(context, ref, _safeUid),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.transparent,
-                          shadowColor: Colors.transparent,
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: OutlinedButton.icon(
+                        onPressed: () => _importFromContacts(context),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: Color(0xFF1565C0), width: 1.5),
+                          foregroundColor: const Color(0xFF1565C0),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                         ),
-                        icon: const Icon(Icons.person_add_rounded, color: Colors.white),
-                        label: const Text('Add Family Member',
-                            style: TextStyle(color: Colors.white, fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
+                        icon: const Icon(Icons.contacts_rounded),
+                        label: const Text('Import from Contacts',
+                            style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
                       ),
                     ),
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: OutlinedButton.icon(
-                      onPressed: () => _importFromContacts(context),
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Color(0xFF1565C0), width: 1.5),
-                        foregroundColor: const Color(0xFF1565C0),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      ),
-                      icon: const Icon(Icons.contacts_rounded),
-                      label: const Text('Import from Contacts',
-                          style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
-                    ),
-                  ),
+                  ],
 
                   const SizedBox(height: 40),
                 ]),
@@ -604,6 +617,10 @@ class _FamilyManagementScreenState extends ConsumerState<FamilyManagementScreen>
   }
 
   Future<void> _importFromContacts(BuildContext context) async {
+    if (_atLimit) {
+      FeedbackService.showWarning(context, 'You can only add up to $_maxMembers family members.');
+      return;
+    }
     final status = await Permission.contacts.request();
     if (!status.isGranted) {
       if (context.mounted) {
@@ -715,7 +732,7 @@ class _ContactPickerSheetState extends State<_ContactPickerSheet> {
         Expanded(
           child: _loading
               ? ListView(physics: const NeverScrollableScrollPhysics(), padding: const EdgeInsets.symmetric(vertical: 8),
-                  children: List.generate(5, (_) => const SkeletonListTile()))
+                  children: List.generate(5, (_) => const _ContactPickerSkeleton()))
               : _filtered.isEmpty
                   ? Center(child: Text('No contacts found', style: AppTextStyles.bodySmall))
                   : ListView.builder(
@@ -739,6 +756,68 @@ class _ContactPickerSheetState extends State<_ContactPickerSheet> {
                     ),
         ),
       ]),
+    );
+  }
+}
+
+// ── Family member skeleton card ────────────────────────────────────────────────
+
+class _FamilyMemberSkeleton extends StatelessWidget {
+  const _FamilyMemberSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: const [
+          BoxShadow(color: Color(0x06000000), blurRadius: 8, offset: Offset(0, 2)),
+        ],
+      ),
+      child: const AppShimmer(
+        child: Row(
+          children: [
+            SkeletonCircle(size: 54),
+            SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SkeletonBox(width: 140, height: 14, radius: 4),
+                  SizedBox(height: 6),
+                  SkeletonBox(width: 200, height: 11, radius: 4),
+                  SizedBox(height: 8),
+                  SkeletonBox(width: 60, height: 20, radius: 6),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ContactPickerSkeleton extends StatelessWidget {
+  const _ContactPickerSkeleton();
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      child: AppShimmer(
+        child: Row(children: [
+          SkeletonCircle(size: 40),
+          SizedBox(width: 12),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            SkeletonBox(width: double.infinity, height: 13, radius: 4),
+            SizedBox(height: 5),
+            SkeletonBox(width: 140, height: 11, radius: 4),
+          ])),
+        ]),
+      ),
     );
   }
 }

@@ -8,6 +8,8 @@ enum NotifType {
   appointment,
   summary,
   patientFollowup,
+  accountApproved,
+  accountRejected,
   unknown,
 }
 
@@ -39,6 +41,8 @@ class NotificationModel {
       case 'appointment':          return NotifType.appointment;
       case 'summary':              return NotifType.summary;
       case 'patient_followup':     return NotifType.patientFollowup;
+      case 'account_approved':     return NotifType.accountApproved;
+      case 'account_rejected':     return NotifType.accountRejected;
       default:                     return NotifType.unknown;
     }
   }

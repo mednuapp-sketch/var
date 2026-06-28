@@ -1,9 +1,12 @@
+import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
 import '../services/doctor_auth_service.dart';
+import '../../../core/widgets/ux_widgets.dart';
 
 class VerificationPendingScreen extends StatefulWidget {
   const VerificationPendingScreen({super.key});
@@ -17,6 +20,7 @@ class _VerificationPendingScreenState extends State<VerificationPendingScreen>
     with SingleTickerProviderStateMixin {
   String _status = 'pending';
   bool _loading = true;
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _statusSub;
 
   late AnimationController _pulseCtrl;
   late Animation<double> _pulse;
@@ -24,7 +28,7 @@ class _VerificationPendingScreenState extends State<VerificationPendingScreen>
   @override
   void initState() {
     super.initState();
-    _loadStatus();
+    _startListening();
     _pulseCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1600),
@@ -36,20 +40,24 @@ class _VerificationPendingScreenState extends State<VerificationPendingScreen>
 
   @override
   void dispose() {
+    _statusSub?.cancel();
     _pulseCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _loadStatus() async {
+  void _startListening() {
     final uid = DoctorAuthService.currentUid;
     if (uid == null) {
       if (mounted) setState(() => _loading = false);
       return;
     }
-    try {
-      final profile = await DoctorAuthService.getProfile(uid);
+    _statusSub = FirebaseFirestore.instance
+        .collection('doctors')
+        .doc(uid)
+        .snapshots()
+        .listen((snap) {
       if (!mounted) return;
-      final status = profile?['status'] as String? ?? 'pending';
+      final status = (snap.data()?['status'] as String?) ?? 'pending';
       if (status == 'active') {
         context.go(AppRoutes.dashboard);
         return;
@@ -58,9 +66,15 @@ class _VerificationPendingScreenState extends State<VerificationPendingScreen>
         _status = status;
         _loading = false;
       });
-    } catch (_) {
+    }, onError: (_) {
       if (mounted) setState(() => _loading = false);
-    }
+    });
+  }
+
+  Future<void> _refreshStatus() async {
+    setState(() => _loading = true);
+    _statusSub?.cancel();
+    _startListening();
   }
 
   @override
@@ -323,27 +337,18 @@ class _VerificationPendingScreenState extends State<VerificationPendingScreen>
                   const SizedBox(height: 28),
 
                   // Action buttons
-                  SizedBox(
+                  GradientButton(
+                    label: isSuspended ? 'Contact Support & Sign Out' : 'Sign Out',
+                    icon: Icons.logout_rounded,
                     width: double.infinity,
                     height: 52,
-                    child: ElevatedButton.icon(
-                      onPressed: () async {
-                        await DoctorAuthService.signOut();
-                        if (mounted) context.go(AppRoutes.login);
-                      },
-                      icon: const Icon(Icons.logout_rounded, size: 18),
-                      label: Text(
-                        isSuspended ? 'Contact Support & Sign Out' : 'Sign Out',
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor:
-                            isSuspended ? AppColors.error : AppColors.primary,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                      ),
-                    ),
+                    colors: isSuspended
+                        ? [AppColors.error, const Color(0xFFB71C1C)]
+                        : null,
+                    onTap: () async {
+                      await DoctorAuthService.signOut();
+                      if (mounted) context.go(AppRoutes.login);
+                    },
                   ),
 
                   if (!isSuspended) ...[
@@ -352,10 +357,7 @@ class _VerificationPendingScreenState extends State<VerificationPendingScreen>
                       width: double.infinity,
                       height: 48,
                       child: OutlinedButton.icon(
-                        onPressed: () {
-                          setState(() => _loading = true);
-                          _loadStatus();
-                        },
+                        onPressed: _refreshStatus,
                         icon: const Icon(Icons.refresh_rounded, size: 18),
                         label: const Text('Check Status Again'),
                         style: OutlinedButton.styleFrom(

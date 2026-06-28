@@ -6,12 +6,13 @@ import '../models/pregnancy_models.dart';
 
 // ─── Firestore paths ─────────────────────────────────────────────────────────
 
-const _kProfiles = 'pregnancy_profiles';
-const _kLogs     = 'pregnancy_weekly_data';
-const _kCheckups = 'pregnancy_checkups';
-const _kMeds     = 'pregnancy_medicines';
-const _kAlerts   = 'pregnancy_alerts';
-const _kNotes    = 'pregnancy_doctor_notes';
+const _kProfiles    = 'pregnancy_profiles';
+const _kLogs        = 'pregnancy_weekly_data';
+const _kCheckups    = 'pregnancy_checkups';
+const _kMeds        = 'pregnancy_medicines';
+const _kAlerts      = 'pregnancy_alerts';
+const _kNotes       = 'pregnancy_doctor_notes';
+const _kWeightLogs  = 'pregnancy_weight_logs';
 
 final _db   = FirebaseFirestore.instance;
 final _auth = FirebaseAuth.instance;
@@ -27,6 +28,7 @@ class PregnancyState {
   final List<PregnancyMedicine> medicines;
   final List<PregnancyAlert> alerts;
   final List<PregnancyDoctorNote> doctorNotes;
+  final List<PregnancyWeightLog> weightLogs;
   final bool isLoading;
   final String? error;
 
@@ -37,11 +39,23 @@ class PregnancyState {
     this.medicines = const [],
     this.alerts = const [],
     this.doctorNotes = const [],
+    this.weightLogs = const [],
     this.isLoading = false,
     this.error,
   });
 
   bool get hasProfile => profile != null;
+
+  PregnancyWeightLog? get latestWeightLog =>
+      weightLogs.isEmpty ? null : weightLogs.first;
+
+  double get currentWeightKg =>
+      latestWeightLog?.weightKg ?? profile?.weightKg ?? 0;
+
+  double get weightGainKg =>
+      currentWeightKg > 0 && (profile?.weightKg ?? 0) > 0
+          ? currentWeightKg - profile!.weightKg
+          : 0;
 
   PregnancyState copyWith({
     PregnancyProfile? profile,
@@ -50,6 +64,7 @@ class PregnancyState {
     List<PregnancyMedicine>? medicines,
     List<PregnancyAlert>? alerts,
     List<PregnancyDoctorNote>? doctorNotes,
+    List<PregnancyWeightLog>? weightLogs,
     bool? isLoading,
     String? error,
     bool clearProfile = false,
@@ -61,6 +76,7 @@ class PregnancyState {
     medicines: medicines ?? this.medicines,
     alerts: alerts ?? this.alerts,
     doctorNotes: doctorNotes ?? this.doctorNotes,
+    weightLogs: weightLogs ?? this.weightLogs,
     isLoading: isLoading ?? this.isLoading,
     error: clearError ? null : (error ?? this.error),
   );
@@ -84,6 +100,7 @@ class PregnancyNotifier extends StateNotifier<PregnancyState> {
           _loadMedicines(),
           _loadAlerts(),
           _loadDoctorNotes(),
+          _loadWeightLogs(),
         ]);
       }
     } catch (e) {
@@ -143,7 +160,8 @@ class PregnancyNotifier extends StateNotifier<PregnancyState> {
       String patientName = 'Patient';
       try {
         final userDoc = await _db.collection('users').doc(uid).get();
-        patientName = userDoc.data()?['name'] as String? ?? 'Patient';
+        final userData = userDoc.data() ?? {};
+        patientName = userData['name'] as String? ?? 'Patient';
       } catch (_) {}
 
       final profileData = profile.toMap();
@@ -187,6 +205,7 @@ class PregnancyNotifier extends StateNotifier<PregnancyState> {
       _loadMedicines(),
       _loadAlerts(),
       _loadDoctorNotes(),
+      _loadWeightLogs(),
     ]);
   }
 
@@ -456,6 +475,77 @@ class PregnancyNotifier extends StateNotifier<PregnancyState> {
     }
   }
 
+  // ── Weight Logs ──────────────────────────────────────────────────────────
+
+  Future<void> _loadWeightLogs() async {
+    final uid = _currentUid;
+    if (uid == null) return;
+    try {
+      final snap = await _db
+          .collection(_kWeightLogs)
+          .where('patientId', isEqualTo: uid)
+          .orderBy('loggedAt', descending: true)
+          .get();
+      state = state.copyWith(
+        weightLogs: snap.docs
+            .map((d) => PregnancyWeightLog.fromMap(d.id, d.data()))
+            .toList(),
+      );
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+    }
+  }
+
+  Future<bool> addWeightLog({
+    required double weightKg,
+    required String notes,
+  }) async {
+    final uid = _currentUid;
+    if (uid == null || state.profile == null) return false;
+    try {
+      final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      final data = {
+        'patientId': uid,
+        'familyMemberId': state.profile!.familyMemberId,
+        'date': today,
+        'pregnancyWeek': state.profile!.currentWeek,
+        'weightKg': weightKg,
+        'notes': notes,
+        'loggedAt': FieldValue.serverTimestamp(),
+      };
+      // Upsert by date — one entry per day
+      final existing = await _db
+          .collection(_kWeightLogs)
+          .where('patientId', isEqualTo: uid)
+          .where('date', isEqualTo: today)
+          .limit(1)
+          .get();
+      if (existing.docs.isNotEmpty) {
+        await existing.docs.first.reference.set(data);
+      } else {
+        await _db.collection(_kWeightLogs).add(data);
+      }
+      await _loadWeightLogs();
+      return true;
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+      return false;
+    }
+  }
+
+  Future<bool> deleteWeightLog(String logId) async {
+    try {
+      await _db.collection(_kWeightLogs).doc(logId).delete();
+      state = state.copyWith(
+        weightLogs: state.weightLogs.where((l) => l.id != logId).toList(),
+      );
+      return true;
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+      return false;
+    }
+  }
+
   Future<void> refresh() => _init();
 
   void clearError() => state = state.copyWith(clearError: true);
@@ -530,4 +620,18 @@ final pregnancyMedicinesStreamProvider = StreamProvider.autoDispose<List<Pregnan
         list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
         return list;
       });
+});
+
+// Real-time stream for weight logs
+final pregnancyWeightLogsStreamProvider = StreamProvider.autoDispose<List<PregnancyWeightLog>>((ref) {
+  final uid = _currentUid;
+  if (uid == null) return Stream.value(const []);
+  return _db
+      .collection(_kWeightLogs)
+      .where('patientId', isEqualTo: uid)
+      .orderBy('loggedAt', descending: true)
+      .snapshots()
+      .map((snap) => snap.docs
+          .map((d) => PregnancyWeightLog.fromMap(d.id, d.data()))
+          .toList());
 });

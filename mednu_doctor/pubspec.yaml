@@ -29,6 +29,7 @@ dependencies:
   go_router: ^13.2.5
 
   # UI
+  flutter_svg: ^2.0.9
   google_fonts: ^6.3.3
   cached_network_image: ^3.4.0
   smooth_page_indicator: ^1.2.1
@@ -57,6 +58,7 @@ dependencies:
   file_picker: ^8.0.7
   flutter_foreground_task: ^8.0.1
   timezone: ^0.9.4
+  screen_protector: ^1.5.2          # prevent screenshot/recording during video calls
 
 dev_dependencies:
   flutter_test:

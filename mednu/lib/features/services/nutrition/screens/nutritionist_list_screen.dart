@@ -69,17 +69,23 @@ class _NutritionistListScreenState extends ConsumerState<NutritionistListScreen>
           ),
           Expanded(
             child: nutritionists.when(
-              loading: () => ListView(physics: const NeverScrollableScrollPhysics(), padding: const EdgeInsets.symmetric(vertical: 8),
-                children: List.generate(6, (_) => const SkeletonListTile())),
+              loading: () => ListView(
+                physics: const NeverScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                children: List.generate(5, (_) => const _NutritionistCardSkeleton()),
+              ),
               error: (e, _) => const AppErrorState(),
               data: (list) {
-                final filtered = _searchQuery.isEmpty
-                    ? list
-                    : list.where((n) =>
-                        n.name.toLowerCase().contains(_searchQuery) ||
-                        n.specialization.toLowerCase().contains(_searchQuery) ||
-                        n.qualification.toLowerCase().contains(_searchQuery) ||
-                        n.city.toLowerCase().contains(_searchQuery)).toList();
+                final filtered = list.where((n) {
+                  final matchesQuery = _searchQuery.isEmpty ||
+                      n.name.toLowerCase().contains(_searchQuery) ||
+                      n.specialization.toLowerCase().contains(_searchQuery) ||
+                      n.qualification.toLowerCase().contains(_searchQuery) ||
+                      n.city.toLowerCase().contains(_searchQuery);
+                  final matchesSpecialty = selectedSpecialty == null ||
+                      n.specialization.toLowerCase().contains(selectedSpecialty.toLowerCase());
+                  return matchesQuery && matchesSpecialty;
+                }).toList();
 
                 if (filtered.isEmpty) {
                   return _EmptyState(query: _searchQuery);
@@ -420,6 +426,41 @@ class _EmptyState extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _NutritionistCardSkeleton extends StatelessWidget {
+  const _NutritionistCardSkeleton();
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: const [BoxShadow(color: Color(0x08000000), blurRadius: 8, offset: Offset(0, 2))],
+      ),
+      child: const AppShimmer(
+        child: Row(children: [
+          SkeletonCircle(size: 56),
+          SizedBox(width: 12),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            SkeletonBox(width: double.infinity, height: 14, radius: 4),
+            SizedBox(height: 6),
+            SkeletonBox(width: 160, height: 11, radius: 4),
+            SizedBox(height: 6),
+            Row(children: [
+              SkeletonBox(width: 60, height: 20, radius: 6),
+              SizedBox(width: 6),
+              SkeletonBox(width: 70, height: 20, radius: 6),
+            ]),
+          ])),
+          SizedBox(width: 10),
+          SkeletonBox(width: 64, height: 34, radius: 10),
+        ]),
       ),
     );
   }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../models/saved_address.dart';
@@ -22,7 +23,7 @@ class AddressBookScreen extends ConsumerWidget {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () => context.pop(),
         ),
         title: const Text(
           'Saved Addresses',
@@ -56,21 +57,21 @@ class AddressBookScreen extends ConsumerWidget {
             child: SkeletonBox(width: double.infinity, height: 72, radius: 14),
           )),
         ),
-        error: (e, _) => Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.error_outline_rounded,
-                  size: 48, color: Colors.grey.shade400),
-              const SizedBox(height: 12),
-              Text('Failed to load addresses',
-                  style: TextStyle(
-                      fontFamily: 'Poppins', color: Colors.grey.shade500)),
-            ],
-          ),
+        error: (e, _) => AppErrorState(
+          message: 'Failed to load addresses. Please try again.',
+          onRetry: () => ref.invalidate(savedAddressesProvider),
         ),
         data: (addresses) {
-          if (addresses.isEmpty) return _empty(context, isDark);
+          if (addresses.isEmpty) {
+            return AppEmptyState(
+              icon: Icons.add_location_alt_rounded,
+              title: 'No saved addresses yet',
+              message: 'Add your home, work or other frequently used locations',
+              iconColor: AppColors.primary,
+              actionLabel: 'Add Address',
+              onAction: () => _openAdd(context),
+            );
+          }
           return ListView.separated(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
             itemCount: addresses.length,
@@ -163,63 +164,6 @@ class AddressBookScreen extends ConsumerWidget {
     }
   }
 
-  Widget _empty(BuildContext context, bool isDark) => Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 90,
-              height: 90,
-              decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha:0.08),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.add_location_alt_rounded,
-                  size: 44, color: AppColors.primary),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'No saved addresses yet',
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Add your home, work or other\nfrequently used locations',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 13,
-                color: Colors.grey.shade500,
-              ),
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: () => _openAdd(context),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-                elevation: 0,
-              ),
-              icon: const Icon(Icons.add_rounded, color: Colors.white),
-              label: const Text(
-                'Add Address',
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white,
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
 }
 
 // ── Address tile ──────────────────────────────────────────

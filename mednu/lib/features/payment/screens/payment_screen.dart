@@ -26,6 +26,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
   late final Razorpay _razorpay;
   String _selectedMethod = 'upi';
   bool _useWallet = false;
+  bool _useMednuMoney = false;
   bool _isProcessing = false;
   String? _pendingOrderId;
   final TextEditingController _upiController = TextEditingController();
@@ -41,9 +42,17 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
     return balance.maybeWhen(data: (b) => b.toInt(), orElse: () => 0);
   }
 
-  int get _totalAmount       => int.tryParse(widget.amount) ?? 0;
-  int get _walletDeduction   => _useWallet ? _totalAmount.clamp(0, _walletBalance) : 0;
-  int get _amountAfterWallet => (_totalAmount - _walletDeduction).clamp(0, _totalAmount);
+  int get _mednuMoneyBalance {
+    final mm = ref.watch(mednuMoneyBalanceProvider);
+    return mm.maybeWhen(data: (b) => b.toInt(), orElse: () => 0);
+  }
+
+  int get _totalAmount           => int.tryParse(widget.amount) ?? 0;
+  // MedNu Money is applied first (bonus credits first)
+  int get _mednuMoneyDeduction   => _useMednuMoney ? _totalAmount.clamp(0, _mednuMoneyBalance) : 0;
+  int get _afterMednuMoney       => (_totalAmount - _mednuMoneyDeduction).clamp(0, _totalAmount);
+  int get _walletDeduction       => _useWallet ? _afterMednuMoney.clamp(0, _walletBalance) : 0;
+  int get _amountAfterWallet     => (_afterMednuMoney - _walletDeduction).clamp(0, _totalAmount);
 
   @override
   void initState() {
@@ -66,6 +75,18 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
     final paymentId = response.paymentId  ?? '';
     final orderId   = response.orderId    ?? _pendingOrderId ?? '';
     final signature = response.signature  ?? '';
+
+    // Deduct MedNu Money if it was applied
+    if (_mednuMoneyDeduction > 0) {
+      try {
+        await ref.read(walletServiceProvider).deductMednuMoney(
+          amount: _mednuMoneyDeduction.toDouble(),
+          title: 'MedNu Money Used',
+          category: 'consultation',
+          description: widget.description,
+        );
+      } catch (_) {}
+    }
 
     if (orderId.isEmpty || signature.isEmpty) {
       setState(() => _isProcessing = false);
@@ -205,7 +226,12 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                   _SummaryRow('Subtotal', '₹${widget.amount}'),
                   const SizedBox(height: 6),
                   const _SummaryRow('Platform Fee', '₹0'),
-                  if (_useWallet) ...[
+                  if (_useMednuMoney && _mednuMoneyDeduction > 0) ...[
+                    const SizedBox(height: 6),
+                    _SummaryRow('MedNu Money', '-₹$_mednuMoneyDeduction',
+                        color: const Color(0xFF6A1B9A)),
+                  ],
+                  if (_useWallet && _walletDeduction > 0) ...[
                     const SizedBox(height: 6),
                     _SummaryRow('Wallet Deduction', '-₹$_walletDeduction',
                         color: const Color(0xFF2E7D32)),
@@ -216,6 +242,60 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
               ),
             ),
             const SizedBox(height: 16),
+
+            // ── MedNu Money toggle ────────────────────────
+            if (_mednuMoneyBalance > 0) ...[
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: _useMednuMoney
+                      ? const Color(0xFF6A1B9A).withValues(alpha: 0.05)
+                      : Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: _useMednuMoney
+                        ? const Color(0xFF6A1B9A).withValues(alpha: 0.4)
+                        : AppColors.divider,
+                    width: _useMednuMoney ? 1.5 : 1,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 40, height: 40,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF6A1B9A), Color(0xFFAB47BC)],
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(Icons.stars_rounded,
+                          color: Colors.amber, size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('MedNu Money',
+                              style: AppTextStyles.labelLarge),
+                          Text('Available: ₹$_mednuMoneyBalance  •  Bookings only',
+                              style: AppTextStyles.bodySmall
+                                  .copyWith(color: const Color(0xFF6A1B9A))),
+                        ],
+                      ),
+                    ),
+                    Switch(
+                      value: _useMednuMoney,
+                      onChanged: (v) => setState(() => _useMednuMoney = v),
+                      activeThumbColor: const Color(0xFF6A1B9A),
+                      activeTrackColor: const Color(0xFF6A1B9A).withValues(alpha: 0.3),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
 
             // ── Wallet toggle ──────────────────────────────
             Container(

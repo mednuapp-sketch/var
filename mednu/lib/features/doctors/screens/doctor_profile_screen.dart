@@ -434,7 +434,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                   boxShadow: [BoxShadow(color: AppColors.primary.withValues(alpha:0.3), blurRadius: 12, offset: const Offset(0, 5))],
                 ),
                 child: ElevatedButton(
-                  onPressed: () { Navigator.pop(ctx); context.go(AppRoutes.appointment); },
+                  onPressed: () { Navigator.pop(ctx); if (context.mounted) context.go(AppRoutes.appointment); },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.transparent, shadowColor: Colors.transparent,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -583,9 +583,13 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
           ),
           child: _loadingFav
               ? const Padding(
-                  padding: EdgeInsets.all(12),
-                  child: SizedBox(width: 18, height: 18,
-                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)),
+                  padding: EdgeInsets.all(14),
+                  child: SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                        color: Colors.white, strokeWidth: 2),
+                  ),
                 )
               : IconButton(
                   icon: Icon(
@@ -1828,7 +1832,7 @@ class _ReviewsSectionState extends State<_ReviewsSection> {
         builder: (context, snap) {
           if (snap.connectionState == ConnectionState.waiting) {
             return Column(children: const [
-              SkeletonListTile(), SkeletonListTile(), SkeletonListTile(),
+              _ReviewCardSkeleton(), _ReviewCardSkeleton(), _ReviewCardSkeleton(),
             ]);
           }
           final reviews = snap.data ?? [];
@@ -1963,5 +1967,41 @@ class _ReviewCard extends StatelessWidget {
     if (diff.inHours >= 1) return '${diff.inHours}h ago';
     if (diff.inMinutes >= 1) return '${diff.inMinutes}m ago';
     return 'Just now';
+  }
+}
+
+class _ReviewCardSkeleton extends StatelessWidget {
+  const _ReviewCardSkeleton();
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: const [BoxShadow(color: Color(0x0D000000), blurRadius: 12, offset: Offset(0, 4))],
+      ),
+      child: const AppShimmer(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            SkeletonCircle(size: 42),
+            SizedBox(width: 12),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              SkeletonBox(width: 140, height: 13, radius: 4),
+              SizedBox(height: 5),
+              SkeletonBox(width: 100, height: 11, radius: 4),
+            ])),
+            SkeletonBox(width: 60, height: 20, radius: 6),
+          ]),
+          SizedBox(height: 12),
+          SkeletonBox(width: double.infinity, height: 11, radius: 4),
+          SizedBox(height: 5),
+          SkeletonBox(width: double.infinity, height: 11, radius: 4),
+          SizedBox(height: 5),
+          SkeletonBox(width: 200, height: 11, radius: 4),
+        ]),
+      ),
+    );
   }
 }

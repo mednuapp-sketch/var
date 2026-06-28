@@ -90,12 +90,24 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen>
     HapticFeedback.mediumImpact();
     setState(() => _isLoading = true);
     try {
-      await ref.read(authProvider.notifier).sendOtp(_fullPhone);
+      // Check Firestore phone_index — works on any device, no auth needed
+      final hasMpin =
+          await ref.read(authProvider.notifier).checkPhoneHasMpin(_fullPhone);
       if (!mounted) return;
-      context.push(AppRoutes.otp, extra: {
-        'phone': _fullPhone,
-        'isExistingUser': false,
-      });
+
+      if (hasMpin) {
+        // Existing user with MPIN — skip OTP, go directly to MPIN screen
+        context.push(AppRoutes.mpin,
+            extra: {'phone': _fullPhone, 'mode': 'login'});
+      } else {
+        // New user — standard OTP flow
+        await ref.read(authProvider.notifier).sendOtp(_fullPhone);
+        if (!mounted) return;
+        context.push(AppRoutes.otp, extra: {
+          'phone': _fullPhone,
+          'isExistingUser': false,
+        });
+      }
     } catch (e) {
       if (!mounted) return;
       _showError(e.toString().replaceFirst('Exception: ', ''));
@@ -118,7 +130,8 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen>
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
     final bottom = MediaQuery.of(context).viewInsets.bottom;
-    final isSmall = size.height < 700;
+    final isSmall = size.height < 750;
+    final isVerySmall = size.height < 620;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
@@ -242,152 +255,134 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen>
                     children: [
                       // ── Hero section ────────────────────────────────────────
                       Expanded(
-                        child: Padding(
-                          padding: EdgeInsets.fromLTRB(28, isSmall ? 20 : 32, 28, 0),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // Logo badge
-                              AnimatedBuilder(
-                                animation: _pulseCtrl,
-                                builder: (_, __) {
-                                  final p = _pulseCtrl.value;
-                                  return Stack(
-                                    alignment: Alignment.center,
-                                    children: [
-                                      Container(
-                                        width: 88, height: 88,
-                                        decoration: BoxDecoration(
-                                          shape: BoxShape.circle,
-                                          gradient: RadialGradient(colors: [
-                                            const Color(0xFFF2A8D8)
-                                                .withValues(alpha: 0.18 + p * 0.10),
-                                            Colors.transparent,
-                                          ]),
+                        child: SingleChildScrollView(
+                          physics: const ClampingScrollPhysics(),
+                          child: Padding(
+                            padding: EdgeInsets.fromLTRB(
+                                28, isVerySmall ? 14 : (isSmall ? 20 : 32), 28, 16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Logo badge
+                                AnimatedBuilder(
+                                  animation: _pulseCtrl,
+                                  builder: (_, __) {
+                                    final p = _pulseCtrl.value;
+                                    final glowSize = isVerySmall ? 64.0 : (isSmall ? 76.0 : 88.0);
+                                    final logoSize = isVerySmall ? 46.0 : (isSmall ? 54.0 : 64.0);
+                                    return Stack(
+                                      alignment: Alignment.center,
+                                      children: [
+                                        Container(
+                                          width: glowSize, height: glowSize,
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            gradient: RadialGradient(colors: [
+                                              const Color(0xFFF2A8D8)
+                                                  .withValues(alpha: 0.18 + p * 0.10),
+                                              Colors.transparent,
+                                            ]),
+                                          ),
                                         ),
-                                      ),
-                                      Container(
-                                        width: 64, height: 64,
-                                        decoration: BoxDecoration(
-                                          borderRadius: BorderRadius.circular(18),
-                                          gradient: AppColors.heroBannerGradient,
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: AppColors.primary
-                                                  .withValues(alpha: 0.30 + p * 0.18),
-                                              blurRadius: 22,
-                                              offset: const Offset(0, 8),
-                                            ),
-                                          ],
-                                        ),
-                                        child: Stack(
-                                          alignment: Alignment.center,
-                                          children: [
-                                            Padding(
-                                              padding: const EdgeInsets.all(14),
-                                              child: SvgPicture.asset(
-                                                'assets/icons/med-nu-icon-stethoscope.svg',
-                                                fit: BoxFit.contain,
-                                                colorFilter: const ColorFilter.mode(
-                                                  Colors.white,
-                                                  BlendMode.srcIn,
-                                                ),
+                                        Container(
+                                          width: logoSize, height: logoSize,
+                                          decoration: BoxDecoration(
+                                            borderRadius: BorderRadius.circular(18),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: AppColors.primary
+                                                    .withValues(alpha: 0.30 + p * 0.18),
+                                                blurRadius: 22,
+                                                offset: const Offset(0, 8),
                                               ),
+                                            ],
+                                          ),
+                                          child: ClipRRect(
+                                            borderRadius: BorderRadius.circular(18),
+                                            child: SvgPicture.asset(
+                                              'assets/icons/mednu_logo.svg',
+                                              fit: BoxFit.contain,
                                             ),
-                                            Positioned(
-                                              bottom: 6, right: 6,
-                                              child: Container(
-                                                width: 14, height: 14,
-                                                decoration: BoxDecoration(
-                                                  color: const Color(0xFF4CAF50),
-                                                  shape: BoxShape.circle,
-                                                  border: Border.all(
-                                                      color: Colors.white, width: 1.5),
-                                                ),
-                                              ),
-                                            ),
-                                          ],
+                                          ),
                                         ),
+                                      ],
+                                    );
+                                  },
+                                ),
+
+                                SizedBox(height: isVerySmall ? 12 : (isSmall ? 16 : 24)),
+
+                                Text(
+                                  'Your health,\nalways protected.',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: isVerySmall ? 24 : (isSmall ? 27 : 30),
+                                    fontWeight: FontWeight.w800,
+                                    fontFamily: 'Poppins',
+                                    height: 1.2,
+                                    letterSpacing: -0.5,
+                                  ),
+                                ),
+                                SizedBox(height: isVerySmall ? 6 : 10),
+                                Text(
+                                  'Sign in or create your account with\nyour mobile number.',
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.55),
+                                    fontSize: isVerySmall ? 13 : 15,
+                                    fontFamily: 'Poppins',
+                                    height: 1.4,
+                                  ),
+                                ),
+
+                                SizedBox(height: isVerySmall ? 10 : (isSmall ? 14 : 20)),
+
+                                // ── Social proof strip ───────────────────────
+                                Row(
+                                  children: [
+                                    const Icon(Icons.star_rounded, color: Color(0xFFFFC857), size: 16),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      '4.9',
+                                      style: TextStyle(
+                                        color: Colors.white.withValues(alpha: 0.85),
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w700,
+                                        fontFamily: 'Poppins',
                                       ),
-                                    ],
-                                  );
-                                },
-                              ),
-
-                              SizedBox(height: isSmall ? 20 : 28),
-
-                              const Text(
-                                'Your health,\nalways protected.',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 30,
-                                  fontWeight: FontWeight.w800,
-                                  fontFamily: 'Poppins',
-                                  height: 1.2,
-                                  letterSpacing: -0.5,
+                                    ),
+                                    Container(
+                                      margin: const EdgeInsets.symmetric(horizontal: 8),
+                                      width: 3, height: 3,
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withValues(alpha: 0.35),
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
+                                    Text(
+                                      'Trusted by 50,000+ patients',
+                                      style: TextStyle(
+                                        color: Colors.white.withValues(alpha: 0.55),
+                                        fontSize: 12.5,
+                                        fontFamily: 'Poppins',
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              ),
-                              const SizedBox(height: 12),
-                              Text(
-                                'Sign in or create your account with\nyour mobile number.',
-                                style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.55),
-                                  fontSize: 15,
-                                  fontFamily: 'Poppins',
-                                  height: 1.5,
+
+                                SizedBox(height: isVerySmall ? 12 : (isSmall ? 16 : 24)),
+
+                                // ── Feature pills ────────────────────────────
+                                const Wrap(
+                                  spacing: 8, runSpacing: 8,
+                                  children: [
+                                    _FeaturePill(icon: Icons.verified_rounded, label: '100% Secure'),
+                                    _FeaturePill(icon: Icons.lock_rounded, label: 'Private'),
+                                    _FeaturePill(icon: Icons.health_and_safety_rounded, label: 'HIPAA'),
+                                    _FeaturePill(icon: Icons.phone_android_rounded, label: 'OTP Verified'),
+                                  ],
                                 ),
-                              ),
-
-                              SizedBox(height: isSmall ? 14 : 20),
-
-                              // ── Social proof strip ───────────────────────
-                              Row(
-                                children: [
-                                  const Icon(Icons.star_rounded, color: Color(0xFFFFC857), size: 16),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    '4.9',
-                                    style: TextStyle(
-                                      color: Colors.white.withValues(alpha: 0.85),
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w700,
-                                      fontFamily: 'Poppins',
-                                    ),
-                                  ),
-                                  Container(
-                                    margin: const EdgeInsets.symmetric(horizontal: 8),
-                                    width: 3, height: 3,
-                                    decoration: BoxDecoration(
-                                      color: Colors.white.withValues(alpha: 0.35),
-                                      shape: BoxShape.circle,
-                                    ),
-                                  ),
-                                  Text(
-                                    'Trusted by 50,000+ patients',
-                                    style: TextStyle(
-                                      color: Colors.white.withValues(alpha: 0.55),
-                                      fontSize: 12.5,
-                                      fontFamily: 'Poppins',
-                                    ),
-                                  ),
-                                ],
-                              ),
-
-                              const Spacer(),
-
-                              // ── Feature pills ────────────────────────────
-                              const Wrap(
-                                spacing: 8, runSpacing: 8,
-                                children: [
-                                  _FeaturePill(icon: Icons.verified_rounded, label: '100% Secure'),
-                                  _FeaturePill(icon: Icons.lock_rounded, label: 'Private'),
-                                  _FeaturePill(icon: Icons.health_and_safety_rounded, label: 'HIPAA'),
-                                  _FeaturePill(icon: Icons.phone_android_rounded, label: 'OTP Verified'),
-                                ],
-                              ),
-
-                              SizedBox(height: size.height * 0.025),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
                       ),
