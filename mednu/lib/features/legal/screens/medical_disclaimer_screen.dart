@@ -1,266 +1,286 @@
-import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+﻿import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../core/constants/app_text_styles.dart';
 
-/// Shown once on first launch. Users must accept before using the app.
-/// Acceptance is recorded in SharedPreferences so it never shows again.
-class MedicalDisclaimerScreen extends StatefulWidget {
-  final VoidCallback onAccepted;
-  const MedicalDisclaimerScreen({super.key, required this.onAccepted});
-
-  static const _prefKey = 'mednu_disclaimer_accepted_v1';
-
-  static Future<bool> hasAccepted() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool(_prefKey) ?? false;
-  }
-
-  static Future<void> markAccepted() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_prefKey, true);
-  }
-
-  @override
-  State<MedicalDisclaimerScreen> createState() => _MedicalDisclaimerScreenState();
-}
-
-class _MedicalDisclaimerScreenState extends State<MedicalDisclaimerScreen> {
-  bool _hasScrolledToBottom = false;
-  bool _isAccepting = false;
-  final _scrollController = ScrollController();
-
-  @override
-  void initState() {
-    super.initState();
-    _scrollController.addListener(_onScroll);
-  }
-
-  @override
-  void dispose() {
-    _scrollController.removeListener(_onScroll);
-    _scrollController.dispose();
-    super.dispose();
-  }
-
-  void _onScroll() {
-    if (_scrollController.position.atEdge &&
-        _scrollController.position.pixels != 0) {
-      if (!_hasScrolledToBottom) {
-        setState(() => _hasScrolledToBottom = true);
-      }
-    }
-  }
-
-  Future<void> _accept() async {
-    setState(() => _isAccepting = true);
-    await MedicalDisclaimerScreen.markAccepted();
-    widget.onAccepted();
-  }
+/// Medical Disclaimer screen — standalone informational page accessible from
+/// the Settings / Legal section. Not the first-launch gate.
+class MedicalDisclaimerScreen extends StatelessWidget {
+  const MedicalDisclaimerScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
-      body: SafeArea(
+      backgroundColor: context.appBackground,
+      appBar: AppBar(
+        backgroundColor: context.appSurface,
+        elevation: 0,
+        scrolledUnderElevation: 1,
+        surfaceTintColor: context.appSurface,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+          color: context.appTextPrimary,
+          onPressed: () => context.pop(),
+        ),
+        title: Text(
+          'Medical Disclaimer',
+          style: TextStyle(fontFamily: 'Poppins',
+            color: context.appTextPrimary,
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        centerTitle: true,
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(16, 20, 16, 40),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Header ──────────────────────────────────────────
+            // ── Warning header banner ─────────────────────────────
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-              decoration: const BoxDecoration(
-                gradient: AppColors.primaryGradient,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF8E1),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: const Color(0xFFFFB300).withValues(alpha: 0.5),
+                  width: 1.5,
+                ),
               ),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     children: [
                       Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha:0.2),
+                          color: const Color(0xFFFFB300).withValues(alpha: 0.18),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: const Icon(
-                          Icons.medical_information_rounded,
-                          color: Colors.white,
-                          size: 28,
+                          Icons.warning_amber_rounded,
+                          color: Color(0xFFE65100),
+                          size: 26,
                         ),
                       ),
                       const SizedBox(width: 14),
-                      const Expanded(
-                        child: Text(
-                          'Medical Disclaimer',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 22,
-                            fontWeight: FontWeight.w700,
-                            fontFamily: 'Poppins',
-                          ),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Important Medical Disclaimer',
+                              style: TextStyle(fontFamily: 'Poppins', 
+                                color: const Color(0xFFBF360C),
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Please read carefully before using MedNU',
+                              style: TextStyle(fontFamily: 'Poppins', 
+                                color: const Color(0xFFE65100),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w400,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Please read carefully before using MedNU',
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha:0.85),
-                      fontSize: 14,
-                    ),
                   ),
                 ],
               ),
             ),
 
-            // ── Scrollable content ───────────────────────────────
-            Expanded(
-              child: SingleChildScrollView(
-                controller: _scrollController,
-                padding: const EdgeInsets.all(20),
+            const SizedBox(height: 16),
+
+            // ── 1. Not a Substitute — red accent card ─────────────
+            _DisclaimerCard(
+              accentColor: AppColors.error,
+              icon: Icons.medical_services_outlined,
+              title: 'Not a Substitute for Professional Medical Advice',
+              body: 'MedNU is not a substitute for professional medical advice, diagnosis, '
+                  'or treatment. The app facilitates access to licensed healthcare providers '
+                  'but does not itself provide medical care or clinical opinions.\n\n'
+                  'Always seek the advice of your physician or a qualified health professional '
+                  'for any medical condition or health concern you may have.',
+            ),
+
+            const SizedBox(height: 12),
+
+            // ── 2. Information Accuracy ───────────────────────────
+            _DisclaimerCard(
+              accentColor: AppColors.info,
+              icon: Icons.info_outline_rounded,
+              title: 'Information Accuracy',
+              body: 'Health content within MedNU is provided for general informational '
+                  'purposes only. While we strive to keep information accurate and current, '
+                  'medical knowledge evolves rapidly.\n\n'
+                  'The content may not always reflect the most recent clinical guidelines, '
+                  'research, or regulatory requirements. Do not make healthcare decisions '
+                  'based solely on information found in this app.',
+            ),
+
+            const SizedBox(height: 12),
+
+            // ── 3. Emergency Situations ───────────────────────────
+            Card(
+              elevation: 0,
+              color: AppColors.error.withValues(alpha: 0.06),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(
+                  color: AppColors.error.withValues(alpha: 0.30),
+                  width: 1.5,
+                ),
+              ),
+              margin: EdgeInsets.zero,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _Section(
-                      icon: Icons.info_outline_rounded,
-                      color: AppColors.info,
-                      title: 'Not a Substitute for Professional Medical Advice',
-                      body:
-                          'MedNU is a healthcare facilitation platform designed to help you connect with licensed medical professionals and manage your health information. The content, tools, and services provided in this app are for informational purposes only.\n\n'
-                          'MedNU does NOT provide medical diagnoses, prescriptions, or treatment plans. Nothing in this app should be construed as professional medical advice. Always consult a qualified, licensed healthcare provider for any medical condition, symptoms, or health concerns.',
-                    ),
-                    _Section(
-                      icon: Icons.emergency_rounded,
-                      color: AppColors.error,
-                      title: 'Emergency Situations',
-                      body:
-                          'MedNU is NOT an emergency medical service. In case of a medical emergency, call your local emergency number (112 in India) or proceed to the nearest hospital immediately.\n\n'
-                          'The ambulance and emergency features in MedNU are supplementary services and must not be relied upon as a primary response to life-threatening situations.',
-                    ),
-                    _Section(
-                      icon: Icons.lock_outline_rounded,
-                      color: AppColors.accent,
-                      title: 'Your Health Data & Privacy',
-                      body:
-                          'MedNU collects and processes personal health information to facilitate consultations and health management. Your data is stored securely and is handled in accordance with our Privacy Policy.\n\n'
-                          'By using this app you consent to the collection, storage, and processing of your health data as described in our Privacy Policy. You may request deletion of your account and data at any time from Settings.',
-                    ),
-                    _Section(
-                      icon: Icons.verified_user_outlined,
-                      color: AppColors.secondary,
-                      title: 'Doctor Verification',
-                      body:
-                          'All doctors on the MedNU platform are required to submit valid medical registration credentials. While MedNU makes reasonable efforts to verify these credentials, we do not guarantee the accuracy, completeness, or currency of each doctor\'s qualifications.\n\n'
-                          'You are encouraged to independently verify a doctor\'s credentials before initiating any consultation.',
-                    ),
-                    _Section(
-                      icon: Icons.gavel_rounded,
-                      color: AppColors.warning,
-                      title: 'Limitation of Liability',
-                      body:
-                          'MedNU Healthcare Services Private Limited, its officers, employees, and partners shall not be liable for any direct, indirect, incidental, or consequential damages arising from:\n\n'
-                          '• Use of or reliance on information within the app\n'
-                          '• Actions or advice of any healthcare provider found on the platform\n'
-                          '• Delays, errors, or failures in the technology infrastructure\n'
-                          '• Any outcome of a medical consultation facilitated through MedNU',
-                    ),
-                    _Section(
-                      icon: Icons.medication_outlined,
-                      color: AppColors.primary,
-                      title: 'Medication & Treatment',
-                      body:
-                          'Never start, stop, or change medication or treatment based solely on information from this app. Prescription medications can only be recommended by a licensed healthcare provider after proper evaluation.\n\n'
-                          'If a doctor prescribes medication through a MedNU consultation, that prescription is the professional opinion of the individual doctor and not a recommendation from MedNU.',
-                    ),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withValues(alpha:0.05),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: AppColors.primary.withValues(alpha:0.2)),
-                      ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Icon(Icons.check_circle_outline_rounded,
-                              color: AppColors.primary, size: 20),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              'By tapping "I Agree", you confirm that you have read and understood this disclaimer and agree to use MedNU in accordance with these terms.',
-                              style: AppTextStyles.bodySmall.copyWith(
-                                  color: AppColors.textSecondary),
+                    // Header row
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: AppColors.error.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(
+                            Icons.emergency_rounded,
+                            color: AppColors.error,
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'Emergency Situations',
+                            style: TextStyle(fontFamily: 'Poppins',
+                              color: AppColors.error,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
-                        ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'If you have a medical emergency, seek immediate help from your '
+                      'nearest hospital or emergency services. Do not use this app as a '
+                      'primary response to a life-threatening situation.\n\n'
+                      'The ambulance and emergency features in MedNU are supplementary '
+                      'services only.',
+                      style: TextStyle(fontFamily: 'Poppins',
+                        color: context.appTextSecondary,
+                        fontSize: 13,
+                        height: 1.75,
                       ),
                     ),
-                    const SizedBox(height: 80),
                   ],
                 ),
               ),
             ),
 
-            // ── Accept button ────────────────────────────────────
+            const SizedBox(height: 12),
+
+            // ── 4. Consult Your Doctor ────────────────────────────
+            _DisclaimerCard(
+              accentColor: AppColors.accent,
+              icon: Icons.person_outlined,
+              title: 'Consult Your Doctor',
+              body: 'Never start, stop, or change medication or treatment based solely on '
+                  'information from this app. Prescription medications can only be '
+                  'recommended by a licensed healthcare provider after a proper evaluation.\n\n'
+                  'Always consult a qualified healthcare professional before making any '
+                  'decision related to your health, medical condition, or treatment.',
+            ),
+
+            const SizedBox(height: 12),
+
+            // ── 5. Limitation of Liability ────────────────────────
+            _DisclaimerCard(
+              accentColor: AppColors.warning,
+              icon: Icons.gavel_rounded,
+              title: 'Limitation of Liability',
+              body: 'MedNU Healthcare Services Private Limited, its officers, employees, '
+                  'and partners shall not be liable for any direct, indirect, incidental, '
+                  'or consequential damages arising from:\n\n'
+                  '• Use of or reliance on information within the app\n'
+                  '• Actions or advice of any healthcare provider on the platform\n'
+                  '• Delays, errors, or failures in the technology infrastructure\n'
+                  '• Any outcome of a medical consultation facilitated through MedNU',
+            ),
+
+            const SizedBox(height: 24),
+
+            // ── "I Have Read" acknowledgement button ─────────────
             Container(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha:0.06),
-                    blurRadius: 12,
-                    offset: const Offset(0, -4),
-                  ),
-                ],
+                color: AppColors.primary.withValues(alpha: 0.05),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: AppColors.primary.withValues(alpha: 0.20),
+                ),
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (!_hasScrolledToBottom)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Text(
-                        'Scroll to read the full disclaimer',
-                        style: AppTextStyles.caption
-                            .copyWith(color: AppColors.textHint),
+                  const Icon(
+                    Icons.check_circle_outline_rounded,
+                    color: AppColors.primary,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'By using MedNU you acknowledge that you have read and understood '
+                      'this disclaimer and agree to use the app in accordance with its terms.',
+                      style: TextStyle(fontFamily: 'Poppins',
+                        color: context.appTextSecondary,
+                        fontSize: 12,
+                        height: 1.65,
                       ),
-                    ),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 52,
-                    child: ElevatedButton(
-                      onPressed: _isAccepting ? null : _accept,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                      ),
-                      child: _isAccepting
-                          ? const SizedBox(
-                              width: 22,
-                              height: 22,
-                              child: CircularProgressIndicator(
-                                  color: Colors.white, strokeWidth: 2.5),
-                            )
-                          : const Text(
-                              'I Understand & Agree',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                fontFamily: 'Poppins',
-                              ),
-                            ),
                     ),
                   ),
                 ],
               ),
             ),
+
+            const SizedBox(height: 20),
+
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: ElevatedButton(
+                onPressed: () => context.pop(),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: Text(
+                  'I Have Read and Understand',
+                  style: TextStyle(fontFamily: 'Poppins', 
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 16),
           ],
         ),
       ),
@@ -268,50 +288,76 @@ class _MedicalDisclaimerScreenState extends State<MedicalDisclaimerScreen> {
   }
 }
 
-class _Section extends StatelessWidget {
+// ─────────────────────────────────────────────────────────────────────────────
+// Private widgets
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _DisclaimerCard extends StatelessWidget {
+  final Color accentColor;
   final IconData icon;
-  final Color color;
   final String title;
   final String body;
 
-  const _Section({
+  const _DisclaimerCard({
+    required this.accentColor,
     required this.icon,
-    required this.color,
     required this.title,
     required this.body,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha:0.1),
-                  borderRadius: BorderRadius.circular(10),
+    return Card(
+      elevation: 0,
+      color: context.appSurface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: accentColor.withValues(alpha: 0.15),
+          width: 1,
+        ),
+      ),
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: accentColor.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(icon, color: accentColor, size: 20),
                 ),
-                child: Icon(icon, color: color, size: 18),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: TextStyle(fontFamily: 'Poppins',
+                      color: context.appTextPrimary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              body,
+              style: TextStyle(fontFamily: 'Poppins',
+                color: context.appTextSecondary,
+                fontSize: 13,
+                height: 1.75,
+                fontWeight: FontWeight.w400,
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(title,
-                    style: AppTextStyles.labelLarge
-                        .copyWith(color: AppColors.textPrimary)),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text(body,
-              style: AppTextStyles.bodySmall
-                  .copyWith(color: AppColors.textSecondary, height: 1.6)),
-          const Divider(height: 24),
-        ],
+            ),
+          ],
+        ),
       ),
     );
   }

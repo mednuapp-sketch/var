@@ -41,7 +41,7 @@ class _TestimonialsSectionState extends State<TestimonialsSection> {
               const SectionHeader(
                 tag: 'Testimonials',
                 title: 'What Our Patients Say',
-                subtitle: 'Thousands of families trust MedNu for their healthcare journey.',
+                subtitle: 'Thousands of families trust MedNU for their healthcare journey.',
               ),
               SizedBox(height: isMobile ? 32 : 48),
               isMobile
@@ -190,12 +190,20 @@ class _TestimonialCardState extends State<_TestimonialCard> {
                 ),
               ),
               const SizedBox(width: 10),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(d['name']!, style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
-                  Text(d['location']!, style: GoogleFonts.poppins(fontSize: 11, color: AppColors.textSecondary)),
-                ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(d['name']!,
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                        style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                    Text(d['location']!,
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                        style: GoogleFonts.poppins(fontSize: 11, color: AppColors.textSecondary)),
+                  ],
+                ),
               ),
             ]),
           ],

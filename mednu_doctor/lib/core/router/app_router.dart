@@ -110,7 +110,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final extra = s.extra as Map<String, dynamic>?;
           return DoctorOtpScreen(
             phone: extra?['phone'] as String? ?? '',
-            verificationId: extra?['verificationId'] as String? ?? '',
             isLogin: extra?['isLogin'] as bool? ?? true,
           );
         },

@@ -7,6 +7,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/widgets/ux_widgets.dart';
+import '../../../core/utils/r.dart';
 
 class FavouriteDoctorsScreen extends StatelessWidget {
   const FavouriteDoctorsScreen({super.key});
@@ -16,13 +17,13 @@ class FavouriteDoctorsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.appBackground,
       body: CustomScrollView(
         slivers: [
           // ── Gradient SliverAppBar ──────────────────────────
           SliverAppBar(
             pinned: true,
-            expandedHeight: 130,
+            expandedHeight: R.h(context, 130),
             backgroundColor: AppColors.primary,
             foregroundColor: Colors.white,
             leading: IconButton(
@@ -42,11 +43,11 @@ class FavouriteDoctorsScreen extends StatelessWidget {
                 child: Stack(
                   children: [
                     Positioned(
-                      top: -20,
-                      right: -20,
+                      top: -R.h(context, 20),
+                      right: -R.w(context, 20),
                       child: Container(
-                        width: 110,
-                        height: 110,
+                        width: R.w(context, 110),
+                        height: R.h(context, 110),
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: Colors.white.withValues(alpha:0.06),
@@ -54,49 +55,64 @@ class FavouriteDoctorsScreen extends StatelessWidget {
                       ),
                     ),
                     SafeArea(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 52, 20, 16),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 40,
-                              height: 40,
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha:0.18),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: const Icon(
-                                Icons.favorite_rounded,
-                                color: Colors.white,
-                                size: 22,
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          return SingleChildScrollView(
+                            physics: const ClampingScrollPhysics(),
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                              child: Padding(
+                                padding: EdgeInsets.fromLTRB(R.p(context, 20), R.p(context, 52), R.p(context, 20), R.p(context, 16)),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Container(
+                                          width: R.w(context, 40),
+                                          height: R.w(context, 40),
+                                          decoration: BoxDecoration(
+                                            color: Colors.white.withValues(alpha:0.18),
+                                            borderRadius: BorderRadius.circular(R.r(context, 12)),
+                                          ),
+                                          child: Icon(
+                                            Icons.favorite_rounded,
+                                            color: Colors.white,
+                                            size: R.w(context, 22),
+                                          ),
+                                        ),
+                                        SizedBox(width: R.p(context, 12)),
+                                        const Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Text(
+                                              'Favourite Doctors',
+                                              style: TextStyle(
+                                                fontFamily: 'Poppins',
+                                                fontSize: 18,
+                                                fontWeight: FontWeight.w700,
+                                                color: Colors.white,
+                                              ),
+                                            ),
+                                            Text(
+                                              'Your saved doctors',
+                                              style: TextStyle(
+                                                fontFamily: 'Poppins',
+                                                fontSize: 12,
+                                                color: Colors.white70,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
-                            const SizedBox(width: 12),
-                            const Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  'Favourite Doctors',
-                                  style: TextStyle(
-                                    fontFamily: 'Poppins',
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                                Text(
-                                  'Your saved doctors',
-                                  style: TextStyle(
-                                    fontFamily: 'Poppins',
-                                    fontSize: 12,
-                                    color: Colors.white70,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
+                          );
+                        },
                       ),
                     ),
                   ],
@@ -121,7 +137,7 @@ class FavouriteDoctorsScreen extends StatelessWidget {
               builder: (context, snap) {
                 if (snap.connectionState == ConnectionState.waiting) {
                   return SliverPadding(
-                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    padding: EdgeInsets.symmetric(vertical: R.p(context, 10)),
                     sliver: SliverList(
                       delegate: SliverChildBuilderDelegate(
                         (_, __) => const SkeletonDoctorCard(),
@@ -141,7 +157,7 @@ class FavouriteDoctorsScreen extends StatelessWidget {
                   );
                 }
                 return SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+                  padding: EdgeInsets.fromLTRB(R.p(context, 16), R.p(context, 16), R.p(context, 16), R.p(context, 32)),
                   sliver: SliverList(
                     delegate: SliverChildBuilderDelegate(
                       (_, i) => FadeInSlide(
@@ -173,7 +189,7 @@ class _DoctorCard extends StatelessWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.r(context, 20))),
         title: const Text(
           'Remove Favourite?',
           style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 16),
@@ -205,14 +221,14 @@ class _DoctorCard extends StatelessWidget {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Row(children: [
-              Icon(Icons.favorite_border_rounded, color: Colors.white, size: 16),
-              SizedBox(width: 8),
-              Text('Removed from favourites', style: TextStyle(fontFamily: 'Poppins')),
+            content: Row(children: [
+              const Icon(Icons.favorite_border_rounded, color: Colors.white, size: 16),
+              SizedBox(width: R.p(context, 8)),
+              const Text('Removed from favourites', style: TextStyle(fontFamily: 'Poppins')),
             ]),
-            backgroundColor: AppColors.textSecondary,
+            backgroundColor: context.appTextSecondary,
             behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.r(context, 12))),
           ),
         );
       }
@@ -233,12 +249,12 @@ class _DoctorCard extends StatelessWidget {
         AppRoutes.doctorProfile.replaceFirst(':id', doctorId),
       ),
       child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(14),
+        margin: EdgeInsets.only(bottom: R.p(context, 12)),
+        padding: EdgeInsets.all(R.p(context, 14)),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: AppColors.divider),
+          color: context.appSurface,
+          borderRadius: BorderRadius.circular(R.r(context, 18)),
+          border: Border.all(color: context.appBorder),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha:0.04),
@@ -249,27 +265,55 @@ class _DoctorCard extends StatelessWidget {
         ),
         child: Row(
           children: [
-            // Avatar
-            Container(
-              width: 56,
-              height: 56,
-              decoration: const BoxDecoration(
-                gradient: AppColors.primaryGradient,
-                shape: BoxShape.circle,
-              ),
-              child: Center(
-                child: Text(
-                  name.isNotEmpty ? name[0].toUpperCase() : 'D',
-                  style: const TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
+            // Avatar with live online status
+            StreamBuilder<DocumentSnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('doctors')
+                  .doc(doctorId)
+                  .snapshots(),
+              builder: (_, docSnap) {
+                final isOnline =
+                    (docSnap.data?.data() as Map<String, dynamic>?)?['isOnline']
+                        as bool? ?? false;
+                return Stack(
+                  children: [
+                    Container(
+                      width: R.w(context, 56),
+                      height: R.h(context, 56),
+                      decoration: const BoxDecoration(
+                        gradient: AppColors.primaryGradient,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Center(
+                        child: Text(
+                          name.isNotEmpty ? name[0].toUpperCase() : 'D',
+                          style: const TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 22,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      bottom: 1, right: 1,
+                      child: Container(
+                        width: R.w(context, 13), height: R.h(context, 13),
+                        decoration: BoxDecoration(
+                          color: isOnline
+                              ? AppColors.accent
+                              : context.appTextHint,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
             ),
-            const SizedBox(width: 14),
+            SizedBox(width: R.p(context, 14)),
 
             // Info
             Expanded(
@@ -283,14 +327,14 @@ class _DoctorCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                   if (specialty.isNotEmpty) ...[
-                    const SizedBox(height: 2),
+                    SizedBox(height: R.p(context, 2)),
                     Text(specialty, style: AppTextStyles.bodySmall),
                   ],
-                  const SizedBox(height: 6),
+                  SizedBox(height: R.p(context, 6)),
                   Row(children: [
                     if (rating > 0) ...[
                       const Icon(Icons.star_rounded, color: Color(0xFFFFA000), size: 14),
-                      const SizedBox(width: 3),
+                      SizedBox(width: R.p(context, 3)),
                       Text(
                         rating.toStringAsFixed(1),
                         style: const TextStyle(
@@ -300,14 +344,14 @@ class _DoctorCard extends StatelessWidget {
                           color: Color(0xFFFFA000),
                         ),
                       ),
-                      const SizedBox(width: 10),
+                      SizedBox(width: R.p(context, 10)),
                     ],
                     if (fee > 0)
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        padding: EdgeInsets.symmetric(horizontal: R.p(context, 8), vertical: R.p(context, 2)),
                         decoration: BoxDecoration(
                           color: AppColors.accent.withValues(alpha:0.1),
-                          borderRadius: BorderRadius.circular(6),
+                          borderRadius: BorderRadius.circular(R.r(context, 6)),
                         ),
                         child: Text(
                           '₹$fee',
@@ -330,11 +374,11 @@ class _DoctorCard extends StatelessWidget {
                 GestureDetector(
                   onTap: () => _removeFavourite(context),
                   child: Container(
-                    width: 36,
-                    height: 36,
+                    width: R.w(context, 36),
+                    height: R.h(context, 36),
                     decoration: BoxDecoration(
                       color: const Color(0xFFFFEBEE),
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(R.r(context, 10)),
                     ),
                     child: const Icon(
                       Icons.favorite_rounded,
@@ -343,22 +387,25 @@ class _DoctorCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                const SizedBox(height: 8),
+                SizedBox(height: R.p(context, 6)),
                 GestureDetector(
                   onTap: () => context.push(
                     AppRoutes.doctorProfile.replaceFirst(':id', doctorId),
                   ),
                   child: Container(
-                    width: 36,
-                    height: 36,
+                    padding: EdgeInsets.symmetric(horizontal: R.p(context, 10), vertical: R.p(context, 7)),
                     decoration: BoxDecoration(
-                      color: AppColors.primary.withValues(alpha:0.08),
-                      borderRadius: BorderRadius.circular(10),
+                      gradient: AppColors.primaryGradient,
+                      borderRadius: BorderRadius.circular(R.r(context, 10)),
                     ),
-                    child: const Icon(
-                      Icons.arrow_forward_ios_rounded,
-                      color: AppColors.primary,
-                      size: 15,
+                    child: const Text(
+                      'Book',
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
                 ),

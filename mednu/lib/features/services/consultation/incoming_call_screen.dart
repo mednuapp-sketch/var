@@ -43,6 +43,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
   int _countdown = 45;
   bool _accepted = false;
   bool _countdownActive = false;
+  Timer? _hapticTimer;
 
   StreamSubscription<DocumentSnapshot>? _sub;
 
@@ -55,6 +56,11 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
     _startCountdown();
     _watchForCancellation();
     HapticFeedback.heavyImpact();
+    // Repeat heavy haptic every 2 seconds while ringing
+    _hapticTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+      if (!mounted || _accepted) return;
+      HapticFeedback.heavyImpact();
+    });
   }
 
   void _initAnimations() {
@@ -169,6 +175,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
     _ripple2.dispose();
     _ripple3.dispose();
     _pulseCtrl.dispose();
+    _hapticTimer?.cancel();
     _sub?.cancel();
     CallNotificationService.stopRinging();
     WakelockPlus.disable();

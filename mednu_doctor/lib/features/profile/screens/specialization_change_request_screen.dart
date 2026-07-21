@@ -507,10 +507,14 @@ class _SpecializationChangeRequestScreenState
             child: Row(children: [
               const Icon(Icons.lock_rounded, size: 16, color: AppColors.textHint),
               const SizedBox(width: 10),
-              Text(_currentSpec,
-                  style: const TextStyle(fontFamily: 'Poppins', fontSize: 14,
-                      fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
-              const Spacer(),
+              Expanded(
+                child: Text(_currentSpec,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontFamily: 'Poppins', fontSize: 14,
+                        fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+              ),
+              const SizedBox(width: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(

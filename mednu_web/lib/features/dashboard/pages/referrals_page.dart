@@ -182,7 +182,7 @@ class _ReferralCard extends StatelessWidget {
         ]),
         const SizedBox(height: 12),
         Text(
-          'Share your code and earn rewards for every friend who joins MedNu!',
+          'Share your code and earn rewards for every friend who joins MedNU!',
           style: GoogleFonts.poppins(fontSize: 13, color: Colors.white70, height: 1.5),
         ),
         const SizedBox(height: 20),
@@ -229,7 +229,7 @@ class _ReferralCard extends StatelessWidget {
                   ? null
                   : () {
                       Clipboard.setData(
-                          ClipboardData(text: 'Join MedNu with my referral code: $code'));
+                          ClipboardData(text: 'Join MedNU with my referral code: $code'));
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Text('Share link copied!',
@@ -283,13 +283,19 @@ class _StatCard extends StatelessWidget {
       child: Row(children: [
         Text(emoji, style: const TextStyle(fontSize: 28)),
         const SizedBox(width: 14),
-        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(value,
-              style: GoogleFonts.poppins(
-                  fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
-          Text(label,
-              style: GoogleFonts.poppins(fontSize: 12, color: AppColors.textSecondary)),
-        ]),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(value,
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+                style: GoogleFonts.poppins(
+                    fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+            Text(label,
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+                style: GoogleFonts.poppins(fontSize: 12, color: AppColors.textSecondary)),
+          ]),
+        ),
       ]),
     );
   }

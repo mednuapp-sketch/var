@@ -1,16 +1,109 @@
 import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/widgets/ux_widgets.dart';
+import '../../../core/utils/r.dart';
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Constants
+// ─────────────────────────────────────────────────────────────────────────────
+
+const _kGreen = Color(0xFF2E7D32);
+const _kOrange = Color(0xFFE65100);
+const _kOrangeLight = Color(0xFFFF8A65);
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Status model
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum BookingStatus { booked, confirmed, inProgress, completed, cancelled }
+
+extension BookingStatusExt on BookingStatus {
+  String get label {
+    switch (this) {
+      case BookingStatus.booked:
+        return 'Booked';
+      case BookingStatus.confirmed:
+        return 'Confirmed';
+      case BookingStatus.inProgress:
+        return 'In Progress';
+      case BookingStatus.completed:
+        return 'Completed';
+      case BookingStatus.cancelled:
+        return 'Cancelled';
+    }
+  }
+
+  Color get color {
+    switch (this) {
+      case BookingStatus.booked:
+        return const Color(0xFF1565C0);
+      case BookingStatus.confirmed:
+        return _kGreen;
+      case BookingStatus.inProgress:
+        return _kOrange;
+      case BookingStatus.completed:
+        return _kGreen;
+      case BookingStatus.cancelled:
+        return AppColors.error;
+    }
+  }
+
+  IconData get icon {
+    switch (this) {
+      case BookingStatus.booked:
+        return Icons.calendar_today_rounded;
+      case BookingStatus.confirmed:
+        return Icons.check_circle_rounded;
+      case BookingStatus.inProgress:
+        return Icons.medical_services_rounded;
+      case BookingStatus.completed:
+        return Icons.task_alt_rounded;
+      case BookingStatus.cancelled:
+        return Icons.cancel_rounded;
+    }
+  }
+
+  bool get canCancel =>
+      this == BookingStatus.booked || this == BookingStatus.confirmed;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Stepper step model
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _TrackStep {
+  final String title, desc;
+  final IconData icon;
+  final bool done;
+  final bool active;
+  final bool cancelled;
+  final String? timestamp;
+
+  const _TrackStep({
+    required this.title,
+    required this.desc,
+    required this.icon,
+    this.done = false,
+    this.active = false,
+    this.cancelled = false,
+    this.timestamp,
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  OrderTrackingScreen
+// ─────────────────────────────────────────────────────────────────────────────
 
 class OrderTrackingScreen extends StatefulWidget {
-  /// Passed from MedicineScreen cart checkout.
-  /// Shape: {orderId, items: [{id, name, brand, price, count}], total, deliveryBoy: {name, phone, rating, deliveries}}
+  /// Shape: {orderId, serviceType, serviceName, bookingDate,
+  ///         status, estimatedTime, provider: {name, photo, rating, contact},
+  ///         items, total}
   final Map<String, dynamic>? orderData;
   const OrderTrackingScreen({super.key, this.orderData});
 
@@ -18,146 +111,274 @@ class OrderTrackingScreen extends StatefulWidget {
   State<OrderTrackingScreen> createState() => _OrderTrackingScreenState();
 }
 
-class _OrderTrackingScreenState extends State<OrderTrackingScreen> with TickerProviderStateMixin {
+class _OrderTrackingScreenState extends State<OrderTrackingScreen>
+    with TickerProviderStateMixin {
   late final AnimationController _pulseCtrl;
-  Timer? _etaTimer;
+  late final AnimationController _shimmerCtrl;
 
-  late final String _orderId;
-  late final List<Map<String, dynamic>> _orderItems;
-  late final int _subtotal;
-  late final String _dbName;
-  late final String _dbPhone;
-  late final double _dbRating;
-  late final int _dbDeliveries;
-  int _etaMinutes = 35;
+  late String _orderId;
+  late String _serviceType;
+  late String _serviceName;
+  late String _bookingDate;
+  late BookingStatus _status;
+  late String _estimatedTime;
+  late String _providerName;
+  late String _providerPhoto;
+  late double _providerRating;
+  late String _providerContact;
+  late List<Map<String, dynamic>> _orderItems;
+  late int _subtotal;
 
-  static const _green = Color(0xFF2E7D32);
-  static const _orange = Color(0xFFE65100);
+  bool _isCancelling = false;
 
-  final _steps = [
-    {'title': 'Order Placed', 'desc': 'Your order has been placed successfully', 'icon': Icons.check_circle_outline_rounded, 'done': true, 'active': false},
-    {'title': 'Order Confirmed', 'desc': 'Pharmacy confirmed your order', 'icon': Icons.store_rounded, 'done': true, 'active': false},
-    {'title': 'Preparing Order', 'desc': 'Medicines being packed carefully', 'icon': Icons.inventory_2_rounded, 'done': true, 'active': false},
-    {'title': 'Out for Delivery', 'desc': 'Delivery partner is on the way', 'icon': Icons.delivery_dining_rounded, 'done': false, 'active': true},
-    {'title': 'Delivered', 'desc': 'Order delivered to your doorstep', 'icon': Icons.home_rounded, 'done': false, 'active': false},
-  ];
+  static const _serviceTypeIcons = {
+    'consultation': Icons.video_call_rounded,
+    'appointment': Icons.calendar_month_rounded,
+    'medicine': Icons.local_shipping_rounded,
+    'lab': Icons.science_rounded,
+    'caregiver': Icons.accessibility_new_rounded,
+    'ambulance': Icons.emergency_rounded,
+  };
+
+  List<_TrackStep> get _steps {
+    final isCancelled = _status == BookingStatus.cancelled;
+    if (isCancelled) {
+      return [
+        const _TrackStep(
+          title: 'Booking Placed',
+          desc: 'Your booking was received',
+          icon: Icons.calendar_today_rounded,
+          done: true,
+        ),
+        const _TrackStep(
+          title: 'Booking Cancelled',
+          desc: 'This booking has been cancelled',
+          icon: Icons.cancel_rounded,
+          active: true,
+          cancelled: true,
+        ),
+      ];
+    }
+
+    final statusIndex = _status.index;
+    return [
+      _TrackStep(
+        title: 'Booked',
+        desc: 'Your booking was placed successfully',
+        icon: Icons.calendar_today_rounded,
+        done: statusIndex >= BookingStatus.booked.index,
+        active: _status == BookingStatus.booked,
+        timestamp: statusIndex >= BookingStatus.booked.index ? _bookingDate : null,
+      ),
+      _TrackStep(
+        title: 'Confirmed',
+        desc: 'Service provider confirmed your booking',
+        icon: Icons.check_circle_rounded,
+        done: statusIndex > BookingStatus.confirmed.index,
+        active: _status == BookingStatus.confirmed,
+      ),
+      _TrackStep(
+        title: 'In Progress',
+        desc: 'Your service is currently underway',
+        icon: Icons.medical_services_rounded,
+        done: statusIndex > BookingStatus.inProgress.index,
+        active: _status == BookingStatus.inProgress,
+      ),
+      _TrackStep(
+        title: 'Completed',
+        desc: 'Service delivered successfully',
+        icon: Icons.task_alt_rounded,
+        done: _status == BookingStatus.completed,
+        active: _status == BookingStatus.completed,
+      ),
+    ];
+  }
 
   @override
   void initState() {
     super.initState();
+    _parseOrderData();
+    _pulseCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1100),
+    )..repeat(reverse: true);
+    _shimmerCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..repeat();
+  }
+
+  void _parseOrderData() {
     final d = widget.orderData ?? {};
-    _orderId = d['orderId'] as String? ?? 'ORD-${DateTime.now().millisecondsSinceEpoch.toString().substring(5)}';
+    _orderId = d['orderId'] as String? ??
+        'MED-${DateTime.now().millisecondsSinceEpoch.toString().substring(5)}';
+    _serviceType = d['serviceType'] as String? ?? 'consultation';
+    _serviceName = d['serviceName'] as String? ?? 'Doctor Consultation';
+    _bookingDate = d['bookingDate'] as String? ?? _formatDate(DateTime.now());
+    _estimatedTime = d['estimatedTime'] as String? ?? 'Today, 3:00 PM';
+
+    final statusStr = d['status'] as String? ?? 'confirmed';
+    _status = BookingStatus.values.firstWhere(
+      (e) => e.name == statusStr,
+      orElse: () => BookingStatus.confirmed,
+    );
+
+    final provider = (d['provider'] as Map?)?.cast<String, dynamic>() ?? {};
+    _providerName = provider['name'] as String? ?? 'Dr. Anjali Sharma';
+    _providerPhoto = provider['photo'] as String? ?? '';
+    _providerRating = (provider['rating'] as num?)?.toDouble() ?? 4.8;
+    _providerContact = provider['contact'] as String? ?? '+91 98765 43210';
 
     final rawItems = d['items'] as List?;
     _orderItems = rawItems != null
         ? rawItems.map((e) => Map<String, dynamic>.from(e as Map)).toList()
         : [
-            {'name': 'Paracetamol 500mg', 'brand': 'Crocin', 'price': 45, 'count': 2},
-            {'name': 'Omeprazole 20mg', 'brand': 'Omez', 'price': 65, 'count': 1},
+            {'name': 'General Consultation', 'qty': 1, 'price': 500},
           ];
-
-    _subtotal = d['total'] as int? ?? _orderItems.fold(0, (s, m) => s + (m['price'] as int) * (m['count'] as int));
-
-    final db = (d['deliveryBoy'] as Map?)?.cast<String, dynamic>() ?? {};
-    _dbName = db['name'] as String? ?? 'Ravi Kumar';
-    _dbPhone = db['phone'] as String? ?? '+91 98765 43210';
-    _dbRating = (db['rating'] as num?)?.toDouble() ?? 4.8;
-    _dbDeliveries = db['deliveries'] as int? ?? 532;
-
-    _pulseCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1100))..repeat(reverse: true);
-
-    _etaTimer = Timer.periodic(const Duration(seconds: 45), (_) {
-      if (mounted && _etaMinutes > 1) setState(() => _etaMinutes--);
-    });
+    _subtotal =
+        d['total'] as int? ?? 500;
   }
 
   @override
   void dispose() {
     _pulseCtrl.dispose();
-    _etaTimer?.cancel();
+    _shimmerCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _openInMaps() async {
-    final d = widget.orderData ?? {};
-    final addr = (d['deliveryAddress'] as Map?)?.cast<String, dynamic>();
-    final addressStr = addr?['address'] as String? ?? '';
-    final query = Uri.encodeComponent(
-      addressStr.isNotEmpty ? addressStr : 'my location',
-    );
-    final uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=$query');
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } else {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not open Google Maps')),
-        );
-      }
-    }
+  String _formatDate(DateTime dt) {
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    return '${dt.day} ${months[dt.month - 1]} ${dt.year}';
   }
 
-  Future<void> _callDriver() async {
-    final digits = _dbPhone.replaceAll(RegExp(r'[^\d+]'), '');
+  Future<void> _callProvider() async {
+    final digits = _providerContact.replaceAll(RegExp(r'[^\d+]'), '');
     final uri = Uri(scheme: 'tel', path: digits);
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri);
     } else {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not dial $_dbPhone'), behavior: SnackBarBehavior.floating),
+          SnackBar(
+            content: Text('Could not dial $_providerContact'),
+            behavior: SnackBarBehavior.floating,
+          ),
         );
       }
     }
   }
 
-  void _showSupportChat(BuildContext context) {
+  Future<void> _cancelBooking() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.r(ctx, 20))),
+        title: const Text(
+          'Cancel Booking?',
+          style: TextStyle(
+            fontFamily: 'Poppins',
+            fontSize: 17,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        content: Text(
+          'Are you sure you want to cancel this booking? This action cannot be undone.',
+          style: TextStyle(
+            fontFamily: 'Poppins',
+            fontSize: 13,
+            color: ctx.appTextSecondary,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Keep Booking',
+                style: TextStyle(fontFamily: 'Poppins')),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(R.r(ctx, 10))),
+            ),
+            child: const Text('Cancel Booking',
+                style: TextStyle(fontFamily: 'Poppins')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() {
+      _isCancelling = true;
+      _status = BookingStatus.cancelled;
+      _isCancelling = false;
+    });
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Booking cancelled successfully.'),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.r(context, 12))),
+          margin: EdgeInsets.all(R.p(context, 16)),
+        ),
+      );
+    }
+  }
+
+  void _showHelpSheet() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _OrderSupportChat(orderId: _orderId),
+      builder: (_) => _OrderSupportSheet(orderId: _orderId),
     );
   }
 
-  String _eta() {
-    final t = DateTime.now().add(Duration(minutes: _etaMinutes));
-    final h = t.hour;
-    final m = t.minute.toString().padLeft(2, '0');
-    final suffix = h >= 12 ? 'PM' : 'AM';
-    final hour = h > 12 ? h - 12 : (h == 0 ? 12 : h);
-    return '$hour:$m $suffix';
-  }
-
-  // ── Build ─────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────
+  //  Build
+  // ─────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
-    final deliveryFee = _subtotal > 499 ? 0 : 30;
-    final totalPaid = _subtotal + deliveryFee;
-
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.appBackground,
       body: CustomScrollView(
+        physics: const BouncingScrollPhysics(),
         slivers: [
           _buildAppBar(),
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                _buildLiveCard(),
-                const SizedBox(height: 20),
-                _buildDeliveryPartner(),
-                const SizedBox(height: 20),
-                Text('Order Progress', style: AppTextStyles.h4),
-                const SizedBox(height: 12),
-                _buildProgress(),
-                const SizedBox(height: 20),
-                Text('Order Items', style: AppTextStyles.h4),
-                const SizedBox(height: 12),
-                _buildOrderItems(deliveryFee, totalPaid),
-                const SizedBox(height: 40),
-              ]),
+              padding: EdgeInsets.fromLTRB(R.p(context, 16), R.p(context, 16), R.p(context, 16), R.p(context, 40)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildHeaderCard(),
+                  SizedBox(height: R.h(context, 16)),
+                  _buildStatusBadge(),
+                  SizedBox(height: R.h(context, 20)),
+                  const Text('Progress', style: AppTextStyles.h4),
+                  SizedBox(height: R.h(context, 12)),
+                  _buildStepper(),
+                  SizedBox(height: R.h(context, 20)),
+                  _buildProviderCard(),
+                  SizedBox(height: R.h(context, 20)),
+                  if (_orderItems.isNotEmpty) ...[
+                    const Text('Order Details', style: AppTextStyles.h4),
+                    SizedBox(height: R.h(context, 12)),
+                    _buildOrderDetails(),
+                    SizedBox(height: R.h(context, 20)),
+                  ],
+                  _buildActionButtons(),
+                  SizedBox(height: R.h(context, 16)),
+                  if (_status.canCancel) _buildCancelButton(),
+                ],
+              ),
             ),
           ),
         ],
@@ -165,362 +386,793 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> with TickerPr
     );
   }
 
-  SliverAppBar _buildAppBar() => SliverAppBar(
-    pinned: true,
-    expandedHeight: 160,
-    leading: IconButton(icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white), onPressed: () => context.pop()),
-    flexibleSpace: FlexibleSpaceBar(
-      background: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(colors: [Color(0xFF1B5E20), _green], begin: Alignment.topLeft, end: Alignment.bottomRight),
-        ),
-        child: SafeArea(child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 50, 20, 16),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Icon(Icons.local_shipping_rounded, color: Colors.white, size: 36),
-            const SizedBox(height: 8),
-            Text('Track Order', style: AppTextStyles.onPrimaryH2),
-            Text('Order ID: $_orderId', style: AppTextStyles.onPrimaryBody),
-          ]),
-        )),
-      ),
-    ),
-  );
-
-  Widget _buildLiveCard() => Container(
-    padding: const EdgeInsets.all(18),
-    decoration: BoxDecoration(
-      gradient: const LinearGradient(colors: [Color(0xFF1B5E20), _green], begin: Alignment.topLeft, end: Alignment.bottomRight),
-      borderRadius: BorderRadius.circular(20),
-    ),
-    child: Column(children: [
-      // Header row
-      Row(children: [
-        AnimatedBuilder(
-          animation: _pulseCtrl,
-          builder: (_, __) => Container(
-            width: 10, height: 10,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha:0.5 + _pulseCtrl.value * 0.5),
-              shape: BoxShape.circle,
+  // ── App Bar ────────────────────────────────────────────
+  SliverAppBar _buildAppBar() {
+    final serviceIcon =
+        _serviceTypeIcons[_serviceType] ?? Icons.medical_services_rounded;
+    return SliverAppBar(
+      pinned: true,
+      expandedHeight: R.h(context, 160),
+      backgroundColor: _kGreen,
+      leading: Padding(
+        padding: EdgeInsets.all(R.p(context, 8)),
+        child: Material(
+          color: Colors.white.withValues(alpha: 0.15),
+          shape: const CircleBorder(),
+          child: InkWell(
+            onTap: () => context.pop(),
+            customBorder: const CircleBorder(),
+            child: Padding(
+              padding: EdgeInsets.all(R.p(context, 8)),
+              child: Icon(Icons.arrow_back_ios_new_rounded,
+                  color: Colors.white, size: R.w(context, 18)),
             ),
           ),
         ),
-        const SizedBox(width: 8),
-        const Text('Live Tracking Active', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, color: Colors.white, fontSize: 14)),
-        const Spacer(),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          decoration: BoxDecoration(color: Colors.white.withValues(alpha:0.15), borderRadius: BorderRadius.circular(8)),
-          child: Text('ETA: $_etaMinutes min', style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: Colors.white, fontWeight: FontWeight.w600)),
-        ),
-      ]),
-      const SizedBox(height: 14),
-
-      // Address row
-      Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(color: Colors.white.withValues(alpha:0.12), borderRadius: BorderRadius.circular(10)),
-        child: Row(children: [
-          const Icon(Icons.location_on_rounded, color: Colors.white70, size: 16),
-          const SizedBox(width: 6),
-          const Expanded(child: Text('Delivering to your saved address', style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: Colors.white70))),
-          Text('By ${_eta()}', style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white)),
-        ]),
       ),
-      const SizedBox(height: 14),
-
-      // Map placeholder (custom painted)
-      ClipRRect(
-        borderRadius: BorderRadius.circular(14),
-        child: SizedBox(
-          height: 130,
-          child: Stack(children: [
-            CustomPaint(painter: _MapPainter(), child: const SizedBox.expand()),
-            // Destination pin
-            Positioned(
-              right: 30, top: 15,
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                Container(
-                  padding: const EdgeInsets.all(5),
-                  decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
-                  child: const Icon(Icons.home_rounded, color: Colors.white, size: 14),
-                ),
-                Container(width: 2, height: 6, color: Colors.red),
-                Container(width: 6, height: 3, decoration: BoxDecoration(color: Colors.red.withValues(alpha:0.4), borderRadius: BorderRadius.circular(3))),
-              ]),
+      actions: [
+        Padding(
+          padding: EdgeInsets.only(right: R.p(context, 8)),
+          child: IconButton(
+            icon: Icon(Icons.headset_mic_rounded,
+                color: Colors.white, size: R.w(context, 22)),
+            onPressed: _showHelpSheet,
+            tooltip: 'Need Help?',
+          ),
+        ),
+      ],
+      flexibleSpace: FlexibleSpaceBar(
+        collapseMode: CollapseMode.pin,
+        background: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFF1B5E20), _kGreen],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             ),
-            // Delivery bike marker (animated pulse)
+          ),
+          child: SafeArea(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return SingleChildScrollView(
+                  physics: const ClampingScrollPhysics(),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                    child: Padding(
+                      padding: EdgeInsets.fromLTRB(R.p(context, 20), R.p(context, 52), R.p(context, 20), R.p(context, 16)),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            width: R.w(context, 52), height: R.h(context, 52),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(R.r(context, 16)),
+                            ),
+                            child: Icon(serviceIcon, color: Colors.white, size: R.w(context, 28)),
+                          ),
+                          SizedBox(width: R.w(context, 14)),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  _serviceName,
+                                  style: AppTextStyles.onPrimaryH2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                Text(
+                                  'Track your booking',
+                                  style: AppTextStyles.onPrimaryBody,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Header Card ────────────────────────────────────────
+  Widget _buildHeaderCard() {
+    return Container(
+      padding: EdgeInsets.all(R.p(context, 16)),
+      decoration: BoxDecoration(
+        color: context.appSurface,
+        borderRadius: BorderRadius.circular(R.r(context, 18)),
+        border: Border.all(color: context.appBorder),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          _InfoRow(
+            icon: Icons.receipt_rounded,
+            label: 'Order ID',
+            value: _orderId,
+            valueColor: AppColors.primary,
+          ),
+          const Divider(height: 16),
+          _InfoRow(
+            icon: Icons.calendar_today_rounded,
+            label: 'Booking Date',
+            value: _bookingDate,
+          ),
+          const Divider(height: 16),
+          _InfoRow(
+            icon: Icons.access_time_rounded,
+            label: 'Estimated Time',
+            value: _estimatedTime,
+            valueColor: _kGreen,
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Status Badge ───────────────────────────────────────
+  Widget _buildStatusBadge() {
+    final color = _status.color;
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.symmetric(horizontal: R.p(context, 18), vertical: R.p(context, 14)),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(R.r(context, 16)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          // Pulsing indicator for active statuses
+          if (_status == BookingStatus.inProgress ||
+              _status == BookingStatus.confirmed)
             AnimatedBuilder(
               animation: _pulseCtrl,
-              builder: (_, __) => Positioned(
-                left: 40 + _pulseCtrl.value * 5,
-                top: 50 + _pulseCtrl.value * 3,
-                child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: const BoxDecoration(color: _green, shape: BoxShape.circle),
-                    child: const Icon(Icons.delivery_dining_rounded, color: Colors.white, size: 18),
+              builder: (_, __) => Container(
+                width: R.w(context, 10), height: R.h(context, 10),
+                margin: EdgeInsets.only(right: R.p(context, 10)),
+                decoration: BoxDecoration(
+                  color: color.withValues(
+                      alpha: 0.5 + _pulseCtrl.value * 0.5),
+                  shape: BoxShape.circle,
+                ),
+              ),
+            )
+          else
+            Container(
+              width: R.w(context, 10), height: R.h(context, 10),
+              margin: EdgeInsets.only(right: R.p(context, 10)),
+              decoration: BoxDecoration(
+                color: color,
+                shape: BoxShape.circle,
+              ),
+            ),
+          Icon(_status.icon, color: color, size: R.w(context, 20)),
+          SizedBox(width: R.w(context, 10)),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Current Status',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 11,
+                    color: color.withValues(alpha: 0.7),
+                    fontWeight: FontWeight.w500,
                   ),
-                  Container(width: 2, height: 6, color: _green),
-                  Container(width: 6, height: 3, decoration: BoxDecoration(color: _green.withValues(alpha:0.4), borderRadius: BorderRadius.circular(3))),
-                ]),
-              ),
+                ),
+                Text(
+                  _status.label,
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: color,
+                  ),
+                ),
+              ],
             ),
-            // Route line
-            Positioned.fill(
-              child: CustomPaint(painter: _RoutePainter()),
-            ),
-          ]),
-        ),
-      ),
-      const SizedBox(height: 16),
-
-      // Open in Maps button
-      SizedBox(
-        width: double.infinity,
-        child: OutlinedButton.icon(
-          onPressed: _openInMaps,
-          icon: const Icon(Icons.map_rounded, size: 16, color: Colors.white),
-          label: const Text('Track on Google Maps', style: TextStyle(color: Colors.white)),
-          style: OutlinedButton.styleFrom(
-            side: const BorderSide(color: Colors.white54),
-            padding: const EdgeInsets.symmetric(vertical: 10),
           ),
-        ),
-      ),
-      const SizedBox(height: 10),
-      // Action buttons
-      Row(children: [
-        Expanded(child: ElevatedButton.icon(
-          onPressed: _callDriver,
-          icon: const Icon(Icons.call_rounded, size: 16),
-          label: const Text('Call Driver'),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.white,
-            foregroundColor: _green,
-            padding: const EdgeInsets.symmetric(vertical: 10),
-          ),
-        )),
-        const SizedBox(width: 12),
-        Expanded(child: OutlinedButton.icon(
-          onPressed: () => _showSupportChat(context),
-          icon: const Icon(Icons.chat_rounded, size: 16, color: Colors.white),
-          label: const Text('Chat', style: TextStyle(color: Colors.white)),
-          style: OutlinedButton.styleFrom(
-            side: const BorderSide(color: Colors.white54),
-            padding: const EdgeInsets.symmetric(vertical: 10),
-          ),
-        )),
-      ]),
-    ]),
-  );
-
-  Widget _buildDeliveryPartner() => Container(
-    padding: const EdgeInsets.all(16),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(18),
-      border: Border.all(color: AppColors.divider),
-      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:0.04), blurRadius: 8, offset: const Offset(0, 2))],
-    ),
-    child: Row(children: [
-      Stack(children: [
-        Container(
-          width: 54, height: 54,
-          decoration: const BoxDecoration(color: _green, shape: BoxShape.circle),
-          child: const Icon(Icons.person_rounded, color: Colors.white, size: 30),
-        ),
-        Positioned(bottom: 0, right: 0, child: Container(
-          width: 16, height: 16,
-          decoration: const BoxDecoration(color: Colors.greenAccent, shape: BoxShape.circle),
-        )),
-      ]),
-      const SizedBox(width: 14),
-      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(_dbName, style: AppTextStyles.labelLarge),
-        const Text('Delivery Partner', style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: AppColors.textSecondary)),
-        const SizedBox(height: 2),
-        Row(children: [
-          const Icon(Icons.star_rounded, size: 13, color: Colors.amber),
-          const SizedBox(width: 3),
-          Text('$_dbRating  •  $_dbDeliveries deliveries', style: AppTextStyles.caption),
-        ]),
-        const SizedBox(height: 2),
-        Row(children: [
-          const Icon(Icons.phone_rounded, size: 13, color: _green),
-          const SizedBox(width: 4),
-          Text(_dbPhone, style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, fontWeight: FontWeight.w600, color: _green)),
-        ]),
-      ])),
-      Column(children: [
-        GestureDetector(
-          onTap: _callDriver,
-          child: Container(
-            width: 44, height: 44,
-            decoration: BoxDecoration(color: _green.withValues(alpha:0.1), shape: BoxShape.circle),
-            child: const Icon(Icons.call_rounded, color: _green, size: 22),
-          ),
-        ),
-        const SizedBox(height: 4),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-          decoration: BoxDecoration(color: _green.withValues(alpha:0.1), borderRadius: BorderRadius.circular(6)),
-          child: const Text('On the way', style: TextStyle(fontFamily: 'Poppins', fontSize: 9, fontWeight: FontWeight.w700, color: _green)),
-        ),
-      ]),
-    ]),
-  );
-
-  Widget _buildProgress() => Container(
-    padding: const EdgeInsets.all(18),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(18),
-      border: Border.all(color: AppColors.divider),
-    ),
-    child: Column(children: _steps.asMap().entries.map((e) {
-      final step = e.value;
-      final isLast = e.key == _steps.length - 1;
-      final isDone = step['done'] as bool;
-      final isActive = step['active'] as bool;
-
-      Widget icon;
-      if (isDone) {
-        icon = Container(
-          width: 38, height: 38,
-          decoration: const BoxDecoration(color: _green, shape: BoxShape.circle),
-          child: Icon(step['icon'] as IconData, size: 18, color: Colors.white),
-        );
-      } else if (isActive) {
-        icon = AnimatedBuilder(
-          animation: _pulseCtrl,
-          builder: (_, __) => Container(
-            width: 38, height: 38,
-            decoration: BoxDecoration(
-              color: Color.lerp(_orange, const Color(0xFFFF8A65), _pulseCtrl.value),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(step['icon'] as IconData, size: 18, color: Colors.white),
-          ),
-        );
-      } else {
-        icon = Container(
-          width: 38, height: 38,
-          decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: AppColors.border, width: 2)),
-          child: Icon(step['icon'] as IconData, size: 18, color: AppColors.textHint),
-        );
-      }
-
-      return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Column(children: [
-          icon,
-          if (!isLast) Container(width: 2, height: 42, color: isDone ? _green : AppColors.border),
-        ]),
-        const SizedBox(width: 14),
-        Expanded(child: Padding(
-          padding: EdgeInsets.only(bottom: isLast ? 0 : 24, top: 8),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(
-              step['title'] as String,
-              style: AppTextStyles.labelLarge.copyWith(
-                color: isDone ? _green : isActive ? _orange : AppColors.textHint,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(step['desc'] as String, style: AppTextStyles.bodySmall),
-          ]),
-        )),
-      ]);
-    }).toList()),
-  );
-
-  Widget _buildOrderItems(int deliveryFee, int totalPaid) => Container(
-    padding: const EdgeInsets.all(16),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(18),
-      border: Border.all(color: AppColors.divider),
-    ),
-    child: Column(children: [
-      ..._orderItems.asMap().entries.map((e) => Column(children: [
-        Row(children: [
           Container(
-            width: 42, height: 42,
-            decoration: BoxDecoration(color: _green.withValues(alpha:0.1), borderRadius: BorderRadius.circular(10)),
-            child: const Icon(Icons.medication_rounded, color: _green, size: 22),
+            padding: EdgeInsets.symmetric(horizontal: R.p(context, 12), vertical: R.p(context, 5)),
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(R.r(context, 20)),
+            ),
+            child: Text(
+              _status.label,
+              style: const TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
+            ),
           ),
-          const SizedBox(width: 10),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(e.value['name'] as String? ?? '', style: AppTextStyles.labelLarge),
-            Text('${e.value['brand'] ?? ''}  •  Qty: ${e.value['count']}', style: AppTextStyles.bodySmall),
-          ])),
-          Text(
-            '₹${(e.value['price'] as int) * (e.value['count'] as int)}',
-            style: AppTextStyles.labelLarge.copyWith(color: _green),
+        ],
+      ),
+    );
+  }
+
+  // ── Custom Stepper ─────────────────────────────────────
+  Widget _buildStepper() {
+    final steps = _steps;
+    return Container(
+      padding: EdgeInsets.all(R.p(context, 18)),
+      decoration: BoxDecoration(
+        color: context.appSurface,
+        borderRadius: BorderRadius.circular(R.r(context, 18)),
+        border: Border.all(color: context.appBorder),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
-        ]),
-        if (e.key < _orderItems.length - 1) const Divider(height: 20),
-      ])),
-      const Divider(height: 24),
-      _SummaryRow('Subtotal', '₹$_subtotal'),
-      const SizedBox(height: 6),
-      _SummaryRow('Delivery Fee', deliveryFee == 0 ? 'FREE' : '₹$deliveryFee', green: deliveryFee == 0),
-      const Divider(height: 20),
-      _SummaryRow('Total Paid', '₹$totalPaid', bold: true),
-    ]),
-  );
+        ],
+      ),
+      child: Column(
+        children: steps.asMap().entries.map((entry) {
+          final i = entry.key;
+          final step = entry.value;
+          final isLast = i == steps.length - 1;
+          return _buildStepRow(step, isLast);
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildStepRow(_TrackStep step, bool isLast) {
+    final Color stepColor;
+    if (step.cancelled) {
+      stepColor = AppColors.error;
+    } else if (step.done || step.active) {
+      stepColor = step.active && !step.done ? _kOrange : _kGreen;
+    } else {
+      stepColor = context.appBorder;
+    }
+
+    Widget stepIcon;
+    if (step.cancelled) {
+      stepIcon = Container(
+        width: R.w(context, 40), height: R.h(context, 40),
+        decoration: const BoxDecoration(
+          color: AppColors.error,
+          shape: BoxShape.circle,
+        ),
+        child: Icon(Icons.close_rounded, color: Colors.white, size: R.w(context, 20)),
+      );
+    } else if (step.done && !step.active) {
+      stepIcon = Container(
+        width: R.w(context, 40), height: R.h(context, 40),
+        decoration: const BoxDecoration(
+          color: _kGreen,
+          shape: BoxShape.circle,
+        ),
+        child: Icon(Icons.check_rounded, color: Colors.white, size: R.w(context, 20)),
+      );
+    } else if (step.active) {
+      stepIcon = AnimatedBuilder(
+        animation: _pulseCtrl,
+        builder: (_, __) => Container(
+          width: R.w(context, 40), height: R.h(context, 40),
+          decoration: BoxDecoration(
+            color: Color.lerp(_kOrange, _kOrangeLight, _pulseCtrl.value),
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: _kOrange.withValues(
+                    alpha: 0.3 + _pulseCtrl.value * 0.2),
+                blurRadius: 10,
+                spreadRadius: 2,
+              ),
+            ],
+          ),
+          child: Icon(step.icon, color: Colors.white, size: R.w(context, 18)),
+        ),
+      );
+    } else {
+      stepIcon = Container(
+        width: R.w(context, 40), height: R.h(context, 40),
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(color: context.appBorder, width: 2),
+          color: context.appSurface,
+        ),
+        child: Icon(step.icon, color: context.appTextHint, size: R.w(context, 18)),
+      );
+    }
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Column(
+          children: [
+            stepIcon,
+            if (!isLast)
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                width: 2, height: 44,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      stepColor.withValues(alpha: 0.8),
+                      stepColor.withValues(alpha: 0.1),
+                    ],
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                  ),
+                  borderRadius: BorderRadius.circular(1),
+                ),
+              ),
+          ],
+        ),
+        SizedBox(width: R.w(context, 14)),
+        Expanded(
+          child: Padding(
+            padding: EdgeInsets.only(
+              top: R.p(context, 8),
+              bottom: isLast ? 0 : R.p(context, 24),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      step.title,
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: step.cancelled
+                            ? AppColors.error
+                            : (step.done || step.active)
+                                ? (step.active && !step.done
+                                    ? _kOrange
+                                    : _kGreen)
+                                : context.appTextHint,
+                      ),
+                    ),
+                    if (step.active && !step.cancelled) ...[
+                      SizedBox(width: R.w(context, 8)),
+                      Container(
+                        padding: EdgeInsets.symmetric(
+                            horizontal: R.p(context, 7), vertical: R.p(context, 2)),
+                        decoration: BoxDecoration(
+                          color: _kOrange.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(R.r(context, 8)),
+                        ),
+                        child: const Text(
+                          'CURRENT',
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 8,
+                            fontWeight: FontWeight.w800,
+                            color: _kOrange,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  step.desc,
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 11,
+                    color: context.appTextSecondary,
+                    height: 1.4,
+                  ),
+                ),
+                if (step.timestamp != null) ...[
+                  SizedBox(height: R.h(context, 3)),
+                  Text(
+                    step.timestamp!,
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 10,
+                      color: context.appTextHint,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── Provider Card ──────────────────────────────────────
+  Widget _buildProviderCard() {
+    return Container(
+      padding: EdgeInsets.all(R.p(context, 16)),
+      decoration: BoxDecoration(
+        color: context.appSurface,
+        borderRadius: BorderRadius.circular(R.r(context, 18)),
+        border: Border.all(color: context.appBorder),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Service Provider', style: AppTextStyles.h4),
+          SizedBox(height: R.h(context, 14)),
+          Row(
+            children: [
+              // Provider avatar
+              Stack(
+                children: [
+                  Container(
+                    width: R.w(context, 58), height: R.h(context, 58),
+                    decoration: BoxDecoration(
+                      gradient: AppColors.primaryGradient,
+                      shape: BoxShape.circle,
+                    ),
+                    child: _providerPhoto.isNotEmpty
+                        ? ClipOval(
+                            child: Image.network(_providerPhoto,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => Icon(
+                                    Icons.person_rounded,
+                                    color: Colors.white, size: R.w(context, 30))),
+                          )
+                        : Center(
+                            child: Text(
+                              _providerName.isNotEmpty
+                                  ? _providerName[0].toUpperCase()
+                                  : 'D',
+                              style: const TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: 22,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                  ),
+                  Positioned(
+                    bottom: 1, right: 1,
+                    child: Container(
+                      width: R.w(context, 16), height: R.h(context, 16),
+                      decoration: const BoxDecoration(
+                        color: _kGreen,
+                        shape: BoxShape.circle,
+                        border: Border.fromBorderSide(
+                          BorderSide(color: Colors.white, width: 2),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(width: R.w(context, 14)),
+
+              // Provider info
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(_providerName,
+                        style: AppTextStyles.labelLarge,
+                        overflow: TextOverflow.ellipsis),
+                    SizedBox(height: R.h(context, 3)),
+                    Row(
+                      children: [
+                        Icon(Icons.star_rounded,
+                            size: R.w(context, 14), color: Colors.amber),
+                        SizedBox(width: R.w(context, 3)),
+                        Text(
+                          '$_providerRating',
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: context.appTextPrimary,
+                          ),
+                        ),
+                        SizedBox(width: R.w(context, 6)),
+                        Text('·',
+                            style: TextStyle(color: context.appTextHint)),
+                        SizedBox(width: R.w(context, 6)),
+                        Flexible(
+                          child: Text(_providerContact,
+                              style: const TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: 11,
+                                color: _kGreen,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              overflow: TextOverflow.ellipsis),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+
+              // Call button
+              GestureDetector(
+                onTap: _callProvider,
+                child: Container(
+                  width: R.w(context, 46), height: R.h(context, 46),
+                  decoration: BoxDecoration(
+                    color: _kGreen.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(Icons.call_rounded,
+                      color: _kGreen, size: R.w(context, 22)),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Order Details ──────────────────────────────────────
+  Widget _buildOrderDetails() {
+    return Container(
+      padding: EdgeInsets.all(R.p(context, 16)),
+      decoration: BoxDecoration(
+        color: context.appSurface,
+        borderRadius: BorderRadius.circular(R.r(context, 18)),
+        border: Border.all(color: context.appBorder),
+      ),
+      child: Column(
+        children: [
+          ..._orderItems.asMap().entries.map((e) {
+            final item = e.value;
+            final isLast = e.key == _orderItems.length - 1;
+            return Column(
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: R.w(context, 40), height: R.h(context, 40),
+                      decoration: BoxDecoration(
+                        color: _kGreen.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(R.r(context, 10)),
+                      ),
+                      child: Icon(Icons.medical_services_rounded,
+                          color: _kGreen, size: R.w(context, 20)),
+                    ),
+                    SizedBox(width: R.w(context, 12)),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item['name'] as String? ?? '',
+                            style: AppTextStyles.labelLarge,
+                          ),
+                          if ((item['qty'] as int? ?? 1) > 1)
+                            Text(
+                              'Qty: ${item['qty']}',
+                              style: AppTextStyles.bodySmall,
+                            ),
+                        ],
+                      ),
+                    ),
+                    Text(
+                      '₹${item['price']}',
+                      style: const TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: _kGreen,
+                      ),
+                    ),
+                  ],
+                ),
+                if (!isLast) const Divider(height: 16),
+              ],
+            );
+          }),
+          const Divider(height: 20),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Total Paid',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: context.appTextPrimary,
+                  )),
+              Text(
+                '₹$_subtotal',
+                style: const TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: _kGreen,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Action Buttons ─────────────────────────────────────
+  Widget _buildActionButtons() {
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: _callProvider,
+            icon: Icon(Icons.call_rounded, size: R.w(context, 18)),
+            label: const Text(
+              'Call Provider',
+              style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600),
+            ),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: _kGreen,
+              side: const BorderSide(color: _kGreen, width: 1.5),
+              padding: EdgeInsets.symmetric(vertical: R.p(context, 13)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(R.r(context, 14))),
+            ),
+          ),
+        ),
+        SizedBox(width: R.w(context, 12)),
+        Expanded(
+          child: ElevatedButton.icon(
+            onPressed: _showHelpSheet,
+            icon: Icon(Icons.headset_mic_rounded, size: R.w(context, 18)),
+            label: const Text(
+              'Need Help?',
+              style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              padding: EdgeInsets.symmetric(vertical: R.p(context, 13)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(R.r(context, 14))),
+              elevation: 0,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── Cancel Button ──────────────────────────────────────
+  Widget _buildCancelButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: _isCancelling ? null : _cancelBooking,
+        icon: _isCancelling
+            ? SizedBox(
+                width: R.w(context, 16), height: R.h(context, 16),
+                child: const CircularProgressIndicator(
+                    strokeWidth: 2, color: AppColors.error))
+            : Icon(Icons.cancel_outlined, size: R.w(context, 18)),
+        label: Text(
+          _isCancelling ? 'Cancelling…' : 'Cancel Booking',
+          style: const TextStyle(
+              fontFamily: 'Poppins', fontWeight: FontWeight.w600),
+        ),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppColors.error,
+          side: const BorderSide(color: AppColors.error),
+          padding: EdgeInsets.symmetric(vertical: R.p(context, 13)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.r(context, 14))),
+        ),
+      ),
+    );
+  }
 }
 
-class _SummaryRow extends StatelessWidget {
+// ─────────────────────────────────────────────────────────────────────────────
+//  Info Row helper
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _InfoRow extends StatelessWidget {
+  final IconData icon;
   final String label, value;
-  final bool bold, green;
-  const _SummaryRow(this.label, this.value, {this.bold = false, this.green = false});
+  final Color? valueColor;
+  const _InfoRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+    this.valueColor,
+  });
+
   @override
-  Widget build(BuildContext context) => Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-    Text(label, style: bold ? AppTextStyles.labelLarge : AppTextStyles.bodyMedium),
-    Text(value, style: (bold ? AppTextStyles.labelLarge : AppTextStyles.bodyMedium).copyWith(
-      color: green ? const Color(0xFF2E7D32) : null,
-    )),
-  ]);
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon,
+            size: R.w(context, 16),
+            color: context.appTextHint),
+        SizedBox(width: R.w(context, 10)),
+        Text(label,
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontSize: 12,
+              color: context.appTextSecondary,
+            )),
+        const Spacer(),
+        Flexible(
+          child: Text(
+            value,
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: valueColor ?? context.appTextPrimary,
+            ),
+            textAlign: TextAlign.right,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
 }
 
-// ── Order Support Chat ────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+//  Support Sheet
+// ─────────────────────────────────────────────────────────────────────────────
 
-class _OrderSupportChat extends StatefulWidget {
+class _OrderSupportSheet extends StatefulWidget {
   final String orderId;
-  const _OrderSupportChat({required this.orderId});
+  const _OrderSupportSheet({required this.orderId});
 
   @override
-  State<_OrderSupportChat> createState() => _OrderSupportChatState();
+  State<_OrderSupportSheet> createState() => _OrderSupportSheetState();
 }
 
-class _OrderSupportChatState extends State<_OrderSupportChat> {
+class _OrderSupportSheetState extends State<_OrderSupportSheet> {
   final _controller = TextEditingController();
   final _scrollController = ScrollController();
   bool _sending = false;
 
-  static const _green = Color(0xFF2E7D32);
-
-  String get _chatPath =>
-      'order_chats/${widget.orderId}/messages';
-
-  String get _uid =>
-      FirebaseAuth.instance.currentUser?.uid ?? 'anonymous';
+  String get _chatPath => 'order_chats/${widget.orderId}/messages';
+  String get _uid => FirebaseAuth.instance.currentUser?.uid ?? 'anonymous';
 
   Future<void> _send() async {
     final text = _controller.text.trim();
     if (text.isEmpty || _sending) return;
     setState(() => _sending = true);
     _controller.clear();
-
     await FirebaseFirestore.instance.collection(_chatPath).add({
       'text': text,
       'senderId': _uid,
       'senderRole': 'patient',
       'timestamp': FieldValue.serverTimestamp(),
     });
-
     if (mounted) {
       setState(() => _sending = false);
       _scrollToBottom();
@@ -552,267 +1204,327 @@ class _OrderSupportChatState extends State<_OrderSupportChat> {
     return Container(
       height: MediaQuery.of(context).size.height * 0.78,
       padding: EdgeInsets.only(bottom: bottom),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      decoration: BoxDecoration(
+        color: context.appSurface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       ),
-      child: Column(children: [
-        Container(width: 40, height: 4, margin: const EdgeInsets.only(top: 12, bottom: 4),
-            decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
+      child: Column(
+        children: [
+          // Handle
+          Container(
+            width: R.w(context, 40), height: R.h(context, 4),
+            margin: EdgeInsets.only(top: R.p(context, 12), bottom: R.p(context, 4)),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade200,
+              borderRadius: BorderRadius.circular(R.r(context, 2)),
+            ),
+          ),
 
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
-          child: Row(children: [
-            Container(width: 38, height: 38,
-                decoration: BoxDecoration(color: _green.withValues(alpha:0.1), borderRadius: BorderRadius.circular(10)),
-                child: const Icon(Icons.support_agent_rounded, color: _green, size: 20)),
-            const SizedBox(width: 12),
-            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text('Order Support', style: TextStyle(fontFamily: 'Poppins', fontSize: 14, fontWeight: FontWeight.w700)),
-              Text('Order #${widget.orderId}', style: const TextStyle(fontFamily: 'Poppins', fontSize: 11, color: AppColors.textHint)),
-            ]),
-            const Spacer(),
-            IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close_rounded, color: AppColors.textHint)),
-          ]),
-        ),
-        const Divider(height: 1),
-
-        Expanded(
-          child: StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection(_chatPath)
-                .orderBy('timestamp', descending: false)
-                .snapshots(),
-            builder: (context, snap) {
-              if (snap.connectionState == ConnectionState.waiting) {
-                return ListView(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  children: List.generate(4, (_) => const _ChatBubbleSkeleton()),
-                );
-              }
-              final docs = snap.data?.docs ?? [];
-              if (docs.isEmpty) {
-                return Center(
-                  child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                    Container(width: 68, height: 68,
-                        decoration: BoxDecoration(color: _green.withValues(alpha:0.08), shape: BoxShape.circle),
-                        child: const Icon(Icons.support_agent_rounded, color: _green, size: 32)),
-                    const SizedBox(height: 12),
-                    const Text('Support Chat', style: TextStyle(fontFamily: 'Poppins', fontSize: 14, fontWeight: FontWeight.w700)),
-                    const SizedBox(height: 6),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 40),
-                      child: Text('Send us a message about your order and our support team will respond shortly.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: AppColors.textHint, height: 1.5)),
-                    ),
-                  ]),
-                );
-              }
-              WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
-              return ListView.builder(
-                controller: _scrollController,
-                padding: const EdgeInsets.all(16),
-                itemCount: docs.length,
-                itemBuilder: (_, i) {
-                  final data = docs[i].data() as Map<String, dynamic>;
-                  final isMe = data['senderId'] == _uid;
-                  final text = data['text'] as String? ?? '';
-                  final ts = data['timestamp'] as Timestamp?;
-                  final time = ts != null
-                      ? '${ts.toDate().hour}:${ts.toDate().minute.toString().padLeft(2, '0')}'
-                      : '';
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: Row(
-                      mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        if (!isMe) ...[
-                          Container(width: 30, height: 30,
-                              decoration: BoxDecoration(color: _green.withValues(alpha:0.1), shape: BoxShape.circle),
-                              child: const Icon(Icons.support_agent_rounded, color: _green, size: 15)),
-                          const SizedBox(width: 8),
-                        ],
-                        Column(
-                          crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-                          children: [
-                            Container(
-                              constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.65),
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                              decoration: BoxDecoration(
-                                color: isMe ? _green : const Color(0xFFE8F5E9),
-                                borderRadius: BorderRadius.only(
-                                  topLeft: const Radius.circular(16),
-                                  topRight: const Radius.circular(16),
-                                  bottomLeft: Radius.circular(isMe ? 16 : 4),
-                                  bottomRight: Radius.circular(isMe ? 4 : 16),
-                                ),
-                              ),
-                              child: Text(text, style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: isMe ? Colors.white : AppColors.textPrimary, height: 1.4)),
-                            ),
-                            const SizedBox(height: 3),
-                            Text(time, style: const TextStyle(fontFamily: 'Poppins', fontSize: 9, color: AppColors.textHint)),
-                          ],
+          // Header
+          Padding(
+            padding: EdgeInsets.fromLTRB(R.p(context, 20), R.p(context, 12), R.p(context, 20), R.p(context, 12)),
+            child: Row(
+              children: [
+                Container(
+                  width: R.w(context, 40), height: R.h(context, 40),
+                  decoration: BoxDecoration(
+                    color: _kGreen.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(R.r(context, 12)),
+                  ),
+                  child: Icon(Icons.support_agent_rounded,
+                      color: _kGreen, size: R.w(context, 20)),
+                ),
+                SizedBox(width: R.w(context, 12)),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Order Support',
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                          )),
+                      Text(
+                        'Order #${widget.orderId}',
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 11,
+                          color: context.appTextHint,
                         ),
-                        if (isMe) const SizedBox(width: 8),
-                      ],
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: Icon(Icons.close_rounded,
+                      color: context.appTextHint),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+
+          // Messages
+          Expanded(
+            child: StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection(_chatPath)
+                  .orderBy('timestamp', descending: false)
+                  .snapshots(),
+              builder: (context, snap) {
+                if (snap.connectionState == ConnectionState.waiting) {
+                  return ListView(
+                    padding: EdgeInsets.all(R.p(context, 16)),
+                    children: List.generate(
+                        3, (_) => const _ChatBubbleSkeleton()),
+                  );
+                }
+                final docs = snap.data?.docs ?? [];
+                if (docs.isEmpty) {
+                  return Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(R.p(context, 32)),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            width: R.w(context, 70), height: R.h(context, 70),
+                            decoration: BoxDecoration(
+                              color: _kGreen.withValues(alpha: 0.08),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(Icons.support_agent_rounded,
+                                color: _kGreen, size: R.w(context, 34)),
+                          ),
+                          SizedBox(height: R.h(context, 14)),
+                          const Text('Support Chat',
+                              style: TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                              )),
+                          SizedBox(height: R.h(context, 8)),
+                          Text(
+                            'Send us a message about your order.\nOur team responds within minutes.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 12,
+                              color: context.appTextHint,
+                              height: 1.5,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   );
-                },
-              );
-            },
+                }
+                WidgetsBinding.instance
+                    .addPostFrameCallback((_) => _scrollToBottom());
+                return ListView.builder(
+                  controller: _scrollController,
+                  padding: EdgeInsets.all(R.p(context, 16)),
+                  itemCount: docs.length,
+                  itemBuilder: (_, i) {
+                    final data = docs[i].data() as Map<String, dynamic>;
+                    final isMe = data['senderId'] == _uid;
+                    final text = data['text'] as String? ?? '';
+                    final ts = data['timestamp'] as Timestamp?;
+                    final time = ts != null
+                        ? '${ts.toDate().hour}:${ts.toDate().minute.toString().padLeft(2, '0')}'
+                        : '';
+                    return Padding(
+                      padding: EdgeInsets.only(bottom: R.p(context, 12)),
+                      child: Row(
+                        mainAxisAlignment: isMe
+                            ? MainAxisAlignment.end
+                            : MainAxisAlignment.start,
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          if (!isMe) ...[
+                            Container(
+                              width: R.w(context, 30), height: R.h(context, 30),
+                              decoration: BoxDecoration(
+                                color: _kGreen.withValues(alpha: 0.1),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(Icons.support_agent_rounded,
+                                  color: _kGreen, size: R.w(context, 15)),
+                            ),
+                            SizedBox(width: R.w(context, 8)),
+                          ],
+                          Column(
+                            crossAxisAlignment: isMe
+                                ? CrossAxisAlignment.end
+                                : CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                constraints: BoxConstraints(
+                                  maxWidth:
+                                      MediaQuery.of(context).size.width * 0.65,
+                                ),
+                                padding: EdgeInsets.symmetric(
+                                    horizontal: R.p(context, 14), vertical: R.p(context, 10)),
+                                decoration: BoxDecoration(
+                                  color: isMe
+                                      ? _kGreen
+                                      : const Color(0xFFE8F5E9),
+                                  borderRadius: BorderRadius.only(
+                                    topLeft: Radius.circular(R.r(context, 16)),
+                                    topRight: Radius.circular(R.r(context, 16)),
+                                    bottomLeft: Radius.circular(isMe ? R.r(context, 16) : R.r(context, 4)),
+                                    bottomRight: Radius.circular(isMe ? R.r(context, 4) : R.r(context, 16)),
+                                  ),
+                                ),
+                                child: Text(
+                                  text,
+                                  style: TextStyle(
+                                    fontFamily: 'Poppins',
+                                    fontSize: 13,
+                                    color: isMe
+                                        ? Colors.white
+                                        : AppColors.textPrimary,
+                                    height: 1.4,
+                                  ),
+                                ),
+                              ),
+                              SizedBox(height: R.h(context, 3)),
+                              Text(
+                                time,
+                                style: TextStyle(
+                                  fontFamily: 'Poppins',
+                                  fontSize: 9,
+                                  color: context.appTextHint,
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (isMe) SizedBox(width: R.w(context, 8)),
+                        ],
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
           ),
-        ),
 
-        Container(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
-          decoration: BoxDecoration(color: Colors.white, boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:0.05), blurRadius: 8, offset: const Offset(0, -2))]),
-          child: Row(children: [
-            Expanded(
-              child: TextField(
-                controller: _controller,
-                textInputAction: TextInputAction.send,
-                onSubmitted: (_) => _send(),
-                decoration: InputDecoration(
-                  hintText: 'Type your message...',
-                  hintStyle: AppTextStyles.bodySmall,
-                  filled: true,
-                  fillColor: AppColors.background,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none),
+          // Input bar
+          Container(
+            padding: EdgeInsets.fromLTRB(R.p(context, 16), R.p(context, 10), R.p(context, 16), R.p(context, 20)),
+            decoration: BoxDecoration(
+              color: context.appSurface,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.05),
+                  blurRadius: 8,
+                  offset: const Offset(0, -2),
                 ),
-              ),
+              ],
             ),
-            const SizedBox(width: 10),
-            GestureDetector(
-              onTap: _send,
-              child: Container(
-                width: 46, height: 46,
-                decoration: BoxDecoration(color: _green, borderRadius: BorderRadius.circular(14)),
-                child: _sending
-                    ? const Padding(padding: EdgeInsets.all(12), child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                    : const Icon(Icons.send_rounded, color: Colors.white, size: 20),
-              ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _controller,
+                    textInputAction: TextInputAction.send,
+                    onSubmitted: (_) => _send(),
+                    style: const TextStyle(
+                        fontFamily: 'Poppins', fontSize: 14),
+                    decoration: InputDecoration(
+                      hintText: 'Type your message…',
+                      hintStyle: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 13,
+                        color: context.appTextHint,
+                      ),
+                      filled: true,
+                      fillColor: context.appBackground,
+                      contentPadding: EdgeInsets.symmetric(
+                          horizontal: R.p(context, 16), vertical: R.p(context, 12)),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(R.r(context, 24)),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+                ),
+                SizedBox(width: R.w(context, 10)),
+                GestureDetector(
+                  onTap: _send,
+                  child: Container(
+                    width: R.w(context, 46), height: R.h(context, 46),
+                    decoration: BoxDecoration(
+                      color: _kGreen,
+                      borderRadius: BorderRadius.circular(R.r(context, 14)),
+                    ),
+                    child: _sending
+                        ? Padding(
+                            padding: EdgeInsets.all(R.p(context, 12)),
+                            child: const CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white),
+                          )
+                        : Icon(Icons.send_rounded,
+                            color: Colors.white, size: R.w(context, 20)),
+                  ),
+                ),
+              ],
             ),
-          ]),
-        ),
-      ]),
+          ),
+        ],
+      ),
     );
   }
 }
 
-// ── Custom painters ───────────────────────────────────────────────────────
-
-class _MapPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), Paint()..color = const Color(0xFFE8F5E9));
-
-    final road = Paint()..color = Colors.white..strokeWidth = 10..style = PaintingStyle.stroke;
-    canvas.drawLine(Offset(0, size.height * 0.45), Offset(size.width, size.height * 0.45), road);
-    canvas.drawLine(Offset(size.width * 0.35, 0), Offset(size.width * 0.35, size.height), road);
-    canvas.drawLine(Offset(size.width * 0.7, 0), Offset(size.width * 0.7, size.height), road);
-
-    final road2 = Paint()..color = Colors.white..strokeWidth = 6..style = PaintingStyle.stroke;
-    canvas.drawLine(Offset(0, size.height * 0.7), Offset(size.width, size.height * 0.7), road2);
-
-    final block = Paint()..color = const Color(0xFFDCEDC8)..style = PaintingStyle.fill;
-    final rr = const Radius.circular(4);
-    canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(size.width * 0.04, size.height * 0.05, size.width * 0.28, size.height * 0.35), rr), block);
-    canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(size.width * 0.38, size.height * 0.05, size.width * 0.28, size.height * 0.35), rr), block);
-    canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(size.width * 0.74, size.height * 0.05, size.width * 0.22, size.height * 0.35), rr), block);
-    canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(size.width * 0.04, size.height * 0.50, size.width * 0.28, size.height * 0.45), rr), block);
-    canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(size.width * 0.38, size.height * 0.75, size.width * 0.28, size.height * 0.20), rr), block);
-    canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(size.width * 0.74, size.height * 0.75, size.width * 0.22, size.height * 0.20), rr), block);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter _) => false;
-}
-
-class _RoutePainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = const Color(0xFF2E7D32).withValues(alpha:0.6)
-      ..strokeWidth = 3
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
-
-    final path = Path()
-      ..moveTo(size.width * 0.18, size.height * 0.58)
-      ..cubicTo(
-        size.width * 0.3, size.height * 0.58,
-        size.width * 0.3, size.height * 0.25,
-        size.width * 0.52, size.height * 0.25,
-      )
-      ..cubicTo(
-        size.width * 0.65, size.height * 0.25,
-        size.width * 0.75, size.height * 0.25,
-        size.width * 0.82, size.height * 0.22,
-      );
-
-    canvas.drawPath(path, paint);
-
-    // Dashed overlay
-    final dashPaint = Paint()
-      ..color = Colors.white.withValues(alpha:0.7)
-      ..strokeWidth = 1.5
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
-
-    final metrics = path.computeMetrics();
-    for (final metric in metrics) {
-      var dist = 0.0;
-      while (dist < metric.length) {
-        final start = dist;
-        final end = (dist + 6).clamp(0.0, metric.length);
-        canvas.drawPath(metric.extractPath(start, end), dashPaint);
-        dist += 12;
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter _) => false;
-}
+// ─────────────────────────────────────────────────────────────────────────────
+//  Chat bubble skeleton
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _ChatBubbleSkeleton extends StatelessWidget {
   const _ChatBubbleSkeleton();
+
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: EdgeInsets.only(bottom: R.p(context, 10)),
       child: AppShimmer(
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Container(
-            margin: const EdgeInsets.only(right: 60),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade200,
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              SkeletonBox(width: double.infinity, height: 12, radius: 4),
-              SizedBox(height: 5),
-              SkeletonBox(width: 160, height: 12, radius: 4),
-            ]),
-          ),
-          const SizedBox(height: 6),
-          Align(
-            alignment: Alignment.centerRight,
-            child: Container(
-              margin: const EdgeInsets.only(left: 60),
-              padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              margin: EdgeInsets.only(right: R.p(context, 60)),
+              padding: EdgeInsets.all(R.p(context, 12)),
               decoration: BoxDecoration(
                 color: Colors.grey.shade200,
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(R.r(context, 14)),
               ),
-              child: const SkeletonBox(width: 140, height: 12, radius: 4),
+              child: const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SkeletonBox(width: double.infinity, height: 12, radius: 4),
+                  SizedBox(height: 5),
+                  SkeletonBox(width: 160, height: 12, radius: 4),
+                ],
+              ),
             ),
-          ),
-        ]),
+            SizedBox(height: R.h(context, 6)),
+            Align(
+              alignment: Alignment.centerRight,
+              child: Container(
+                margin: EdgeInsets.only(left: R.p(context, 60)),
+                padding: EdgeInsets.all(R.p(context, 12)),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade200,
+                  borderRadius: BorderRadius.circular(R.r(context, 14)),
+                ),
+                child: const SkeletonBox(width: 140, height: 12, radius: 4),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -1,4 +1,6 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -7,6 +9,7 @@ import '../../../core/constants/app_text_styles.dart';
 import '../providers/water_tracker_provider.dart';
 import '../services/health_notification_service.dart'
     show HealthNotificationService;
+import '../../../core/utils/r.dart';
 
 class WaterReminderScreen extends ConsumerWidget {
   const WaterReminderScreen({super.key});
@@ -20,7 +23,7 @@ class WaterReminderScreen extends ConsumerWidget {
       backgroundColor: const Color(0xFFE3F2FD),
       body: CustomScrollView(
         slivers: [
-          _buildAppBar(state),
+          _buildAppBar(context, state),
           SliverToBoxAdapter(
             child: state.isLoading
                 ? const _LoadingBody()
@@ -31,10 +34,10 @@ class WaterReminderScreen extends ConsumerWidget {
     );
   }
 
-  SliverAppBar _buildAppBar(WaterTrackerState state) {
+  SliverAppBar _buildAppBar(BuildContext context, WaterTrackerState state) {
     return SliverAppBar(
       pinned: true,
-      expandedHeight: 210,
+      expandedHeight: R.h(context, 210),
       backgroundColor: const Color(0xFF1565C0),
       leading: Builder(
         builder: (ctx) => IconButton(
@@ -52,58 +55,75 @@ class WaterReminderScreen extends ConsumerWidget {
             ),
           ),
           child: SafeArea(
-            child: Column(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return SingleChildScrollView(
+                  physics: const ClampingScrollPhysics(),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                    child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const SizedBox(height: 16),
+                SizedBox(height: R.h(context, 16)),
                 Stack(
                   alignment: Alignment.center,
                   children: [
                     SizedBox(
-                      width: 120,
-                      height: 120,
-                      child: CircularProgressIndicator(
-                        value: state.progress,
-                        strokeWidth: 10,
-                        backgroundColor: Colors.white.withValues(alpha:0.2),
-                        valueColor:
-                            const AlwaysStoppedAnimation<Color>(Colors.white),
+                      width: R.w(context, 140),
+                      height: R.h(context, 140),
+                      child: CustomPaint(
+                        painter: _WaterArcPainter(
+                          progress: state.progress.clamp(0.0, 1.0),
+                          trackColor: Colors.white.withValues(alpha: 0.18),
+                          fillColors: const [
+                            Color(0xFF42A5F5),
+                            Color(0xFFE3F2FD),
+                          ],
+                        ),
                       ),
                     ),
-                    Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Text('💧', style: TextStyle(fontSize: 26)),
-                        Text(
-                          '${state.glassesLogged}/${state.goalGlasses}',
-                          style: const TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 22,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.white,
+                    SizedBox(
+                      width: R.w(context, 108),
+                      height: R.h(context, 108),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text('💧', style: TextStyle(fontSize: R.sp(context, 20))),
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              '${state.glassesLogged}/${state.goalGlasses}',
+                              style: TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: R.sp(context, 20),
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white,
+                              ),
+                            ),
                           ),
-                        ),
-                        const Text(
-                          'glasses',
-                          style: TextStyle(
-                              fontFamily: 'Poppins',
-                              fontSize: 11,
-                              color: Colors.white70),
-                        ),
-                      ],
+                          Text(
+                            'glasses',
+                            style: TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: R.sp(context, 10),
+                                color: Colors.white70),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
+                SizedBox(height: R.h(context, 8)),
                 Text(
                   '${state.totalMl} ml of ${state.goalMl} ml goal',
                   style: const TextStyle(
                       fontFamily: 'Poppins', fontSize: 12, color: Colors.white70),
                 ),
                 if (state.goalReached)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 4),
-                    child: Text(
+                  Padding(
+                    padding: EdgeInsets.only(top: R.h(context, 4)),
+                    child: const Text(
                       '🎉 Daily goal reached!',
                       style: TextStyle(
                           fontFamily: 'Poppins',
@@ -114,6 +134,10 @@ class WaterReminderScreen extends ConsumerWidget {
                   ),
               ],
             ),
+                  ),
+                );
+              },
+            ),
           ),
         ),
       ),
@@ -121,14 +145,63 @@ class WaterReminderScreen extends ConsumerWidget {
   }
 }
 
+// ─── Water Arc Painter ────────────────────────────────────────────────────────
+
+class _WaterArcPainter extends CustomPainter {
+  final double progress;
+  final Color trackColor;
+  final List<Color> fillColors;
+  const _WaterArcPainter({
+    required this.progress,
+    required this.trackColor,
+    required this.fillColors,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cx = size.width / 2;
+    final cy = size.height / 2;
+    final radius = (size.width / 2) - 8;
+    const strokeWidth = 10.0;
+    final rect = Rect.fromCircle(center: Offset(cx, cy), radius: radius);
+
+    // Track arc
+    final trackPaint = Paint()
+      ..color = trackColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
+    canvas.drawArc(rect, -math.pi / 2, 2 * math.pi, false, trackPaint);
+
+    if (progress <= 0) return;
+
+    // Gradient fill arc
+    final fillPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round
+      ..shader = SweepGradient(
+        colors: fillColors,
+        startAngle: -math.pi / 2,
+        endAngle: -math.pi / 2 + (2 * math.pi * progress),
+        tileMode: TileMode.clamp,
+      ).createShader(rect);
+    canvas.drawArc(
+        rect, -math.pi / 2, 2 * math.pi * progress, false, fillPaint);
+  }
+
+  @override
+  bool shouldRepaint(_WaterArcPainter old) => old.progress != progress;
+}
+
 // ─── Loading ──────────────────────────────────────────────────────────────────
 
 class _LoadingBody extends StatelessWidget {
   const _LoadingBody();
   @override
-  Widget build(BuildContext context) => const Padding(
-        padding: EdgeInsets.only(top: 80),
-        child: Center(
+  Widget build(BuildContext context) => Padding(
+        padding: EdgeInsets.only(top: R.h(context, 80)),
+        child: const Center(
             child: CircularProgressIndicator(color: Color(0xFF1565C0))),
       );
 }
@@ -144,18 +217,24 @@ class _Body extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(R.p(context, 16)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _LogButton(state: state, notifier: notifier),
-          const SizedBox(height: 20),
+          SizedBox(height: R.h(context, 14)),
+          // Quick-add buttons
+          _QuickAddButtons(notifier: notifier, state: state),
+          SizedBox(height: R.h(context, 20)),
+          // Reminder time picker tile
+          _ReminderTimeTile(state: state),
+          SizedBox(height: R.h(context, 20)),
           _SettingsCard(state: state, notifier: notifier),
-          const SizedBox(height: 20),
+          SizedBox(height: R.h(context, 20)),
           Text("Today's Log", style: AppTextStyles.h4),
-          const SizedBox(height: 12),
+          SizedBox(height: R.h(context, 12)),
           _TodayLogList(state: state),
-          const SizedBox(height: 40),
+          SizedBox(height: R.h(context, 40)),
         ],
       ),
     );
@@ -183,7 +262,7 @@ class _LogButton extends StatelessWidget {
                     backgroundColor: const Color(0xFF1565C0),
                     behavior: SnackBarBehavior.floating,
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
+                        borderRadius: BorderRadius.circular(R.r(context, 12))),
                   ),
                 );
               }
@@ -193,17 +272,17 @@ class _LogButton extends StatelessWidget {
         duration: const Duration(milliseconds: 200),
         child: Container(
           width: double.infinity,
-          padding: const EdgeInsets.all(20),
+          padding: EdgeInsets.all(R.p(context, 20)),
           decoration: BoxDecoration(
             gradient: const LinearGradient(
                 colors: [Color(0xFF0D47A1), Color(0xFF42A5F5)]),
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(R.r(context, 20)),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               const Text('💧', style: TextStyle(fontSize: 28)),
-              const SizedBox(width: 12),
+              SizedBox(width: R.w(context, 12)),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -227,6 +306,223 @@ class _LogButton extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+// ─── Quick Add Buttons ────────────────────────────────────────────────────────
+
+class _QuickAddButtons extends StatelessWidget {
+  final WaterTrackerState state;
+  final WaterTrackerNotifier notifier;
+  const _QuickAddButtons({required this.state, required this.notifier});
+
+  static const _amounts = [150, 250, 350];
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Quick Add',
+          style: TextStyle(
+            fontFamily: 'Poppins',
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF1565C0),
+          ),
+        ),
+        SizedBox(height: R.h(context, 8)),
+        Row(
+          children: _amounts.map((ml) {
+            return Expanded(
+              child: Padding(
+                padding: EdgeInsets.only(
+                    right: ml != _amounts.last ? R.w(context, 8) : 0),
+                child: GestureDetector(
+                  onTap: state.goalReached
+                      ? null
+                      : () async {
+                          HapticFeedback.mediumImpact();
+                          // Calculate how many glasses match this ml and log
+                          final glassSize = state.glassSizeMl > 0
+                              ? state.glassSizeMl
+                              : 250;
+                          final count =
+                              (ml / glassSize).ceil().clamp(1, 3);
+                          for (int i = 0; i < count; i++) {
+                            await notifier.logWater();
+                          }
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('💧 ${ml}ml added!'),
+                                backgroundColor: const Color(0xFF1565C0),
+                                behavior: SnackBarBehavior.floating,
+                                duration: const Duration(seconds: 1),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius:
+                                        BorderRadius.circular(R.r(context, 12))),
+                              ),
+                            );
+                          }
+                        },
+                  child: AnimatedOpacity(
+                    opacity: state.goalReached ? 0.4 : 1.0,
+                    duration: const Duration(milliseconds: 200),
+                    child: Container(
+                      padding: EdgeInsets.symmetric(
+                          horizontal: R.p(context, 10), vertical: R.p(context, 11)),
+                      decoration: BoxDecoration(
+                        color: context.appSurface,
+                        borderRadius: BorderRadius.circular(R.r(context, 14)),
+                        border: Border.all(
+                            color: const Color(0xFF1565C0)
+                                .withValues(alpha: 0.35)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF1565C0)
+                                .withValues(alpha: 0.08),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        children: [
+                          const Icon(Icons.water_drop_rounded,
+                              color: Color(0xFF1565C0), size: 20),
+                          SizedBox(height: R.h(context, 4)),
+                          Text(
+                            '${ml}ml',
+                            style: const TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF1565C0),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+}
+
+// ─── Reminder Time Tile ───────────────────────────────────────────────────────
+
+class _ReminderTimeTile extends StatefulWidget {
+  final WaterTrackerState state;
+  const _ReminderTimeTile({required this.state});
+
+  @override
+  State<_ReminderTimeTile> createState() => _ReminderTimeTileState();
+}
+
+class _ReminderTimeTileState extends State<_ReminderTimeTile> {
+  TimeOfDay? _selectedTime;
+
+  String _formatTime(TimeOfDay t) {
+    final now = DateTime.now();
+    final dt = DateTime(now.year, now.month, now.day, t.hour, t.minute);
+    return DateFormat('h:mm a').format(dt);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final next = HealthNotificationService.nextReminderTime(
+        widget.state.reminderIntervalHours);
+    final displayTime = _selectedTime != null
+        ? _formatTime(_selectedTime!)
+        : next != null
+            ? DateFormat('h:mm a').format(next)
+            : '--';
+
+    return GestureDetector(
+      onTap: () async {
+        final picked = await showTimePicker(
+          context: context,
+          initialTime: _selectedTime ??
+              (next != null
+                  ? TimeOfDay.fromDateTime(next)
+                  : TimeOfDay.now()),
+          builder: (ctx, child) => Theme(
+            data: Theme.of(ctx).copyWith(
+              colorScheme: const ColorScheme.light(
+                primary: Color(0xFF1565C0),
+              ),
+            ),
+            child: child!,
+          ),
+        );
+        if (picked != null) {
+          setState(() => _selectedTime = picked);
+        }
+      },
+      child: Container(
+        padding: EdgeInsets.symmetric(
+            horizontal: R.p(context, 16), vertical: R.p(context, 14)),
+        decoration: BoxDecoration(
+          color: context.appSurface,
+          borderRadius: BorderRadius.circular(R.r(context, 14)),
+          border:
+              Border.all(color: const Color(0xFF1565C0).withValues(alpha: 0.25)),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF1565C0).withValues(alpha: 0.06),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(children: [
+          Container(
+            width: R.w(context, 38),
+            height: R.h(context, 38),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1565C0).withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(R.r(context, 10)),
+            ),
+            child: const Icon(Icons.alarm_rounded,
+                color: Color(0xFF1565C0), size: 20),
+          ),
+          SizedBox(width: R.w(context, 12)),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Next Reminder',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF1565C0),
+                  ),
+                ),
+                Text(
+                  displayTime,
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 12,
+                    color: context.appTextSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Icon(Icons.chevron_right_rounded,
+              color: Color(0xFF1565C0), size: 20),
+        ]),
       ),
     );
   }
@@ -269,11 +565,11 @@ class _NotifStatusBannerState extends State<_NotifStatusBanner> {
     if (allGood) return const SizedBox.shrink();
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
+      margin: EdgeInsets.only(bottom: R.h(context, 12)),
+      padding: EdgeInsets.all(R.p(context, 14)),
       decoration: BoxDecoration(
         color: Colors.orange.shade50,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(R.r(context, 14)),
         border: Border.all(color: Colors.orange.shade300),
       ),
       child: Column(
@@ -282,7 +578,7 @@ class _NotifStatusBannerState extends State<_NotifStatusBanner> {
           Row(children: [
             Icon(Icons.warning_amber_rounded,
                 color: Colors.orange.shade700, size: 20),
-            const SizedBox(width: 8),
+            SizedBox(width: R.w(context, 8)),
             const Expanded(
               child: Text('Action needed for reminders',
                   style: TextStyle(
@@ -291,12 +587,12 @@ class _NotifStatusBannerState extends State<_NotifStatusBanner> {
                       fontSize: 13)),
             ),
           ]),
-          const SizedBox(height: 8),
+          SizedBox(height: R.h(context, 8)),
           if (!(_notifGranted ?? true))
             _IssueItem('Notification permission denied — reminders cannot fire.'),
           if (!(_exactAlarm ?? true))
             _IssueItem('Exact alarm permission missing — reminders may fire late.'),
-          const SizedBox(height: 10),
+          SizedBox(height: R.h(context, 10)),
           SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
@@ -316,7 +612,7 @@ class _NotifStatusBannerState extends State<_NotifStatusBanner> {
               style: OutlinedButton.styleFrom(
                 side: BorderSide(color: Colors.orange.shade400),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10)),
+                    borderRadius: BorderRadius.circular(R.r(context, 10))),
               ),
             ),
           ),
@@ -332,7 +628,7 @@ class _IssueItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: 4),
+        padding: EdgeInsets.only(bottom: R.h(context, 4)),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -360,15 +656,15 @@ class _SettingsCard extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text('Settings', style: AppTextStyles.h4),
-        const SizedBox(height: 12),
+        SizedBox(height: R.h(context, 12)),
 
         // Show warning banner only when reminders are meant to be on
         if (state.remindersEnabled) const _NotifStatusBanner(),
 
         Container(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(R.p(context, 16)),
           decoration: BoxDecoration(
-              color: Colors.white, borderRadius: BorderRadius.circular(16)),
+              color: Colors.white, borderRadius: BorderRadius.circular(R.r(context, 16))),
           child: Column(
             children: [
               // Daily goal
@@ -377,13 +673,13 @@ class _SettingsCard extends StatelessWidget {
                 label: 'Daily Goal',
                 trailing: _GoalPicker(state: state, notifier: notifier),
               ),
-              const Divider(height: 20),
+              Divider(height: R.h(context, 20)),
 
               // Reminders toggle
               Row(children: [
                 const Icon(Icons.notifications_rounded,
                     color: Color(0xFF1565C0)),
-                const SizedBox(width: 12),
+                SizedBox(width: R.w(context, 12)),
                 const Expanded(
                   child: Text('Reminders',
                       style: TextStyle(
@@ -551,17 +847,17 @@ class _TodayLogList extends StatelessWidget {
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
             color: Colors.white, borderRadius: BorderRadius.circular(16)),
-        child: const Center(
+        child: Center(
           child: Column(children: [
-            Text('💧', style: TextStyle(fontSize: 32)),
-            SizedBox(height: 8),
+            const Text('💧', style: TextStyle(fontSize: 32)),
+            const SizedBox(height: 8),
             Text(
               "No water logged today yet.\nTap the button above to start!",
               textAlign: TextAlign.center,
               style: TextStyle(
                   fontFamily: 'Poppins',
                   fontSize: 13,
-                  color: AppColors.textHint),
+                  color: context.appTextHint),
             ),
           ]),
         ),

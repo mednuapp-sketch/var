@@ -13,6 +13,7 @@ import '../../../core/router/app_router.dart';
 import '../../../core/services/feedback_service.dart';
 import '../../../core/services/image_upload_service.dart';
 import '../../../core/services/operation_logger.dart';
+import '../../../core/utils/r.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../referral/referral_provider.dart';
@@ -27,6 +28,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   final _nameCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   final _dobCtrl = TextEditingController();
+  final _checkupCtrl = TextEditingController();
+  final _allergiesCtrl = TextEditingController();
+  final _conditionsCtrl = TextEditingController();
   String _gender = 'Female';
   bool _populated = false;
 
@@ -41,6 +45,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     _nameCtrl.dispose();
     _emailCtrl.dispose();
     _dobCtrl.dispose();
+    _checkupCtrl.dispose();
+    _allergiesCtrl.dispose();
+    _conditionsCtrl.dispose();
     super.dispose();
   }
 
@@ -51,6 +58,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     _dobCtrl.text = data['dob'] as String? ?? '';
     final g = data['gender'] as String? ?? 'Female';
     _gender = ['Female', 'Male', 'Other'].contains(g) ? g : 'Female';
+    _checkupCtrl.text = data['lastCheckup'] as String? ?? '';
+    _allergiesCtrl.text = data['allergies'] as String? ?? '';
+    _conditionsCtrl.text = data['chronicConditions'] as String? ?? '';
     _currentPhotoUrl = data['photoUrl'] as String?;
     _populated = true;
   }
@@ -62,22 +72,23 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      backgroundColor: context.appSurface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(R.r(context, 24))),
       ),
       builder: (_) => SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+          padding: EdgeInsets.fromLTRB(R.p(context, 20), R.p(context, 12),
+              R.p(context, 20), R.p(context, 20)),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                width: 40, height: 4,
-                margin: const EdgeInsets.only(bottom: 20),
+                width: R.w(context, 40), height: R.h(context, 4),
+                margin: EdgeInsets.only(bottom: R.p(context, 20)),
                 decoration: BoxDecoration(
-                  color: AppColors.divider,
-                  borderRadius: BorderRadius.circular(2),
+                  color: context.appBorder,
+                  borderRadius: BorderRadius.circular(R.r(context, 2)),
                 ),
               ),
               const Text('Profile Photo',
@@ -85,7 +96,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       fontFamily: 'Poppins',
                       fontSize: 16,
                       fontWeight: FontWeight.w700)),
-              const SizedBox(height: 20),
+              SizedBox(height: R.h(context, 20)),
               _SheetOption(
                 icon: Icons.photo_library_rounded,
                 label: 'Choose from Gallery',
@@ -95,7 +106,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   _pickAndUpload(ImageSource.gallery);
                 },
               ),
-              const SizedBox(height: 12),
+              SizedBox(height: R.h(context, 12)),
               _SheetOption(
                 icon: Icons.camera_alt_rounded,
                 label: 'Take a Photo',
@@ -106,7 +117,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 },
               ),
               if (hasPhoto) ...[
-                const SizedBox(height: 12),
+                SizedBox(height: R.h(context, 12)),
                 _SheetOption(
                   icon: Icons.delete_outline_rounded,
                   label: 'Remove Photo',
@@ -170,7 +181,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         content: const Text('Profile photo updated!'),
         backgroundColor: AppColors.success,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.r(context, 12))),
       ));
     } catch (e) {
       if (!mounted) return;
@@ -203,7 +214,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: const Text('Profile photo removed.'),
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.r(context, 12))),
       ));
     } catch (e) {
       if (!mounted) return;
@@ -220,8 +231,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   // Called when CachedNetworkImage fails to load, so existing users auto-heal.
   Future<void> _refreshPhotoUrl(String uid) async {
     try {
-      final ref = FirebaseStorage.instance.ref().child('users/$uid/profile.jpg');
-      final signedUrl = await ref.getDownloadURL();
+      final storageRef = FirebaseStorage.instance.ref().child('users/$uid/profile.jpg');
+      final signedUrl = await storageRef.getDownloadURL();
       final uri = Uri.parse(signedUrl);
       final stableUrl = uri.replace(queryParameters: {'alt': 'media'}).toString();
       await ref.read(authProvider.notifier).updatePhotoUrl(stableUrl);
@@ -249,6 +260,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             email: _emailCtrl.text.trim(),
             dob: _dobCtrl.text.trim(),
             gender: _gender,
+            lastCheckup: _checkupCtrl.text.trim(),
+            allergies: _allergiesCtrl.text.trim(),
+            chronicConditions: _conditionsCtrl.text.trim(),
           );
       await OperationLogger.logSuccess(
         action: OpAction.profileUpdated,
@@ -288,12 +302,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final userName = _nameCtrl.text.isNotEmpty ? _nameCtrl.text : 'Your Profile';
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.appBackground,
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
             pinned: true,
-            expandedHeight: 180,
+            expandedHeight: R.h(context, 180),
             backgroundColor: AppColors.primary,
             foregroundColor: Colors.white,
             leading: IconButton(
@@ -302,14 +316,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             ),
             actions: [
               Padding(
-                padding: const EdgeInsets.only(right: 8),
+                padding: EdgeInsets.only(right: R.p(context, 8)),
                 child: TextButton(
                   onPressed: authState.isLoading ? null : _save,
                   child: authState.isLoading
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
+                      ? SizedBox(
+                          width: R.w(context, 18),
+                          height: R.h(context, 18),
+                          child: const CircularProgressIndicator(
                               strokeWidth: 2, color: Colors.white),
                         )
                       : const Text(
@@ -340,8 +354,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       top: -30,
                       right: -30,
                       child: Container(
-                        width: 130,
-                        height: 130,
+                        width: R.w(context, 130),
+                        height: R.h(context, 130),
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: Colors.white.withValues(alpha:0.06),
@@ -349,9 +363,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       ),
                     ),
                     SafeArea(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 52, 20, 16),
-                        child: Row(
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          return SingleChildScrollView(
+                            physics: const ClampingScrollPhysics(),
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                              child: Padding(
+                                padding: EdgeInsets.fromLTRB(R.p(context, 20), R.p(context, 52),
+                                    R.p(context, 20), R.p(context, 16)),
+                                child: Row(
                           children: [
                             GestureDetector(
                               onTap: _uploading ? null : _showPhotoOptions,
@@ -359,8 +380,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                 alignment: Alignment.center,
                                 children: [
                                   Container(
-                                    width: 64,
-                                    height: 64,
+                                    width: R.w(context, 64),
+                                    height: R.h(context, 64),
                                     decoration: BoxDecoration(
                                       color: Colors.white.withValues(alpha: 0.18),
                                       shape: BoxShape.circle,
@@ -376,34 +397,34 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                               ? CachedNetworkImage(
                                                   imageUrl: _currentPhotoUrl!,
                                                   fit: BoxFit.cover,
-                                                  placeholder: (_, __) => const Icon(
+                                                  placeholder: (_, __) => Icon(
                                                       Icons.person_rounded,
-                                                      size: 34,
+                                                      size: R.w(context, 34),
                                                       color: Colors.white),
                                                   errorWidget: (_, __, ___) {
                                                     // Old signed URL expired — refresh to permanent URL
                                                     final uid = ref.read(authProvider).user?.uid;
                                                     if (uid != null) _refreshPhotoUrl(uid);
-                                                    return const Icon(Icons.person_rounded,
-                                                        size: 34, color: Colors.white);
+                                                    return Icon(Icons.person_rounded,
+                                                        size: R.w(context, 34), color: Colors.white);
                                                   },
                                                 )
-                                              : const Icon(Icons.person_rounded,
-                                                  size: 34, color: Colors.white),
+                                              : Icon(Icons.person_rounded,
+                                                  size: R.w(context, 34), color: Colors.white),
                                     ),
                                   ),
                                   if (_uploading)
                                     Container(
-                                      width: 64,
-                                      height: 64,
+                                      width: R.w(context, 64),
+                                      height: R.h(context, 64),
                                       decoration: BoxDecoration(
                                         color: Colors.black.withValues(alpha: 0.45),
                                         shape: BoxShape.circle,
                                       ),
                                       child: Center(
                                         child: SizedBox(
-                                          width: 28,
-                                          height: 28,
+                                          width: R.w(context, 28),
+                                          height: R.h(context, 28),
                                           child: CircularProgressIndicator(
                                             value: _uploadProgress > 0
                                                 ? _uploadProgress
@@ -419,8 +440,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                       bottom: 0,
                                       right: 0,
                                       child: Container(
-                                        width: 22,
-                                        height: 22,
+                                        width: R.w(context, 22),
+                                        height: R.h(context, 22),
                                         decoration: BoxDecoration(
                                           color: Colors.white,
                                           shape: BoxShape.circle,
@@ -428,16 +449,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                               color: AppColors.primary,
                                               width: 1.5),
                                         ),
-                                        child: const Icon(
+                                        child: Icon(
                                             Icons.camera_alt_rounded,
-                                            size: 11,
+                                            size: R.w(context, 11),
                                             color: AppColors.primary),
                                       ),
                                     ),
                                 ],
                               ),
                             ),
-                            const SizedBox(width: 14),
+                            SizedBox(width: R.w(context, 14)),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -452,7 +473,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                       color: Colors.white,
                                     ),
                                   ),
-                                  const SizedBox(height: 2),
+                                  SizedBox(height: R.h(context, 2)),
                                   Text(
                                     userName,
                                     style: const TextStyle(
@@ -467,7 +488,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                               ),
                             ),
                           ],
-                        ),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
                       ),
                     ),
                   ],
@@ -478,33 +503,35 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           SliverToBoxAdapter(
             child: userDocAsync.when(
               loading: () => Padding(
-                padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
+                padding: EdgeInsets.fromLTRB(R.p(context, 20), R.p(context, 24),
+                    R.p(context, 20), R.p(context, 40)),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    SkeletonBox(width: 100, height: 13),
-                    const SizedBox(height: 8),
-                    SkeletonBox(width: double.infinity, height: 52),
-                    const SizedBox(height: 20),
-                    SkeletonBox(width: 100, height: 13),
-                    const SizedBox(height: 8),
-                    SkeletonBox(width: double.infinity, height: 52),
-                    const SizedBox(height: 20),
-                    SkeletonBox(width: 100, height: 13),
-                    const SizedBox(height: 8),
-                    SkeletonBox(width: double.infinity, height: 52),
-                    const SizedBox(height: 20),
-                    SkeletonBox(width: 100, height: 13),
-                    const SizedBox(height: 8),
-                    SkeletonBox(width: double.infinity, height: 52),
+                    SkeletonBox(width: R.w(context, 100), height: R.h(context, 13)),
+                    SizedBox(height: R.h(context, 8)),
+                    SkeletonBox(width: double.infinity, height: R.h(context, 52)),
+                    SizedBox(height: R.h(context, 20)),
+                    SkeletonBox(width: R.w(context, 100), height: R.h(context, 13)),
+                    SizedBox(height: R.h(context, 8)),
+                    SkeletonBox(width: double.infinity, height: R.h(context, 52)),
+                    SizedBox(height: R.h(context, 20)),
+                    SkeletonBox(width: R.w(context, 100), height: R.h(context, 13)),
+                    SizedBox(height: R.h(context, 8)),
+                    SkeletonBox(width: double.infinity, height: R.h(context, 52)),
+                    SizedBox(height: R.h(context, 20)),
+                    SkeletonBox(width: R.w(context, 100), height: R.h(context, 13)),
+                    SizedBox(height: R.h(context, 8)),
+                    SkeletonBox(width: double.infinity, height: R.h(context, 52)),
                   ],
                 ),
               ),
               error: (e, _) => AppErrorState(
                 message: 'Unable to load profile. Please try again.',
               ),
-              data: (_) => SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
+              data: (_) => Padding(
+                padding: EdgeInsets.fromLTRB(R.p(context, 20), R.p(context, 24),
+                    R.p(context, 20), R.p(context, 40)),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -512,12 +539,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               _label('Full Name'),
               _field(_nameCtrl, 'Enter your full name',
                   Icons.person_outline_rounded),
-              const SizedBox(height: 16),
+              SizedBox(height: R.h(context, 16)),
 
               _label('Email Address'),
               _field(_emailCtrl, 'Enter email address', Icons.email_outlined,
                   keyboardType: TextInputType.emailAddress),
-              const SizedBox(height: 16),
+              SizedBox(height: R.h(context, 16)),
 
               _label('Date of Birth'),
               GestureDetector(
@@ -547,23 +574,23 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       _dobCtrl, 'DD/MM/YYYY', Icons.calendar_today_outlined),
                 ),
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: R.h(context, 16)),
 
               _label('Gender'),
               Container(
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                    EdgeInsets.symmetric(horizontal: R.p(context, 16), vertical: R.p(context, 4)),
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: AppColors.border),
+                  color: context.appSurface,
+                  borderRadius: BorderRadius.circular(R.r(context, 14)),
+                  border: Border.all(color: context.appBorder),
                 ),
                 child: DropdownButtonHideUnderline(
                   child: DropdownButton<String>(
                     value: _gender,
                     isExpanded: true,
-                    icon: const Icon(Icons.keyboard_arrow_down_rounded,
-                        color: AppColors.textHint),
+                    icon: Icon(Icons.keyboard_arrow_down_rounded,
+                        color: context.appTextHint),
                     items: ['Female', 'Male', 'Other']
                         .map((g) => DropdownMenuItem(
                             value: g,
@@ -573,39 +600,68 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 32),
+              SizedBox(height: R.h(context, 16)),
+
+              _label('Last Checkup'),
+              GestureDetector(
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: DateTime.now(),
+                    firstDate: DateTime(1940),
+                    lastDate: DateTime.now(),
+                    builder: (ctx, child) => Theme(
+                      data: Theme.of(ctx).copyWith(
+                        colorScheme: const ColorScheme.light(
+                            primary: AppColors.primary),
+                      ),
+                      child: child!,
+                    ),
+                  );
+                  if (picked != null) {
+                    setState(() {
+                      _checkupCtrl.text =
+                          '${picked.day.toString().padLeft(2, '0')}/${picked.month.toString().padLeft(2, '0')}/${picked.year}';
+                    });
+                  }
+                },
+                child: AbsorbPointer(
+                  child: _field(_checkupCtrl, 'DD/MM/YYYY', Icons.calendar_today_outlined),
+                ),
+              ),
+              SizedBox(height: R.h(context, 16)),
+
+              _label('Allergies'),
+              _field(_allergiesCtrl, 'Enter allergies (if any)', Icons.warning_amber_rounded),
+              SizedBox(height: R.h(context, 16)),
+
+              _label('Chronic Conditions'),
+              _field(_conditionsCtrl, 'Enter chronic conditions (if any)', Icons.monitor_heart_outlined),
+              SizedBox(height: R.h(context, 32)),
 
               _label('Family Members'),
               _FamilyMembersRow(uid: uid),
-              const SizedBox(height: 16),
+              SizedBox(height: R.h(context, 16)),
 
               // Favourite Doctors entry
               _FavouriteDoctorsCard(uid: uid),
-              const SizedBox(height: 16),
+              SizedBox(height: R.h(context, 16)),
 
               // Referral & Rewards entry
               _ReferralEntryCard(uid: uid),
-              const SizedBox(height: 32),
-
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: authState.isLoading ? null : _save,
-                  child: const Text('Save Changes'),
-                ),
-              ),
+              SizedBox(height: R.h(context, 16)),
             ],
           ),
         ),
       ),
-      ),
+          ),
         ],
       ),
     );
   }
 
   Widget _label(String text) => Padding(
-        padding: const EdgeInsets.only(bottom: 8),
+        padding: EdgeInsets.only(bottom: R.p(context, 8)),
         child: Text(text, style: AppTextStyles.labelLarge),
       );
 
@@ -621,7 +677,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         style: AppTextStyles.bodyLarge,
         decoration: InputDecoration(
           hintText: hint,
-          prefixIcon: Icon(icon, color: AppColors.textHint, size: 20),
+          prefixIcon: Icon(icon, color: context.appTextHint, size: R.w(context, 20)),
         ),
       );
 }
@@ -646,17 +702,17 @@ class _FamilyMembersRow extends StatelessWidget {
     return GestureDetector(
       onTap: () => context.push('/profile/family'),
       child: Container(
-        padding: const EdgeInsets.all(14),
+        padding: EdgeInsets.all(R.p(context, 14)),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.border),
+          color: context.appSurface,
+          borderRadius: BorderRadius.circular(R.r(context, 14)),
+          border: Border.all(color: context.appBorder),
         ),
         child: effectiveUid.isEmpty
             ? Row(children: [
                 Text('No members added yet', style: AppTextStyles.bodySmall),
                 const Spacer(),
-                const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.textHint),
+                Icon(Icons.arrow_forward_ios_rounded, size: R.w(context, 14), color: context.appTextHint),
               ])
             : StreamBuilder<DocumentSnapshot>(
                 stream: FirebaseFirestore.instance
@@ -684,7 +740,7 @@ class _FamilyMembersRow extends StatelessWidget {
                             final color = _colors[name.isNotEmpty ? name.codeUnitAt(0) % _colors.length : 0];
                             return Row(mainAxisSize: MainAxisSize.min, children: [
                               CircleAvatar(
-                                radius: 14,
+                                radius: R.w(context, 14),
                                 backgroundColor: color.withValues(alpha:0.15),
                                 child: Text(
                                   name.isNotEmpty ? name[0].toUpperCase() : '?',
@@ -692,7 +748,7 @@ class _FamilyMembersRow extends StatelessWidget {
                                       fontWeight: FontWeight.w700, color: color),
                                 ),
                               ),
-                              const SizedBox(width: 6),
+                              SizedBox(width: R.w(context, 6)),
                               Text(
                                 relation.isNotEmpty ? relation : name.split(' ').first,
                                 style: AppTextStyles.bodySmall,
@@ -701,8 +757,8 @@ class _FamilyMembersRow extends StatelessWidget {
                           }).toList(),
                         ),
                       ),
-                    const SizedBox(width: 8),
-                    const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.textHint),
+                    SizedBox(width: R.w(context, 8)),
+                    Icon(Icons.arrow_forward_ios_rounded, size: R.w(context, 14), color: context.appTextHint),
                   ]);
                 },
               ),
@@ -733,24 +789,24 @@ class _FavouriteDoctorsCard extends StatelessWidget {
         return GestureDetector(
           onTap: () => context.push(AppRoutes.favouriteDoctors),
           child: Container(
-            padding: const EdgeInsets.all(14),
+            padding: EdgeInsets.all(R.p(context, 14)),
             decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppColors.border),
+              color: context.appSurface,
+              borderRadius: BorderRadius.circular(R.r(context, 14)),
+              border: Border.all(color: context.appBorder),
             ),
             child: Row(children: [
               Container(
-                width: 40,
-                height: 40,
+                width: R.w(context, 40),
+                height: R.h(context, 40),
                 decoration: BoxDecoration(
                   color: const Color(0xFFFFEBEE),
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(R.r(context, 10)),
                 ),
-                child: const Icon(Icons.favorite_rounded,
-                    color: Color(0xFFE53935), size: 20),
+                child: Icon(Icons.favorite_rounded,
+                    color: const Color(0xFFE53935), size: R.w(context, 20)),
               ),
-              const SizedBox(width: 12),
+              SizedBox(width: R.w(context, 12)),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -763,7 +819,7 @@ class _FavouriteDoctorsCard extends StatelessWidget {
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    const SizedBox(height: 2),
+                    SizedBox(height: R.h(context, 2)),
                     Text(
                       snap.connectionState == ConnectionState.waiting
                           ? 'Loading...'
@@ -773,17 +829,17 @@ class _FavouriteDoctorsCard extends StatelessWidget {
                                   ? '1 doctor saved'
                                   : '$count doctors saved',
                       style: AppTextStyles.bodySmall
-                          .copyWith(color: AppColors.textSecondary),
+                          .copyWith(color: context.appTextSecondary),
                     ),
                   ],
                 ),
               ),
               if (count > 0)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  padding: EdgeInsets.symmetric(horizontal: R.p(context, 8), vertical: R.p(context, 3)),
                   decoration: BoxDecoration(
                     color: const Color(0xFFFFEBEE),
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.circular(R.r(context, 20)),
                   ),
                   child: Text(
                     '$count',
@@ -795,9 +851,9 @@ class _FavouriteDoctorsCard extends StatelessWidget {
                     ),
                   ),
                 ),
-              const SizedBox(width: 8),
-              const Icon(Icons.arrow_forward_ios_rounded,
-                  size: 14, color: AppColors.textHint),
+              SizedBox(width: R.w(context, 8)),
+              Icon(Icons.arrow_forward_ios_rounded,
+                  size: R.w(context, 14), color: context.appTextHint),
             ]),
           ),
         );
@@ -821,7 +877,7 @@ class _ReferralEntryCard extends ConsumerWidget {
     return GestureDetector(
       onTap: () => context.push(AppRoutes.referral),
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(R.p(context, 16)),
         decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: [
@@ -831,44 +887,44 @@ class _ReferralEntryCard extends ConsumerWidget {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(R.r(context, 16)),
           border: Border.all(color: AppColors.primary.withValues(alpha:0.18)),
         ),
         child: Row(
           children: [
             Container(
-              width: 46, height: 46,
+              width: R.w(context, 46), height: R.h(context, 46),
               decoration: const BoxDecoration(
                 gradient: AppColors.primaryGradient,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.card_giftcard_rounded,
-                  color: Colors.white, size: 22),
+              child: Icon(Icons.card_giftcard_rounded,
+                  color: Colors.white, size: R.w(context, 22)),
             ),
-            const SizedBox(width: 14),
+            SizedBox(width: R.w(context, 14)),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('Referral & Rewards',
                       style: AppTextStyles.labelLarge),
-                  const SizedBox(height: 3),
+                  SizedBox(height: R.h(context, 3)),
                   statsAsync.isLoading
                       ? Text('Loading...',
                           style: AppTextStyles.bodySmall
-                              .copyWith(color: AppColors.textSecondary))
+                              .copyWith(color: context.appTextSecondary))
                       : Text(
                           totalReferrals == 0
                               ? 'Invite friends and earn rewards'
                               : '$totalReferrals referrals · ₹${earned.toStringAsFixed(0)} earned',
                           style: AppTextStyles.bodySmall
-                              .copyWith(color: AppColors.textSecondary),
+                              .copyWith(color: context.appTextSecondary),
                         ),
                 ],
               ),
             ),
-            const Icon(Icons.arrow_forward_ios_rounded,
-                size: 14, color: AppColors.textHint),
+            Icon(Icons.arrow_forward_ios_rounded,
+                size: R.w(context, 14), color: context.appTextHint),
           ],
         ),
       ),
@@ -893,22 +949,22 @@ class _SheetOption extends StatelessWidget {
   Widget build(BuildContext context) => GestureDetector(
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          padding: EdgeInsets.symmetric(horizontal: R.p(context, 16), vertical: R.p(context, 14)),
           decoration: BoxDecoration(
             color: color.withValues(alpha: 0.06),
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(R.r(context, 14)),
           ),
           child: Row(children: [
             Container(
-              width: 40,
-              height: 40,
+              width: R.w(context, 40),
+              height: R.h(context, 40),
               decoration: BoxDecoration(
                 color: color.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(R.r(context, 10)),
               ),
-              child: Icon(icon, color: color, size: 20),
+              child: Icon(icon, color: color, size: R.w(context, 20)),
             ),
-            const SizedBox(width: 14),
+            SizedBox(width: R.w(context, 14)),
             Text(
               label,
               style: TextStyle(

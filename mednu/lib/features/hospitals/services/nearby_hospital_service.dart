@@ -64,9 +64,9 @@ class NearbyHospitalService {
     return (res.data['results'] as List? ?? []).cast<Map<String, dynamic>>();
   }
 
-  /// Merges raw Google Places results with MedNu Firestore hospitals.
-  /// Google hospitals matched to a MedNu hospital get isMednu = true.
-  /// MedNu hospitals not found in Google results are appended at the end.
+  /// Merges raw Google Places results with MedNU Firestore hospitals.
+  /// Google hospitals matched to a MedNU hospital get isMednu = true.
+  /// MedNU hospitals not found in Google results are appended at the end.
   List<NearbyHospital> mergeResults({
     required double userLat,
     required double userLng,
@@ -106,7 +106,7 @@ class NearbyHospitalService {
       ));
     }
 
-    // Append MedNu-only hospitals not found in Google results
+    // Append MedNU-only hospitals not found in Google results
     for (final h in mednuHospitals) {
       if (!matchedMednuIds.contains(h.id)) {
         results.add(NearbyHospital(
@@ -121,7 +121,7 @@ class NearbyHospitalService {
       }
     }
 
-    // Sort: distance asc, then MedNu before others, then undistanced
+    // Sort: distance asc, then MedNU before others, then undistanced
     results.sort((a, b) {
       if (a.distanceKm != null && b.distanceKm != null) {
         return a.distanceKm!.compareTo(b.distanceKm!);

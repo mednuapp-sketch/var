@@ -456,8 +456,10 @@ class _ContactPickerSheetState extends State<_ContactPickerSheet> {
   @override
   Widget build(BuildContext context) {
     final height = MediaQuery.of(context).size.height * 0.85;
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     return Container(
       height: height,
+      padding: EdgeInsets.only(bottom: bottomInset),
       decoration: const BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),

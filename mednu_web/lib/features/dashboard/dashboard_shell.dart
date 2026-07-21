@@ -168,14 +168,9 @@ class _MobileTopBar extends StatelessWidget {
         ),
         const SizedBox(width: 12),
         Row(children: [
-          Container(
-            width: 28,
-            height: 28,
-            decoration: BoxDecoration(gradient: AppColors.primaryGradient, borderRadius: BorderRadius.circular(7)),
-            child: const Center(child: Text('M', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w800))),
-          ),
+          Image.asset('assets/images/mednu_logo.png', width: 28, height: 28, filterQuality: FilterQuality.high),
           const SizedBox(width: 7),
-          Text('MedNu', style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.primary)),
+          Text('MedNU', style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.primary)),
         ]),
         const Spacer(),
         _NotificationBell(),

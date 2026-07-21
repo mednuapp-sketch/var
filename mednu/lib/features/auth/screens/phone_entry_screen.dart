@@ -2,12 +2,9 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/router/app_router.dart';
-import '../../legal/screens/privacy_policy_screen.dart';
-import '../../legal/screens/terms_of_service_screen.dart';
 import '../providers/auth_provider.dart';
 
 class PhoneEntryScreen extends ConsumerStatefulWidget {
@@ -132,6 +129,7 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen>
     final bottom = MediaQuery.of(context).viewInsets.bottom;
     final isSmall = size.height < 750;
     final isVerySmall = size.height < 620;
+    final isDark = context.isDarkMode;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
@@ -299,8 +297,8 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen>
                                           ),
                                           child: ClipRRect(
                                             borderRadius: BorderRadius.circular(18),
-                                            child: SvgPicture.asset(
-                                              'assets/icons/mednu_logo.svg',
+                                            child: Image.asset(
+                                              'assets/icons/mednu_logo.png',
                                               fit: BoxFit.contain,
                                             ),
                                           ),
@@ -397,7 +395,7 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen>
                           padding: EdgeInsets.fromLTRB(
                               24, 16, 24, 24 + MediaQuery.of(context).padding.bottom),
                           decoration: BoxDecoration(
-                            color: Colors.white,
+                            color: isDark ? AppColors.darkSurface : Colors.white,
                             borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
                             boxShadow: [
                               BoxShadow(
@@ -430,18 +428,18 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen>
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        const Text('Enter mobile number',
+                                        Text('Enter mobile number',
                                             style: TextStyle(
                                               fontSize: 18,
                                               fontWeight: FontWeight.w700,
-                                              color: Color(0xFF1A0A2E),
+                                              color: isDark ? Colors.white : const Color(0xFF1A0A2E),
                                               fontFamily: 'Poppins',
                                             )),
                                         const SizedBox(height: 4),
-                                        Text("We'll send a one-time password to verify",
+                                        Text("Enter your registered mobile number",
                                             style: TextStyle(
                                               fontSize: 13,
-                                              color: Colors.grey.shade500,
+                                              color: context.appTextSecondary,
                                               fontFamily: 'Poppins',
                                             )),
                                       ],
@@ -464,7 +462,7 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen>
                               AnimatedContainer(
                                 duration: const Duration(milliseconds: 180),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFFF8F4FF),
+                                  color: isDark ? AppColors.darkCard : const Color(0xFFF8F4FF),
                                   borderRadius: BorderRadius.circular(16),
                                   border: Border.all(
                                     color: _focused || _isValid
@@ -487,9 +485,11 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen>
                                     Container(
                                       padding: const EdgeInsets.symmetric(
                                           horizontal: 12, vertical: 17),
-                                      decoration: const BoxDecoration(
-                                        color: Color(0xFFEDE0F0),
-                                        borderRadius: BorderRadius.horizontal(
+                                      decoration: BoxDecoration(
+                                        color: isDark
+                                            ? AppColors.darkCardElevated
+                                            : const Color(0xFFEDE0F0),
+                                        borderRadius: const BorderRadius.horizontal(
                                             left: Radius.circular(16)),
                                       ),
                                       child: const Row(
@@ -527,22 +527,22 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen>
                                           if (v.length == 10) HapticFeedback.selectionClick();
                                         },
                                         onSubmitted: (_) => _continue(),
-                                        decoration: const InputDecoration(
+                                        decoration: InputDecoration(
                                           hintText: '98765 43210',
                                           hintStyle: TextStyle(
-                                              color: Color(0xFFBBBBBB),
+                                              color: context.appTextHint,
                                               fontFamily: 'Poppins',
                                               fontSize: 16),
                                           border: InputBorder.none,
                                           counterText: '',
-                                          contentPadding: EdgeInsets.symmetric(
+                                          contentPadding: const EdgeInsets.symmetric(
                                               horizontal: 16, vertical: 17),
                                         ),
-                                        style: const TextStyle(
+                                        style: TextStyle(
                                           fontSize: 18,
                                           fontWeight: FontWeight.w600,
                                           fontFamily: 'Poppins',
-                                          color: Color(0xFF1A0A2E),
+                                          color: isDark ? Colors.white : const Color(0xFF1A0A2E),
                                           letterSpacing: 2,
                                         ),
                                       ),
@@ -640,7 +640,7 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen>
                                                 : const Row(
                                                     mainAxisAlignment: MainAxisAlignment.center,
                                                     children: [
-                                                      Text('Get OTP',
+                                                      Text('Continue',
                                                           style: TextStyle(
                                                             fontSize: 16,
                                                             fontWeight: FontWeight.w700,
@@ -667,22 +667,18 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen>
                                   alignment: WrapAlignment.center,
                                   children: [
                                     Icon(Icons.lock_outline_rounded,
-                                        size: 12, color: Colors.grey.shade400),
+                                        size: 12, color: context.appTextHint),
                                     const SizedBox(width: 4),
                                     Text(
                                       'By continuing, you agree to our ',
                                       style: TextStyle(
                                         fontSize: 11,
-                                        color: Colors.grey.shade400,
+                                        color: context.appTextHint,
                                         fontFamily: 'Poppins',
                                       ),
                                     ),
                                     GestureDetector(
-                                      onTap: () => Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                            builder: (_) => const TermsOfServiceScreen()),
-                                      ),
+                                      onTap: () => context.push(AppRoutes.termsOfService),
                                       child: Text(
                                         'Terms',
                                         style: TextStyle(
@@ -699,16 +695,12 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen>
                                       ' & ',
                                       style: TextStyle(
                                         fontSize: 11,
-                                        color: Colors.grey.shade400,
+                                        color: context.appTextHint,
                                         fontFamily: 'Poppins',
                                       ),
                                     ),
                                     GestureDetector(
-                                      onTap: () => Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                            builder: (_) => const PrivacyPolicyScreen()),
-                                      ),
+                                      onTap: () => context.push(AppRoutes.privacyPolicy),
                                       child: Text(
                                         'Privacy Policy',
                                         style: TextStyle(

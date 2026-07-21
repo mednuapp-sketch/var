@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_rating_bar/flutter_rating_bar.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_text_styles.dart';
@@ -8,14 +10,21 @@ import '../providers/nutrition_provider.dart';
 import '../models/nutritionist_model.dart';
 import '../../../../core/widgets/ux_widgets.dart';
 
+// ── Nutrition theme ─────────────────────────────────────────────────────────
+const _kGreen       = Color(0xFF2E7D32);
+const _kGreenLight  = Color(0xFF66BB6A);
+const _kGreenBg     = Color(0xFFF1F8F1);
+
 class NutritionistListScreen extends ConsumerStatefulWidget {
   const NutritionistListScreen({super.key});
 
   @override
-  ConsumerState<NutritionistListScreen> createState() => _NutritionistListScreenState();
+  ConsumerState<NutritionistListScreen> createState() =>
+      _NutritionistListScreenState();
 }
 
-class _NutritionistListScreenState extends ConsumerState<NutritionistListScreen> {
+class _NutritionistListScreenState
+    extends ConsumerState<NutritionistListScreen> {
   final _searchCtrl = TextEditingController();
   String _searchQuery = '';
 
@@ -40,10 +49,10 @@ class _NutritionistListScreenState extends ConsumerState<NutritionistListScreen>
   @override
   Widget build(BuildContext context) {
     final selectedSpecialty = ref.watch(nutritionistSpecialtyFilterProvider);
-    final nutritionists = ref.watch(nutritionistsStreamProvider);
+    final nutritionists     = ref.watch(nutritionistsStreamProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.appBackground,
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded),
@@ -52,27 +61,39 @@ class _NutritionistListScreenState extends ConsumerState<NutritionistListScreen>
         title: const Text('Find Nutritionist', style: AppTextStyles.h3),
         centerTitle: true,
         elevation: 0,
-        backgroundColor: Colors.white,
-        foregroundColor: AppColors.textPrimary,
+        scrolledUnderElevation: 1,
+        backgroundColor: context.appSurface,
+        foregroundColor: context.appTextPrimary,
+        surfaceTintColor: context.appSurface,
       ),
       body: Column(
         children: [
+          // ── Search bar ────────────────────────────────────
           _SearchBar(
             controller: _searchCtrl,
             onChanged: (v) => setState(() => _searchQuery = v.toLowerCase()),
           ),
+          // ── Specialty chips ───────────────────────────────
           _SpecialtyFilter(
             specialties: _specialties,
-            selected: selectedSpecialty ?? 'All',
-            onSelect: (s) => ref.read(nutritionistSpecialtyFilterProvider.notifier).state =
-                s == 'All' ? null : s,
+            selected:    selectedSpecialty ?? 'All',
+            onSelect: (s) =>
+                ref.read(nutritionistSpecialtyFilterProvider.notifier).state =
+                    s == 'All' ? null : s,
           ),
+          // ── Results ───────────────────────────────────────
           Expanded(
             child: nutritionists.when(
               loading: () => ListView(
                 physics: const NeverScrollableScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                children: List.generate(5, (_) => const _NutritionistCardSkeleton()),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                children: List.generate(
+                  5,
+                  (_) => const Padding(
+                    padding: EdgeInsets.only(bottom: 14),
+                    child: _NutritionistCardSkeleton(),
+                  ),
+                ),
               ),
               error: (e, _) => const AppErrorState(),
               data: (list) {
@@ -83,7 +104,9 @@ class _NutritionistListScreenState extends ConsumerState<NutritionistListScreen>
                       n.qualification.toLowerCase().contains(_searchQuery) ||
                       n.city.toLowerCase().contains(_searchQuery);
                   final matchesSpecialty = selectedSpecialty == null ||
-                      n.specialization.toLowerCase().contains(selectedSpecialty.toLowerCase());
+                      n.specialization
+                          .toLowerCase()
+                          .contains(selectedSpecialty.toLowerCase());
                   return matchesQuery && matchesSpecialty;
                 }).toList();
 
@@ -92,14 +115,15 @@ class _NutritionistListScreenState extends ConsumerState<NutritionistListScreen>
                 }
 
                 return ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
                   physics: const BouncingScrollPhysics(),
                   itemCount: filtered.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  separatorBuilder: (_, __) => const SizedBox(height: 14),
                   itemBuilder: (ctx, i) => _NutritionistCard(
                     nutritionist: filtered[i],
                     onTap: () => context.push(
-                      AppRoutes.nutritionNutritionistProfile.replaceFirst(':id', filtered[i].id),
+                      AppRoutes.nutritionNutritionistProfile
+                          .replaceFirst(':id', filtered[i].id),
                     ),
                   ),
                 );
@@ -112,6 +136,8 @@ class _NutritionistListScreenState extends ConsumerState<NutritionistListScreen>
   }
 }
 
+// ── Search bar ───────────────────────────────────────────────────────────────
+
 class _SearchBar extends StatelessWidget {
   final TextEditingController controller;
   final ValueChanged<String> onChanged;
@@ -121,19 +147,22 @@ class _SearchBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+      color: context.appSurface,
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
       child: TextField(
         controller: controller,
         onChanged: onChanged,
         style: AppTextStyles.bodyMedium,
         decoration: InputDecoration(
           hintText: 'Search by name, specialty, city...',
-          hintStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.textHint),
-          prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textHint),
+          hintStyle:
+              AppTextStyles.bodyMedium.copyWith(color: context.appTextHint),
+          prefixIcon: Icon(Icons.search_rounded,
+              color: context.appTextHint, size: 20),
           suffixIcon: controller.text.isNotEmpty
               ? IconButton(
-                  icon: const Icon(Icons.clear_rounded, color: AppColors.textHint),
+                  icon: Icon(Icons.clear_rounded,
+                      color: context.appTextHint, size: 18),
                   onPressed: () {
                     controller.clear();
                     onChanged('');
@@ -141,44 +170,55 @@ class _SearchBar extends StatelessWidget {
                 )
               : null,
           filled: true,
-          fillColor: AppColors.background,
+          fillColor: context.appBackground,
           contentPadding: const EdgeInsets.symmetric(vertical: 12),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide.none,
+          ),
         ),
       ),
     );
   }
 }
 
+// ── Specialty filter chips ────────────────────────────────────────────────────
+
 class _SpecialtyFilter extends StatelessWidget {
   final List<String> specialties;
   final String selected;
   final ValueChanged<String> onSelect;
 
-  const _SpecialtyFilter({required this.specialties, required this.selected, required this.onSelect});
+  const _SpecialtyFilter({
+    required this.specialties,
+    required this.selected,
+    required this.onSelect,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: Colors.white,
-      height: 44,
+      color: context.appSurface,
+      height: 48,
       child: ListView.separated(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
         scrollDirection: Axis.horizontal,
         itemCount: specialties.length,
         separatorBuilder: (_, __) => const SizedBox(width: 8),
         itemBuilder: (ctx, i) {
-          final s = specialties[i];
-          final isSelected = s == selected || (selected == 'All' && s == 'All');
+          final s          = specialties[i];
+          final isSelected = s == selected;
           return GestureDetector(
             onTap: () => onSelect(s),
-            child: Container(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
               alignment: Alignment.center,
               padding: const EdgeInsets.symmetric(horizontal: 16),
               decoration: BoxDecoration(
-                color: isSelected ? const Color(0xFF2E7D32) : Colors.transparent,
+                color: isSelected ? _kGreen : Colors.transparent,
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: isSelected ? const Color(0xFF2E7D32) : AppColors.border),
+                border: Border.all(
+                    color: isSelected ? _kGreen : context.appBorder),
               ),
               child: Text(
                 s,
@@ -186,7 +226,7 @@ class _SpecialtyFilter extends StatelessWidget {
                   fontFamily: 'Poppins',
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
-                  color: isSelected ? Colors.white : AppColors.textSecondary,
+                  color: isSelected ? Colors.white : context.appTextSecondary,
                 ),
               ),
             ),
@@ -197,11 +237,14 @@ class _SpecialtyFilter extends StatelessWidget {
   }
 }
 
+// ── Nutritionist card ─────────────────────────────────────────────────────────
+
 class _NutritionistCard extends StatelessWidget {
   final NutritionistModel nutritionist;
   final VoidCallback onTap;
 
-  const _NutritionistCard({required this.nutritionist, required this.onTap});
+  const _NutritionistCard(
+      {required this.nutritionist, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -210,17 +253,26 @@ class _NutritionistCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: context.appSurface,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: AppColors.border),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:0.04), blurRadius: 8, offset: const Offset(0, 2))],
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 12,
+              offset: const Offset(0, 3),
+            ),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // ── Header row ─────────────────────────────
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _Avatar(name: nutritionist.name, photoUrl: nutritionist.photoUrl),
+                _Avatar(
+                    name: nutritionist.name,
+                    photoUrl: nutritionist.photoUrl),
                 const SizedBox(width: 14),
                 Expanded(
                   child: Column(
@@ -228,81 +280,167 @@ class _NutritionistCard extends StatelessWidget {
                     children: [
                       Row(
                         children: [
-                          Expanded(child: Text(nutritionist.name, style: AppTextStyles.labelLarge)),
-                          if (nutritionist.isAvailable)
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(color: const Color(0xFF2E7D32).withValues(alpha:0.1), borderRadius: BorderRadius.circular(6)),
-                              child: const Text('Available', style: TextStyle(fontFamily: 'Poppins', fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFF2E7D32))),
+                          Expanded(
+                            child: Text(
+                              nutritionist.name,
+                              style: AppTextStyles.labelLarge,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
+                          ),
+                          if (nutritionist.isAvailable)
+                            _AvailabilityBadge(),
                         ],
                       ),
                       const SizedBox(height: 2),
-                      Text(nutritionist.qualification, style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
-                      Text(nutritionist.specialization, style: AppTextStyles.bodySmall.copyWith(color: const Color(0xFF2E7D32), fontWeight: FontWeight.w600)),
+                      Text(
+                        nutritionist.qualification,
+                        style: AppTextStyles.bodySmall
+                            .copyWith(color: context.appTextSecondary),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 1),
+                      Text(
+                        nutritionist.specialization,
+                        style: AppTextStyles.bodySmall.copyWith(
+                            color: _kGreen,
+                            fontWeight: FontWeight.w600),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 6),
+                      // Star rating
+                      Row(
+                        children: [
+                          RatingBarIndicator(
+                            rating: nutritionist.rating,
+                            itemBuilder: (ctx, _) => const Icon(
+                              Icons.star_rounded,
+                              color: Color(0xFFF9A825),
+                            ),
+                            itemCount: 5,
+                            itemSize: 14,
+                            unratedColor:
+                                const Color(0xFFF9A825).withValues(alpha: 0.25),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            '${nutritionist.rating.toStringAsFixed(1)} (${nutritionist.reviewCount})',
+                            style: AppTextStyles.bodySmall.copyWith(
+                                color: context.appTextSecondary),
+                          ),
+                        ],
+                      ),
                     ],
                   ),
                 ),
               ],
             ),
+
+            // ── Info chips row ──────────────────────────
             const SizedBox(height: 12),
-            Row(
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
               children: [
-                _InfoChip(icon: Icons.star_rounded, label: '${nutritionist.rating.toStringAsFixed(1)} (${nutritionist.reviewCount})', color: const Color(0xFFF9A825)),
-                const SizedBox(width: 8),
-                _InfoChip(icon: Icons.work_rounded, label: '${nutritionist.experienceYears} yrs exp', color: AppColors.textSecondary),
-                const SizedBox(width: 8),
-                _InfoChip(icon: Icons.location_on_rounded, label: nutritionist.city.isNotEmpty ? nutritionist.city : 'Online', color: AppColors.textSecondary),
+                _InfoChip(
+                  icon: Icons.work_history_rounded,
+                  label: '${nutritionist.experienceYears} yrs exp',
+                  color: context.appTextSecondary,
+                ),
+                _InfoChip(
+                  icon: Icons.location_on_rounded,
+                  label: nutritionist.city.isNotEmpty
+                      ? nutritionist.city
+                      : 'Online',
+                  color: context.appTextSecondary,
+                ),
+                if (nutritionist.isOnlineAvailable)
+                  _InfoChip(
+                    icon: Icons.videocam_rounded,
+                    label: 'Online',
+                    color: _kGreen,
+                    bgColor: _kGreenBg,
+                  ),
+                if (nutritionist.isInPersonAvailable)
+                  _InfoChip(
+                    icon: Icons.local_hospital_rounded,
+                    label: 'In-Person',
+                    color: AppColors.info,
+                    bgColor: const Color(0xFFE3F2FD),
+                  ),
               ],
             ),
+
+            // ── Expertise tags ──────────────────────────
             if (nutritionist.expertiseAreas.isNotEmpty) ...[
               const SizedBox(height: 10),
               Wrap(
                 spacing: 6,
                 runSpacing: 6,
-                children: nutritionist.expertiseAreas.take(4).map((e) => Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF2E7D32).withValues(alpha:0.06),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(e, style: const TextStyle(fontFamily: 'Poppins', fontSize: 10, color: Color(0xFF2E7D32))),
-                )).toList(),
+                children: nutritionist.expertiseAreas.take(3).map((e) {
+                  return Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 9, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: _kGreenBg,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      e,
+                      style: const TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 10,
+                        color: _kGreen,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  );
+                }).toList(),
               ),
             ],
-            const SizedBox(height: 12),
+
+            // ── Footer: fee + book CTA ──────────────────
+            const SizedBox(height: 14),
             Row(
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Consultation Fee', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textHint)),
-                      Text('₹${nutritionist.consultationFee.toInt()}', style: AppTextStyles.h4.copyWith(color: const Color(0xFF2E7D32))),
-                    ],
-                  ),
-                ),
-                Row(
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (nutritionist.isOnlineAvailable)
-                      _ModeChip(label: 'Online', icon: Icons.videocam_rounded),
-                    if (nutritionist.isInPersonAvailable) ...[
-                      const SizedBox(width: 6),
-                      _ModeChip(label: 'In-Person', icon: Icons.location_on_rounded),
-                    ],
+                    Text(
+                      'Consultation Fee',
+                      style: AppTextStyles.bodySmall
+                          .copyWith(color: context.appTextHint),
+                    ),
+                    Text(
+                      '₹${nutritionist.consultationFee.toInt()}',
+                      style: AppTextStyles.h4.copyWith(color: _kGreen),
+                    ),
                   ],
                 ),
-                const SizedBox(width: 10),
-                ElevatedButton(
-                  onPressed: onTap,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF2E7D32),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    elevation: 0,
+                const Spacer(),
+                SizedBox(
+                  height: 40,
+                  child: ElevatedButton(
+                    onPressed: onTap,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _kGreen,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                      elevation: 0,
+                    ),
+                    child: const Text(
+                      'Book Now',
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                      ),
+                    ),
                   ),
-                  child: const Text('Book', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 13)),
                 ),
               ],
             ),
@@ -313,18 +451,65 @@ class _NutritionistCard extends StatelessWidget {
   }
 }
 
+// ── Availability badge ────────────────────────────────────────────────────────
+
+class _AvailabilityBadge extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: _kGreenBg,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: const BoxDecoration(
+              color: _kGreen,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 4),
+          const Text(
+            'Available',
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: _kGreen,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Avatar widget (cached_network_image) ─────────────────────────────────────
+
 class _Avatar extends StatelessWidget {
   final String name;
   final String photoUrl;
+
   const _Avatar({required this.name, required this.photoUrl});
 
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(16),
       child: photoUrl.isNotEmpty
-          ? Image.network(photoUrl, width: 64, height: 64, fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => _Fallback(name: name))
+          ? CachedNetworkImage(
+              imageUrl: photoUrl,
+              width: 72,
+              height: 72,
+              fit: BoxFit.cover,
+              placeholder: (_, __) => _Fallback(name: name),
+              errorWidget: (_, __, ___) => _Fallback(name: name),
+            )
           : _Fallback(name: name),
     );
   }
@@ -337,65 +522,75 @@ class _Fallback extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 64,
-      height: 64,
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(colors: [Color(0xFF2E7D32), Color(0xFF66BB6A)]),
-        borderRadius: BorderRadius.circular(14),
+      width: 72,
+      height: 72,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [_kGreen, _kGreenLight],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
       ),
       alignment: Alignment.center,
       child: Text(
         name.isNotEmpty ? name[0].toUpperCase() : 'N',
-        style: const TextStyle(fontFamily: 'Poppins', fontSize: 26, fontWeight: FontWeight.w700, color: Colors.white),
+        style: const TextStyle(
+          fontFamily: 'Poppins',
+          fontSize: 28,
+          fontWeight: FontWeight.w700,
+          color: Colors.white,
+        ),
       ),
     );
   }
 }
+
+// ── Info chip ─────────────────────────────────────────────────────────────────
 
 class _InfoChip extends StatelessWidget {
   final IconData icon;
   final String label;
   final Color color;
-  const _InfoChip({required this.icon, required this.label, required this.color});
+  final Color? bgColor;
 
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 12, color: color),
-        const SizedBox(width: 3),
-        Text(label, style: TextStyle(fontFamily: 'Poppins', fontSize: 11, color: color)),
-      ],
-    );
-  }
-}
-
-class _ModeChip extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  const _ModeChip({required this.label, required this.icon});
+  const _InfoChip({
+    required this.icon,
+    required this.label,
+    required this.color,
+    this.bgColor,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: const Color(0xFF2E7D32).withValues(alpha:0.08),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: const Color(0xFF2E7D32).withValues(alpha:0.2)),
-      ),
+      decoration: bgColor != null
+          ? BoxDecoration(
+              color: bgColor,
+              borderRadius: BorderRadius.circular(6),
+            )
+          : null,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 10, color: const Color(0xFF2E7D32)),
-          const SizedBox(width: 3),
-          Text(label, style: const TextStyle(fontFamily: 'Poppins', fontSize: 10, color: Color(0xFF2E7D32))),
+          Icon(icon, size: 12, color: color),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontSize: 11,
+              color: color,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
         ],
       ),
     );
   }
 }
+
+// ── Empty state ───────────────────────────────────────────────────────────────
 
 class _EmptyState extends StatelessWidget {
   final String query;
@@ -405,23 +600,35 @@ class _EmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(32),
+        padding: const EdgeInsets.all(36),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.search_off_rounded, size: 64, color: Colors.grey[300]),
-            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: _kGreenBg,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.search_off_rounded,
+                  size: 48, color: _kGreen),
+            ),
+            const SizedBox(height: 20),
             Text(
-              query.isNotEmpty ? 'No results for "$query"' : 'No nutritionists available',
-              style: AppTextStyles.labelLarge.copyWith(color: AppColors.textSecondary),
+              query.isNotEmpty
+                  ? 'No results for "$query"'
+                  : 'No nutritionists available',
+              style: AppTextStyles.labelLarge
+                  .copyWith(color: context.appTextPrimary),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
             Text(
               query.isNotEmpty
                   ? 'Try a different search term or filter'
-                  : 'Nutritionists will appear here once added by admin',
-              style: AppTextStyles.bodySmall.copyWith(color: AppColors.textHint),
+                  : 'Nutritionists will appear here once added',
+              style: AppTextStyles.bodySmall
+                  .copyWith(color: context.appTextSecondary),
               textAlign: TextAlign.center,
             ),
           ],
@@ -431,36 +638,63 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
+// ── Skeleton card ─────────────────────────────────────────────────────────────
+
 class _NutritionistCardSkeleton extends StatelessWidget {
   const _NutritionistCardSkeleton();
+
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: const [BoxShadow(color: Color(0x08000000), blurRadius: 8, offset: Offset(0, 2))],
+        color: context.appSurface,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: const [
+          BoxShadow(
+              color: Color(0x08000000), blurRadius: 10, offset: Offset(0, 2))
+        ],
       ),
-      child: const AppShimmer(
-        child: Row(children: [
-          SkeletonCircle(size: 56),
-          SizedBox(width: 12),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            SkeletonBox(width: double.infinity, height: 14, radius: 4),
-            SizedBox(height: 6),
-            SkeletonBox(width: 160, height: 11, radius: 4),
-            SizedBox(height: 6),
+      child: AppShimmer(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: const [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SkeletonBox(width: 72, height: 72, radius: 16),
+                SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SkeletonBox(
+                          width: double.infinity, height: 14, radius: 6),
+                      SizedBox(height: 7),
+                      SkeletonBox(width: 140, height: 11, radius: 6),
+                      SizedBox(height: 7),
+                      SkeletonBox(width: 100, height: 11, radius: 6),
+                      SizedBox(height: 10),
+                      SkeletonBox(width: 120, height: 12, radius: 6),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 14),
             Row(children: [
-              SkeletonBox(width: 60, height: 20, radius: 6),
-              SizedBox(width: 6),
-              SkeletonBox(width: 70, height: 20, radius: 6),
+              SkeletonBox(width: 80, height: 24, radius: 6),
+              SizedBox(width: 8),
+              SkeletonBox(width: 70, height: 24, radius: 6),
             ]),
-          ])),
-          SizedBox(width: 10),
-          SkeletonBox(width: 64, height: 34, radius: 10),
-        ]),
+            SizedBox(height: 12),
+            Row(children: [
+              SkeletonBox(width: 70, height: 34, radius: 8),
+              Spacer(),
+              SkeletonBox(width: 100, height: 40, radius: 12),
+            ]),
+          ],
+        ),
       ),
     );
   }

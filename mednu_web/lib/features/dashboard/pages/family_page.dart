@@ -324,57 +324,63 @@ class _AddMemberSheetState extends State<_AddMemberSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(
-        left: 24,
-        right: 24,
-        top: 24,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(children: [
-            Text('Add Family Member',
-                style: GoogleFonts.poppins(
-                    fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-            const Spacer(),
-            GestureDetector(
-              onTap: () => Navigator.pop(context),
-              child: Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                    color: AppColors.background, borderRadius: BorderRadius.circular(8)),
-                child: const Icon(Icons.close_rounded, size: 16, color: AppColors.textSecondary),
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.9),
+      child: SingleChildScrollView(
+        physics: const ClampingScrollPhysics(),
+        padding: EdgeInsets.only(
+          left: 24,
+          right: 24,
+          top: 24,
+          bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              Expanded(
+                child: Text('Add Family Member',
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.poppins(
+                        fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
               ),
+              GestureDetector(
+                onTap: () => Navigator.pop(context),
+                child: Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                      color: AppColors.background, borderRadius: BorderRadius.circular(8)),
+                  child: const Icon(Icons.close_rounded, size: 16, color: AppColors.textSecondary),
+                ),
+              ),
+            ]),
+            const SizedBox(height: 20),
+            _SheetField(label: 'Full Name *', controller: _nameController, hint: 'Enter name'),
+            const SizedBox(height: 14),
+            _SheetDropdown(
+              label: 'Relation',
+              value: _selectedRelation,
+              items: _relations,
+              onChanged: (v) => setState(() => _selectedRelation = v!),
             ),
-          ]),
-          const SizedBox(height: 20),
-          _SheetField(label: 'Full Name *', controller: _nameController, hint: 'Enter name'),
-          const SizedBox(height: 14),
-          _SheetDropdown(
-            label: 'Relation',
-            value: _selectedRelation,
-            items: _relations,
-            onChanged: (v) => setState(() => _selectedRelation = v!),
-          ),
-          const SizedBox(height: 14),
-          _SheetDropdown(
-            label: 'Gender',
-            value: _selectedGender,
-            items: _genders,
-            onChanged: (v) => setState(() => _selectedGender = v!),
-          ),
-          const SizedBox(height: 22),
-          GradientButton(
-            label: _saving ? 'Adding…' : 'Add Member',
-            onTap: _saving ? null : _save,
-            height: 48,
-            fontSize: 14,
-          ),
-        ],
+            const SizedBox(height: 14),
+            _SheetDropdown(
+              label: 'Gender',
+              value: _selectedGender,
+              items: _genders,
+              onChanged: (v) => setState(() => _selectedGender = v!),
+            ),
+            const SizedBox(height: 22),
+            GradientButton(
+              label: _saving ? 'Adding…' : 'Add Member',
+              onTap: _saving ? null : _save,
+              height: 48,
+              fontSize: 14,
+            ),
+          ],
+        ),
       ),
     );
   }

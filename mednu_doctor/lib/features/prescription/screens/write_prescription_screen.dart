@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
@@ -113,6 +112,7 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
   // ── Form controllers ───────────────────────────────────────────────────────
   final _chiefComplaintsCtrl     = TextEditingController();
   final _historyCtrl             = TextEditingController();
+  final _allergiesCtrl           = TextEditingController();
   final _examinationCtrl         = TextEditingController();
   final _diagnosisCtrl           = TextEditingController();
   final _specialInstructionsCtrl = TextEditingController();
@@ -125,6 +125,9 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
 
   // ── Investigations ─────────────────────────────────────────────────────────
   final Set<String> _selectedInvestigations = {};
+
+  // ── Allergies ──────────────────────────────────────────────────────────────
+  bool _showAllergies = false;
 
   // ── Follow-up ──────────────────────────────────────────────────────────────
   bool   _followUpRequired = false;
@@ -162,9 +165,11 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
     _loadPatientInfo();
     _startAutoSave();
     for (final c in [
-      _chiefComplaintsCtrl, _historyCtrl, _examinationCtrl,
+      _chiefComplaintsCtrl, _historyCtrl, _allergiesCtrl, _examinationCtrl,
       _diagnosisCtrl, _specialInstructionsCtrl, _additionalNotesCtrl,
-    ]) { c.addListener(() => _hasDraftChanges = true); }
+    ]) {
+      c.addListener(() => _hasDraftChanges = true);
+    }
   }
 
   @override
@@ -172,6 +177,7 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
     _autoSaveTimer?.cancel();
     _chiefComplaintsCtrl.dispose();
     _historyCtrl.dispose();
+    _allergiesCtrl.dispose();
     _examinationCtrl.dispose();
     _diagnosisCtrl.dispose();
     _specialInstructionsCtrl.dispose();
@@ -245,6 +251,7 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
           .set({
         'chiefComplaints':     _chiefComplaintsCtrl.text,
         'history':             _historyCtrl.text,
+        'allergies':           _showAllergies ? _allergiesCtrl.text : '',
         'examination':         _examinationCtrl.text,
         'diagnosis':           _diagnosisCtrl.text,
         'specialInstructions': _specialInstructionsCtrl.text,
@@ -387,6 +394,7 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
         'chiefComplaints':       _chiefComplaintsCtrl.text.trim(),
         'history':               _historyCtrl.text.trim(),
         'historyComorbidities':  _historyCtrl.text.trim(),
+        'allergies':             _showAllergies ? _allergiesCtrl.text.trim() : '',
         'examination':           _examinationCtrl.text.trim(),
         'investigations':        allInvestigations,
         'diagnosis':             _diagnosisCtrl.text.trim(),
@@ -800,6 +808,18 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
           ),
           const SizedBox(height: 20),
 
+          // ── Allergies (Optional, collapsible) ────────────────
+          _AllergiesSection(
+            show: _showAllergies,
+            controller: _allergiesCtrl,
+            onToggle: (v) {
+              setState(() => _showAllergies = v);
+              _hasDraftChanges = true;
+            },
+            onChanged: () => _hasDraftChanges = true,
+          ),
+          const SizedBox(height: 20),
+
           // ── Section 3: Examination / Vitals ───────────────────
           _SectionHeader(
             sectionNumber: '03',
@@ -1041,7 +1061,7 @@ class _RxHeaderBanner extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // MedNu logo icon
+                // MedNU logo icon
                 Container(
                   width: 48, height: 48,
                   decoration: BoxDecoration(
@@ -1056,8 +1076,8 @@ class _RxHeaderBanner extends StatelessWidget {
                   ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(12),
-                    child: SvgPicture.asset(
-                      'assets/icons/mednu_logo.svg',
+                    child: Image.asset(
+                      'assets/icons/mednu_logo.png',
                       fit: BoxFit.contain,
                     ),
                   ),
@@ -1067,7 +1087,7 @@ class _RxHeaderBanner extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('MedNu Healthcare',
+                      const Text('MedNU Healthcare',
                           style: TextStyle(
                             fontFamily: 'Poppins',
                             fontWeight: FontWeight.w800,
@@ -1884,6 +1904,150 @@ class _DoseCheckbox extends StatelessWidget {
       );
 }
 
+// ── Allergies Section ─────────────────────────────────────────────────────────
+
+class _AllergiesSection extends StatelessWidget {
+  final bool                  show;
+  final TextEditingController controller;
+  final ValueChanged<bool>    onToggle;
+  final VoidCallback          onChanged;
+
+  const _AllergiesSection({
+    required this.show,
+    required this.controller,
+    required this.onToggle,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: show
+              ? const Color(0xFFE53935).withValues(alpha: 0.3)
+              : AppColors.border.withValues(alpha: 0.5),
+          width: show ? 1.5 : 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 14, 10, 14),
+            child: Row(children: [
+              Container(
+                width: 40, height: 40,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE53935).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.warning_amber_rounded,
+                    color: Color(0xFFE53935), size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
+                      Text('Allergies & Adverse Reactions',
+                          style: AppTextStyles.labelLarge
+                              .copyWith(color: AppColors.textPrimary)),
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppColors.textHint.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Text('Optional',
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 9,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textHint,
+                              letterSpacing: 0.5,
+                            )),
+                      ),
+                    ]),
+                    Text('Known drug, food, or environmental allergies',
+                        style: AppTextStyles.caption
+                            .copyWith(color: AppColors.textSecondary)),
+                  ],
+                ),
+              ),
+              Switch(
+                value: show,
+                activeThumbColor: const Color(0xFFE53935),
+                activeTrackColor:
+                    const Color(0xFFE53935).withValues(alpha: 0.3),
+                onChanged: onToggle,
+              ),
+            ]),
+          ),
+          if (show) ...[
+            Divider(
+              height: 1,
+              color: const Color(0xFFE53935).withValues(alpha: 0.15),
+              indent: 14,
+              endIndent: 14,
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+              child: TextField(
+                controller: controller,
+                maxLines: 3,
+                onChanged: (_) => onChanged(),
+                style: AppTextStyles.bodyMedium
+                    .copyWith(color: AppColors.textPrimary, height: 1.5),
+                decoration: InputDecoration(
+                  hintText:
+                      'e.g. Penicillin — rash\nAspirin — GI bleeding\nSulfa drugs — anaphylaxis\nPeanuts — swelling...',
+                  hintStyle: AppTextStyles.caption
+                      .copyWith(color: AppColors.textHint, height: 1.5),
+                  contentPadding: const EdgeInsets.all(12),
+                  filled: true,
+                  fillColor: const Color(0xFFE53935).withValues(alpha: 0.03),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(
+                      color: const Color(0xFFE53935).withValues(alpha: 0.2),
+                    ),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(
+                      color: const Color(0xFFE53935).withValues(alpha: 0.2),
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(
+                      color: Color(0xFFE53935),
+                      width: 1.5,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 // ── Follow-up Section ────────────────────────────────────────────────────────
 
 class _FollowUpSection extends StatelessWidget {
@@ -2114,7 +2278,7 @@ class _SuccessDialogState extends State<_SuccessDialog>
         Text('Prescription Sent!', style: AppTextStyles.h3),
         const SizedBox(height: 8),
         Text(
-          '${widget.patientName} has been notified via the MedNu app.\nRx ID: ${widget.rxId}',
+          '${widget.patientName} has been notified via the MedNU app.\nRx ID: ${widget.rxId}',
           textAlign: TextAlign.center,
           style: AppTextStyles.bodySmall.copyWith(height: 1.5),
         ),

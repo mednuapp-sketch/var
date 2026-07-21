@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -10,11 +11,10 @@ import '../../../core/constants/app_text_styles.dart';
 import '../../../core/providers/theme_provider.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/services/booking_reminder_service.dart';
+import '../../../core/utils/r.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../my_services/services/my_services_service.dart';
 import '../../security/services/biometric_service.dart';
-import '../../legal/screens/privacy_policy_screen.dart';
-import '../../legal/screens/terms_of_service_screen.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -82,7 +82,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     showDialog<int>(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.r(context, 20))),
         title: const Text(
           'Remind me before',
           style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 16),
@@ -102,7 +102,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     color: selected ? AppColors.primary : null,
                   )),
               trailing: selected
-                  ? Icon(Icons.check_circle_rounded, color: AppColors.primary, size: 20)
+                  ? Icon(Icons.check_circle_rounded, color: AppColors.primary, size: R.w(context, 20))
                   : null,
               onTap: () => Navigator.pop(ctx, m),
             );
@@ -174,15 +174,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       context: context,
       barrierDismissible: false,
       builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.r(context, 20))),
         content: Row(
           children: [
-            const SizedBox(
-              width: 24,
-              height: 24,
-              child: CircularProgressIndicator(strokeWidth: 2.5),
+            SizedBox(
+              width: R.w(context, 24),
+              height: R.h(context, 24),
+              child: const CircularProgressIndicator(strokeWidth: 2.5),
             ),
-            const SizedBox(width: 16),
+            SizedBox(width: R.w(context, 16)),
             Expanded(child: Text(message)),
           ],
         ),
@@ -200,12 +200,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final photoUrl = userDocAsync.value?['photoUrl'] as String? ?? '';
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.appBackground,
       body: CustomScrollView(
         slivers: [
           // ── Gradient header ───────────────────────────────
           SliverAppBar(
-            expandedHeight: 160,
+            expandedHeight: R.h(context, 160),
             pinned: true,
             backgroundColor: AppColors.primary,
             foregroundColor: Colors.white,
@@ -229,8 +229,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       top: -30,
                       right: -30,
                       child: Container(
-                        width: 130,
-                        height: 130,
+                        width: R.w(context, 130),
+                        height: R.h(context, 130),
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: Colors.white.withValues(alpha:0.06),
@@ -241,8 +241,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       bottom: -10,
                       left: -20,
                       child: Container(
-                        width: 90,
-                        height: 90,
+                        width: R.w(context, 90),
+                        height: R.h(context, 90),
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: Colors.white.withValues(alpha:0.05),
@@ -250,88 +250,110 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       ),
                     ),
                     SafeArea(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 52, 20, 16),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 56,
-                              height: 56,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Colors.white.withValues(alpha:0.18),
-                                border: Border.all(
-                                  color: Colors.white.withValues(alpha:0.35),
-                                  width: 2,
-                                ),
-                                image: photoUrl.isNotEmpty
-                                    ? DecorationImage(
-                                        image: NetworkImage(photoUrl),
-                                        fit: BoxFit.cover,
-                                      )
-                                    : null,
-                              ),
-                              child: photoUrl.isEmpty
-                                  ? const Icon(Icons.person_rounded,
-                                      color: Colors.white, size: 28)
-                                  : null,
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    userName.isNotEmpty ? userName : 'My Account',
-                                    style: const TextStyle(
-                                      fontFamily: 'Poppins',
-                                      fontSize: 17,
-                                      fontWeight: FontWeight.w700,
-                                      color: Colors.white,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  if (userPhone.isNotEmpty) ...[
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      userPhone,
-                                      style: const TextStyle(
-                                        fontFamily: 'Poppins',
-                                        fontSize: 12,
-                                        color: Colors.white70,
-                                      ),
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          return SingleChildScrollView(
+                            physics: const ClampingScrollPhysics(),
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                              child: Padding(
+                                padding: EdgeInsets.fromLTRB(R.p(context, 20), R.p(context, 52),
+                                    R.p(context, 20), R.p(context, 16)),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Container(
+                                          width: R.w(context, 56),
+                                          height: R.h(context, 56),
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            color: Colors.white.withValues(alpha: 0.18),
+                                            border: Border.all(
+                                              color: Colors.white.withValues(alpha: 0.35),
+                                              width: 2,
+                                            ),
+                                          ),
+                                          child: ClipOval(
+                                            child: photoUrl.isNotEmpty
+                                                ? CachedNetworkImage(
+                                                    imageUrl: photoUrl,
+                                                    fit: BoxFit.cover,
+                                                    width: R.w(context, 56),
+                                                    height: R.h(context, 56),
+                                                    errorWidget: (_, __, ___) => Icon(
+                                                      Icons.person_rounded,
+                                                      color: Colors.white,
+                                                      size: R.w(context, 28),
+                                                    ),
+                                                  )
+                                                : Icon(Icons.person_rounded,
+                                                    color: Colors.white, size: R.w(context, 28)),
+                                          ),
+                                        ),
+                                        SizedBox(width: R.w(context, 14)),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Text(
+                                                userName.isNotEmpty ? userName : 'My Account',
+                                                style: const TextStyle(
+                                                  fontFamily: 'Poppins',
+                                                  fontSize: 17,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: Colors.white,
+                                                ),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                              if (userPhone.isNotEmpty) ...[
+                                                SizedBox(height: R.h(context, 2)),
+                                                Text(
+                                                  userPhone,
+                                                  style: const TextStyle(
+                                                    fontFamily: 'Poppins',
+                                                    fontSize: 12,
+                                                    color: Colors.white70,
+                                                  ),
+                                                ),
+                                              ],
+                                            ],
+                                          ),
+                                        ),
+                                        GestureDetector(
+                                          onTap: () => context.push(AppRoutes.profile),
+                                          child: Container(
+                                            padding: EdgeInsets.symmetric(
+                                                horizontal: R.p(context, 12), vertical: R.p(context, 7)),
+                                            decoration: BoxDecoration(
+                                              color: Colors.white.withValues(alpha:0.18),
+                                              borderRadius: BorderRadius.circular(R.r(context, 20)),
+                                              border: Border.all(
+                                                color: Colors.white.withValues(alpha:0.3),
+                                              ),
+                                            ),
+                                            child: const Text(
+                                              'Edit Profile',
+                                              style: TextStyle(
+                                                fontFamily: 'Poppins',
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w600,
+                                                color: Colors.white,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ],
-                                ],
-                              ),
-                            ),
-                            GestureDetector(
-                              onTap: () => context.push(AppRoutes.profile),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 12, vertical: 7),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha:0.18),
-                                  borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(
-                                    color: Colors.white.withValues(alpha:0.3),
-                                  ),
-                                ),
-                                child: const Text(
-                                  'Edit Profile',
-                                  style: TextStyle(
-                                    fontFamily: 'Poppins',
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.white,
-                                  ),
                                 ),
                               ),
                             ),
-                          ],
-                        ),
+                          );
+                        },
                       ),
                     ),
                   ],
@@ -342,10 +364,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
           // ── Settings content ──────────────────────────────
           SliverToBoxAdapter(
-            child: ListView(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(R.p(context, 16), R.p(context, 20),
+                  R.p(context, 16), R.p(context, 32)),
+              child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 // Notifications
                 _SectionHeader(
@@ -353,7 +376,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   title: 'Notifications',
                   color: const Color(0xFF7B1FA2),
                 ),
-                const SizedBox(height: 8),
+                SizedBox(height: R.h(context, 8)),
                 _SettingsCard(children: [
                   _SwitchTile(Icons.notifications_rounded, 'Push Notifications',
                       'Receive alerts for appointments & orders', _notifications,
@@ -388,7 +411,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ],
                 ]),
 
-                const SizedBox(height: 20),
+                SizedBox(height: R.h(context, 20)),
 
                 // Security
                 _SectionHeader(
@@ -396,16 +419,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   title: 'Security & Privacy',
                   color: const Color(0xFF1565C0),
                 ),
-                const SizedBox(height: 8),
+                SizedBox(height: R.h(context, 8)),
                 _SettingsCard(children: [
                   _loadingBiometric
-                      ? const Padding(
-                          padding: EdgeInsets.all(16),
+                      ? Padding(
+                          padding: EdgeInsets.all(R.p(context, 16)),
                           child: Center(
                               child: SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(strokeWidth: 2))),
+                                  width: R.w(context, 20),
+                                  height: R.h(context, 20),
+                                  child: const CircularProgressIndicator(strokeWidth: 2))),
                         )
                       : _BiometricTile(
                           enabled: _biometric,
@@ -418,19 +441,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       (v) => setState(() => _locationAccess = v)),
                   const Divider(height: 1, indent: 62),
                   _NavTile(Icons.privacy_tip_rounded, 'Privacy Policy',
-                      'Read our privacy policy', () {
-                    Navigator.push(context,
-                        MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen()));
-                  }),
+                      'Read our privacy policy',
+                      () => context.push(AppRoutes.privacyPolicy)),
                   const Divider(height: 1, indent: 62),
                   _NavTile(Icons.gavel_rounded, 'Terms of Service',
-                      'Read our terms of service', () {
-                    Navigator.push(context,
-                        MaterialPageRoute(builder: (_) => const TermsOfServiceScreen()));
-                  }),
+                      'Read our terms of service',
+                      () => context.push(AppRoutes.termsOfService)),
                 ]),
 
-                const SizedBox(height: 20),
+                SizedBox(height: R.h(context, 20)),
 
                 // Appearance
                 _SectionHeader(
@@ -438,7 +457,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   title: 'Appearance',
                   color: const Color(0xFF00897B),
                 ),
-                const SizedBox(height: 8),
+                SizedBox(height: R.h(context, 8)),
                 _SettingsCard(children: [
                   _SwitchTile(
                     Icons.dark_mode_rounded,
@@ -448,12 +467,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     (_) => ref.read(themeProvider.notifier).toggle(),
                     iconColor: const Color(0xFF37474F),
                   ),
-                  const Divider(height: 1, indent: 62),
-                  _NavTile(Icons.language_rounded, 'Language',
-                      'English (Default)', () => context.push(AppRoutes.language)),
                 ]),
 
-                const SizedBox(height: 20),
+                SizedBox(height: R.h(context, 20)),
 
                 // Account
                 _SectionHeader(
@@ -461,7 +477,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   title: 'Account',
                   color: AppColors.primary,
                 ),
-                const SizedBox(height: 8),
+                SizedBox(height: R.h(context, 8)),
                 _SettingsCard(children: [
                   _NavTile(Icons.person_outline_rounded, 'Edit Profile',
                       'Update name, email & photo',
@@ -472,7 +488,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       () => context.push(AppRoutes.referral)),
                 ]),
 
-                const SizedBox(height: 20),
+                SizedBox(height: R.h(context, 20)),
 
                 // Support
                 _SectionHeader(
@@ -480,7 +496,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   title: 'Support',
                   color: const Color(0xFFE65100),
                 ),
-                const SizedBox(height: 8),
+                SizedBox(height: R.h(context, 8)),
                 _SettingsCard(children: [
                   _NavTile(Icons.help_outline_rounded, 'Help & FAQ',
                       'Find answers to common questions',
@@ -491,7 +507,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     final uri = Uri(
                       scheme: 'mailto',
                       path: 'support@mednu.in',
-                      queryParameters: {'subject': 'MedNu App Support'},
+                      queryParameters: {'subject': 'MedNU App Support'},
                     );
                     if (await canLaunchUrl(uri)) await launchUrl(uri);
                   }),
@@ -505,7 +521,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     }
                   }),
                   const Divider(height: 1, indent: 62),
-                  _NavTile(Icons.info_outline_rounded, 'About MedNu',
+                  _NavTile(Icons.info_outline_rounded, 'About MedNU',
                       'Mission, services & legal info',
                       () => context.push(AppRoutes.about)),
                   const Divider(height: 1, indent: 62),
@@ -518,19 +534,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                 ]),
 
-                const SizedBox(height: 28),
+                SizedBox(height: R.h(context, 28)),
 
                 // Sign Out
                 SizedBox(
                   width: double.infinity,
-                  height: 52,
+                  height: R.h(context, 52),
                   child: OutlinedButton.icon(
                     onPressed: () async {
                       final confirm = await showDialog<bool>(
                         context: context,
                         builder: (_) => AlertDialog(
                           shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(20)),
+                              borderRadius: BorderRadius.circular(R.r(context, 20))),
                           title: const Text('Sign Out'),
                           content: const Text(
                               'Are you sure you want to sign out?'),
@@ -552,17 +568,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         context.go(AppRoutes.login);
                       }
                     },
-                    icon: const Icon(Icons.logout_rounded, size: 18),
+                    icon: Icon(Icons.logout_rounded, size: R.w(context, 18)),
                     label: const Text('Sign Out'),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppColors.error,
                       side: BorderSide(color: AppColors.error.withValues(alpha:0.5)),
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14)),
+                          borderRadius: BorderRadius.circular(R.r(context, 14))),
                     ),
                   ),
                 ),
               ],
+            ),
             ),
           ),
         ],
@@ -581,18 +598,18 @@ class _BiometricTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        contentPadding: EdgeInsets.symmetric(horizontal: R.p(context, 16), vertical: R.p(context, 4)),
         leading: Container(
-          width: 38,
-          height: 38,
+          width: R.w(context, 38),
+          height: R.h(context, 38),
           decoration: BoxDecoration(
-            color: (supported ? const Color(0xFF1565C0) : AppColors.textHint)
+            color: (supported ? const Color(0xFF1565C0) : context.appTextHint)
                 .withValues(alpha:0.1),
-            borderRadius: BorderRadius.circular(11),
+            borderRadius: BorderRadius.circular(R.r(context, 11)),
           ),
           child: Icon(Icons.fingerprint_rounded,
-              color: supported ? const Color(0xFF1565C0) : AppColors.textHint,
-              size: 20),
+              color: supported ? const Color(0xFF1565C0) : context.appTextHint,
+              size: R.w(context, 20)),
         ),
         title: Text('Biometric Login', style: AppTextStyles.labelLarge),
         subtitle: Text(
@@ -620,15 +637,15 @@ class _SectionHeader extends StatelessWidget {
   Widget build(BuildContext context) => Row(
         children: [
           Container(
-            width: 28,
-            height: 28,
+            width: R.w(context, 28),
+            height: R.h(context, 28),
             decoration: BoxDecoration(
               color: color.withValues(alpha:0.1),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(R.r(context, 8)),
             ),
-            child: Icon(icon, size: 15, color: color),
+            child: Icon(icon, size: R.w(context, 15), color: color),
           ),
-          const SizedBox(width: 8),
+          SizedBox(width: R.w(context, 8)),
           Text(
             title,
             style: TextStyle(
@@ -652,8 +669,8 @@ class _SettingsCard extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         decoration: BoxDecoration(
           color: Theme.of(context).colorScheme.surface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.divider),
+          borderRadius: BorderRadius.circular(R.r(context, 16)),
+          border: Border.all(color: context.appBorder),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha:0.04),
@@ -678,16 +695,16 @@ class _SwitchTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        contentPadding: EdgeInsets.symmetric(horizontal: R.p(context, 16), vertical: R.p(context, 4)),
         leading: Container(
-          width: 38,
-          height: 38,
+          width: R.w(context, 38),
+          height: R.h(context, 38),
           decoration: BoxDecoration(
             color: (iconColor ?? AppColors.primary).withValues(alpha:0.1),
-            borderRadius: BorderRadius.circular(11),
+            borderRadius: BorderRadius.circular(R.r(context, 11)),
           ),
           child: Icon(icon,
-              color: iconColor ?? AppColors.primary, size: 20),
+              color: iconColor ?? AppColors.primary, size: R.w(context, 20)),
         ),
         title: Text(title, style: AppTextStyles.labelLarge),
         subtitle: Text(subtitle, style: AppTextStyles.caption),
@@ -707,15 +724,15 @@ class _NavTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) => ListTile(
         onTap: onTap,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        contentPadding: EdgeInsets.symmetric(horizontal: R.p(context, 16), vertical: R.p(context, 4)),
         leading: Container(
-          width: 38,
-          height: 38,
+          width: R.w(context, 38),
+          height: R.h(context, 38),
           decoration: BoxDecoration(
             color: AppColors.primary.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(11),
+            borderRadius: BorderRadius.circular(R.r(context, 11)),
           ),
-          child: Icon(icon, color: AppColors.primary, size: 20),
+          child: Icon(icon, color: AppColors.primary, size: R.w(context, 20)),
         ),
         title: Text(title, style: AppTextStyles.labelLarge),
         subtitle: Text(subtitle, style: AppTextStyles.caption),
@@ -725,7 +742,7 @@ class _NavTile extends StatelessWidget {
                     .colorScheme
                     .onSurface
                     .withValues(alpha: 0.3),
-                size: 20)
+                size: R.w(context, 20))
             : null,
       );
 }
@@ -741,22 +758,22 @@ class _ReminderTimingTile extends StatelessWidget {
     final label = minutes >= 60 ? '1 hour before' : '$minutes minutes before';
     return ListTile(
       onTap: onTap,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      contentPadding: EdgeInsets.symmetric(horizontal: R.p(context, 16), vertical: R.p(context, 4)),
       leading: Container(
-        width: 38,
-        height: 38,
+        width: R.w(context, 38),
+        height: R.h(context, 38),
         decoration: BoxDecoration(
           color: const Color(0xFF00897B).withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(11),
+          borderRadius: BorderRadius.circular(R.r(context, 11)),
         ),
-        child: const Icon(Icons.schedule_rounded,
-            color: Color(0xFF00897B), size: 20),
+        child: Icon(Icons.schedule_rounded,
+            color: const Color(0xFF00897B), size: R.w(context, 20)),
       ),
       title: Text('Reminder Timing', style: AppTextStyles.labelLarge),
       subtitle: Text(label, style: AppTextStyles.caption),
       trailing: Icon(Icons.chevron_right_rounded,
           color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
-          size: 20),
+          size: R.w(context, 20)),
     );
   }
 }

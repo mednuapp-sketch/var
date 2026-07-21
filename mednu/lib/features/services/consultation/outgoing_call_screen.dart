@@ -308,8 +308,8 @@ class _OutgoingCallScreenState extends State<OutgoingCallScreen>
     final label = switch (_callState) {
       _OutgoingState.calling  => widget.isScheduled
           ? 'Waiting for doctor to join...'
-          : 'Calling...',
-      _OutgoingState.ringing  => 'Doctor is joining — Connecting',
+          : 'Connecting you to Dr. ${widget.doctorName}...',
+      _OutgoingState.ringing  => 'Doctor is joining the call...',
       _OutgoingState.declined => 'Call Declined',
       _OutgoingState.missed   => 'No Answer',
     };

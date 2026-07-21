@@ -69,7 +69,7 @@ class MednuWebApp extends ConsumerWidget {
     final router = ref.watch(routerProvider);
 
     return MaterialApp.router(
-      title: 'MedNu — Your Healthcare Companion',
+      title: 'MedNU — Your Healthcare Companion',
       theme: AppTheme.light,
       debugShowCheckedModeBanner: false,
       scaffoldMessengerKey: scaffoldMessengerKey,

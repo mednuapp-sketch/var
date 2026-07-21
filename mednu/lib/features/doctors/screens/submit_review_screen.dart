@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
@@ -141,7 +142,7 @@ class _SubmitReviewScreenState extends State<SubmitReviewScreen>
               'Thank you for sharing your experience with ${widget.doctorName}. Your feedback helps other patients.',
               textAlign: TextAlign.center,
               style: AppTextStyles.bodySmall
-                  .copyWith(color: AppColors.textSecondary),
+                  .copyWith(color: context.appTextSecondary),
             ),
             const SizedBox(height: 24),
             SizedBox(
@@ -163,7 +164,7 @@ class _SubmitReviewScreenState extends State<SubmitReviewScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.appBackground,
       appBar: AppBar(
         title: const Text(
           'Rate Your Experience',
@@ -184,9 +185,9 @@ class _SubmitReviewScreenState extends State<SubmitReviewScreen>
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: context.appSurface,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.divider),
+              border: Border.all(color: context.appBorder),
             ),
             child: Row(children: [
               Container(
@@ -236,13 +237,16 @@ class _SubmitReviewScreenState extends State<SubmitReviewScreen>
           const SizedBox(height: 4),
           Text('How would you rate your overall experience?',
               style: AppTextStyles.bodySmall
-                  .copyWith(color: AppColors.textSecondary)),
+                  .copyWith(color: context.appTextSecondary)),
           const SizedBox(height: 16),
           Center(
             child: _StarRatingRow(
               rating: _overallRating,
               size: 44,
-              onChanged: (v) => setState(() => _overallRating = v),
+              onChanged: (v) {
+                HapticFeedback.selectionClick();
+                setState(() => _overallRating = v);
+              },
             ),
           ),
           if (_overallRating > 0) ...[
@@ -263,49 +267,49 @@ class _SubmitReviewScreenState extends State<SubmitReviewScreen>
           const SizedBox(height: 4),
           Text('Optional — helps doctors improve specific areas',
               style: AppTextStyles.bodySmall
-                  .copyWith(color: AppColors.textSecondary)),
+                  .copyWith(color: context.appTextSecondary)),
           const SizedBox(height: 16),
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: context.appSurface,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.divider),
+              border: Border.all(color: context.appBorder),
             ),
             child: Column(children: [
               _CategoryRating(
                 label: 'Communication',
                 icon: Icons.chat_bubble_outline_rounded,
                 rating: _communication,
-                onChanged: (v) => setState(() => _communication = v),
+                onChanged: (v) { HapticFeedback.selectionClick(); setState(() => _communication = v); },
               ),
               const Divider(height: 20),
               _CategoryRating(
                 label: 'Treatment Quality',
                 icon: Icons.medical_services_outlined,
                 rating: _treatment,
-                onChanged: (v) => setState(() => _treatment = v),
+                onChanged: (v) { HapticFeedback.selectionClick(); setState(() => _treatment = v); },
               ),
               const Divider(height: 20),
               _CategoryRating(
                 label: 'Wait Time',
                 icon: Icons.schedule_outlined,
                 rating: _waitTime,
-                onChanged: (v) => setState(() => _waitTime = v),
+                onChanged: (v) { HapticFeedback.selectionClick(); setState(() => _waitTime = v); },
               ),
               const Divider(height: 20),
               _CategoryRating(
                 label: 'Professionalism',
                 icon: Icons.workspace_premium_outlined,
                 rating: _professionalism,
-                onChanged: (v) => setState(() => _professionalism = v),
+                onChanged: (v) { HapticFeedback.selectionClick(); setState(() => _professionalism = v); },
               ),
               const Divider(height: 20),
               _CategoryRating(
                 label: 'Helpfulness',
                 icon: Icons.volunteer_activism_outlined,
                 rating: _helpfulness,
-                onChanged: (v) => setState(() => _helpfulness = v),
+                onChanged: (v) { HapticFeedback.selectionClick(); setState(() => _helpfulness = v); },
               ),
             ]),
           ),
@@ -316,38 +320,88 @@ class _SubmitReviewScreenState extends State<SubmitReviewScreen>
           const SizedBox(height: 4),
           Text('Share what you experienced (optional)',
               style: AppTextStyles.bodySmall
-                  .copyWith(color: AppColors.textSecondary)),
+                  .copyWith(color: context.appTextSecondary)),
           const SizedBox(height: 12),
-          TextField(
-            controller: _textController,
-            maxLines: 4,
-            maxLength: 500,
-            textInputAction: TextInputAction.done,
-            style: const TextStyle(fontFamily: 'Poppins', fontSize: 14),
-            decoration: InputDecoration(
-              hintText:
-                  'Describe your experience, treatment quality, doctor\'s approach...',
-              hintStyle: TextStyle(
-                  fontFamily: 'Poppins',
-                  fontSize: 13,
-                  color: AppColors.textHint),
-              filled: true,
-              fillColor: Colors.white,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: AppColors.border),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: AppColors.border),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide:
-                    const BorderSide(color: AppColors.primary, width: 1.5),
-              ),
-              contentPadding: const EdgeInsets.all(14),
+          ValueListenableBuilder<TextEditingValue>(
+            valueListenable: _textController,
+            builder: (context, value, _) {
+              final charCount = value.text.length;
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextField(
+                    controller: _textController,
+                    maxLines: 4,
+                    maxLength: 500,
+                    maxLengthEnforcement: MaxLengthEnforcement.enforced,
+                    textInputAction: TextInputAction.done,
+                    style: const TextStyle(fontFamily: 'Poppins', fontSize: 14),
+                    decoration: InputDecoration(
+                      hintText:
+                          'Describe your experience, treatment quality, doctor\'s approach...',
+                      hintStyle: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 13,
+                          color: context.appTextHint),
+                      filled: true,
+                      fillColor: context.appSurface,
+                      counterText: '', // hide default counter
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(color: context.appBorder),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(color: context.appBorder),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide:
+                            const BorderSide(color: AppColors.primary, width: 1.5),
+                      ),
+                      contentPadding: const EdgeInsets.all(14),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      '$charCount/500 characters',
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 11,
+                        color: charCount >= 450
+                            ? AppColors.error
+                            : context.appTextHint,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 24),
+
+          // Disclaimer
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.amber.withValues(alpha: 0.07),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.amber.withValues(alpha: 0.25)),
             ),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Icon(Icons.info_outline_rounded, size: 16, color: Colors.amber),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Your review helps other patients make informed decisions. False reviews may be removed.',
+                  style: AppTextStyles.caption.copyWith(
+                      color: context.appTextSecondary, height: 1.5),
+                ),
+              ),
+            ]),
           ),
           const SizedBox(height: 32),
 
@@ -383,13 +437,13 @@ class _SubmitReviewScreenState extends State<SubmitReviewScreen>
           const SizedBox(height: 16),
           Center(
             child: Row(mainAxisSize: MainAxisSize.min, children: [
-              const Icon(Icons.lock_outline_rounded,
-                  size: 12, color: AppColors.textHint),
+              Icon(Icons.lock_outline_rounded,
+                  size: 12, color: context.appTextHint),
               const SizedBox(width: 4),
               Text(
                 'Your review is verified and cannot be edited after submission',
                 style: AppTextStyles.caption
-                    .copyWith(color: AppColors.textHint),
+                    .copyWith(color: context.appTextHint),
                 textAlign: TextAlign.center,
               ),
             ]),
@@ -446,7 +500,7 @@ class _StarRatingRow extends StatelessWidget {
                     : Icons.star_outline_rounded,
                 key: ValueKey('$i-${rating >= starVal}'),
                 size: size,
-                color: rating >= starVal ? Colors.amber : AppColors.border,
+                color: rating >= starVal ? Colors.amber : context.appBorder,
               ),
             ),
           ),
@@ -471,33 +525,57 @@ class _CategoryRating extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(children: [
-      Icon(icon, size: 18, color: AppColors.primary),
-      const SizedBox(width: 10),
-      Expanded(
-        child: Text(label,
-            style: const TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 13,
-                fontWeight: FontWeight.w500)),
-      ),
-      Row(
-        mainAxisSize: MainAxisSize.min,
-        children: List.generate(5, (i) {
-          final v = (i + 1).toDouble();
-          return GestureDetector(
-            onTap: () => onChanged(v),
-            child: Padding(
-              padding: const EdgeInsets.only(left: 4),
-              child: Icon(
-                rating >= v ? Icons.star_rounded : Icons.star_outline_rounded,
-                size: 20,
-                color: rating >= v ? Colors.amber : AppColors.border,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(children: [
+          Icon(icon, size: 18, color: AppColors.primary),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(label,
+                style: const TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500)),
+          ),
+          if (rating > 0) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                rating.toStringAsFixed(1),
+                style: const TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.primary,
+                ),
               ),
             ),
-          );
-        }),
-      ),
-    ]);
+            const SizedBox(width: 8),
+          ],
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: List.generate(5, (i) {
+              final v = (i + 1).toDouble();
+              return GestureDetector(
+                onTap: () => onChanged(v),
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 4),
+                  child: Icon(
+                    rating >= v ? Icons.star_rounded : Icons.star_outline_rounded,
+                    size: 20,
+                    color: rating >= v ? Colors.amber : context.appBorder,
+                  ),
+                ),
+              );
+            }),
+          ),
+        ]),
+      ],
+    );
   }
 }

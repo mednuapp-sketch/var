@@ -28,40 +28,35 @@ double _haversineKm(double lat1, double lng1, double lat2, double lng2) {
 //  Filter state
 // ─────────────────────────────────────────────────────────────
 class _FilterState {
-  final String sortBy; // 'relevance' | 'rating' | 'experience' | 'fee_asc' | 'fee_desc'
-  final double minRating; // 0 = any
-  final int minExperience; // 0 = any  (years)
+  final String sortBy; // 'relevance' | 'fee_asc' | 'fee_desc'
   final int maxFee; // 0 = any
   final String gender; // 'Any' | 'Male' | 'Female'
+  final bool availableNow; // filter to online doctors only
 
   const _FilterState({
     this.sortBy = 'relevance',
-    this.minRating = 0,
-    this.minExperience = 0,
     this.maxFee = 0,
     this.gender = 'Any',
+    this.availableNow = false,
   });
 
   bool get hasActiveFilters =>
       sortBy != 'relevance' ||
-      minRating > 0 ||
-      minExperience > 0 ||
       maxFee > 0 ||
-      gender != 'Any';
+      gender != 'Any' ||
+      availableNow;
 
   _FilterState copyWith({
     String? sortBy,
-    double? minRating,
-    int? minExperience,
     int? maxFee,
     String? gender,
+    bool? availableNow,
   }) =>
       _FilterState(
         sortBy: sortBy ?? this.sortBy,
-        minRating: minRating ?? this.minRating,
-        minExperience: minExperience ?? this.minExperience,
         maxFee: maxFee ?? this.maxFee,
         gender: gender ?? this.gender,
+        availableNow: availableNow ?? this.availableNow,
       );
 }
 
@@ -71,12 +66,16 @@ class _FilterState {
 class DoctorsListScreen extends ConsumerStatefulWidget {
   final String? initialSpecialty;
   final String? initialMode; // 'video' | 'inperson'
+  final String? initialType; // 'therapist' | null (any professional type)
+  final int? initialDuration; // preferred session length in minutes, carried from the booking flow
   final bool showBackButton;
 
   const DoctorsListScreen({
     super.key,
     this.initialSpecialty,
     this.initialMode,
+    this.initialType,
+    this.initialDuration,
     this.showBackButton = true,
   });
 
@@ -89,6 +88,7 @@ class _DoctorsListScreenState extends ConsumerState<DoctorsListScreen>
   late String _selectedSpecialty;
   // 'video' = online/global | 'inperson' = location-filtered
   late String _consultationMode;
+  late bool _therapistsOnly;
   String _search = '';
   String _debouncedSearch = '';
   Timer? _searchDebounce;
@@ -96,16 +96,26 @@ class _DoctorsListScreenState extends ConsumerState<DoctorsListScreen>
   late TabController _tabController;
 
   static const _specialties = [
-    'All', 'General', 'Cardiology', 'Endocrinology',
+    'All', 'Available Now', 'General', 'Cardiology', 'Endocrinology',
     'Gastroenterology', 'Nephrology', 'Urology', 'Neurology',
     'Pulmonology', 'Gynaecology', 'Dermatology', 'General Surgery',
     'Orthopaedics', 'Ophthalmology', 'ENT', 'Paediatrics',
     'Psychiatry', 'Dental', 'Rheumatology', 'Oncology',
   ];
 
+  // Shown instead of _specialties when browsing therapists only.
+  static const _therapistSpecialties = [
+    'All', 'Available Now', 'Psychiatry', 'Psychology', 'Counselling',
+    'Pediatric Psychiatry',
+  ];
+
+  List<String> get _activeSpecialties =>
+      _therapistsOnly ? _therapistSpecialties : _specialties;
+
   @override
   void initState() {
     super.initState();
+    _therapistsOnly = widget.initialType == 'therapist';
     _selectedSpecialty = widget.initialSpecialty ?? 'All';
     _consultationMode = widget.initialMode == 'inperson' ? 'inperson' : 'video';
     _tabController = TabController(
@@ -231,11 +241,11 @@ class _DoctorsListScreenState extends ConsumerState<DoctorsListScreen>
 
     return Scaffold(
       resizeToAvoidBottomInset: false,
-      backgroundColor: AppColors.background,
+      backgroundColor: context.appBackground,
       appBar: AppBar(
-        title: const Text(
-          'Find Doctors',
-          style: TextStyle(
+        title: Text(
+          _therapistsOnly ? 'Find Therapists' : 'Find Doctors',
+          style: const TextStyle(
             fontFamily: 'Poppins',
             fontWeight: FontWeight.w700,
             color: Colors.white,
@@ -295,21 +305,33 @@ class _DoctorsListScreenState extends ConsumerState<DoctorsListScreen>
               tabs: const [
                 Tab(
                   child: Row(
-                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Icon(Icons.video_call_rounded, size: 16),
                       SizedBox(width: 5),
-                      Text('Video / Online'),
+                      Flexible(
+                        child: Text(
+                          'Video / Online',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
                     ],
                   ),
                 ),
                 Tab(
                   child: Row(
-                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Icon(Icons.location_on_rounded, size: 16),
                       SizedBox(width: 5),
-                      Text('In-Person'),
+                      Flexible(
+                        child: Text(
+                          'In-Person',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -327,9 +349,9 @@ class _DoctorsListScreenState extends ConsumerState<DoctorsListScreen>
             decoration: InputDecoration(
               hintText: 'Search doctors, specialities…',
               prefixIcon:
-                  const Icon(Icons.search_rounded, color: AppColors.textHint),
+                  Icon(Icons.search_rounded, color: context.appTextHint),
               filled: true,
-              fillColor: Colors.white,
+              fillColor: context.appSurface,
               border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
                   borderSide: BorderSide.none),
@@ -412,7 +434,7 @@ class _DoctorsListScreenState extends ConsumerState<DoctorsListScreen>
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Video consultations available globally to India',
+                    'Video consultations available across India',
                     style: AppTextStyles.caption
                         .copyWith(color: Colors.teal.shade700),
                     maxLines: 1,
@@ -430,13 +452,23 @@ class _DoctorsListScreenState extends ConsumerState<DoctorsListScreen>
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: _specialties.length,
+            itemCount: _activeSpecialties.length,
             itemBuilder: (_, i) {
-              final selected = _selectedSpecialty == _specialties[i];
-              final isNotAll = _specialties[i] != 'All';
+              final chip = _activeSpecialties[i];
+              final isAvailableNow = chip == 'Available Now';
+              final selected = isAvailableNow
+                  ? _filters.availableNow
+                  : _selectedSpecialty == chip;
+              final isNotAll = chip != 'All' && !isAvailableNow;
               return GestureDetector(
-                onTap: () =>
-                    setState(() => _selectedSpecialty = _specialties[i]),
+                onTap: () {
+                  if (isAvailableNow) {
+                    setState(() => _filters = _filters.copyWith(
+                        availableNow: !_filters.availableNow));
+                  } else {
+                    setState(() => _selectedSpecialty = chip);
+                  }
+                },
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 180),
                   margin: const EdgeInsets.only(right: 8),
@@ -451,27 +483,48 @@ class _DoctorsListScreenState extends ConsumerState<DoctorsListScreen>
                     border: Border.all(
                         color: selected
                             ? AppColors.primary
-                            : AppColors.border),
+                            : context.appBorder),
                   ),
                   child: Center(
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        if (isAvailableNow && !selected)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 5),
+                            child: Icon(Icons.bolt_rounded, size: 13, color: context.appTextSecondary),
+                          ),
+                        if (isAvailableNow && selected)
+                          const Padding(
+                            padding: EdgeInsets.only(right: 5),
+                            child: Icon(Icons.bolt_rounded, size: 13, color: Colors.white),
+                          ),
                         Text(
-                          _specialties[i],
+                          chip,
                           style: TextStyle(
                             fontFamily: 'Poppins',
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
                             color: selected
                                 ? Colors.white
-                                : AppColors.textSecondary,
+                                : context.appTextSecondary,
                           ),
                         ),
                         if (selected && isNotAll) ...[
                           const SizedBox(width: 5),
                           GestureDetector(
                             onTap: () => setState(() => _selectedSpecialty = 'All'),
+                            child: const Icon(
+                              Icons.close_rounded,
+                              size: 14,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                        if (selected && isAvailableNow) ...[
+                          const SizedBox(width: 5),
+                          GestureDetector(
+                            onTap: () => setState(() => _filters = _filters.copyWith(availableNow: false)),
                             child: const Icon(
                               Icons.close_rounded,
                               size: 14,
@@ -503,18 +556,6 @@ class _DoctorsListScreenState extends ConsumerState<DoctorsListScreen>
                     onRemove: () => setState(
                         () => _filters = _filters.copyWith(sortBy: 'relevance')),
                   ),
-                if (_filters.minRating > 0)
-                  _ActiveFilterChip(
-                    label: '${_filters.minRating.toStringAsFixed(1)}+ ★',
-                    onRemove: () => setState(
-                        () => _filters = _filters.copyWith(minRating: 0)),
-                  ),
-                if (_filters.minExperience > 0)
-                  _ActiveFilterChip(
-                    label: '${_filters.minExperience}+ yrs',
-                    onRemove: () => setState(
-                        () => _filters = _filters.copyWith(minExperience: 0)),
-                  ),
                 if (_filters.maxFee > 0)
                   _ActiveFilterChip(
                     label: 'Fee ≤₹${_filters.maxFee}',
@@ -527,6 +568,35 @@ class _DoctorsListScreenState extends ConsumerState<DoctorsListScreen>
                     onRemove: () => setState(
                         () => _filters = _filters.copyWith(gender: 'Any')),
                   ),
+                if (_filters.availableNow)
+                  _ActiveFilterChip(
+                    label: 'Available Now',
+                    onRemove: () => setState(
+                        () => _filters = _filters.copyWith(availableNow: false)),
+                  ),
+                // Clear all button
+                GestureDetector(
+                  onTap: () => setState(() => _filters = const _FilterState()),
+                  child: Container(
+                    margin: const EdgeInsets.only(right: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      Icon(Icons.clear_all_rounded, size: 13, color: context.appTextSecondary),
+                      SizedBox(width: 4),
+                      Text('Clear All',
+                          style: TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: context.appTextSecondary)),
+                    ]),
+                  ),
+                ),
               ],
             ),
           ),
@@ -546,6 +616,8 @@ class _DoctorsListScreenState extends ConsumerState<DoctorsListScreen>
                 search: _debouncedSearch,
                 filters: _filters,
                 locationMode: _LocationMode.global,
+                therapistsOnly: _therapistsOnly,
+                duration: widget.initialDuration,
               ),
               // In-Person tab — requires location
               locState.isDetecting
@@ -567,6 +639,8 @@ class _DoctorsListScreenState extends ConsumerState<DoctorsListScreen>
                           locationMode: _LocationMode.nearby(
                               locState.lat ?? 0, locState.lng ?? 0),
                           isInPerson: true,
+                          therapistsOnly: _therapistsOnly,
+                          duration: widget.initialDuration,
                         ),
             ],
           ),
@@ -578,10 +652,6 @@ class _DoctorsListScreenState extends ConsumerState<DoctorsListScreen>
 
   String _sortLabel(String s) {
     switch (s) {
-      case 'rating':
-        return 'Top Rated';
-      case 'experience':
-        return 'Most Experienced';
       case 'fee_asc':
         return 'Fee: Low';
       case 'fee_desc':
@@ -616,6 +686,8 @@ class _DoctorListView extends StatelessWidget {
   final _FilterState filters;
   final _LocationMode locationMode;
   final bool isInPerson;
+  final bool therapistsOnly;
+  final int? duration;
 
   const _DoctorListView({
     required this.specialty,
@@ -623,6 +695,8 @@ class _DoctorListView extends StatelessWidget {
     required this.filters,
     required this.locationMode,
     this.isInPerson = false,
+    this.therapistsOnly = false,
+    this.duration,
   });
 
   @override
@@ -630,6 +704,10 @@ class _DoctorListView extends StatelessWidget {
     Query<Map<String, dynamic>> q = FirebaseFirestore.instance
         .collection('doctors')
         .where('status', isEqualTo: 'active');
+
+    if (therapistsOnly) {
+      q = q.where('type', isEqualTo: 'therapist');
+    }
 
     if (specialty != 'All') {
       q = q.where('specialty', isEqualTo: specialty);
@@ -691,25 +769,6 @@ class _DoctorListView extends StatelessWidget {
         }
 
         // ── Client-side filters ───────────────────────────────
-        if (filters.minRating > 0) {
-          withDistance = withDistance.where((e) {
-            final reviews = (e.key.data()['totalReviews'] as num?)?.toInt() ?? 0;
-            if (reviews == 0) return false; // no verified rating — exclude from rating filters
-            final r = (e.key.data()['rating'] as num?)?.toDouble() ?? 0;
-            return r >= filters.minRating;
-          }).toList();
-        }
-
-        if (filters.minExperience > 0) {
-          withDistance = withDistance.where((e) {
-            final exp = e.key.data()['experience'];
-            final yrs = exp is int
-                ? exp
-                : int.tryParse(exp?.toString() ?? '0') ?? 0;
-            return yrs >= filters.minExperience;
-          }).toList();
-        }
-
         if (filters.maxFee > 0) {
           withDistance = withDistance.where((e) {
             final fee = e.key.data()['fee'];
@@ -727,26 +786,14 @@ class _DoctorListView extends StatelessWidget {
           }).toList();
         }
 
+        if (filters.availableNow) {
+          withDistance = withDistance.where((e) {
+            return e.key.data()['isOnline'] == true;
+          }).toList();
+        }
+
         // ── Sort ─────────────────────────────────────────────
         switch (filters.sortBy) {
-          case 'rating':
-            withDistance.sort((a, b) {
-              final aReviews = (a.key.data()['totalReviews'] as num?)?.toInt() ?? 0;
-              final bReviews = (b.key.data()['totalReviews'] as num?)?.toInt() ?? 0;
-              final ra = aReviews > 0 ? (a.key.data()['rating'] as num?)?.toDouble() ?? 0 : 0;
-              final rb = bReviews > 0 ? (b.key.data()['rating'] as num?)?.toDouble() ?? 0 : 0;
-              return rb.compareTo(ra);
-            });
-            break;
-          case 'experience':
-            withDistance.sort((a, b) {
-              final ea = a.key.data()['experience'];
-              final eb = b.key.data()['experience'];
-              final ia = ea is int ? ea : int.tryParse(ea?.toString() ?? '0') ?? 0;
-              final ib = eb is int ? eb : int.tryParse(eb?.toString() ?? '0') ?? 0;
-              return ib.compareTo(ia);
-            });
-            break;
           case 'fee_asc':
             withDistance.sort((a, b) {
               final fa = a.key.data()['fee'];
@@ -791,33 +838,63 @@ class _DoctorListView extends StatelessWidget {
                 ? Icons.location_searching_rounded
                 : Icons.people_outline_rounded,
             title: isInPerson && !locationMode.isGlobal
-                ? 'No nearby doctors'
+                ? (therapistsOnly ? 'No nearby therapists' : 'No nearby doctors')
                 : search.isNotEmpty
                     ? 'No results for "$search"'
-                    : 'No doctors available',
+                    : filters.hasActiveFilters
+                        ? (therapistsOnly ? 'No therapists match your filters' : 'No doctors match your filters')
+                        : (therapistsOnly ? 'No therapists available' : 'No doctors available'),
             message: isInPerson && !locationMode.isGlobal
-                ? 'No doctors found within ${_LocationMode.maxKm.toInt()} km. Try adjusting your location or filters.'
-                : search.isNotEmpty
-                    ? 'Try a different search term or remove filters.'
-                    : 'No doctors available right now. Check back soon.',
+                ? 'No ${therapistsOnly ? 'therapists' : 'doctors'} found within ${_LocationMode.maxKm.toInt()} km. Try adjusting your location or filters.'
+                : filters.hasActiveFilters || search.isNotEmpty
+                    ? 'No ${therapistsOnly ? 'therapists' : 'doctors'} match your search. Try different filters or a broader specialty.'
+                    : 'No ${therapistsOnly ? 'therapists' : 'doctors'} available right now. Check back soon.',
           );
         }
 
-        return ListView.builder(
-          padding: const EdgeInsets.fromLTRB(16, 6, 16, 20),
-          itemCount: withDistance.length,
-          itemBuilder: (_, i) {
-            final entry = withDistance[i];
-            return FadeInSlide(
-              delay: Duration(milliseconds: i * 35),
-              child: _DoctorCard(
-                data: entry.key.data(),
-                docId: entry.key.id,
-                distanceKm: entry.value,
-                isInPerson: isInPerson,
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── Results count badge ───────────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  '${withDistance.length} doctor${withDistance.length == 1 ? '' : 's'} found',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: context.appTextSecondary,
+                  ),
+                ),
               ),
-            );
-          },
+            ),
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
+                itemCount: withDistance.length,
+                itemBuilder: (_, i) {
+                  final entry = withDistance[i];
+                  return FadeInSlide(
+                    delay: Duration(milliseconds: i * 35),
+                    child: _DoctorCard(
+                      data: entry.key.data(),
+                      docId: entry.key.id,
+                      distanceKm: entry.value,
+                      isInPerson: isInPerson,
+                      duration: duration,
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
         );
       },
     );
@@ -832,12 +909,14 @@ class _DoctorCard extends StatelessWidget {
   final String docId;
   final double? distanceKm;
   final bool isInPerson;
+  final int? duration;
 
   const _DoctorCard({
     required this.data,
     required this.docId,
     this.distanceKm,
     this.isInPerson = false,
+    this.duration,
   });
 
   @override
@@ -858,18 +937,19 @@ class _DoctorCard extends StatelessWidget {
     final hospital = data['hospital'] as String? ??
         data['hospitalAffiliation'] as String? ?? '';
     final isVerified = data['verified'] as bool? ?? true;
+    final profilePath = duration != null ? '/doctors/$docId?duration=$duration' : '/doctors/$docId';
 
     return TapScale(
-      onTap: () => context.push('/doctors/$docId'),
+      onTap: () => context.push(profilePath),
       child: Container(
         margin: const EdgeInsets.only(bottom: 14),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: context.appSurface,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: isOnline
                 ? AppColors.accent.withValues(alpha: 0.2)
-                : AppColors.divider,
+                : context.appDivider,
           ),
           boxShadow: [
             BoxShadow(
@@ -956,11 +1036,11 @@ class _DoctorCard extends StatelessWidget {
                         Expanded(
                           child: Text(
                             name,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontFamily: 'Poppins',
                               fontSize: 15,
                               fontWeight: FontWeight.w700,
-                              color: AppColors.textPrimary,
+                              color: context.appTextPrimary,
                             ),
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -1016,7 +1096,7 @@ class _DoctorCard extends StatelessWidget {
                           child: Text(
                             qual.isNotEmpty ? '$specialty · $qual' : specialty,
                             style: AppTextStyles.bodySmall.copyWith(
-                              color: AppColors.textSecondary,
+                              color: context.appTextSecondary,
                             ),
                             overflow: TextOverflow.ellipsis,
                             maxLines: 1,
@@ -1037,12 +1117,14 @@ class _DoctorCard extends StatelessWidget {
                         children: [
                           if (hasRating) ...[
                             _statChip(
+                              context,
                               icon: Icons.star_rounded,
                               label: '$rating ($totalReviews)',
                               color: const Color(0xFFF9A825),
                             ),
                           ],
                           _statChip(
+                            context,
                             icon: Icons.currency_rupee_rounded,
                             label: fee > 0 ? '$fee' : 'Free',
                             color: AppColors.primary,
@@ -1061,20 +1143,20 @@ class _DoctorCard extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.fromLTRB(14, 0, 14, 0),
                 child: Divider(
-                    height: 1, color: AppColors.divider.withValues(alpha: 0.6)),
+                    height: 1, color: context.appDivider.withValues(alpha: 0.6)),
               ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(14, 8, 14, 0),
                 child: Row(children: [
                   if (hospital.isNotEmpty) ...[
-                    const Icon(Icons.local_hospital_rounded,
-                        size: 13, color: AppColors.textHint),
+                    Icon(Icons.local_hospital_rounded,
+                        size: 13, color: context.appTextHint),
                     const SizedBox(width: 4),
                     Expanded(
                       child: Text(
                         hospital,
                         style: AppTextStyles.caption
-                            .copyWith(color: AppColors.textHint),
+                            .copyWith(color: context.appTextHint),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
@@ -1112,42 +1194,44 @@ class _DoctorCard extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
               child: Row(children: [
-                // Quick Connect button
-                Expanded(
-                  child: GestureDetector(
-                    onTap: () => context.push('/doctors/$docId',
-                        extra: {'mode': 'quickConnect'}),
-                    child: Container(
-                      height: 38,
-                      decoration: BoxDecoration(
-                        border: Border.all(color: AppColors.primary),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.flash_on_rounded,
-                              size: 15, color: AppColors.primary),
-                          SizedBox(width: 5),
-                          Text(
-                            'Quick Connect',
-                            style: TextStyle(
-                              fontFamily: 'Poppins',
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.primary,
+                // Quick Connect — only shown when doctor is online
+                if (isOnline) ...[
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => context.push('/doctors/$docId',
+                          extra: {'mode': 'quickConnect'}),
+                      child: Container(
+                        height: 38,
+                        decoration: BoxDecoration(
+                          border: Border.all(color: AppColors.primary),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.flash_on_rounded,
+                                size: 15, color: AppColors.primary),
+                            SizedBox(width: 5),
+                            Text(
+                              'Quick Connect',
+                              style: TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.primary,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 10),
+                  const SizedBox(width: 10),
+                ],
                 // Book Appointment button
                 Expanded(
                   child: GestureDetector(
-                    onTap: () => context.push('/doctors/$docId'),
+                    onTap: () => context.push(profilePath),
                     child: Container(
                       height: 38,
                       decoration: BoxDecoration(
@@ -1189,7 +1273,8 @@ class _DoctorCard extends StatelessWidget {
     );
   }
 
-  Widget _statChip({
+  Widget _statChip(
+    BuildContext context, {
     required IconData icon,
     required String label,
     required Color color,
@@ -1204,7 +1289,7 @@ class _DoctorCard extends StatelessWidget {
             fontFamily: 'Poppins',
             fontSize: 12,
             fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
-            color: bold ? color : AppColors.textSecondary,
+            color: bold ? color : context.appTextSecondary,
           ),
         ),
       ]);
@@ -1271,8 +1356,8 @@ class _FilterSheetState extends State<_FilterSheet> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
+      decoration: BoxDecoration(
+        color: context.appSurface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       padding: EdgeInsets.fromLTRB(
@@ -1285,7 +1370,7 @@ class _FilterSheetState extends State<_FilterSheet> {
               width: 40, height: 4,
               margin: const EdgeInsets.only(bottom: 16),
               decoration: BoxDecoration(
-                  color: AppColors.border,
+                  color: context.appBorder,
                   borderRadius: BorderRadius.circular(2)),
             ),
           ),
@@ -1307,48 +1392,8 @@ class _FilterSheetState extends State<_FilterSheet> {
             spacing: 8, runSpacing: 8,
             children: [
               _sortChip('relevance', 'Relevance'),
-              _sortChip('rating', 'Top Rated'),
-              _sortChip('experience', 'Most Experienced'),
               _sortChip('fee_asc', 'Fee: Low → High'),
               _sortChip('fee_desc', 'Fee: High → Low'),
-            ],
-          ),
-          const SizedBox(height: 20),
-
-          // Min rating
-          Row(children: [
-            Text('Minimum Rating', style: AppTextStyles.labelLarge),
-            const Spacer(),
-            Text(
-              _state.minRating > 0
-                  ? '${_state.minRating.toStringAsFixed(1)} ★'
-                  : 'Any',
-              style: AppTextStyles.bodySmall
-                  .copyWith(color: AppColors.primary),
-            ),
-          ]),
-          const SizedBox(height: 6),
-          Wrap(
-            spacing: 8, runSpacing: 8,
-            children: [
-              _ratingChip(0, 'Any'),
-              _ratingChip(3.0, '3.0+'),
-              _ratingChip(4.0, '4.0+'),
-              _ratingChip(4.5, '4.5+'),
-            ],
-          ),
-          const SizedBox(height: 20),
-
-          // Experience
-          Text('Experience', style: AppTextStyles.labelLarge),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8, runSpacing: 8,
-            children: [
-              _expChip(0, 'Any'),
-              _expChip(5, '5+ years'),
-              _expChip(10, '10+ years'),
-              _expChip(15, '15+ years'),
             ],
           ),
           const SizedBox(height: 20),
@@ -1378,6 +1423,21 @@ class _FilterSheetState extends State<_FilterSheet> {
               _genderChip('Female'),
             ],
           ),
+          const SizedBox(height: 20),
+
+          // Available Now toggle
+          Row(children: [
+            Text('Available Now', style: AppTextStyles.labelLarge),
+            const Spacer(),
+            Switch(
+              value: _state.availableNow,
+              activeThumbColor: Colors.white,
+              activeTrackColor: AppColors.primary,
+              onChanged: (v) => setState(() => _state = _state.copyWith(availableNow: v)),
+            ),
+          ]),
+          Text('Show only doctors who are currently online',
+              style: AppTextStyles.bodySmall.copyWith(color: context.appTextHint)),
           const SizedBox(height: 28),
 
           SizedBox(
@@ -1412,25 +1472,8 @@ class _FilterSheetState extends State<_FilterSheet> {
                 fontFamily: 'Poppins',
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
-                color: sel ? Colors.white : AppColors.textSecondary)),
+                color: sel ? Colors.white : context.appTextSecondary)),
       ),
-    );
-  }
-
-  Widget _ratingChip(double value, String label) {
-    final sel = _state.minRating == value;
-    return GestureDetector(
-      onTap: () => setState(() => _state = _state.copyWith(minRating: value)),
-      child: _buildChip(label, sel),
-    );
-  }
-
-  Widget _expChip(int value, String label) {
-    final sel = _state.minExperience == value;
-    return GestureDetector(
-      onTap: () =>
-          setState(() => _state = _state.copyWith(minExperience: value)),
-      child: _buildChip(label, sel),
     );
   }
 
@@ -1469,7 +1512,7 @@ class _FilterSheetState extends State<_FilterSheet> {
                 fontFamily: 'Poppins',
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
-                color: selected ? AppColors.primary : AppColors.textSecondary)),
+                color: selected ? AppColors.primary : context.appTextSecondary)),
       );
 }
 
@@ -1693,7 +1736,7 @@ class _LocationRequiredView extends StatelessWidget {
             Text(
               'Enable Location',
               style: AppTextStyles.h3.copyWith(
-                  color: AppColors.textPrimary),
+                  color: context.appTextPrimary),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 10),
@@ -1701,7 +1744,7 @@ class _LocationRequiredView extends StatelessWidget {
               'We need your GPS location to find doctors near you. '
               'Tap below to detect your current position.',
               style: AppTextStyles.bodyMedium
-                  .copyWith(color: AppColors.textSecondary),
+                  .copyWith(color: context.appTextSecondary),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
@@ -1733,7 +1776,7 @@ class _LocationRequiredView extends StatelessWidget {
             Text(
               'In-person consultations require location access\nto show doctors within 15 km.',
               style: AppTextStyles.caption
-                  .copyWith(color: AppColors.textHint),
+                  .copyWith(color: context.appTextHint),
               textAlign: TextAlign.center,
             ),
           ],

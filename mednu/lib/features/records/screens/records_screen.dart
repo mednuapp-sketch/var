@@ -293,7 +293,7 @@ class _RecordsScreenState extends State<RecordsScreen>
         : 'My Health Records';
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.appBackground,
       appBar: AppBar(
         title: Text(
           title,
@@ -328,9 +328,18 @@ class _RecordsScreenState extends State<RecordsScreen>
             fontSize: 13,
           ),
           tabs: const [
-            Tab(text: 'Prescriptions'),
-            Tab(text: 'Reports'),
-            Tab(text: 'Consultations'),
+            Tab(
+              child: Text('Prescriptions',
+                  maxLines: 1, overflow: TextOverflow.ellipsis),
+            ),
+            Tab(
+              child: Text('Reports',
+                  maxLines: 1, overflow: TextOverflow.ellipsis),
+            ),
+            Tab(
+              child: Text('Consultations',
+                  maxLines: 1, overflow: TextOverflow.ellipsis),
+            ),
           ],
         ),
       ),
@@ -413,9 +422,9 @@ class _RecordsScreenState extends State<RecordsScreen>
         return Container(
           margin: const EdgeInsets.only(bottom: 12),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: context.appSurface,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.divider),
+            border: Border.all(color: context.appBorder),
             boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:0.04), blurRadius: 8, offset: const Offset(0, 2))],
           ),
           child: Material(
@@ -448,7 +457,7 @@ class _RecordsScreenState extends State<RecordsScreen>
                       onPressed: () => context.push(AppRoutes.prescriptionViewer, extra: rx),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.share_rounded, color: AppColors.textHint),
+                      icon: Icon(Icons.share_rounded, color: context.appTextHint),
                       tooltip: 'Share',
                       onPressed: () => sharePrescription(rx),
                     ),
@@ -505,9 +514,9 @@ class _RecordsScreenState extends State<RecordsScreen>
         return Container(
           margin: const EdgeInsets.only(bottom: 12),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: context.appSurface,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.divider),
+            border: Border.all(color: context.appBorder),
             boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:0.04), blurRadius: 8, offset: const Offset(0, 2))],
           ),
           child: Material(
@@ -544,7 +553,7 @@ class _RecordsScreenState extends State<RecordsScreen>
                   ),
                   const SizedBox(width: 4),
                   if (imageUrl.isNotEmpty)
-                    const Icon(Icons.chevron_right_rounded, color: AppColors.textHint, size: 20),
+                    Icon(Icons.chevron_right_rounded, color: context.appTextHint, size: 20),
                 ]),
               ),
             ),
@@ -573,16 +582,20 @@ class _RecordsScreenState extends State<RecordsScreen>
         maxChildSize: 0.95,
         minChildSize: 0.5,
         builder: (sheetCtx, ctrl) => Container(
-          decoration: const BoxDecoration(
-              color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+          decoration: BoxDecoration(
+              color: context.appSurface, borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
           child: Column(children: [
             Container(width: 40, height: 4, margin: const EdgeInsets.only(top: 12, bottom: 16),
                 decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Row(children: [
-                Text(name, style: AppTextStyles.h4),
-                const Spacer(),
+                Expanded(
+                  child: Text(name,
+                      style: AppTextStyles.h4,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
+                ),
                 IconButton(icon: const Icon(Icons.close_rounded), onPressed: () => Navigator.pop(sheetCtx)),
               ]),
             ),
@@ -640,9 +653,9 @@ class _RecordsScreenState extends State<RecordsScreen>
           margin: const EdgeInsets.only(bottom: 12),
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: context.appSurface,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.divider),
+            border: Border.all(color: context.appBorder),
             boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:0.04), blurRadius: 8, offset: const Offset(0, 2))],
           ),
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -660,14 +673,14 @@ class _RecordsScreenState extends State<RecordsScreen>
               ],
               const SizedBox(height: 6),
               Row(children: [
-                const Icon(Icons.schedule_rounded, size: 13, color: AppColors.textHint),
+                Icon(Icons.schedule_rounded, size: 13, color: context.appTextHint),
                 const SizedBox(width: 4),
                 Text(dateStr, style: AppTextStyles.bodySmall),
               ]),
               if (durStr.isNotEmpty) ...[
                 const SizedBox(height: 2),
                 Row(children: [
-                  const Icon(Icons.timer_outlined, size: 13, color: AppColors.textHint),
+                  Icon(Icons.timer_outlined, size: 13, color: context.appTextHint),
                   const SizedBox(width: 4),
                   Text('Duration: $durStr', style: AppTextStyles.bodySmall),
                 ]),
@@ -695,8 +708,8 @@ class _SourcePicker extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
-      decoration: const BoxDecoration(
-          color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      decoration: BoxDecoration(
+          color: context.appSurface, borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         Container(width: 40, height: 4,
             decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
@@ -758,7 +771,7 @@ class _PrescriptionCardSkeleton extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.appSurface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFFEEEEEE)),
         boxShadow: const [BoxShadow(color: Color(0x0A000000), blurRadius: 8, offset: Offset(0, 2))],

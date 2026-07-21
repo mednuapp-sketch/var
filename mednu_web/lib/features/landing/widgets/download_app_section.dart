@@ -121,7 +121,7 @@ class _BrandVisual extends StatelessWidget {
         ),
         SizedBox(height: mobile ? 16 : 24),
         Text(
-          'MedNu',
+          'MedNU',
           style: GoogleFonts.poppins(
             fontSize: mobile ? 24 : compact ? 28 : 36,
             fontWeight: FontWeight.w800,
@@ -227,7 +227,7 @@ class _TextContent extends StatelessWidget {
         ),
         const SizedBox(height: 18),
         Text(
-          'Take MedNu\nEverywhere You Go',
+          'Take MedNU\nEverywhere You Go',
           textAlign: textAlign,
           style: GoogleFonts.poppins(
             fontSize: titleSize,

@@ -1,12 +1,17 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/constants/app_spacing.dart';
 import '../../../core/constants/app_text_styles.dart';
-import '../../../core/widgets/service_booking_sheet.dart';
+import '../../../core/services/feedback_service.dart';
+import '../../../core/utils/r.dart';
+import '../../../core/widgets/add_to_cart_button.dart';
 import '../../../core/widgets/ux_widgets.dart';
+import '../../cart/providers/cart_provider.dart';
 
-class PhysioScreen extends StatelessWidget {
+class PhysioScreen extends ConsumerWidget {
   const PhysioScreen({super.key});
 
   static const _themeColor = Color(0xFF1565C0);
@@ -32,36 +37,35 @@ class PhysioScreen extends StatelessWidget {
     return '₹$price$label';
   }
 
-  void _book(BuildContext ctx, Map<String, dynamic> svc) {
-    ServiceBookingSheet.show(
-      ctx,
-      type: 'physiotherapy',
-      serviceName: svc['name'] as String,
-      themeColor: _themeColor,
-      priceLabel: svc['priceLabel'] as String,
-      amount: (svc['price'] as num?)?.toInt() ?? 0,
-      paymentDescription: 'Physiotherapy: ${svc['name']}',
-      serviceDetails: {
-        'sessionType': svc['name'],
-        'title':       svc['name'],
-        'price':       svc['price'],
-      },
-    );
+  void _book(BuildContext ctx, WidgetRef ref, Map<String, dynamic> svc) {
+    ref.read(cartProvider.notifier).addItem(
+          type: 'physiotherapy',
+          serviceName: svc['name'] as String,
+          themeColor: _themeColor,
+          unitAmount: (svc['price'] as num?)?.toInt() ?? 0,
+          serviceDetails: {
+            'sessionType': svc['name'],
+            'title':       svc['name'],
+            'price':       svc['price'],
+          },
+        );
+    FeedbackService.showSuccess(ctx, '${svc['name']} added to cart');
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.appBackground,
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
             pinned: true,
-            expandedHeight: 160,
+            expandedHeight: AppSpacing.headerHeight(context),
             leading: IconButton(
               icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
               onPressed: () => context.pop(),
             ),
+            actions: const [CartBadgeAction()],
             flexibleSpace: FlexibleSpaceBar(
               background: Container(
                 decoration: const BoxDecoration(
@@ -72,14 +76,29 @@ class PhysioScreen extends StatelessWidget {
                   ),
                 ),
                 child: SafeArea(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 50, 20, 16),
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      const Icon(Icons.fitness_center_rounded, color: Colors.white, size: 36),
-                      const SizedBox(height: 8),
-                      Text('Physiotherapy', style: AppTextStyles.onPrimaryH2),
-                      Text('Certified physiotherapists • Online & Home', style: AppTextStyles.onPrimaryBody),
-                    ]),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      return SingleChildScrollView(
+                        physics: const ClampingScrollPhysics(),
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                          child: Padding(
+                            padding: AppSpacing.headerPadding(context),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.fitness_center_rounded, color: Colors.white, size: AppSpacing.headerIconSize(context)),
+                                SizedBox(height: AppSpacing.headerIconGap(context)),
+                                Text('Physiotherapy', style: AppTextStyles.onPrimaryH2),
+                                Text('Certified physiotherapists • Online & Home', style: AppTextStyles.onPrimaryBody),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ),
               ),
@@ -87,10 +106,34 @@ class PhysioScreen extends StatelessWidget {
           ),
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: AppSpacing.page(context),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                // Progress info banner
+                Container(
+                  margin: EdgeInsets.only(bottom: AppSpacing.sectionGap(context)),
+                  padding: EdgeInsets.all(R.p(context, 14)),
+                  decoration: BoxDecoration(
+                    color: _themeColor.withValues(alpha: 0.07),
+                    borderRadius: BorderRadius.circular(R.r(context, 14)),
+                    border: Border.all(color: _themeColor.withValues(alpha: 0.2)),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.info_outline_rounded, color: const Color(0xFF1565C0), size: R.w(context, 18)),
+                      SizedBox(width: R.p(context, 10)),
+                      Expanded(
+                        child: Text(
+                          'Physiotherapy works best over multiple sessions. Most patients see improvement in 4–6 sessions.',
+                          style: TextStyle(fontFamily: 'Poppins', fontSize: R.sp(context, 12),
+                              color: const Color(0xFF1565C0), height: 1.5),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
                 Text('Choose Service', style: AppTextStyles.h4),
-                const SizedBox(height: 12),
+                SizedBox(height: R.h(context, 12)),
                 StreamBuilder<QuerySnapshot>(
                   stream: FirebaseFirestore.instance
                       .collection('services')
@@ -127,19 +170,19 @@ class PhysioScreen extends StatelessWidget {
                       final duration = svc['duration'] as String;
                       final subtitle = desc.isNotEmpty ? desc : (duration.isNotEmpty ? duration : '');
                       return Container(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        padding: const EdgeInsets.all(16),
+                        margin: EdgeInsets.only(bottom: R.h(context, 12)),
+                        padding: EdgeInsets.all(R.p(context, 16)),
                         decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: AppColors.divider),
+                          color: context.appSurface,
+                          borderRadius: BorderRadius.circular(R.r(context, 16)),
+                          border: Border.all(color: context.appBorder),
                         ),
                         child: Row(children: [
                           Container(
                             width: 50, height: 50,
                             decoration: BoxDecoration(
                               color: _themeColor.withValues(alpha:0.1),
-                              borderRadius: BorderRadius.circular(14),
+                              borderRadius: BorderRadius.circular(R.r(context, 14)),
                             ),
                             child: Icon(icon, color: _themeColor, size: 26),
                           ),
@@ -152,21 +195,21 @@ class PhysioScreen extends StatelessWidget {
                             Text(svc['priceLabel'] as String, style: AppTextStyles.labelMedium.copyWith(color: _themeColor)),
                           ])),
                           ElevatedButton(
-                            onPressed: () => _book(ctx, svc),
+                            onPressed: () => _book(ctx, ref, svc),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: _themeColor,
                               minimumSize: const Size(70, 36),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                               elevation: 0,
                             ),
-                            child: const Text('Book', style: TextStyle(fontSize: 12)),
+                            child: const Text('Add', style: TextStyle(fontSize: 12)),
                           ),
                         ]),
                       );
                     }).toList());
                   },
                 ),
-                const SizedBox(height: 40),
+                SizedBox(height: R.h(context, 40)),
               ]),
             ),
           ),

@@ -6,8 +6,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/constants/app_spacing.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/utils/r.dart';
 import '../../../core/widgets/ux_widgets.dart';
 
 class ConsultationScreen extends ConsumerStatefulWidget {
@@ -107,9 +109,12 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
         .listen((snap) {
       if (!mounted) return;
       if (snap.metadata.isFromCache) return; // ignore stale local cache
-      final allOnline = snap.docs.map((doc) => _docToMap(doc)).toList();
-      // Filter out ghost-online doctors whose heartbeat has gone stale.
-      final fresh = allOnline.where(_isGenuinelyOnline).toList();
+      // _docToMap already folds the heartbeat-freshness check into 'available',
+      // so this list and the Schedule tab's _allDoctors agree on who's online.
+      final fresh = snap.docs
+          .map((doc) => _docToMap(doc))
+          .where((doc) => doc['available'] == true)
+          .toList();
       setState(() {
         _onlineDoctors = fresh;
         _quickConnectLoading = false;
@@ -120,6 +125,25 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
   Map<String, dynamic> _docToMap(QueryDocumentSnapshot<Object?> doc) {
     final d = doc.data() as Map<String, dynamic>;
     final specialty = d['specialty'] as String? ?? 'General Physician';
+    final lastHeartbeat = d['lastHeartbeat'];
+    // A doctor only counts as online if the flag is set AND their heartbeat
+    // is fresh — computed once here so every tab agrees on the same status.
+    final isOnline = d['isOnline'] == true && _hasFreshHeartbeat(lastHeartbeat);
+    // Use Firestore waitTime field if present; otherwise derive a pseudo-random
+    // but stable wait time from the doc ID so it doesn't flicker on rebuilds.
+    String waitLabel;
+    if (isOnline) {
+      final firestoreWait = d['waitTime'];
+      if (firestoreWait != null) {
+        waitLabel = '~${firestoreWait} min wait';
+      } else {
+        // Stable pseudo-random 2-8 min based on doc id hash
+        final seed = doc.id.codeUnits.fold(0, (a, b) => a + b) % 7;
+        waitLabel = '~${seed + 2} min wait';
+      }
+    } else {
+      waitLabel = 'Offline';
+    }
     return {
       'uid': doc.id,
       'name': d['name'] as String? ?? 'Doctor',
@@ -128,21 +152,18 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
       'rating': (d['rating'] as num?)?.toDouble() ?? 0.0,
       'experience': '${d['experience'] ?? '–'} yrs',
       'fee': '₹${d['fee'] ?? '0'}',
-      'available': d['isOnline'] == true,
-      'wait': d['isOnline'] == true ? 'Ready Now' : 'Offline',
+      'available': isOnline,
+      'wait': waitLabel,
       'icon': Icons.person_rounded,
       'color': _colorForSpecialty(specialty),
-      'lastHeartbeat': d['lastHeartbeat'], // Timestamp? — used for staleness check
+      'lastHeartbeat': lastHeartbeat, // Timestamp? — used for staleness check
     };
   }
 
-  /// Returns true if the doctor is genuinely online (not a ghost state).
-  /// A doctor is considered online if their heartbeat is within the last
-  /// 3 minutes, or if they have no heartbeat field yet (just toggled on).
-  bool _isGenuinelyOnline(Map<String, dynamic> doctor) {
-    if (doctor['available'] != true) return false;
-    final ts = doctor['lastHeartbeat'];
-    if (ts == null) return true; // no heartbeat field → just went online
+  /// Returns true if the heartbeat timestamp is within the last 3 minutes,
+  /// or if there's no heartbeat field yet (doctor just toggled online).
+  bool _hasFreshHeartbeat(dynamic ts) {
+    if (ts == null) return true;
     try {
       final heartbeat = (ts as dynamic).toDate() as DateTime;
       return DateTime.now().difference(heartbeat).inMinutes < 3;
@@ -297,11 +318,11 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.appBackground,
       body: NestedScrollView(
         headerSliverBuilder: (ctx, innerBoxIsScrolled) => [
           SliverAppBar(
-            expandedHeight: 150,
+            expandedHeight: AppSpacing.headerHeight(context),
             pinned: true,
             forceElevated: innerBoxIsScrolled,
             backgroundColor: AppColors.primaryDark,
@@ -313,17 +334,29 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
               background: Container(
                 decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
                 child: SafeArea(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 48, 20, 0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Consultation', style: AppTextStyles.onPrimaryH2),
-                        const SizedBox(height: 4),
-                        Text('Connect instantly or book in advance',
-                            style: AppTextStyles.onPrimaryBody),
-                      ],
-                    ),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      return SingleChildScrollView(
+                        physics: const ClampingScrollPhysics(),
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                          child: Padding(
+                            padding: AppSpacing.headerPaddingWithBottomWidget(context),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text('Consultation', style: AppTextStyles.onPrimaryH2),
+                                SizedBox(height: R.h(context, 4)),
+                                Text('Connect instantly or book in advance',
+                                    style: AppTextStyles.onPrimaryBody),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ),
               ),
@@ -346,22 +379,32 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
                     Tab(
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
-                        mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(Icons.bolt_rounded, size: 16),
                           SizedBox(width: 5),
-                          Text('Quick Connect'),
+                          Flexible(
+                            child: Text(
+                              'Quick Connect',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
                         ],
                       ),
                     ),
                     Tab(
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
-                        mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(Icons.calendar_month_rounded, size: 16),
                           SizedBox(width: 5),
-                          Text('Schedule'),
+                          Flexible(
+                            child: Text(
+                              'Schedule',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -387,22 +430,38 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
 
   // ── Quick Connect Tab ─────────────────────────────────────
   Widget _buildQuickConnect() {
+    final hasOnline = !_quickConnectLoading && _onlineDoctors.isNotEmpty;
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
+      padding: AppSpacing.page(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
+          // Real-time available doctor count banner
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 300),
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  AppColors.primary.withValues(alpha:0.08),
-                  AppColors.secondary.withValues(alpha:0.05),
-                ],
-              ),
+              gradient: hasOnline
+                  ? const LinearGradient(
+                      colors: [Color(0xFF1B5E20), Color(0xFF2E7D32)],
+                    )
+                  : LinearGradient(
+                      colors: [
+                        AppColors.primary.withValues(alpha: 0.08),
+                        AppColors.secondary.withValues(alpha: 0.05),
+                      ],
+                    ),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.primary.withValues(alpha:0.15)),
+              border: hasOnline
+                  ? null
+                  : Border.all(color: AppColors.primary.withValues(alpha: 0.15)),
+              boxShadow: hasOnline
+                  ? [BoxShadow(
+                      color: const Color(0xFF2E7D32).withValues(alpha: 0.3),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    )]
+                  : null,
             ),
             child: Row(
               children: [
@@ -410,28 +469,69 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
                   width: 48,
                   height: 48,
                   decoration: BoxDecoration(
-                    gradient: AppColors.primaryGradient,
+                    color: hasOnline
+                        ? Colors.white.withValues(alpha: 0.2)
+                        : AppColors.primary.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(14),
                   ),
-                  child: const Icon(Icons.bolt_rounded,
-                      color: Colors.white, size: 26),
+                  child: Icon(
+                    hasOnline ? Icons.circle : Icons.bolt_rounded,
+                    color: hasOnline ? const Color(0xFF69F0AE) : AppColors.primary,
+                    size: hasOnline ? 18 : 26,
+                  ),
                 ),
                 const SizedBox(width: 14),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        '${_onlineDoctors.length} Doctor${_onlineDoctors.length == 1 ? '' : 's'} Available Now',
-                        style: AppTextStyles.labelLarge
-                            .copyWith(color: AppColors.primary),
-                      ),
+                      _quickConnectLoading
+                          ? Text(
+                              'Checking availability...',
+                              style: AppTextStyles.labelLarge.copyWith(
+                                color: AppColors.primary,
+                              ),
+                            )
+                          : Text(
+                              hasOnline
+                                  ? '${_onlineDoctors.length} Doctor${_onlineDoctors.length == 1 ? '' : 's'} Available Now'
+                                  : 'No Doctors Online',
+                              style: AppTextStyles.labelLarge.copyWith(
+                                color: hasOnline ? Colors.white : AppColors.primary,
+                              ),
+                            ),
                       const SizedBox(height: 2),
-                      Text('Skip the wait — connect in seconds',
-                          style: AppTextStyles.bodySmall),
+                      Text(
+                        hasOnline
+                            ? 'Skip the wait — connect in seconds'
+                            : 'Try scheduling an appointment instead',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: hasOnline
+                              ? Colors.white.withValues(alpha: 0.8)
+                              : context.appTextSecondary,
+                        ),
+                      ),
                     ],
                   ),
                 ),
+                if (hasOnline)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Text(
+                      'LIVE',
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -445,7 +545,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
                   margin: const EdgeInsets.only(bottom: 12),
                   height: 90,
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: context.appSurface,
                     borderRadius: BorderRadius.circular(16),
                   ),
                 )),
@@ -457,7 +557,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
               icon: Icons.hourglass_empty_rounded,
               title: 'No doctors online right now',
               message: 'Ask a doctor to go online, or schedule an appointment instead.',
-              iconColor: AppColors.textSecondary,
+              iconColor: context.appTextSecondary,
               actionLabel: 'Schedule Appointment',
               onAction: () => _tabController.animateTo(1),
             ),
@@ -542,7 +642,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
         children: [
           // Consultation type selector
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+            padding: EdgeInsets.fromLTRB(R.p(context, 20), R.p(context, 20), R.p(context, 20), 0),
             child: Row(
               children: ['Video', 'In-Person', 'Chat'].map((type) {
                 final selected = _selectedType == type;
@@ -554,9 +654,9 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     decoration: BoxDecoration(
                       gradient: selected ? AppColors.primaryGradient : null,
-                      color: selected ? null : Colors.white,
+                      color: selected ? null : context.appSurface,
                       borderRadius: BorderRadius.circular(20),
-                      border: selected ? null : Border.all(color: AppColors.border),
+                      border: selected ? null : Border.all(color: context.appBorder),
                       boxShadow: selected
                           ? [BoxShadow(color: AppColors.primary.withValues(alpha:0.3),
                               blurRadius: 8, offset: const Offset(0, 3))]
@@ -569,14 +669,14 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
                               : type == 'In-Person' ? Icons.person_rounded
                               : Icons.chat_rounded,
                           size: 14,
-                          color: selected ? Colors.white : AppColors.textSecondary,
+                          color: selected ? Colors.white : context.appTextSecondary,
                         ),
                         const SizedBox(width: 4),
                         Text(type,
                             style: TextStyle(
                               fontFamily: 'Poppins', fontSize: 12,
                               fontWeight: FontWeight.w600,
-                              color: selected ? Colors.white : AppColors.textSecondary,
+                              color: selected ? Colors.white : context.appTextSecondary,
                             )),
                       ],
                     ),
@@ -589,7 +689,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
           // In-Person location note
           if (_selectedType == 'In-Person')
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
+              padding: EdgeInsets.symmetric(horizontal: R.p(context, 20)),
               child: GestureDetector(
                 onTap: () => context.push('/doctors?mode=inperson'),
                 child: Container(
@@ -622,16 +722,16 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
 
           // Search
           Padding(
-            padding: const EdgeInsets.all(20),
+            padding: AppSpacing.page(context),
             child: TextField(
               onChanged: (v) =>
                   setState(() => _scheduleSearch = v.toLowerCase()),
               decoration: InputDecoration(
                 hintText: 'Search doctor by name or specialty…',
-                prefixIcon: const Icon(Icons.search_rounded,
-                    color: AppColors.textHint),
+                prefixIcon: Icon(Icons.search_rounded,
+                    color: context.appTextHint),
                 filled: true,
-                fillColor: Colors.white,
+                fillColor: context.appSurface,
                 border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
                     borderSide: BorderSide.none),
@@ -642,10 +742,10 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
 
           // Doctors List
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
+            padding: AppSpacing.pageHorizontal(context),
             child: Text('Available Doctors', style: AppTextStyles.h4),
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: AppSpacing.cardGap(context)),
           Builder(builder: (_) {
             // Filter doctors for Video vs In-Person type
             // For Video: show all doctors
@@ -663,11 +763,11 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
             }
 
             if (filtered.isEmpty) {
-              return const Padding(
-                padding: EdgeInsets.all(20),
+              return Padding(
+                padding: AppSpacing.page(context),
                 child: Center(
                   child: Text('No doctors found.',
-                      style: TextStyle(color: Colors.grey)),
+                      style: TextStyle(color: context.appTextSecondary)),
                 ),
               );
             }
@@ -692,20 +792,20 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
                   .toList(),
             );
           }),
-          const SizedBox(height: 20),
+          SizedBox(height: AppSpacing.sectionGap(context)),
 
           if (_selectedDoctor != null) ...[
             // Date picker
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
+              padding: AppSpacing.pageHorizontal(context),
               child: Text('Select Date', style: AppTextStyles.h4),
             ),
-            const SizedBox(height: 12),
+            SizedBox(height: AppSpacing.cardGap(context)),
             SizedBox(
-              height: 80,
+              height: R.h(context, 80),
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 20),
+                padding: AppSpacing.pageHorizontal(context),
                 itemCount: _dateTimes.length,
                 itemBuilder: (_, i) {
                   final d = _dateTimes[i];
@@ -728,14 +828,14 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
                       margin: const EdgeInsets.only(right: 10),
                       decoration: BoxDecoration(
                         gradient: selected ? AppColors.primaryGradient : null,
-                        color: selected ? null : (isWorkingDay ? Colors.white : const Color(0xFFF5F5F5)),
+                        color: selected ? null : (isWorkingDay ? context.appSurface : const Color(0xFFF5F5F5)),
                         borderRadius: BorderRadius.circular(14),
                         boxShadow: selected
                             ? [BoxShadow(color: AppColors.primary.withValues(alpha:0.3),
                                 blurRadius: 10, offset: const Offset(0, 4))]
                             : null,
                         border: selected ? null : Border.all(
-                          color: isWorkingDay ? AppColors.border : Colors.transparent,
+                          color: isWorkingDay ? context.appBorder : Colors.transparent,
                         ),
                       ),
                       child: Column(
@@ -747,7 +847,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
                               fontFamily: 'Poppins', fontSize: 10,
                               color: selected
                                   ? Colors.white70
-                                  : (isWorkingDay ? AppColors.textSecondary : AppColors.textHint),
+                                  : (isWorkingDay ? context.appTextSecondary : context.appTextHint),
                             ),
                           ),
                           const SizedBox(height: 2),
@@ -758,14 +858,14 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
                               fontWeight: FontWeight.w700,
                               color: selected
                                   ? Colors.white
-                                  : (isWorkingDay ? AppColors.textPrimary : AppColors.textHint),
+                                  : (isWorkingDay ? context.appTextPrimary : context.appTextHint),
                             ),
                           ),
                           Text(
                             DateFormat('MMM').format(d),
                             style: TextStyle(
                               fontFamily: 'Poppins', fontSize: 9,
-                              color: selected ? Colors.white60 : AppColors.textHint,
+                              color: selected ? Colors.white60 : context.appTextHint,
                             ),
                           ),
                           if (!selected && !isWorkingDay)
@@ -783,19 +883,19 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
                 },
               ),
             ),
-            const SizedBox(height: 20),
+            SizedBox(height: AppSpacing.sectionGap(context)),
 
             // Time picker
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
+              padding: AppSpacing.pageHorizontal(context),
               child: Text('Select Time', style: AppTextStyles.h4),
             ),
-            const SizedBox(height: 12),
+            SizedBox(height: AppSpacing.cardGap(context)),
             if (_scheduleSlots.isEmpty)
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                padding: EdgeInsets.symmetric(horizontal: R.p(context, 20), vertical: R.p(context, 16)),
                 child: Container(
-                  padding: const EdgeInsets.all(16),
+                  padding: EdgeInsets.all(AppSpacing.cardPadding(context)),
                   decoration: BoxDecoration(
                     color: Colors.orange.withValues(alpha:0.07),
                     borderRadius: BorderRadius.circular(14),
@@ -819,16 +919,11 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
               )
             else
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 3, childAspectRatio: 2.2,
-                  crossAxisSpacing: 10, mainAxisSpacing: 10,
-                ),
-                itemCount: _scheduleSlots.length,
-                itemBuilder: (_, i) {
+              padding: AppSpacing.pageHorizontal(context),
+              child: staticGrid(
+                crossAxisCount: 3,
+                aspectRatio: 2.2,
+                children: List.generate(_scheduleSlots.length, (i) {
                   final time = _scheduleSlots[i];
                   final isExpired = _isScheduleSlotExpired(time);
                   final isBooked = _bookedScheduleTimes.contains(time);
@@ -844,10 +939,10 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
                     textColor = const Color(0xFFE57373);
                   } else if (isExpired) {
                     bgColor = const Color(0xFFF5F5F5);
-                    textColor = AppColors.textHint;
+                    textColor = context.appTextHint;
                   } else {
-                    bgColor = Colors.white;
-                    textColor = AppColors.textPrimary;
+                    bgColor = context.appSurface;
+                    textColor = context.appTextPrimary;
                   }
                   return GestureDetector(
                     onTap: isDisabled ? null : () => setState(() => _selectedTimeIndex = i),
@@ -864,7 +959,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
                                     ? const Color(0xFFEF9A9A)
                                     : isExpired
                                         ? Colors.transparent
-                                        : AppColors.border,
+                                        : context.appBorder,
                               ),
                       ),
                       child: Center(
@@ -888,20 +983,20 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
                       ),
                     ),
                   );
-                },
+                }),
               ),
             ),
-            const SizedBox(height: 24),
+            SizedBox(height: R.h(context, 24)),
 
             // Fee
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
+              padding: AppSpacing.pageHorizontal(context),
               child: Container(
-                padding: const EdgeInsets.all(16),
+                padding: EdgeInsets.all(AppSpacing.cardPadding(context)),
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: AppColors.divider),
+                  color: context.appSurface,
+                  borderRadius: BorderRadius.circular(AppSpacing.cardRadius(context)),
+                  border: Border.all(color: context.appBorder),
                 ),
                 child: Column(
                   children: [
@@ -918,7 +1013,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
                 ),
               ),
             ),
-            const SizedBox(height: 100),
+            SizedBox(height: R.h(context, 100)),
           ],
         ],
       ),
@@ -927,9 +1022,9 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
 
   Widget _buildBookButton() {
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 30),
+      padding: EdgeInsets.fromLTRB(R.p(context, 20), R.p(context, 12), R.p(context, 20), R.p(context, 30)),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.appSurface,
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha:0.06),
@@ -989,11 +1084,19 @@ class _QuickConnectCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final doctorColor = doctor['color'] as Color;
+    final name = doctor['name'] as String? ?? 'Doctor';
+    final photoUrl = doctor['photoUrl'] as String? ?? '';
+    // Build initials from name for avatar fallback
+    final initials = name.trim().split(' ').take(2)
+        .map((w) => w.isNotEmpty ? w[0].toUpperCase() : '')
+        .join();
+
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.appSurface,
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(color: AppColors.shadow, blurRadius: 12, offset: const Offset(0, 4)),
@@ -1001,37 +1104,67 @@ class _QuickConnectCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Container(
-            width: 60, height: 60,
-            decoration: BoxDecoration(
-              color: (doctor['color'] as Color).withValues(alpha:0.12),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Stack(
-              children: [
-                Center(child: Icon(doctor['icon'] as IconData,
-                    size: 34, color: doctor['color'] as Color)),
-                Positioned(
-                  bottom: 4, right: 4,
-                  child: Container(
-                    width: 10, height: 10,
-                    decoration: const BoxDecoration(
-                      color: Color(0xFF4CAF50),
-                      shape: BoxShape.circle,
-                    ),
+          // Avatar with online dot
+          Stack(
+            children: [
+              Container(
+                width: 60, height: 60,
+                decoration: BoxDecoration(
+                  color: doctorColor.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: photoUrl.isNotEmpty
+                    ? ClipOval(
+                        child: Image.network(
+                          photoUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Center(
+                            child: Text(
+                              initials,
+                              style: TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: 20,
+                                fontWeight: FontWeight.w700,
+                                color: doctorColor,
+                              ),
+                            ),
+                          ),
+                        ),
+                      )
+                    : Center(
+                        child: Text(
+                          initials,
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                            color: doctorColor,
+                          ),
+                        ),
+                      ),
+              ),
+              Positioned(
+                bottom: 2, right: 2,
+                child: Container(
+                  width: 14, height: 14,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF4CAF50),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: context.appSurface, width: 2),
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(doctor['name'], style: AppTextStyles.labelLarge),
+                Text(name, style: AppTextStyles.labelLarge),
                 const SizedBox(height: 2),
-                Text(doctor['specialty'], style: AppTextStyles.bodySmall),
+                Text(doctor['specialty'] as String? ?? '',
+                    style: AppTextStyles.bodySmall),
                 const SizedBox(height: 6),
                 Row(
                   children: [
@@ -1039,18 +1172,30 @@ class _QuickConnectCard extends StatelessWidget {
                     const SizedBox(width: 3),
                     Text('${doctor['rating']}', style: AppTextStyles.labelSmall),
                     const SizedBox(width: 10),
+                    // Estimated wait time badge
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF4CAF50).withValues(alpha:0.1),
+                        color: const Color(0xFF4CAF50).withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        doctor['wait'],
-                        style: const TextStyle(
-                          fontFamily: 'Poppins', fontSize: 10,
-                          fontWeight: FontWeight.w600, color: Color(0xFF2E7D32),
+                        border: Border.all(
+                          color: const Color(0xFF4CAF50).withValues(alpha: 0.3),
                         ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.access_time_rounded,
+                              size: 10, color: Color(0xFF2E7D32)),
+                          const SizedBox(width: 3),
+                          Text(
+                            doctor['wait'] as String? ?? 'Ready',
+                            style: const TextStyle(
+                              fontFamily: 'Poppins', fontSize: 10,
+                              fontWeight: FontWeight.w600, color: Color(0xFF2E7D32),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
@@ -1059,18 +1204,19 @@ class _QuickConnectCard extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 10),
+          // Prominent green "Connect Now" button
           GestureDetector(
             onTap: onConnect,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
-                gradient: AppColors.primaryGradient,
+                color: const Color(0xFF2E7D32),
                 borderRadius: BorderRadius.circular(14),
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.primary.withValues(alpha:0.3),
-                    blurRadius: 8,
-                    offset: const Offset(0, 3),
+                    color: const Color(0xFF2E7D32).withValues(alpha: 0.35),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
                   ),
                 ],
               ),
@@ -1079,9 +1225,9 @@ class _QuickConnectCard extends StatelessWidget {
                 children: [
                   Icon(Icons.video_call_rounded, color: Colors.white, size: 22),
                   SizedBox(height: 3),
-                  Text('Connect',
+                  Text('Connect Now',
                       style: TextStyle(
-                        fontFamily: 'Poppins', fontSize: 10,
+                        fontFamily: 'Poppins', fontSize: 9,
                         fontWeight: FontWeight.w700, color: Colors.white,
                       )),
                 ],
@@ -1145,9 +1291,9 @@ class _ConnectingSheetState extends State<_ConnectingSheet>
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(28),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      decoration: BoxDecoration(
+        color: context.appSurface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -1155,7 +1301,7 @@ class _ConnectingSheetState extends State<_ConnectingSheet>
           Container(
             width: 40, height: 4,
             decoration: BoxDecoration(
-              color: AppColors.border, borderRadius: BorderRadius.circular(2)),
+              color: context.appBorder, borderRadius: BorderRadius.circular(2)),
           ),
           const SizedBox(height: 28),
           Container(
@@ -1186,7 +1332,7 @@ class _ConnectingSheetState extends State<_ConnectingSheet>
               child: LinearProgressIndicator(
                 value: _progress.value,
                 minHeight: 6,
-                backgroundColor: AppColors.divider,
+                backgroundColor: context.appDivider,
                 valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
               ),
             ),
@@ -1224,10 +1370,10 @@ class _DoctorCard extends StatelessWidget {
         margin: const EdgeInsets.fromLTRB(20, 0, 20, 12),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: context.appSurface,
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
-            color: isSelected ? AppColors.primary : AppColors.divider,
+            color: isSelected ? AppColors.primary : context.appBorder,
             width: isSelected ? 2 : 1,
           ),
           boxShadow: isSelected
@@ -1281,7 +1427,7 @@ class _DoctorCard extends StatelessWidget {
                       const SizedBox(width: 3),
                       Text('${doctor['rating']}', style: AppTextStyles.labelSmall),
                       const SizedBox(width: 12),
-                      const Icon(Icons.work_outline_rounded, size: 14, color: AppColors.textHint),
+                      Icon(Icons.work_outline_rounded, size: 14, color: context.appTextHint),
                       const SizedBox(width: 3),
                       Text(doctor['experience'], style: AppTextStyles.labelSmall),
                       const Spacer(),
@@ -1444,16 +1590,16 @@ class _BookingConfirmSheetState extends State<_BookingConfirmSheet> {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(24),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      decoration: BoxDecoration(
+        color: context.appSurface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
             width: 40, height: 4,
-            decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(2)),
+            decoration: BoxDecoration(color: context.appBorder, borderRadius: BorderRadius.circular(2)),
           ),
           const SizedBox(height: 20),
           Container(
@@ -1484,7 +1630,7 @@ class _BookingConfirmSheetState extends State<_BookingConfirmSheet> {
               hintText: 'e.g. Fever for 2 days, headache...',
               prefixIcon: const Icon(Icons.notes_rounded),
               filled: true,
-              fillColor: AppColors.background,
+              fillColor: context.appBackground,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
                 borderSide: BorderSide.none,
@@ -1545,7 +1691,7 @@ class _ConfirmRow extends StatelessWidget {
           const SizedBox(width: 12),
           Text(label, style: AppTextStyles.bodyMedium),
           const Spacer(),
-          Text(value, style: AppTextStyles.labelMedium.copyWith(color: AppColors.textPrimary)),
+          Text(value, style: AppTextStyles.labelMedium.copyWith(color: context.appTextPrimary)),
         ],
       ),
     );

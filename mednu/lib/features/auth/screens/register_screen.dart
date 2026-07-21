@@ -24,7 +24,23 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
   final _emailCtrl   = TextEditingController();
   final _dobCtrl     = TextEditingController();
   final _cityCtrl    = TextEditingController();
+  DateTime? _dobDate;
+
+  static const int _minAge = 18;
+
+  int _ageFromDob(DateTime dob) {
+    final now = DateTime.now();
+    int age = now.year - dob.year;
+    if (now.month < dob.month ||
+        (now.month == dob.month && now.day < dob.day)) {
+      age--;
+    }
+    return age;
+  }
   final _referralCtrl = TextEditingController();
+  final _checkupCtrl    = TextEditingController();
+  final _allergiesCtrl  = TextEditingController();
+  final _conditionsCtrl = TextEditingController();
 
   String  _selectedGender    = 'Male';
   bool    _isLoading         = false;
@@ -57,6 +73,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
     _dobCtrl.dispose();
     _cityCtrl.dispose();
     _referralCtrl.dispose();
+    _checkupCtrl.dispose();
+    _allergiesCtrl.dispose();
+    _conditionsCtrl.dispose();
     super.dispose();
   }
 
@@ -173,8 +192,38 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
       ),
     );
     if (picked != null) {
+      if (_ageFromDob(picked) < _minAge) {
+        _showError('You must be at least $_minAge years old to use MedNU.');
+        return;
+      }
       setState(() {
+        _dobDate = picked;
         _dobCtrl.text =
+            '${picked.day.toString().padLeft(2, '0')}/${picked.month.toString().padLeft(2, '0')}/${picked.year}';
+      });
+    }
+  }
+
+  // ── Last checkup picker ───────────────────────────────────────────────────
+  Future<void> _pickCheckup() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now(),
+      firstDate: DateTime(1940),
+      lastDate: DateTime.now(),
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(
+          colorScheme: const ColorScheme.light(
+            primary: Color(0xFF7b2d6e),
+            onPrimary: Colors.white,
+          ),
+        ),
+        child: child!,
+      ),
+    );
+    if (picked != null) {
+      setState(() {
+        _checkupCtrl.text =
             '${picked.day.toString().padLeft(2, '0')}/${picked.month.toString().padLeft(2, '0')}/${picked.year}';
       });
     }
@@ -189,6 +238,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
     }
     if (_dobCtrl.text.trim().isEmpty) {
       _showError('Please select your date of birth.');
+      return;
+    }
+    if (_dobDate != null && _ageFromDob(_dobDate!) < _minAge) {
+      _showError('You must be at least $_minAge years old to use MedNU.');
       return;
     }
 
@@ -222,6 +275,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
         city:         _cityCtrl.text.trim().isEmpty ? null : _cityCtrl.text.trim(),
         referralCode: _referralCtrl.text.trim().isEmpty ? null : _referralCtrl.text.trim(),
         photoUrl:     photoUrl,
+        lastCheckup:       _checkupCtrl.text.trim().isEmpty ? null : _checkupCtrl.text.trim(),
+        allergies:         _allergiesCtrl.text.trim().isEmpty ? null : _allergiesCtrl.text.trim(),
+        chronicConditions: _conditionsCtrl.text.trim().isEmpty ? null : _conditionsCtrl.text.trim(),
       );
 
       if (!mounted) return;
@@ -438,9 +494,16 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                                 hint: 'DD / MM / YYYY',
                                 prefix: Icons.cake_outlined,
                                 suffix: Icons.calendar_today_rounded,
-                                validator: (v) => v == null || v.trim().isEmpty
-                                    ? 'Select your date of birth'
-                                    : null,
+                                validator: (v) {
+                                  if (v == null || v.trim().isEmpty) {
+                                    return 'Select your date of birth';
+                                  }
+                                  if (_dobDate != null &&
+                                      _ageFromDob(_dobDate!) < _minAge) {
+                                    return 'You must be at least $_minAge years old';
+                                  }
+                                  return null;
+                                },
                               ),
                             ),
                           ),
@@ -478,6 +541,48 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                             controller: _cityCtrl,
                             hint: 'Your city',
                             prefix: Icons.location_city_outlined,
+                          ),
+
+                          const SizedBox(height: 20),
+
+                          // ══ Health Info (optional) ═════════════════════
+                          _SectionHeader(
+                              icon: Icons.health_and_safety_rounded,
+                              label: 'Health Info (optional)'),
+                          const SizedBox(height: 12),
+
+                          _sectionLabel('Last Checkup'),
+                          const SizedBox(height: 6),
+                          GestureDetector(
+                            onTap: _pickCheckup,
+                            child: AbsorbPointer(
+                              child: _field(
+                                controller: _checkupCtrl,
+                                hint: 'DD / MM / YYYY',
+                                prefix: Icons.event_available_outlined,
+                                suffix: Icons.calendar_today_rounded,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+
+                          _sectionLabel('Allergies (if any)'),
+                          const SizedBox(height: 6),
+                          _field(
+                            controller: _allergiesCtrl,
+                            hint: 'e.g. Penicillin, Peanuts',
+                            prefix: Icons.warning_amber_rounded,
+                            capitalization: TextCapitalization.words,
+                          ),
+                          const SizedBox(height: 14),
+
+                          _sectionLabel('Chronic Conditions (if any)'),
+                          const SizedBox(height: 6),
+                          _field(
+                            controller: _conditionsCtrl,
+                            hint: 'e.g. Diabetes, Hypertension',
+                            prefix: Icons.monitor_heart_outlined,
+                            capitalization: TextCapitalization.words,
                           ),
 
                           const SizedBox(height: 20),

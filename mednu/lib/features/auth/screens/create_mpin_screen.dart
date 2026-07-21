@@ -228,320 +228,349 @@ class _CreateMPINScreenState extends ConsumerState<CreateMPINScreen>
               opacity: _fadeIn,
               child: SlideTransition(
                 position: _slideUp,
-                child: Column(
-                  children: [
-                    // ── Back button (confirm step only) ──────────────────────
-                    SizedBox(
-                      height: 56,
-                      child: _step == _CreateStep.confirm
-                          ? Padding(
-                              padding:
-                                  const EdgeInsets.fromLTRB(20, 10, 20, 0),
-                              child: Align(
-                                alignment: Alignment.centerLeft,
-                                child: GestureDetector(
-                                  onTap: () {
-                                    _stepCtrl.reverse();
-                                    setState(() {
-                                      _step     = _CreateStep.enter;
-                                      _entered  = '';
-                                      _firstPin = '';
-                                      _errorMsg = null;
-                                    });
-                                  },
-                                  child: Container(
-                                    padding: const EdgeInsets.all(10),
-                                    decoration: BoxDecoration(
-                                      color:
-                                          Colors.white.withValues(alpha: 0.10),
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(
-                                          color: Colors.white
-                                              .withValues(alpha: 0.12)),
-                                    ),
-                                    child: const Icon(
-                                        Icons.arrow_back_ios_new_rounded,
-                                        color: Colors.white,
-                                        size: 16),
-                                  ),
-                                ),
-                              ),
-                            )
-                          : const SizedBox.shrink(),
+                child: SingleChildScrollView(
+                  physics: const ClampingScrollPhysics(),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: size.height -
+                          MediaQuery.of(context).padding.top -
+                          MediaQuery.of(context).padding.bottom,
                     ),
-
-                    SizedBox(height: size.height * 0.03),
-
-                    // ── Shield icon with glow ────────────────────────────────
-                    ScaleTransition(
-                      scale: _successCtrl.value > 0 ? _successScale : const AlwaysStoppedAnimation(1.0),
-                      child: AnimatedBuilder(
-                        animation: _pulseCtrl,
-                        builder: (_, child) => Stack(
-                          alignment: Alignment.center,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        // ── Top section ──────────────────────────────────────
+                        Column(
                           children: [
-                            // Outer glow ring
-                            Container(
-                              width: 110,
-                              height: 110,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                gradient: RadialGradient(colors: [
-                                  const Color(0xFF9C27B0).withValues(
-                                      alpha:
-                                          0.18 + _pulseCtrl.value * 0.10),
-                                  Colors.transparent,
-                                ]),
-                              ),
+                            // Back button (confirm step only)
+                            SizedBox(
+                              height: 56,
+                              child: _step == _CreateStep.confirm
+                                  ? Padding(
+                                      padding: const EdgeInsets.fromLTRB(
+                                          20, 10, 20, 0),
+                                      child: Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: GestureDetector(
+                                          onTap: () {
+                                            _stepCtrl.reverse();
+                                            setState(() {
+                                              _step = _CreateStep.enter;
+                                              _entered = '';
+                                              _firstPin = '';
+                                              _errorMsg = null;
+                                            });
+                                          },
+                                          child: Container(
+                                            padding: const EdgeInsets.all(10),
+                                            decoration: BoxDecoration(
+                                              color: Colors.white
+                                                  .withValues(alpha: 0.10),
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                              border: Border.all(
+                                                  color: Colors.white
+                                                      .withValues(alpha: 0.12)),
+                                            ),
+                                            child: const Icon(
+                                                Icons.arrow_back_ios_new_rounded,
+                                                color: Colors.white,
+                                                size: 16),
+                                          ),
+                                        ),
+                                      ),
+                                    )
+                                  : const SizedBox.shrink(),
                             ),
-                            // Inner circle
-                            Container(
-                              width: 80,
-                              height: 80,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                gradient: const LinearGradient(
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                  colors: [
-                                    Color(0xFF9C27B0),
-                                    Color(0xFF7b2d6e),
+
+                            SizedBox(height: size.height * 0.03),
+
+                            // Shield icon with glow
+                            AnimatedBuilder(
+                              animation: _successCtrl,
+                              builder: (_, child) => ScaleTransition(
+                                scale: (_successCtrl.isAnimating ||
+                                        _successCtrl.isCompleted)
+                                    ? _successScale
+                                    : const AlwaysStoppedAnimation(1.0),
+                                child: child,
+                              ),
+                              child: AnimatedBuilder(
+                                animation: _pulseCtrl,
+                                builder: (_, child) => Stack(
+                                  alignment: Alignment.center,
+                                  children: [
+                                    Container(
+                                      width: 100,
+                                      height: 100,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        gradient: RadialGradient(colors: [
+                                          const Color(0xFF9C27B0).withValues(
+                                              alpha:
+                                                  0.18 + _pulseCtrl.value * 0.10),
+                                          Colors.transparent,
+                                        ]),
+                                      ),
+                                    ),
+                                    Container(
+                                      width: 72,
+                                      height: 72,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        gradient: const LinearGradient(
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
+                                          colors: [
+                                            Color(0xFF9C27B0),
+                                            Color(0xFF7b2d6e),
+                                          ],
+                                        ),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: const Color(0xFF9C27B0)
+                                                .withValues(alpha: 0.45),
+                                            blurRadius: 24,
+                                            offset: const Offset(0, 6),
+                                          ),
+                                        ],
+                                      ),
+                                      child: const Icon(
+                                        Icons.shield_rounded,
+                                        color: Colors.white,
+                                        size: 32,
+                                      ),
+                                    ),
                                   ],
                                 ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: const Color(0xFF9C27B0)
-                                        .withValues(alpha: 0.45),
-                                    blurRadius: 24,
-                                    offset: const Offset(0, 6),
-                                  ),
-                                ],
                               ),
-                              child: const Icon(
-                                Icons.shield_rounded,
-                                color: Colors.white,
-                                size: 36,
+                            ),
+
+                            SizedBox(height: size.height * 0.025),
+
+                            // Step pills
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                _StepPill(
+                                  label: 'Create',
+                                  active: true,
+                                  done: _step == _CreateStep.confirm,
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8),
+                                  child: Container(
+                                    width: 28,
+                                    height: 2,
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(1),
+                                      color: _step == _CreateStep.confirm
+                                          ? const Color(0xFFF2A8D8)
+                                          : Colors.white.withValues(alpha: 0.2),
+                                    ),
+                                  ),
+                                ),
+                                _StepPill(
+                                  label: 'Confirm',
+                                  active: _step == _CreateStep.confirm,
+                                  done: false,
+                                ),
+                              ],
+                            ),
+
+                            SizedBox(height: size.height * 0.02),
+
+                            // Heading
+                            Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 32),
+                              child: AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 280),
+                                transitionBuilder: (child, anim) =>
+                                    FadeTransition(
+                                  opacity: anim,
+                                  child: SlideTransition(
+                                    position: Tween(
+                                            begin: const Offset(0.05, 0),
+                                            end: Offset.zero)
+                                        .animate(anim),
+                                    child: child,
+                                  ),
+                                ),
+                                child: Column(
+                                  key: ValueKey(_step),
+                                  children: [
+                                    Text(
+                                      _heading,
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 22,
+                                        fontWeight: FontWeight.w700,
+                                        fontFamily: 'Poppins',
+                                        letterSpacing: -0.3,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 5),
+                                    Text(
+                                      _subheading,
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        color: Colors.white.withValues(alpha: 0.5),
+                                        fontSize: 12.5,
+                                        fontFamily: 'Poppins',
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+
+                            SizedBox(height: size.height * 0.035),
+
+                            // PIN dots
+                            AnimatedBuilder(
+                              animation: _shakeAnim,
+                              builder: (_, child) {
+                                final dx = _shakeCtrl.isAnimating
+                                    ? 12 *
+                                        sin(_shakeAnim.value * pi * 4) *
+                                        (1 - _shakeAnim.value)
+                                    : 0.0;
+                                return Transform.translate(
+                                    offset: Offset(dx, 0), child: child);
+                              },
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: List.generate(_pinLength, (i) {
+                                  final filled = i < _entered.length;
+                                  return AnimatedContainer(
+                                    duration: const Duration(milliseconds: 150),
+                                    curve: Curves.easeOut,
+                                    margin: const EdgeInsets.symmetric(
+                                        horizontal: 12),
+                                    width: filled ? 22 : 18,
+                                    height: filled ? 22 : 18,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: filled
+                                          ? const Color(0xFFF2A8D8)
+                                          : Colors.transparent,
+                                      border: Border.all(
+                                        color: filled
+                                            ? const Color(0xFFF2A8D8)
+                                            : Colors.white
+                                                .withValues(alpha: 0.30),
+                                        width: 2,
+                                      ),
+                                      boxShadow: filled
+                                          ? [
+                                              BoxShadow(
+                                                color: const Color(0xFFF2A8D8)
+                                                    .withValues(alpha: 0.55),
+                                                blurRadius: 10,
+                                                spreadRadius: 1,
+                                              ),
+                                            ]
+                                          : null,
+                                    ),
+                                  );
+                                }),
+                              ),
+                            ),
+
+                            const SizedBox(height: 12),
+
+                            // Error message
+                            AnimatedOpacity(
+                              opacity: _errorMsg != null ? 1 : 0,
+                              duration: const Duration(milliseconds: 200),
+                              child: Container(
+                                margin: const EdgeInsets.symmetric(
+                                    horizontal: 40),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 16, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFF6B6B)
+                                      .withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                      color: const Color(0xFFFF6B6B)
+                                          .withValues(alpha: 0.3)),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.error_outline_rounded,
+                                        color: Color(0xFFFF6B6B), size: 15),
+                                    const SizedBox(width: 6),
+                                    Flexible(
+                                      child: Text(
+                                        _errorMsg ?? '',
+                                        textAlign: TextAlign.center,
+                                        style: const TextStyle(
+                                          color: Color(0xFFFF6B6B),
+                                          fontSize: 12,
+                                          fontFamily: 'Poppins',
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ],
                         ),
-                      ),
-                    ),
 
-                    SizedBox(height: size.height * 0.03),
-
-                    // ── Step pills ───────────────────────────────────────────
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        _StepPill(
-                          label: 'Create',
-                          active: true,
-                          done: _step == _CreateStep.confirm,
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                          child: Container(
-                            width: 28,
-                            height: 2,
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(1),
-                              color: _step == _CreateStep.confirm
-                                  ? const Color(0xFFF2A8D8)
-                                  : Colors.white.withValues(alpha: 0.2),
+                        // ── Bottom section (keypad + badge) ──────────────────
+                        Column(
+                          children: [
+                            MpinPad(onKey: _onKey, isLoading: _isLoading),
+                            const SizedBox(height: 12),
+                            Padding(
+                              padding: EdgeInsets.only(
+                                  bottom:
+                                      MediaQuery.of(context).padding.bottom +
+                                          12),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 16, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.06),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                      color: Colors.white
+                                          .withValues(alpha: 0.10)),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.lock_rounded,
+                                        size: 11,
+                                        color: Colors.white
+                                            .withValues(alpha: 0.45)),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      'End-to-end encrypted  ·  Never stored in plain text',
+                                      style: TextStyle(
+                                        color: Colors.white
+                                            .withValues(alpha: 0.45),
+                                        fontSize: 10.5,
+                                        fontFamily: 'Poppins',
+                                        letterSpacing: 0.2,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
-                          ),
-                        ),
-                        _StepPill(
-                          label: 'Confirm',
-                          active: _step == _CreateStep.confirm,
-                          done: false,
+                          ],
                         ),
                       ],
                     ),
-
-                    const SizedBox(height: 24),
-
-                    // ── Heading ──────────────────────────────────────────────
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 32),
-                      child: AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 280),
-                        transitionBuilder: (child, anim) => FadeTransition(
-                          opacity: anim,
-                          child: SlideTransition(
-                            position: Tween(
-                                    begin: const Offset(0.05, 0),
-                                    end: Offset.zero)
-                                .animate(anim),
-                            child: child,
-                          ),
-                        ),
-                        child: Column(
-                          key: ValueKey(_step),
-                          children: [
-                            Text(
-                              _heading,
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 24,
-                                fontWeight: FontWeight.w700,
-                                fontFamily: 'Poppins',
-                                letterSpacing: -0.3,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              _subheading,
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.5),
-                                fontSize: 13,
-                                fontFamily: 'Poppins',
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-
-                    SizedBox(height: size.height * 0.045),
-
-                    // ── PIN dots ─────────────────────────────────────────────
-                    AnimatedBuilder(
-                      animation: _shakeAnim,
-                      builder: (_, child) {
-                        final dx = _shakeCtrl.isAnimating
-                            ? 12 *
-                                sin(_shakeAnim.value * pi * 4) *
-                                (1 - _shakeAnim.value)
-                            : 0.0;
-                        return Transform.translate(
-                            offset: Offset(dx, 0), child: child);
-                      },
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: List.generate(_pinLength, (i) {
-                          final filled = i < _entered.length;
-                          return AnimatedContainer(
-                            duration: const Duration(milliseconds: 150),
-                            curve: Curves.easeOut,
-                            margin: const EdgeInsets.symmetric(horizontal: 12),
-                            width: filled ? 22 : 18,
-                            height: filled ? 22 : 18,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: filled
-                                  ? const Color(0xFFF2A8D8)
-                                  : Colors.transparent,
-                              border: Border.all(
-                                color: filled
-                                    ? const Color(0xFFF2A8D8)
-                                    : Colors.white.withValues(alpha: 0.30),
-                                width: 2,
-                              ),
-                              boxShadow: filled
-                                  ? [
-                                      BoxShadow(
-                                        color: const Color(0xFFF2A8D8)
-                                            .withValues(alpha: 0.55),
-                                        blurRadius: 10,
-                                        spreadRadius: 1,
-                                      ),
-                                    ]
-                                  : null,
-                            ),
-                          );
-                        }),
-                      ),
-                    ),
-
-                    const SizedBox(height: 14),
-
-                    // ── Error message ────────────────────────────────────────
-                    AnimatedOpacity(
-                      opacity: _errorMsg != null ? 1 : 0,
-                      duration: const Duration(milliseconds: 200),
-                      child: Container(
-                        margin: const EdgeInsets.symmetric(horizontal: 40),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFF6B6B).withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                              color: const Color(0xFFFF6B6B)
-                                  .withValues(alpha: 0.3)),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.error_outline_rounded,
-                                color: Color(0xFFFF6B6B), size: 15),
-                            const SizedBox(width: 6),
-                            Flexible(
-                              child: Text(
-                                _errorMsg ?? '',
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                  color: Color(0xFFFF6B6B),
-                                  fontSize: 12,
-                                  fontFamily: 'Poppins',
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-
-                    const Spacer(),
-
-                    // ── Keypad ───────────────────────────────────────────────
-                    MpinPad(onKey: _onKey, isLoading: _isLoading),
-
-                    const SizedBox(height: 16),
-
-                    // ── Security badge ───────────────────────────────────────
-                    Padding(
-                      padding: EdgeInsets.only(
-                          bottom:
-                              MediaQuery.of(context).padding.bottom + 16),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 7),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.06),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                              color:
-                                  Colors.white.withValues(alpha: 0.10)),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.lock_rounded,
-                                size: 12,
-                                color:
-                                    Colors.white.withValues(alpha: 0.45)),
-                            const SizedBox(width: 6),
-                            Text(
-                              'End-to-end encrypted  ·  Never stored in plain text',
-                              style: TextStyle(
-                                color:
-                                    Colors.white.withValues(alpha: 0.45),
-                                fontSize: 11,
-                                fontFamily: 'Poppins',
-                                letterSpacing: 0.2,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),

@@ -9,9 +9,14 @@ import 'package:permission_handler/permission_handler.dart';
 import '../../home/providers/location_provider.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/places_service.dart';
-import '../../../core/utils/maps_launcher.dart';
 
-// ─── Picker phase ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Map Location Picker Screen
+// Full-screen Google Map with a draggable center-pin.
+// Search bar at top, current-location FAB, reverse-geocode on camera idle,
+// persistent bottom sheet (180px) with address + Confirm button.
+// Handles permission denied, GPS off, offline gracefully.
+// ─────────────────────────────────────────────────────────────────────────────
 
 enum _Phase {
   checking,
@@ -20,11 +25,8 @@ enum _Phase {
   gpsDisabled,
   offline,
   ready,
+  mapLoadFailed,
 }
-
-// ═════════════════════════════════════════════════════════════════════════════
-// MapLocationPickerScreen
-// ═════════════════════════════════════════════════════════════════════════════
 
 class MapLocationPickerScreen extends ConsumerStatefulWidget {
   final double? initialLat;
@@ -43,31 +45,38 @@ class MapLocationPickerScreen extends ConsumerStatefulWidget {
 
 class _MapLocationPickerScreenState
     extends ConsumerState<MapLocationPickerScreen> {
-  // ── Map ──────────────────────────────────────────────────────────────────
+  // Map
   GoogleMapController? _mapCtrl;
   bool _mapReady = false;
   LatLng? _center;
 
-  // ── State ────────────────────────────────────────────────────────────────
+  // Search
+  final _searchCtrl = TextEditingController();
+  final _searchFocus = FocusNode();
+  // State
   _Phase _phase = _Phase.checking;
   bool _geocoding = false;
   bool _geocodingFailed = false;
   PreciseAddress? _picked;
 
-  // ── Timers & cancel token ────────────────────────────────────────────────
+  // Timers & cancel token
   Timer? _debounceTimer;
   Timer? _geocodeTimeoutTimer;
-  int _geocodeSeq = 0; // stale result guard
+  Timer? _mapLoadTimer;
+  int _geocodeSeq = 0;
+  Key _mapKey = UniqueKey();
 
   static const double _defaultZoom = 16.5;
   static const double _fallbackLat = 17.3850; // Hyderabad
   static const double _fallbackLng = 78.4867;
   static const int _geocodeTimeoutSec = 10;
+  static const int _mapLoadTimeoutSec = 8;
+
+  // Bottom sheet height constant
+  static const double _sheetHeight = 200;
 
   double get _initLat => widget.initialLat ?? _fallbackLat;
   double get _initLng => widget.initialLng ?? _fallbackLng;
-
-  // ── Lifecycle ─────────────────────────────────────────────────────────────
 
   @override
   void initState() {
@@ -79,16 +88,19 @@ class _MapLocationPickerScreenState
   void dispose() {
     _debounceTimer?.cancel();
     _geocodeTimeoutTimer?.cancel();
+    _mapLoadTimer?.cancel();
+    _searchCtrl.dispose();
+    _searchFocus.dispose();
     _mapCtrl?.dispose();
     super.dispose();
   }
 
-  // ── Pre-flight: permission + GPS + connectivity ───────────────────────────
+  // ── Pre-flight ────────────────────────────────────────────────────────────
 
   Future<void> _preflight() async {
     if (mounted) setState(() => _phase = _Phase.checking);
 
-    // 1. Connectivity
+    // Connectivity
     final result = await Connectivity().checkConnectivity();
     final results = result is List ? result as List : [result];
     final isOnline = results.any((r) => r != ConnectivityResult.none);
@@ -97,12 +109,10 @@ class _MapLocationPickerScreenState
       return;
     }
 
-    // 2. Location permission
+    // Location permission
     var status = await Permission.locationWhenInUse.status;
     if (status.isPermanentlyDenied) {
-      if (mounted) {
-        setState(() => _phase = _Phase.permissionPermanentlyDenied);
-      }
+      if (mounted) setState(() => _phase = _Phase.permissionPermanentlyDenied);
       return;
     }
     if (status.isDenied) {
@@ -118,28 +128,57 @@ class _MapLocationPickerScreenState
       }
     }
 
-    // 3. GPS enabled
+    // GPS
     final gpsOn = await Geolocator.isLocationServiceEnabled();
     if (!gpsOn) {
       if (mounted) setState(() => _phase = _Phase.gpsDisabled);
       return;
     }
 
-    if (mounted) setState(() => _phase = _Phase.ready);
+    if (mounted) {
+      setState(() => _phase = _Phase.ready);
+      _startMapLoadTimeout();
+    }
+  }
+
+  void _startMapLoadTimeout() {
+    _mapLoadTimer?.cancel();
+    _mapLoadTimer = Timer(const Duration(seconds: _mapLoadTimeoutSec), () {
+      if (!mounted || _mapReady) return;
+      setState(() => _phase = _Phase.mapLoadFailed);
+    });
+  }
+
+  void _retryMapLoad() {
+    setState(() {
+      _mapKey = UniqueKey();
+      _mapReady = false;
+      _phase = _Phase.ready;
+    });
+    _startMapLoadTimeout();
   }
 
   // ── Map callbacks ─────────────────────────────────────────────────────────
 
   void _onMapCreated(GoogleMapController ctrl) {
+    _mapLoadTimer?.cancel();
     _mapCtrl = ctrl;
     setState(() => _mapReady = true);
 
     if (widget.initialLat != null) {
-      // Provided coordinates: geocode immediately
       _center = LatLng(_initLat, _initLng);
+      // Force a camera move so the map's bottom `padding` (which keeps the
+      // pin clear of the bottom sheet) is applied to this initial position too —
+      // `initialCameraPosition` alone renders centered in the full widget,
+      // ignoring padding, which visually offsets the pin from the true target
+      // until the user drags the map.
+      _mapCtrl!.moveCamera(
+        CameraUpdate.newCameraPosition(
+          CameraPosition(target: _center!, zoom: _defaultZoom),
+        ),
+      );
       _scheduleGeocode();
     } else {
-      // No initial coords: move to user's GPS
       _moveToCurrentPos();
     }
   }
@@ -150,9 +189,7 @@ class _MapLocationPickerScreenState
     if (!_geocoding) setState(() => _geocoding = true);
   }
 
-  void _onCameraIdle() {
-    _scheduleGeocode();
-  }
+  void _onCameraIdle() => _scheduleGeocode();
 
   void _scheduleGeocode() {
     _debounceTimer?.cancel();
@@ -160,14 +197,14 @@ class _MapLocationPickerScreenState
         Timer(const Duration(milliseconds: 600), _reverseGeocode);
   }
 
-  // ── GPS ──────────────────────────────────────────────────────────────────
+  // ── GPS ───────────────────────────────────────────────────────────────────
 
   Future<void> _moveToCurrentPos() async {
     if (!mounted) return;
     setState(() => _geocoding = true);
 
     try {
-      // Fast coarse fix first for quick feedback
+      // Fast coarse fix
       try {
         final quick = await Geolocator.getCurrentPosition(
           desiredAccuracy: LocationAccuracy.low,
@@ -178,7 +215,7 @@ class _MapLocationPickerScreenState
         }
       } catch (_) {}
 
-      // High-accuracy follow-up
+      // High-accuracy
       final pos = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
         timeLimit: const Duration(seconds: 8),
@@ -187,10 +224,16 @@ class _MapLocationPickerScreenState
         _animateTo(LatLng(pos.latitude, pos.longitude));
       }
     } catch (_) {
-      // GPS unavailable — geocode the fallback (Hyderabad) to at least show
-      // something in the address bar
-      if (mounted) {
+      if (mounted && _mapCtrl != null) {
         _center = LatLng(_initLat, _initLng);
+        // Same padding fix as _onMapCreated: force a camera move to the
+        // fallback position so it's rendered padding-aware instead of at
+        // the raw (unpadded) initialCameraPosition.
+        _mapCtrl!.moveCamera(
+          CameraUpdate.newCameraPosition(
+            CameraPosition(target: _center!, zoom: _defaultZoom),
+          ),
+        );
         _scheduleGeocode();
       }
     }
@@ -210,7 +253,6 @@ class _MapLocationPickerScreenState
     final seq = ++_geocodeSeq;
     final center = _center ?? LatLng(_initLat, _initLng);
 
-    // Arm 10-second safety timeout
     _geocodeTimeoutTimer?.cancel();
     _geocodeTimeoutTimer = Timer(
       const Duration(seconds: _geocodeTimeoutSec),
@@ -219,18 +261,14 @@ class _MapLocationPickerScreenState
         setState(() {
           _geocoding = false;
           _geocodingFailed = true;
-          // Allow confirm with coordinates only
-          _picked ??= PreciseAddress(
-            lat: center.latitude,
-            lng: center.longitude,
-          );
+          _picked ??= PreciseAddress(lat: center.latitude, lng: center.longitude);
         });
       },
     );
 
     try {
-      final details =
-          await placesService.reverseGeocode(center.latitude, center.longitude);
+      final details = await placesService.reverseGeocode(
+          center.latitude, center.longitude);
       if (!mounted || seq != _geocodeSeq) return;
       _geocodeTimeoutTimer?.cancel();
 
@@ -251,12 +289,8 @@ class _MapLocationPickerScreenState
           _geocodingFailed = false;
         });
       } else {
-        // API returned nothing — allow pin-only confirmation
         setState(() {
-          _picked = PreciseAddress(
-            lat: center.latitude,
-            lng: center.longitude,
-          );
+          _picked = PreciseAddress(lat: center.latitude, lng: center.longitude);
           _geocoding = false;
           _geocodingFailed = true;
         });
@@ -265,10 +299,7 @@ class _MapLocationPickerScreenState
       if (!mounted || seq != _geocodeSeq) return;
       _geocodeTimeoutTimer?.cancel();
       setState(() {
-        _picked = PreciseAddress(
-          lat: center.latitude,
-          lng: center.longitude,
-        );
+        _picked = PreciseAddress(lat: center.latitude, lng: center.longitude);
         _geocoding = false;
         _geocodingFailed = true;
       });
@@ -308,7 +339,7 @@ class _MapLocationPickerScreenState
           iconColor: AppColors.primary,
           title: 'Location Permission Required',
           subtitle:
-              'MedNu needs your location to find nearby doctors, hospitals, and home services.',
+              'MedNU needs your location to find nearby doctors, hospitals, and home services.',
           primaryLabel: 'Grant Permission',
           onPrimary: () async {
             final s = await Permission.locationWhenInUse.request();
@@ -324,11 +355,10 @@ class _MapLocationPickerScreenState
           iconColor: Colors.red,
           title: 'Location Access Blocked',
           subtitle:
-              'Please enable "Location" permission for MedNu in your device Settings > Apps.',
+              'Please enable "Location" permission for MedNU in your device Settings > Apps.',
           primaryLabel: 'Open Settings',
           onPrimary: () async {
             await openAppSettings();
-            // Re-check after user returns from settings
             if (mounted) _preflight();
           },
           secondaryLabel: 'Go Back',
@@ -364,63 +394,87 @@ class _MapLocationPickerScreenState
           onSecondary: () => Navigator.pop(context),
         );
 
+      case _Phase.mapLoadFailed:
+        return _ErrorGateView(
+          icon: Icons.map_outlined,
+          iconColor: Colors.red,
+          title: 'Map Failed to Load',
+          subtitle:
+              'We couldn\'t load Google Maps on this device. Check your internet connection and Google Play Services, then try again.',
+          primaryLabel: 'Retry',
+          onPrimary: _retryMapLoad,
+          secondaryLabel: 'Go Back',
+          onSecondary: () => Navigator.pop(context),
+        );
+
       case _Phase.ready:
         return _buildMapStack(isDark);
     }
   }
 
   Widget _buildMapStack(bool isDark) {
-    final String barLabel;
+    final String addressText;
     if (_geocoding) {
-      barLabel = 'Locating…';
+      addressText = 'Finding address...';
     } else if (_geocodingFailed) {
-      barLabel = 'Tap confirm to use pin location';
+      addressText = 'Unable to determine address';
     } else {
-      barLabel = _picked?.short ?? 'Move map to set location';
+      addressText = _picked?.short ?? 'Move map to set location';
     }
 
     return Stack(
       children: [
-        // ── Google Map ────────────────────────────────────────────────────
-        GoogleMap(
-          initialCameraPosition: CameraPosition(
-            target: LatLng(_initLat, _initLng),
-            zoom: _defaultZoom,
+        // ── Google Map ─────────────────────────────────────────────────────
+        Positioned.fill(
+          child: GoogleMap(
+            key: _mapKey,
+            initialCameraPosition: CameraPosition(
+              target: LatLng(_initLat, _initLng),
+              zoom: _defaultZoom,
+            ),
+            onMapCreated: _onMapCreated,
+            onCameraMove: _onCameraMove,
+            onCameraIdle: _onCameraIdle,
+            myLocationEnabled: true,
+            myLocationButtonEnabled: false,
+            zoomControlsEnabled: false,
+            compassEnabled: false,
+            mapToolbarEnabled: false,
+            padding: EdgeInsets.only(bottom: _sheetHeight),
           ),
-          onMapCreated: _onMapCreated,
-          onCameraMove: _onCameraMove,
-          onCameraIdle: _onCameraIdle,
-          myLocationEnabled: true,
-          myLocationButtonEnabled: false,
-          zoomControlsEnabled: false,
-          compassEnabled: false,
-          mapToolbarEnabled: false,
         ),
 
-        // ── Shimmer while map tiles load ──────────────────────────────────
+        // ── Map loading shimmer ────────────────────────────────────────────
         if (!_mapReady) const _MapLoadingShimmer(),
 
-        // ── Centre pin (only once map is ready) ───────────────────────────
-        if (_mapReady) _CentrePin(geocoding: _geocoding),
+        // ── Centre pin ─────────────────────────────────────────────────────
+        if (_mapReady)
+          Positioned.fill(
+            bottom: _sheetHeight,
+            child: _CentrePin(geocoding: _geocoding),
+          ),
 
-        // ── Top bar ───────────────────────────────────────────────────────
+        // ── Search bar (top, floating over map) ────────────────────────────
         SafeArea(
           child: Padding(
             padding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             child: Row(
               children: [
-                _IconButton(
+                _MapIconButton(
                   icon: Icons.arrow_back_ios_new_rounded,
                   isDark: isDark,
                   onTap: () => context.pop(),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: _AddressBar(
-                    label: barLabel,
-                    isLoading: _geocoding,
+                  child: _SearchBar(
+                    controller: _searchCtrl,
+                    focusNode: _searchFocus,
                     isDark: isDark,
+                    addressText: addressText,
+                    isLoading: _geocoding,
+                    onSearchActive: (_) {},
                   ),
                 ),
               ],
@@ -428,11 +482,11 @@ class _MapLocationPickerScreenState
           ),
         ),
 
-        // ── Retry geocode FAB (shown when geocoding failed) ───────────────
+        // ── Retry geocode FAB ──────────────────────────────────────────────
         if (_geocodingFailed && _mapReady)
           Positioned(
             right: 16,
-            bottom: 278,
+            bottom: _sheetHeight + 66,
             child: _MapFab(
               icon: Icons.refresh_rounded,
               tooltip: 'Retry address lookup',
@@ -447,11 +501,11 @@ class _MapLocationPickerScreenState
             ),
           ),
 
-        // ── My location FAB ───────────────────────────────────────────────
+        // ── My location FAB ────────────────────────────────────────────────
         if (_mapReady)
           Positioned(
             right: 16,
-            bottom: 218,
+            bottom: _sheetHeight + 12,
             child: _MapFab(
               icon: Icons.my_location_rounded,
               tooltip: 'Go to my location',
@@ -460,7 +514,7 @@ class _MapLocationPickerScreenState
             ),
           ),
 
-        // ── Bottom confirm sheet ───────────────────────────────────────────
+        // ── Bottom confirm sheet (persistent 180px) ────────────────────────
         Positioned(
           left: 0,
           right: 0,
@@ -478,9 +532,7 @@ class _MapLocationPickerScreenState
   }
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// Checking view — spinner while doing pre-flight
-// ═════════════════════════════════════════════════════════════════════════════
+// ── Checking view ─────────────────────────────────────────────────────────────
 
 class _CheckingView extends StatelessWidget {
   const _CheckingView();
@@ -492,9 +544,7 @@ class _CheckingView extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           CircularProgressIndicator(
-            color: AppColors.primary,
-            strokeWidth: 2.5,
-          ),
+              color: AppColors.primary, strokeWidth: 2.5),
           SizedBox(height: 16),
           Text(
             'Checking location access…',
@@ -511,9 +561,7 @@ class _CheckingView extends StatelessWidget {
   }
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// Error gate view — shown for permission / GPS / offline errors
-// ═════════════════════════════════════════════════════════════════════════════
+// ── Error gate view ───────────────────────────────────────────────────────────
 
 class _ErrorGateView extends StatelessWidget {
   final IconData icon;
@@ -544,7 +592,6 @@ class _ErrorGateView extends StatelessWidget {
         padding: const EdgeInsets.all(28),
         child: Column(
           children: [
-            // Back button row
             Row(
               children: [
                 GestureDetector(
@@ -554,7 +601,7 @@ class _ErrorGateView extends StatelessWidget {
                     height: 40,
                     decoration: BoxDecoration(
                       color: isDark
-                          ? Colors.white.withValues(alpha:0.08)
+                          ? Colors.white.withValues(alpha: 0.08)
                           : Colors.grey.shade100,
                       borderRadius: BorderRadius.circular(10),
                     ),
@@ -565,18 +612,16 @@ class _ErrorGateView extends StatelessWidget {
               ],
             ),
             const Spacer(),
-            // Icon
             Container(
               width: 88,
               height: 88,
               decoration: BoxDecoration(
-                color: iconColor.withValues(alpha:0.1),
+                color: iconColor.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: Icon(icon, color: iconColor, size: 42),
             ),
             const SizedBox(height: 28),
-            // Title
             Text(
               title,
               textAlign: TextAlign.center,
@@ -588,22 +633,19 @@ class _ErrorGateView extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 12),
-            // Subtitle
             Text(
               subtitle,
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontFamily: 'Poppins',
                 fontSize: 14,
-                fontWeight: FontWeight.w400,
                 color: isDark
-                    ? Colors.white.withValues(alpha:0.6)
+                    ? Colors.white.withValues(alpha: 0.6)
                     : Colors.grey.shade600,
                 height: 1.6,
               ),
             ),
             const Spacer(),
-            // Primary button
             SizedBox(
               width: double.infinity,
               height: 52,
@@ -612,8 +654,7 @@ class _ErrorGateView extends StatelessWidget {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
+                      borderRadius: BorderRadius.circular(14)),
                   elevation: 0,
                 ),
                 child: Text(
@@ -628,18 +669,15 @@ class _ErrorGateView extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 12),
-            // Secondary button
             SizedBox(
               width: double.infinity,
               height: 48,
               child: OutlinedButton(
                 onPressed: onSecondary,
                 style: OutlinedButton.styleFrom(
-                  side:
-                      BorderSide(color: Colors.grey.shade300),
+                  side: BorderSide(color: Colors.grey.shade300),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
+                      borderRadius: BorderRadius.circular(14)),
                 ),
                 child: Text(
                   secondaryLabel,
@@ -647,8 +685,7 @@ class _ErrorGateView extends StatelessWidget {
                     fontFamily: 'Poppins',
                     fontWeight: FontWeight.w500,
                     fontSize: 14,
-                    color:
-                        isDark ? Colors.white70 : Colors.black54,
+                    color: isDark ? Colors.white70 : Colors.black54,
                   ),
                 ),
               ),
@@ -661,9 +698,7 @@ class _ErrorGateView extends StatelessWidget {
   }
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// Map loading shimmer
-// ═════════════════════════════════════════════════════════════════════════════
+// ── Map loading shimmer ───────────────────────────────────────────────────────
 
 class _MapLoadingShimmer extends StatefulWidget {
   const _MapLoadingShimmer();
@@ -710,9 +745,7 @@ class _MapLoadingShimmerState extends State<_MapLoadingShimmer>
             mainAxisSize: MainAxisSize.min,
             children: [
               const CircularProgressIndicator(
-                color: AppColors.primary,
-                strokeWidth: 2.5,
-              ),
+                  color: AppColors.primary, strokeWidth: 2.5),
               const SizedBox(height: 14),
               Text(
                 'Loading map…',
@@ -731,9 +764,7 @@ class _MapLoadingShimmerState extends State<_MapLoadingShimmer>
   }
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// Centre pin with pulse animation while geocoding
-// ═════════════════════════════════════════════════════════════════════════════
+// ── Centre pin with pulse animation ──────────────────────────────────────────
 
 class _CentrePin extends StatefulWidget {
   final bool geocoding;
@@ -786,28 +817,21 @@ class _CentrePinState extends State<_CentrePin>
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.primary.withValues(alpha:0.4),
+                    color: AppColors.primary.withValues(alpha: 0.4),
                     blurRadius: 12,
                     spreadRadius: widget.geocoding ? 4 : 2,
                   ),
                 ],
               ),
-              child: const Icon(
-                Icons.location_on_rounded,
-                color: Colors.white,
-                size: 26,
-              ),
+              child: const Icon(Icons.location_on_rounded,
+                  color: Colors.white, size: 26),
             ),
-            Container(
-              width: 2,
-              height: 14,
-              color: AppColors.primary,
-            ),
+            Container(width: 2, height: 14, color: AppColors.primary),
             Container(
               width: 10,
               height: 4,
               decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha:0.15),
+                color: Colors.black.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(4),
               ),
             ),
@@ -818,85 +842,83 @@ class _CentrePinState extends State<_CentrePin>
   }
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// Address bar
-// ═════════════════════════════════════════════════════════════════════════════
+// ── Search bar (floating over map) ────────────────────────────────────────────
 
-class _AddressBar extends StatelessWidget {
-  final String label;
-  final bool isLoading;
+class _SearchBar extends StatelessWidget {
+  final TextEditingController controller;
+  final FocusNode focusNode;
   final bool isDark;
+  final String addressText;
+  final bool isLoading;
+  final ValueChanged<bool> onSearchActive;
 
-  const _AddressBar({
-    required this.label,
-    required this.isLoading,
+  const _SearchBar({
+    required this.controller,
+    required this.focusNode,
     required this.isDark,
+    required this.addressText,
+    required this.isLoading,
+    required this.onSearchActive,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
       height: 46,
-      padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
-        color: isDark ? AppColors.darkCardElevated : Colors.white,
+        color: isDark ? const Color(0xFF2C2C2C) : Colors.white,
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha:0.1),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            color: Colors.black.withValues(alpha: 0.12),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
           ),
         ],
       ),
-      child: Row(
-        children: [
-          Icon(Icons.map_outlined, size: 18, color: AppColors.primary),
-          const SizedBox(width: 8),
-          if (isLoading) ...[
-            // Shimmer skeleton
-            Container(
-              width: 140,
-              height: 12,
-              decoration: BoxDecoration(
-                color: isDark
-                    ? Colors.white.withValues(alpha:0.1)
-                    : Colors.grey.shade200,
-                borderRadius: BorderRadius.circular(6),
-              ),
-            ),
-          ] else ...[
-            Expanded(
-              child: Text(
-                label,
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: isDark ? Colors.white : Colors.black87,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ],
+      child: TextField(
+        controller: controller,
+        focusNode: focusNode,
+        onTap: () => onSearchActive(true),
+        onSubmitted: (_) => onSearchActive(false),
+        style: TextStyle(
+          fontFamily: 'Poppins',
+          fontSize: 13,
+          color: isDark ? Colors.white : Colors.black87,
+        ),
+        decoration: InputDecoration(
+          hintText: isLoading ? 'Finding address...' : addressText,
+          hintStyle: TextStyle(
+            fontFamily: 'Poppins',
+            fontSize: 13,
+            color: isDark ? Colors.white60 : Colors.grey.shade500,
+          ),
+          prefixIcon: Icon(
+            Icons.search_rounded,
+            size: 20,
+            color: isLoading ? AppColors.primary : Colors.grey.shade500,
+          ),
+          border: InputBorder.none,
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        ),
       ),
     );
   }
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// Top-bar icon button
-// ═════════════════════════════════════════════════════════════════════════════
+// ── Map icon button ───────────────────────────────────────────────────────────
 
-class _IconButton extends StatelessWidget {
+class _MapIconButton extends StatelessWidget {
   final IconData icon;
   final bool isDark;
   final VoidCallback onTap;
 
-  const _IconButton(
-      {required this.icon, required this.isDark, required this.onTap});
+  const _MapIconButton({
+    required this.icon,
+    required this.isDark,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -906,13 +928,13 @@ class _IconButton extends StatelessWidget {
         width: 44,
         height: 44,
         decoration: BoxDecoration(
-          color: isDark ? AppColors.darkCardElevated : Colors.white,
+          color: isDark ? const Color(0xFF2C2C2C) : Colors.white,
           borderRadius: BorderRadius.circular(12),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha:0.1),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
+              color: Colors.black.withValues(alpha: 0.12),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
             ),
           ],
         ),
@@ -924,9 +946,7 @@ class _IconButton extends StatelessWidget {
   }
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// Floating map button
-// ═════════════════════════════════════════════════════════════════════════════
+// ── Floating map button ───────────────────────────────────────────────────────
 
 class _MapFab extends StatelessWidget {
   final IconData icon;
@@ -951,11 +971,11 @@ class _MapFab extends StatelessWidget {
           width: 48,
           height: 48,
           decoration: BoxDecoration(
-            color: isDark ? AppColors.darkCardElevated : Colors.white,
+            color: isDark ? const Color(0xFF2C2C2C) : Colors.white,
             borderRadius: BorderRadius.circular(12),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha:0.15),
+                color: Colors.black.withValues(alpha: 0.15),
                 blurRadius: 10,
                 offset: const Offset(0, 3),
               ),
@@ -968,9 +988,7 @@ class _MapFab extends StatelessWidget {
   }
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// Bottom confirm sheet
-// ═════════════════════════════════════════════════════════════════════════════
+// ── Bottom confirm sheet (persistent 180px) ───────────────────────────────────
 
 class _BottomConfirmSheet extends StatelessWidget {
   final PreciseAddress? picked;
@@ -987,12 +1005,6 @@ class _BottomConfirmSheet extends StatelessWidget {
     required this.onConfirm,
   });
 
-  void _openInMaps() {
-    if (picked == null) return;
-    MapsLauncher.openLocation(picked!.lat, picked!.lng,
-        label: picked!.formatted);
-  }
-
   bool get _canConfirm => !isLoading && picked != null;
 
   @override
@@ -1001,50 +1013,49 @@ class _BottomConfirmSheet extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: isDark ? AppColors.darkCardElevated : Colors.white,
-        borderRadius:
-            const BorderRadius.vertical(top: Radius.circular(24)),
+        color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha:0.12),
+            color: Colors.black.withValues(alpha: 0.14),
             blurRadius: 20,
             offset: const Offset(0, -4),
           ),
         ],
       ),
-      padding:
-          EdgeInsets.fromLTRB(20, 16, 20, bottomPad + 20),
+      padding: EdgeInsets.fromLTRB(20, 14, 20, bottomPad + 16),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Handle bar
+          // Handle
           Center(
             child: Container(
               width: 36,
               height: 4,
               decoration: BoxDecoration(
                 color: isDark
-                    ? Colors.white.withValues(alpha:0.15)
+                    ? Colors.white.withValues(alpha: 0.15)
                     : Colors.grey.shade300,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
 
+          // Address row
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                width: 42,
-                height: 42,
+                width: 40,
+                height: 40,
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha:0.1),
-                  borderRadius: BorderRadius.circular(12),
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(11),
                 ),
-                child: Icon(Icons.location_on_rounded,
-                    color: AppColors.primary, size: 22),
+                child: const Icon(Icons.location_on_rounded,
+                    color: AppColors.primary, size: 20),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -1055,52 +1066,49 @@ class _BottomConfirmSheet extends StatelessWidget {
                       'Selected Location',
                       style: TextStyle(
                         fontFamily: 'Poppins',
-                        fontSize: 11,
+                        fontSize: 10.5,
                         fontWeight: FontWeight.w600,
                         color: Colors.grey.shade500,
                         letterSpacing: 0.5,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 3),
                     if (isLoading)
                       _ShimmerBar(isDark: isDark)
-                    else if (isFailed && picked != null)
+                    else if (isFailed)
                       Column(
-                        crossAxisAlignment:
-                            CrossAxisAlignment.start,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Pin placed — address lookup failed',
+                            'Unable to determine location',
                             style: TextStyle(
                               fontFamily: 'Poppins',
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
-                              color: isDark
-                                  ? Colors.white70
-                                  : Colors.black54,
+                              color: isDark ? Colors.white70 : Colors.black54,
                             ),
                           ),
-                          const SizedBox(height: 2),
-                          Text(
-                            '${picked!.lat.toStringAsFixed(5)}, ${picked!.lng.toStringAsFixed(5)}',
-                            style: TextStyle(
-                              fontFamily: 'Poppins',
-                              fontSize: 11,
-                              color: Colors.grey.shade500,
+                          if (picked != null) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              '${picked!.lat.toStringAsFixed(5)}, ${picked!.lng.toStringAsFixed(5)}',
+                              style: TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: 11,
+                                color: Colors.grey.shade500,
+                              ),
                             ),
-                          ),
+                          ],
                         ],
                       )
                     else
                       Text(
-                        picked?.formatted ??
-                            'Move the map to set location',
+                        picked?.formatted ?? 'Move the map to set location',
                         style: TextStyle(
                           fontFamily: 'Poppins',
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
-                          color:
-                              isDark ? Colors.white : Colors.black87,
+                          color: isDark ? Colors.white : Colors.black87,
                         ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
@@ -1111,84 +1119,42 @@ class _BottomConfirmSheet extends StatelessWidget {
             ],
           ),
 
-          // PIN / city chips
-          if (!isLoading &&
-              !isFailed &&
-              picked?.pincode?.isNotEmpty == true) ...[
-            const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.only(left: 54),
-              child: Wrap(
-                spacing: 8,
-                children: [
-                  _Chip(
-                    icon: Icons.pin_drop_rounded,
-                    label: 'PIN: ${picked!.pincode}',
-                    isDark: isDark,
-                  ),
-                  if (picked?.city?.isNotEmpty == true)
-                    _Chip(
-                      icon: Icons.location_city_rounded,
-                      label: picked!.city!,
-                      isDark: isDark,
-                    ),
-                ],
-              ),
-            ),
-          ],
-
-          const SizedBox(height: 12),
-
-          // Open in Maps
-          if (_canConfirm && !isFailed)
-            OutlinedButton.icon(
-              onPressed: _openInMaps,
-              icon: const Icon(Icons.open_in_new_rounded, size: 16),
-              label: const Text(
-                'Open in Google Maps',
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.primary,
-                side: BorderSide(
-                    color: AppColors.primary.withValues(alpha:0.4)),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-                minimumSize: const Size(double.infinity, 44),
-              ),
-            ),
-
-          if (_canConfirm && !isFailed) const SizedBox(height: 10),
+          const SizedBox(height: 14),
 
           // Confirm button
           SizedBox(
             width: double.infinity,
-            height: 52,
+            height: 50,
             child: ElevatedButton(
               onPressed: _canConfirm ? onConfirm : null,
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 disabledBackgroundColor:
-                    AppColors.primary.withValues(alpha:0.35),
+                    AppColors.primary.withValues(alpha: 0.35),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
+                    borderRadius: BorderRadius.circular(14)),
                 elevation: 0,
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.check_circle_outline_rounded,
-                      color: Colors.white, size: 20),
+                  if (isLoading)
+                    const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                          color: Colors.white, strokeWidth: 2),
+                    )
+                  else
+                    const Icon(Icons.check_circle_outline_rounded,
+                        color: Colors.white, size: 20),
                   const SizedBox(width: 8),
                   Text(
-                    isFailed
-                        ? 'Confirm Pin Location'
-                        : 'Confirm Location',
+                    isLoading
+                        ? 'Locating...'
+                        : isFailed
+                            ? 'Confirm Pin Location'
+                            : 'Confirm Location',
                     style: const TextStyle(
                       fontFamily: 'Poppins',
                       fontWeight: FontWeight.w700,
@@ -1249,8 +1215,8 @@ class _ShimmerBarState extends State<_ShimmerBar>
             width: 220,
             decoration: BoxDecoration(
               color: widget.isDark
-                  ? Colors.white.withValues(alpha:_anim.value * 0.15)
-                  : Colors.grey.withValues(alpha:_anim.value * 0.35),
+                  ? Colors.white.withValues(alpha: _anim.value * 0.15)
+                  : Colors.grey.withValues(alpha: _anim.value * 0.35),
               borderRadius: BorderRadius.circular(6),
             ),
           ),
@@ -1260,51 +1226,9 @@ class _ShimmerBarState extends State<_ShimmerBar>
             width: 140,
             decoration: BoxDecoration(
               color: widget.isDark
-                  ? Colors.white.withValues(alpha:_anim.value * 0.1)
-                  : Colors.grey.withValues(alpha:_anim.value * 0.25),
+                  ? Colors.white.withValues(alpha: _anim.value * 0.1)
+                  : Colors.grey.withValues(alpha: _anim.value * 0.25),
               borderRadius: BorderRadius.circular(6),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ── Info chip ─────────────────────────────────────────────────────────────────
-
-class _Chip extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final bool isDark;
-
-  const _Chip(
-      {required this.icon, required this.label, required this.isDark});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: isDark
-            ? Colors.white.withValues(alpha:0.06)
-            : Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon,
-              size: 12,
-              color: isDark ? Colors.white70 : Colors.grey.shade600),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-              color: isDark ? Colors.white70 : Colors.grey.shade700,
             ),
           ),
         ],

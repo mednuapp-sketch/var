@@ -4,6 +4,7 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -136,7 +137,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
     state = state.copyWith(isLoading: true, error: null);
     try {
       _pendingPhone = phone;
-      await Msg91Service.sendOtp(phone);
+      if (isResend) {
+        await Msg91Service.resendOtp(phone);
+      } else {
+        await Msg91Service.sendOtp(phone);
+      }
       state = state.copyWith(isLoading: false);
     } catch (e) {
       debugPrint('🔴 MSG91 sendOtp error → $e');
@@ -157,6 +162,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final customToken = await Msg91Service.verifyOtp(phone, otp);
       await _auth.signInWithCustomToken(customToken);
       _pendingPhone = null;
+      await _sec.write(key: 'last_phone', value: phone);
       state = state.copyWith(isLoading: false);
     } catch (e) {
       debugPrint('🔴 MSG91 verifyOtp error → $e');
@@ -177,6 +183,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
     String? city,
     String? referralCode,
     String? photoUrl,
+    String? lastCheckup,
+    String? allergies,
+    String? chronicConditions,
   }) async {
     state = state.copyWith(isLoading: true, error: null);
     try {
@@ -204,6 +213,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
         'gender':             gender,
         'dob':                dob,
         if (city != null && city.isNotEmpty) 'city': city,
+        if (lastCheckup != null && lastCheckup.isNotEmpty) 'lastCheckup': lastCheckup,
+        if (allergies != null && allergies.isNotEmpty) 'allergies': allergies,
+        if (chronicConditions != null && chronicConditions.isNotEmpty) 'chronicConditions': chronicConditions,
         'role':               'patient',
         'status':             'active',
         'createdAt':          now,
@@ -276,7 +288,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
       // Write to phone_index so any device can detect this user has MPIN.
       // Fire-and-forget: this is a secondary optimisation index — failure here
       // must not block MPIN creation (the hash is already stored on users/{uid}).
-      final phone = _auth.currentUser?.phoneNumber ?? '';
+      // Use the stored phone from secure storage because custom-token auth
+      // does not populate currentUser.phoneNumber.
+      final phone = (await _sec.read(key: 'last_phone')) ?? '';
       if (phone.isNotEmpty) {
         _db.collection('phone_index').doc(phone).set({
           'hasMpin':   true,
@@ -288,7 +302,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       // Also cache locally for same-device instant verification (no network)
       await _sec.write(key: _localHashKey,  value: mpinHash);
       await _sec.write(key: _localUidKey,   value: uid);
-      await _sec.write(key: _localPhoneKey, value: phone);
+      if (phone.isNotEmpty) await _sec.write(key: _localPhoneKey, value: phone);
 
       state = state.copyWith(isLoading: false, loginAttempts: 0, lockedUntil: null);
     } catch (e) {
@@ -309,6 +323,40 @@ class AuthNotifier extends StateNotifier<AuthState> {
       return doc.exists && (doc.data()?['hasMpin'] == true);
     } catch (_) {
       return false;
+    }
+  }
+
+  // ── MPIN-first login on ANY device (Option A) ────────────────────────────
+  // Calls verifyMpinAndIssueToken cloud function which verifies the MPIN
+  // server-side and returns a custom token — no OTP required on any device.
+  Future<void> verifyMpinAndSignIn(String mpin, String phone) async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      final callable = FirebaseFunctions.instance
+          .httpsCallable('verifyMpinAndIssueToken');
+      final result = await callable.call({'phone': phone, 'mpin': mpin});
+      final customToken = result.data['customToken'] as String;
+      await _auth.signInWithCustomToken(customToken);
+
+      // Cache locally so same-device future logins skip even the network call.
+      final uid = _auth.currentUser?.uid;
+      if (uid != null) {
+        final mpinHash = _hashMpin(mpin, uid);
+        await _sec.write(key: _localHashKey,  value: mpinHash);
+        await _sec.write(key: _localUidKey,   value: uid);
+        await _sec.write(key: _localPhoneKey, value: phone);
+      }
+      await _sec.write(key: 'last_phone', value: phone);
+
+      state = state.copyWith(isLoading: false, loginAttempts: 0, lockedUntil: null);
+    } on FirebaseFunctionsException catch (e) {
+      final msg = e.message ?? 'Login failed. Please try again.';
+      state = state.copyWith(isLoading: false, error: msg);
+      throw Exception(msg);
+    } catch (e) {
+      final msg = e.toString().replaceFirst('Exception: ', '');
+      state = state.copyWith(isLoading: false, error: msg);
+      throw Exception(msg);
     }
   }
 
@@ -396,6 +444,17 @@ class AuthNotifier extends StateNotifier<AuthState> {
           if (fcmToken != null) 'fcmToken': fcmToken,
         });
         _auditLogin(uid, success: true);
+
+        // Heal phone_index so future logins can skip OTP.
+        final phone = await _sec.read(key: 'last_phone') ?? '';
+        if (phone.isNotEmpty) {
+          _db.collection('phone_index').doc(phone).set({
+            'hasMpin':   true,
+            'uid':       uid,
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true)).ignore();
+        }
+
         state = state.copyWith(
             isLoading: false, loginAttempts: 0, lockedUntil: null);
         return true;
@@ -459,6 +518,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
     required String email,
     required String dob,
     required String gender,
+    String? lastCheckup,
+    String? allergies,
+    String? chronicConditions,
   }) async {
     state = state.copyWith(isLoading: true, error: null);
     try {
@@ -466,6 +528,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
       if (uid == null) throw Exception('Session expired. Please sign in again.');
       await _db.collection('users').doc(uid).update({
         'name': name, 'email': email, 'dob': dob, 'gender': gender,
+        if (lastCheckup != null) 'lastCheckup': lastCheckup,
+        if (allergies != null) 'allergies': allergies,
+        if (chronicConditions != null) 'chronicConditions': chronicConditions,
         'updatedAt': FieldValue.serverTimestamp(),
       });
       state = state.copyWith(isLoading: false);

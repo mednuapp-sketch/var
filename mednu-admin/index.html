@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Mednu Admin Panel</title>
+  <title>MedNU Admin Panel</title>
   <link rel="stylesheet" href="css/style.css" />
   <!-- Tabler Icons -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css" />
@@ -24,7 +24,7 @@
   <div class="login-box">
     <div class="login-logo">
       <div class="logo-icon">M</div>
-      <h1>Mednu Admin</h1>
+      <h1>MedNU Admin</h1>
       <p>Sign in to your admin account</p>
     </div>
     <form id="login-form">
@@ -53,7 +53,7 @@
     <div class="sidebar-logo">
       <div class="logo-icon">M</div>
       <div>
-        <div class="logo-label">Mednu</div>
+        <div class="logo-label">MedNU</div>
         <div class="logo-sub">Admin Panel</div>
       </div>
     </div>
@@ -143,6 +143,10 @@
       <div class="nav-item" data-tab="caregivers" data-title="Caregivers Management">
         <i class="ti ti-heart-handshake nav-icon" aria-hidden="true"></i> Caregivers
         <span class="nav-badge nav-badge-green" id="nav-caregivers-count" style="display:none;">0</span>
+      </div>
+      <div class="nav-item" data-tab="care-assistants" data-title="Care Assistants Management">
+        <i class="ti ti-support nav-icon" aria-hidden="true"></i> Care Assistants
+        <span class="nav-badge nav-badge-green" id="nav-care-assistants-count" style="display:none;">0</span>
       </div>
       <div class="nav-section-label">Logs &amp; Audit</div>
       <div class="nav-item" data-tab="prescriptions" data-title="Prescription Lookup">
@@ -504,11 +508,84 @@
 
       <!-- ===== DOCTORS TAB ===== -->
       <div id="tab-doctors" class="tab-section">
+
+        <!-- Add / Edit Doctor or Therapist -->
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-header">
+            <span class="card-title" id="doctor-form-title">Add Doctor / Therapist</span>
+            <button class="btn btn-outline" id="cancel-doctor-btn" style="display:none;" onclick="cancelDoctorEdit()">
+              <i class="ti ti-x"></i> Cancel
+            </button>
+          </div>
+          <div class="banner-form-grid">
+            <div class="form-group">
+              <label class="form-label">Full Name <span style="color:var(--danger)">*</span></label>
+              <input id="dr-name" type="text" class="form-input" placeholder="e.g. Dr. Ananya Rao" maxlength="100" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Professional Type <span style="color:var(--danger)">*</span></label>
+              <select id="dr-type" class="filter-select" style="width:100%;padding:10px 12px;height:auto;" onchange="onDoctorTypeChange()">
+                <option value="doctor">Doctor</option>
+                <option value="therapist">Therapist</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Specialty <span style="color:var(--danger)">*</span></label>
+              <select id="dr-specialty" class="filter-select" style="width:100%;padding:10px 12px;height:auto;"></select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Gender <span style="color:var(--danger)">*</span></label>
+              <select id="dr-gender" class="filter-select" style="width:100%;padding:10px 12px;height:auto;">
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Email</label>
+              <input id="dr-email" type="email" class="form-input" placeholder="e.g. doctor@example.com" maxlength="120" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Phone Number</label>
+              <input id="dr-phone" type="tel" class="form-input" placeholder="e.g. 9876543210" maxlength="15" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Qualifications</label>
+              <input id="dr-qualifications" type="text" class="form-input" placeholder="e.g. MBBS, MD" maxlength="150" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Experience (years)</label>
+              <input id="dr-experience" type="number" class="form-input" placeholder="e.g. 8" min="0" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Consultation Fee (₹) <span style="color:var(--danger)">*</span></label>
+              <input id="dr-fee" type="number" class="form-input" placeholder="e.g. 500" min="0" />
+            </div>
+          </div>
+          <div class="banner-form-footer">
+            <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:center;flex:1;">
+              <label class="toggle-label">
+                <input type="checkbox" id="dr-active" checked />
+                <span class="toggle-switch"></span>
+                <span class="toggle-text">Active &amp; visible in app</span>
+              </label>
+            </div>
+            <button id="save-doctor-btn" class="btn-publish" onclick="saveDoctorAdmin()">
+              <i class="ti ti-device-floppy"></i> Save Doctor
+            </button>
+          </div>
+        </div>
+
         <div class="card">
           <div class="card-header">
             <span class="card-title">All Doctors</span>
             <div style="display:flex;gap:8px;">
               <input id="doctor-search" type="text" class="search-input" placeholder="Search doctors..." />
+              <select id="doctor-type-filter" class="filter-select">
+                <option value="all">All types</option>
+                <option value="doctor">Doctor</option>
+                <option value="therapist">Therapist</option>
+              </select>
               <select id="doctor-status-filter" class="filter-select">
                 <option value="all">All status</option>
                 <option value="active">Active</option>
@@ -522,12 +599,12 @@
             <table>
               <thead>
                 <tr>
-                  <th>Doctor</th><th>Specialisation</th><th>Phone</th>
+                  <th>Doctor</th><th>Type</th><th>Specialisation</th><th>Phone</th>
                   <th>Consultations</th><th>Rating</th><th>Status</th><th>Actions</th>
                 </tr>
               </thead>
               <tbody id="doctors-tbody">
-                <tr><td colspan="7" class="loading">Loading doctors...</td></tr>
+                <tr><td colspan="8" class="loading">Loading doctors...</td></tr>
               </tbody>
             </table>
           </div>
@@ -1355,6 +1432,14 @@
               <label class="form-label">Service Area <span class="form-hint">(optional)</span></label>
               <input id="amb-area" type="text" class="form-input" placeholder="e.g. Hyderabad, Secunderabad" maxlength="100" />
             </div>
+            <div class="form-group">
+              <label class="form-label">Latitude <span class="form-hint">(required for nearby search)</span></label>
+              <input id="amb-lat" type="number" step="any" class="form-input" placeholder="e.g. 17.4126" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Longitude <span class="form-hint">(required for nearby search)</span></label>
+              <input id="amb-lng" type="number" step="any" class="form-input" placeholder="e.g. 78.4071" />
+            </div>
           </div>
           <div class="banner-form-footer">
             <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:center;flex:1;">
@@ -1486,7 +1571,7 @@
               </div>
               <div class="form-group" style="grid-column:1/-1;">
                 <label class="form-label">Campaign Message</label>
-                <input id="ref-campaign-message" type="text" class="form-input" placeholder="Invite friends to MedNu and earn rewards!" maxlength="140" />
+                <input id="ref-campaign-message" type="text" class="form-input" placeholder="Invite friends to MedNU and earn rewards!" maxlength="140" />
                 <small class="form-hint">Shown in the share sheet inside the app</small>
               </div>
               <div class="form-group">
@@ -1882,10 +1967,10 @@
                 <input type="hidden" id="svc-type" />
               </div>
               <div class="form-group">
-                <label class="form-label">Price (₹)</label>
+                <label class="form-label" id="svc-price-label">Price (₹)</label>
                 <input id="svc-price" type="number" min="0" step="1" class="form-input" placeholder="e.g. 499" />
               </div>
-              <div class="form-group">
+              <div class="form-group" id="svc-price-unit-group">
                 <label class="form-label">Price Unit</label>
                 <select id="svc-price-unit" class="filter-select" style="width:100%;padding:10px 12px;height:auto;">
                   <option value="per_session">Per Session</option>
@@ -1904,7 +1989,11 @@
                 <label class="form-label">Short Description <span class="form-hint">(optional)</span></label>
                 <input id="svc-desc" type="text" class="form-input" placeholder="Brief service description" maxlength="200" />
               </div>
-              <!-- Equipment deposit — shown only for equipment category -->
+              <!-- Equipment-only fields — shown only for equipment category -->
+              <div class="form-group" id="svc-buy-price-group" style="display:none;">
+                <label class="form-label">Buy Price (₹) <span class="form-hint">(optional)</span></label>
+                <input id="svc-buy-price" type="number" min="0" step="1" class="form-input" placeholder="e.g. 15000" />
+              </div>
               <div class="form-group" id="svc-deposit-group" style="display:none;">
                 <label class="form-label">Refundable Deposit (₹) <span class="form-hint">(optional)</span></label>
                 <input id="svc-deposit" type="number" min="0" step="1" class="form-input" placeholder="e.g. 2000" />
@@ -2636,7 +2725,7 @@
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
             <div>
               <h3 style="margin:0;font-size:16px;font-weight:700;color:var(--text-primary);">Diet Plans</h3>
-              <p style="margin:4px 0 0;font-size:12px;color:var(--text-muted);">Manage diet plans shown to users in the MedNu app</p>
+              <p style="margin:4px 0 0;font-size:12px;color:var(--text-muted);">Manage diet plans shown to users in the MedNU app</p>
             </div>
             <button class="btn-primary" onclick="openAddDietPlanModal()" style="display:flex;align-items:center;gap:6px;">
               <i class="ti ti-plus"></i> Add Diet Plan
@@ -2933,6 +3022,111 @@
             </div>
           </div>
           <div id="caregivers-list"><div class="loading">Loading caregivers…</div></div>
+        </div>
+      </div>
+
+      <!-- ===== CARE ASSISTANTS TAB ===== -->
+      <div id="tab-care-assistants" class="tab-section">
+
+        <!-- Add / Edit Care Assistant -->
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-header">
+            <span class="card-title" id="care-assistant-form-title">Add Care Assistant</span>
+            <button class="btn btn-outline" id="cancel-care-assistant-btn" style="display:none;" onclick="cancelCareAssistantEdit()">
+              <i class="ti ti-x"></i> Cancel
+            </button>
+          </div>
+          <div class="banner-form-grid">
+            <div class="form-group">
+              <label class="form-label">Full Name <span style="color:var(--danger)">*</span></label>
+              <input id="ca-name" type="text" class="form-input" placeholder="e.g. Ramesh Kumar" maxlength="100" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Gender <span style="color:var(--danger)">*</span></label>
+              <select id="ca-gender" class="filter-select" style="width:100%;padding:10px 12px;height:auto;">
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Location / City <span style="color:var(--danger)">*</span></label>
+              <input id="ca-location" type="text" class="form-input" placeholder="e.g. Hyderabad" maxlength="100" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Specialty / Focus Area</label>
+              <input id="ca-specialty" type="text" class="form-input" placeholder="e.g. Hospital Escort, Errand Assistance" maxlength="120" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Experience</label>
+              <input id="ca-experience" type="text" class="form-input" placeholder="e.g. 3 years" maxlength="50" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Hourly Rate (₹) <span style="color:var(--danger)">*</span></label>
+              <input id="ca-rate-hourly" type="number" class="form-input" placeholder="e.g. 150" min="0" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Half-Day Rate (₹) <span style="color:var(--danger)">*</span></label>
+              <input id="ca-rate-halfday" type="number" class="form-input" placeholder="e.g. 600" min="0" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Full-Day Rate (₹) <span style="color:var(--danger)">*</span></label>
+              <input id="ca-rate-fullday" type="number" class="form-input" placeholder="e.g. 1000" min="0" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Multi-Day Rate (₹ / day) <span style="color:var(--danger)">*</span></label>
+              <input id="ca-rate-multiday" type="number" class="form-input" placeholder="e.g. 900" min="0" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Rating (0–5)</label>
+              <input id="ca-rating" type="number" class="form-input" placeholder="e.g. 4.8" min="0" max="5" step="0.1" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Phone Number</label>
+              <input id="ca-phone" type="tel" class="form-input" placeholder="e.g. 9876543210" maxlength="15" />
+            </div>
+          </div>
+          <div class="form-group" style="padding:0 0 12px 0;">
+            <label class="form-label">About / Bio</label>
+            <textarea id="ca-bio" class="form-input" rows="2" placeholder="Brief description about the care assistant..." maxlength="400" style="resize:vertical;"></textarea>
+          </div>
+          <div class="banner-form-footer">
+            <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:center;flex:1;">
+              <label class="toggle-label">
+                <input type="checkbox" id="ca-verified" checked />
+                <span class="toggle-switch"></span>
+                <span class="toggle-text">Police Verified</span>
+              </label>
+              <label class="toggle-label">
+                <input type="checkbox" id="ca-active" checked />
+                <span class="toggle-switch"></span>
+                <span class="toggle-text">Active &amp; visible in app</span>
+              </label>
+            </div>
+            <button id="save-care-assistant-btn" class="btn-publish" onclick="saveCareAssistant()">
+              <i class="ti ti-device-floppy"></i> Save Care Assistant
+            </button>
+          </div>
+        </div>
+
+        <!-- Care Assistants List -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">All Care Assistants</span>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <input id="care-assistant-search" type="text" class="search-input" placeholder="Search name, location..." oninput="filterCareAssistants()" />
+              <select id="care-assistant-gender-filter" class="filter-select" onchange="filterCareAssistants()">
+                <option value="all">All Genders</option>
+                <option value="Female">Female</option>
+                <option value="Male">Male</option>
+              </select>
+              <select id="care-assistant-status-filter" class="filter-select" onchange="filterCareAssistants()">
+                <option value="all">All</option>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </select>
+            </div>
+          </div>
+          <div id="care-assistants-list"><div class="loading">Loading care assistants…</div></div>
         </div>
       </div>
 

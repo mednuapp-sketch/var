@@ -77,7 +77,7 @@ class NutritionGoalModel {
       case 'pregnancy': return 'Pregnancy Nutrition';
       case 'fitness': return 'Sports & Fitness';
       case 'pcos': return 'PCOS Diet';
-      case 'heart_health': return 'Heart Healthy';
+      case 'heart_health': return 'Healthy Heart';
       default: return 'General Wellness';
     }
   }

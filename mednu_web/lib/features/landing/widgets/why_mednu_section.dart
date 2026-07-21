@@ -39,7 +39,7 @@ class WhyMednuSection extends StatelessWidget {
           child: Column(
             children: [
               SectionHeader(
-                tag: 'Why MedNu',
+                tag: 'Why MedNU',
                 title: 'Healthcare Reimagined\nFor You',
                 subtitle: 'We\'re not just an app. We\'re your complete healthcare partner.',
                 alignment: CrossAxisAlignment.center,

@@ -79,15 +79,10 @@ class _SidebarHeader extends StatelessWidget {
       padding: EdgeInsets.symmetric(horizontal: collapsed ? 16 : 20),
       child: Row(
         children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(gradient: AppColors.primaryGradient, borderRadius: BorderRadius.circular(10)),
-            child: const Center(child: Text('M', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800))),
-          ),
+          Image.asset('assets/images/mednu_logo.png', width: 36, height: 36, filterQuality: FilterQuality.high),
           if (!collapsed) ...[
             const SizedBox(width: 10),
-            Text('MedNu', style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: -0.5)),
+            Text('MedNU', style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: -0.5)),
           ],
         ],
       ),

@@ -8,6 +8,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/widgets/ux_widgets.dart';
+import '../../../core/utils/r.dart';
 
 class PostConsultationScreen extends StatefulWidget {
   final String? consultationId;
@@ -270,12 +271,12 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.appBackground,
       body: _checking
-          ? SingleChildScrollView(physics: const NeverScrollableScrollPhysics(), padding: const EdgeInsets.all(16),
+          ? SingleChildScrollView(physics: const NeverScrollableScrollPhysics(), padding: EdgeInsets.all(R.p(context, 16)),
               child: Column(children: [
-                const SizedBox(height: 40),
-                ...List.generate(4, (_) => const Padding(padding: EdgeInsets.only(bottom: 16), child: SkeletonBox(width: double.infinity, height: 64, radius: 16))),
+                SizedBox(height: R.h(context, 40)),
+                ...List.generate(4, (_) => Padding(padding: EdgeInsets.only(bottom: R.h(context, 16)), child: SkeletonBox(width: double.infinity, height: R.h(context, 64), radius: R.r(context, 16)))),
               ]))
           : _submitted
               ? _buildSuccessView()
@@ -308,8 +309,8 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
               child: FadeTransition(
                 opacity: _successOpacity,
                 child: Container(
-                  width: 120,
-                  height: 120,
+                  width: R.w(context, 120),
+                  height: R.h(context, 120),
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha:0.15),
                     shape: BoxShape.circle,
@@ -319,7 +320,7 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
                 ),
               ),
             ),
-            const SizedBox(height: 32),
+            SizedBox(height: R.h(context, 32)),
             FadeTransition(
               opacity: _successOpacity,
               child: Column(
@@ -333,9 +334,9 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
                       color: Colors.white,
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  SizedBox(height: R.h(context, 12)),
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 40),
+                    padding: EdgeInsets.symmetric(horizontal: R.p(context, 40)),
                     child: Text(
                       _isImmediate
                           ? 'Thank you! Your feedback helps us improve the quality of care.'
@@ -349,7 +350,7 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
                       ),
                     ),
                   ),
-                  const SizedBox(height: 32),
+                  SizedBox(height: R.h(context, 32)),
                   // Star rating display
                   if (_rating > 0) ...[
                     Row(
@@ -360,7 +361,7 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
                         size: 32,
                       )),
                     ),
-                    const SizedBox(height: 24),
+                    SizedBox(height: R.h(context, 24)),
                   ],
                   // Auto-nav hint
                   Text(
@@ -371,14 +372,14 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
                       color: Colors.white38,
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  SizedBox(height: R.h(context, 24)),
                   TextButton(
                     onPressed: () => context.go(AppRoutes.home),
                     style: TextButton.styleFrom(
                       foregroundColor: Colors.white,
                       backgroundColor: Colors.white.withValues(alpha:0.15),
-                      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                      padding: EdgeInsets.symmetric(horizontal: R.p(context, 32), vertical: R.p(context, 12)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.r(context, 24))),
                     ),
                     child: const Text(
                       'Go to Home',
@@ -398,7 +399,7 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
 
   Widget _buildAlreadySubmittedView() {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.appBackground,
       appBar: AppBar(
         backgroundColor: AppColors.primaryDark,
         leading: IconButton(
@@ -409,31 +410,31 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
       ),
       body: Center(
         child: Padding(
-          padding: const EdgeInsets.all(32),
+          padding: EdgeInsets.all(R.p(context, 32)),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                width: 96,
-                height: 96,
+                width: R.w(context, 96),
+                height: R.h(context, 96),
                 decoration: BoxDecoration(
                   color: AppColors.accent.withValues(alpha:0.1),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(Icons.check_circle_rounded, color: AppColors.accent, size: 54),
               ),
-              const SizedBox(height: 24),
+              SizedBox(height: R.h(context, 24)),
               const Text(
                 'Already Submitted',
                 style: TextStyle(fontFamily: 'Poppins', fontSize: 22, fontWeight: FontWeight.w800),
               ),
-              const SizedBox(height: 10),
+              SizedBox(height: R.h(context, 10)),
               const Text(
                 'You have already submitted feedback for this consultation. Thank you for sharing your experience!',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontFamily: 'Poppins', fontSize: 14, color: Colors.grey, height: 1.6),
               ),
-              const SizedBox(height: 32),
+              SizedBox(height: R.h(context, 32)),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
@@ -455,7 +456,7 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
       slivers: [
         SliverAppBar(
           pinned: true,
-          expandedHeight: 170,
+          expandedHeight: R.h(context, 170),
           leading: IconButton(
             icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
             onPressed: () => context.pop(),
@@ -464,24 +465,31 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
             background: Container(
               decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
               child: SafeArea(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 52, 20, 20),
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    return SingleChildScrollView(
+                      physics: const ClampingScrollPhysics(),
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                        child: Padding(
+                  padding: EdgeInsets.fromLTRB(R.p(context, 20), R.p(context, 52), R.p(context, 20), R.p(context, 20)),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Row(children: [
                         Container(
-                          padding: const EdgeInsets.all(10),
+                          padding: EdgeInsets.all(R.p(context, 10)),
                           decoration: BoxDecoration(
                             color: Colors.white.withValues(alpha:0.15),
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(R.r(context, 12)),
                           ),
                           child: Icon(
                             _isImmediate ? Icons.star_rounded : Icons.health_and_safety_rounded,
-                            color: Colors.white, size: 24,
+                            color: Colors.white, size: R.w(context, 24),
                           ),
                         ),
-                        const SizedBox(width: 12),
+                        SizedBox(width: R.w(context, 12)),
                         Expanded(
                           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                             Text(
@@ -501,6 +509,10 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
                       ]),
                     ],
                   ),
+                        ),
+                      ),
+                    );
+                  },
                 ),
               ),
             ),
@@ -508,13 +520,13 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
         ),
         SliverToBoxAdapter(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+            padding: EdgeInsets.fromLTRB(R.p(context, 16), R.p(context, 16), R.p(context, 16), 0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Doctor card
                 _buildDoctorCard(),
-                const SizedBox(height: 20),
+                SizedBox(height: R.h(context, 20)),
 
                 // Star rating
                 _buildSection(
@@ -522,7 +534,7 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
                   required: _isImmediate,
                   child: _buildStarRating(),
                 ),
-                const SizedBox(height: 20),
+                SizedBox(height: R.h(context, 20)),
 
                 // Feeling selector (follow-up mode)
                 _buildSection(
@@ -530,14 +542,14 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
                   required: !_isImmediate,
                   child: _buildFeelingSelector(),
                 ),
-                const SizedBox(height: 20),
+                SizedBox(height: R.h(context, 20)),
 
                 // Pain level
                 _buildSection(
                   title: 'Pain Level',
                   child: _buildPainSlider(),
                 ),
-                const SizedBox(height: 20),
+                SizedBox(height: R.h(context, 20)),
 
                 // Symptoms
                 _buildSection(
@@ -545,7 +557,7 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
                   subtitle: 'Select all that apply',
                   child: _buildSymptomChips(),
                 ),
-                const SizedBox(height: 20),
+                SizedBox(height: R.h(context, 20)),
 
                 // Notes
                 _buildSection(
@@ -553,11 +565,11 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
                   subtitle: 'Optional',
                   child: _buildNotesField(),
                 ),
-                const SizedBox(height: 24),
+                SizedBox(height: R.h(context, 24)),
 
                 // Submit button
                 _buildSubmitButton(),
-                const SizedBox(height: 48),
+                SizedBox(height: R.h(context, 48)),
               ],
             ),
           ),
@@ -580,16 +592,16 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
         Row(children: [
           Text(title, style: AppTextStyles.h4),
           if (required) ...[
-            const SizedBox(width: 4),
+            SizedBox(width: R.w(context, 4)),
             const Text('*', style: TextStyle(color: Color(0xFFE53935), fontWeight: FontWeight.w700)),
           ],
           if (subtitle != null) ...[
-            const SizedBox(width: 6),
+            SizedBox(width: R.w(context, 6)),
             Text(subtitle,
                 style: const TextStyle(fontFamily: 'Poppins', fontSize: 11, color: Colors.grey)),
           ],
         ]),
-        const SizedBox(height: 12),
+        SizedBox(height: R.h(context, 12)),
         child,
       ],
     );
@@ -601,9 +613,9 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.appSurface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.divider),
+        border: Border.all(color: context.appBorder),
         boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:0.04), blurRadius: 10, offset: const Offset(0, 2))],
       ),
       child: Row(children: [
@@ -657,10 +669,10 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.appSurface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: _isImmediate && _rating == 0 ? const Color(0xFFFFCDD2) : AppColors.divider,
+          color: _isImmediate && _rating == 0 ? const Color(0xFFFFCDD2) : context.appDivider,
         ),
         boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:0.04), blurRadius: 10, offset: const Offset(0, 2))],
       ),
@@ -679,7 +691,7 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
                 padding: const EdgeInsets.symmetric(horizontal: 5),
                 child: Icon(
                   filled ? Icons.star_rounded : Icons.star_outline_rounded,
-                  color: filled ? const Color(0xFFFFA000) : AppColors.textHint,
+                  color: filled ? const Color(0xFFFFA000) : context.appTextHint,
                   size: 46,
                 ),
               ),
@@ -696,7 +708,7 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
               fontFamily: 'Poppins',
               fontSize: 14,
               fontWeight: FontWeight.w600,
-              color: _rating == 0 ? AppColors.textHint : colors[_rating],
+              color: _rating == 0 ? context.appTextHint : colors[_rating],
             ),
           ),
         ),
@@ -736,7 +748,7 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
                   border: Border.all(
                     color: _selectedFeeling == f['value']
                         ? f['color'] as Color
-                        : AppColors.border,
+                        : context.appBorder,
                     width: _selectedFeeling == f['value'] ? 2 : 1,
                   ),
                   boxShadow: _selectedFeeling == f['value']
@@ -753,7 +765,7 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
                       fontFamily: 'Poppins', fontSize: 10, fontWeight: FontWeight.w600,
                       color: _selectedFeeling == f['value']
                           ? f['color'] as Color
-                          : AppColors.textSecondary,
+                          : context.appTextSecondary,
                     ),
                   ),
                 ]),
@@ -788,9 +800,9 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.appSurface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.divider),
+        border: Border.all(color: context.appBorder),
         boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:0.04), blurRadius: 10, offset: const Offset(0, 2))],
       ),
       child: Column(children: [
@@ -856,7 +868,7 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
               color: selected ? AppColors.primary.withValues(alpha:0.1) : Colors.white,
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
-                color: selected ? AppColors.primary : AppColors.border,
+                color: selected ? AppColors.primary : context.appBorder,
                 width: selected ? 2 : 1,
               ),
               boxShadow: selected
@@ -872,7 +884,7 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
                 s,
                 style: TextStyle(
                   fontFamily: 'Poppins', fontSize: 12, fontWeight: FontWeight.w600,
-                  color: selected ? AppColors.primary : AppColors.textPrimary,
+                  color: selected ? AppColors.primary : context.appTextPrimary,
                 ),
               ),
             ]),
@@ -895,15 +907,15 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
             : 'Describe any new symptoms, concerns, or how your recovery is going...',
         hintStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 13, color: Colors.black38),
         filled: true,
-        fillColor: Colors.white,
+        fillColor: context.appSurface,
         counterStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 11, color: Colors.grey),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: AppColors.border),
+          borderSide: BorderSide(color: context.appBorder),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: AppColors.border),
+          borderSide: BorderSide(color: context.appBorder),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),

@@ -85,7 +85,7 @@ service cloud.firestore {
       allow read: if isAuth() && (
         resource.data.status == 'active' || isOwner(doctorId) || isAdmin()
       );
-      allow create: if isOwner(doctorId);
+      allow create: if isOwner(doctorId) || isAdmin();
       allow update: if (isOwner(doctorId) &&
                          doesNotModify(['status', 'rating', 'reviewCount', 'earnings', 'verificationStatus'])) ||
                        isAdmin();

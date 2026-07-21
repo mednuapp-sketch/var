@@ -1261,7 +1261,7 @@ exports.onServiceRequestStatusChange = onDocumentUpdated(
         rejected:    ["Ambulance Unavailable", "We could not fulfil your ambulance request right now. Please try again.", "ambulance_rejected"],
         cancelled:   ["Ambulance Booking Cancelled", "Your ambulance booking has been cancelled.", "ambulance_cancelled"],
       },
-      lab: {
+      lab_tests: {
         accepted:         ["Lab Booking Confirmed", "Your lab booking has been accepted. Our technician will visit you soon.", "lab_accepted"],
         assigned:         ["Technician Assigned", "A lab technician has been assigned to your booking.", "lab_assigned"],
         in_progress:      ["Technician on the Way", "Your lab technician is on the way to collect your sample.", "lab_in_progress"],
@@ -1717,22 +1717,9 @@ exports.verifyRazorpayPayment = onCall({ enforceAppCheck: true }, async (request
 });
 
 // ── MSG91: Send OTP ───────────────────────────────────────────────────────────
-//
-// Called from Flutter before showing the OTP screen.
-// Sends a 6-digit OTP to the given phone via MSG91.
-// Auth key and widget/template ID are stored in Cloud Function environment
-// variables — never exposed to the client.
-//
-// Set via:
-//   firebase functions:secrets:set MSG91_AUTH_KEY
-//   firebase functions:config:set msg91.template_id="YOUR_TEMPLATE_ID"
-// Or add to functions/.env:
-//   MSG91_AUTH_KEY=your_auth_key
-//   MSG91_TEMPLATE_ID=your_template_or_widget_id
-//
-// Request:  { phone: "+919876543210" }
-// Response: { success: true }
-exports.msg91SendOtp = onCall({ invoker: "public" }, async (request) => {
+// Called from Flutter via httpsCallable('msg91SendOtp').
+// Request data: { phone: "+919876543210" }
+exports.msg91SendOtp = onCall(async (request) => {
   const { phone } = request.data || {};
 
   if (!phone || !/^\+91\d{10}$/.test(phone)) {
@@ -1740,38 +1727,26 @@ exports.msg91SendOtp = onCall({ invoker: "public" }, async (request) => {
   }
 
   const authKey = process.env.MSG91_AUTH_KEY;
-  const templateId = process.env.MSG91_TEMPLATE_ID;
-
-  if (!authKey || !templateId) {
-    console.error("MSG91 credentials not configured in environment.");
+  const widgetId = process.env.MSG91_TEMPLATE_ID;
+  if (!authKey || !widgetId) {
+    console.error("MSG91 credentials not configured.");
     throw new HttpsError("internal", "OTP service not configured.");
   }
 
-  // MSG91 expects mobile without '+': 919876543210
-  const mobile = phone.replace("+", "");
+  const identifier = phone.replace("+", "");
 
   try {
-    const res = await fetch("https://control.msg91.com/api/v5/otp", {
+    const apiRes = await fetch("https://control.msg91.com/api/v5/widget/initiate", {
       method: "POST",
-      headers: {
-        "authkey": authKey,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        template_id: templateId,
-        mobile,
-        otp_length: "4",
-        otp_expiry: "10",
-      }),
+      headers: { "authkey": authKey, "Content-Type": "application/json" },
+      body: JSON.stringify({ widgetId, identifier }),
     });
-
-    const data = await res.json();
-    console.log("MSG91 sendOtp response:", JSON.stringify(data));
+    const data = await apiRes.json();
+    console.log("MSG91 widget/initiate response:", JSON.stringify(data));
 
     if (data.type !== "success") {
       throw new HttpsError("internal", data.message || "Failed to send OTP. Please try again.");
     }
-
     return { success: true };
   } catch (err) {
     if (err instanceof HttpsError) throw err;
@@ -1780,16 +1755,173 @@ exports.msg91SendOtp = onCall({ invoker: "public" }, async (request) => {
   }
 });
 
+// ── MSG91: Resend OTP ─────────────────────────────────────────────────────────
+// Uses MSG91's widget/resend endpoint to retry delivery without creating a new OTP.
+// Request data: { phone: "+919876543210" }
+exports.msg91ResendOtp = onCall(async (request) => {
+  const { phone } = request.data || {};
+
+  if (!phone || !/^\+91\d{10}$/.test(phone)) {
+    throw new HttpsError("invalid-argument", "Invalid phone number. Must be +91 followed by 10 digits.");
+  }
+
+  const authKey = process.env.MSG91_AUTH_KEY;
+  const widgetId = process.env.MSG91_TEMPLATE_ID;
+  if (!authKey || !widgetId) {
+    throw new HttpsError("internal", "OTP service not configured.");
+  }
+
+  const identifier = phone.replace("+", "");
+
+  try {
+    const apiRes = await fetch("https://control.msg91.com/api/v5/widget/resend", {
+      method: "POST",
+      headers: { "authkey": authKey, "Content-Type": "application/json" },
+      body: JSON.stringify({ widgetId, identifier, retryType: "text" }),
+    });
+    const data = await apiRes.json();
+    console.log("MSG91 widget/resend response:", JSON.stringify(data));
+
+    if (data.type !== "success") {
+      throw new HttpsError("internal", data.message || "Failed to resend OTP. Please try again.");
+    }
+    return { success: true };
+  } catch (err) {
+    if (err instanceof HttpsError) throw err;
+    console.error("MSG91 resendOtp error:", err);
+    throw new HttpsError("internal", "Failed to resend OTP. Please try again.");
+  }
+});
+
+// ── MPIN Login: Verify MPIN + Issue Firebase Custom Token ────────────────────
+//
+// Enables passwordless login on any device without OTP.
+// Flow: client sends phone + raw MPIN → function computes SHA-256 hash
+// server-side → compares against users/{uid}.mpinHash → issues custom token.
+// Lockout (5 attempts / 15 min) is enforced here just like verifyMpin() in Dart.
+//
+// Request data: { phone: "+919876543210", mpin: "1234" }
+// Response:     { customToken: string }
+exports.verifyMpinAndIssueToken = onCall(async (request) => {
+  const { phone, mpin } = request.data || {};
+
+  if (!phone || !/^\+91\d{10}$/.test(phone)) {
+    throw new HttpsError("invalid-argument", "Invalid phone number.");
+  }
+  if (!mpin || !/^\d{4}$/.test(mpin)) {
+    throw new HttpsError("invalid-argument", "Invalid MPIN format.");
+  }
+
+  const db   = getFirestore();
+  const auth = getAuth();
+
+  // 1. Resolve uid — fast path via phone_index, fallback via Firebase Auth
+  let uid;
+  const phoneSnap = await db.collection("phone_index").doc(phone).get();
+  if (phoneSnap.exists && phoneSnap.data().uid) {
+    uid = phoneSnap.data().uid;
+  } else {
+    // phone_index missing for users who registered before the index was added.
+    // Resolve uid from Firebase Auth directly.
+    try {
+      uid = (await auth.getUserByPhoneNumber(phone)).uid;
+    } catch (err) {
+      if (err.code === "auth/user-not-found") {
+        throw new HttpsError("not-found", "No account found for this number.");
+      }
+      throw new HttpsError("internal", "Authentication lookup failed.");
+    }
+  }
+
+  // 2. Fetch user doc for stored hash + lockout state
+  const userSnap = await db.collection("users").doc(uid).get();
+  if (!userSnap.exists) {
+    throw new HttpsError("not-found", "Account not found.");
+  }
+  const data = userSnap.data();
+
+  // 3. Lockout check
+  const lockedUntilTs = data.lockedUntil;
+  if (lockedUntilTs) {
+    const lockedUntil = lockedUntilTs.toDate();
+    if (new Date() < lockedUntil) {
+      const remaining = Math.ceil((lockedUntil - new Date()) / 60000);
+      throw new HttpsError(
+        "resource-exhausted",
+        `Account locked. Try again in ${remaining} minute(s).`
+      );
+    }
+    // Lock expired — clear it
+    await db.collection("users").doc(uid).update({
+      lockedUntil: FieldValue.delete(),
+      loginAttempts: 0,
+    });
+  }
+
+  const storedHash = data.mpinHash;
+  if (!storedHash) {
+    throw new HttpsError(
+      "failed-precondition",
+      "MPIN not set. Please use OTP to log in."
+    );
+  }
+
+  // 4. Compute hash server-side — same algorithm as Dart: SHA-256(uid:mpin:MEDNU_V1)
+  const inputHash = crypto
+    .createHash("sha256")
+    .update(`${uid}:${mpin}:MEDNU_V1`)
+    .digest("hex");
+
+  const attempts = data.loginAttempts || 0;
+  const MAX_ATTEMPTS = 5;
+  const LOCK_MINUTES = 15;
+
+  if (inputHash !== storedHash) {
+    // Wrong MPIN — increment attempts, possibly lock
+    const newAttempts = attempts + 1;
+    if (newAttempts >= MAX_ATTEMPTS) {
+      const lockUntil = new Date(Date.now() + LOCK_MINUTES * 60 * 1000);
+      await db.collection("users").doc(uid).update({
+        loginAttempts: newAttempts,
+        lockedUntil: Timestamp.fromDate(lockUntil),
+      });
+      throw new HttpsError(
+        "resource-exhausted",
+        `Too many attempts. Account locked for ${LOCK_MINUTES} minutes.`
+      );
+    }
+    await db.collection("users").doc(uid).update({ loginAttempts: newAttempts });
+    const remaining = MAX_ATTEMPTS - newAttempts;
+    throw new HttpsError(
+      "unauthenticated",
+      `Incorrect MPIN. ${remaining} attempt(s) left.`
+    );
+  }
+
+  // 5. Correct MPIN — reset attempts, update lastLogin, issue token
+  await db.collection("users").doc(uid).update({
+    loginAttempts: 0,
+    lockedUntil: FieldValue.delete(),
+    lastLogin: FieldValue.serverTimestamp(),
+  });
+
+  // Heal phone_index if it was missing so the fast path works next time.
+  if (!phoneSnap.exists || !phoneSnap.data().uid) {
+    db.collection("phone_index").doc(phone).set(
+      { hasMpin: true, uid, updatedAt: FieldValue.serverTimestamp() },
+      { merge: true }
+    ).catch(() => {});
+  }
+
+  const customToken = await auth.createCustomToken(uid);
+  console.log(`MPIN login success for uid ${uid}`);
+  return { customToken };
+});
+
 // ── MSG91: Verify OTP + Issue Firebase Custom Token ───────────────────────────
-//
-// Called from Flutter after the user enters the OTP.
-// 1. Verifies the OTP with MSG91.
-// 2. Finds or creates a Firebase Auth user by phone number.
-// 3. Returns a Firebase custom token for signInWithCustomToken().
-//
-// Request:  { phone: "+919876543210", otp: "123456" }
-// Response: { customToken: "<firebase-custom-token>" }
-exports.msg91VerifyOtp = onCall({ invoker: "public" }, async (request) => {
+// Called from Flutter via httpsCallable('msg91VerifyOtp').
+// Request data: { phone: "+919876543210", otp: "1234" }
+exports.msg91VerifyOtp = onCall(async (request) => {
   const { phone, otp } = request.data || {};
 
   if (!phone || !/^\+91\d{10}$/.test(phone)) {
@@ -1800,27 +1932,25 @@ exports.msg91VerifyOtp = onCall({ invoker: "public" }, async (request) => {
   }
 
   const authKey = process.env.MSG91_AUTH_KEY;
-  if (!authKey) {
+  const widgetId = process.env.MSG91_TEMPLATE_ID;
+  if (!authKey || !widgetId) {
     throw new HttpsError("internal", "OTP service not configured.");
   }
 
-  const mobile = phone.replace("+", "");
+  const identifier = phone.replace("+", "");
 
-  // ── Step 1: Verify OTP with MSG91 ─────────────────────────────────────────
+  // ── Step 1: Verify OTP via MSG91 Widget API ───────────────────────────────
   try {
-    const res = await fetch(
-      `https://control.msg91.com/api/v5/otp/verify?otp=${otp}&mobile=${mobile}`,
-      {
-        method: "GET",
-        headers: { "authkey": authKey },
-      }
-    );
-
-    const data = await res.json();
-    console.log("MSG91 verifyOtp response:", JSON.stringify(data));
+    const apiRes = await fetch("https://control.msg91.com/api/v5/widget/verify", {
+      method: "POST",
+      headers: { "authkey": authKey, "Content-Type": "application/json" },
+      body: JSON.stringify({ widgetId, identifier, otp }),
+    });
+    const data = await apiRes.json();
+    console.log("MSG91 widget/verify response:", JSON.stringify(data));
 
     if (data.type !== "success") {
-      throw new HttpsError("unauthenticated", "Incorrect OTP. Please check and try again.");
+      throw new HttpsError("unauthenticated", data.message || "Incorrect OTP. Please try again.");
     }
   } catch (err) {
     if (err instanceof HttpsError) throw err;
@@ -1828,26 +1958,21 @@ exports.msg91VerifyOtp = onCall({ invoker: "public" }, async (request) => {
     throw new HttpsError("internal", "OTP verification failed. Please try again.");
   }
 
-  // ── Step 2: Find or create Firebase user by phone ─────────────────────────
+  // ── Step 2: Find or create Firebase user by phone ────────────────────────
   const auth = getAuth();
   let uid;
-
   try {
-    const user = await auth.getUserByPhoneNumber(phone);
-    uid = user.uid;
-    console.log(`MSG91 auth: found existing Firebase user ${uid} for ${phone}`);
+    uid = (await auth.getUserByPhoneNumber(phone)).uid;
   } catch (err) {
     if (err.code === "auth/user-not-found") {
-      const newUser = await auth.createUser({ phoneNumber: phone });
-      uid = newUser.uid;
-      console.log(`MSG91 auth: created new Firebase user ${uid} for ${phone}`);
+      uid = (await auth.createUser({ phoneNumber: phone })).uid;
     } else {
-      console.error("Firebase getUserByPhoneNumber error:", err);
+      console.error("Firebase auth error:", err);
       throw new HttpsError("internal", "Authentication failed. Please try again.");
     }
   }
 
-  // ── Step 3: Issue Firebase custom token ────────────────────────────────────
+  // ── Step 3: Issue Firebase custom token ──────────────────────────────────
   const customToken = await auth.createCustomToken(uid);
   return { customToken };
 });

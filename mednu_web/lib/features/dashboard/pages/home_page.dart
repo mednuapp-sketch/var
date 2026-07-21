@@ -202,7 +202,7 @@ class _QuickStats extends StatelessWidget {
       {'emoji': '📅', 'value': '$upcomingCount', 'label': 'Upcoming Appointments', 'color': 0xFF42A5F5},
       {'emoji': '💰', 'value': '₹${walletBalance.toStringAsFixed(0)}', 'label': 'Wallet Balance', 'color': 0xFFFFA726},
       {'emoji': '👨‍👩‍👧', 'value': '$familyCount', 'label': 'Family Members', 'color': 0xFFEC407A},
-      {'emoji': '🏥', 'value': 'MedNu', 'label': 'Healthcare Partner', 'color': 0xFF66BB6A},
+      {'emoji': '🏥', 'value': 'MedNU', 'label': 'Healthcare Partner', 'color': 0xFF66BB6A},
     ];
 
     return GridView.builder(

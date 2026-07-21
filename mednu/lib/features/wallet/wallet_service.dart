@@ -245,7 +245,7 @@ class WalletService {
     await _db.runTransaction((tx) async {
       final snap = await tx.get(_userRef);
       final current = _parseMednuMoneyBalance(snap);
-      if (current < amount) throw Exception('Insufficient MedNu Money balance');
+      if (current < amount) throw Exception('Insufficient MedNU Money balance');
       tx.set(
         _userRef,
         {'mednuMoneyBalance': current - amount},
@@ -281,7 +281,7 @@ class WalletService {
         .limit(1)
         .get();
     if (query.docs.isEmpty) {
-      throw Exception('No MedNu account found with this phone number');
+      throw Exception('No MedNU account found with this phone number');
     }
     final recipientRef = query.docs.first.reference;
     if (recipientRef.id == _uid) {
@@ -316,7 +316,7 @@ class WalletService {
       final recipientTxDoc = recipientRef.collection('transactions').doc();
       final senderLabel = _auth.currentUser?.phoneNumber ??
           _auth.currentUser?.email ??
-          'a MedNu user';
+          'a MedNU user';
       tx.set(
         recipientTxDoc,
         WalletTransaction(

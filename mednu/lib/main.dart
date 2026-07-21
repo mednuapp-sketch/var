@@ -63,7 +63,7 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
         ));
     await _localNotifications.show(
       type.hashCode,
-      title.isNotEmpty ? title : 'MedNu',
+      title.isNotEmpty ? title : 'MedNU',
       body,
       const NotificationDetails(
         android: AndroidNotificationDetails(
@@ -368,13 +368,14 @@ void main() {
       // are independent of each other — run them concurrently to
       // cut cold-start time by ~600-900 ms.
       await Future.wait([
-        if (!kDebugMode)
-          FirebaseAppCheck.instance.activate(
-            androidProvider: AndroidProvider.playIntegrity,
-            appleProvider: AppleProvider.appAttest,
-          )
-        else
-          Future.value(),
+        FirebaseAppCheck.instance.activate(
+          androidProvider: kDebugMode
+              ? AndroidProvider.debug
+              : AndroidProvider.playIntegrity,
+          appleProvider: kDebugMode
+              ? AppleProvider.debug
+              : AppleProvider.appAttest,
+        ),
         _initFCM(),
         CallNotificationService.init(),
         HealthNotificationService.init(),

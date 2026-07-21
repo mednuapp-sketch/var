@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import '../../../core/services/msg91_service.dart';
 
 class DoctorAuthService {
   static final _auth = FirebaseAuth.instance;
@@ -9,39 +10,18 @@ class DoctorAuthService {
   static User? get currentUser => _auth.currentUser;
   static String? get currentUid => _auth.currentUser?.uid;
 
-  // ── Phone Auth ─────────────────────────────────────────
+  // ── MSG91 OTP ──────────────────────────────────────────
 
-  static Future<void> sendOTP({
-    required String phone,
-    required void Function(String verificationId) onCodeSent,
-    required void Function(String error) onError,
-    void Function(PhoneAuthCredential)? onAutoVerified,
-  }) async {
-    await _auth.verifyPhoneNumber(
-      phoneNumber: phone,
-      verificationCompleted: (credential) async {
-        try {
-          await _auth.signInWithCredential(credential);
-          onAutoVerified?.call(credential);
-        } catch (_) {}
-      },
-      verificationFailed: (e) =>
-          onError(e.message ?? 'OTP sending failed. Try again.'),
-      codeSent: (verificationId, _) => onCodeSent(verificationId),
-      codeAutoRetrievalTimeout: (_) {},
-      timeout: const Duration(seconds: 60),
-    );
-  }
+  static Future<void> sendOTP(String phone) =>
+      Msg91Service.sendOtp(phone);
 
-  static Future<UserCredential> verifyOTP({
-    required String verificationId,
-    required String otp,
-  }) async {
-    final credential = PhoneAuthProvider.credential(
-      verificationId: verificationId,
-      smsCode: otp,
-    );
-    return _auth.signInWithCredential(credential);
+  static Future<void> resendOTP(String phone) =>
+      Msg91Service.resendOtp(phone);
+
+  static Future<User?> verifyOTP(String phone, String otp) async {
+    final customToken = await Msg91Service.verifyOtp(phone, otp);
+    final credential = await _auth.signInWithCustomToken(customToken);
+    return credential.user;
   }
 
   // ── Doctor Profile ─────────────────────────────────────
@@ -56,6 +36,7 @@ class DoctorAuthService {
     required String name,
     required String phone,
     required String specialty,
+    String type = 'doctor',
     String email = '',
     String qualifications = '',
     String experience = '',
@@ -79,6 +60,7 @@ class DoctorAuthService {
       'name': name,
       'phone': phone,
       'email': email,
+      'type': type,
       'specialty': specialty,
       'qualifications': qualifications,
       'experience': experience,

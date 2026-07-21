@@ -3,11 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/widgets/ux_widgets.dart';
 import '../models/pregnancy_models.dart';
 import '../providers/pregnancy_provider.dart';
 import '../data/pregnancy_week_data.dart';
-import '../../../core/widgets/ux_widgets.dart';
+import '../../../core/utils/r.dart';
 
 class PregnancyDashboardScreen extends ConsumerStatefulWidget {
   const PregnancyDashboardScreen({super.key});
@@ -18,69 +20,59 @@ class PregnancyDashboardScreen extends ConsumerStatefulWidget {
 }
 
 class _PregnancyDashboardScreenState
-    extends ConsumerState<PregnancyDashboardScreen> {
+    extends ConsumerState<PregnancyDashboardScreen>
+    with TickerProviderStateMixin {
+  late final AnimationController _heroAnim;
+  late final Animation<double> _heroFade;
+
   @override
   void initState() {
     super.initState();
+    _heroAnim = AnimationController(vsync: this, duration: const Duration(milliseconds: 700));
+    _heroFade = CurvedAnimation(parent: _heroAnim, curve: Curves.easeOut);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(pregnancyProvider.notifier).refresh();
+      _heroAnim.forward();
     });
+  }
+
+  @override
+  void dispose() {
+    _heroAnim.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(pregnancyProvider);
-
-    if (state.isLoading) {
-      return Scaffold(
-        backgroundColor: const Color(0xFFFFF0F5),
-        body: SingleChildScrollView(
-          physics: const NeverScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(16),
-          child: Column(children: [
-            const SizedBox(height: 60),
-            const SkeletonBox(width: double.infinity, height: 180, radius: 24),
-            const SizedBox(height: 16),
-            const Row(children: [
-              Expanded(child: SkeletonBox(width: double.infinity, height: 90, radius: 16)),
-              SizedBox(width: 12),
-              Expanded(child: SkeletonBox(width: double.infinity, height: 90, radius: 16)),
-            ]),
-            const SizedBox(height: 16),
-            ...List.generate(3, (_) => const Padding(
-              padding: EdgeInsets.only(bottom: 12),
-              child: SkeletonBox(width: double.infinity, height: 72, radius: 16),
-            )),
-          ]),
-        ),
-      );
-    }
-
-    if (!state.hasProfile) {
-      return _buildNoProfile();
-    }
+    if (state.isLoading) return _buildShimmer();
+    if (!state.hasProfile) return _buildNoProfile();
 
     return Scaffold(
-      backgroundColor: const Color(0xFFFFF0F5),
+      backgroundColor: context.appBackground,
       body: RefreshIndicator(
         color: AppColors.primary,
         onRefresh: () => ref.read(pregnancyProvider.notifier).refresh(),
         child: CustomScrollView(
           slivers: [
-            _buildAppBar(state.profile!),
+            _buildSliverAppBar(state.profile!),
             SliverToBoxAdapter(
-              child: Column(
-                children: [
-                  _buildWeekCard(state.profile!),
-                  _buildQuickActions(context),
-                  _buildWeightSummaryCard(state),
-                  _buildWeeklyDevCard(state.profile!),
-                  _buildUpcomingCheckups(state.checkups),
-                  _buildMedicinesCard(state.medicines),
-                  _buildDoctorNotes(state.doctorNotes),
-                  _buildRecentLogs(state.recentLogs),
-                  const SizedBox(height: 100),
-                ],
+              child: FadeTransition(
+                opacity: _heroFade,
+                child: Column(
+                  children: [
+                    _buildHeroWeekCard(state.profile!),
+                    _buildBabySizeCard(state.profile!),
+                    _buildQuickActions(),
+                    _buildWeightSummaryCard(state),
+                    _buildWeeklyDevCard(state.profile!),
+                    _buildUpcomingCheckups(state.checkups),
+                    _buildMedicinesCard(state.medicines),
+                    if (state.doctorNotes.isNotEmpty) _buildDoctorNotes(state.doctorNotes),
+                    if (state.recentLogs.isNotEmpty) _buildRecentLogs(state.recentLogs),
+                    SizedBox(height: R.h(context, 100)),
+                  ],
+                ),
               ),
             ),
           ],
@@ -90,60 +82,44 @@ class _PregnancyDashboardScreenState
         onPressed: () => context.push(AppRoutes.pregnancyJournal),
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
+        elevation: 4,
         icon: const Icon(Icons.edit_note_rounded),
-        label: const Text('Log Today', style: TextStyle(fontWeight: FontWeight.w600)),
+        label: Text('Log Today', style: AppTextStyles.labelLarge.copyWith(color: Colors.white)),
       ),
     );
   }
 
-  Widget _buildNoProfile() => Scaffold(
-    backgroundColor: const Color(0xFFFFF0F5),
-    appBar: AppBar(
-      backgroundColor: Colors.transparent,
-      elevation: 0,
-      leading: IconButton(
-        icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF880E4F)),
-        onPressed: () => context.pop(),
-      ),
-      title: const Text('Pregnancy Care',
-          style: TextStyle(color: Color(0xFF1A1A2E), fontWeight: FontWeight.w700)),
-    ),
-    body: Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
+  // ── Shimmer Loading ────────────────────────────────────────────────────────
+
+  Widget _buildShimmer() => Scaffold(
+    backgroundColor: context.appBackground,
+    body: AppShimmer(
+      child: SingleChildScrollView(
+        physics: const NeverScrollableScrollPhysics(),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Container(
-              width: 100,
-              height: 100,
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(colors: [Color(0xFFF8BBD9), Color(0xFFE1BEE7)]),
-                shape: BoxShape.circle,
+            const SkeletonBox(width: double.infinity, height: 220, radius: 0),
+            SizedBox(height: R.h(context, 12)),
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: R.p(context, 16)),
+              child: Column(
+                children: [
+                  const SkeletonBox(width: double.infinity, height: 120, radius: 20),
+                  SizedBox(height: R.h(context, 12)),
+                  const SkeletonBox(width: double.infinity, height: 100, radius: 20),
+                  SizedBox(height: R.h(context, 12)),
+                  Row(children: [
+                    for (int i = 0; i < 4; i++) ...[
+                      Expanded(child: SkeletonBox(width: double.infinity, height: 80, radius: 14)),
+                      if (i < 3) SizedBox(width: R.w(context, 10)),
+                    ],
+                  ]),
+                  SizedBox(height: R.h(context, 12)),
+                  const SkeletonBox(width: double.infinity, height: 130, radius: 20),
+                  SizedBox(height: R.h(context, 12)),
+                  const SkeletonBox(width: double.infinity, height: 160, radius: 20),
+                ],
               ),
-              child: const Icon(Icons.pregnant_woman_rounded, size: 52, color: AppColors.primary),
-            ),
-            const SizedBox(height: 24),
-            const Text('Start Your Journey',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Color(0xFF1A1A2E))),
-            const SizedBox(height: 8),
-            const Text(
-              'Create your pregnancy profile to get personalized care, weekly updates, and expert guidance.',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 14, color: Color(0xFF616161), height: 1.6),
-            ),
-            const SizedBox(height: 32),
-            ElevatedButton(
-              onPressed: () => context.push(AppRoutes.pregnancyOnboarding),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                elevation: 0,
-              ),
-              child: const Text('Create Pregnancy Profile',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
             ),
           ],
         ),
@@ -151,8 +127,74 @@ class _PregnancyDashboardScreenState
     ),
   );
 
-  SliverAppBar _buildAppBar(PregnancyProfile profile) => SliverAppBar(
-    expandedHeight: 180,
+  // ── No Profile ─────────────────────────────────────────────────────────────
+
+  Widget _buildNoProfile() => Scaffold(
+    backgroundColor: context.appBackground,
+    appBar: AppBar(
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.primary),
+        onPressed: () => context.pop(),
+      ),
+      title: Text('Pregnancy Care',
+          style: AppTextStyles.h3.copyWith(color: context.appTextPrimary)),
+    ),
+    body: Center(
+      child: Padding(
+        padding: EdgeInsets.all(R.p(context, 32)),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: R.w(context, 120),
+              height: R.w(context, 120),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(colors: [Color(0xFFF8BBD9), Color(0xFFE1BEE7)]),
+                shape: BoxShape.circle,
+              ),
+              child: const Center(child: Text('🤰', style: TextStyle(fontSize: 52))),
+            ),
+            SizedBox(height: R.h(context, 28)),
+            Text('Start Your Journey',
+                style: AppTextStyles.display.copyWith(color: context.appTextPrimary)),
+            SizedBox(height: R.h(context, 10)),
+            Text(
+              'Create your pregnancy profile to get personalized care, weekly updates, and expert guidance.',
+              textAlign: TextAlign.center,
+              style: AppTextStyles.bodyLarge.copyWith(color: context.appTextSecondary),
+            ),
+            SizedBox(height: R.h(context, 36)),
+            Container(
+              decoration: BoxDecoration(
+                gradient: AppColors.pregnancyGrad,
+                borderRadius: BorderRadius.circular(R.r(context, 14)),
+                boxShadow: [BoxShadow(
+                    color: AppColors.primary.withValues(alpha: 0.3),
+                    blurRadius: 14, offset: const Offset(0, 5))],
+              ),
+              child: ElevatedButton(
+                onPressed: () => context.push(AppRoutes.pregnancyOnboarding),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.transparent,
+                  shadowColor: Colors.transparent,
+                  padding: EdgeInsets.symmetric(horizontal: R.p(context, 40), vertical: R.p(context, 16)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.r(context, 14))),
+                ),
+                child: Text('Create Pregnancy Profile', style: AppTextStyles.button),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+
+  // ── Sliver App Bar ─────────────────────────────────────────────────────────
+
+  SliverAppBar _buildSliverAppBar(PregnancyProfile profile) => SliverAppBar(
+    expandedHeight: R.h(context, 210),
     pinned: true,
     backgroundColor: AppColors.primary,
     foregroundColor: Colors.white,
@@ -160,130 +202,143 @@ class _PregnancyDashboardScreenState
       icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
       onPressed: () => context.pop(),
     ),
+    actions: [
+      IconButton(
+        icon: const Icon(Icons.notifications_outlined, color: Colors.white),
+        onPressed: () => context.push(AppRoutes.notifications),
+      ),
+    ],
     flexibleSpace: FlexibleSpaceBar(
       background: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Color(0xFFC2185B), Color(0xFF7B1FA2)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
+        decoration: const BoxDecoration(gradient: AppColors.pregnancyGrad),
         child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 56, 20, 16),
-            child: Row(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return SingleChildScrollView(
+                physics: const ClampingScrollPhysics(),
+                reverse: true,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: Padding(
+            padding: EdgeInsets.fromLTRB(R.p(context, 20), R.p(context, 56), R.p(context, 20), R.p(context, 20)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      const Text('My Pregnancy', style: TextStyle(
-                          color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w500)),
-                      const SizedBox(height: 4),
-                      Text('Week ${profile.currentWeek}',
-                          style: const TextStyle(
-                              color: Colors.white, fontSize: 28, fontWeight: FontWeight.w800)),
-                      Text(profile.trimesterLabel,
-                          style: const TextStyle(color: Colors.white70, fontSize: 13)),
-                    ],
-                  ),
-                ),
-                Column(
-                  mainAxisAlignment: MainAxisAlignment.end,
+                Text('My Pregnancy',
+                    style: AppTextStyles.onPrimaryBody),
+                SizedBox(height: R.h(context, 4)),
+                Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        '${profile.daysUntilDue} days to go',
-                        style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Week ${profile.currentWeek}',
+                              style: AppTextStyles.display.copyWith(
+                                  color: Colors.white, fontSize: 36, fontWeight: FontWeight.w900)),
+                          Text(profile.trimesterLabel,
+                              style: AppTextStyles.onPrimaryBody),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Due ${DateFormat('dd MMM yyyy').format(profile.dueDate)}',
-                      style: const TextStyle(color: Colors.white70, fontSize: 11),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Container(
+                          padding: EdgeInsets.symmetric(horizontal: R.p(context, 14), vertical: R.p(context, 7)),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(R.r(context, 20)),
+                            border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
+                          ),
+                          child: Text(
+                            '${profile.daysUntilDue} days left',
+                            style: AppTextStyles.labelMedium.copyWith(color: Colors.white),
+                          ),
+                        ),
+                        SizedBox(height: R.h(context, 6)),
+                        Text(
+                          'Due ${DateFormat('dd MMM yyyy').format(profile.dueDate)}',
+                          style: AppTextStyles.onPrimaryBody,
+                        ),
+                      ],
                     ),
                   ],
                 ),
               ],
             ),
+                  ),
+                ),
+              );
+            },
           ),
         ),
       ),
     ),
-    actions: [
-      IconButton(
-        icon: const Icon(Icons.notifications_outlined),
-        onPressed: () => context.push(AppRoutes.notifications),
-      ),
-    ],
   );
 
-  Widget _buildWeekCard(PregnancyProfile profile) {
-    final total = 40;
-    final progress = profile.currentWeek / total;
+  // ── Hero Week Progress Card ────────────────────────────────────────────────
+
+  Widget _buildHeroWeekCard(PregnancyProfile profile) {
+    final progress = profile.currentWeek / 40;
     return Container(
-      margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-      padding: const EdgeInsets.all(16),
+      margin: EdgeInsets.fromLTRB(R.p(context, 16), R.p(context, 16), R.p(context, 16), R.p(context, 8)),
+      padding: EdgeInsets.all(R.p(context, 18)),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 10)],
+        color: context.appSurface,
+        borderRadius: BorderRadius.circular(R.r(context, 20)),
+        boxShadow: [BoxShadow(color: AppColors.primary.withValues(alpha: 0.08), blurRadius: 15, offset: const Offset(0, 4))],
       ),
       child: Column(
         children: [
           Row(
             children: [
-              _statChip(Icons.calendar_month_rounded, 'Week', '${profile.currentWeek}/40', const Color(0xFFC2185B)),
-              const SizedBox(width: 10),
-              _statChip(Icons.timeline_rounded, 'Trimester', profile.currentTrimester.toString(), const Color(0xFF7B1FA2)),
-              const SizedBox(width: 10),
-              _statChip(Icons.favorite_border_rounded, 'Days Left', '${profile.daysUntilDue}', const Color(0xFFE91E8C)),
+              _statPill('Week', '${profile.currentWeek}/40', AppColors.primary, Icons.calendar_month_rounded),
+              SizedBox(width: R.w(context, 10)),
+              _statPill('Trimester', '${profile.currentTrimester}rd', AppColors.secondary, Icons.timeline_rounded),
+              SizedBox(width: R.w(context, 10)),
+              _statPill('Days Left', '${profile.daysUntilDue}', AppColors.primaryLight, Icons.favorite_rounded),
             ],
           ),
-          const SizedBox(height: 14),
+          SizedBox(height: R.h(context, 16)),
           ClipRRect(
-            borderRadius: BorderRadius.circular(6),
+            borderRadius: BorderRadius.circular(R.r(context, 8)),
             child: LinearProgressIndicator(
               value: progress,
-              backgroundColor: const Color(0xFFF5F5F5),
+              backgroundColor: context.appBorder,
               valueColor: const AlwaysStoppedAnimation(AppColors.primary),
-              minHeight: 8,
+              minHeight: 10,
             ),
           ),
-          const SizedBox(height: 6),
+          SizedBox(height: R.h(context, 8)),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Week 1', style: TextStyle(fontSize: 10, color: AppColors.textHint)),
-              Text('${(progress * 100).toInt()}% complete',
-                  style: const TextStyle(fontSize: 10, color: AppColors.primary, fontWeight: FontWeight.w600)),
-              const Text('Week 40', style: TextStyle(fontSize: 10, color: AppColors.textHint)),
+              Text('Week 1', style: AppTextStyles.bodySmall.copyWith(color: context.appTextHint)),
+              Text('${(progress * 100).toInt()}% of journey complete',
+                  style: AppTextStyles.bodySmall.copyWith(color: AppColors.primary, fontWeight: FontWeight.w700)),
+              Text('Week 40', style: AppTextStyles.bodySmall.copyWith(color: context.appTextHint)),
             ],
           ),
           if (profile.isHighRisk) ...[
-            const SizedBox(height: 10),
+            SizedBox(height: R.h(context, 12)),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              padding: EdgeInsets.symmetric(horizontal: R.p(context, 12), vertical: R.p(context, 8)),
               decoration: BoxDecoration(
-                color: const Color(0xFFFFF3E0),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: const Color(0xFFFF9800).withValues(alpha: 0.4)),
+                color: const Color(0xFFFFF8E1),
+                borderRadius: BorderRadius.circular(R.r(context, 10)),
+                border: Border.all(color: const Color(0xFFFFC107).withValues(alpha: 0.5)),
               ),
               child: Row(
-                children: const [
-                  Icon(Icons.warning_amber_rounded, color: Color(0xFFE65100), size: 16),
-                  SizedBox(width: 6),
+                children: [
+                  Icon(Icons.warning_amber_rounded, color: const Color(0xFFE65100), size: R.w(context, 16)),
+                  SizedBox(width: R.w(context, 8)),
                   Expanded(
                     child: Text('High-risk pregnancy — follow up with your doctor regularly.',
-                        style: TextStyle(fontSize: 11, color: Color(0xFFE65100), fontWeight: FontWeight.w500)),
+                        style: AppTextStyles.bodySmall.copyWith(
+                            color: const Color(0xFFE65100), fontWeight: FontWeight.w600)),
                   ),
                 ],
               ),
@@ -294,84 +349,156 @@ class _PregnancyDashboardScreenState
     );
   }
 
-  Widget _statChip(IconData icon, String label, String value, Color color) => Expanded(
+  Widget _statPill(String label, String value, Color color, IconData icon) => Expanded(
     child: Container(
-      padding: const EdgeInsets.all(10),
+      padding: EdgeInsets.symmetric(vertical: R.p(context, 12)),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(R.r(context, 12)),
       ),
       child: Column(
         children: [
-          Icon(icon, color: color, size: 18),
-          const SizedBox(height: 4),
-          Text(value, style: TextStyle(color: color, fontWeight: FontWeight.w800, fontSize: 14)),
-          Text(label, style: const TextStyle(fontSize: 10, color: AppColors.textHint)),
+          Icon(icon, color: color, size: R.w(context, 18)),
+          SizedBox(height: R.h(context, 4)),
+          Text(value, style: AppTextStyles.labelLarge.copyWith(color: color, fontSize: 14, fontWeight: FontWeight.w800)),
+          Text(label, style: AppTextStyles.bodySmall.copyWith(color: context.appTextHint)),
         ],
       ),
     ),
   );
 
-  Widget _buildQuickActions(BuildContext context) => Padding(
+  // ── Baby Size Card ─────────────────────────────────────────────────────────
+
+  Widget _buildBabySizeCard(PregnancyProfile profile) {
+    final data = getWeekData(profile.currentWeek);
+    return Container(
+      margin: EdgeInsets.symmetric(horizontal: R.p(context, 16), vertical: R.p(context, 8)),
+      padding: EdgeInsets.all(R.p(context, 18)),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF7B1FA2), Color(0xFFC2185B)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(R.r(context, 20)),
+        boxShadow: [BoxShadow(color: AppColors.secondary.withValues(alpha: 0.25), blurRadius: 14, offset: const Offset(0, 4))],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Your Baby This Week',
+                    style: AppTextStyles.onPrimaryBody),
+                SizedBox(height: R.h(context, 6)),
+                Text(data.babySizeComparison,
+                    style: AppTextStyles.h2.copyWith(color: Colors.white, fontSize: 22)),
+                Text('${data.babyLength} · ${data.babyWeight}',
+                    style: AppTextStyles.onPrimaryBody),
+                SizedBox(height: R.h(context, 10)),
+                Text(data.development,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.bodySmall.copyWith(color: Colors.white, height: 1.5)),
+                SizedBox(height: R.h(context, 12)),
+                GestureDetector(
+                  onTap: () => context.push(AppRoutes.pregnancyWeekly),
+                  child: Container(
+                    padding: EdgeInsets.symmetric(horizontal: R.p(context, 14), vertical: R.p(context, 8)),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(R.r(context, 20)),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('View week guide',
+                            style: AppTextStyles.bodySmall.copyWith(color: Colors.white, fontWeight: FontWeight.w600)),
+                        SizedBox(width: R.w(context, 4)),
+                        Icon(Icons.arrow_forward_rounded, color: Colors.white, size: R.w(context, 14)),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          SizedBox(width: R.w(context, 16)),
+          Container(
+            width: R.w(context, 80),
+            height: R.w(context, 80),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.15),
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white.withValues(alpha: 0.25), width: 2),
+            ),
+            child: Center(child: Text(_fruitEmoji(profile.currentWeek), style: const TextStyle(fontSize: 40))),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Quick Actions ──────────────────────────────────────────────────────────
+
+  Widget _buildQuickActions() => Padding(
     padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
     child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
+        Text('Quick Access', style: AppTextStyles.h4.copyWith(color: context.appTextPrimary)),
+        const SizedBox(height: 12),
+        staticGrid(
+          crossAxisCount: 4,
+          aspectRatio: 0.85,
           children: [
-            _quickAction(context, Icons.medical_services_rounded, 'Medicines', AppRoutes.pregnancyMedicines, const Color(0xFF66BB6A)),
-            const SizedBox(width: 8),
-            _quickAction(context, Icons.calendar_month_rounded, 'Checkups', AppRoutes.pregnancyCheckups, const Color(0xFF42A5F5)),
-            const SizedBox(width: 8),
-            _quickAction(context, Icons.restaurant_rounded, 'Nutrition', AppRoutes.pregnancyNutrition, const Color(0xFFFFA726)),
-            const SizedBox(width: 8),
-            _quickAction(context, Icons.crisis_alert_rounded, 'Emergency', AppRoutes.pregnancyEmergency, const Color(0xFFEF5350)),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            _quickAction(context, Icons.monitor_weight_rounded, 'Weight', AppRoutes.pregnancyWeight, const Color(0xFF7B1FA2)),
-            const SizedBox(width: 8),
-            _quickAction(context, Icons.auto_graph_rounded, 'Weekly', AppRoutes.pregnancyWeekly, const Color(0xFFC2185B)),
-            const SizedBox(width: 8),
-            _quickAction(context, Icons.book_rounded, 'Journal', AppRoutes.pregnancyJournal, const Color(0xFF26C6DA)),
-            const SizedBox(width: 8),
-            const Expanded(child: SizedBox()),
+            _quickTile(Icons.medical_services_rounded, 'Medicines', const Color(0xFF66BB6A), AppRoutes.pregnancyMedicines),
+            _quickTile(Icons.calendar_month_rounded, 'Checkups', const Color(0xFF42A5F5), AppRoutes.pregnancyCheckups),
+            _quickTile(Icons.restaurant_rounded, 'Nutrition', const Color(0xFFFFA726), AppRoutes.pregnancyNutrition),
+            _quickTile(Icons.crisis_alert_rounded, 'Emergency', const Color(0xFFEF5350), AppRoutes.pregnancyEmergency),
+            _quickTile(Icons.monitor_weight_rounded, 'Weight', AppColors.secondary, AppRoutes.pregnancyWeight),
+            _quickTile(Icons.auto_graph_rounded, 'Weekly', AppColors.primary, AppRoutes.pregnancyWeekly),
+            _quickTile(Icons.book_rounded, 'Journal', const Color(0xFF26C6DA), AppRoutes.pregnancyJournal),
+            _quickTile(Icons.medical_information_rounded, 'Profile', const Color(0xFFAB47BC), AppRoutes.pregnancyOnboarding),
           ],
         ),
       ],
     ),
   );
 
-  Widget _quickAction(BuildContext context, IconData icon, String label, String route, Color color) =>
-      Expanded(
-        child: GestureDetector(
-          onTap: () => context.push(route),
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8)],
-            ),
-            child: Column(
-              children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.12),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(icon, color: color, size: 18),
+  Widget _quickTile(IconData icon, String label, Color color, String route) =>
+      GestureDetector(
+        onTap: () => context.push(route),
+        child: Container(
+          decoration: BoxDecoration(
+            color: context.appSurface,
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: [BoxShadow(color: color.withValues(alpha: 0.08), blurRadius: 8, offset: const Offset(0, 2))],
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
                 ),
-                const SizedBox(height: 6),
-                Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
-              ],
-            ),
+                child: Icon(icon, color: color, size: 20),
+              ),
+              const SizedBox(height: 7),
+              Text(label,
+                  style: AppTextStyles.labelSmall.copyWith(color: context.appTextPrimary),
+                  textAlign: TextAlign.center),
+            ],
           ),
         ),
       );
+
+  // ── Weight Summary ─────────────────────────────────────────────────────────
 
   Widget _buildWeightSummaryCard(PregnancyState state) {
     final profile = state.profile!;
@@ -388,9 +515,9 @@ class _PregnancyDashboardScreenState
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10)],
+          color: context.appSurface,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 12, offset: const Offset(0, 2))],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -398,49 +525,47 @@ class _PregnancyDashboardScreenState
             Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.all(7),
+                  padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF7B1FA2).withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
+                    color: AppColors.secondary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(Icons.monitor_weight_rounded, color: Color(0xFF7B1FA2), size: 18),
+                  child: const Icon(Icons.monitor_weight_rounded, color: AppColors.secondary, size: 18),
                 ),
-                const SizedBox(width: 8),
-                const Expanded(
-                  child: Text('Weight Tracker',
-                      style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: Color(0xFF1A1A2E))),
-                ),
-                const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.textHint),
+                const SizedBox(width: 10),
+                Expanded(child: Text('Weight Tracker',
+                    style: AppTextStyles.h4.copyWith(color: context.appTextPrimary))),
+                Icon(Icons.arrow_forward_ios_rounded, size: 13, color: context.appTextHint),
               ],
             ),
             const SizedBox(height: 14),
             Row(
               children: [
-                _weightChip('Start', '${startWeight.toStringAsFixed(1)} kg', const Color(0xFF7B1FA2)),
+                _weightChip('Start', '${startWeight.toStringAsFixed(1)} kg', AppColors.secondary),
                 const SizedBox(width: 8),
-                _weightChip('Current',
-                    hasLogs ? '${currentWeight.toStringAsFixed(1)} kg' : '— kg',
-                    const Color(0xFFC2185B)),
+                _weightChip('Current', hasLogs ? '${currentWeight.toStringAsFixed(1)} kg' : '— kg', AppColors.primary),
                 const SizedBox(width: 8),
-                _weightChip('Gained',
-                    gain > 0 ? '+${gain.toStringAsFixed(1)} kg' : '0.0 kg',
-                    gain > maxGain ? const Color(0xFFEF5350) : const Color(0xFF66BB6A)),
+                _weightChip(
+                  'Gained',
+                  gain > 0 ? '+${gain.toStringAsFixed(1)} kg' : '0.0 kg',
+                  gain > maxGain ? AppColors.error : AppColors.success,
+                ),
               ],
             ),
             const SizedBox(height: 12),
             Row(
               children: [
-                const Icon(Icons.info_outline_rounded, size: 13, color: AppColors.textHint),
-                const SizedBox(width: 4),
+                Icon(Icons.info_outline_rounded, size: 13, color: context.appTextHint),
+                const SizedBox(width: 5),
                 Text(
-                  'Recommended gain: ${minGain.toStringAsFixed(1)}–${maxGain.toStringAsFixed(1)} kg',
-                  style: const TextStyle(fontSize: 11, color: AppColors.textHint),
+                  'Recommended: ${minGain.toStringAsFixed(1)}–${maxGain.toStringAsFixed(1)} kg',
+                  style: AppTextStyles.bodySmall.copyWith(color: context.appTextHint),
                 ),
                 const Spacer(),
                 if (lastLog != null)
                   Text(
                     'Updated ${DateFormat('dd MMM').format(lastLog.loggedAt)}',
-                    style: const TextStyle(fontSize: 10, color: AppColors.textHint),
+                    style: AppTextStyles.bodySmall.copyWith(color: context.appTextHint),
                   ),
               ],
             ),
@@ -455,124 +580,100 @@ class _PregnancyDashboardScreenState
       padding: const EdgeInsets.symmetric(vertical: 10),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
         children: [
-          Text(value,
-              style: TextStyle(color: color, fontWeight: FontWeight.w800, fontSize: 13)),
+          Text(value, style: AppTextStyles.labelLarge.copyWith(color: color, fontWeight: FontWeight.w800)),
           const SizedBox(height: 2),
-          Text(label, style: const TextStyle(fontSize: 10, color: AppColors.textHint)),
+          Text(label, style: AppTextStyles.bodySmall.copyWith(color: context.appTextHint)),
         ],
       ),
     ),
   );
 
+  // ── Weekly Dev Card ────────────────────────────────────────────────────────
+
   Widget _buildWeeklyDevCard(PregnancyProfile profile) {
     final data = getWeekData(profile.currentWeek);
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF7B1FA2), Color(0xFFC2185B)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(16),
+        color: context.appSurface,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 12, offset: const Offset(0, 2))],
       ),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(16),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: () => context.push(AppRoutes.pregnancyWeekly),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.tips_and_updates_rounded, color: Color(0xFFFFA726), size: 18),
+              const SizedBox(width: 8),
+              Text('Tip of the Day', style: AppTextStyles.h4.copyWith(color: context.appTextPrimary)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFFDE7),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFFFC107).withValues(alpha: 0.3)),
+            ),
+            child: Row(
               children: [
-                Row(
-                  children: [
-                    const Icon(Icons.child_care_rounded, color: Colors.white70, size: 18),
-                    const SizedBox(width: 6),
-                    Text('Week ${profile.currentWeek} — Baby Development',
-                        style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w500)),
-                    const Spacer(),
-                    const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white54, size: 14),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(data.babySizeComparison,
-                              style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800)),
-                          Text('${data.babyLength} • ${data.babyWeight}',
-                              style: const TextStyle(color: Colors.white70, fontSize: 12)),
-                          const SizedBox(height: 8),
-                          Text(data.development,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(color: Colors.white, fontSize: 12, height: 1.5)),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.15),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Text(
-                        _fruitEmoji(profile.currentWeek),
-                        style: const TextStyle(fontSize: 32),
-                      ),
-                    ),
-                  ],
+                const Text('💡', style: TextStyle(fontSize: 22)),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(data.weeklyTip,
+                      style: AppTextStyles.bodyMedium.copyWith(color: context.appTextPrimary)),
                 ),
               ],
             ),
           ),
-        ),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF3E5F5),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                const Text('🌙', style: TextStyle(fontSize: 22)),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(data.motherChanges,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.bodySmall.copyWith(color: AppColors.secondary, height: 1.5)),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  String _fruitEmoji(int week) {
-    const emojis = {
-      4: '🌱', 5: '🫘', 6: '🌿', 7: '🫐', 8: '🍓', 10: '🍋',
-      12: '🍈', 14: '🥝', 16: '🥑', 18: '🫑', 20: '🍌', 22: '🌽',
-      24: '🌽', 26: '🥬', 28: '🍆', 30: '🥥', 32: '🎃', 36: '🥗',
-      38: '🥦', 40: '🎃',
-    };
-    final keys = emojis.keys.toList()..sort();
-    String emoji = '👶';
-    for (final k in keys) {
-      if (k <= week) emoji = emojis[k]!;
-    }
-    return emoji;
-  }
+  // ── Upcoming Checkups ──────────────────────────────────────────────────────
 
   Widget _buildUpcomingCheckups(List<PregnancyCheckup> checkups) {
-    final upcoming = checkups.where((c) =>
-        c.status == 'upcoming' &&
-        c.scheduledDate.isAfter(DateTime.now().subtract(const Duration(days: 1))))
-        .take(3).toList();
+    final upcoming = checkups
+        .where((c) => c.status == 'upcoming' && c.scheduledDate.isAfter(DateTime.now().subtract(const Duration(days: 1))))
+        .take(3)
+        .toList();
 
-    return _sectionContainer(
+    return _sectionCard(
       title: 'Upcoming Checkups',
       icon: Icons.event_rounded,
       iconColor: const Color(0xFF42A5F5),
       onSeeAll: () => context.push(AppRoutes.pregnancyCheckups),
       child: upcoming.isEmpty
-          ? _emptyState('No upcoming checkups', 'Your doctor will schedule them')
-          : Column(
-              children: upcoming.map((c) => _checkupTile(c)).toList(),
-            ),
+          ? _emptyState('No upcoming checkups', 'Your doctor will schedule them soon', Icons.event_available_rounded)
+          : Column(children: upcoming.map(_checkupTile).toList()),
     );
   }
 
@@ -580,9 +681,9 @@ class _PregnancyDashboardScreenState
     margin: const EdgeInsets.only(bottom: 8),
     padding: const EdgeInsets.all(12),
     decoration: BoxDecoration(
-      color: const Color(0xFFF7F4F8),
-      borderRadius: BorderRadius.circular(10),
-      border: Border.all(color: AppColors.border),
+      color: context.appBackground,
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: context.appBorder),
     ),
     child: Row(
       children: [
@@ -595,14 +696,14 @@ class _PregnancyDashboardScreenState
           ),
           child: Icon(_checkupIcon(c.type), color: const Color(0xFF42A5F5), size: 22),
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: 12),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(c.title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+              Text(c.title, style: AppTextStyles.labelLarge.copyWith(color: context.appTextPrimary)),
               Text(DateFormat('dd MMM yyyy').format(c.scheduledDate),
-                  style: const TextStyle(fontSize: 11, color: AppColors.textHint)),
+                  style: AppTextStyles.bodySmall.copyWith(color: context.appTextHint)),
             ],
           ),
         ),
@@ -612,8 +713,8 @@ class _PregnancyDashboardScreenState
             color: const Color(0xFF42A5F5).withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(20),
           ),
-          child: Text('Week ${c.pregnancyWeek}',
-              style: const TextStyle(fontSize: 10, color: Color(0xFF1565C0), fontWeight: FontWeight.w600)),
+          child: Text('Wk ${c.pregnancyWeek}',
+              style: AppTextStyles.labelSmall.copyWith(color: const Color(0xFF1565C0))),
         ),
       ],
     ),
@@ -629,51 +730,53 @@ class _PregnancyDashboardScreenState
     }
   }
 
+  // ── Medicines ──────────────────────────────────────────────────────────────
+
   Widget _buildMedicinesCard(List<PregnancyMedicine> medicines) {
     final active = medicines.where((m) => m.isActive).take(3).toList();
-    return _sectionContainer(
+    return _sectionCard(
       title: 'My Medicines',
       icon: Icons.medication_rounded,
       iconColor: const Color(0xFF66BB6A),
       onSeeAll: () => context.push(AppRoutes.pregnancyMedicines),
       child: active.isEmpty
-          ? _emptyState('No medicines yet', 'Your doctor will prescribe as needed')
-          : Column(children: active.map((m) => _medicineTile(m)).toList()),
+          ? _emptyState('No medicines listed', 'Your doctor will prescribe as needed', Icons.medication_outlined)
+          : Column(children: active.map(_medicineTile).toList()),
     );
   }
 
   Widget _medicineTile(PregnancyMedicine m) {
-    final typeColor = _medTypeColor(m.type);
+    final color = _medTypeColor(m.type);
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: typeColor.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: typeColor.withValues(alpha: 0.2)),
+        color: color.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Row(
         children: [
-          Icon(_medIcon(m.type), color: typeColor, size: 20),
+          Icon(_medIcon(m.type), color: color, size: 20),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(m.name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                Text('${m.dosage} • ${m.frequency}',
-                    style: const TextStyle(fontSize: 11, color: AppColors.textHint)),
+                Text(m.name, style: AppTextStyles.labelLarge.copyWith(color: context.appTextPrimary)),
+                Text('${m.dosage} · ${m.frequency}',
+                    style: AppTextStyles.bodySmall.copyWith(color: context.appTextHint)),
               ],
             ),
           ),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(
-              color: typeColor.withValues(alpha: 0.12),
+              color: color.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(m.type[0].toUpperCase() + m.type.substring(1),
-                style: TextStyle(fontSize: 9, color: typeColor, fontWeight: FontWeight.w700)),
+                style: AppTextStyles.labelSmall.copyWith(color: color)),
           ),
         ],
       ),
@@ -698,107 +801,119 @@ class _PregnancyDashboardScreenState
     }
   }
 
-  Widget _buildDoctorNotes(List<PregnancyDoctorNote> notes) {
-    if (notes.isEmpty) return const SizedBox.shrink();
-    return _sectionContainer(
-      title: 'Doctor\'s Notes',
-      icon: Icons.notes_rounded,
-      iconColor: const Color(0xFF7B1FA2),
-      child: Column(
-        children: notes.take(2).map((n) => _doctorNoteTile(n)).toList(),
-      ),
-    );
-  }
+  // ── Doctor Notes ───────────────────────────────────────────────────────────
 
-  Widget _doctorNoteTile(PregnancyDoctorNote n) => Container(
-    margin: const EdgeInsets.only(bottom: 8),
-    padding: const EdgeInsets.all(12),
-    decoration: BoxDecoration(
-      color: const Color(0xFFF3E5F5),
-      borderRadius: BorderRadius.circular(10),
-      border: Border.all(color: const Color(0xFF7B1FA2).withValues(alpha: 0.15)),
-    ),
+  Widget _buildDoctorNotes(List<PregnancyDoctorNote> notes) => _sectionCard(
+    title: "Doctor's Notes",
+    icon: Icons.notes_rounded,
+    iconColor: AppColors.secondary,
     child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            const Icon(Icons.person_rounded, size: 14, color: Color(0xFF7B1FA2)),
-            const SizedBox(width: 4),
-            Text('Dr. ${n.doctorName}',
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF7B1FA2))),
-            const Spacer(),
-            Text(DateFormat('dd MMM').format(n.createdAt),
-                style: const TextStyle(fontSize: 10, color: AppColors.textHint)),
-          ],
+      children: notes.take(2).map((n) => Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF3E5F5),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.secondary.withValues(alpha: 0.15)),
         ),
-        const SizedBox(height: 6),
-        Text(n.content, style: const TextStyle(fontSize: 12, height: 1.5)),
-        if (n.recommendation != null) ...[
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              const Icon(Icons.tips_and_updates_rounded, size: 13, color: Color(0xFFFFA726)),
-              const SizedBox(width: 4),
-              Expanded(
-                child: Text(n.recommendation!,
-                    style: const TextStyle(fontSize: 11, color: Color(0xFFE65100), fontStyle: FontStyle.italic)),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.person_rounded, size: 14, color: AppColors.secondary),
+                const SizedBox(width: 5),
+                Text('Dr. ${n.doctorName}',
+                    style: AppTextStyles.labelMedium.copyWith(color: AppColors.secondary)),
+                const Spacer(),
+                Text(DateFormat('dd MMM').format(n.createdAt),
+                    style: AppTextStyles.bodySmall.copyWith(color: context.appTextHint)),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(n.content, style: AppTextStyles.bodySmall.copyWith(color: context.appTextPrimary, height: 1.5)),
+            if (n.recommendation != null) ...[
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  const Icon(Icons.tips_and_updates_rounded, size: 13, color: Color(0xFFFFA726)),
+                  const SizedBox(width: 5),
+                  Expanded(
+                    child: Text(n.recommendation!,
+                        style: AppTextStyles.bodySmall.copyWith(
+                            color: const Color(0xFFE65100), fontStyle: FontStyle.italic)),
+                  ),
+                ],
               ),
             ],
-          ),
-        ],
-      ],
+          ],
+        ),
+      )).toList(),
     ),
   );
 
-  Widget _buildRecentLogs(List<PregnancyWeeklyLog> logs) {
-    if (logs.isEmpty) return const SizedBox.shrink();
-    return _sectionContainer(
-      title: 'Recent Journal Entries',
-      icon: Icons.book_rounded,
-      iconColor: const Color(0xFFC2185B),
-      child: Column(
-        children: logs.take(3).map((l) => _logTile(l)).toList(),
-      ),
-    );
+  // ── Recent Journal Logs ────────────────────────────────────────────────────
+
+  Widget _buildRecentLogs(List<PregnancyWeeklyLog> logs) => _sectionCard(
+    title: 'Recent Journal Entries',
+    icon: Icons.book_rounded,
+    iconColor: AppColors.primary,
+    onSeeAll: () => context.push(AppRoutes.pregnancyJournal),
+    child: Column(
+      children: logs.take(3).map((l) => Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.primary.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.primary.withValues(alpha: 0.12)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Center(child: Text(_moodEmoji(l.mood), style: const TextStyle(fontSize: 20))),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Week ${l.pregnancyWeek} · ${l.mood}',
+                      style: AppTextStyles.labelMedium.copyWith(color: context.appTextPrimary)),
+                  if (l.symptoms.isNotEmpty)
+                    Text(l.symptoms.take(3).join(' · '),
+                        style: AppTextStyles.bodySmall.copyWith(color: context.appTextHint)),
+                ],
+              ),
+            ),
+            Text(DateFormat('dd MMM').format(l.loggedAt),
+                style: AppTextStyles.bodySmall.copyWith(color: context.appTextHint)),
+          ],
+        ),
+      )).toList(),
+    ),
+  );
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+
+  String _fruitEmoji(int week) {
+    const emojis = {
+      4: '🌱', 5: '🫘', 6: '🌿', 7: '🫐', 8: '🍓', 10: '🍋',
+      12: '🍈', 14: '🥝', 16: '🥑', 18: '🫑', 20: '🍌', 22: '🌽',
+      24: '🌽', 26: '🥬', 28: '🍆', 30: '🥥', 32: '🎃', 36: '🥗',
+      38: '🥦', 40: '👶',
+    };
+    final keys = emojis.keys.toList()..sort();
+    String emoji = '👶';
+    for (final k in keys) { if (k <= week) emoji = emojis[k]!; }
+    return emoji;
   }
-
-  Widget _logTile(PregnancyWeeklyLog l) => Container(
-    margin: const EdgeInsets.only(bottom: 8),
-    padding: const EdgeInsets.all(12),
-    decoration: BoxDecoration(
-      color: const Color(0xFFFCE4EC),
-      borderRadius: BorderRadius.circular(10),
-    ),
-    child: Row(
-      children: [
-        Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            color: AppColors.primary.withValues(alpha: 0.1),
-            shape: BoxShape.circle,
-          ),
-          child: Center(child: Text(_moodEmoji(l.mood), style: const TextStyle(fontSize: 20))),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Week ${l.pregnancyWeek} — ${l.mood}',
-                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
-              if (l.symptoms.isNotEmpty)
-                Text(l.symptoms.take(3).join(' • '),
-                    style: const TextStyle(fontSize: 10, color: AppColors.textHint)),
-            ],
-          ),
-        ),
-        Text(DateFormat('dd MMM').format(l.loggedAt),
-            style: const TextStyle(fontSize: 10, color: AppColors.textHint)),
-      ],
-    ),
-  );
 
   String _moodEmoji(String mood) {
     const map = {
@@ -809,7 +924,7 @@ class _PregnancyDashboardScreenState
     return map[mood] ?? '💗';
   }
 
-  Widget _sectionContainer({
+  Widget _sectionCard({
     required String title,
     required IconData icon,
     required Color iconColor,
@@ -820,46 +935,50 @@ class _PregnancyDashboardScreenState
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10)],
+          color: context.appSurface,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 12, offset: const Offset(0, 2))],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                Icon(icon, color: iconColor, size: 18),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(title, style: const TextStyle(
-                      fontWeight: FontWeight.w700, fontSize: 14, color: Color(0xFF1A1A2E))),
+                Container(
+                  padding: const EdgeInsets.all(7),
+                  decoration: BoxDecoration(
+                    color: iconColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(icon, color: iconColor, size: 17),
                 ),
+                const SizedBox(width: 8),
+                Expanded(child: Text(title, style: AppTextStyles.h4.copyWith(color: context.appTextPrimary))),
                 if (onSeeAll != null)
                   GestureDetector(
                     onTap: onSeeAll,
-                    child: const Text('See all',
-                        style: TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.w600)),
+                    child: Text('See all',
+                        style: AppTextStyles.labelMedium.copyWith(color: AppColors.primary)),
                   ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
             child,
           ],
         ),
       );
 
-  Widget _emptyState(String title, String subtitle) => Padding(
+  Widget _emptyState(String title, String subtitle, IconData icon) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 8),
     child: Row(
       children: [
-        const Icon(Icons.info_outline_rounded, size: 16, color: AppColors.textHint),
-        const SizedBox(width: 8),
+        Icon(icon, size: 18, color: context.appTextHint),
+        const SizedBox(width: 10),
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(title, style: const TextStyle(fontSize: 13, color: AppColors.textHint)),
-            Text(subtitle, style: const TextStyle(fontSize: 11, color: AppColors.textHint)),
+            Text(title, style: AppTextStyles.bodyMedium.copyWith(color: context.appTextSecondary, fontWeight: FontWeight.w500)),
+            Text(subtitle, style: AppTextStyles.bodySmall.copyWith(color: context.appTextHint)),
           ],
         ),
       ],

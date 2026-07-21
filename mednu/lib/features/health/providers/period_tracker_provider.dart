@@ -4,96 +4,247 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../services/health_notification_service.dart';
 
-// ─── Models ──────────────────────────────────────────────────────────────────
+// ─── Model ────────────────────────────────────────────────────────────────────
 
-class PeriodCycle {
+class PeriodEntry {
   final String id;
   final DateTime startDate;
-  final DateTime? endDate;
-  final String flowLevel;
+  final DateTime endDate;
+  final String flowLevel; // 'Light' | 'Medium' | 'Heavy'
+  final bool hasBloodClots;
+  final List<String> symptoms;
+  final String? mood;
+  final String? notes;
 
-  const PeriodCycle({
+  const PeriodEntry({
     required this.id,
     required this.startDate,
-    this.endDate,
+    required this.endDate,
     required this.flowLevel,
+    this.hasBloodClots = false,
+    this.symptoms = const [],
+    this.mood,
+    this.notes,
   });
+
+  factory PeriodEntry.fromFirestore(
+      String id, Map<String, dynamic> d, int defaultDuration) {
+    final start =
+        (d['startDate'] as Timestamp?)?.toDate() ?? DateTime.now();
+    final end = (d['endDate'] as Timestamp?)?.toDate() ??
+        start.add(Duration(days: defaultDuration - 1));
+    return PeriodEntry(
+      id: id,
+      startDate: _dateOnly(start),
+      endDate: _dateOnly(end),
+      flowLevel: d['flowLevel'] as String? ?? 'Medium',
+      hasBloodClots: d['hasBloodClots'] as bool? ?? false,
+      symptoms: List<String>.from(d['symptoms'] as List? ?? []),
+      mood: d['mood'] as String?,
+      notes: d['notes'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toFirestore() => {
+        'startDate': Timestamp.fromDate(startDate),
+        'endDate': Timestamp.fromDate(endDate),
+        'flowLevel': flowLevel,
+        'hasBloodClots': hasBloodClots,
+        'symptoms': symptoms,
+        'mood': mood,
+        'notes': notes,
+      };
+
+  PeriodEntry copyWith({
+    DateTime? startDate,
+    DateTime? endDate,
+    String? flowLevel,
+    bool? hasBloodClots,
+    List<String>? symptoms,
+    String? mood,
+    String? notes,
+  }) =>
+      PeriodEntry(
+        id: id,
+        startDate: startDate ?? this.startDate,
+        endDate: endDate ?? this.endDate,
+        flowLevel: flowLevel ?? this.flowLevel,
+        hasBloodClots: hasBloodClots ?? this.hasBloodClots,
+        symptoms: symptoms ?? this.symptoms,
+        mood: mood ?? this.mood,
+        notes: notes ?? this.notes,
+      );
 }
+
+// Keep PeriodCycle as an alias so existing imports in other files don't break
+typedef PeriodCycle = PeriodEntry;
+
+DateTime _dateOnly(DateTime dt) => DateTime(dt.year, dt.month, dt.day);
 
 // ─── State ───────────────────────────────────────────────────────────────────
 
 class PeriodTrackerState {
-  final PeriodCycle? currentCycle;
-  final List<PeriodCycle> recentCycles;
-  final List<String> todaySymptoms;
-  final String? todayMood;
+  final List<PeriodEntry> entries; // newest first
+  final bool onboardingComplete;
   final int avgCycleLength;
+  final int periodDuration;
+  final String defaultFlow;
+  final bool defaultHasBloodClots;
   final bool remindersEnabled;
   final int reminderDaysBefore;
   final bool isLoading;
 
   const PeriodTrackerState({
-    this.currentCycle,
-    this.recentCycles = const [],
-    this.todaySymptoms = const [],
-    this.todayMood,
+    this.entries = const [],
+    this.onboardingComplete = false,
     this.avgCycleLength = 28,
+    this.periodDuration = 5,
+    this.defaultFlow = 'Medium',
+    this.defaultHasBloodClots = false,
     this.remindersEnabled = false,
     this.reminderDaysBefore = 3,
-    this.isLoading = false,
+    this.isLoading = true,
   });
 
-  // ─── Computed ─────────────────────────────────────────────────────────────
+  // ── Backward-compat helpers ──────────────────────────────────────────────
+  PeriodEntry? get currentCycle => entries.isEmpty ? null : entries.first;
+  List<PeriodEntry> get recentCycles => entries;
+  bool get hasCycle => entries.isNotEmpty;
 
-  bool get hasCycle => currentCycle != null;
+  // ── Cycle computations ──────────────────────────────────────────────────
 
-  int get cycleDay {
-    if (currentCycle == null) return 0;
-    return (DateTime.now().difference(currentCycle!.startDate).inDays + 1)
-        .clamp(1, avgCycleLength);
-  }
+  DateTime? get lastPeriodStart =>
+      entries.isEmpty ? null : entries.first.startDate;
 
-  DateTime? get nextPeriodDate {
-    if (currentCycle == null) return null;
-    return currentCycle!.startDate.add(Duration(days: avgCycleLength));
-  }
+  DateTime? get nextPeriodDate => lastPeriodStart == null
+      ? null
+      : lastPeriodStart!.add(Duration(days: avgCycleLength));
 
   int get daysToNextPeriod {
     if (nextPeriodDate == null) return 0;
-    return nextPeriodDate!.difference(DateTime.now()).inDays.clamp(0, avgCycleLength);
+    final diff = nextPeriodDate!.difference(_dateOnly(DateTime.now())).inDays;
+    return diff.clamp(0, avgCycleLength);
+  }
+
+  int get cycleDay {
+    if (lastPeriodStart == null) return 0;
+    return (_dateOnly(DateTime.now())
+                .difference(lastPeriodStart!)
+                .inDays +
+            1)
+        .clamp(1, avgCycleLength);
   }
 
   String get currentPhase {
-    final day = cycleDay;
-    if (day == 0) return 'Unknown';
-    if (day <= 5) return 'Menstruation';
-    if (day <= 13) return 'Follicular';
-    if (day <= 16) return 'Ovulation';
+    final d = cycleDay;
+    if (d == 0) return 'Unknown';
+    if (d <= periodDuration) return 'Menstruation';
+    if (d <= 13) return 'Follicular';
+    if (d <= 16) return 'Ovulation';
     return 'Luteal';
   }
 
   bool get isInFertileWindow {
-    final day = cycleDay;
-    return day >= 12 && day <= 16;
+    final d = cycleDay;
+    return d >= 12 && d <= 16;
+  }
+
+  // ── Calendar data ───────────────────────────────────────────────────────
+
+  /// All dates covered by logged period entries.
+  Set<DateTime> get loggedPeriodDays {
+    final days = <DateTime>{};
+    for (final e in entries) {
+      var d = e.startDate;
+      while (!d.isAfter(e.endDate)) {
+        days.add(d);
+        d = d.add(const Duration(days: 1));
+      }
+    }
+    return days;
+  }
+
+  /// Up to 3 future period start dates predicted from the last logged period.
+  List<DateTime> get predictedPeriodStarts {
+    if (lastPeriodStart == null) return [];
+    final starts = <DateTime>[];
+    var base = lastPeriodStart!;
+    for (int i = 0; i < 3; i++) {
+      base = base.add(Duration(days: avgCycleLength));
+      starts.add(base);
+    }
+    return starts;
+  }
+
+  /// Predicted period days (from predicted starts, each lasting periodDuration).
+  Set<DateTime> get predictedPeriodDays {
+    final days = <DateTime>{};
+    for (final start in predictedPeriodStarts) {
+      var d = start;
+      for (int i = 0; i < periodDuration; i++) {
+        // Don't overlap with already-logged days
+        if (!loggedPeriodDays.contains(d)) days.add(d);
+        d = d.add(const Duration(days: 1));
+      }
+    }
+    return days;
+  }
+
+  /// Fertile window days (cycle days 12–16) for the last 2 logged + next 3 predicted cycles.
+  Set<DateTime> get fertileDays {
+    final days = <DateTime>{};
+    final starts = <DateTime>[];
+
+    // Last 2 logged
+    for (int i = 0; i < entries.length && i < 2; i++) {
+      starts.add(entries[i].startDate);
+    }
+    // Next 3 predicted
+    starts.addAll(predictedPeriodStarts);
+
+    for (final start in starts) {
+      for (int offset = 11; offset <= 15; offset++) {
+        final d = start.add(Duration(days: offset));
+        if (!loggedPeriodDays.contains(d)) days.add(d);
+      }
+    }
+    return days;
+  }
+
+  /// Ovulation days (cycle day 14) for recent + predicted cycles.
+  Set<DateTime> get ovulationDays {
+    final days = <DateTime>{};
+    final starts = <DateTime>[];
+    for (int i = 0; i < entries.length && i < 2; i++) {
+      starts.add(entries[i].startDate);
+    }
+    starts.addAll(predictedPeriodStarts);
+
+    for (final start in starts) {
+      final d = start.add(const Duration(days: 13));
+      if (!loggedPeriodDays.contains(d)) days.add(d);
+    }
+    return days;
   }
 
   PeriodTrackerState copyWith({
-    PeriodCycle? currentCycle,
-    List<PeriodCycle>? recentCycles,
-    List<String>? todaySymptoms,
-    String? todayMood,
-    bool clearMood = false,
+    List<PeriodEntry>? entries,
+    bool? onboardingComplete,
     int? avgCycleLength,
+    int? periodDuration,
+    String? defaultFlow,
+    bool? defaultHasBloodClots,
     bool? remindersEnabled,
     int? reminderDaysBefore,
     bool? isLoading,
   }) =>
       PeriodTrackerState(
-        currentCycle: currentCycle ?? this.currentCycle,
-        recentCycles: recentCycles ?? this.recentCycles,
-        todaySymptoms: todaySymptoms ?? this.todaySymptoms,
-        todayMood: clearMood ? null : (todayMood ?? this.todayMood),
+        entries: entries ?? this.entries,
+        onboardingComplete: onboardingComplete ?? this.onboardingComplete,
         avgCycleLength: avgCycleLength ?? this.avgCycleLength,
+        periodDuration: periodDuration ?? this.periodDuration,
+        defaultFlow: defaultFlow ?? this.defaultFlow,
+        defaultHasBloodClots: defaultHasBloodClots ?? this.defaultHasBloodClots,
         remindersEnabled: remindersEnabled ?? this.remindersEnabled,
         reminderDaysBefore: reminderDaysBefore ?? this.reminderDaysBefore,
         isLoading: isLoading ?? this.isLoading,
@@ -113,7 +264,7 @@ class PeriodTrackerNotifier extends StateNotifier<PeriodTrackerState> {
 
   static String get _today => DateFormat('yyyy-MM-dd').format(DateTime.now());
 
-  CollectionReference<Map<String, dynamic>>? get _cyclesRef => _uid == null
+  CollectionReference<Map<String, dynamic>>? get _entriesRef => _uid == null
       ? null
       : _db.collection('health_data').doc(_uid).collection('period_cycles');
 
@@ -135,7 +286,7 @@ class PeriodTrackerNotifier extends StateNotifier<PeriodTrackerState> {
 
   Future<void> _init() async {
     state = state.copyWith(isLoading: true);
-    await Future.wait([_loadSettings(), _loadRecentCycles(), _loadTodayLog()]);
+    await Future.wait([_loadSettings(), _loadEntries()]);
     state = state.copyWith(isLoading: false);
   }
 
@@ -147,85 +298,96 @@ class PeriodTrackerNotifier extends StateNotifier<PeriodTrackerState> {
       final d = snap.data();
       if (d == null) return;
       state = state.copyWith(
+        onboardingComplete: d['onboardingComplete'] as bool? ?? false,
         avgCycleLength: d['avgCycleLength'] as int? ?? 28,
+        periodDuration: d['periodDuration'] as int? ?? 5,
+        defaultFlow: d['defaultFlow'] as String? ?? 'Medium',
+        defaultHasBloodClots: d['defaultHasBloodClots'] as bool? ?? false,
         remindersEnabled: d['remindersEnabled'] as bool? ?? false,
         reminderDaysBefore: d['reminderDaysBefore'] as int? ?? 3,
       );
     } catch (_) {}
   }
 
-  Future<void> _loadRecentCycles() async {
-    if (_cyclesRef == null) return;
+  Future<void> _loadEntries() async {
+    if (_entriesRef == null) return;
     try {
-      final snap = await _cyclesRef!
+      final snap = await _entriesRef!
           .orderBy('startDate', descending: true)
-          .limit(6)
+          .limit(12)
           .get();
       if (snap.docs.isEmpty) return;
-      final cycles = snap.docs.map((doc) {
-        final d = doc.data();
-        return PeriodCycle(
-          id: doc.id,
-          startDate: (d['startDate'] as Timestamp?)?.toDate() ?? DateTime.now(),
-          endDate: (d['endDate'] as Timestamp?)?.toDate(),
-          flowLevel: d['flowLevel'] as String? ?? 'Medium',
-        );
-      }).toList();
-      state = state.copyWith(recentCycles: cycles, currentCycle: cycles.first);
+      final dur = state.periodDuration;
+      final list = snap.docs
+          .map((doc) => PeriodEntry.fromFirestore(doc.id, doc.data(), dur))
+          .toList();
+      state = state.copyWith(entries: list);
     } catch (_) {}
   }
 
-  Future<void> _loadTodayLog() async {
-    if (_todayDailyRef == null) return;
+  // ── Public API ──────────────────────────────────────────────────────────
+
+  Future<void> completeOnboarding({
+    required int cycleLength,
+    required int periodDuration,
+    required String defaultFlow,
+    required bool hasBloodClots,
+  }) async {
+    state = state.copyWith(
+      onboardingComplete: true,
+      avgCycleLength: cycleLength,
+      periodDuration: periodDuration,
+      defaultFlow: defaultFlow,
+      defaultHasBloodClots: hasBloodClots,
+    );
+    await _saveSettings();
+  }
+
+  Future<void> logPeriod({
+    required DateTime startDate,
+    required DateTime endDate,
+    required String flowLevel,
+    required bool hasBloodClots,
+    List<String> symptoms = const [],
+    String? mood,
+    String? notes,
+  }) async {
+    if (_uid == null || _entriesRef == null) return;
     try {
-      final snap = await _todayDailyRef!.get();
-      if (!snap.exists) return;
-      final d = snap.data();
-      if (d == null) return;
-      state = state.copyWith(
-        todaySymptoms: List<String>.from(d['symptoms'] as List? ?? []),
-        todayMood: d['mood'] as String?,
+      final ref = _entriesRef!.doc();
+      final entry = PeriodEntry(
+        id: ref.id,
+        startDate: _dateOnly(startDate),
+        endDate: _dateOnly(endDate),
+        flowLevel: flowLevel,
+        hasBloodClots: hasBloodClots,
+        symptoms: symptoms,
+        mood: mood,
+        notes: notes,
       );
-    } catch (_) {}
-  }
+      await ref.set(entry.toFirestore());
 
-  // ─── Public API ─────────────────────────────────────────────────────────
+      final updated = [entry, ...state.entries]
+        ..sort((a, b) => b.startDate.compareTo(a.startDate));
 
-  Future<void> logPeriodStart(String flowLevel) async {
-    if (_uid == null || _cyclesRef == null) return;
-    try {
-      final ref = _cyclesRef!.doc();
-      final now = DateTime.now();
-      await ref.set({
-        'startDate': Timestamp.fromDate(now),
-        'flowLevel': flowLevel,
-        'endDate': null,
-      });
-
-      final newCycle = PeriodCycle(id: ref.id, startDate: now, flowLevel: flowLevel);
-
-      // Recalculate avg cycle length from historical start dates
+      // Recalculate avg cycle length from historical gaps
       int newAvg = state.avgCycleLength;
-      if (state.recentCycles.isNotEmpty) {
-        final sorted = [...state.recentCycles]
-          ..sort((a, b) => a.startDate.compareTo(b.startDate));
+      if (updated.length >= 2) {
         final gaps = <int>[];
-        for (int i = 1; i < sorted.length; i++) {
-          final gap = sorted[i].startDate.difference(sorted[i - 1].startDate).inDays;
-          if (gap >= 21 && gap <= 35) gaps.add(gap);
+        for (int i = 0; i < updated.length - 1; i++) {
+          final gap = updated[i]
+              .startDate
+              .difference(updated[i + 1].startDate)
+              .inDays;
+          if (gap >= 21 && gap <= 45) gaps.add(gap);
         }
-        // Include the gap from last cycle to now
-        final lastGap = now.difference(sorted.last.startDate).inDays;
-        if (lastGap >= 21 && lastGap <= 35) gaps.add(lastGap);
         if (gaps.isNotEmpty) {
           newAvg = (gaps.reduce((a, b) => a + b) / gaps.length).round();
         }
       }
 
-      final updatedCycles = [newCycle, ...state.recentCycles].take(6).toList();
       state = state.copyWith(
-        currentCycle: newCycle,
-        recentCycles: updatedCycles,
+        entries: updated.take(12).toList(),
         avgCycleLength: newAvg,
       );
       await _saveSettings();
@@ -236,89 +398,139 @@ class PeriodTrackerNotifier extends StateNotifier<PeriodTrackerState> {
           state.reminderDaysBefore,
         );
       }
-
-      // Always send caring wellness notifications when period starts
       await HealthNotificationService.schedulePeriodWellnessNotifications(
-        periodStartDate: now,
+        periodStartDate: startDate,
       );
     } catch (_) {}
   }
 
-  Future<void> toggleSymptom(String symptom) async {
-    final current = List<String>.from(state.todaySymptoms);
-    if (current.contains(symptom)) {
-      current.remove(symptom);
-    } else {
-      current.add(symptom);
-    }
-    state = state.copyWith(todaySymptoms: current);
-    await _saveTodayLog();
+  Future<void> updateEntry({
+    required String id,
+    required DateTime startDate,
+    required DateTime endDate,
+    required String flowLevel,
+    required bool hasBloodClots,
+    List<String> symptoms = const [],
+    String? mood,
+    String? notes,
+  }) async {
+    if (_uid == null || _entriesRef == null) return;
+    try {
+      final updated = PeriodEntry(
+        id: id,
+        startDate: _dateOnly(startDate),
+        endDate: _dateOnly(endDate),
+        flowLevel: flowLevel,
+        hasBloodClots: hasBloodClots,
+        symptoms: symptoms,
+        mood: mood,
+        notes: notes,
+      );
+      await _entriesRef!.doc(id).set(updated.toFirestore());
+
+      final list = state.entries.map((e) => e.id == id ? updated : e).toList()
+        ..sort((a, b) => b.startDate.compareTo(a.startDate));
+      state = state.copyWith(entries: list);
+    } catch (_) {}
   }
 
-  Future<void> setMood(String mood) async {
-    final isSame = state.todayMood == mood;
-    if (isSame) {
-      state = state.copyWith(clearMood: true);
-    } else {
-      state = state.copyWith(todayMood: mood);
-    }
-    await _saveTodayLog();
+  Future<void> deleteEntry(String id) async {
+    if (_uid == null || _entriesRef == null) return;
+    try {
+      await _entriesRef!.doc(id).delete();
+      final list = state.entries.where((e) => e.id != id).toList();
+      state = state.copyWith(entries: list);
+    } catch (_) {}
   }
 
-  Future<void> setRemindersEnabled(bool enabled) async {
-    if (enabled) {
-      final granted = await HealthNotificationService.requestNotificationPermission();
-      if (!granted) return;
-      state = state.copyWith(remindersEnabled: true);
-      await _saveSettings();
-      if (state.nextPeriodDate != null) {
-        await HealthNotificationService.schedulePeriodReminder(
-          state.nextPeriodDate!,
-          state.reminderDaysBefore,
-        );
-      }
-    } else {
-      state = state.copyWith(remindersEnabled: false);
-      await _saveSettings();
+  Future<void> saveSettings({
+    int? cycleLength,
+    int? periodDuration,
+    String? defaultFlow,
+    bool? defaultHasBloodClots,
+    bool? remindersEnabled,
+    int? reminderDaysBefore,
+  }) async {
+    state = state.copyWith(
+      avgCycleLength: cycleLength,
+      periodDuration: periodDuration,
+      defaultFlow: defaultFlow,
+      defaultHasBloodClots: defaultHasBloodClots,
+      remindersEnabled: remindersEnabled,
+      reminderDaysBefore: reminderDaysBefore,
+    );
+    await _saveSettings();
+
+    if (state.remindersEnabled && state.nextPeriodDate != null) {
+      await HealthNotificationService.schedulePeriodReminder(
+        state.nextPeriodDate!,
+        state.reminderDaysBefore,
+      );
+    } else if (!state.remindersEnabled) {
       await HealthNotificationService.cancelPeriodReminder();
     }
   }
 
-  Future<void> setReminderDaysBefore(int days) async {
-    state = state.copyWith(reminderDaysBefore: days);
-    await _saveSettings();
-    if (state.remindersEnabled && state.nextPeriodDate != null) {
-      await HealthNotificationService.schedulePeriodReminder(
-        state.nextPeriodDate!,
-        days,
+  // Legacy methods for backward compat
+  Future<void> logPeriodStart(String flowLevel) => logPeriod(
+        startDate: DateTime.now(),
+        endDate: DateTime.now()
+            .add(Duration(days: state.periodDuration - 1)),
+        flowLevel: flowLevel,
+        hasBloodClots: state.defaultHasBloodClots,
       );
+
+  Future<void> setCycleLength(int days) =>
+      saveSettings(cycleLength: days);
+
+  Future<void> setRemindersEnabled(bool enabled) async {
+    if (enabled) {
+      final granted =
+          await HealthNotificationService.requestNotificationPermission();
+      if (!granted) return;
     }
+    await saveSettings(remindersEnabled: enabled);
   }
 
-  Future<void> setCycleLength(int days) async {
-    state = state.copyWith(avgCycleLength: days);
-    await _saveSettings();
+  Future<void> setReminderDaysBefore(int days) =>
+      saveSettings(reminderDaysBefore: days);
+
+  Future<void> toggleSymptom(String symptom) async {
+    // Daily log (not per-entry) — legacy feature kept
+    if (_todayDailyRef == null) return;
+    try {
+      final snap = await _todayDailyRef!.get();
+      final existing = List<String>.from(
+          snap.data()?['symptoms'] as List? ?? []);
+      if (existing.contains(symptom)) {
+        existing.remove(symptom);
+      } else {
+        existing.add(symptom);
+      }
+      await _todayDailyRef!.set(
+          {'symptoms': existing, 'date': _today}, SetOptions(merge: true));
+    } catch (_) {}
+  }
+
+  Future<void> setMood(String mood) async {
+    if (_todayDailyRef == null) return;
+    try {
+      await _todayDailyRef!
+          .set({'mood': mood, 'date': _today}, SetOptions(merge: true));
+    } catch (_) {}
   }
 
   Future<void> _saveSettings() async {
     if (_settingsRef == null) return;
     try {
       await _settingsRef!.set({
+        'onboardingComplete': state.onboardingComplete,
         'avgCycleLength': state.avgCycleLength,
+        'periodDuration': state.periodDuration,
+        'defaultFlow': state.defaultFlow,
+        'defaultHasBloodClots': state.defaultHasBloodClots,
         'remindersEnabled': state.remindersEnabled,
         'reminderDaysBefore': state.reminderDaysBefore,
-      }, SetOptions(merge: true));
-    } catch (_) {}
-  }
-
-  Future<void> _saveTodayLog() async {
-    if (_todayDailyRef == null) return;
-    try {
-      await _todayDailyRef!.set({
-        'date': _today,
-        'symptoms': state.todaySymptoms,
-        'mood': state.todayMood,
-        'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
     } catch (_) {}
   }

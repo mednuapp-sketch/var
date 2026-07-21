@@ -1,6 +1,6 @@
-# Mednu Admin Panel
+# MedNU Admin Panel
 
-A complete web admin dashboard for the Mednu app.
+A complete web admin dashboard for the MedNU app.
 Connects directly to your existing Firebase (Firestore) backend.
 
 ---
@@ -39,7 +39,7 @@ const firebaseConfig = {
 
 **How to get these:**
 1. Go to https://console.firebase.google.com
-2. Open your Mednu project
+2. Open your MedNU project
 3. Click ⚙️ Settings → Project Settings
 4. Scroll to "Your apps" → Web app → Copy config
 
@@ -111,10 +111,10 @@ Upload the entire `mednu-admin/` folder to any web hosting (Hostinger, Netlify, 
 
 ## 🔧 Customisation
 
-- **Logo / Name:** Search for "Mednu" in `index.html` and replace
+- **Logo / Name:** Search for "MedNU" in `index.html` and replace
 - **Colors:** Edit CSS variables at the top of `css/style.css`
 - **Add a new section:** Copy a tab in `index.html`, add nav item, add JS loader in `app.js`
 
 ---
 
-Built for Mednu · Firebase + Paytm Stack
+Built for MedNU · Firebase + Paytm Stack

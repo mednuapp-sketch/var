@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -10,6 +11,7 @@ import '../../../core/router/app_router.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../providers/water_tracker_provider.dart';
 import '../../../core/widgets/ux_widgets.dart';
+import '../../../core/utils/r.dart';
 
 // â”€â”€â”€ Entry point â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 //
@@ -25,7 +27,7 @@ class HealthDashboardScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.appBackground,
       body: StreamBuilder<User?>(
         stream: FirebaseAuth.instance.authStateChanges(),
         builder: (context, snap) {
@@ -56,7 +58,7 @@ class HealthDashboardScreen extends StatelessWidget {
 class _FullPageLoader extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: context.appBackground,
         appBar: AppBar(
           backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
@@ -73,20 +75,20 @@ class _FullPageLoader extends StatelessWidget {
         ),
         body: SingleChildScrollView(
           physics: const ClampingScrollPhysics(),
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(R.p(context, 16)),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SkeletonBox(width: double.infinity, height: 140, radius: 20),
-              const SizedBox(height: 16),
-              const Row(children: [
-                Expanded(child: SkeletonBox(width: double.infinity, height: 90, radius: 16)),
-                SizedBox(width: 12),
-                Expanded(child: SkeletonBox(width: double.infinity, height: 90, radius: 16)),
+              SkeletonBox(width: double.infinity, height: R.h(context, 140), radius: R.r(context, 20)),
+              SizedBox(height: R.h(context, 16)),
+              Row(children: [
+                Expanded(child: SkeletonBox(width: double.infinity, height: R.h(context, 90), radius: R.r(context, 16))),
+                SizedBox(width: R.w(context, 12)),
+                Expanded(child: SkeletonBox(width: double.infinity, height: R.h(context, 90), radius: R.r(context, 16))),
               ]),
-              const SizedBox(height: 16),
-              const SkeletonBox(width: double.infinity, height: 200, radius: 20),
-              const SizedBox(height: 16),
+              SizedBox(height: R.h(context, 16)),
+              SkeletonBox(width: double.infinity, height: R.h(context, 200), radius: R.r(context, 20)),
+              SizedBox(height: R.h(context, 16)),
               ...List.generate(3, (_) => const _HealthItemSkeleton()),
             ],
           ),
@@ -99,7 +101,7 @@ class _FullPageLoader extends StatelessWidget {
 class _NotSignedIn extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: context.appBackground,
         appBar: AppBar(
           backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
@@ -116,31 +118,31 @@ class _NotSignedIn extends StatelessWidget {
         ),
         body: Center(
           child: Padding(
-            padding: const EdgeInsets.all(32),
+            padding: EdgeInsets.all(R.p(context, 32)),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Container(
-                  width: 72,
-                  height: 72,
+                  width: R.w(context, 72),
+                  height: R.w(context, 72),
                   decoration: const BoxDecoration(
                     gradient: AppColors.primaryGradient,
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.monitor_heart_rounded,
-                      color: Colors.white, size: 36),
+                  child: Icon(Icons.monitor_heart_rounded,
+                      color: Colors.white, size: R.w(context, 36)),
                 ),
-                const SizedBox(height: 20),
+                SizedBox(height: R.h(context, 20)),
                 Text('Sign in to view your Health Dashboard',
                     textAlign: TextAlign.center,
                     style:
-                        AppTextStyles.h3.copyWith(color: AppColors.textPrimary)),
-                const SizedBox(height: 8),
+                        AppTextStyles.h3.copyWith(color: context.appTextPrimary)),
+                SizedBox(height: R.h(context, 8)),
                 Text(
                   'Track vitals, appointments, prescriptions and more.',
                   textAlign: TextAlign.center,
                   style: AppTextStyles.bodyMedium
-                      .copyWith(color: AppColors.textSecondary),
+                      .copyWith(color: context.appTextSecondary),
                 ),
               ],
             ),
@@ -166,73 +168,87 @@ class _DashboardContent extends ConsumerWidget {
         (userDocAsync.value?['gender'] as String? ?? '').toLowerCase();
     final isMale = gender == 'male';
 
-    return CustomScrollView(
-      physics: const BouncingScrollPhysics(),
+    return RefreshIndicator(
+      color: AppColors.primary,
+      onRefresh: () => Future.wait([
+        waterNotifier.refresh(),
+        ref.refresh(userDocProvider(uid).future),
+      ]),
+      child: CustomScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
       slivers: [
         _appBar(context, userName),
         SliverPadding(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 40),
+          padding: EdgeInsets.fromLTRB(R.p(context, 16), R.p(context, 14),
+              R.p(context, 16), R.p(context, 40)),
           sliver: SliverList(
             delegate: SliverChildListDelegate([
-              // â”€â”€ Vitals â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+              // ── Health Score ───────────────────────────────────────────────
+              RepaintBoundary(
+                  child: _HealthScoreCard(waterState: waterState, uid: uid)),
+              SizedBox(height: R.h(context, 22)),
+
+              // ── Vitals ────────────────────────────────────────────────────
               _SecHead('Health Summary', Icons.monitor_heart_rounded,
                   AppColors.error,
-                  btn: _btn('Log Vitals',
+                  btn: _btn(context, 'Log Vitals',
                       () => _logVitalsSheet(context))),
-              const SizedBox(height: 10),
-              _VitalsSection(uid: uid),
-              const SizedBox(height: 22),
+              SizedBox(height: R.h(context, 10)),
+              RepaintBoundary(child: _VitalsSection(uid: uid)),
+              SizedBox(height: R.h(context, 22)),
 
               // â”€â”€ Water â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
               _SecHead('Water Intake', Icons.water_drop_rounded,
                   const Color(0xFF1565C0)),
-              const SizedBox(height: 10),
-              _WaterCard(state: waterState, notifier: waterNotifier),
-              const SizedBox(height: 22),
+              SizedBox(height: R.h(context, 10)),
+              RepaintBoundary(
+                  child: _WaterCard(state: waterState, notifier: waterNotifier)),
+              SizedBox(height: R.h(context, 22)),
 
               // â”€â”€ Appointments â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
               _SecHead('Upcoming Appointments',
                   Icons.calendar_today_rounded, AppColors.info,
-                  btn: _btn('View All',
+                  btn: _btn(context, 'View All',
                       () => context.push(AppRoutes.appointment))),
-              const SizedBox(height: 10),
-              _AppointmentsSection(uid: uid),
-              const SizedBox(height: 22),
+              SizedBox(height: R.h(context, 10)),
+              RepaintBoundary(child: _AppointmentsSection(uid: uid)),
+              SizedBox(height: R.h(context, 22)),
 
               // â”€â”€ Prescriptions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
               _SecHead('Active Prescriptions', Icons.medication_rounded,
                   const Color(0xFF2E7D32),
                   btn: _btn(
-                      'View All', () => context.push(AppRoutes.records))),
-              const SizedBox(height: 10),
-              _PrescriptionsSection(uid: uid),
-              const SizedBox(height: 22),
+                      context, 'View All', () => context.push(AppRoutes.records))),
+              SizedBox(height: R.h(context, 10)),
+              RepaintBoundary(child: _PrescriptionsSection(uid: uid)),
+              SizedBox(height: R.h(context, 22)),
 
               // â”€â”€ Health Records Quick Links â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
               _SecHead('Health Records', Icons.folder_open_rounded,
                   const Color(0xFF6A1B9A)),
-              const SizedBox(height: 10),
-              _QuickActions(uid: uid),
-              const SizedBox(height: 22),
+              SizedBox(height: R.h(context, 10)),
+              RepaintBoundary(child: _QuickActions(uid: uid)),
+              SizedBox(height: R.h(context, 22)),
 
               // â”€â”€ Women's Health â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
               if (!isMale) ...[
                 _SecHead("Women's Health", Icons.favorite_rounded,
                     AppColors.primary),
-                const SizedBox(height: 10),
-                _WomensHealth(),
-                const SizedBox(height: 22),
+                SizedBox(height: R.h(context, 10)),
+                const RepaintBoundary(child: _WomensHealth()),
+                SizedBox(height: R.h(context, 22)),
               ],
 
               // â”€â”€ BMI â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
               _SecHead('BMI Calculator', Icons.monitor_weight_rounded,
                   const Color(0xFF2E7D32)),
-              const SizedBox(height: 10),
-              _BMICard(uid: uid),
+              SizedBox(height: R.h(context, 10)),
+              RepaintBoundary(child: _BMICard(uid: uid)),
             ]),
           ),
         ),
       ],
+      ),
     );
   }
 
@@ -244,7 +260,7 @@ class _DashboardContent extends ConsumerWidget {
         name.isNotEmpty ? ', ${name.split(' ').first}' : '';
     return SliverAppBar(
       pinned: true,
-      expandedHeight: 150,
+      expandedHeight: R.h(context, 150),
       backgroundColor: AppColors.primary,
       foregroundColor: Colors.white,
       leading: IconButton(
@@ -257,47 +273,60 @@ class _DashboardContent extends ConsumerWidget {
           decoration:
               const BoxDecoration(gradient: AppColors.primaryGradient),
           child: SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 44, 20, 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(children: [
-                    Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha:0.2),
-                          shape: BoxShape.circle),
-                      child: const Icon(Icons.monitor_heart_rounded,
-                          color: Colors.white, size: 20),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return SingleChildScrollView(
+                  physics: const NeverScrollableScrollPhysics(),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                    child: Padding(
+                      padding: EdgeInsets.fromLTRB(R.p(context, 20),
+                          R.p(context, 44), R.p(context, 20), R.p(context, 12)),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Row(children: [
+                            Container(
+                              width: R.w(context, 36),
+                              height: R.w(context, 36),
+                              decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha:0.2),
+                                  shape: BoxShape.circle),
+                              child: Icon(Icons.monitor_heart_rounded,
+                                  color: Colors.white, size: R.w(context, 20)),
+                            ),
+                            SizedBox(width: R.w(context, 10)),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text('$greet$first',
+                                    style: TextStyle(
+                                        fontFamily: 'Poppins',
+                                        fontSize: R.sp(context, 12),
+                                        color: Colors.white70)),
+                                Text('Health Dashboard',
+                                    style: TextStyle(
+                                        fontFamily: 'Poppins',
+                                        fontSize: R.sp(context, 19),
+                                        fontWeight: FontWeight.w800,
+                                        color: Colors.white)),
+                              ],
+                            ),
+                          ]),
+                          SizedBox(height: R.h(context, 6)),
+                          Text(DateFormat('EEEE, d MMMM yyyy').format(DateTime.now()),
+                              style: TextStyle(
+                                  fontFamily: 'Poppins',
+                                  fontSize: R.sp(context, 11),
+                                  color: Colors.white54)),
+                        ],
+                      ),
                     ),
-                    const SizedBox(width: 10),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('$greet$first',
-                            style: const TextStyle(
-                                fontFamily: 'Poppins',
-                                fontSize: 12,
-                                color: Colors.white70)),
-                        const Text('Health Dashboard',
-                            style: TextStyle(
-                                fontFamily: 'Poppins',
-                                fontSize: 19,
-                                fontWeight: FontWeight.w800,
-                                color: Colors.white)),
-                      ],
-                    ),
-                  ]),
-                  const SizedBox(height: 6),
-                  Text(DateFormat('EEEE, d MMMM yyyy').format(DateTime.now()),
-                      style: const TextStyle(
-                          fontFamily: 'Poppins',
-                          fontSize: 11,
-                          color: Colors.white54)),
-                ],
-              ),
+                  ),
+                );
+              },
             ),
           ),
         ),
@@ -305,18 +334,19 @@ class _DashboardContent extends ConsumerWidget {
     );
   }
 
-  Widget _btn(String label, VoidCallback onTap) => TextButton(
+  Widget _btn(BuildContext context, String label, VoidCallback onTap) =>
+      TextButton(
         onPressed: onTap,
         style: TextButton.styleFrom(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          padding: EdgeInsets.symmetric(
+              horizontal: R.p(context, 8), vertical: R.p(context, 2)),
           minimumSize: Size.zero,
           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         ),
         child: Text(label,
-            style: const TextStyle(
+            style: TextStyle(
                 fontFamily: 'Poppins',
-                fontSize: 12,
+                fontSize: R.sp(context, 12),
                 fontWeight: FontWeight.w600,
                 color: AppColors.primary)),
       );
@@ -328,6 +358,256 @@ class _DashboardContent extends ConsumerWidget {
         backgroundColor: Colors.transparent,
         builder: (_) => _LogVitalsSheet(uid: uid),
       );
+}
+
+// ─── Health Score Card ─────────────────────────────────────────────────────────
+
+class _HealthScoreCard extends StatelessWidget {
+  final WaterTrackerState waterState;
+  final String uid;
+  const _HealthScoreCard({required this.waterState, required this.uid});
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('appointments')
+          .where('patientId', isEqualTo: uid)
+          .where('status', isEqualTo: 'booked')
+          .limit(1)
+          .snapshots(),
+      builder: (context, apptSnap) {
+        return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+          stream: FirebaseFirestore.instance
+              .collection('prescriptions')
+              .where('patientId', isEqualTo: uid)
+              .limit(1)
+              .snapshots(),
+          builder: (context, rxSnap) {
+            final waterGoalMet = waterState.goalReached;
+            final hasAppointment =
+                (apptSnap.data?.docs ?? []).isNotEmpty;
+            final hasPrescription =
+                (rxSnap.data?.docs ?? []).isNotEmpty;
+
+            final score = 70 +
+                (waterGoalMet ? 10 : 0) +
+                (hasAppointment ? 10 : 0) +
+                (hasPrescription ? 10 : 0);
+
+            final String scoreLabel = score >= 90
+                ? 'Excellent'
+                : score >= 80
+                    ? 'Good'
+                    : 'Fair';
+
+            return Container(
+              padding: EdgeInsets.all(R.p(context, 18)),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFFC2185B), Color(0xFF7B1FA2)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(R.r(context, 20)),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFC2185B).withValues(alpha: 0.25),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  // Score ring
+                  SizedBox(
+                    width: R.w(context, 88),
+                    height: R.w(context, 88),
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        SizedBox(
+                          width: R.w(context, 88),
+                          height: R.w(context, 88),
+                          child: CustomPaint(
+                            painter: _ScoreRingPainter(
+                              progress: score / 100.0,
+                              trackColor:
+                                  Colors.white.withValues(alpha: 0.2),
+                              fillColor: context.appSurface,
+                            ),
+                          ),
+                        ),
+                        Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              '$score',
+                              style: const TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: 26,
+                                fontWeight: FontWeight.w900,
+                                color: Colors.white,
+                                height: 1,
+                              ),
+                            ),
+                            const Text(
+                              '/100',
+                              style: TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: 10,
+                                color: Colors.white70,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  SizedBox(width: R.w(context, 18)),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(children: [
+                          Text(
+                            'Health Score',
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: R.sp(context, 16),
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                            ),
+                          ),
+                          SizedBox(width: R.w(context, 8)),
+                          Container(
+                            padding: EdgeInsets.symmetric(
+                                horizontal: R.p(context, 8), vertical: R.p(context, 2)),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(R.r(context, 10)),
+                            ),
+                            child: Text(
+                              scoreLabel,
+                              style: TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: R.sp(context, 10),
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ]),
+                        SizedBox(height: R.h(context, 10)),
+                        _ScoreFactor(
+                          label: 'Water Goal',
+                          met: waterGoalMet,
+                        ),
+                        SizedBox(height: R.h(context, 4)),
+                        _ScoreFactor(
+                          label: 'Appointment Booked',
+                          met: hasAppointment,
+                        ),
+                        SizedBox(height: R.h(context, 4)),
+                        _ScoreFactor(
+                          label: 'Active Prescription',
+                          met: hasPrescription,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class _ScoreFactor extends StatelessWidget {
+  final String label;
+  final bool met;
+  const _ScoreFactor({required this.label, required this.met});
+
+  @override
+  Widget build(BuildContext context) => Row(
+        children: [
+          Icon(
+            met ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+            size: R.w(context, 14),
+            color: met ? Colors.white : Colors.white38,
+          ),
+          SizedBox(width: R.w(context, 6)),
+          Text(
+            label,
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontSize: R.sp(context, 11),
+              color: met ? Colors.white : Colors.white54,
+              fontWeight: met ? FontWeight.w600 : FontWeight.w400,
+            ),
+          ),
+          if (met) ...[
+            const Spacer(),
+            Text(
+              '+10',
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: R.sp(context, 10),
+                fontWeight: FontWeight.w700,
+                color: Colors.white70,
+              ),
+            ),
+          ],
+        ],
+      );
+}
+
+class _ScoreRingPainter extends CustomPainter {
+  final double progress;
+  final Color trackColor;
+  final Color fillColor;
+  const _ScoreRingPainter({
+    required this.progress,
+    required this.trackColor,
+    required this.fillColor,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cx = size.width / 2;
+    final cy = size.height / 2;
+    final radius = (size.width / 2) - 6;
+    const strokeWidth = 7.0;
+    final rect =
+        Rect.fromCircle(center: Offset(cx, cy), radius: radius);
+
+    // Track
+    final trackPaint = Paint()
+      ..color = trackColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
+    canvas.drawArc(rect, -math.pi / 2, 2 * math.pi, false, trackPaint);
+
+    // Fill
+    final fillPaint = Paint()
+      ..color = fillColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
+    canvas.drawArc(
+        rect, -math.pi / 2, 2 * math.pi * progress, false, fillPaint);
+  }
+
+  @override
+  bool shouldRepaint(_ScoreRingPainter old) =>
+      old.progress != progress ||
+      old.trackColor != trackColor ||
+      old.fillColor != fillColor;
 }
 
 // â”€â”€â”€ Section header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -343,23 +623,23 @@ class _SecHead extends StatelessWidget {
   Widget build(BuildContext context) => Row(
         children: [
           Container(
-            width: 36,
-            height: 36,
+            width: R.w(context, 36),
+            height: R.w(context, 36),
             decoration: BoxDecoration(
               color: color.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(11),
+              borderRadius: BorderRadius.circular(R.r(context, 11)),
             ),
-            child: Icon(icon, size: 18, color: color),
+            child: Icon(icon, size: R.w(context, 18), color: color),
           ),
-          const SizedBox(width: 10),
+          SizedBox(width: R.w(context, 10)),
           Expanded(
             child: Text(
               title,
               style: TextStyle(
                 fontFamily: 'Poppins',
-                fontSize: 15,
+                fontSize: R.sp(context, 15),
                 fontWeight: FontWeight.w700,
-                color: AppColors.textPrimary,
+                color: context.appTextPrimary,
               ),
             ),
           ),
@@ -382,11 +662,11 @@ class _VitalsSection extends StatelessWidget {
           .doc(uid)
           .collection('vitals')
           .orderBy('recordedAt', descending: true)
-          .limit(1)
+          .limit(20)
           .snapshots(),
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
-          return _vitalsLoading();
+          return _vitalsLoading(context);
         }
         if (snap.hasError || snap.data == null) {
           return _InfoCard(
@@ -403,22 +683,33 @@ class _VitalsSection extends StatelessWidget {
             text: 'No vitals recorded yet. Tap "Log Vitals" to track BP, heart rate, blood sugar & more.',
           );
         }
-        return _VitalsGrid(data: docs.first.data());
+        return _VitalsGrid(data: _mergeLatestVitals(docs));
       },
     );
   }
 
-  Widget _vitalsLoading() => GridView.count(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        crossAxisCount: 2,
-        childAspectRatio: 1.45,
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
+  // Each "Log Vitals" entry may only fill in a subset of fields, so the
+  // single newest doc can be missing values that were recorded recently in
+  // an earlier entry. Merge the latest non-null value per field instead.
+  static Map<String, dynamic> _mergeLatestVitals(
+      List<QueryDocumentSnapshot<Map<String, dynamic>>> docs) {
+    final merged = <String, dynamic>{};
+    for (final doc in docs) {
+      for (final entry in doc.data().entries) {
+        if (entry.value != null && !merged.containsKey(entry.key)) {
+          merged[entry.key] = entry.value;
+        }
+      }
+    }
+    return merged;
+  }
+
+  Widget _vitalsLoading(BuildContext context) => _staticGrid(
+        aspectRatio: 1.45,
         children: List.generate(
           4,
-          (_) => const SkeletonBox(
-              width: double.infinity, height: double.infinity, radius: 16),
+          (_) => SkeletonBox(
+              width: double.infinity, height: double.infinity, radius: R.r(context, 16)),
         ),
       );
 }
@@ -440,13 +731,8 @@ class _VitalsGrid extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        GridView.count(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisCount: 2,
-          childAspectRatio: 1.45,
-          crossAxisSpacing: 10,
-          mainAxisSpacing: 10,
+        _staticGrid(
+          aspectRatio: 1.45,
           children: [
             _VCard('Heart Rate', hr != null ? '${hr.round()}' : '–',
                 'bpm', Icons.favorite_rounded, const Color(0xFFE53935),
@@ -470,29 +756,29 @@ class _VitalsGrid extends StatelessWidget {
           ],
         ),
         if (weight != null || ts != null) ...[
-          const SizedBox(height: 8),
+          SizedBox(height: R.h(context, 8)),
           Container(
             padding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                EdgeInsets.symmetric(horizontal: R.p(context, 12), vertical: R.p(context, 8)),
             decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppColors.divider)),
+                color: context.appSurface,
+                borderRadius: BorderRadius.circular(R.r(context, 10)),
+                border: Border.all(color: context.appBorder)),
             child: Row(
               children: [
                 if (weight != null) ...[
-                  const Icon(Icons.monitor_weight_rounded,
-                      color: Color(0xFF6A1B9A), size: 16),
-                  const SizedBox(width: 6),
+                  Icon(Icons.monitor_weight_rounded,
+                      color: const Color(0xFF6A1B9A), size: R.w(context, 16)),
+                  SizedBox(width: R.w(context, 6)),
                   Text('${weight.toStringAsFixed(1)} kg',
                       style: AppTextStyles.labelLarge
-                          .copyWith(color: AppColors.textPrimary)),
+                          .copyWith(color: context.appTextPrimary)),
                 ],
                 const Spacer(),
                 if (ts != null)
                   Text('Updated ${_ago(ts)}',
                       style: AppTextStyles.caption
-                          .copyWith(color: AppColors.textHint)),
+                          .copyWith(color: context.appTextHint)),
               ],
             ),
           ),
@@ -556,11 +842,11 @@ class _VCard extends StatelessWidget {
             : const Color(0xFF2E7D32);
 
     return Container(
-      padding: const EdgeInsets.all(13),
+      padding: EdgeInsets.all(R.p(context, 13)),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.divider),
+        color: context.appSurface,
+        borderRadius: BorderRadius.circular(R.r(context, 16)),
+        border: Border.all(color: context.appBorder),
         boxShadow: [
           BoxShadow(
               color: color.withValues(alpha:0.06),
@@ -572,37 +858,37 @@ class _VCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
-            Icon(icon, color: color, size: 17),
+            Icon(icon, color: color, size: R.w(context, 17)),
             const Spacer(),
             if (status != '–')
               Container(
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                    EdgeInsets.symmetric(horizontal: R.p(context, 5), vertical: R.p(context, 2)),
                 decoration: BoxDecoration(
                     color: sc.withValues(alpha:0.1),
-                    borderRadius: BorderRadius.circular(5)),
+                    borderRadius: BorderRadius.circular(R.r(context, 5))),
                 child: Text(status,
                     style: TextStyle(
                         fontFamily: 'Poppins',
-                        fontSize: 9,
+                        fontSize: R.sp(context, 9),
                         fontWeight: FontWeight.w600,
                         color: sc)),
               ),
           ]),
-          const SizedBox(height: 8),
+          SizedBox(height: R.h(context, 8)),
           Text(value,
               style: TextStyle(
                   fontFamily: 'Poppins',
-                  fontSize: value.length > 7 ? 16 : 22,
+                  fontSize: R.sp(context, value.length > 7 ? 16 : 22),
                   fontWeight: FontWeight.w800,
                   color: color)),
           Text(unit,
               style:
-                  AppTextStyles.caption.copyWith(color: AppColors.textHint)),
-          const SizedBox(height: 2),
+                  AppTextStyles.caption.copyWith(color: context.appTextHint)),
+          SizedBox(height: R.h(context, 2)),
           Text(label,
               style: AppTextStyles.bodySmall
-                  .copyWith(color: AppColors.textSecondary)),
+                  .copyWith(color: context.appTextSecondary)),
         ],
       ),
     );
@@ -621,11 +907,11 @@ class _WaterCard extends StatelessWidget {
   Widget build(BuildContext context) {
     const c = Color(0xFF1565C0);
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(R.p(context, 16)),
       decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.divider),
+          color: context.appSurface,
+          borderRadius: BorderRadius.circular(R.r(context, 16)),
+          border: Border.all(color: context.appBorder),
           boxShadow: [
             BoxShadow(
                 color: c.withValues(alpha:0.06),
@@ -636,33 +922,79 @@ class _WaterCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('${state.glassesLogged} / ${state.goalGlasses} glasses',
-                    style: const TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 17,
-                        fontWeight: FontWeight.w800,
-                        color: c)),
-                Text('${state.totalMl} ml of ${state.goalMl} ml',
-                    style: AppTextStyles.caption
-                        .copyWith(color: AppColors.textHint)),
-              ]),
-              const Spacer(),
-              if (state.goalReached)
+              // Circular progress ring
+              SizedBox(
+                width: R.w(context, 70),
+                height: R.w(context, 70),
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    SizedBox(
+                      width: R.w(context, 70),
+                      height: R.w(context, 70),
+                      child: CircularProgressIndicator(
+                        value: state.progress.clamp(0.0, 1.0),
+                        strokeWidth: 7,
+                        backgroundColor: c.withValues(alpha: 0.12),
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          state.goalReached ? const Color(0xFF2E7D32) : c,
+                        ),
+                        strokeCap: StrokeCap.round,
+                      ),
+                    ),
+                    Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          '${(state.progress.clamp(0.0, 1.0) * 100).round()}%',
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                            color: state.goalReached
+                                ? const Color(0xFF2E7D32)
+                                : c,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('${state.glassesLogged} / ${state.goalGlasses} glasses',
+                      style: const TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 17,
+                          fontWeight: FontWeight.w800,
+                          color: c)),
+                  Text('${state.totalMl} ml of ${state.goalMl} ml',
+                      style: AppTextStyles.caption
+                          .copyWith(color: context.appTextHint)),
+                  const SizedBox(height: 4),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: LinearProgressIndicator(
+                      value: state.progress.clamp(0.0, 1.0),
+                      minHeight: 5,
+                      backgroundColor: c.withValues(alpha: 0.1),
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        state.goalReached ? const Color(0xFF2E7D32) : c,
+                      ),
+                    ),
+                  ),
+                ]),
+              ),
+              if (state.goalReached) ...[
+                const SizedBox(width: 8),
                 _pill('Goal!', Icons.check_circle_rounded,
                     const Color(0xFF2E7D32)),
+              ],
             ],
-          ),
-          const SizedBox(height: 10),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: LinearProgressIndicator(
-              value: state.progress,
-              minHeight: 8,
-              backgroundColor: c.withValues(alpha:0.1),
-              valueColor: const AlwaysStoppedAnimation<Color>(c),
-            ),
           ),
           const SizedBox(height: 12),
           SingleChildScrollView(
@@ -689,7 +1021,9 @@ class _WaterCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          Row(children: [
+          Container(
+            color: const Color(0x33FF00FF),
+            child: Row(children: [
             Expanded(
               child: FilledButton.icon(
                 style: FilledButton.styleFrom(
@@ -705,7 +1039,7 @@ class _WaterCard extends StatelessWidget {
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                             content:
-                                Text('ðŸ’§ ${state.glassSizeMl} ml logged!'),
+                                Text('💧 ${state.glassSizeMl} ml logged!'),
                             backgroundColor: c,
                             behavior: SnackBarBehavior.floating,
                             shape: RoundedRectangleBorder(
@@ -741,6 +1075,7 @@ class _WaterCard extends StatelessWidget {
                       fontSize: 13)),
             ),
           ]),
+          ),
         ],
       ),
     );
@@ -853,9 +1188,9 @@ class _ApptTile extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
-          color: Colors.white,
+          color: context.appSurface,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.divider)),
+          border: Border.all(color: context.appBorder)),
       child: Row(children: [
         Container(
           width: 42,
@@ -871,13 +1206,13 @@ class _ApptTile extends StatelessWidget {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(doctor,
                 style: AppTextStyles.labelLarge
-                    .copyWith(color: AppColors.textPrimary),
+                    .copyWith(color: context.appTextPrimary),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis),
             if (speciality.isNotEmpty)
               Text(speciality,
                   style: AppTextStyles.bodySmall
-                      .copyWith(color: AppColors.textSecondary)),
+                      .copyWith(color: context.appTextSecondary)),
           ]),
         ),
         Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
@@ -887,7 +1222,7 @@ class _ApptTile extends StatelessWidget {
           if (time.isNotEmpty)
             Text(time,
                 style: AppTextStyles.caption
-                    .copyWith(color: AppColors.textHint)),
+                    .copyWith(color: context.appTextHint)),
         ]),
       ]),
     );
@@ -955,9 +1290,9 @@ class _RxTile extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
-          color: Colors.white,
+          color: context.appSurface,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.divider)),
+          border: Border.all(color: context.appBorder)),
       child: Row(children: [
         Container(
           width: 42,
@@ -974,7 +1309,7 @@ class _RxTile extends StatelessWidget {
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text('Dr. $doctor',
                 style: AppTextStyles.labelLarge
-                    .copyWith(color: AppColors.textPrimary),
+                    .copyWith(color: context.appTextPrimary),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis),
             Text(
@@ -982,13 +1317,13 @@ class _RxTile extends StatelessWidget {
                     ? '${meds.length} medicine${meds.length > 1 ? 's' : ''}'
                     : 'View details',
                 style: AppTextStyles.bodySmall
-                    .copyWith(color: AppColors.textSecondary)),
+                    .copyWith(color: context.appTextSecondary)),
           ]),
         ),
         if (dateStr.isNotEmpty)
           Text(dateStr,
               style:
-                  AppTextStyles.caption.copyWith(color: AppColors.textHint)),
+                  AppTextStyles.caption.copyWith(color: context.appTextHint)),
       ]),
     );
   }
@@ -1013,13 +1348,8 @@ class _QuickActions extends StatelessWidget {
           () => context.push(AppRoutes.prescriptionViewer)),
     ];
 
-    return GridView.count(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      crossAxisCount: 2,
-      childAspectRatio: 2.35,
-      crossAxisSpacing: 10,
-      mainAxisSpacing: 10,
+    return _staticGrid(
+      aspectRatio: 2.35,
       children: items.map((item) {
         final (label, icon, gradient, onTap) = item;
         return GestureDetector(
@@ -1054,6 +1384,8 @@ class _QuickActions extends StatelessWidget {
 // â”€â”€â”€ Women's health â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _WomensHealth extends StatelessWidget {
+  const _WomensHealth();
+
   @override
   Widget build(BuildContext context) => Column(children: [
         GestureDetector(
@@ -1079,10 +1411,10 @@ class _WomensHealth extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Center(
-                    child: Text('ðŸŒ¸', style: TextStyle(fontSize: 20))),
+                    child: Text('🌸', style: TextStyle(fontSize: 20))),
               ),
               const SizedBox(width: 13),
-              const Expanded(
+              Expanded(
                 child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -1091,12 +1423,12 @@ class _WomensHealth extends StatelessWidget {
                               fontFamily: 'Poppins',
                               fontWeight: FontWeight.w700,
                               fontSize: 14,
-                              color: AppColors.textPrimary)),
+                              color: context.appTextPrimary)),
                       Text('Track cycle, symptoms & mood',
                           style: TextStyle(
                               fontFamily: 'Poppins',
                               fontSize: 12,
-                              color: AppColors.textSecondary)),
+                              color: context.appTextSecondary)),
                     ]),
               ),
               const Icon(Icons.chevron_right_rounded,
@@ -1173,12 +1505,12 @@ class _BMICard extends StatelessWidget {
           .doc(uid)
           .collection('vitals')
           .orderBy('recordedAt', descending: true)
-          .limit(1)
+          .limit(20)
           .snapshots(),
       builder: (context, snap) {
         double? w, h;
         if (snap.hasData && (snap.data?.docs ?? []).isNotEmpty) {
-          final d = snap.data!.docs.first.data();
+          final d = _VitalsSection._mergeLatestVitals(snap.data!.docs);
           w = (d['weight'] as num?)?.toDouble();
           h = (d['height'] as num?)?.toDouble();
         }
@@ -1198,18 +1530,20 @@ class _BMICard extends StatelessWidget {
         return Container(
           padding: const EdgeInsets.all(15),
           decoration: BoxDecoration(
-              color: Colors.white,
+              color: context.appSurface,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.divider)),
+              border: Border.all(color: context.appBorder)),
           child: Column(children: [
-            const Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _BMICat('Under\nweight', '< 18.5', Color(0xFF1565C0)),
-                _BMICat('Normal',       '18.5–24.9', Color(0xFF2E7D32)),
-                _BMICat('Over\nweight', '25–29.9', Color(0xFFE65100)),
-                _BMICat('Obese',        '≥ 30', AppColors.error),
-              ],
+            const IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _BMICat('Under\nweight', '< 18.5', Color(0xFF1565C0)),
+                  _BMICat('Normal\n',      '18.5–24.9', Color(0xFF2E7D32)),
+                  _BMICat('Over\nweight', '25–29.9', Color(0xFFE65100)),
+                  _BMICat('Obese\n',       '≥ 30', AppColors.error),
+                ],
+              ),
             ),
             const SizedBox(height: 12),
             if (bmi != null)
@@ -1238,13 +1572,13 @@ class _BMICard extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(
                     horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
-                    color: AppColors.background,
+                    color: context.appBackground,
                     borderRadius: BorderRadius.circular(8)),
                 child: Text(
                     'Log your weight & height via "Log Vitals" to see your BMI here.',
                     textAlign: TextAlign.center,
                     style: AppTextStyles.bodySmall
-                        .copyWith(color: AppColors.textSecondary)),
+                        .copyWith(color: context.appTextSecondary)),
               ),
             const SizedBox(height: 12),
             SizedBox(
@@ -1284,8 +1618,8 @@ class _BMICard extends StatelessWidget {
               bottom: MediaQuery.of(ctx).viewInsets.bottom),
           child: Container(
             padding: const EdgeInsets.fromLTRB(20, 14, 20, 28),
-            decoration: const BoxDecoration(
-                color: Colors.white,
+            decoration: BoxDecoration(
+                color: context.appSurface,
                 borderRadius:
                     BorderRadius.vertical(top: Radius.circular(24))),
             child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -1293,7 +1627,7 @@ class _BMICard extends StatelessWidget {
                   width: 36,
                   height: 4,
                   decoration: BoxDecoration(
-                      color: AppColors.divider,
+                      color: context.appDivider,
                       borderRadius: BorderRadius.circular(2))),
               const SizedBox(height: 14),
               Text('BMI Calculator', style: AppTextStyles.h3),
@@ -1386,10 +1720,10 @@ class _BMICat extends StatelessWidget {
             Text(
               range,
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                 fontFamily: 'Poppins',
                 fontSize: 9,
-                color: AppColors.textHint,
+                color: context.appTextHint,
               ),
             ),
           ]),
@@ -1479,8 +1813,8 @@ class _LogVitalsSheetState extends State<_LogVitalsSheet> {
             EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
         child: Container(
           padding: const EdgeInsets.fromLTRB(20, 14, 20, 28),
-          decoration: const BoxDecoration(
-            color: Colors.white,
+          decoration: BoxDecoration(
+            color: context.appSurface,
             borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
           ),
           child: SingleChildScrollView(
@@ -1493,7 +1827,7 @@ class _LogVitalsSheetState extends State<_LogVitalsSheet> {
                         width: 36,
                         height: 4,
                         decoration: BoxDecoration(
-                            color: AppColors.divider,
+                            color: context.appDivider,
                             borderRadius: BorderRadius.circular(2))),
                   ),
                   const SizedBox(height: 14),
@@ -1501,7 +1835,7 @@ class _LogVitalsSheetState extends State<_LogVitalsSheet> {
                   const SizedBox(height: 4),
                   Text('Fill in any or all fields',
                       style: AppTextStyles.bodySmall
-                          .copyWith(color: AppColors.textSecondary)),
+                          .copyWith(color: context.appTextSecondary)),
                   const SizedBox(height: 16),
                   Row(children: [
                     Expanded(child: _VF(_hr, 'Heart Rate', '72', 'bpm')),
@@ -1581,19 +1915,19 @@ class _VF extends StatelessWidget {
           hintText: hint,
           suffixText: suffix,
           labelStyle: AppTextStyles.bodySmall
-              .copyWith(color: AppColors.textSecondary),
+              .copyWith(color: context.appTextSecondary),
           suffixStyle:
-              AppTextStyles.caption.copyWith(color: AppColors.textHint),
+              AppTextStyles.caption.copyWith(color: context.appTextHint),
           filled: true,
-          fillColor: AppColors.background,
+          fillColor: context.appBackground,
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: AppColors.border)),
+              borderSide: BorderSide(color: context.appBorder)),
           enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: AppColors.border)),
+              borderSide: BorderSide(color: context.appBorder)),
           focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
               borderSide:
@@ -1621,9 +1955,9 @@ class _InfoCard extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.all(15),
         decoration: BoxDecoration(
-            color: Colors.white,
+            color: context.appSurface,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppColors.divider)),
+            border: Border.all(color: context.appBorder)),
         child: Row(children: [
           Container(
             width: 38,
@@ -1636,7 +1970,7 @@ class _InfoCard extends StatelessWidget {
           Expanded(
             child: Text(text,
                 style: AppTextStyles.bodySmall
-                    .copyWith(color: AppColors.textSecondary)),
+                    .copyWith(color: context.appTextSecondary)),
           ),
           if (cta != null && onCta != null) ...[
             const SizedBox(width: 6),
@@ -1663,6 +1997,35 @@ class _InfoCard extends StatelessWidget {
 Widget _loadingCard(double height) =>
     SkeletonBox(width: double.infinity, height: height, radius: 14);
 
+// Fixed 2-column grid built from Row/Column instead of GridView.
+// GridView (even shrinkWrap + NeverScrollableScrollPhysics) still installs a
+// vertical drag recognizer that competes with the page's outer scrollable,
+// causing upward swipes to stall partway. A Column of Rows has no Scrollable
+// at all, so it can't fight the outer scroll gesture.
+Widget _staticGrid({
+  required List<Widget> children,
+  required double aspectRatio,
+  double spacing = 10,
+}) {
+  final rows = <Widget>[];
+  for (var i = 0; i < children.length; i += 2) {
+    final second = i + 1 < children.length ? children[i + 1] : null;
+    rows.add(Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(child: AspectRatio(aspectRatio: aspectRatio, child: children[i])),
+        SizedBox(width: spacing),
+        Expanded(
+            child: second != null
+                ? AspectRatio(aspectRatio: aspectRatio, child: second)
+                : const SizedBox()),
+      ],
+    ));
+    if (i + 2 < children.length) rows.add(SizedBox(height: spacing));
+  }
+  return Column(children: rows);
+}
+
 class _HealthItemSkeleton extends StatelessWidget {
   const _HealthItemSkeleton();
   @override
@@ -1671,7 +2034,7 @@ class _HealthItemSkeleton extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.appSurface,
         borderRadius: BorderRadius.circular(14),
         boxShadow: const [BoxShadow(color: Color(0x08000000), blurRadius: 6)],
       ),

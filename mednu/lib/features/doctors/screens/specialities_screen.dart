@@ -3,9 +3,17 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
+import '../../../core/utils/r.dart';
 
-class SpecialitiesScreen extends StatelessWidget {
+class SpecialitiesScreen extends StatefulWidget {
   const SpecialitiesScreen({super.key});
+
+  @override
+  State<SpecialitiesScreen> createState() => _SpecialitiesScreenState();
+}
+
+class _SpecialitiesScreenState extends State<SpecialitiesScreen> {
+  String _search = '';
 
   static const List<_SpecialtyData> _items = [
     _SpecialtyData('General Physician', 'General',
@@ -50,13 +58,19 @@ class SpecialitiesScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final filtered = _search.isEmpty
+        ? _items
+        : _items
+            .where((s) => s.label.toLowerCase().contains(_search.toLowerCase()))
+            .toList();
+
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.appBackground,
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
             pinned: true,
-            expandedHeight: 130,
+            expandedHeight: R.h(context, 130),
             leading: IconButton(
               icon: const Icon(Icons.arrow_back_ios_new_rounded,
                   color: Colors.white),
@@ -67,20 +81,67 @@ class SpecialitiesScreen extends StatelessWidget {
                 decoration: const BoxDecoration(
                     gradient: AppColors.primaryGradient),
                 child: SafeArea(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 44, 20, 12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        Text('Specialities',
-                            style: AppTextStyles.onPrimaryH2),
-                        const SizedBox(height: 4),
-                        Text('Browse doctors by medical specialty',
-                            style: AppTextStyles.onPrimaryBody),
-                      ],
-                    ),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      return SingleChildScrollView(
+                        physics: const ClampingScrollPhysics(),
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                              minHeight: constraints.maxHeight),
+                          child: Padding(
+                            padding: EdgeInsets.fromLTRB(R.p(context, 20),
+                                R.p(context, 44), R.p(context, 20),
+                                R.p(context, 12)),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text('Specialities',
+                                    style: AppTextStyles.onPrimaryH2),
+                                SizedBox(height: R.h(context, 4)),
+                                Text('Browse doctors by medical specialty',
+                                    style: AppTextStyles.onPrimaryBody),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
                   ),
+                ),
+              ),
+            ),
+          ),
+
+          // ── Search bar ────────────────────────────────────────
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(R.p(context, 16), R.p(context, 14),
+                  R.p(context, 16), 0),
+              child: TextField(
+                onChanged: (v) => setState(() => _search = v),
+                decoration: InputDecoration(
+                  hintText: 'Search specialities…',
+                  hintStyle: TextStyle(
+                      fontFamily: 'Poppins', fontSize: 13,
+                      color: context.appTextHint),
+                  prefixIcon: Icon(Icons.search_rounded,
+                      color: context.appTextHint, size: 20),
+                  suffixIcon: _search.isNotEmpty
+                      ? IconButton(
+                          icon: Icon(Icons.close_rounded,
+                              color: context.appTextHint, size: 18),
+                          onPressed: () => setState(() => _search = ''),
+                        )
+                      : null,
+                  filled: true,
+                  fillColor: context.appSurface,
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(R.r(context, 14)),
+                      borderSide: BorderSide.none),
+                  contentPadding:
+                      EdgeInsets.symmetric(vertical: R.p(context, 13)),
                 ),
               ),
             ),
@@ -88,39 +149,61 @@ class SpecialitiesScreen extends StatelessWidget {
 
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              padding: EdgeInsets.fromLTRB(R.p(context, 16), R.p(context, 12),
+                  R.p(context, 16), R.p(context, 8)),
               child: Row(children: [
-                const Icon(Icons.grid_view_rounded,
-                    size: 16, color: AppColors.textSecondary),
-                const SizedBox(width: 6),
-                Text('${_items.length} Specialities Available',
-                    style: AppTextStyles.bodySmall
-                        .copyWith(color: AppColors.textSecondary)),
+                Icon(Icons.grid_view_rounded,
+                    size: R.w(context, 16), color: context.appTextSecondary),
+                SizedBox(width: R.w(context, 6)),
+                Text(
+                  _search.isEmpty
+                      ? '${_items.length} Specialities Available'
+                      : '${filtered.length} result${filtered.length == 1 ? '' : 's'} for "$_search"',
+                  style: AppTextStyles.bodySmall
+                      .copyWith(color: context.appTextSecondary),
+                ),
               ]),
             ),
           ),
 
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-            sliver: SliverGrid(
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                childAspectRatio: 0.82,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-              ),
-              delegate: SliverChildBuilderDelegate(
-                (_, i) => _SpecialtyCard(item: _items[i]),
-                childCount: _items.length,
-              ),
-            ),
-          ),
+          filtered.isEmpty
+              ? SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(vertical: R.p(context, 48)),
+                    child: Column(
+                      children: [
+                        Icon(Icons.search_off_rounded,
+                            size: R.w(context, 48), color: context.appTextHint),
+                        SizedBox(height: R.h(context, 12)),
+                        Text('No speciality found for "$_search"',
+                            style: AppTextStyles.bodyMedium
+                                .copyWith(color: context.appTextSecondary)),
+                      ],
+                    ),
+                  ),
+                )
+              : SliverPadding(
+                  padding: EdgeInsets.fromLTRB(R.p(context, 16), 0,
+                      R.p(context, 16), R.p(context, 24)),
+                  sliver: SliverGrid(
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 3,
+                      childAspectRatio: 0.82,
+                      crossAxisSpacing: R.p(context, 12),
+                      mainAxisSpacing: R.p(context, 12),
+                    ),
+                    delegate: SliverChildBuilderDelegate(
+                      (_, i) => _SpecialtyCard(item: filtered[i]),
+                      childCount: filtered.length,
+                    ),
+                  ),
+                ),
 
           SliverToBoxAdapter(
             child: _PopularNowSection(),
           ),
 
-          const SliverToBoxAdapter(child: SizedBox(height: 24)),
+          SliverToBoxAdapter(child: SizedBox(height: R.h(context, 24))),
         ],
       ),
     );
@@ -138,9 +221,9 @@ class _SpecialtyCard extends StatelessWidget {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: AppColors.divider),
+          color: context.appSurface,
+          borderRadius: BorderRadius.circular(R.r(context, 18)),
+          border: Border.all(color: context.appBorder),
           boxShadow: [
             BoxShadow(
               color: item.color.withValues(alpha:0.06),
@@ -153,32 +236,32 @@ class _SpecialtyCard extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              width: 52,
-              height: 52,
+              width: R.w(context, 52),
+              height: R.h(context, 52),
               decoration: BoxDecoration(
                 color: item.bgColor,
                 shape: BoxShape.circle,
               ),
-              child: Icon(item.icon, color: item.color, size: 26),
+              child: Icon(item.icon, color: item.color, size: R.w(context, 26)),
             ),
-            const SizedBox(height: 10),
+            SizedBox(height: R.h(context, 10)),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 6),
+              padding: EdgeInsets.symmetric(horizontal: R.p(context, 6)),
               child: Text(
                 item.label,
                 textAlign: TextAlign.center,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
+                style: TextStyle(
                   fontFamily: 'Poppins',
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
+                  color: context.appTextPrimary,
                   height: 1.3,
                 ),
               ),
             ),
-            const SizedBox(height: 6),
+            SizedBox(height: R.h(context, 6)),
             _DoctorCountBadge(specialty: item.firestoreKey),
           ],
         ),
@@ -201,13 +284,14 @@ class _DoctorCountBadge extends StatelessWidget {
       builder: (_, snap) {
         final count = snap.data?.docs.length ?? 0;
         if (count == 0 && snap.connectionState == ConnectionState.waiting) {
-          return const SizedBox(height: 14);
+          return SizedBox(height: R.h(context, 14));
         }
         return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          padding: EdgeInsets.symmetric(
+              horizontal: R.p(context, 8), vertical: R.p(context, 2)),
           decoration: BoxDecoration(
             color: AppColors.primary.withValues(alpha:0.08),
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(R.r(context, 8)),
           ),
           child: Text(
             count == 0 ? 'No doctors' : '$count doctor${count == 1 ? '' : 's'}',
@@ -241,7 +325,8 @@ class _PopularNowSection extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+              padding: EdgeInsets.fromLTRB(R.p(context, 16), R.p(context, 8),
+                  R.p(context, 16), R.p(context, 12)),
               child: Row(
                 children: [
                   Text('Available Now', style: AppTextStyles.h4),
@@ -259,10 +344,10 @@ class _PopularNowSection extends StatelessWidget {
               ),
             ),
             SizedBox(
-              height: 112,
+              height: R.h(context, 112),
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+                padding: EdgeInsets.symmetric(horizontal: R.p(context, 16)),
                 itemCount: docs.length,
                 itemBuilder: (_, i) {
                   final d = docs[i].data() as Map<String, dynamic>;
@@ -273,13 +358,13 @@ class _PopularNowSection extends StatelessWidget {
                   return GestureDetector(
                     onTap: () => context.push('/doctors/$id'),
                     child: Container(
-                      width: 84,
-                      margin: const EdgeInsets.only(right: 12),
-                      padding: const EdgeInsets.all(8),
+                      width: R.w(context, 84),
+                      margin: EdgeInsets.only(right: R.p(context, 12)),
+                      padding: EdgeInsets.all(R.p(context, 8)),
                       decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: AppColors.divider),
+                        color: context.appSurface,
+                        borderRadius: BorderRadius.circular(R.r(context, 14)),
+                        border: Border.all(color: context.appBorder),
                       ),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -287,8 +372,8 @@ class _PopularNowSection extends StatelessWidget {
                           Stack(
                             children: [
                               Container(
-                                width: 46,
-                                height: 46,
+                                width: R.w(context, 46),
+                                height: R.h(context, 46),
                                 decoration: BoxDecoration(
                                   color: AppColors.primary.withValues(alpha:0.1),
                                   shape: BoxShape.circle,
@@ -311,8 +396,8 @@ class _PopularNowSection extends StatelessWidget {
                                 bottom: 1,
                                 right: 1,
                                 child: Container(
-                                  width: 11,
-                                  height: 11,
+                                  width: R.w(context, 11),
+                                  height: R.h(context, 11),
                                   decoration: BoxDecoration(
                                     color: AppColors.accent,
                                     shape: BoxShape.circle,
@@ -323,17 +408,17 @@ class _PopularNowSection extends StatelessWidget {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 6),
+                          SizedBox(height: R.h(context, 6)),
                           Text(
                             name.split(' ').take(2).join(' '),
                             textAlign: TextAlign.center,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontFamily: 'Poppins',
                               fontSize: 10,
                               fontWeight: FontWeight.w600,
-                              color: AppColors.textPrimary,
+                              color: context.appTextPrimary,
                             ),
                           ),
                           Text(
@@ -341,10 +426,10 @@ class _PopularNowSection extends StatelessWidget {
                             textAlign: TextAlign.center,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontFamily: 'Poppins',
                               fontSize: 9,
-                              color: AppColors.textHint,
+                              color: context.appTextHint,
                             ),
                           ),
                         ],
@@ -354,7 +439,7 @@ class _PopularNowSection extends StatelessWidget {
                 },
               ),
             ),
-            const SizedBox(height: 8),
+            SizedBox(height: R.h(context, 8)),
           ],
         );
       },

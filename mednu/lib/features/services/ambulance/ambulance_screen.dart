@@ -5,8 +5,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/constants/app_spacing.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/services/booking_service.dart';
+import '../../../core/utils/r.dart';
 import '../../home/providers/location_provider.dart';
 import '../../location/providers/saved_addresses_provider.dart';
 import '../../location/models/saved_address.dart';
@@ -263,41 +265,54 @@ class _AmbulanceScreenState extends ConsumerState<AmbulanceScreen> {
     final typeData = _types.firstWhere((t) => t.name == _selectedType,
         orElse: () => _types.first);
 
-    setState(() => _busy = true);
-    try {
-      await BookingService.createRequest(
-        type: 'ambulance',
-        serviceName: '${typeData.name} Ambulance',
-        patientName: _patientName.isNotEmpty ? _patientName : 'Emergency',
-        patientPhone: _patientPhone,
-        address: _location!.formatted,
-        preferredDate: 'Immediate',
-        preferredTime: 'Now',
-        notes: _notesCtrl.text.trim(),
-        serviceDetails: {
-          'ambulanceType': typeData.name,
-          'price': typeData.priceNum,
-          'locationData': _location!.toBookingMap(),
+    // Show 3-step confirmation sheet
+    _showBookingProgressSheet(typeData);
+  }
+
+  void _showBookingProgressSheet(_AmbulanceType typeData) {
+    showModalBottomSheet(
+      context: context,
+      isDismissible: false,
+      enableDrag: false,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _BookingProgressSheet(
+        typeData: typeData,
+        location: _location!,
+        onComplete: () async {
+          Navigator.pop(context);
+          setState(() => _busy = true);
+          try {
+            await BookingService.createRequest(
+              type: 'ambulance',
+              serviceName: '${typeData.name} Ambulance',
+              patientName: _patientName.isNotEmpty ? _patientName : 'Emergency',
+              patientPhone: _patientPhone,
+              address: _location!.formatted,
+              preferredDate: 'Immediate',
+              preferredTime: 'Now',
+              notes: _notesCtrl.text.trim(),
+              serviceDetails: {
+                'ambulanceType': typeData.name,
+                'price': typeData.priceNum,
+                'locationData': _location!.toBookingMap(),
+              },
+            );
+            if (mounted) setState(() { _busy = false; _done = true; });
+          } catch (_) {
+            if (mounted) {
+              setState(() => _busy = false);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Booking failed. Please try again.',
+                      style: TextStyle(fontFamily: 'Poppins')),
+                  backgroundColor: _kRed,
+                ),
+              );
+            }
+          }
         },
-      );
-      if (mounted) setState(() {
-        _busy = false;
-        _done = true;
-      });
-    } catch (_) {
-      if (mounted) {
-        setState(() => _busy = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Booking failed. Please try again.',
-              style: TextStyle(fontFamily: 'Poppins'),
-            ),
-            backgroundColor: _kRed,
-          ),
-        );
-      }
-    }
+      ),
+    );
   }
 
   // ── Build ─────────────────────────────────────────────────
@@ -322,22 +337,25 @@ class _AmbulanceScreenState extends ConsumerState<AmbulanceScreen> {
     if (_done) return _buildSuccess();
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.appBackground,
       body: CustomScrollView(
         slivers: [
           _buildAppBar(),
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+              padding: EdgeInsets.fromLTRB(R.p(context, 20), R.p(context, 20), R.p(context, 20), 0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Live count row
+                  _buildLiveCountBadge(),
+                  SizedBox(height: AppSpacing.sectionGap(context)),
                   _buildLocationSection(),
-                  const SizedBox(height: 24),
+                  SizedBox(height: R.h(context, 24)),
                   _buildTypesSection(),
-                  const SizedBox(height: 24),
+                  SizedBox(height: R.h(context, 24)),
                   _buildNotesSection(),
-                  const SizedBox(height: 110),
+                  SizedBox(height: R.h(context, 110)),
                 ],
               ),
             ),
@@ -348,11 +366,64 @@ class _AmbulanceScreenState extends ConsumerState<AmbulanceScreen> {
     );
   }
 
+  // ── Live ambulance count ─────────────────────────────────
+
+  Widget _buildLiveCountBadge() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('ambulances')
+          .where('isAvailable', isEqualTo: true)
+          .snapshots(),
+      builder: (context, snap) {
+        final count = snap.data?.docs.length ?? 0;
+        final isReady = snap.hasData;
+        return Container(
+          padding: EdgeInsets.symmetric(horizontal: R.p(context, 14), vertical: R.p(context, 10)),
+          decoration: BoxDecoration(
+            color: isReady && count > 0
+                ? _kGreen.withValues(alpha: 0.08)
+                : Colors.grey.withValues(alpha: 0.07),
+            borderRadius: BorderRadius.circular(R.r(context, 12)),
+            border: Border.all(
+              color: isReady && count > 0
+                  ? _kGreen.withValues(alpha: 0.25)
+                  : Colors.grey.withValues(alpha: 0.2),
+            ),
+          ),
+          child: Row(children: [
+            Container(
+              width: 8, height: 8,
+              decoration: BoxDecoration(
+                color: isReady && count > 0 ? _kGreen : Colors.grey,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 8),
+            isReady
+                ? Text(
+                    '$count ambulance${count == 1 ? '' : 's'} available',
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: count > 0 ? _kGreen : Colors.grey.shade600,
+                    ),
+                  )
+                : const SizedBox(
+                    width: 14, height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 1.5, color: _kGreen),
+                  ),
+          ]),
+        );
+      },
+    );
+  }
+
   // ── App bar ──────────────────────────────────────────────
 
   Widget _buildAppBar() => SliverAppBar(
         pinned: true,
-        expandedHeight: 160,
+        expandedHeight: AppSpacing.headerHeight(context),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded,
               color: Colors.white),
@@ -368,20 +439,32 @@ class _AmbulanceScreenState extends ConsumerState<AmbulanceScreen> {
               ),
             ),
             child: SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 50, 20, 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Icon(Icons.local_shipping_rounded,
-                        color: Colors.white, size: 36),
-                    const SizedBox(height: 8),
-                    Text('Ambulance Service',
-                        style: AppTextStyles.onPrimaryH2),
-                    Text('Available 24/7 • GPS Precision Dispatch',
-                        style: AppTextStyles.onPrimaryBody),
-                  ],
-                ),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  return SingleChildScrollView(
+                    physics: const ClampingScrollPhysics(),
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                      child: Padding(
+                        padding: AppSpacing.headerPadding(context),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.local_shipping_rounded,
+                                color: Colors.white, size: AppSpacing.headerIconSize(context)),
+                            SizedBox(height: AppSpacing.headerIconGap(context)),
+                            Text('Ambulance Service',
+                                style: AppTextStyles.onPrimaryH2),
+                            Text('Available 24/7 • GPS Precision Dispatch',
+                                style: AppTextStyles.onPrimaryBody),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
           ),
@@ -413,12 +496,12 @@ class _AmbulanceScreenState extends ConsumerState<AmbulanceScreen> {
           onTap: _locationLoading ? null : _showLocationPicker,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
-            padding: const EdgeInsets.all(16),
+            padding: EdgeInsets.all(R.p(context, 16)),
             decoration: BoxDecoration(
               color: _hasValidLocation
                   ? const Color(0xFFFFF5F5)
-                  : Colors.white,
-              borderRadius: BorderRadius.circular(16),
+                  : context.appSurface,
+              borderRadius: BorderRadius.circular(R.r(context, 16)),
               border: Border.all(
                 color: _hasValidLocation
                     ? _kRed.withValues(alpha:0.35)
@@ -459,7 +542,7 @@ class _AmbulanceScreenState extends ConsumerState<AmbulanceScreen> {
                     'GPS: ${_location!.lat.toStringAsFixed(5)}, '
                     '${_location!.lng.toStringAsFixed(5)}',
                     style: AppTextStyles.caption
-                        .copyWith(color: AppColors.textHint),
+                        .copyWith(color: context.appTextHint),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
@@ -469,7 +552,7 @@ class _AmbulanceScreenState extends ConsumerState<AmbulanceScreen> {
                   return age.isNotEmpty
                       ? Text(age,
                           style: AppTextStyles.caption
-                              .copyWith(color: AppColors.textHint))
+                              .copyWith(color: ctx.appTextHint))
                       : const SizedBox.shrink();
                 }),
                 const SizedBox(width: 4),
@@ -503,7 +586,7 @@ class _AmbulanceScreenState extends ConsumerState<AmbulanceScreen> {
                       AppTextStyles.labelLarge.copyWith(color: _kRed)),
               Text('High-accuracy GPS enabled',
                   style: AppTextStyles.caption
-                      .copyWith(color: AppColors.textHint)),
+                      .copyWith(color: context.appTextHint)),
             ],
           ),
         ],
@@ -585,7 +668,7 @@ class _AmbulanceScreenState extends ConsumerState<AmbulanceScreen> {
                     Text(
                       'Tap to detect GPS or pick on map',
                       style: AppTextStyles.caption
-                          .copyWith(color: AppColors.textHint),
+                          .copyWith(color: context.appTextHint),
                     ),
                   ],
                 ),
@@ -695,22 +778,22 @@ class _AmbulanceScreenState extends ConsumerState<AmbulanceScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('Select Ambulance Type', style: AppTextStyles.h4),
-          const SizedBox(height: 12),
+          SizedBox(height: R.h(context, 12)),
           ..._types.map((t) {
             final selected = _selectedType == t.name;
             return GestureDetector(
               onTap: () => setState(() => _selectedType = t.name),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
-                margin: const EdgeInsets.only(bottom: 10),
-                padding: const EdgeInsets.all(16),
+                margin: EdgeInsets.only(bottom: R.h(context, 10)),
+                padding: EdgeInsets.all(R.p(context, 16)),
                 decoration: BoxDecoration(
                   color: selected
                       ? const Color(0xFFFFF5F5)
-                      : Colors.white,
-                  borderRadius: BorderRadius.circular(16),
+                      : context.appSurface,
+                  borderRadius: BorderRadius.circular(R.r(context, 16)),
                   border: Border.all(
-                    color: selected ? _kRed : AppColors.border,
+                    color: selected ? _kRed : context.appBorder,
                     width: selected ? 2 : 1,
                   ),
                 ),
@@ -728,7 +811,7 @@ class _AmbulanceScreenState extends ConsumerState<AmbulanceScreen> {
                       child: Icon(t.icon,
                           color: selected
                               ? _kRed
-                              : AppColors.textHint,
+                              : context.appTextHint,
                           size: 24),
                     ),
                     const SizedBox(width: 14),
@@ -741,7 +824,7 @@ class _AmbulanceScreenState extends ConsumerState<AmbulanceScreen> {
                             style: AppTextStyles.labelLarge.copyWith(
                                 color: selected
                                     ? _kRed
-                                    : AppColors.textPrimary),
+                                    : context.appTextPrimary),
                           ),
                           const SizedBox(height: 2),
                           Text(t.description,
@@ -779,7 +862,7 @@ class _AmbulanceScreenState extends ConsumerState<AmbulanceScreen> {
                   fontSize: 12,
                   color: Colors.grey[400]),
               filled: true,
-              fillColor: Colors.white,
+              fillColor: context.appSurface,
               border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide(color: Colors.grey[200]!)),
@@ -804,7 +887,7 @@ class _AmbulanceScreenState extends ConsumerState<AmbulanceScreen> {
     return Container(
       padding: EdgeInsets.fromLTRB(20, 12, 20, bottom + 16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.appSurface,
         boxShadow: [
           BoxShadow(
               color: Colors.black.withValues(alpha:0.06),
@@ -909,48 +992,6 @@ class _AmbulanceScreenState extends ConsumerState<AmbulanceScreen> {
               ),
               const SizedBox(height: 20),
 
-              // ETA card
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: _kGreen.withValues(alpha:0.08),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                      color: _kGreen.withValues(alpha:0.2)),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.timer_rounded,
-                        color: _kGreen, size: 26),
-                    const SizedBox(width: 14),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
-                        Text(
-                          'Estimated Arrival',
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 12,
-                            color: _kGreen,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        Text(
-                          '8–12 minutes',
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 20,
-                            fontWeight: FontWeight.w800,
-                            color: _kGreen,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-
               // Booking detail card
               Container(
                 width: double.infinity,
@@ -1040,6 +1081,122 @@ class _AmbulanceScreenState extends ConsumerState<AmbulanceScreen> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Booking progress bottom sheet
+// ─────────────────────────────────────────────────────────────────────────────
+class _BookingProgressSheet extends StatefulWidget {
+  final _AmbulanceType typeData;
+  final PreciseAddress location;
+  final Future<void> Function() onComplete;
+
+  const _BookingProgressSheet({
+    required this.typeData,
+    required this.location,
+    required this.onComplete,
+  });
+
+  @override
+  State<_BookingProgressSheet> createState() => _BookingProgressSheetState();
+}
+
+class _BookingProgressSheetState extends State<_BookingProgressSheet> {
+  int _step = 0; // 0=confirm, 1=processing, 2=done
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.9),
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+      decoration: BoxDecoration(
+        color: context.appSurface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 36, height: 4,
+            decoration: BoxDecoration(
+              color: Colors.grey[300],
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 20),
+          if (_step == 0) ...[
+            const Icon(Icons.local_hospital_rounded, color: _kRed, size: 40),
+            const SizedBox(height: 12),
+            const Text(
+              'Confirm Ambulance Booking',
+              style: TextStyle(fontFamily: 'Poppins', fontSize: 17, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '${widget.typeData.name} Ambulance — ${widget.typeData.price}',
+              style: const TextStyle(fontFamily: 'Poppins', fontSize: 13, color: Colors.black54),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              widget.location.formatted,
+              style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: Colors.black45),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: const Text('Cancel', style: TextStyle(fontFamily: 'Poppins')),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      setState(() => _step = 1);
+                      await widget.onComplete();
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _kRed,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: const Text('Confirm', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
+                  ),
+                ),
+              ],
+            ),
+          ] else if (_step == 1) ...[
+            const SizedBox(height: 16),
+            const CircularProgressIndicator(color: _kRed),
+            const SizedBox(height: 16),
+            const Text(
+              'Dispatching ambulance...',
+              style: TextStyle(fontFamily: 'Poppins', fontSize: 15, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Please do not close this screen.',
+              style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: Colors.black45),
+            ),
+            const SizedBox(height: 24),
+          ],
+        ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Location picker bottom sheet
 // ─────────────────────────────────────────────────────────────────────────────
 class _LocationPickerSheet extends StatelessWidget {
@@ -1063,9 +1220,9 @@ class _LocationPickerSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       height: MediaQuery.of(context).size.height * 0.7,
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      decoration: BoxDecoration(
+        color: context.appSurface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: Column(
         children: [

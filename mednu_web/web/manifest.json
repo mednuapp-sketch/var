@@ -1,6 +1,6 @@
 {
-    "name": "MedNu — Your Healthcare Companion",
-    "short_name": "MedNu",
+    "name": "MedNU — Your Healthcare Companion",
+    "short_name": "MedNU",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#FFF5F9",

@@ -248,7 +248,7 @@ class _LiveChatScreenState extends State<LiveChatScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                'MedNu Support',
+                'MedNU Support',
                 style: TextStyle(
                     fontFamily: 'Poppins',
                     fontWeight: FontWeight.w700,

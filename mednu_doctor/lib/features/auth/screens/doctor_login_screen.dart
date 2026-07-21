@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import '../services/doctor_auth_service.dart';
 import '../../../core/constants/app_colors.dart';
@@ -127,8 +126,8 @@ class _DoctorLoginScreenState extends State<DoctorLoginScreen>
                                 ),
                                 child: ClipRRect(
                                   borderRadius: BorderRadius.circular(18),
-                                  child: SvgPicture.asset(
-                                    'assets/icons/mednu_logo.svg',
+                                  child: Image.asset(
+                                    'assets/icons/mednu_logo.png',
                                     fit: BoxFit.contain,
                                   ),
                                 ),
@@ -359,47 +358,19 @@ class _DoctorLoginScreenState extends State<DoctorLoginScreen>
       return;
     }
     setState(() => _isLoading = true);
-
-    await DoctorAuthService.sendOTP(
-      phone: '+91${_phoneController.text}',
-      onCodeSent: (verificationId) {
-        if (!mounted) return;
-        setState(() => _isLoading = false);
-        context.push(AppRoutes.otp, extra: {
-          'phone': '+91${_phoneController.text}',
-          'verificationId': verificationId,
-          'isLogin': true,
-        });
-      },
-      onError: (error) {
-        if (!mounted) return;
-        setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(error)));
-      },
-      onAutoVerified: (_) async {
-        // Firebase auto-verified the number (common on Android for previously
-        // used numbers). The user is already signed in — skip the OTP screen.
-        final uid = DoctorAuthService.currentUid;
-        if (uid == null || !mounted) return;
-        setState(() => _isLoading = false);
-        try {
-          final exists = await DoctorAuthService.profileExists(uid);
-          if (!exists) {
-            if (!mounted) return;
-            context.go(AppRoutes.register);
-            return;
-          }
-          final profile = await DoctorAuthService.getProfile(uid);
-          final status = profile?['status'] as String?;
-          if (!mounted) return;
-          context.go(status == 'active' ? AppRoutes.dashboard : AppRoutes.verificationPending);
-        } catch (_) {
-          if (!mounted) return;
-          context.go(AppRoutes.verificationPending);
-        }
-      },
-    );
+    final phone = '+91${_phoneController.text}';
+    try {
+      await DoctorAuthService.sendOTP(phone);
+      if (!mounted) return;
+      context.push(AppRoutes.otp, extra: {'phone': phone, 'isLogin': true});
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 }
 

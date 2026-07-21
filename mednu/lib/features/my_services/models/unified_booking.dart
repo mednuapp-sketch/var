@@ -101,6 +101,7 @@ class UnifiedBooking {
   static BookingStatus _parseStatus(String? s) {
     switch ((s ?? '').toLowerCase().replaceAll(' ', '_')) {
       case 'confirmed':
+      case 'accepted':
       case 'booked':              return BookingStatus.confirmed;
       case 'assigned':            return BookingStatus.assigned;
       case 'on_the_way':          return BookingStatus.onTheWay;
@@ -111,7 +112,8 @@ class UnifiedBooking {
       case 'delivered':           return BookingStatus.delivered;
       case 'completed':           return BookingStatus.completed;
       case 'cancelled':
-      case 'canceled':            return BookingStatus.cancelled;
+      case 'canceled':
+      case 'rejected':            return BookingStatus.cancelled;
       case 'rescheduled':         return BookingStatus.rescheduled;
       case 'requested':           return BookingStatus.requested;
       default:                    return BookingStatus.pending;
@@ -173,11 +175,14 @@ class UnifiedBooking {
 
   factory UnifiedBooking.fromServiceRequest(Map<String, dynamic> d, String id) {
     final type = d['type'] as String? ?? '';
+    final serviceDetails = d['serviceDetails'] as Map<String, dynamic>?;
+    final isEquipmentPurchase = type.toLowerCase() == 'equipment' && serviceDetails?['mode'] == 'buy';
+    final serviceType = isEquipmentPurchase ? 'Equipment Purchase' : _serviceTypeLabel(type);
     return UnifiedBooking(
       id: id,
       source: BookingSource.serviceRequest,
-      serviceType: _serviceTypeLabel(type),
-      serviceName: d['serviceName'] as String? ?? _serviceTypeLabel(type),
+      serviceType: serviceType,
+      serviceName: d['serviceName'] as String? ?? serviceType,
       providerName: d['assignedTo'] as String?,
       providerPhone: d['providerPhone'] as String?,
       date: d['preferredDate'] as String? ?? '',
@@ -229,7 +234,9 @@ class UnifiedBooking {
       case 'equipment_hiring':   return 'Equipment Rental';
       case 'medicine':
       case 'medicine_delivery':  return 'Pharmacy Delivery';
-      case 'lab_test':           return 'Lab Test';
+      case 'lab_test':
+      case 'lab_tests':
+      case 'lab':                return 'Lab Test';
       case 'home_sample':        return 'Home Sample Collection';
       case 'pregnancy':          return 'Pregnancy Checkup';
       default:

@@ -190,7 +190,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen>
     return FadeTransition(
       opacity: _fadeAnim,
       child: Scaffold(
-        backgroundColor: isDark ? AppColors.darkBase : AppColors.background,
+        backgroundColor: context.appBackground,
         appBar: _buildAppBar(isDark),
         body: _query.isEmpty
             ? _buildEmptyState(isDark)
@@ -207,8 +207,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen>
     return AppBar(
       elevation: 0,
       scrolledUnderElevation: 1,
-      backgroundColor:
-          isDark ? AppColors.darkSurface : AppColors.surface,
+      backgroundColor: context.appSurface,
       titleSpacing: 0,
       leading: IconButton(
         icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
@@ -219,7 +218,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen>
         autofocus: true,
         textInputAction: TextInputAction.search,
         style: AppTextStyles.bodyLarge.copyWith(
-          color: isDark ? Colors.white : AppColors.textPrimary,
+          color: context.appTextPrimary,
           fontWeight: FontWeight.w500,
         ),
         onChanged: _onChanged,
@@ -230,13 +229,13 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen>
           hintText: 'Doctors, reports, hospitals, labs...',
           border: InputBorder.none,
           hintStyle: AppTextStyles.bodyLarge.copyWith(
-            color: AppColors.textHint,
+            color: context.appTextHint,
             fontWeight: FontWeight.w400,
           ),
           suffixIcon: _query.isNotEmpty
               ? IconButton(
                   icon: const Icon(Icons.cancel_rounded, size: 18),
-                  color: AppColors.textHint,
+                  color: context.appTextHint,
                   onPressed: () {
                     _ctrl.clear();
                     _onChanged('');
@@ -331,13 +330,9 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen>
             isDark: isDark,
           ),
           const SizedBox(height: 12),
-          GridView.count(
+          _staticGridN(
             crossAxisCount: 3,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: 10,
-            crossAxisSpacing: 10,
-            childAspectRatio: 1.6,
+            aspectRatio: 1.6,
             children: _quickItems
                 .map((item) => _QuickAccessTile(
                       item: item,
@@ -487,7 +482,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen>
     ),
     SearchResult(
       id: '_b_medicines',
-      title: 'Medicines',
+      title: 'Pharmacy',
       subtitle: '',
       route: AppRoutes.medicine,
       icon: Icons.medication_rounded,
@@ -718,7 +713,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen>
           Text(
             'No results for "$_query"',
             style: AppTextStyles.h4.copyWith(
-              color: isDark ? Colors.white : AppColors.textPrimary,
+              color: context.appTextPrimary,
             ),
             textAlign: TextAlign.center,
           ),
@@ -726,14 +721,14 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen>
           Text(
             'Try a different spelling or browse\nour services below.',
             style: AppTextStyles.bodyMedium
-                .copyWith(color: AppColors.textSecondary),
+                .copyWith(color: context.appTextSecondary),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 32),
           Text(
             'POPULAR SEARCHES',
             style: AppTextStyles.labelSmall.copyWith(
-              color: AppColors.textHint,
+              color: context.appTextHint,
               letterSpacing: 1.2,
             ),
           ),
@@ -880,7 +875,7 @@ class _FilterRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       height: 44,
-      color: isDark ? AppColors.darkSurface : AppColors.surface,
+      color: context.appSurface,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -950,12 +945,10 @@ class _DoctorCard extends StatelessWidget {
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: isDark ? AppColors.darkCard : AppColors.surface,
+          color: context.appSurface,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: isDark
-                ? AppColors.darkBorder
-                : AppColors.border.withValues(alpha:0.5),
+            color: context.appBorder,
           ),
           boxShadow: isDark
               ? null
@@ -1001,7 +994,7 @@ class _DoctorCard extends StatelessWidget {
                         child: Text(
                           name,
                           style: AppTextStyles.labelLarge.copyWith(
-                            color: isDark ? Colors.white : AppColors.textPrimary,
+                            color: context.appTextPrimary,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -1015,7 +1008,7 @@ class _DoctorCard extends StatelessWidget {
                   Text(
                     qual.isNotEmpty ? '$spec · $qual' : spec,
                     style: AppTextStyles.bodySmall
-                        .copyWith(color: AppColors.textSecondary),
+                        .copyWith(color: context.appTextSecondary),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -1029,7 +1022,7 @@ class _DoctorCard extends StatelessWidget {
                         Text(
                           rating.toStringAsFixed(1),
                           style: AppTextStyles.labelSmall.copyWith(
-                            color: isDark ? Colors.white70 : AppColors.textPrimary,
+                            color: isDark ? Colors.white70 : context.appTextPrimary,
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -1038,7 +1031,7 @@ class _DoctorCard extends StatelessWidget {
                         Text(
                           '$exp yrs exp',
                           style: AppTextStyles.caption.copyWith(
-                            color: AppColors.textSecondary,
+                            color: context.appTextSecondary,
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -1058,7 +1051,7 @@ class _DoctorCard extends StatelessWidget {
             const SizedBox(width: 8),
             Icon(Icons.chevron_right_rounded,
                 size: 18,
-                color: isDark ? Colors.white30 : AppColors.textHint),
+                color: isDark ? Colors.white30 : context.appTextHint),
           ],
         ),
       ),
@@ -1125,7 +1118,7 @@ class _ResultTile extends StatelessWidget {
             child: Text(
               item.title,
               style: AppTextStyles.labelLarge.copyWith(
-                color: isDark ? Colors.white : AppColors.textPrimary,
+                color: context.appTextPrimary,
               ),
             ),
           ),
@@ -1155,12 +1148,12 @@ class _ResultTile extends StatelessWidget {
           ? Text(
               item.subtitle,
               style: AppTextStyles.bodySmall
-                  .copyWith(color: AppColors.textSecondary),
+                  .copyWith(color: context.appTextSecondary),
             )
           : null,
       trailing: Icon(Icons.chevron_right_rounded,
           size: 16,
-          color: isDark ? Colors.white24 : AppColors.textHint),
+          color: isDark ? Colors.white24 : context.appTextHint),
       onTap: onTap,
     );
   }
@@ -1203,14 +1196,14 @@ class _LabTestTile extends StatelessWidget {
                   Text(
                     item.title,
                     style: AppTextStyles.labelLarge.copyWith(
-                      color: isDark ? Colors.white : AppColors.textPrimary,
+                      color: context.appTextPrimary,
                     ),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     item.subtitle,
                     style: AppTextStyles.bodySmall
-                        .copyWith(color: AppColors.textSecondary),
+                        .copyWith(color: context.appTextSecondary),
                   ),
                 ],
               ),
@@ -1261,12 +1254,12 @@ class _EmptySectionHeader extends StatelessWidget {
       children: [
         Icon(icon,
             size: 15,
-            color: isDark ? Colors.white54 : AppColors.textSecondary),
+            color: isDark ? Colors.white54 : context.appTextSecondary),
         const SizedBox(width: 6),
         Text(
           label,
           style: AppTextStyles.labelMedium.copyWith(
-            color: isDark ? Colors.white70 : AppColors.textPrimary,
+            color: isDark ? Colors.white70 : context.appTextPrimary,
           ),
         ),
         const Spacer(),
@@ -1296,12 +1289,10 @@ class _HistoryChip extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
         decoration: BoxDecoration(
-          color: isDark ? AppColors.darkCard : AppColors.surface,
+          color: context.appSurface,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: isDark
-                ? AppColors.darkBorder
-                : AppColors.border.withValues(alpha:0.6),
+            color: context.appBorder,
           ),
         ),
         child: Row(
@@ -1309,12 +1300,12 @@ class _HistoryChip extends StatelessWidget {
           children: [
             Icon(Icons.history_rounded,
                 size: 13,
-                color: isDark ? Colors.white38 : AppColors.textHint),
+                color: isDark ? Colors.white38 : context.appTextHint),
             const SizedBox(width: 5),
             Text(
               label,
               style: AppTextStyles.bodySmall.copyWith(
-                color: isDark ? Colors.white70 : AppColors.textPrimary,
+                color: isDark ? Colors.white70 : context.appTextPrimary,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -1323,7 +1314,7 @@ class _HistoryChip extends StatelessWidget {
               onTap: onDelete,
               child: Icon(Icons.close_rounded,
                   size: 12,
-                  color: isDark ? Colors.white30 : AppColors.textHint),
+                  color: isDark ? Colors.white30 : context.appTextHint),
             ),
           ],
         ),
@@ -1379,12 +1370,10 @@ class _QuickAccessTile extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: isDark ? AppColors.darkCard : AppColors.surface,
+          color: context.appSurface,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: isDark
-                ? AppColors.darkBorder
-                : AppColors.border.withValues(alpha:0.5),
+            color: context.appBorder,
           ),
           boxShadow: isDark
               ? null
@@ -1412,7 +1401,7 @@ class _QuickAccessTile extends StatelessWidget {
               child: Text(
                 item.title,
                 style: AppTextStyles.labelSmall.copyWith(
-                  color: isDark ? Colors.white : AppColors.textPrimary,
+                  color: context.appTextPrimary,
                   letterSpacing: 0,
                   fontSize: 11.5,
                 ),
@@ -1442,12 +1431,10 @@ class _BrowseChip extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
         decoration: BoxDecoration(
-          color: isDark ? AppColors.darkCard : AppColors.surface,
+          color: context.appSurface,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: isDark
-                ? AppColors.darkBorder
-                : AppColors.border.withValues(alpha:0.5),
+            color: context.appBorder,
           ),
         ),
         child: Row(
@@ -1458,7 +1445,7 @@ class _BrowseChip extends StatelessWidget {
             Text(
               item.title,
               style: AppTextStyles.bodySmall.copyWith(
-                color: isDark ? Colors.white70 : AppColors.textPrimary,
+                color: isDark ? Colors.white70 : context.appTextPrimary,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -1521,7 +1508,7 @@ class _HospitalSearchTile extends StatelessWidget {
                   Text(
                     'Search hospitals for "$query"',
                     style: AppTextStyles.labelLarge.copyWith(
-                      color: isDark ? Colors.white : AppColors.textPrimary,
+                      color: context.appTextPrimary,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -1530,7 +1517,7 @@ class _HospitalSearchTile extends StatelessWidget {
                   Text(
                     'Find nearby hospitals matching your search',
                     style: AppTextStyles.bodySmall
-                        .copyWith(color: AppColors.textSecondary),
+                        .copyWith(color: context.appTextSecondary),
                   ),
                 ],
               ),
@@ -1566,4 +1553,30 @@ class _SearchResultSkeleton extends StatelessWidget {
       ),
     );
   }
+}
+
+// Static (non-scrolling) grid replacement for GridView.count — avoids nesting
+// a Scrollable inside an outer scroll view, which stalls swipe gestures.
+Widget _staticGridN({
+  required List<Widget> children,
+  required int crossAxisCount,
+  required double aspectRatio,
+  double spacing = 10,
+}) {
+  final rows = <Widget>[];
+  for (var i = 0; i < children.length; i += crossAxisCount) {
+    final rowChildren = <Widget>[];
+    for (var col = 0; col < crossAxisCount; col++) {
+      final idx = i + col;
+      if (col > 0) rowChildren.add(SizedBox(width: spacing));
+      rowChildren.add(Expanded(
+        child: idx < children.length
+            ? AspectRatio(aspectRatio: aspectRatio, child: children[idx])
+            : const SizedBox(),
+      ));
+    }
+    rows.add(Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: rowChildren));
+    if (i + crossAxisCount < children.length) rows.add(SizedBox(height: spacing));
+  }
+  return Column(children: rows);
 }

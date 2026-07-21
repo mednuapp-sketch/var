@@ -3,7 +3,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 class Msg91Service {
   static final _functions = FirebaseFunctions.instance;
 
-  /// Sends a 6-digit OTP to [phone] via MSG91.
+  /// Sends a 4-digit OTP to [phone] via MSG91.
   /// [phone] must be in E.164 format: +919876543210
   static Future<void> sendOtp(String phone) async {
     try {
@@ -15,6 +15,21 @@ class Msg91Service {
       }
     } on FirebaseFunctionsException catch (e) {
       throw Exception(e.message ?? 'Failed to send OTP. Please try again.');
+    }
+  }
+
+  /// Resends OTP using MSG91's retry endpoint — avoids "already sent" rejection
+  /// when the previous OTP is still active.
+  static Future<void> resendOtp(String phone) async {
+    try {
+      final result = await _functions
+          .httpsCallable('msg91ResendOtp')
+          .call({'phone': phone});
+      if (result.data['success'] != true) {
+        throw Exception('Failed to resend OTP. Please try again.');
+      }
+    } on FirebaseFunctionsException catch (e) {
+      throw Exception(e.message ?? 'Failed to resend OTP. Please try again.');
     }
   }
 

@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:math';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
@@ -38,6 +37,7 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
   final _feeCtrl        = TextEditingController();
   final _otherSpecCtrl  = TextEditingController();
   String _selectedSpec  = 'General';
+  String _professionalType = 'doctor'; // 'doctor' | 'therapist'
 
   // Names match patient app specialty filters exactly so search/filter works
   static const _specialties = [
@@ -64,6 +64,19 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
     'Rheumatology',
     'Other',
   ];
+
+  // Shown instead of _specialties when registering as a Therapist —
+  // names match the therapy types on the patient app's Counselling screen.
+  static const _therapistSpecialties = [
+    'Psychiatry',
+    'Psychology',
+    'Counselling',
+    'Pediatric Psychiatry',
+    'Other',
+  ];
+
+  List<String> get _activeSpecialties =>
+      _professionalType == 'therapist' ? _therapistSpecialties : _specialties;
 
   // ── Step 3: Documents ─────────────────────────────────────────────────────
   File? _mbbsDegreeFile;
@@ -251,6 +264,7 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
             ? _phoneCtrl.text.trim()
             : FirebaseAuth.instance.currentUser?.phoneNumber ?? '',
         email:              _emailCtrl.text.trim(),
+        type:               _professionalType,
         specialty:          _effectiveSpecialty,
         qualifications:     _qualCtrl.text.trim(),
         experience:         _expCtrl.text.trim(),
@@ -495,6 +509,36 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       _SectionHeader(icon: Icons.work_rounded, title: 'Professional Details', subtitle: 'Your medical qualifications'),
       const SizedBox(height: 20),
+      Text('I am registering as a *', style: AppTextStyles.labelLarge),
+      const SizedBox(height: 8),
+      Row(children: [
+        Expanded(
+          child: _TypeChoiceCard(
+            label: 'Doctor',
+            icon: Icons.local_hospital_rounded,
+            selected: _professionalType == 'doctor',
+            onTap: () => setState(() {
+              _professionalType = 'doctor';
+              _selectedSpec = _specialties.first;
+              _otherSpecCtrl.clear();
+            }),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _TypeChoiceCard(
+            label: 'Therapist',
+            icon: Icons.psychology_rounded,
+            selected: _professionalType == 'therapist',
+            onTap: () => setState(() {
+              _professionalType = 'therapist';
+              _selectedSpec = _therapistSpecialties.first;
+              _otherSpecCtrl.clear();
+            }),
+          ),
+        ),
+      ]),
+      const SizedBox(height: 20),
       Text('Specialization *', style: AppTextStyles.labelLarge),
       const SizedBox(height: 8),
       DropdownButtonFormField<String>(
@@ -508,7 +552,7 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
           contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
           prefixIcon: const Icon(Icons.local_hospital_rounded, color: AppColors.primary, size: 20),
         ),
-        items: _specialties.map((s) => DropdownMenuItem(
+        items: _activeSpecialties.map((s) => DropdownMenuItem(
           value: s,
           child: Text(s, style: AppTextStyles.bodyMedium.copyWith(
             fontWeight: s == 'Other' ? FontWeight.w600 : FontWeight.normal,
@@ -745,12 +789,12 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
           const SizedBox(height: 16),
           const _DeclText(
             'I, the undersigned, hereby declare that:\n\n'
-            '1. I wish to continue to work with MedNu as a registered medical professional on this platform.\n\n'
+            '1. I wish to continue to work with MedNU as a registered medical professional on this platform.\n\n'
             '2. All the information and documents submitted by me are true, correct, and authentic to the best of my knowledge.\n\n'
             '3. I hold a valid medical license and am authorized to practice medicine in India.\n\n'
-            '4. I will maintain professional standards and ethics while providing medical consultations through MedNu.\n\n'
+            '4. I will maintain professional standards and ethics while providing medical consultations through MedNU.\n\n'
             '5. I understand that providing false information may result in immediate termination of my account and may attract legal consequences.\n\n'
-            '6. I consent to MedNu verifying my credentials with the relevant medical authorities.',
+            '6. I consent to MedNU verifying my credentials with the relevant medical authorities.',
           ),
           const SizedBox(height: 16),
           GestureDetector(
@@ -772,7 +816,7 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
               ),
               const SizedBox(width: 10),
               const Expanded(child: Text(
-                'I confirm that I wish to work with MedNu as a medical professional and all the above statements are true.',
+                'I confirm that I wish to work with MedNU as a medical professional and all the above statements are true.',
                 style: TextStyle(fontFamily: 'Poppins', fontSize: 13, height: 1.5),
               )),
             ]),
@@ -811,15 +855,15 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
             ),
             child: const SingleChildScrollView(
               child: _DeclText(
-                'By registering on MedNu Doctor platform, you agree to:\n\n'
+                'By registering on MedNU Doctor platform, you agree to:\n\n'
                 '• Provide accurate and up-to-date medical consultations to patients.\n\n'
                 '• Maintain patient confidentiality and comply with applicable privacy laws.\n\n'
                 '• Not misuse the platform for non-medical solicitation or advertising.\n\n'
-                '• Allow MedNu to display your profile, ratings, and reviews to patients.\n\n'
+                '• Allow MedNU to display your profile, ratings, and reviews to patients.\n\n'
                 '• Respond to patient consultations in a timely and professional manner.\n\n'
                 '• Comply with the Indian Medical Council Act and all applicable medical regulations.\n\n'
-                '• Allow MedNu to collect a platform service fee per consultation as per the agreed rate.\n\n'
-                '• Accept that MedNu may suspend or terminate your account for violations of these terms.',
+                '• Allow MedNU to collect a platform service fee per consultation as per the agreed rate.\n\n'
+                '• Accept that MedNU may suspend or terminate your account for violations of these terms.',
               ),
             ),
           ),
@@ -843,7 +887,7 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
               ),
               const SizedBox(width: 10),
               const Expanded(child: Text(
-                'I have read and agree to the MedNu Terms & Conditions and Privacy Policy.',
+                'I have read and agree to the MedNU Terms & Conditions and Privacy Policy.',
                 style: TextStyle(fontFamily: 'Poppins', fontSize: 13, height: 1.5),
               )),
             ]),
@@ -874,6 +918,47 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
 }
 
 // ── Shared widgets ─────────────────────────────────────────────────────────────
+
+class _TypeChoiceCard extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+  const _TypeChoiceCard({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: onTap,
+    child: AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      decoration: BoxDecoration(
+        color: selected ? AppColors.primary.withOpacity(0.08) : Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: selected ? AppColors.primary : AppColors.border,
+          width: selected ? 2 : 1,
+        ),
+      ),
+      child: Column(children: [
+        Icon(icon, color: selected ? AppColors.primary : AppColors.textSecondary, size: 24),
+        const SizedBox(height: 6),
+        Text(
+          label,
+          style: AppTextStyles.bodyMedium.copyWith(
+            fontWeight: FontWeight.w600,
+            color: selected ? AppColors.primary : AppColors.textSecondary,
+          ),
+        ),
+      ]),
+    ),
+  );
+}
 
 class _SectionHeader extends StatelessWidget {
   final IconData icon;

@@ -654,18 +654,20 @@ async function loadDoctors() {
 function renderDoctorsTable(doctors) {
   const tbody = document.getElementById('doctors-tbody');
   if (!doctors.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="loading">No doctors found</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="loading">No doctors found</td></tr>';
     return;
   }
   tbody.innerHTML = doctors.map(d => {
     const initials = getInitials(d.name || 'DR');
     const color = randomAvatarColor(d.name);
     const safeStatus = (d.status || 'pending').toLowerCase();
+    const isTherapist = d.type === 'therapist';
     return `<tr>
       <td><div class="user-cell">
         <div class="doc-avatar" style="background:${escHtml(color.bg)};color:${escHtml(color.fg)};">${escHtml(initials)}</div>
         <div><div class="user-name">${escHtml(d.name || '—')}</div><div class="user-sub">${escHtml(d.email || '')}</div></div>
       </div></td>
+      <td><span class="svc-type-badge" style="background:${isTherapist ? '#f3e5f5' : '#e3f2fd'};color:${isTherapist ? '#6a1b9a' : '#1565c0'};">${isTherapist ? 'Therapist' : 'Doctor'}</span></td>
       <td>${escHtml(d.specialty || d.specialisation || d.specialization || '—')}</td>
       <td>${escHtml(d.phone || '—')}</td>
       <td>${escHtml(String(d.consultations || 0))}</td>
@@ -676,9 +678,141 @@ function renderDoctorsTable(doctors) {
           <button class="btn btn-approve" onclick="approveDoctor('${escHtml(d.id)}', this)">Approve</button>
           <button class="btn btn-reject" style="margin-left:4px;" onclick="rejectDoctor('${escHtml(d.id)}', this)">Reject</button>
         ` : `<button class="btn btn-outline" onclick="viewDoctor('${escHtml(d.id)}')">View</button>`}
+        <button class="btn btn-outline" style="margin-left:4px;" onclick="editDoctorAdmin('${escHtml(d.id)}')" title="Edit">
+          <i class="ti ti-edit"></i>
+        </button>
       </td>
     </tr>`;
   }).join('');
+}
+
+function filterDoctorsTable() {
+  const q           = (document.getElementById('doctor-search')?.value || '').toLowerCase();
+  const typeFilter   = document.getElementById('doctor-type-filter')?.value || 'all';
+  const statusFilter = document.getElementById('doctor-status-filter')?.value || 'all';
+
+  let list = allDoctors;
+  if (typeFilter !== 'all') list = list.filter(d => (d.type || 'doctor') === typeFilter);
+  if (statusFilter !== 'all') list = list.filter(d => d.status === statusFilter);
+  if (q) {
+    list = list.filter(d =>
+      (d.name||'').toLowerCase().includes(q) ||
+      (d.specialty||d.specialisation||d.specialization||'').toLowerCase().includes(q) ||
+      (d.email||'').toLowerCase().includes(q)
+    );
+  }
+  renderDoctorsTable(list);
+}
+
+// Add / Edit Doctor / Therapist (admin form)
+let _editingDoctorId = null;
+
+const DOCTOR_SPECIALTIES = [
+  'General', 'Cardiology', 'Dermatology', 'Gynaecology', 'Paediatrics',
+  'ENT', 'Orthopaedics', 'Neurology', 'Ophthalmology', 'Urology',
+  'Gastroenterology', 'General Surgery', 'Dental', 'Radiology', 'Oncology',
+  'Nephrology', 'Endocrinology', 'Pulmonology', 'Anaesthesiology', 'Rheumatology',
+];
+
+const THERAPIST_SPECIALTIES = [
+  'Psychiatry', 'Psychology', 'Counselling', 'Pediatric Psychiatry',
+];
+
+function onDoctorTypeChange() {
+  const type = document.getElementById('dr-type')?.value || 'doctor';
+  const specialtyEl = document.getElementById('dr-specialty');
+  if (!specialtyEl) return;
+  const list = type === 'therapist' ? THERAPIST_SPECIALTIES : DOCTOR_SPECIALTIES;
+  const current = specialtyEl.value;
+  specialtyEl.innerHTML = list.map(s => `<option value="${escHtml(s)}">${escHtml(s)}</option>`).join('');
+  if (list.includes(current)) specialtyEl.value = current;
+}
+
+async function saveDoctorAdmin() {
+  const name           = document.getElementById('dr-name')?.value.trim();
+  const type           = document.getElementById('dr-type')?.value || 'doctor';
+  const specialty      = document.getElementById('dr-specialty')?.value;
+  const gender         = document.getElementById('dr-gender')?.value;
+  const email          = document.getElementById('dr-email')?.value.trim();
+  const phone          = document.getElementById('dr-phone')?.value.trim();
+  const qualifications = document.getElementById('dr-qualifications')?.value.trim();
+  const experienceRaw  = document.getElementById('dr-experience')?.value;
+  const feeRaw         = document.getElementById('dr-fee')?.value;
+  const isActive       = document.getElementById('dr-active')?.checked !== false;
+
+  if (!name)      { showToast('Name is required'); return; }
+  if (!specialty) { showToast('Specialty is required'); return; }
+  if (!feeRaw)    { showToast('Consultation fee is required'); return; }
+
+  const btn = document.getElementById('save-doctor-btn');
+  btn.disabled = true;
+
+  const data = {
+    name, type, specialty, gender,
+    email:          email          || null,
+    phone:          phone          || null,
+    qualifications: qualifications || null,
+    experience:     experienceRaw  ? parseInt(experienceRaw, 10) : null,
+    fee:            parseInt(feeRaw, 10),
+    status:         isActive ? 'active' : 'suspended',
+    updatedAt:      firebase.firestore.FieldValue.serverTimestamp(),
+    updatedBy:      auth.currentUser?.email || 'admin',
+  };
+
+  try {
+    if (_editingDoctorId) {
+      await db.collection('doctors').doc(_editingDoctorId).update(data);
+      showToast('Doctor updated');
+    } else {
+      data.createdAt          = firebase.firestore.FieldValue.serverTimestamp();
+      data.isOnline           = false;
+      data.isVerified         = true;
+      data.rating             = 0;
+      data.totalReviews       = 0;
+      data.totalConsultations = 0;
+      data.addedByAdmin       = true;
+      await db.collection('doctors').add(data);
+      showToast(type === 'therapist' ? 'Therapist added' : 'Doctor added');
+    }
+    cancelDoctorEdit();
+    loadDoctors();
+  } catch (err) {
+    showToast('Save failed: ' + err.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function editDoctorAdmin(id) {
+  const d = allDoctors.find(x => x.id === id);
+  if (!d) return;
+  _editingDoctorId = id;
+  document.getElementById('dr-name').value           = d.name           || '';
+  document.getElementById('dr-type').value           = d.type           || 'doctor';
+  onDoctorTypeChange();
+  document.getElementById('dr-specialty').value      = d.specialty      || '';
+  document.getElementById('dr-gender').value         = d.gender         || 'Male';
+  document.getElementById('dr-email').value          = d.email          || '';
+  document.getElementById('dr-phone').value          = d.phone          || '';
+  document.getElementById('dr-qualifications').value = d.qualifications || '';
+  document.getElementById('dr-experience').value     = d.experience != null ? d.experience : '';
+  document.getElementById('dr-fee').value            = d.fee != null ? d.fee : '';
+  document.getElementById('dr-active').checked       = d.status === 'active';
+  document.getElementById('doctor-form-title').textContent = 'Edit Doctor / Therapist';
+  document.getElementById('cancel-doctor-btn').style.display = 'inline-flex';
+  document.getElementById('dr-name').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function cancelDoctorEdit() {
+  _editingDoctorId = null;
+  ['dr-name','dr-email','dr-phone','dr-qualifications','dr-experience','dr-fee']
+    .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  document.getElementById('dr-type').value = 'doctor';
+  onDoctorTypeChange();
+  document.getElementById('dr-gender').value = 'Male';
+  document.getElementById('dr-active').checked = true;
+  document.getElementById('doctor-form-title').textContent = 'Add Doctor / Therapist';
+  document.getElementById('cancel-doctor-btn').style.display = 'none';
 }
 
 async function approveDoctor(id, btn) {
@@ -1124,21 +1258,12 @@ async function _submitRejectSpecRequest(id) {
 }
 
 // Doctors search & filter
-document.getElementById('doctor-search')?.addEventListener('input', e => {
-  const q = e.target.value.toLowerCase();
-  const filtered = allDoctors.filter(d =>
-    (d.name||'').toLowerCase().includes(q) ||
-    (d.specialty||d.specialisation||d.specialization||'').toLowerCase().includes(q) ||
-    (d.email||'').toLowerCase().includes(q)
-  );
-  renderDoctorsTable(filtered);
-});
+document.getElementById('doctor-search')?.addEventListener('input', filterDoctorsTable);
+document.getElementById('doctor-type-filter')?.addEventListener('change', filterDoctorsTable);
+document.getElementById('doctor-status-filter')?.addEventListener('change', filterDoctorsTable);
 
-document.getElementById('doctor-status-filter')?.addEventListener('change', e => {
-  const val = e.target.value;
-  const filtered = val === 'all' ? allDoctors : allDoctors.filter(d => d.status === val);
-  renderDoctorsTable(filtered);
-});
+// Populate the add-doctor specialty dropdown on load
+onDoctorTypeChange();
 
 // ============================================
 //   PATIENTS  (real-time — reads from 'users' collection)
@@ -2386,13 +2511,14 @@ function buildLocationBlock(r) {
 }
 
 function reqTypeLabel(type) {
-  const m = { diagnostics: 'Diagnostics', care_assistant: 'Care Assistant', physiotherapy: 'Physiotherapy', equipment: 'Equipment', caregivers: 'Caregivers' };
+  const m = { diagnostics: 'Diagnostics', lab_tests: 'Lab Tests', care_assistant: 'Care Assistant', physiotherapy: 'Physiotherapy', equipment: 'Equipment', caregivers: 'Caregivers' };
   return m[type] || capitalize(type || 'Service');
 }
 
 function reqTypeColor(type) {
   const m = {
     diagnostics:    { bg: '#e0f7fa', fg: '#0097a7' },
+    lab_tests:      { bg: '#e8eaf6', fg: '#3949ab' },
     care_assistant: { bg: '#fff3e0', fg: '#e65100' },
     physiotherapy:  { bg: '#e3f2fd', fg: '#1565c0' },
     equipment:      { bg: '#eceff1', fg: '#37474f' },
@@ -2402,7 +2528,7 @@ function reqTypeColor(type) {
 }
 
 function reqTypeIcon(type) {
-  const m = { diagnostics: '', care_assistant: '', physiotherapy: '', equipment: '', caregivers: '' };
+  const m = { diagnostics: '', lab_tests: '', care_assistant: '', physiotherapy: '', equipment: '', caregivers: '' };
   return m[type] || '';
 }
 
@@ -2687,6 +2813,7 @@ function renderAmbulancesList(ambulances) {
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">
           <span class="pill" style="background:${tc}18;color:${tc};border:1px solid ${tc}44;">${escHtml(a.type || 'Basic')}</span>
           ${a.phone ? `<span class="banner-cta-chip"><i class="ti ti-phone" style="font-size:11px;"></i> ${escHtml(a.phone)}</span>` : ''}
+          ${(a.latitude && a.longitude) ? `<span class="banner-cta-chip"><i class="ti ti-map-pin" style="font-size:11px;"></i> ${a.latitude.toFixed(4)}, ${a.longitude.toFixed(4)}</span>` : '<span class="pill pill-pending">No location set</span>'}
           ${a.isAvailable ? '<span class="pill pill-active">Available</span>' : '<span class="pill pill-pending">Busy</span>'}
           ${a.isEnabled ? '' : '<span class="pill pill-suspended">Disabled</span>'}
         </div>
@@ -2712,11 +2839,20 @@ async function saveAmbulance() {
   const phone       = document.getElementById('amb-phone')?.value.trim();
   const type        = document.getElementById('amb-type')?.value || 'Basic';
   const serviceArea = document.getElementById('amb-area')?.value.trim();
+  const latRaw      = document.getElementById('amb-lat')?.value.trim();
+  const lngRaw      = document.getElementById('amb-lng')?.value.trim();
   const isAvailable = document.getElementById('amb-available')?.checked !== false;
   const isEnabled   = document.getElementById('amb-enabled')?.checked !== false;
 
   if (!name || !phone) {
     showToast('Service name and phone are required');
+    return;
+  }
+
+  const latitude  = latRaw !== '' ? parseFloat(latRaw) : null;
+  const longitude = lngRaw !== '' ? parseFloat(lngRaw) : null;
+  if ((latRaw !== '' && Number.isNaN(latitude)) || (lngRaw !== '' && Number.isNaN(longitude))) {
+    showToast('Latitude/longitude must be valid numbers');
     return;
   }
 
@@ -2727,6 +2863,8 @@ async function saveAmbulance() {
   const data = {
     name, phone, type,
     serviceArea: serviceArea || '',
+    latitude: latitude ?? null,
+    longitude: longitude ?? null,
     isAvailable,
     isEnabled,
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -2758,6 +2896,8 @@ function editAmbulance(id) {
   document.getElementById('amb-phone').value = a.phone       || '';
   document.getElementById('amb-type').value  = a.type        || 'Basic';
   document.getElementById('amb-area').value  = a.serviceArea || '';
+  document.getElementById('amb-lat').value   = a.latitude ?? '';
+  document.getElementById('amb-lng').value   = a.longitude ?? '';
   document.getElementById('amb-available').checked = a.isAvailable !== false;
   document.getElementById('amb-enabled').checked   = a.isEnabled   !== false;
   document.getElementById('ambulance-form-title').textContent   = 'Edit Ambulance Service';
@@ -2768,7 +2908,7 @@ function editAmbulance(id) {
 
 function cancelAmbulanceEdit() {
   _editingAmbulanceId = null;
-  ['amb-name','amb-phone','amb-area'].forEach(id => {
+  ['amb-name','amb-phone','amb-area','amb-lat','amb-lng'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
@@ -3630,6 +3770,7 @@ function initDashboard() {
   initLiveCallsListener();
   _liveCallsInited = true;
   initCaregiversListener();
+  initCareAssistantsListener();
 }
 
 function updateAdminDisplayName() {
@@ -3802,18 +3943,27 @@ async function deleteMedCat(id) {
   } catch (e) { showToast('Delete failed: ' + e.message); }
 }
 
-// Show/hide deposit field based on active service category
-function _syncEquipmentDepositField() {
-  const group = document.getElementById('svc-deposit-group');
-  if (!group) return;
-  group.style.display = (_activeServiceCategory === 'equipment') ? 'block' : 'none';
+// Show/hide equipment-only fields (deposit, buy price) and adjust price
+// labelling/unit visibility based on the active service category. Equipment
+// rent pricing is always per-day, so the generic Price Unit picker is hidden
+// and a dedicated Buy Price field is shown instead.
+function _syncEquipmentFields() {
+  const isEquipment = _activeServiceCategory === 'equipment';
+  const depositGroup  = document.getElementById('svc-deposit-group');
+  const buyPriceGroup = document.getElementById('svc-buy-price-group');
+  const priceUnitGroup = document.getElementById('svc-price-unit-group');
+  const priceLabel    = document.getElementById('svc-price-label');
+  if (depositGroup)   depositGroup.style.display   = isEquipment ? 'block' : 'none';
+  if (buyPriceGroup)  buyPriceGroup.style.display  = isEquipment ? 'block' : 'none';
+  if (priceUnitGroup) priceUnitGroup.style.display = isEquipment ? 'none'  : 'block';
+  if (priceLabel)     priceLabel.textContent       = isEquipment ? 'Rent Price / Day (₹)' : 'Price (₹)';
 }
 
-// Patch openServiceCategory to toggle deposit field
+// Patch openServiceCategory to toggle equipment-only fields
 const _origOpenServiceCategory = openServiceCategory;
 function openServiceCategory(key) {
   _origOpenServiceCategory(key);
-  _syncEquipmentDepositField();
+  _syncEquipmentFields();
 }
 
 
@@ -3934,6 +4084,9 @@ function renderServicesList(services) {
     const priceStr = s.price
       ? `₹${Number(s.price).toLocaleString('en-IN')} <span style="font-size:11px;font-weight:400;color:var(--text-muted);">${s.priceUnit ? '/ '+s.priceUnit.replace('_',' ') : ''}</span>`
       : '<span style="color:var(--text-muted);font-size:12px;">Price not set</span>';
+    const buyPriceStr = (s.type === 'equipment' && s.purchasePrice)
+      ? `<span class="service-price">Buy: ₹${Number(s.purchasePrice).toLocaleString('en-IN')}</span>`
+      : '';
     const thumb = s.imageUrl
       ? `<img class="service-thumb" src="${escHtml(s.imageUrl)}" alt="${escHtml(s.name || '')}" loading="lazy" />`
       : `<div class="service-thumb-placeholder" style="background:${tc.bg};color:${tc.fg};">${tc.icon}</div>`;
@@ -3946,6 +4099,7 @@ function renderServicesList(services) {
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center;">
           <span class="svc-type-badge" style="background:${tc.bg};color:${tc.fg};">${tc.icon} ${svcTypeLabel(s.type)}</span>
           <span class="service-price">${priceStr}</span>
+          ${buyPriceStr}
           ${s.duration ? `<span class="banner-cta-chip">â± ${escHtml(s.duration)}</span>` : ''}
           ${s.isFeatured ? '<span class="pill pill-active">â­ Featured</span>' : ''}
           ${s.isEnabled ? '<span class="pill pill-active">Enabled</span>' : '<span class="pill pill-suspended">Disabled</span>'}
@@ -3978,6 +4132,8 @@ async function saveService() {
   const isFeatured  = document.getElementById('svc-featured')?.checked || false;
   const depositRaw  = document.getElementById('svc-deposit')?.value;
   const deposit     = type === 'equipment' && depositRaw ? parseFloat(depositRaw) : null;
+  const buyPriceRaw = document.getElementById('svc-buy-price')?.value;
+  const purchasePrice = type === 'equipment' && buyPriceRaw ? parseFloat(buyPriceRaw) : null;
   const fileInput   = document.getElementById('service-file-input');
   const file        = fileInput?.files[0];
 
@@ -4022,10 +4178,11 @@ async function saveService() {
   const data = {
     name, type,
     price:       price ? parseFloat(price) : null,
-    priceUnit:   priceUnit || 'per_session',
+    priceUnit:   type === 'equipment' ? 'per_day' : (priceUnit || 'per_session'),
     duration:    duration   || null,
     description: description || null,
     deposit:     deposit,
+    purchasePrice: purchasePrice,
     imageUrl, storagePath,
     isEnabled, isFeatured,
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -4063,7 +4220,9 @@ function editService(id) {
   document.getElementById('svc-featured').checked = s.isFeatured  || false;
   const depositInput = document.getElementById('svc-deposit');
   if (depositInput) depositInput.value = s.deposit || '';
-  _syncEquipmentDepositField();
+  const buyPriceInput = document.getElementById('svc-buy-price');
+  if (buyPriceInput) buyPriceInput.value = s.purchasePrice || '';
+  _syncEquipmentFields();
   if (s.imageUrl) {
     const img = document.getElementById('service-preview-img');
     img.src = s.imageUrl; img.style.display = 'block';
@@ -4077,7 +4236,7 @@ function editService(id) {
 
 function cancelServiceEdit() {
   _editingServiceId = null;
-  ['svc-name','svc-price','svc-duration','svc-desc','svc-deposit'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  ['svc-name','svc-price','svc-duration','svc-desc','svc-deposit','svc-buy-price'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   const typeEl = document.getElementById('svc-type');
   if (typeEl) typeEl.value = _activeServiceCategory || 'diagnostics';
   const puEl = document.getElementById('svc-price-unit'); if (puEl) puEl.value = 'per_session';
@@ -6116,7 +6275,7 @@ async function saveDietPlan() {
     } else {
       data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
       await db.collection('diet_plans').add(data);
-      showToast('Diet plan added. It will appear in the MedNu app.');
+      showToast('Diet plan added. It will appear in the MedNU app.');
     }
     closeDietPlanModal();
     loadDietPlans();
@@ -6812,6 +6971,203 @@ async function deleteCaregiver(id, btn) {
   try {
     await db.collection('caregivers').doc(id).delete();
     showToast('Caregiver deleted');
+  } catch (e) {
+    showToast('Delete failed: ' + e.message);
+    btn.disabled = false;
+  }
+}
+
+// ============================================
+//   CARE ASSISTANTS
+// ============================================
+
+let _allCareAssistants      = [];
+let _editingCareAssistantId = null;
+let _careAssistantsListener = null;
+
+function initCareAssistantsListener() {
+  if (_careAssistantsListener) _careAssistantsListener();
+  _careAssistantsListener = db.collection('care_assistants')
+    .orderBy('createdAt', 'desc')
+    .onSnapshot(snap => {
+      _allCareAssistants = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      filterCareAssistants();
+      const activeCount = _allCareAssistants.filter(c => c.isActive).length;
+      const badge = document.getElementById('nav-care-assistants-count');
+      if (badge) {
+        badge.textContent = activeCount;
+        badge.style.display = activeCount > 0 ? 'inline' : 'none';
+      }
+    }, err => console.error('[CareAssistants]', err));
+}
+
+function filterCareAssistants() {
+  const q            = (document.getElementById('care-assistant-search')?.value || '').toLowerCase();
+  const genderFilter  = document.getElementById('care-assistant-gender-filter')?.value || 'all';
+  const statusFilter  = document.getElementById('care-assistant-status-filter')?.value || 'all';
+
+  let list = _allCareAssistants;
+  if (genderFilter !== 'all') list = list.filter(c => c.gender === genderFilter);
+  if (statusFilter === 'active')   list = list.filter(c => c.isActive);
+  if (statusFilter === 'inactive') list = list.filter(c => !c.isActive);
+  if (q) list = list.filter(c =>
+    (c.name || '').toLowerCase().includes(q) ||
+    (c.location || '').toLowerCase().includes(q) ||
+    (c.specialty || '').toLowerCase().includes(q)
+  );
+  renderCareAssistantsList(list);
+}
+
+function renderCareAssistantsList(list) {
+  const el = document.getElementById('care-assistants-list');
+  if (!el) return;
+  if (!list.length) {
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon">🧑‍🦽</div><p>No care assistants found. Add one above.</p></div>';
+    return;
+  }
+  el.innerHTML = list.map(c => {
+    const tc = { bg: '#fff3e0', fg: '#e65100' };
+    const rating = c.rating ? `⭐ ${parseFloat(c.rating).toFixed(1)}` : '';
+    return `
+    <div class="service-card" id="ca-card-${c.id}">
+      <div class="service-thumb-placeholder" style="background:${tc.bg};color:${tc.fg};font-size:22px;">🧑‍🦽</div>
+      <div class="service-info">
+        <div class="service-name">${escHtml(c.name || '—')}</div>
+        <div class="service-meta">
+          ${escHtml(c.specialty || '')}
+          ${c.experience ? ' · ' + escHtml(c.experience) : ''}
+          ${c.location ? ' · 📍 ' + escHtml(c.location) : ''}
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center;">
+          ${c.gender ? `<span class="svc-type-badge" style="background:#f3e5f5;color:#6a1b9a;">${escHtml(c.gender)}</span>` : ''}
+          <span class="service-price">₹${Number(c.rateHourly || 0).toLocaleString('en-IN')}<span style="font-size:11px;font-weight:400;color:var(--text-muted);">/hr</span></span>
+          <span class="service-price">₹${Number(c.rateFullDay || 0).toLocaleString('en-IN')}<span style="font-size:11px;font-weight:400;color:var(--text-muted);">/day</span></span>
+          ${c.isVerified ? '<span class="svc-type-badge" style="background:#e8f5e9;color:#2e7d32;">Verified</span>' : ''}
+          ${rating ? `<span class="banner-cta-chip">${escHtml(rating)}</span>` : ''}
+          ${c.isActive ? '<span class="pill pill-active">Active</span>' : '<span class="pill pill-suspended">Inactive</span>'}
+        </div>
+      </div>
+      <div class="service-actions">
+        <label class="toggle-label" title="${c.isActive ? 'Deactivate' : 'Activate'}">
+          <input type="checkbox" ${c.isActive ? 'checked' : ''} onchange="toggleCareAssistant('${c.id}', this.checked)" />
+          <span class="toggle-switch"></span>
+        </label>
+        <button class="btn btn-outline" onclick="editCareAssistant('${c.id}')" title="Edit">
+          <i class="ti ti-edit"></i>
+        </button>
+        <button class="btn btn-reject" onclick="deleteCareAssistant('${c.id}', this)" title="Delete">
+          <i class="ti ti-trash"></i>
+        </button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function saveCareAssistant() {
+  const name          = document.getElementById('ca-name')?.value.trim();
+  const gender        = document.getElementById('ca-gender')?.value;
+  const location      = document.getElementById('ca-location')?.value.trim();
+  const specialty     = document.getElementById('ca-specialty')?.value.trim();
+  const experience    = document.getElementById('ca-experience')?.value.trim();
+  const rateHourlyRaw  = document.getElementById('ca-rate-hourly')?.value;
+  const rateHalfDayRaw = document.getElementById('ca-rate-halfday')?.value;
+  const rateFullDayRaw = document.getElementById('ca-rate-fullday')?.value;
+  const rateMultiDayRaw = document.getElementById('ca-rate-multiday')?.value;
+  const ratingRaw     = document.getElementById('ca-rating')?.value;
+  const phone         = document.getElementById('ca-phone')?.value.trim();
+  const bio           = document.getElementById('ca-bio')?.value.trim();
+  const isVerified    = document.getElementById('ca-verified')?.checked !== false;
+  const isActive      = document.getElementById('ca-active')?.checked !== false;
+
+  if (!name)     { showToast('Name is required'); return; }
+  if (!location) { showToast('Location is required'); return; }
+  if (!rateHourlyRaw || !rateHalfDayRaw || !rateFullDayRaw || !rateMultiDayRaw) {
+    showToast('All four duration rates are required'); return;
+  }
+
+  const btn = document.getElementById('save-care-assistant-btn');
+  btn.disabled = true;
+
+  const data = {
+    name, gender, location,
+    specialty:     specialty  || null,
+    experience:    experience || null,
+    rateHourly:    parseFloat(rateHourlyRaw),
+    rateHalfDay:   parseFloat(rateHalfDayRaw),
+    rateFullDay:   parseFloat(rateFullDayRaw),
+    rateMultiDay:  parseFloat(rateMultiDayRaw),
+    rating:        ratingRaw ? parseFloat(ratingRaw) : null,
+    phone:         phone     || null,
+    bio:           bio       || null,
+    isVerified,
+    isActive,
+    updatedAt:     firebase.firestore.FieldValue.serverTimestamp(),
+    updatedBy:     auth.currentUser?.email || 'admin',
+  };
+
+  try {
+    if (_editingCareAssistantId) {
+      await db.collection('care_assistants').doc(_editingCareAssistantId).update(data);
+      showToast('Care assistant updated ✔');
+    } else {
+      data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+      await db.collection('care_assistants').add(data);
+      showToast('Care assistant added ✔');
+    }
+    cancelCareAssistantEdit();
+  } catch (err) {
+    showToast('Save failed: ' + err.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function editCareAssistant(id) {
+  const c = _allCareAssistants.find(x => x.id === id);
+  if (!c) return;
+  _editingCareAssistantId = id;
+  document.getElementById('ca-name').value           = c.name         || '';
+  document.getElementById('ca-gender').value         = c.gender       || 'Male';
+  document.getElementById('ca-location').value       = c.location     || '';
+  document.getElementById('ca-specialty').value      = c.specialty    || '';
+  document.getElementById('ca-experience').value     = c.experience   || '';
+  document.getElementById('ca-rate-hourly').value    = c.rateHourly   != null ? c.rateHourly   : '';
+  document.getElementById('ca-rate-halfday').value   = c.rateHalfDay  != null ? c.rateHalfDay  : '';
+  document.getElementById('ca-rate-fullday').value   = c.rateFullDay  != null ? c.rateFullDay  : '';
+  document.getElementById('ca-rate-multiday').value  = c.rateMultiDay != null ? c.rateMultiDay : '';
+  document.getElementById('ca-rating').value         = c.rating       != null ? c.rating       : '';
+  document.getElementById('ca-phone').value          = c.phone        || '';
+  document.getElementById('ca-bio').value            = c.bio          || '';
+  document.getElementById('ca-verified').checked     = c.isVerified   !== false;
+  document.getElementById('ca-active').checked       = c.isActive     !== false;
+  document.getElementById('care-assistant-form-title').textContent = 'Edit Care Assistant';
+  document.getElementById('cancel-care-assistant-btn').style.display = 'inline-flex';
+  document.getElementById('ca-name').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function cancelCareAssistantEdit() {
+  _editingCareAssistantId = null;
+  ['ca-name','ca-location','ca-specialty','ca-experience','ca-rate-hourly','ca-rate-halfday','ca-rate-fullday','ca-rate-multiday','ca-rating','ca-phone','ca-bio']
+    .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  document.getElementById('ca-gender').value      = 'Male';
+  document.getElementById('ca-verified').checked  = true;
+  document.getElementById('ca-active').checked    = true;
+  document.getElementById('care-assistant-form-title').textContent = 'Add Care Assistant';
+  document.getElementById('cancel-care-assistant-btn').style.display = 'none';
+}
+
+async function toggleCareAssistant(id, isActive) {
+  try {
+    await db.collection('care_assistants').doc(id).update({ isActive, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+  } catch (e) { showToast('Update failed: ' + e.message); }
+}
+
+async function deleteCareAssistant(id, btn) {
+  if (!confirm('Delete this care assistant? This cannot be undone.')) return;
+  btn.disabled = true;
+  try {
+    await db.collection('care_assistants').doc(id).delete();
+    showToast('Care assistant deleted');
   } catch (e) {
     showToast('Delete failed: ' + e.message);
     btn.disabled = false;

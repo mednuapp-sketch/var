@@ -16,6 +16,7 @@ import '../../features/home/providers/location_provider.dart';
 import '../../features/location/providers/saved_addresses_provider.dart';
 import '../../features/location/models/saved_address.dart';
 import '../../features/location/screens/map_location_picker_screen.dart';
+import 'rating_feedback_sheet.dart';
 
 class ServiceBookingSheet extends ConsumerStatefulWidget {
   final String type;
@@ -77,6 +78,24 @@ class _ServiceBookingSheetState extends ConsumerState<ServiceBookingSheet> {
   final _phoneCtrl = TextEditingController();
   final _manualAddrCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
+
+  // Types that count as therapy sessions — exempt from the adult-accompaniment
+  // warning shown for minors on every other consultation/service booking.
+  static const _therapyTypes = {'physiotherapy', 'counselling'};
+
+  List<Map<String, dynamic>> _familyMembers = [];
+  int _bookingForIndex = -1; // -1 = self
+  String _selfName = '';
+
+  bool get _isTherapy => _therapyTypes.contains(widget.type);
+
+  bool get _showsMinorWarning {
+    if (_bookingForIndex < 0 || _bookingForIndex >= _familyMembers.length) {
+      return false;
+    }
+    final age = _familyMembers[_bookingForIndex]['age'];
+    return age is int && age > 0 && age < 18 && !_isTherapy;
+  }
 
   String _date = '';
   String _time = '';
@@ -244,9 +263,24 @@ class _ServiceBookingSheetState extends ConsumerState<ServiceBookingSheet> {
           .doc(user.uid)
           .get();
       if (snap.exists && mounted) {
-        setState(() => _nameCtrl.text = snap.data()?['name'] ?? '');
+        final data = snap.data();
+        final rawMembers = data?['familyMembers'];
+        setState(() {
+          _selfName = data?['name'] ?? '';
+          _nameCtrl.text = _selfName;
+          _familyMembers = rawMembers is List
+              ? rawMembers.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList()
+              : <Map<String, dynamic>>[];
+        });
       }
     } catch (_) {}
+  }
+
+  void _selectBookingFor(int index) {
+    setState(() {
+      _bookingForIndex = index;
+      _nameCtrl.text = index < 0 ? _selfName : (_familyMembers[index]['name'] as String? ?? '');
+    });
   }
 
   void _prefillAddress() {
@@ -639,6 +673,13 @@ class _ServiceBookingSheetState extends ConsumerState<ServiceBookingSheet> {
       if (mounted) {
         FeedbackService.dismiss(context);
         setState(() { _busy = false; _done = true; });
+        // Show one-time app rating prompt after a short delay so the
+        // success screen is visible first. Skipped if already submitted.
+        Future.delayed(const Duration(milliseconds: 1200), () {
+          if (mounted) {
+            maybeShowRatingSheet(context, themeColor: widget.themeColor);
+          }
+        });
       }
     } catch (e) {
       if (mounted) {
@@ -825,6 +866,44 @@ class _ServiceBookingSheetState extends ConsumerState<ServiceBookingSheet> {
                 child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                  if (_familyMembers.isNotEmpty) ...[
+                    _label('Booking For'),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _bookingForChip(label: 'Self', selected: _bookingForIndex < 0, onTap: () => _selectBookingFor(-1)),
+                        for (int i = 0; i < _familyMembers.length; i++)
+                          _bookingForChip(
+                            label: _familyMembers[i]['name'] as String? ?? 'Member',
+                            selected: _bookingForIndex == i,
+                            onTap: () => _selectBookingFor(i),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                  ],
+                  if (_showsMinorWarning) ...[
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.amber.withValues(alpha: 0.4)),
+                      ),
+                      child: Row(children: [
+                        Icon(Icons.escalator_warning_rounded, size: 18, color: Colors.amber.shade800),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'This patient is under 18. An adult must accompany them for this consultation.',
+                            style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: Colors.amber.shade900),
+                          ),
+                        ),
+                      ]),
+                    ),
+                    const SizedBox(height: 14),
+                  ],
                   _label('Patient Name *'),
                   _field(_nameCtrl, 'Enter patient name',
                       validator: _req),
@@ -1018,6 +1097,34 @@ class _ServiceBookingSheetState extends ConsumerState<ServiceBookingSheet> {
             ),
           ),
         ],
+      );
+
+  Widget _bookingForChip({
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+  }) =>
+      GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+          decoration: BoxDecoration(
+            color: selected ? widget.themeColor : const Color(0xFFF8F9FA),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: selected ? widget.themeColor : Colors.grey[300]!,
+            ),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: selected ? Colors.white : Colors.black87,
+            ),
+          ),
+        ),
       );
 
   Widget _label(String text) => Padding(

@@ -6,8 +6,6 @@ import 'package:flutter_svg/flutter_svg.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
-import '../../legal/screens/privacy_policy_screen.dart';
-import '../../legal/screens/terms_of_service_screen.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -144,10 +142,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
           SafeArea(
             child: SingleChildScrollView(
               physics: const ClampingScrollPhysics(),
-              child: SizedBox(
-                height: size.height -
-                    MediaQuery.of(context).padding.top -
-                    MediaQuery.of(context).padding.bottom,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minHeight: size.height -
+                      MediaQuery.of(context).padding.top -
+                      MediaQuery.of(context).padding.bottom,
+                ),
                 child: FadeTransition(
                   opacity: _fadeIn,
                   child: SlideTransition(
@@ -155,143 +155,138 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 28),
                       child: Column(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          SizedBox(height: isSmall ? 32 : size.height * 0.09),
-
-                          // ── Logo section ─────────────────────────────────
-                          _LogoSection(pulseCtrl: _pulseCtrl),
-
-                          SizedBox(height: isSmall ? 20 : 32),
-
-                          // ── Headline ─────────────────────────────────────
-                          const Text(
-                            'Your Health.\nOur Priority.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontFamily: 'Poppins',
-                              fontSize: 30,
-                              fontWeight: FontWeight.w800,
-                              color: Colors.white,
-                              height: 1.15,
-                              letterSpacing: -0.5,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            'Trusted by thousands of families\nfor complete healthcare management.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontFamily: 'Poppins',
-                              fontSize: 13.5,
-                              fontWeight: FontWeight.w400,
-                              color: Colors.white.withValues(alpha:0.62),
-                              height: 1.55,
-                            ),
-                          ),
-
-                          SizedBox(height: isSmall ? 20 : 36),
-
-                          // ── Trust badges ─────────────────────────────────
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
+                          // ── Top section ───────────────────────────────────
+                          Column(
                             children: [
-                              _TrustBadge(
-                                icon: Icons.verified_rounded,
-                                label: 'Verified',
+                              SizedBox(
+                                  height:
+                                      isSmall ? 24 : size.height * 0.09),
+                              _LogoSection(pulseCtrl: _pulseCtrl),
+                              SizedBox(height: isSmall ? 16 : 32),
+                              Text(
+                                'Your Health.\nOur Priority.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontFamily: 'Poppins',
+                                  fontSize: isSmall ? 26 : 30,
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.white,
+                                  height: 1.15,
+                                  letterSpacing: -0.5,
+                                ),
                               ),
-                              const SizedBox(width: 12),
-                              _TrustBadge(
-                                icon: Icons.lock_rounded,
-                                label: 'Secure',
+                              SizedBox(height: isSmall ? 8 : 12),
+                              Text(
+                                'Trusted by thousands of families\nfor complete healthcare management.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontFamily: 'Poppins',
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w400,
+                                  color: Colors.white.withValues(alpha: 0.62),
+                                  height: 1.55,
+                                ),
                               ),
-                              const SizedBox(width: 12),
-                              _TrustBadge(
-                                icon: Icons.health_and_safety_rounded,
-                                label: 'HIPAA Safe',
+                              SizedBox(height: isSmall ? 16 : 36),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  _TrustBadge(
+                                    icon: Icons.verified_rounded,
+                                    label: 'Verified',
+                                  ),
+                                  const SizedBox(width: 12),
+                                  _TrustBadge(
+                                    icon: Icons.lock_rounded,
+                                    label: 'Secure',
+                                  ),
+                                  const SizedBox(width: 12),
+                                  _TrustBadge(
+                                    icon: Icons.health_and_safety_rounded,
+                                    label: 'HIPAA Safe',
+                                  ),
+                                ],
                               ),
+                              SizedBox(height: isSmall ? 20 : 36),
                             ],
                           ),
 
-                          const Spacer(),
-
-                          // ── White card ────────────────────────────────────
-                          _AuthCard(
-                            shimmerCtrl: _shimmerCtrl,
-                            isLoading: _isLoading,
-                            onGoogleSignIn: _googleSignIn,
+                          // ── Bottom section ────────────────────────────────
+                          Column(
+                            children: [
+                              _AuthCard(
+                                shimmerCtrl: _shimmerCtrl,
+                                isLoading: _isLoading,
+                                onGoogleSignIn: _googleSignIn,
+                              ),
+                              const SizedBox(height: 16),
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: Wrap(
+                                  alignment: WrapAlignment.center,
+                                  children: [
+                                    Text(
+                                      'By continuing, you agree to our ',
+                                      style: TextStyle(
+                                        fontFamily: 'Poppins',
+                                        fontSize: 11.5,
+                                        color: Colors.white
+                                            .withValues(alpha: 0.45),
+                                      ),
+                                    ),
+                                    GestureDetector(
+                                      onTap: () => context
+                                          .push(AppRoutes.termsOfService),
+                                      child: Text(
+                                        'Terms',
+                                        style: TextStyle(
+                                          fontFamily: 'Poppins',
+                                          fontSize: 11.5,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.white
+                                              .withValues(alpha: 0.75),
+                                          decoration:
+                                              TextDecoration.underline,
+                                          decorationColor: Colors.white
+                                              .withValues(alpha: 0.4),
+                                        ),
+                                      ),
+                                    ),
+                                    Text(
+                                      ' & ',
+                                      style: TextStyle(
+                                        fontFamily: 'Poppins',
+                                        fontSize: 11.5,
+                                        color: Colors.white
+                                            .withValues(alpha: 0.45),
+                                      ),
+                                    ),
+                                    GestureDetector(
+                                      onTap: () => context
+                                          .push(AppRoutes.privacyPolicy),
+                                      child: Text(
+                                        'Privacy Policy',
+                                        style: TextStyle(
+                                          fontFamily: 'Poppins',
+                                          fontSize: 11.5,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.white
+                                              .withValues(alpha: 0.75),
+                                          decoration:
+                                              TextDecoration.underline,
+                                          decorationColor: Colors.white
+                                              .withValues(alpha: 0.4),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              SizedBox(height: isSmall ? 12 : 20),
+                            ],
                           ),
-
-                          const SizedBox(height: 20),
-
-                          // ── Terms ──────────────────────────────────────────
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
-                            child: Wrap(
-                              alignment: WrapAlignment.center,
-                              children: [
-                                Text(
-                                  'By continuing, you agree to our ',
-                                  style: TextStyle(
-                                    fontFamily: 'Poppins',
-                                    fontSize: 11.5,
-                                    color: Colors.white.withValues(alpha:0.45),
-                                  ),
-                                ),
-                                GestureDetector(
-                                  onTap: () => Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) =>
-                                          const TermsOfServiceScreen(),
-                                    ),
-                                  ),
-                                  child: Text(
-                                    'Terms',
-                                    style: TextStyle(
-                                      fontFamily: 'Poppins',
-                                      fontSize: 11.5,
-                                      fontWeight: FontWeight.w600,
-                                      color: Colors.white.withValues(alpha:0.75),
-                                      decoration: TextDecoration.underline,
-                                      decorationColor:
-                                          Colors.white.withValues(alpha:0.4),
-                                    ),
-                                  ),
-                                ),
-                                Text(
-                                  ' & ',
-                                  style: TextStyle(
-                                    fontFamily: 'Poppins',
-                                    fontSize: 11.5,
-                                    color: Colors.white.withValues(alpha:0.45),
-                                  ),
-                                ),
-                                GestureDetector(
-                                  onTap: () => Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) =>
-                                          const PrivacyPolicyScreen(),
-                                    ),
-                                  ),
-                                  child: Text(
-                                    'Privacy Policy',
-                                    style: TextStyle(
-                                      fontFamily: 'Poppins',
-                                      fontSize: 11.5,
-                                      fontWeight: FontWeight.w600,
-                                      color: Colors.white.withValues(alpha:0.75),
-                                      decoration: TextDecoration.underline,
-                                      decorationColor:
-                                          Colors.white.withValues(alpha:0.4),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          SizedBox(height: isSmall ? 8 : 16),
                         ],
                       ),
                     ),
@@ -350,8 +345,8 @@ class _LogoSection extends StatelessWidget {
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(22),
-                child: SvgPicture.asset(
-                  'assets/icons/mednu_logo.svg',
+                child: Image.asset(
+                  'assets/icons/mednu_logo.png',
                   fit: BoxFit.contain,
                 ),
               ),
@@ -381,7 +376,7 @@ class _AuthCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(24, 28, 24, 28),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.appSurface,
         borderRadius: BorderRadius.circular(28),
         boxShadow: [
           BoxShadow(
@@ -396,12 +391,13 @@ class _AuthCard extends StatelessWidget {
         children: [
           // Header
           Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Container(
                 width: 42,
                 height: 42,
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha:0.08),
+                  color: AppColors.primary.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Icon(
@@ -411,23 +407,27 @@ class _AuthCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 14),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Welcome to MedNU',
-                    style: AppTextStyles.h4.copyWith(
-                      color: AppColors.textPrimary,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Welcome to MedNU',
+                      style: AppTextStyles.h4.copyWith(
+                        color: context.appTextPrimary,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Sign in to access your health dashboard',
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: AppColors.textSecondary,
+                    const SizedBox(height: 2),
+                    Text(
+                      'Sign in to access your health dashboard',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: context.appTextSecondary,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ],
           ),
@@ -448,7 +448,7 @@ class _AuthCard extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: const [
               _FeaturePill(icon: Icons.calendar_month_rounded, label: 'Book Appointments'),
-              _FeaturePill(icon: Icons.local_pharmacy_rounded, label: 'Medicine'),
+              _FeaturePill(icon: Icons.local_pharmacy_rounded, label: 'Pharmacy'),
               _FeaturePill(icon: Icons.favorite_rounded, label: 'Health Tracking'),
             ],
           ),
@@ -478,11 +478,11 @@ class _GoogleButton extends StatelessWidget {
         duration: const Duration(milliseconds: 200),
         height: 56,
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: context.appSurface,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isLoading
-                ? AppColors.border
+                ? context.appBorder
                 : const Color(0xFFDDE2E8),
             width: 1.5,
           ),
@@ -548,7 +548,7 @@ class _GoogleButton extends StatelessWidget {
                           Text(
                             'Signing in…',
                             style: AppTextStyles.labelLarge.copyWith(
-                              color: AppColors.textSecondary,
+                              color: context.appTextSecondary,
                             ),
                           ),
                         ],
@@ -565,7 +565,7 @@ class _GoogleButton extends StatelessWidget {
                           Text(
                             'Continue with Google',
                             style: AppTextStyles.labelLarge.copyWith(
-                              color: AppColors.textPrimary,
+                              color: context.appTextPrimary,
                               fontSize: 15,
                             ),
                           ),
@@ -637,11 +637,11 @@ class _FeaturePill extends StatelessWidget {
         const SizedBox(height: 5),
         Text(
           label,
-          style: const TextStyle(
+          style: TextStyle(
             fontFamily: 'Poppins',
             fontSize: 9.5,
             fontWeight: FontWeight.w500,
-            color: AppColors.textSecondary,
+            color: context.appTextSecondary,
           ),
           textAlign: TextAlign.center,
         ),

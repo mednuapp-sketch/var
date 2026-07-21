@@ -22,7 +22,7 @@ class ReferralConfig {
     this.rewardTriggerCondition = 'on_signup',
     this.maxReferralLimit = 0,
     this.campaignTitle = 'Refer & Earn',
-    this.campaignMessage = 'Invite friends to MedNu and earn rewards!',
+    this.campaignMessage = 'Invite friends to MedNU and earn rewards!',
     this.bannerText = 'Share & earn per referral',
     this.offerExpiryDate,
   });
@@ -38,7 +38,7 @@ class ReferralConfig {
       maxReferralLimit: (data['maxReferralLimit'] as num?)?.toInt() ?? 0,
       campaignTitle: data['campaignTitle'] as String? ?? 'Refer & Earn',
       campaignMessage: data['campaignMessage'] as String? ??
-          'Invite friends to MedNu and earn rewards!',
+          'Invite friends to MedNU and earn rewards!',
       bannerText:
           data['bannerText'] as String? ?? 'Share & earn per referral',
       offerExpiryDate:
@@ -356,7 +356,7 @@ class ReferralService {
         'type': 'credit',
         'category': 'referral',
         'walletType': 'mednu_money',
-        'description': 'Joined via referral code — use as MedNu Money for bookings',
+        'description': 'Joined via referral code — use as MedNU Money for bookings',
         'timestamp': FieldValue.serverTimestamp(),
       });
     }
@@ -374,7 +374,7 @@ class ReferralService {
         'type': 'referral_reward',
         'title': 'Referral Reward Earned! 🎉',
         'body':
-            'You earned ₹${referrerReward.toStringAsFixed(0)} MedNu Money because a friend joined MedNu using your referral code. Use it for your next booking!',
+            'You earned ₹${referrerReward.toStringAsFixed(0)} MedNU Money because a friend joined MedNU using your referral code. Use it for your next booking!',
         'createdAt': now,
         'deliverAt': now,
         'isRead': false,
@@ -390,7 +390,7 @@ class ReferralService {
         'type': 'welcome_bonus',
         'title': 'Welcome Bonus Added! 🎁',
         'body':
-            '₹${referredReward.toStringAsFixed(0)} MedNu Money has been added as a welcome gift! Use it for any MedNu booking.',
+            '₹${referredReward.toStringAsFixed(0)} MedNU Money has been added as a welcome gift! Use it for any MedNU booking.',
         'createdAt': now,
         'deliverAt': now,
         'isRead': false,

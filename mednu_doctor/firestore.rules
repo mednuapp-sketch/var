@@ -74,7 +74,7 @@ service cloud.firestore {
         resource.data.status == 'approved' || isOwner(doctorId) || isAdmin()
       );
       // Doctors update their own profile (limited fields); admins can update all
-      allow create: if isOwner(doctorId);
+      allow create: if isOwner(doctorId) || isAdmin();
       allow update: if (isOwner(doctorId) &&
                          doesNotModify(['status', 'rating', 'reviewCount', 'earnings', 'verificationStatus'])) ||
                        isAdmin();

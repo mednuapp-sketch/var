@@ -14,11 +14,11 @@ import '../../features/services/consultation/video_call_screen.dart';
 import '../../features/services/consultation/outgoing_call_screen.dart';
 import '../../features/services/consultation/incoming_call_screen.dart';
 import '../../features/services/emergency/emergency_screen.dart';
-import '../../features/services/emergency/sos_screen.dart';
 import '../../features/services/emergency/manage_contacts_screen.dart';
 import '../../features/services/medicine_delivery/medicine_screen.dart';
 import '../../features/services/ambulance/ambulance_screen.dart';
 import '../../features/services/diagnostics/diagnostics_screen.dart';
+import '../../features/services/lab_tests/lab_tests_screen.dart';
 import '../../features/services/caregivers/caregivers_screen.dart';
 import '../../features/services/care_assistant/care_assistant_screen.dart';
 import '../../features/services/nutrition/screens/nutrition_home_screen.dart';
@@ -72,11 +72,13 @@ import '../../features/location/screens/map_location_picker_screen.dart';
 import '../../features/doctors/screens/submit_review_screen.dart';
 import '../../features/legal/screens/privacy_policy_screen.dart';
 import '../../features/legal/screens/terms_of_service_screen.dart';
+import '../../features/legal/screens/medical_disclaimer_screen.dart';
 import '../../features/support/screens/help_support_screen.dart';
 import '../../features/support/screens/about_screen.dart';
 import '../../features/my_services/screens/my_services_screen.dart';
 import '../../features/my_services/screens/service_detail_screen.dart';
 import '../../features/my_services/models/unified_booking.dart';
+import '../../features/cart/screens/cart_screen.dart';
 
 class AppRoutes {
   static const splash             = '/';
@@ -93,10 +95,10 @@ class AppRoutes {
   static const consultation       = '/consultation';
   static const videoCall          = '/consultation/video/:id';
   static const emergency          = '/emergency';
-  static const sos                = '/sos';
   static const sosContacts        = '/sos/contacts';
   static const medicine           = '/medicine';
   static const diagnostics        = '/diagnostics';
+  static const labTests           = '/lab-tests';
   static const ambulance          = '/ambulance';
   static const caregivers         = '/caregivers';
   static const careAssistant      = '/care-assistant';
@@ -111,6 +113,7 @@ class AppRoutes {
   static const nutritionGoals                 = '/nutrition/goals';
   static const counselling        = '/counselling';
   static const equipment          = '/equipment';
+  static const cart               = '/cart';
   static const hospitals          = '/hospitals';
   static const pharmacy           = '/pharmacy';
   static const records            = '/records';
@@ -154,8 +157,9 @@ class AppRoutes {
   static const submitReview = '/review/submit';
 
   // Legal
-  static const privacyPolicy = '/legal/privacy';
-  static const termsOfService = '/legal/terms';
+  static const privacyPolicy      = '/legal/privacy';
+  static const termsOfService     = '/legal/terms';
+  static const medicalDisclaimer  = '/legal/disclaimer';
 
   // Support
   static const helpSupport = '/support/help';
@@ -232,7 +236,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         },
       ),
       GoRoute(path: AppRoutes.emergency,          builder: (c, s) => const EmergencyScreen()),
-      GoRoute(path: AppRoutes.sos,                builder: (c, s) => const SOSScreen()),
       GoRoute(path: AppRoutes.sosContacts,        builder: (c, s) => const ManageContactsScreen()),
       GoRoute(path: AppRoutes.medicine,           builder: (c, s) {
         final extra = s.extra;
@@ -244,6 +247,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       }),
       GoRoute(path: AppRoutes.ambulance,          builder: (c, s) => const AmbulanceScreen()),
       GoRoute(path: AppRoutes.diagnostics,        builder: (c, s) => const DiagnosticsScreen()),
+      GoRoute(path: AppRoutes.labTests,           builder: (c, s) => const LabTestsScreen()),
       GoRoute(path: AppRoutes.caregivers,         builder: (c, s) => const CaregiversScreen()),
       GoRoute(path: AppRoutes.careAssistant,      builder: (c, s) => const CareAssistantScreen()),
       GoRoute(path: AppRoutes.nutrition,                    builder: (c, s) => const NutritionHomeScreen()),
@@ -257,10 +261,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: AppRoutes.physio,             builder: (c, s) => const PhysioScreen()),
       GoRoute(path: AppRoutes.counselling,        builder: (c, s) => const CounsellingScreen()),
       GoRoute(path: AppRoutes.equipment,          builder: (c, s) => const EquipmentScreen()),
+      GoRoute(path: AppRoutes.cart,               builder: (c, s) => const CartScreen()),
       GoRoute(path: AppRoutes.appointment,        builder: (c, s) => const AppointmentScreen()),
-      GoRoute(path: AppRoutes.doctors,            builder: (c, s) => DoctorsListScreen(initialSpecialty: s.uri.queryParameters['specialty'], initialMode: s.uri.queryParameters['mode'])),
+      GoRoute(path: AppRoutes.doctors,            builder: (c, s) => DoctorsListScreen(initialSpecialty: s.uri.queryParameters['specialty'], initialMode: s.uri.queryParameters['mode'], initialType: s.uri.queryParameters['type'], initialDuration: int.tryParse(s.uri.queryParameters['duration'] ?? ''))),
       GoRoute(path: AppRoutes.specialities,       builder: (c, s) => const SpecialitiesScreen()),
-      GoRoute(path: AppRoutes.doctorProfile,      builder: (c, s) => DoctorProfileScreen(doctorId: s.pathParameters['id'] ?? '')),
+      GoRoute(path: AppRoutes.doctorProfile,      builder: (c, s) => DoctorProfileScreen(doctorId: s.pathParameters['id'] ?? '', initialDuration: int.tryParse(s.uri.queryParameters['duration'] ?? ''))),
       GoRoute(path: AppRoutes.hospitals,          builder: (c, s) => HospitalsScreen(initialQuery: s.uri.queryParameters['q'])),
       GoRoute(path: AppRoutes.pharmacy,           builder: (c, s) => const PharmacyScreen()),
       GoRoute(path: AppRoutes.records, builder: (c, s) {
@@ -329,8 +334,9 @@ GoRoute(path: AppRoutes.referral,           builder: (c, s) => const ReferralScr
       GoRoute(path: AppRoutes.pregnancyNutrition, builder: (c, s) => const PregnancyNutritionScreen()),
       GoRoute(path: AppRoutes.pregnancyEmergency, builder: (c, s) => const PregnancyEmergencyScreen()),
       GoRoute(path: AppRoutes.pregnancyWeight,    builder: (c, s) => const PregnancyWeightTrackerScreen()),
-      GoRoute(path: AppRoutes.privacyPolicy,   builder: (c, s) => const PrivacyPolicyScreen()),
-      GoRoute(path: AppRoutes.termsOfService,  builder: (c, s) => const TermsOfServiceScreen()),
+      GoRoute(path: AppRoutes.privacyPolicy,     builder: (c, s) => const PrivacyPolicyScreen()),
+      GoRoute(path: AppRoutes.termsOfService,    builder: (c, s) => const TermsOfServiceScreen()),
+      GoRoute(path: AppRoutes.medicalDisclaimer, builder: (c, s) => const MedicalDisclaimerScreen()),
       GoRoute(path: AppRoutes.helpSupport,     builder: (c, s) => const HelpSupportScreen()),
       GoRoute(path: AppRoutes.about,           builder: (c, s) => const AboutScreen()),
 

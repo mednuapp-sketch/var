@@ -172,50 +172,68 @@ class _GradientAppBar extends StatelessWidget {
             ),
             if (hasData)
               SafeArea(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 56, 20, 20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: const Text(
-                          'Last 12 Months',
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 10,
-                            color: Colors.white70,
-                            fontWeight: FontWeight.w500,
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    return SingleChildScrollView(
+                      reverse: true,
+                      physics: const ClampingScrollPhysics(),
+                      child: ConstrainedBox(
+                        constraints:
+                            BoxConstraints(minHeight: constraints.maxHeight),
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 56, 20, 20),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: const Text(
+                                  'Last 12 Months',
+                                  style: TextStyle(
+                                    fontFamily: 'Poppins',
+                                    fontSize: 10,
+                                    color: Colors.white70,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                '₹${_formatAmount(lifetime!)}',
+                                style: const TextStyle(
+                                  fontFamily: 'Poppins',
+                                  fontSize: 38,
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.white,
+                                  height: 1.1,
+                                ),
+                              ),
+                              const SizedBox(height: 14),
+                              Row(children: [
+                                Expanded(
+                                    child: _HeroStat(
+                                        _formatAmount(today!), 'Today')),
+                                _heroDivider(),
+                                Expanded(
+                                    child: _HeroStat(
+                                        _formatAmount(week!), 'This Week')),
+                                _heroDivider(),
+                                Expanded(
+                                    child: _HeroStat(
+                                        _formatAmount(month!), 'This Month')),
+                              ]),
+                            ],
                           ),
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '₹${_formatAmount(lifetime!)}',
-                        style: const TextStyle(
-                          fontFamily: 'Poppins',
-                          fontSize: 38,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
-                          height: 1.1,
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      Row(children: [
-                        _HeroStat(_formatAmount(today!), 'Today'),
-                        _heroDivider(),
-                        _HeroStat(_formatAmount(week!), 'This Week'),
-                        _heroDivider(),
-                        _HeroStat(_formatAmount(month!), 'This Month'),
-                      ]),
-                    ],
-                  ),
+                    );
+                  },
                 ),
               ),
           ],
@@ -1098,6 +1116,8 @@ class _HeroStat extends StatelessWidget {
         children: [
           Text(
             '₹$value',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: const TextStyle(
               fontFamily: 'Poppins',
               fontSize: 15,
@@ -1107,6 +1127,8 @@ class _HeroStat extends StatelessWidget {
           ),
           Text(
             label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: const TextStyle(
               fontFamily: 'Poppins',
               fontSize: 10,

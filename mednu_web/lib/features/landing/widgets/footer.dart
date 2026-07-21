@@ -88,7 +88,7 @@ class WebFooter extends StatelessWidget {
                         _CopyrightText(),
                       ])
                     : Row(children: [
-                        _CopyrightText(),
+                        Flexible(child: _CopyrightText()),
                         const Spacer(),
                         _SocialRow(),
                       ]),
@@ -147,30 +147,13 @@ class _BrandSection extends StatelessWidget {
       children: [
         // Logo with pink cross icon
         Row(children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              gradient: AppColors.primaryGradient,
-              borderRadius: BorderRadius.circular(11),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.primary.withOpacity(0.25),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Center(
-              child: _MiniCross(size: 18, color: Colors.white),
-            ),
-          ),
+          Image.asset('assets/images/mednu_logo.png', width: 38, height: 38, filterQuality: FilterQuality.high),
           const SizedBox(width: 10),
           ShaderMask(
             shaderCallback: (b) =>
                 AppColors.primaryGradient.createShader(b),
             blendMode: BlendMode.srcIn,
-            child: Text('MedNu',
+            child: Text('MedNU',
                 style: GoogleFonts.poppins(
                     fontSize: 22,
                     fontWeight: FontWeight.w800,
@@ -258,9 +241,13 @@ class _ContactRow extends StatelessWidget {
     return Row(children: [
       Icon(icon, size: 14, color: const Color(0xFFBDBDBD)),
       const SizedBox(width: 6),
-      Text(text,
-          style: GoogleFonts.poppins(
-              fontSize: 12, color: const Color(0xFF757575))),
+      Flexible(
+        child: Text(text,
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
+            style: GoogleFonts.poppins(
+                fontSize: 12, color: const Color(0xFF757575))),
+      ),
     ]);
   }
 }
@@ -557,7 +544,9 @@ class _CopyrightText extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Text(
-      '© 2026 MedNu Healthcare Services Pvt. Ltd. All rights reserved.',
+      '© 2026 MedNU Healthcare Services Pvt. Ltd. All rights reserved.',
+      overflow: TextOverflow.ellipsis,
+      maxLines: 1,
       style: GoogleFonts.poppins(
           fontSize: 12, color: const Color(0xFF9E9E9E)),
     );

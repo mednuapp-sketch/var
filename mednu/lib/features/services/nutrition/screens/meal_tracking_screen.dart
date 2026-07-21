@@ -6,6 +6,7 @@ import '../../../../core/constants/app_text_styles.dart';
 import '../providers/nutrition_provider.dart';
 import '../models/meal_log_model.dart';
 import '../../../../core/widgets/ux_widgets.dart';
+import '../services/food_lookup_service.dart';
 
 class MealTrackingScreen extends ConsumerStatefulWidget {
   const MealTrackingScreen({super.key});
@@ -49,13 +50,13 @@ class _MealTrackingScreenState extends ConsumerState<MealTrackingScreen> {
     final meals = ref.watch(mealLogsProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.appBackground,
       appBar: AppBar(
         leading: IconButton(icon: const Icon(Icons.arrow_back_ios_new_rounded), onPressed: () => context.pop()),
         title: const Text('Meal Tracker', style: AppTextStyles.h3),
         centerTitle: true,
-        backgroundColor: Colors.white,
-        foregroundColor: AppColors.textPrimary,
+        backgroundColor: context.appSurface,
+        foregroundColor: context.appTextPrimary,
         elevation: 0,
         actions: [
           TextButton.icon(
@@ -126,7 +127,7 @@ class _DailySummary extends StatelessWidget {
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      color: Colors.white,
+      color: context.appSurface,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
@@ -158,7 +159,7 @@ class _SumItem extends StatelessWidget {
             children: [TextSpan(text: unit, style: TextStyle(fontFamily: 'Poppins', fontSize: 10, color: color.withValues(alpha:0.7)))],
           ),
         ),
-        Text(label, style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
+        Text(label, style: AppTextStyles.bodySmall.copyWith(color: context.appTextSecondary)),
       ],
     );
   }
@@ -188,7 +189,7 @@ class _MealTypeFilter extends StatelessWidget {
   Widget build(BuildContext context) {
     final list = meals.valueOrNull ?? [];
     return Container(
-      color: Colors.white,
+      color: context.appSurface,
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
       child: Row(
         children: ['breakfast', 'lunch', 'dinner', 'snack'].map((type) {
@@ -243,7 +244,7 @@ class _MealTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = _colors[log.mealType] ?? AppColors.textSecondary;
+    final color = _colors[log.mealType] ?? context.appTextSecondary;
     return Dismissible(
       key: Key(log.id),
       direction: DismissDirection.endToStart,
@@ -257,9 +258,9 @@ class _MealTile extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: context.appSurface,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.border),
+          border: Border.all(color: context.appBorder),
         ),
         child: Row(
           children: [
@@ -274,7 +275,7 @@ class _MealTile extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(log.foodName, style: AppTextStyles.labelLarge),
-                  if (log.notes.isNotEmpty) Text(log.notes, style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  if (log.notes.isNotEmpty) Text(log.notes, style: AppTextStyles.bodySmall.copyWith(color: context.appTextSecondary), maxLines: 1, overflow: TextOverflow.ellipsis),
                   const SizedBox(height: 4),
                   Row(
                     children: [
@@ -325,9 +326,9 @@ class _EmptyMealState extends StatelessWidget {
           children: [
             Icon(Icons.restaurant_menu_rounded, size: 60, color: Colors.grey[300]),
             const SizedBox(height: 16),
-            Text('No ${MealLogModel.mealTypeLabel(type)} logged', style: AppTextStyles.labelLarge.copyWith(color: AppColors.textSecondary)),
+            Text('No ${MealLogModel.mealTypeLabel(type)} logged', style: AppTextStyles.labelLarge.copyWith(color: context.appTextSecondary)),
             const SizedBox(height: 8),
-            Text('Tap the button below to log what you ate', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textHint), textAlign: TextAlign.center),
+            Text('Tap the button below to log what you ate', style: AppTextStyles.bodySmall.copyWith(color: context.appTextHint), textAlign: TextAlign.center),
             const SizedBox(height: 20),
             ElevatedButton.icon(
               onPressed: onAdd,
@@ -366,24 +367,75 @@ class _AddMealSheet extends StatefulWidget {
 class _AddMealSheetState extends State<_AddMealSheet> {
   late String _type;
   final _nameCtrl = TextEditingController();
+  final _qtyCtrl = TextEditingController(text: '100');
   final _calsCtrl = TextEditingController();
   final _proteinCtrl = TextEditingController();
   final _carbsCtrl = TextEditingController();
   final _fatCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
+
+  String _unit = 'g';
   bool _isLoading = false;
+  bool _isSearching = false;
+  List<FoodNutrition> _searchResults = [];
+  FoodNutrition? _selectedFood;
+  bool _autoFilled = false;
+
+  static const _units = ['g', 'ml', 'cup', 'tbsp', 'tsp', 'piece', 'bowl', 'plate'];
 
   @override
   void initState() {
     super.initState();
     _type = widget.selectedType;
+    _qtyCtrl.addListener(_recalculate);
   }
 
   @override
   void dispose() {
-    _nameCtrl.dispose(); _calsCtrl.dispose(); _proteinCtrl.dispose();
-    _carbsCtrl.dispose(); _fatCtrl.dispose(); _notesCtrl.dispose();
+    _nameCtrl.dispose();
+    _qtyCtrl.dispose();
+    _calsCtrl.dispose();
+    _proteinCtrl.dispose();
+    _carbsCtrl.dispose();
+    _fatCtrl.dispose();
+    _notesCtrl.dispose();
     super.dispose();
+  }
+
+  void _recalculate() {
+    final food = _selectedFood;
+    if (food == null) return;
+    final qty = double.tryParse(_qtyCtrl.text) ?? 0;
+    if (qty <= 0) return;
+    final grams = qty * (FoodLookupService.unitGrams[_unit] ?? 1.0);
+    final r = food.forGrams(grams);
+    _calsCtrl.text = r.calories.toStringAsFixed(0);
+    _proteinCtrl.text = r.protein.toStringAsFixed(1);
+    _carbsCtrl.text = r.carbs.toStringAsFixed(1);
+    _fatCtrl.text = r.fat.toStringAsFixed(1);
+    if (mounted) setState(() => _autoFilled = true);
+  }
+
+  void _selectUnit(String unit) {
+    setState(() => _unit = unit);
+    _recalculate();
+  }
+
+  Future<void> _search() async {
+    final query = _nameCtrl.text.trim();
+    if (query.isEmpty) return;
+    setState(() { _isSearching = true; _searchResults = []; });
+    final results = await FoodLookupService.search(query);
+    if (mounted) setState(() { _isSearching = false; _searchResults = results; });
+  }
+
+  void _selectFood(FoodNutrition food) {
+    setState(() {
+      _selectedFood = food;
+      _nameCtrl.text = food.name;
+      _searchResults = [];
+    });
+    _recalculate();
   }
 
   Future<void> _submit() async {
@@ -415,29 +467,223 @@ class _AddMealSheetState extends State<_AddMealSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: AppColors.divider, borderRadius: BorderRadius.circular(2)))),
+            Center(
+              child: Container(
+                width: 40, height: 4,
+                decoration: BoxDecoration(color: context.appDivider, borderRadius: BorderRadius.circular(2)),
+              ),
+            ),
             const SizedBox(height: 16),
             const Text('Log Meal', style: AppTextStyles.h3),
             const SizedBox(height: 16),
             _MealTypeRow(selected: _type, onSelect: (t) => setState(() => _type = t)),
+            const SizedBox(height: 16),
+
+            // ── Food name + search ──
+            _FieldLabel(label: 'Food Name', required: true),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _nameCtrl,
+                    style: AppTextStyles.bodyMedium,
+                    onSubmitted: (_) => _search(),
+                    decoration: InputDecoration(
+                      hintText: 'e.g. Chicken breast, Rice, Dal',
+                      hintStyle: AppTextStyles.bodySmall.copyWith(color: context.appTextHint),
+                      filled: true,
+                      fillColor: context.appBackground,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE65100))),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: _isSearching ? null : _search,
+                  child: Container(
+                    padding: const EdgeInsets.all(11),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE65100),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: _isSearching
+                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                        : const Icon(Icons.search_rounded, color: Colors.white, size: 20),
+                  ),
+                ),
+              ],
+            ),
+
+            // ── Search results ──
+            if (_isSearching)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 12),
+                child: Center(child: Text('Searching food database...', style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: Color(0xFF9E9E9E)))),
+              ),
+            if (_searchResults.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Container(
+                decoration: BoxDecoration(
+                  color: context.appSurface,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: context.appBorder),
+                  boxShadow: const [BoxShadow(color: Color(0x0A000000), blurRadius: 8, offset: Offset(0, 2))],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Column(
+                    children: _searchResults.take(6).toList().asMap().entries.map((e) {
+                      final idx = e.key;
+                      final food = e.value;
+                      return InkWell(
+                        onTap: () => _selectFood(food),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            border: idx != 0 ? Border(top: BorderSide(color: context.appBorder)) : null,
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.restaurant_rounded, size: 14, color: Color(0xFFE65100)),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  food.name,
+                                  style: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w500),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                '${food.caloriesPer100g.toStringAsFixed(0)} kcal/100g',
+                                style: TextStyle(fontFamily: 'Poppins', fontSize: 10, color: const Color(0xFFE65100), fontWeight: FontWeight.w600),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ),
+            ],
+            if (!_isSearching && _searchResults.isEmpty && _selectedFood == null)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  'Type food name and tap 🔍 to auto-fill nutrition info',
+                  style: AppTextStyles.bodySmall.copyWith(color: context.appTextHint),
+                ),
+              ),
+
             const SizedBox(height: 14),
-            _Field(controller: _nameCtrl, label: 'Food Name', hint: 'e.g. Oats with milk', required: true),
-            const SizedBox(height: 12),
+
+            // ── Quantity + unit ──
+            _FieldLabel(label: 'Quantity & Unit'),
+            const SizedBox(height: 6),
             Row(
               children: [
-                Expanded(child: _Field(controller: _calsCtrl, label: 'Calories (kcal)', hint: '350', keyboardType: TextInputType.number, required: true)),
+                SizedBox(
+                  width: 90,
+                  child: TextField(
+                    controller: _qtyCtrl,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    style: AppTextStyles.bodyMedium,
+                    decoration: InputDecoration(
+                      hintText: '100',
+                      hintStyle: AppTextStyles.bodySmall.copyWith(color: context.appTextHint),
+                      filled: true,
+                      fillColor: context.appBackground,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE65100))),
+                    ),
+                  ),
+                ),
                 const SizedBox(width: 10),
-                Expanded(child: _Field(controller: _proteinCtrl, label: 'Protein (g)', hint: '12', keyboardType: TextInputType.number)),
+                Expanded(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: _units.map((u) {
+                        final sel = u == _unit;
+                        return GestureDetector(
+                          onTap: () => _selectUnit(u),
+                          child: Container(
+                            margin: const EdgeInsets.only(right: 6),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: sel ? const Color(0xFFE65100) : context.appBackground,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: sel ? const Color(0xFFE65100) : context.appBorder),
+                            ),
+                            child: Text(
+                              u,
+                              style: TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: sel ? Colors.white : context.appTextSecondary,
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ),
               ],
             ),
-            const SizedBox(height: 12),
+
+            const SizedBox(height: 14),
+
+            // ── Nutrition fields ──
             Row(
               children: [
-                Expanded(child: _Field(controller: _carbsCtrl, label: 'Carbs (g)', hint: '60', keyboardType: TextInputType.number)),
-                const SizedBox(width: 10),
-                Expanded(child: _Field(controller: _fatCtrl, label: 'Fat (g)', hint: '8', keyboardType: TextInputType.number)),
+                _FieldLabel(label: 'Nutrition'),
+                if (_autoFilled) ...[
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                    decoration: BoxDecoration(color: const Color(0xFFE8F5E9), borderRadius: BorderRadius.circular(6)),
+                    child: const Text('Auto-filled', style: TextStyle(fontFamily: 'Poppins', fontSize: 9, color: Color(0xFF2E7D32), fontWeight: FontWeight.w600)),
+                  ),
+                ],
               ],
             ),
+            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: context.appBackground,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: _autoFilled ? const Color(0xFFE65100).withValues(alpha: 0.25) : context.appBorder),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Expanded(child: _NutriField(controller: _calsCtrl, label: 'Calories', unit: 'kcal', color: const Color(0xFFE65100))),
+                      const SizedBox(width: 10),
+                      Expanded(child: _NutriField(controller: _proteinCtrl, label: 'Protein', unit: 'g', color: const Color(0xFF1565C0))),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(child: _NutriField(controller: _carbsCtrl, label: 'Carbs', unit: 'g', color: const Color(0xFF2E7D32))),
+                      const SizedBox(width: 10),
+                      Expanded(child: _NutriField(controller: _fatCtrl, label: 'Fat', unit: 'g', color: const Color(0xFF7B1FA2))),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
             const SizedBox(height: 12),
             _Field(controller: _notesCtrl, label: 'Notes (optional)', hint: 'Homemade, restaurant name...'),
             const SizedBox(height: 20),
@@ -459,6 +705,63 @@ class _AddMealSheetState extends State<_AddMealSheet> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _FieldLabel extends StatelessWidget {
+  final String label;
+  final bool required;
+  const _FieldLabel({required this.label, this.required = false});
+
+  @override
+  Widget build(BuildContext context) {
+    return RichText(
+      text: TextSpan(
+        text: label,
+        style: AppTextStyles.labelSmall.copyWith(color: context.appTextSecondary),
+        children: required ? [const TextSpan(text: ' *', style: TextStyle(color: Colors.red))] : [],
+      ),
+    );
+  }
+}
+
+class _NutriField extends StatelessWidget {
+  final TextEditingController controller;
+  final String label;
+  final String unit;
+  final Color color;
+  const _NutriField({required this.controller, required this.label, required this.unit, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+            const SizedBox(width: 5),
+            Text('$label ($unit)', style: TextStyle(fontFamily: 'Poppins', fontSize: 10, fontWeight: FontWeight.w600, color: color)),
+          ],
+        ),
+        const SizedBox(height: 4),
+        TextField(
+          controller: controller,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w700),
+          decoration: InputDecoration(
+            hintText: '0',
+            hintStyle: AppTextStyles.bodySmall.copyWith(color: context.appTextHint),
+            filled: true,
+            fillColor: context.appSurface,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: color.withValues(alpha: 0.2))),
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: color.withValues(alpha: 0.2))),
+            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: color)),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -510,32 +813,23 @@ class _Field extends StatelessWidget {
   final TextEditingController controller;
   final String label;
   final String hint;
-  final TextInputType keyboardType;
-  final bool required;
-  const _Field({required this.controller, required this.label, required this.hint, this.keyboardType = TextInputType.text, this.required = false});
+  const _Field({required this.controller, required this.label, required this.hint});
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        RichText(
-          text: TextSpan(
-            text: label,
-            style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary),
-            children: required ? [const TextSpan(text: ' *', style: TextStyle(color: Colors.red))] : [],
-          ),
-        ),
+        Text(label, style: AppTextStyles.labelSmall.copyWith(color: context.appTextSecondary)),
         const SizedBox(height: 6),
         TextField(
           controller: controller,
-          keyboardType: keyboardType,
           style: AppTextStyles.bodyMedium,
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: AppTextStyles.bodySmall.copyWith(color: AppColors.textHint),
+            hintStyle: AppTextStyles.bodySmall.copyWith(color: context.appTextHint),
             filled: true,
-            fillColor: AppColors.background,
+            fillColor: context.appBackground,
             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
             focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE65100))),
@@ -554,7 +848,7 @@ class _MealTileSkeleton extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.appSurface,
         borderRadius: BorderRadius.circular(14),
         boxShadow: const [BoxShadow(color: Color(0x08000000), blurRadius: 6)],
       ),

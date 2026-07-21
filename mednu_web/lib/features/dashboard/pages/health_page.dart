@@ -96,7 +96,7 @@ class _HealthContent extends StatelessWidget {
           ]),
           const SizedBox(height: 12),
           Text(
-            'Track your vitals — blood pressure, blood sugar, steps, and more — using the MedNu mobile app. Your data syncs automatically to your profile.',
+            'Track your vitals — blood pressure, blood sugar, steps, and more — using the MedNU mobile app. Your data syncs automatically to your profile.',
             style: GoogleFonts.poppins(fontSize: 13, color: AppColors.textSecondary, height: 1.6),
           ),
           const SizedBox(height: 14),
@@ -177,11 +177,17 @@ class _MedicalInfoCard extends StatelessWidget {
                       child: Text(item.$2,
                           style: GoogleFonts.poppins(
                               fontSize: 13, color: AppColors.textSecondary))),
-                  Text(item.$3,
-                      style: GoogleFonts.poppins(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary)),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(item.$3,
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                        textAlign: TextAlign.right,
+                        style: GoogleFonts.poppins(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimary)),
+                  ),
                 ]),
               )),
         if (allergyList.isNotEmpty) ...[

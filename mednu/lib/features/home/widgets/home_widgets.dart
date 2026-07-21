@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
@@ -17,19 +16,27 @@ import '../../profile/screens/family_management_screen.dart';
 class DoctorConsultBanner extends StatelessWidget {
   const DoctorConsultBanner({super.key});
 
+  static const double _cardHeight = 192;
+  static const _cardRadius = BorderRadius.only(
+    bottomLeft: Radius.circular(28),
+    bottomRight: Radius.circular(28),
+  );
+  static const _brandGradient = LinearGradient(
+    colors: [Color(0xFFD81B60), Color(0xFF7B1FA2)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: () => context.push(AppRoutes.consultation),
       child: Container(
         width: double.infinity,
-        height: 176,
+        height: _cardHeight,
         decoration: BoxDecoration(
-          borderRadius: const BorderRadius.only(
-            bottomLeft: Radius.circular(28),
-            bottomRight: Radius.circular(28),
-          ),
-          gradient: AppColors.primaryGradient,
+          borderRadius: _cardRadius,
+          gradient: _brandGradient,
           boxShadow: [
             BoxShadow(
               color: AppColors.primary.withValues(alpha:0.38),
@@ -38,194 +45,177 @@ class DoctorConsultBanner extends StatelessWidget {
             ),
           ],
         ),
-        child: Stack(
-          children: [
-            // Large background circle top-right
-            Positioned(
-              right: -18, top: -25,
-              child: Container(
-                width: 130, height: 130,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha:0.08),
-                  shape: BoxShape.circle,
+        child: ClipRRect(
+          borderRadius: _cardRadius,
+          child: Stack(
+            children: [
+              // Large soft glow behind the doctor
+              Positioned(
+                right: -18, top: -25,
+                child: Container(
+                  width: 150, height: 150,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha:0.10),
+                    shape: BoxShape.circle,
+                  ),
                 ),
               ),
-            ),
-            Positioned(
-              right: 75, bottom: -35,
-              child: Container(
-                width: 80, height: 80,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha:0.05),
-                  shape: BoxShape.circle,
+              Positioned(
+                right: 75, bottom: -35,
+                child: Container(
+                  width: 80, height: 80,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha:0.05),
+                    shape: BoxShape.circle,
+                  ),
                 ),
               ),
-            ),
-            // Doctor avatar section on the right
-            Positioned(
-              right: 0, top: 0, bottom: 0,
-              child: SizedBox(
-                width: 130,
-                child: Stack(
-                  alignment: Alignment.center,
+              // Tiny dotted decoration, top-left
+              const Positioned(left: 20, top: 18, child: _DotGrid()),
+              // Doctor cutout illustration, fully contained within the card
+              Positioned(
+                right: 4, top: 0, bottom: 0,
+                width: 138,
+                child: Image.asset(
+                  'assets/images/avatar.png',
+                  fit: BoxFit.contain,
+                  alignment: Alignment.bottomCenter,
+                ),
+              ),
+              // Soft wave that lets the doctor emerge instead of a hard PNG crop line
+              Positioned(
+                left: 0, right: 0, bottom: 0,
+                height: 46,
+                child: ClipPath(
+                  clipper: _WaveClipper(),
+                  child: Container(
+                    color: Theme.of(context).colorScheme.surface,
+                  ),
+                ),
+              ),
+              // Text content on the left
+              Padding(
+                padding: const EdgeInsets.fromLTRB(22, 0, 128, 22),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // Outer glow ring
+                    const Text(
+                      'Consult Top\nDoctors',
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 21,
+                        fontWeight: FontWeight.w800,
+                        height: 1.12,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Video & chat with\nspecialists near you',
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 11,
+                        color: Colors.white70,
+                        height: 1.4,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
                     Container(
-                      width: 96, height: 96,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
                       decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white.withValues(alpha:0.2), width: 2),
-                      ),
-                    ),
-                    // Doctor photo
-                    ClipOval(
-                      child: CachedNetworkImage(
-                        imageUrl: 'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=200&h=200&fit=crop&crop=face&q=80',
-                        width: 82, height: 82,
-                        fit: BoxFit.cover,
-                        placeholder: (_, __) => Container(
-                          width: 82, height: 82,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha:0.18),
-                            shape: BoxShape.circle,
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(22),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha:0.12),
+                            blurRadius: 8,
+                            offset: const Offset(0, 3),
                           ),
-                          child: const Icon(Icons.medical_services_rounded, color: Colors.white, size: 38),
-                        ),
-                        errorWidget: (_, __, ___) => Container(
-                          width: 82, height: 82,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha:0.18),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(Icons.medical_services_rounded, color: Colors.white, size: 38),
-                        ),
+                        ],
                       ),
-                    ),
-                    // "Online" badge top-right
-                    Positioned(
-                      top: 18, right: 16,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(10),
-                          boxShadow: [
-                            BoxShadow(color: Colors.black.withValues(alpha:0.12), blurRadius: 8)
-                          ],
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              width: 6, height: 6,
-                              decoration: const BoxDecoration(
-                                color: Color(0xFF2E7D32),
-                                shape: BoxShape.circle,
-                              ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Quick Connect',
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.primary,
                             ),
-                            const SizedBox(width: 4),
-                            Text(
-                              'Online',
-                              style: TextStyle(
-                                fontFamily: 'Poppins',
-                                fontSize: 8,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.primary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    // Chat bubble bottom-left
-                    Positioned(
-                      bottom: 18, left: 12,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha:0.22),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Text(
-                          '💬 Ready',
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 8,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white,
                           ),
-                        ),
+                          const SizedBox(width: 5),
+                          Icon(Icons.arrow_forward_rounded, size: 12, color: AppColors.primary),
+                        ],
                       ),
                     ),
                   ],
                 ),
               ),
-            ),
-            // Text content on the left
-            Padding(
-              padding: const EdgeInsets.fromLTRB(22, 0, 130, 0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Text(
-                    'Consult Top Doctors',
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Video & chat with\nspecialists near you',
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 11,
-                      color: Colors.white70,
-                      height: 1.4,
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(22),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha:0.12),
-                          blurRadius: 8,
-                          offset: const Offset(0, 3),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Quick Connect',
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.primary,
-                          ),
-                        ),
-                        const SizedBox(width: 5),
-                        Icon(Icons.arrow_forward_rounded, size: 12, color: AppColors.primary),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
+}
+
+// Small dotted accent grid used as a decorative flourish on the banner.
+class _DotGrid extends StatelessWidget {
+  const _DotGrid();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: List.generate(3, (row) {
+        return Padding(
+          padding: EdgeInsets.only(bottom: row == 2 ? 0 : 6),
+          child: Row(
+            children: List.generate(3, (col) {
+              return Padding(
+                padding: EdgeInsets.only(right: col == 2 ? 0 : 6),
+                child: Container(
+                  width: 3, height: 3,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.28),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              );
+            }),
+          ),
+        );
+      }),
+    );
+  }
+}
+
+// Flowing wave used to blend the doctor's cutout into the card's bottom
+// edge instead of leaving a hard rectangular crop line.
+class _WaveClipper extends CustomClipper<Path> {
+  @override
+  Path getClip(Size size) {
+    return Path()
+      ..moveTo(0, size.height * 0.65)
+      ..cubicTo(
+        size.width * 0.16, size.height * 0.25,
+        size.width * 0.36, size.height * 0.95,
+        size.width * 0.60, size.height * 0.55,
+      )
+      ..cubicTo(
+        size.width * 0.78, size.height * 0.25,
+        size.width * 0.90, size.height * 0.70,
+        size.width, size.height * 0.40,
+      )
+      ..lineTo(size.width, size.height)
+      ..lineTo(0, size.height)
+      ..close();
+  }
+
+  @override
+  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -304,13 +294,17 @@ class AiDoctorCard extends StatelessWidget {
                         children: [
                           Row(
                             children: [
-                              const Text(
-                                'AI Doctor',
-                                style: TextStyle(
-                                  fontFamily: 'Poppins',
-                                  fontSize: 17,
-                                  fontWeight: FontWeight.w800,
-                                  color: Colors.white,
+                              const Flexible(
+                                child: Text(
+                                  'AI Doctor',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontFamily: 'Poppins',
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w800,
+                                    color: Colors.white,
+                                  ),
                                 ),
                               ),
                               const SizedBox(width: 8),
@@ -437,16 +431,25 @@ class SpecialtiesSection extends StatelessWidget {
   const SpecialtiesSection({super.key});
 
   static const _specs = [
-    _Spec('General',       Icons.medical_services_rounded,      Color(0xFF1565C0)),
-    _Spec('Cardiology',    Icons.favorite_rounded,              Color(0xFFC62828)),
-    _Spec('Dermatology',   Icons.face_retouching_natural,       Color(0xFFE65100)),
-    _Spec('Gynaecology',   Icons.pregnant_woman,                Color(0xFFC2185B)),
-    _Spec('Paediatrics',   Icons.child_care_rounded,            Color(0xFF6A1B9A)),
-    _Spec('ENT',           Icons.hearing_rounded,               Color(0xFF00695C)),
-    _Spec('Orthopaedics',  Icons.accessibility_new_rounded,     Color(0xFF283593)),
-    _Spec('Neurology',     Icons.psychology_rounded,            Color(0xFF4A148C)),
-    _Spec('Ophthalmology', Icons.visibility_rounded,            Color(0xFF2E7D32)),
-    _Spec('Psychiatry',    Icons.self_improvement_rounded,      Color(0xFF00838F)),
+    _Spec('General',          Icons.medical_services_rounded,   Color(0xFF1565C0)),
+    _Spec('Cardiology',       Icons.favorite_rounded,           Color(0xFFC62828)),
+    _Spec('Dermatology',      Icons.face_retouching_natural,    Color(0xFFE65100)),
+    _Spec('Gynaecology',      Icons.pregnant_woman,             Color(0xFFC2185B)),
+    _Spec('Paediatrics',      Icons.child_care_rounded,         Color(0xFF6A1B9A)),
+    _Spec('ENT',              Icons.hearing_rounded,            Color(0xFF00695C)),
+    _Spec('Orthopaedics',     Icons.accessibility_new_rounded,  Color(0xFF283593)),
+    _Spec('Neurology',        Icons.psychology_rounded,         Color(0xFF4A148C)),
+    _Spec('Ophthalmology',    Icons.visibility_rounded,         Color(0xFF2E7D32)),
+    _Spec('Psychiatry',       Icons.self_improvement_rounded,   Color(0xFF00838F)),
+    _Spec('Endocrinology',    Icons.science_rounded,            Color(0xFF558B2F)),
+    _Spec('Gastroenterology', Icons.monitor_heart_rounded,      Color(0xFFE65100)),
+    _Spec('Nephrology',       Icons.water_drop_rounded,         Color(0xFF283593)),
+    _Spec('Urology',          Icons.health_and_safety_rounded,  Color(0xFF7B1FA2)),
+    _Spec('Pulmonology',      Icons.air_rounded,                Color(0xFF006064)),
+    _Spec('General Surgery',  Icons.cut_rounded,                Color(0xFF4E342E)),
+    _Spec('Dental',           Icons.mood_rounded,               Color(0xFF00838F)),
+    _Spec('Rheumatology',     Icons.elderly_rounded,            Color(0xFF827717)),
+    _Spec('Oncology',         Icons.biotech_rounded,            Color(0xFFBF360C)),
   ];
 
   @override
@@ -468,16 +471,17 @@ class SpecialtiesSection extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: GridView.count(
-            crossAxisCount: 5,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: 10,
-            crossAxisSpacing: 6,
-            childAspectRatio: 0.75,
-            children: _specs.map((s) => _SpecChip(spec: s)).toList(),
+        SizedBox(
+          height: 82,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            itemCount: _specs.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 14),
+            itemBuilder: (_, i) => SizedBox(
+              width: 58,
+              child: _SpecChip(spec: _specs[i]),
+            ),
           ),
         ),
       ],
@@ -585,11 +589,14 @@ class FamilyRow extends ConsumerWidget {
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 20),
             children: [
-              _FamilyMemberTile(
-                member: _FamilyMember(
-                  name: userName.isNotEmpty ? userName.split(' ').first : 'You',
-                  initials: selfInitial,
-                  isActive: true,
+              GestureDetector(
+                onTap: () => context.push(AppRoutes.profile),
+                child: _FamilyMemberTile(
+                  member: _FamilyMember(
+                    name: userName.isNotEmpty ? userName.split(' ').first : 'You',
+                    initials: selfInitial,
+                    isActive: true,
+                  ),
                 ),
               ),
               ...members.map((m) {
@@ -610,7 +617,20 @@ class FamilyRow extends ConsumerWidget {
                   final currentUid = ref.read(authProvider).user?.uid
                       ?? FirebaseAuth.instance.currentUser?.uid
                       ?? '';
-                  showAddFamilyMemberSheet(context, ref, currentUid);
+                  final minorCount = members.where((m) {
+                    final age = m['age'];
+                    return age is int && age > 0 && age < 18;
+                  }).length;
+                  final adultCount = members.where((m) {
+                    final age = m['age'];
+                    return age is int && age >= 18;
+                  }).length;
+                  showAddFamilyMemberSheet(
+                    context, ref, currentUid,
+                    currentMinorCount: minorCount,
+                    currentAdultCount: adultCount,
+                    currentTotalCount: members.length,
+                  );
                 },
                 child: Container(
                   width: 60,
@@ -851,6 +871,7 @@ class _StripTile extends StatelessWidget {
     return GestureDetector(
       onTap: () => context.push(strip.route),
       child: Container(
+        height: 76,
         margin: const EdgeInsets.symmetric(horizontal: 20),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
@@ -878,12 +899,18 @@ class _StripTile extends StatelessWidget {
             const SizedBox(width: 12),
             Expanded(
               child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(strip.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: AppTextStyles.labelLarge.copyWith(color: strip.color, fontSize: 13)),
                   const SizedBox(height: 2),
-                  Text(strip.sub, style: AppTextStyles.bodySmall),
+                  Text(strip.sub,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.bodySmall),
                 ],
               ),
             ),
@@ -905,6 +932,8 @@ class _StripTile extends StatelessWidget {
                 ),
                 child: Text(
                   strip.ctaLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontFamily: 'Poppins',
                     fontSize: 10,
@@ -938,15 +967,16 @@ class _ServiceGridState extends State<ServiceGrid> {
 
   static final _services = [
     _Service('Emergency',   Icons.emergency_rounded,         AppColors.emergencyGrad,   AppRoutes.emergency,     null,      'Immediate 24/7 help for medical emergencies',  'Call Now'),
-    _Service('Consult',     Icons.video_call_rounded,        AppColors.consultGrad,     AppRoutes.consultation,  null,      'Book & consult with top specialists near you',  'Book Now'),
-    _Service('Medicine',    Icons.medication_liquid_rounded, AppColors.medicineGrad,    AppRoutes.medicine,      '20% OFF', 'Order medicines delivered to your doorstep',    'Order Now'),
+    _Service('Consultation', Icons.video_call_rounded,       AppColors.consultGrad,     AppRoutes.consultation,  null,      'Book with top specialists',  'Book Now'),
+    _Service('Pharmacy',    Icons.medication_liquid_rounded, AppColors.medicineGrad,    AppRoutes.medicine,      null,      'Order medicines to be delivered to your doorstep',    'Order Now'),
     _Service('Pregnancy',   Icons.pregnant_woman_rounded,    AppColors.pregnancyGrad,   AppRoutes.pregnancy,     'NEW',     'Track your pregnancy journey week by week',      'Track Now'),
-    _Service('Diagnostics', Icons.science_rounded,           AppColors.diagnosticGrad,  AppRoutes.diagnostics,   null,      'Book lab tests & home sample collection',        'Book Test'),
-    _Service('Care Assist', Icons.support_agent_rounded,     AppColors.careAssistGrad,  AppRoutes.careAssistant, null,      'AI-powered health assistant at your service',    'Try Now'),
+    _Service('Diagnostics', Icons.science_rounded,           AppColors.diagnosticGrad,  AppRoutes.diagnostics,   null,      'X-Ray, MRI, CT, ECG & imaging scans',        'Book Test'),
+    _Service('Lab Tests',   Icons.bloodtype_rounded,         AppColors.labTestGrad,    AppRoutes.labTests,     null,      'Book blood & lab tests with certified labs', 'Book Test'),
+    _Service('Care Assist', Icons.support_agent_rounded,     AppColors.careAssistGrad,  AppRoutes.careAssistant, null,      'Health assistant at your service',    'Try Now'),
     _Service('Ambulance',   Icons.local_shipping_rounded,    AppColors.ambulanceGrad,   AppRoutes.ambulance,     null,      'Emergency ambulance at your location',           'Call Now'),
-    _Service('Physio',      Icons.fitness_center_rounded,    AppColors.physioGrad,      AppRoutes.physio,        null,      'Physiotherapy & rehabilitation at home',          'Book Now'),
-    _Service('Nutrition',   Icons.restaurant_rounded,        AppColors.nutritionGrad,   AppRoutes.nutrition,     null,      'Personalised diet plans from nutritionists',      'Get Plan'),
-    _Service('Therapy',     Icons.psychology_rounded,        AppColors.counselGrad,     AppRoutes.counselling,   null,      'Mental health support & therapy sessions',        'Book Now'),
+    _Service('Physiotherapy', Icons.fitness_center_rounded,  AppColors.physioGrad,      AppRoutes.physio,        null,      'Physiotherapy & rehabilitation',          'Book Now'),
+    _Service('Nutrition and Diet',   Icons.restaurant_rounded,        AppColors.nutritionGrad,   AppRoutes.nutrition,     null,      'Personalised diet plans from nutritionists',      'Get Plan'),
+    _Service('Therapy and Counselling', Icons.psychology_rounded, AppColors.counselGrad,     AppRoutes.counselling,   null,      'Mental health support & therapy sessions',        'Book Now'),
     _Service('Equipment',   Icons.medical_services_rounded,  AppColors.equipmentGrad,   AppRoutes.equipment,     null,      'Rent or buy medical equipment online',            'Browse'),
     _Service('Caregivers',  Icons.elderly_rounded,           AppColors.caregiverGrad,   AppRoutes.caregivers,    null,      'Trained attendants & caregiver support',          'Hire Now'),
   ];
@@ -1128,6 +1158,8 @@ class _ServiceCarouselCard extends StatelessWidget {
                     const Spacer(),
                     Text(
                       service.label,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontFamily: 'Poppins',
                         fontSize: isCenter ? 16 : 12,
@@ -1419,21 +1451,21 @@ class UpcomingAppointmentCard extends StatelessWidget {
                   Text(specialty, style: AppTextStyles.bodySmall),
                 ],
                 const SizedBox(height: 8),
-                Row(
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
                   children: [
                     _InfoChip(
                       icon: Icons.calendar_today_outlined,
                       label: displayDate,
                       color: AppColors.primary,
                     ),
-                    if (time.isNotEmpty) ...[
-                      const SizedBox(width: 8),
+                    if (time.isNotEmpty)
                       _InfoChip(
                         icon: Icons.access_time_rounded,
                         label: time,
                         color: AppColors.secondary,
                       ),
-                    ],
                   ],
                 ),
               ],
@@ -1625,12 +1657,17 @@ class _InfoChip extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, size: 11, color: color),
           const SizedBox(width: 4),
-          Text(label,
-              style: AppTextStyles.caption.copyWith(
-                  color: color, fontWeight: FontWeight.w700, fontSize: 10)),
+          Flexible(
+            child: Text(label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.caption.copyWith(
+                    color: color, fontWeight: FontWeight.w700, fontSize: 10)),
+          ),
         ],
       ),
     );

@@ -1,7 +1,8 @@
+import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
 
 final authStateProvider = StreamProvider<User?>((ref) {
   return FirebaseAuth.instance.authStateChanges();
@@ -36,34 +37,45 @@ class AuthState {
       );
 }
 
+// Base URL used for the two OTP endpoints — routed through Firebase Hosting
+// so the Cloud Run service account auth is handled transparently.
+const _kApiBase = 'https://mednu-healthcare-app.web.app';
+
 class AuthNotifier extends StateNotifier<AuthState> {
   AuthNotifier() : super(const AuthState());
-
-  final _functions = FirebaseFunctions.instance;
 
   Future<void> sendOtp(String phone) async {
     state = state.copyWith(loading: true, phone: phone, error: null);
     try {
-      await _functions.httpsCallable('msg91SendOtp').call({
-        'phone': '+91$phone',
-      });
+      final res = await http.post(
+        Uri.parse('$_kApiBase/api/sendOtp'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'phone': '+91$phone'}),
+      );
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      if (res.statusCode != 200) {
+        throw Exception(data['error'] ?? 'Failed to send OTP.');
+      }
       state = state.copyWith(step: AuthStep.otp, loading: false);
-    } on FirebaseFunctionsException catch (e) {
-      state = state.copyWith(loading: false, error: e.message ?? 'Failed to send OTP.');
     } catch (e) {
-      state = state.copyWith(loading: false, error: e.toString());
+      state = state.copyWith(loading: false, error: e.toString().replaceFirst('Exception: ', ''));
     }
   }
 
   Future<void> verifyOtp(String otp) async {
     state = state.copyWith(loading: true, error: null);
     try {
-      final result = await _functions.httpsCallable('msg91VerifyOtp').call({
-        'phone': '+91${state.phone}',
-        'otp': otp,
-      });
+      final res = await http.post(
+        Uri.parse('$_kApiBase/api/verifyOtp'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'phone': '+91${state.phone}', 'otp': otp}),
+      );
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      if (res.statusCode != 200) {
+        throw Exception(data['error'] ?? 'Incorrect OTP. Please try again.');
+      }
 
-      final customToken = result.data['customToken'] as String?;
+      final customToken = data['customToken'] as String?;
       if (customToken == null || customToken.isEmpty) {
         throw Exception('Verification failed. Please try again.');
       }
@@ -87,10 +99,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
         step: hasProfile ? AuthStep.done : AuthStep.register,
         loading: false,
       );
-    } on FirebaseFunctionsException catch (e) {
-      state = state.copyWith(loading: false, error: e.message ?? 'Incorrect OTP. Please try again.');
     } catch (e) {
-      state = state.copyWith(loading: false, error: e.toString());
+      state = state.copyWith(loading: false, error: e.toString().replaceFirst('Exception: ', ''));
     }
   }
 

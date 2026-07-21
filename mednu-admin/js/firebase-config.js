@@ -22,7 +22,7 @@ const storage = firebase.storage();
 // ============================================
 //  HOW TO GET THESE VALUES:
 //  1. Go to https://console.firebase.google.com
-//  2. Select your Mednu project
+//  2. Select your MedNU project
 //  3. Click the gear icon → Project Settings
 //  4. Scroll to "Your apps" → Web app
 //  5. Copy the firebaseConfig object and paste above

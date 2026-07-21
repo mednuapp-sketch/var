@@ -48,7 +48,7 @@ class CallForegroundService : Service() {
                         "Active Call",
                         NotificationManager.IMPORTANCE_LOW
                     ).apply {
-                        description = "Ongoing MedNu consultation call"
+                        description = "Ongoing MedNU consultation call"
                         setShowBadge(false)
                     }
                 )
@@ -73,7 +73,7 @@ class CallForegroundService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val title = if (callerName.isNotEmpty()) "In call with $callerName" else "MedNu Call Active"
+        val title = if (callerName.isNotEmpty()) "In call with $callerName" else "MedNU Call Active"
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)

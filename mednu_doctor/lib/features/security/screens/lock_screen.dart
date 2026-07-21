@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import '../../../core/constants/app_colors.dart';
 import '../services/biometric_service.dart';
 
@@ -76,8 +75,8 @@ class _LockScreenState extends State<LockScreen> {
                   ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(24),
-                    child: SvgPicture.asset(
-                      'assets/icons/mednu_logo.svg',
+                    child: Image.asset(
+                      'assets/icons/mednu_logo.png',
                       fit: BoxFit.contain,
                     ),
                   ),

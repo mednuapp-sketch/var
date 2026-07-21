@@ -55,6 +55,7 @@ class AppColors {
   static const LinearGradient medicineGrad    = LinearGradient(colors: [Color(0xFF66BB6A), Color(0xFF2E7D32)], begin: Alignment.topLeft, end: Alignment.bottomRight);
   static const LinearGradient consultGrad     = LinearGradient(colors: [Color(0xFFAB47BC), Color(0xFF6A1B9A)], begin: Alignment.topLeft, end: Alignment.bottomRight);
   static const LinearGradient diagnosticGrad  = LinearGradient(colors: [Color(0xFF26C6DA), Color(0xFF0097A7)], begin: Alignment.topLeft, end: Alignment.bottomRight);
+  static const LinearGradient labTestGrad     = LinearGradient(colors: [Color(0xFF5C6BC0), Color(0xFF3949AB)], begin: Alignment.topLeft, end: Alignment.bottomRight);
   static const LinearGradient careAssistGrad  = LinearGradient(colors: [Color(0xFFFFA726), Color(0xFFE65100)], begin: Alignment.topLeft, end: Alignment.bottomRight);
   static const LinearGradient ambulanceGrad   = LinearGradient(colors: [Color(0xFFEF5350), Color(0xFF880E4F)], begin: Alignment.topLeft, end: Alignment.bottomRight);
   static const LinearGradient physioGrad      = LinearGradient(colors: [Color(0xFF42A5F5), Color(0xFF0D47A1)], begin: Alignment.topLeft, end: Alignment.bottomRight);
@@ -82,4 +83,40 @@ class AppColors {
 
   // ── Shadow ────────────────────────────────────────────
   static const Color shadow   = Color(0x1AC2185B);
+}
+
+// ─────────────────────────────────────────────────────────
+// Theme-aware color access — use these instead of the raw
+// AppColors.* constants above (which are light-mode only)
+// whenever a widget needs to look correct in dark mode too.
+// Values mirror exactly what AppTheme.darkTheme/lightTheme
+// already define for each role.
+// ─────────────────────────────────────────────────────────
+extension AppColorsContext on BuildContext {
+  bool get isDarkMode => Theme.of(this).brightness == Brightness.dark;
+
+  /// Scaffold / page background.
+  Color get appBackground => Theme.of(this).scaffoldBackgroundColor;
+
+  /// Card / elevated container background.
+  Color get appSurface =>
+      Theme.of(this).cardTheme.color ?? Theme.of(this).colorScheme.surface;
+
+  /// Primary text color.
+  Color get appTextPrimary => Theme.of(this).colorScheme.onSurface;
+
+  /// Secondary / muted text color.
+  Color get appTextSecondary =>
+      isDarkMode ? const Color(0xFFB0BEC5) : AppColors.textSecondary;
+
+  /// Hint / tertiary text color.
+  Color get appTextHint =>
+      isDarkMode ? const Color(0xFF7D8FAD) : AppColors.textHint;
+
+  /// Divider color.
+  Color get appDivider => Theme.of(this).dividerColor;
+
+  /// Border color.
+  Color get appBorder =>
+      isDarkMode ? AppColors.darkBorderMedium : AppColors.border;
 }

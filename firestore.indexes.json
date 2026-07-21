@@ -779,6 +779,14 @@
       ]
     },
     {
+      "collectionGroup": "care_assistants",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "isActive",  "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "appointment_slots",
       "queryScope": "COLLECTION",
       "fields": [

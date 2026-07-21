@@ -72,21 +72,21 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   Future<void> _navigate() async {
     await Future.delayed(const Duration(milliseconds: 1500));
     if (!mounted) return;
-    final ok = await MedicalDisclaimerScreen.hasAccepted();
+    final prefs = await SharedPreferences.getInstance();
+    final accepted = prefs.getBool('disclaimer_accepted') ?? false;
     if (!mounted) return;
-    if (!ok) { _showDisclaimer(); return; }
+    if (!accepted) { await _showDisclaimer(prefs); return; }
     await _go();
   }
 
-  void _showDisclaimer() {
+  Future<void> _showDisclaimer(SharedPreferences prefs) async {
     if (!mounted) return;
-    Navigator.of(context).push(MaterialPageRoute(
+    await Navigator.of(context).push(MaterialPageRoute(
       fullscreenDialog: true,
-      builder: (_) => MedicalDisclaimerScreen(onAccepted: () async {
-        if (mounted) Navigator.of(context).pop();
-        await _go();
-      }),
+      builder: (_) => const MedicalDisclaimerScreen(),
     ));
+    await prefs.setBool('disclaimer_accepted', true);
+    await _go();
   }
 
   Future<void> _go() async {
@@ -269,7 +269,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                                 ),
                               ),
 
-                              // MedNu logo
+                              // MedNU logo
                               ClipRRect(
                                 borderRadius: BorderRadius.circular(
                                     size.width * 0.58 * 110 / 512),
@@ -320,7 +320,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                       Opacity(
                         opacity: tagFade,
                         child: Text(
-                          'ALWAYS WITH YOU',
+                          'MEDNU ALWAYS WITH YOU',
                           style: TextStyle(
                             fontFamily:  'Poppins',
                             fontSize:    size.width * 0.033,
@@ -353,7 +353,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                               ),
                               SizedBox(height: size.height * 0.016),
                               Text(
-                                'MedNU Healthcare Services Pvt. Ltd.',
+                                'MedNU Always With You',
                                 style: TextStyle(
                                   fontFamily: 'Poppins',
                                   fontSize:   size.width * 0.028,

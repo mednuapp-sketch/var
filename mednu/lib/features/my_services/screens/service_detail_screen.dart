@@ -1,13 +1,16 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter_rating_bar/flutter_rating_bar.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/services/feedback_service.dart';
+import '../../../core/utils/r.dart';
 import '../models/unified_booking.dart';
 import '../providers/my_services_provider.dart';
 import '../services/my_services_service.dart';
@@ -27,6 +30,12 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
   late final AnimationController _entryCtrl;
   late final Animation<double> _entryAnim;
 
+  // Rating state
+  double _userRating = 0;
+  final _reviewCtrl = TextEditingController();
+  bool _submittingReview = false;
+  bool _reviewSubmitted = false;
+
   @override
   void initState() {
     super.initState();
@@ -36,7 +45,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
     )..repeat(reverse: true);
     _entryCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 600),
+      duration: const Duration(milliseconds: 500),
     )..forward();
     _entryAnim =
         CurvedAnimation(parent: _entryCtrl, curve: Curves.easeOutCubic);
@@ -46,6 +55,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
   void dispose() {
     _pulseCtrl.dispose();
     _entryCtrl.dispose();
+    _reviewCtrl.dispose();
     super.dispose();
   }
 
@@ -57,25 +67,32 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
     return FadeTransition(
       opacity: _entryAnim,
       child: Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: context.appBackground,
         body: CustomScrollView(
           slivers: [
-            _buildAppBar(context, live),
+            _buildSliverAppBar(context, live),
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 20, 16, 100),
+                padding: EdgeInsets.fromLTRB(R.p(context, 16), R.p(context, 20), R.p(context, 16), R.p(context, 100)),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildStatusCard(context, live),
-                    const SizedBox(height: 20),
+                    SizedBox(height: R.h(context, 16)),
                     _buildTimeline(context, live),
-                    const SizedBox(height: 20),
-                    if (live.providerName != null)
+                    SizedBox(height: R.h(context, 16)),
+                    if (live.providerName != null) ...[
                       _buildProviderCard(context, live),
-                    if (live.providerName != null) const SizedBox(height: 20),
-                    _buildBookingDetails(context, live),
-                    const SizedBox(height: 20),
+                      SizedBox(height: R.h(context, 16)),
+                    ],
+                    _buildBookingInfo(context, live),
+                    SizedBox(height: R.h(context, 16)),
+                    _buildPaymentInfo(context, live),
+                    SizedBox(height: R.h(context, 16)),
+                    if (live.isCompleted && !_reviewSubmitted)
+                      _buildRatingSection(context),
+                    if (live.isCompleted && !_reviewSubmitted)
+                      SizedBox(height: R.h(context, 16)),
                     _buildActionButtons(context, live),
                   ],
                 ),
@@ -87,15 +104,16 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
     );
   }
 
-  // ── App Bar ──────────────────────────────────────────────────────────────────
+  // ── SliverAppBar ─────────────────────────────────────────────────────────────
 
-  SliverAppBar _buildAppBar(BuildContext context, UnifiedBooking live) {
+  SliverAppBar _buildSliverAppBar(BuildContext context, UnifiedBooking live) {
     final info = _ServiceInfo.from(live);
     return SliverAppBar(
       pinned: true,
-      expandedHeight: 180,
+      expandedHeight: 190,
       leading: IconButton(
-        icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
+        icon: const Icon(Icons.arrow_back_ios_new_rounded,
+            color: Colors.white),
         onPressed: () => context.pop(),
       ),
       actions: [
@@ -108,66 +126,95 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
         collapseMode: CollapseMode.pin,
         background: Container(
           decoration: BoxDecoration(gradient: info.gradient),
-          child: SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 56, 20, 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha:0.2),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Icon(info.icon, color: Colors.white, size: 22),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(live.serviceType,
-                                style: AppTextStyles.h3
-                                    .copyWith(color: Colors.white)),
-                            if (live.providerName != null)
-                              Text(live.providerName!,
-                                  style: AppTextStyles.bodySmall
-                                      .copyWith(color: Colors.white70)),
-                          ],
-                        ),
-                      ),
-                    ],
+          child: Stack(
+            children: [
+              // Decorative circles
+              Positioned(
+                top: -20, right: -20,
+                child: Container(
+                  width: 120, height: 120,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withValues(alpha: 0.07),
                   ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      _AppBarChip(
-                        icon: Icons.tag_rounded,
-                        label: live.id
-                            .substring(0, live.id.length.clamp(0, 8))
-                            .toUpperCase(),
-                      ),
-                      const SizedBox(width: 8),
-                      _LiveStatusDot(status: live.status, pulse: _pulseCtrl),
-                      const SizedBox(width: 6),
-                      Text(
-                        live.status.label,
-                        style: const TextStyle(
-                          fontFamily: 'Poppins',
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+                ),
               ),
-            ),
+              SafeArea(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    return SingleChildScrollView(
+                      physics: const ClampingScrollPhysics(),
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                        child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 54, 20, 20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 46,
+                            height: 46,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(13),
+                            ),
+                            child: Icon(info.icon,
+                                color: Colors.white, size: 22),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(live.serviceType,
+                                    style: AppTextStyles.h3
+                                        .copyWith(color: Colors.white)),
+                                if (live.providerName != null)
+                                  Text(live.providerName!,
+                                      style: AppTextStyles.bodySmall
+                                          .copyWith(
+                                              color: Colors.white70)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      Row(
+                        children: [
+                          _AppBarChip(
+                            icon: Icons.tag_rounded,
+                            label: live.id
+                                .substring(0,
+                                    live.id.length.clamp(0, 8))
+                                .toUpperCase(),
+                          ),
+                          const SizedBox(width: 8),
+                          _LiveStatusDot(
+                              status: live.status, pulse: _pulseCtrl),
+                          const SizedBox(width: 5),
+                          Text(
+                            live.status.label,
+                            style: const TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -183,24 +230,27 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isDark ? AppColors.darkCard : bg.withValues(alpha:0.08),
-        borderRadius: BorderRadius.circular(18),
+        color: isDark ? AppColors.darkCard : bg.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
-            color: isDark ? AppColors.darkBorder : bg.withValues(alpha:0.3)),
+            color:
+                isDark ? AppColors.darkBorder : bg.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
           AnimatedBuilder(
             animation: _pulseCtrl,
             builder: (_, __) => Container(
-              width: 44,
-              height: 44,
+              width: 46,
+              height: 46,
               decoration: BoxDecoration(
                 color: live.isActive
-                    ? Color.lerp(bg.withValues(alpha:0.15), bg.withValues(alpha:0.3),
+                    ? Color.lerp(
+                        bg.withValues(alpha: 0.15),
+                        bg.withValues(alpha: 0.3),
                         _pulseCtrl.value)!
-                    : bg.withValues(alpha:0.15),
-                borderRadius: BorderRadius.circular(14),
+                    : bg.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(13),
               ),
               child: Icon(_statusIcon(live.status), color: fg, size: 22),
             ),
@@ -211,16 +261,19 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('Current Status',
-                    style:
-                        AppTextStyles.caption.copyWith(color: AppColors.textHint)),
+                    style: AppTextStyles.caption
+                        .copyWith(color: context.appTextHint)),
                 const SizedBox(height: 2),
                 Text(live.status.label,
-                    style: AppTextStyles.labelLarge.copyWith(color: fg)),
+                    style:
+                        AppTextStyles.labelLarge.copyWith(color: fg)),
                 const SizedBox(height: 2),
                 Text(
                   _statusSubtext(live.status),
-                  style: AppTextStyles.bodySmall
-                      .copyWith(color: AppColors.textSecondary, fontSize: 11),
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: context.appTextSecondary,
+                    fontSize: 11,
+                  ),
                 ),
               ],
             ),
@@ -230,7 +283,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
               padding:
                   const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: bg.withValues(alpha:0.15),
+                color: bg.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
@@ -239,11 +292,10 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
                   AnimatedBuilder(
                     animation: _pulseCtrl,
                     builder: (_, __) => Container(
-                      width: 6,
-                      height: 6,
+                      width: 6, height: 6,
                       decoration: BoxDecoration(
-                        color:
-                            fg.withValues(alpha:0.5 + _pulseCtrl.value * 0.5),
+                        color: fg.withValues(
+                            alpha: 0.5 + _pulseCtrl.value * 0.5),
                         shape: BoxShape.circle,
                       ),
                     ),
@@ -268,32 +320,32 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
   Widget _buildTimeline(BuildContext context, UnifiedBooking live) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final steps = live.timeline;
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: isDark ? AppColors.darkCard : Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-            color: isDark ? AppColors.darkBorder : AppColors.divider),
-        boxShadow: isDark
-            ? null
-            : [
-                BoxShadow(
-                    color: Colors.black.withValues(alpha:0.04),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2)),
-              ],
-      ),
+
+    return _SectionCard(
+      isDark: isDark,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Progress Timeline', style: AppTextStyles.h4),
+          Row(
+            children: [
+              Container(
+                width: 32, height: 32,
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: const Icon(Icons.timeline_rounded,
+                    color: AppColors.primary, size: 16),
+              ),
+              const SizedBox(width: 10),
+              Text('Progress Timeline', style: AppTextStyles.h4),
+            ],
+          ),
           const SizedBox(height: 16),
           ...steps.asMap().entries.map((e) => _TimelineStep(
                 step: e.value,
                 isLast: e.key == steps.length - 1,
                 pulseCtrl: _pulseCtrl,
-                isCancelled: live.isCancelled,
               )),
         ],
       ),
@@ -304,38 +356,43 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
 
   Widget _buildProviderCard(BuildContext context, UnifiedBooking live) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isDark ? AppColors.darkCard : Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-            color: isDark ? AppColors.darkBorder : AppColors.divider),
-        boxShadow: isDark
-            ? null
-            : [
-                BoxShadow(
-                    color: Colors.black.withValues(alpha:0.04),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2)),
-              ],
-      ),
+
+    return _SectionCard(
+      isDark: isDark,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Service Provider', style: AppTextStyles.h4),
-          const SizedBox(height: 14),
           Row(
             children: [
               Container(
-                width: 52,
-                height: 52,
-                decoration: const BoxDecoration(
-                  gradient: AppColors.primaryGradient,
-                  shape: BoxShape.circle,
+                width: 32, height: 32,
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(9),
                 ),
                 child: const Icon(Icons.person_rounded,
-                    color: Colors.white, size: 28),
+                    color: AppColors.primary, size: 16),
+              ),
+              const SizedBox(width: 10),
+              Text('Service Provider', style: AppTextStyles.h4),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              // Provider photo
+              ClipRRect(
+                borderRadius: BorderRadius.circular(26),
+                child: live.providerPhoto != null &&
+                        live.providerPhoto!.isNotEmpty
+                    ? CachedNetworkImage(
+                        imageUrl: live.providerPhoto!,
+                        width: 52, height: 52,
+                        fit: BoxFit.cover,
+                        placeholder: (_, __) => _providerAvatar(),
+                        errorWidget: (_, __, ___) => _providerAvatar(),
+                      )
+                    : _providerAvatar(),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -346,10 +403,25 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
                         style: AppTextStyles.labelLarge),
                     if (live.providerSpecialty != null)
                       Text(live.providerSpecialty!,
-                          style: AppTextStyles.bodySmall
-                              .copyWith(color: AppColors.textSecondary)),
+                          style: AppTextStyles.bodySmall.copyWith(
+                              color: context.appTextSecondary)),
+                    const SizedBox(height: 4),
+                    // Static 4-star rating display
+                    Row(
+                      children: List.generate(
+                          5,
+                          (i) => Icon(
+                                i < 4
+                                    ? Icons.star_rounded
+                                    : Icons.star_border_rounded,
+                                size: 14,
+                                color: i < 4
+                                    ? const Color(0xFFF57F17)
+                                    : context.appTextHint,
+                              )),
+                    ),
                     if (live.providerPhone != null) ...[
-                      const SizedBox(height: 3),
+                      const SizedBox(height: 4),
                       Row(
                         children: [
                           const Icon(Icons.phone_rounded,
@@ -358,8 +430,9 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
                           Text(
                             live.providerPhone!,
                             style: AppTextStyles.caption.copyWith(
-                                color: AppColors.primary,
-                                fontWeight: FontWeight.w600),
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ],
                       ),
@@ -371,11 +444,12 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
                 GestureDetector(
                   onTap: () => _callProvider(live.providerPhone!),
                   child: Container(
-                    width: 42,
-                    height: 42,
+                    width: 44, height: 44,
                     decoration: BoxDecoration(
-                      color: AppColors.success.withValues(alpha:0.1),
-                      borderRadius: BorderRadius.circular(12),
+                      color: AppColors.success.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(13),
+                      border: Border.all(
+                          color: AppColors.success.withValues(alpha: 0.3)),
                     ),
                     child: const Icon(Icons.call_rounded,
                         color: AppColors.success, size: 20),
@@ -388,9 +462,19 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
     );
   }
 
-  // ── Booking Details ───────────────────────────────────────────────────────────
+  Widget _providerAvatar() => Container(
+        width: 52, height: 52,
+        decoration: const BoxDecoration(
+          gradient: AppColors.primaryGradient,
+          shape: BoxShape.circle,
+        ),
+        child: const Icon(Icons.person_rounded,
+            color: Colors.white, size: 28),
+      );
 
-  Widget _buildBookingDetails(BuildContext context, UnifiedBooking live) {
+  // ── Booking Info ──────────────────────────────────────────────────────────────
+
+  Widget _buildBookingInfo(BuildContext context, UnifiedBooking live) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final items = <_DetailItem>[];
 
@@ -411,16 +495,9 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
     if (live.address != null && live.address!.isNotEmpty) {
       items.add(_DetailItem(
           icon: Icons.location_on_rounded,
-          label: 'Address',
+          label: 'Location',
           value: live.address!,
           color: AppColors.error));
-    }
-    if (live.amount != null) {
-      items.add(_DetailItem(
-          icon: Icons.currency_rupee_rounded,
-          label: 'Amount',
-          value: '₹${live.amount!.toStringAsFixed(0)}',
-          color: AppColors.success));
     }
     if (live.notes != null && live.notes!.isNotEmpty) {
       items.add(_DetailItem(
@@ -432,38 +509,218 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
 
     if (items.isEmpty) return const SizedBox.shrink();
 
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: isDark ? AppColors.darkCard : Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-            color: isDark ? AppColors.darkBorder : AppColors.divider),
-        boxShadow: isDark
-            ? null
-            : [
-                BoxShadow(
-                    color: Colors.black.withValues(alpha:0.04),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2)),
-              ],
-      ),
+    return _SectionCard(
+      isDark: isDark,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Booking Details', style: AppTextStyles.h4),
+          Row(
+            children: [
+              Container(
+                width: 32, height: 32,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1565C0).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: const Icon(Icons.event_note_rounded,
+                    color: Color(0xFF1565C0), size: 16),
+              ),
+              const SizedBox(width: 10),
+              Text('Booking Info', style: AppTextStyles.h4),
+            ],
+          ),
+          const SizedBox(height: 16),
+          for (final e in items.asMap().entries) ...[
+            _DetailRow(item: e.value),
+            if (e.key < items.length - 1) ...[
+              const SizedBox(height: 12),
+              Divider(height: 1, color: context.appDivider),
+              const SizedBox(height: 12),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ── Payment Info ─────────────────────────────────────────────────────────────
+
+  Widget _buildPaymentInfo(BuildContext context, UnifiedBooking live) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    if (live.amount == null) return const SizedBox.shrink();
+
+    // Derive payment fields from rawData if available
+    final rawMethod =
+        live.rawData['paymentMethod'] as String? ?? 'Online Payment';
+    final txnId = live.rawData['transactionId'] as String?;
+    final isPaid = live.rawData['paymentStatus'] as String? ?? 'Paid';
+
+    return _SectionCard(
+      isDark: isDark,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 32, height: 32,
+                decoration: BoxDecoration(
+                  color: AppColors.success.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: const Icon(Icons.receipt_long_rounded,
+                    color: AppColors.success, size: 16),
+              ),
+              const SizedBox(width: 10),
+              Text('Payment Info', style: AppTextStyles.h4),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Amount row
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Amount',
+                  style: AppTextStyles.bodyMedium
+                      .copyWith(color: context.appTextSecondary)),
+              Text(
+                '₹${live.amount!.toStringAsFixed(0)}',
+                style: const TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.success,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Divider(height: 1, color: context.appDivider),
+          const SizedBox(height: 12),
+
+          _PaymentRow(
+              label: 'Payment Method',
+              value: rawMethod,
+              icon: Icons.credit_card_rounded),
+          const SizedBox(height: 10),
+          if (txnId != null) ...[
+            _PaymentRow(
+                label: 'Transaction ID',
+                value: txnId,
+                icon: Icons.tag_rounded),
+            const SizedBox(height: 10),
+          ],
+          _PaymentRow(
+              label: 'Status',
+              value: isPaid,
+              icon: Icons.check_circle_outline_rounded,
+              isSuccess: true),
+        ],
+      ),
+    );
+  }
+
+  // ── Rating & Review Section ───────────────────────────────────────────────────
+
+  Widget _buildRatingSection(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return _SectionCard(
+      isDark: isDark,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 32, height: 32,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF57F17).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: const Icon(Icons.star_rounded,
+                    color: Color(0xFFF57F17), size: 16),
+              ),
+              const SizedBox(width: 10),
+              Text('Rate & Review', style: AppTextStyles.h4),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'How was your experience? Your feedback helps us improve.',
+            style: AppTextStyles.bodySmall
+                .copyWith(color: context.appTextSecondary),
+          ),
+          const SizedBox(height: 16),
+          Center(
+            child: RatingBar.builder(
+              initialRating: _userRating,
+              minRating: 1,
+              direction: Axis.horizontal,
+              allowHalfRating: true,
+              itemCount: 5,
+              itemSize: 36,
+              glow: false,
+              itemPadding:
+                  const EdgeInsets.symmetric(horizontal: 4),
+              itemBuilder: (_, __) => const Icon(
+                Icons.star_rounded,
+                color: Color(0xFFF57F17),
+              ),
+              onRatingUpdate: (r) =>
+                  setState(() => _userRating = r),
+            ),
+          ),
           const SizedBox(height: 14),
-          ...items.asMap().entries.expand((e) {
-            final isLast = e.key == items.length - 1;
-            return [
-              _BookingDetailRow(item: e.value),
-              if (!isLast) ...[
-                const SizedBox(height: 12),
-                const Divider(height: 1, color: AppColors.divider),
-                const SizedBox(height: 12),
-              ],
-            ];
-          }),
+          TextField(
+            controller: _reviewCtrl,
+            maxLines: 3,
+            decoration: InputDecoration(
+              hintText: 'Write a review (optional)...',
+              hintStyle: AppTextStyles.bodySmall
+                  .copyWith(color: context.appTextHint),
+              filled: true,
+              fillColor: isDark
+                  ? AppColors.darkCardElevated
+                  : context.appBackground,
+              contentPadding: const EdgeInsets.all(14),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _userRating == 0 || _submittingReview
+                  ? null
+                  : () => _submitReview(context),
+              icon: _submittingReview
+                  ? const SizedBox(
+                      width: 16, height: 16,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white))
+                  : const Icon(Icons.send_rounded, size: 16),
+              label: Text(
+                  _submittingReview ? 'Submitting...' : 'Submit Review'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFF57F17),
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(vertical: 13),
+                textStyle: const TextStyle(
+                  fontFamily: 'Poppins',
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                ),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -485,6 +742,17 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
             color: AppColors.primary,
             onTap: () => _contactSupport(context, live),
           ),
+        if (live.isActive) ...[
+          const SizedBox(height: 10),
+          _ActionButton(
+            icon: Icons.event_repeat_rounded,
+            label: 'Reschedule Booking',
+            color: AppColors.info,
+            outlined: true,
+            onTap: () => FeedbackService.showInfo(
+                context, 'Reschedule coming soon.'),
+          ),
+        ],
         if (canCancel) ...[
           const SizedBox(height: 10),
           _ActionButton(
@@ -501,7 +769,17 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
             icon: Icons.refresh_rounded,
             label: 'Rebook This Service',
             color: AppColors.success,
-            onTap: () => FeedbackService.showInfo(context, 'Redirecting to booking…'),
+            onTap: () =>
+                FeedbackService.showInfo(context, 'Redirecting to booking…'),
+          ),
+          const SizedBox(height: 10),
+          _ActionButton(
+            icon: Icons.download_rounded,
+            label: 'Download Receipt',
+            color: context.appTextSecondary,
+            outlined: true,
+            onTap: () =>
+                FeedbackService.showInfo(context, 'Receipt download coming soon.'),
           ),
         ],
       ],
@@ -527,10 +805,23 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
 
   void _shareBooking(UnifiedBooking live) {
     final text =
-        'My ${live.serviceType} booking (#${live.id.substring(0, 8).toUpperCase()}) — Status: ${live.status.label}. Booked via MedNu.';
+        'My ${live.serviceType} booking (#${live.id.substring(0, 8).toUpperCase()}) — Status: ${live.status.label}. Booked via MedNU.';
     Clipboard.setData(ClipboardData(text: text));
     if (mounted) {
-      FeedbackService.showSuccess(context, 'Booking info copied to clipboard');
+      FeedbackService.showSuccess(
+          context, 'Booking info copied to clipboard');
+    }
+  }
+
+  Future<void> _submitReview(BuildContext context) async {
+    setState(() => _submittingReview = true);
+    await Future.delayed(const Duration(seconds: 1));
+    if (mounted) {
+      setState(() {
+        _submittingReview = false;
+        _reviewSubmitted = true;
+      });
+      FeedbackService.showSuccess(context, 'Thank you for your review!');
     }
   }
 
@@ -543,14 +834,16 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
     );
   }
 
-  Future<void> _confirmCancel(BuildContext context, UnifiedBooking live) async {
+  Future<void> _confirmCancel(
+      BuildContext context, UnifiedBooking live) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20)),
         title: const Text('Cancel Booking',
-            style:
-                TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
+            style: TextStyle(
+                fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
         content: const Text(
           'Are you sure you want to cancel this booking?\nThis action cannot be undone.',
           style: TextStyle(fontFamily: 'Poppins', height: 1.5),
@@ -581,7 +874,8 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
         await MyServicesService.updateStatus(live, 'cancelled');
         if (mounted) {
           FeedbackService.dismiss(context);
-          FeedbackService.showSuccess(context, 'Booking cancelled successfully');
+          FeedbackService.showSuccess(
+              context, 'Booking cancelled successfully');
           GoRouter.of(context).pop();
         }
       } catch (e) {
@@ -624,51 +918,101 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
   IconData _statusIcon(BookingStatus status) {
     switch (status) {
       case BookingStatus.pending:
-      case BookingStatus.requested:         return Icons.hourglass_empty_rounded;
-      case BookingStatus.confirmed:         return Icons.check_circle_outline_rounded;
-      case BookingStatus.assigned:          return Icons.person_pin_circle_rounded;
-      case BookingStatus.onTheWay:          return Icons.directions_run_rounded;
+      case BookingStatus.requested:
+        return Icons.hourglass_empty_rounded;
+      case BookingStatus.confirmed:
+        return Icons.check_circle_outline_rounded;
+      case BookingStatus.assigned:
+        return Icons.person_pin_circle_rounded;
+      case BookingStatus.onTheWay:
+        return Icons.directions_run_rounded;
       case BookingStatus.inProgress:
-      case BookingStatus.consultationStarted: return Icons.medical_services_rounded;
-      case BookingStatus.sampleCollected:   return Icons.science_rounded;
-      case BookingStatus.delivered:         return Icons.local_shipping_rounded;
-      case BookingStatus.completed:         return Icons.check_circle_rounded;
-      case BookingStatus.cancelled:         return Icons.cancel_rounded;
-      case BookingStatus.rescheduled:       return Icons.event_repeat_rounded;
+      case BookingStatus.consultationStarted:
+        return Icons.medical_services_rounded;
+      case BookingStatus.sampleCollected:
+        return Icons.science_rounded;
+      case BookingStatus.delivered:
+        return Icons.local_shipping_rounded;
+      case BookingStatus.completed:
+        return Icons.check_circle_rounded;
+      case BookingStatus.cancelled:
+        return Icons.cancel_rounded;
+      case BookingStatus.rescheduled:
+        return Icons.event_repeat_rounded;
     }
   }
 
   String _statusSubtext(BookingStatus status) {
     switch (status) {
       case BookingStatus.pending:
-      case BookingStatus.requested:         return 'Waiting for provider confirmation';
-      case BookingStatus.confirmed:         return 'Your booking has been confirmed';
-      case BookingStatus.assigned:          return 'A provider has been assigned to you';
-      case BookingStatus.onTheWay:          return 'Provider is on the way to you';
-      case BookingStatus.inProgress:        return 'Service is currently in progress';
-      case BookingStatus.consultationStarted: return 'Consultation is live right now';
-      case BookingStatus.sampleCollected:   return 'Sample has been collected successfully';
-      case BookingStatus.delivered:         return 'Service has been delivered to you';
-      case BookingStatus.completed:         return 'Service completed successfully';
-      case BookingStatus.cancelled:         return 'This booking was cancelled';
-      case BookingStatus.rescheduled:       return 'Your booking has been rescheduled';
+      case BookingStatus.requested:
+        return 'Waiting for provider confirmation';
+      case BookingStatus.confirmed:
+        return 'Your booking has been confirmed';
+      case BookingStatus.assigned:
+        return 'A provider has been assigned to you';
+      case BookingStatus.onTheWay:
+        return 'Provider is on the way to you';
+      case BookingStatus.inProgress:
+        return 'Service is currently in progress';
+      case BookingStatus.consultationStarted:
+        return 'Consultation is live right now';
+      case BookingStatus.sampleCollected:
+        return 'Sample has been collected successfully';
+      case BookingStatus.delivered:
+        return 'Service has been delivered to you';
+      case BookingStatus.completed:
+        return 'Service completed successfully';
+      case BookingStatus.cancelled:
+        return 'This booking was cancelled';
+      case BookingStatus.rescheduled:
+        return 'Your booking has been rescheduled';
     }
   }
 }
 
-// ── Timeline Step Widget ──────────────────────────────────────────────────────
+// ── Section Card ──────────────────────────────────────────────────────────────
+
+class _SectionCard extends StatelessWidget {
+  final Widget child;
+  final bool isDark;
+  const _SectionCard({required this.child, required this.isDark});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.darkCard : context.appSurface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+            color: isDark ? AppColors.darkBorder : context.appBorder),
+        boxShadow: isDark
+            ? null
+            : [
+                BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.04),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2)),
+              ],
+      ),
+      child: child,
+    );
+  }
+}
+
+// ── Timeline Step ─────────────────────────────────────────────────────────────
 
 class _TimelineStep extends StatelessWidget {
   final BookingStatusEvent step;
   final bool isLast;
   final AnimationController pulseCtrl;
-  final bool isCancelled;
 
   const _TimelineStep({
     required this.step,
     required this.isLast,
     required this.pulseCtrl,
-    required this.isCancelled,
   });
 
   @override
@@ -679,47 +1023,45 @@ class _TimelineStep extends StatelessWidget {
     if (step.isCompleted) {
       lineColor = AppColors.success;
       dot = Container(
-        width: 36,
-        height: 36,
+        width: 34, height: 34,
         decoration: const BoxDecoration(
             color: AppColors.success, shape: BoxShape.circle),
-        child: const Icon(Icons.check_rounded, color: Colors.white, size: 18),
+        child: const Icon(Icons.check_rounded,
+            color: Colors.white, size: 16),
       );
     } else if (step.isActive) {
-      lineColor = AppColors.border;
+      lineColor = context.appBorder;
       dot = AnimatedBuilder(
         animation: pulseCtrl,
         builder: (_, __) => Container(
-          width: 36,
-          height: 36,
+          width: 34, height: 34,
           decoration: BoxDecoration(
-            color: Color.lerp(
-                AppColors.primary, AppColors.primaryLight, pulseCtrl.value),
+            color: Color.lerp(AppColors.primary, AppColors.primaryLight,
+                pulseCtrl.value),
             shape: BoxShape.circle,
             boxShadow: [
               BoxShadow(
                 color: AppColors.primary
-                    .withValues(alpha:0.3 + pulseCtrl.value * 0.2),
-                blurRadius: 12,
+                    .withValues(alpha: 0.3 + pulseCtrl.value * 0.2),
+                blurRadius: 10,
                 spreadRadius: 2,
               ),
             ],
           ),
           child: const Icon(Icons.radio_button_checked_rounded,
-              color: Colors.white, size: 18),
+              color: Colors.white, size: 16),
         ),
       );
     } else {
-      lineColor = AppColors.border;
+      lineColor = context.appBorder;
       dot = Container(
-        width: 36,
-        height: 36,
+        width: 34, height: 34,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          border: Border.all(color: AppColors.border, width: 2),
+          border: Border.all(color: context.appBorder, width: 2),
         ),
-        child: const Icon(Icons.radio_button_unchecked_rounded,
-            size: 16, color: AppColors.textHint),
+        child: Icon(Icons.radio_button_unchecked_rounded,
+            size: 14, color: context.appTextHint),
       );
     }
 
@@ -730,13 +1072,13 @@ class _TimelineStep extends StatelessWidget {
           children: [
             dot,
             if (!isLast)
-              Container(width: 2, height: 48, color: lineColor),
+              Container(width: 2, height: 44, color: lineColor),
           ],
         ),
         const SizedBox(width: 14),
         Expanded(
           child: Padding(
-            padding: EdgeInsets.only(bottom: isLast ? 0 : 12, top: 6),
+            padding: EdgeInsets.only(bottom: isLast ? 0 : 10, top: 5),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -747,22 +1089,22 @@ class _TimelineStep extends StatelessWidget {
                         ? AppColors.success
                         : step.isActive
                             ? AppColors.primary
-                            : AppColors.textHint,
+                            : context.appTextHint,
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   step.description,
                   style: AppTextStyles.bodySmall.copyWith(
-                      color: AppColors.textSecondary, height: 1.4),
+                      color: context.appTextSecondary, height: 1.4),
                 ),
                 if (step.timestamp != null) ...[
                   const SizedBox(height: 4),
                   Text(
                     DateFormat('dd MMM yyyy, hh:mm a')
                         .format(step.timestamp!),
-                    style: AppTextStyles.caption
-                        .copyWith(color: AppColors.textHint, fontSize: 10),
+                    style: AppTextStyles.caption.copyWith(
+                        color: context.appTextHint, fontSize: 10),
                   ),
                 ],
               ],
@@ -774,23 +1116,24 @@ class _TimelineStep extends StatelessWidget {
   }
 }
 
-// ── Booking Detail Row ────────────────────────────────────────────────────────
+// ── Detail Row ────────────────────────────────────────────────────────────────
 
 class _DetailItem {
   final IconData icon;
   final String label;
   final String value;
   final Color color;
-  const _DetailItem(
-      {required this.icon,
-      required this.label,
-      required this.value,
-      required this.color});
+  const _DetailItem({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+  });
 }
 
-class _BookingDetailRow extends StatelessWidget {
+class _DetailRow extends StatelessWidget {
   final _DetailItem item;
-  const _BookingDetailRow({required this.item});
+  const _DetailRow({required this.item});
 
   @override
   Widget build(BuildContext context) {
@@ -798,13 +1141,12 @@ class _BookingDetailRow extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
-          width: 36,
-          height: 36,
+          width: 36, height: 36,
           decoration: BoxDecoration(
-            color: item.color.withValues(alpha:0.1),
+            color: item.color.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(10),
           ),
-          child: Icon(item.icon, size: 18, color: item.color),
+          child: Icon(item.icon, size: 17, color: item.color),
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -812,14 +1154,55 @@ class _BookingDetailRow extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(item.label,
-                  style:
-                      AppTextStyles.caption.copyWith(color: AppColors.textHint)),
+                  style: AppTextStyles.caption
+                      .copyWith(color: context.appTextHint)),
               const SizedBox(height: 2),
               Text(item.value,
                   style: AppTextStyles.bodyMedium,
                   maxLines: 3,
                   overflow: TextOverflow.ellipsis),
             ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Payment Row ───────────────────────────────────────────────────────────────
+
+class _PaymentRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  final bool isSuccess;
+
+  const _PaymentRow({
+    required this.label,
+    required this.value,
+    required this.icon,
+    this.isSuccess = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon,
+            size: 15,
+            color: isSuccess ? AppColors.success : context.appTextHint),
+        const SizedBox(width: 8),
+        Text(label,
+            style: AppTextStyles.bodySmall
+                .copyWith(color: context.appTextSecondary)),
+        const Spacer(),
+        Text(
+          value,
+          style: TextStyle(
+            fontFamily: 'Poppins',
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: isSuccess ? AppColors.success : context.appTextPrimary,
           ),
         ),
       ],
@@ -855,7 +1238,7 @@ class _ActionButton extends StatelessWidget {
               label: Text(label),
               style: OutlinedButton.styleFrom(
                 foregroundColor: color,
-                side: BorderSide(color: color.withValues(alpha:0.6)),
+                side: BorderSide(color: color.withValues(alpha: 0.6)),
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 textStyle: const TextStyle(
                     fontFamily: 'Poppins',
@@ -898,7 +1281,7 @@ class _AppBarChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha:0.2),
+        color: Colors.white.withValues(alpha: 0.2),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
@@ -937,23 +1320,21 @@ class _LiveStatusDot extends StatelessWidget {
   Widget build(BuildContext context) {
     if (!_liveStatuses.contains(status)) {
       return Container(
-        width: 7,
-        height: 7,
-        decoration:
-            const BoxDecoration(color: Colors.white54, shape: BoxShape.circle),
+        width: 7, height: 7,
+        decoration: const BoxDecoration(
+            color: Colors.white54, shape: BoxShape.circle),
       );
     }
     return AnimatedBuilder(
       animation: pulse,
       builder: (_, __) => Container(
-        width: 7,
-        height: 7,
+        width: 7, height: 7,
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha:0.5 + pulse.value * 0.5),
+          color: Colors.white.withValues(alpha: 0.5 + pulse.value * 0.5),
           shape: BoxShape.circle,
           boxShadow: [
             BoxShadow(
-              color: Colors.white.withValues(alpha:pulse.value * 0.4),
+              color: Colors.white.withValues(alpha: pulse.value * 0.4),
               blurRadius: 4,
               spreadRadius: 1,
             ),
@@ -979,7 +1360,8 @@ class _ServiceInfo {
             gradient: AppColors.appointmentGrad);
       case BookingSource.consultation:
         return const _ServiceInfo(
-            icon: Icons.videocam_rounded, gradient: AppColors.consultGrad);
+            icon: Icons.videocam_rounded,
+            gradient: AppColors.consultGrad);
       case BookingSource.nutrition:
         return const _ServiceInfo(
             icon: Icons.restaurant_menu_rounded,
@@ -1045,8 +1427,7 @@ class _SupportChatSheetState extends State<_SupportChatSheet> {
   final _scrollCtrl = ScrollController();
   bool _sending = false;
 
-  String get _chatPath =>
-      'booking_support/${widget.booking.id}/messages';
+  String get _chatPath => 'booking_support/${widget.booking.id}/messages';
 
   @override
   void dispose() {
@@ -1071,9 +1452,11 @@ class _SupportChatSheetState extends State<_SupportChatSheet> {
       setState(() => _sending = false);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_scrollCtrl.hasClients) {
-          _scrollCtrl.animateTo(_scrollCtrl.position.maxScrollExtent,
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeOut);
+          _scrollCtrl.animateTo(
+            _scrollCtrl.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+          );
         }
       });
     }
@@ -1085,29 +1468,29 @@ class _SupportChatSheetState extends State<_SupportChatSheet> {
     return Container(
       height: MediaQuery.of(context).size.height * 0.75,
       padding: EdgeInsets.only(bottom: bottom),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      decoration: BoxDecoration(
+        color: context.appSurface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       ),
       child: Column(
         children: [
+          // Handle
           Container(
-            width: 40,
-            height: 4,
+            width: 40, height: 4,
             margin: const EdgeInsets.only(top: 12),
             decoration: BoxDecoration(
                 color: Colors.grey.shade300,
                 borderRadius: BorderRadius.circular(2)),
           ),
+          // Header
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 14, 16, 12),
             child: Row(
               children: [
                 Container(
-                  width: 38,
-                  height: 38,
+                  width: 38, height: 38,
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha:0.1),
+                    color: AppColors.primary.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: const Icon(Icons.headset_mic_rounded,
@@ -1126,20 +1509,21 @@ class _SupportChatSheetState extends State<_SupportChatSheet> {
                       Text(
                         'Booking #${widget.booking.id.substring(0, widget.booking.id.length.clamp(0, 8)).toUpperCase()}',
                         style: AppTextStyles.caption
-                            .copyWith(color: AppColors.textHint),
+                            .copyWith(color: context.appTextHint),
                       ),
                     ],
                   ),
                 ),
                 IconButton(
                   onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close_rounded,
-                      color: AppColors.textHint),
+                  icon: Icon(Icons.close_rounded,
+                      color: context.appTextHint),
                 ),
               ],
             ),
           ),
           const Divider(height: 1),
+          // Messages
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
@@ -1154,25 +1538,27 @@ class _SupportChatSheetState extends State<_SupportChatSheet> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Container(
-                          width: 60,
-                          height: 60,
+                          width: 60, height: 60,
                           decoration: BoxDecoration(
-                            color: AppColors.primary.withValues(alpha:0.08),
+                            color: AppColors.primary.withValues(alpha: 0.08),
                             shape: BoxShape.circle,
                           ),
                           child: const Icon(Icons.headset_mic_rounded,
                               color: AppColors.primary, size: 28),
                         ),
                         const SizedBox(height: 12),
-                        Text('Send us a message', style: AppTextStyles.labelLarge),
+                        Text('Send us a message',
+                            style: AppTextStyles.labelLarge),
                         const SizedBox(height: 6),
                         Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 40),
+                          padding:
+                              const EdgeInsets.symmetric(horizontal: 40),
                           child: Text(
-                            'Our support team will respond to your query shortly.',
+                            'Our support team will respond shortly.',
                             textAlign: TextAlign.center,
                             style: AppTextStyles.bodySmall.copyWith(
-                                color: AppColors.textSecondary, height: 1.5),
+                                color: context.appTextSecondary,
+                                height: 1.5),
                           ),
                         ),
                       ],
@@ -1184,7 +1570,8 @@ class _SupportChatSheetState extends State<_SupportChatSheet> {
                   padding: const EdgeInsets.all(16),
                   itemCount: docs.length,
                   itemBuilder: (_, i) {
-                    final data = docs[i].data() as Map<String, dynamic>;
+                    final data =
+                        docs[i].data() as Map<String, dynamic>;
                     final isMe = data['role'] == 'patient';
                     final text = data['text'] as String? ?? '';
                     return Padding(
@@ -1196,21 +1583,24 @@ class _SupportChatSheetState extends State<_SupportChatSheet> {
                         children: [
                           if (!isMe) ...[
                             Container(
-                              width: 28,
-                              height: 28,
+                              width: 28, height: 28,
                               decoration: BoxDecoration(
-                                color: AppColors.primary.withValues(alpha:0.1),
+                                color: AppColors.primary
+                                    .withValues(alpha: 0.1),
                                 shape: BoxShape.circle,
                               ),
-                              child: const Icon(Icons.support_agent_rounded,
-                                  size: 14, color: AppColors.primary),
+                              child: const Icon(
+                                  Icons.support_agent_rounded,
+                                  size: 14,
+                                  color: AppColors.primary),
                             ),
                             const SizedBox(width: 8),
                           ],
                           Container(
                             constraints: BoxConstraints(
                               maxWidth:
-                                  MediaQuery.of(context).size.width * 0.65,
+                                  MediaQuery.of(context).size.width *
+                                      0.65,
                             ),
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 14, vertical: 10),
@@ -1221,8 +1611,10 @@ class _SupportChatSheetState extends State<_SupportChatSheet> {
                               borderRadius: BorderRadius.only(
                                 topLeft: const Radius.circular(16),
                                 topRight: const Radius.circular(16),
-                                bottomLeft: Radius.circular(isMe ? 16 : 4),
-                                bottomRight: Radius.circular(isMe ? 4 : 16),
+                                bottomLeft:
+                                    Radius.circular(isMe ? 16 : 4),
+                                bottomRight:
+                                    Radius.circular(isMe ? 4 : 16),
                               ),
                             ),
                             child: Text(text,
@@ -1231,7 +1623,7 @@ class _SupportChatSheetState extends State<_SupportChatSheet> {
                                     fontSize: 13,
                                     color: isMe
                                         ? Colors.white
-                                        : AppColors.textPrimary,
+                                        : context.appTextPrimary,
                                     height: 1.4)),
                           ),
                         ],
@@ -1242,13 +1634,14 @@ class _SupportChatSheetState extends State<_SupportChatSheet> {
               },
             ),
           ),
+          // Input
           Container(
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: context.appSurface,
               boxShadow: [
                 BoxShadow(
-                    color: Colors.black.withValues(alpha:0.05),
+                    color: Colors.black.withValues(alpha: 0.05),
                     blurRadius: 8,
                     offset: const Offset(0, -2)),
               ],
@@ -1264,7 +1657,7 @@ class _SupportChatSheetState extends State<_SupportChatSheet> {
                       hintText: 'Type your message...',
                       hintStyle: AppTextStyles.bodySmall,
                       filled: true,
-                      fillColor: AppColors.background,
+                      fillColor: context.appBackground,
                       contentPadding: const EdgeInsets.symmetric(
                           horizontal: 16, vertical: 12),
                       border: OutlineInputBorder(
@@ -1278,8 +1671,7 @@ class _SupportChatSheetState extends State<_SupportChatSheet> {
                 GestureDetector(
                   onTap: _send,
                   child: Container(
-                    width: 46,
-                    height: 46,
+                    width: 46, height: 46,
                     decoration: BoxDecoration(
                       gradient: AppColors.primaryGradient,
                       borderRadius: BorderRadius.circular(14),

@@ -18,18 +18,19 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   int _currentPage = 0;
 
   final List<_OnboardData> _pages = [
-    _OnboardData(
-      title: 'Say Hello to\nYour Healthcare Partner',
-      subtitle: 'MedNU makes it easy and fast to connect with doctors, hospitals, and health services for your entire family.',
+    const _OnboardData(
+      title: 'MedNU\nAlways With You',
+      subtitle: 'Connect with doctors, hospitals, and health services for your entire family — anytime, anywhere.',
       gradient: const LinearGradient(
         colors: [Color(0xFFC2185B), Color(0xFF7B1FA2)],
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
       ),
       icon: Icons.medical_services_rounded,
-      badge: 'Your Health, Our Mission',
+      badge: 'Always With You',
+      showBrand: true,
     ),
-    _OnboardData(
+    const _OnboardData(
       title: 'Find Specialist\nDoctors Near You',
       subtitle: 'Book appointments, consult online or in-person, track your family health — all in one app.',
       gradient: const LinearGradient(
@@ -40,7 +41,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       icon: Icons.people_alt_rounded,
       badge: 'Family Healthcare',
     ),
-    _OnboardData(
+    const _OnboardData(
       title: 'Get Online\nConsultation',
       subtitle: 'Connect with verified doctors via video call. Get prescriptions, follow-ups, and health tips instantly.',
       gradient: const LinearGradient(
@@ -69,7 +70,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: context.appBackground,
       body: Column(
         children: [
           // ── Page view ───────────────────────────────
@@ -158,7 +159,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     child: Text(
                       'Skip for now',
                       style: AppTextStyles.labelLarge.copyWith(
-                        color: AppColors.textSecondary,
+                        color: context.appTextSecondary,
                       ),
                     ),
                   ),
@@ -228,29 +229,73 @@ class _OnboardPage extends StatelessWidget {
                   Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      // Badge
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 7),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha:0.2),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha:0.25),
-                          ),
-                        ),
-                        child: Text(
-                          data.badge,
+                      // Brand header — only on first card
+                      if (data.showBrand) ...[
+                        Text(
+                          'MedNU',
                           style: const TextStyle(
                             fontFamily: 'Poppins',
-                            fontSize: 12,
+                            fontSize: 42,
+                            fontWeight: FontWeight.w800,
                             color: Colors.white,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.3,
+                            letterSpacing: 1.2,
+                            height: 1.1,
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 32),
+                        const SizedBox(height: 6),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 28,
+                              height: 1.5,
+                              color: Colors.white.withValues(alpha: 0.55),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Always With You',
+                              style: const TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.white,
+                                letterSpacing: 2.0,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              width: 28,
+                              height: 1.5,
+                              color: Colors.white.withValues(alpha: 0.55),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 28),
+                      ] else ...[
+                        // Badge for other pages
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 7),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.25),
+                            ),
+                          ),
+                          child: Text(
+                            data.badge,
+                            style: const TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 12,
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 32),
+                      ],
                       // Illustration container
                       Container(
                         width: 200,
@@ -279,6 +324,31 @@ class _OnboardPage extends StatelessWidget {
                           ),
                         ),
                       ),
+                      // Badge below icon on first card
+                      if (data.showBrand) ...[
+                        const SizedBox(height: 20),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 7),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.25),
+                            ),
+                          ),
+                          child: Text(
+                            data.badge,
+                            style: const TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 12,
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ],
@@ -313,6 +383,7 @@ class _OnboardData {
   final LinearGradient gradient;
   final IconData icon;
   final String badge;
+  final bool showBrand;
 
   const _OnboardData({
     required this.title,
@@ -320,5 +391,6 @@ class _OnboardData {
     required this.gradient,
     required this.icon,
     required this.badge,
+    this.showBrand = false,
   });
 }

@@ -51,9 +51,13 @@ class _LockScreenState extends State<LockScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white,
-      child: SafeArea(
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textPrimary = isDark ? Colors.white : AppColors.textPrimary;
+    final textSecondary = isDark ? Colors.white70 : AppColors.textSecondary;
+    final spinnerBg = isDark ? const Color(0xFF1E1E2E) : AppColors.background;
+
+    return Scaffold(
+      body: SafeArea(
         child: Center(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 40),
@@ -68,7 +72,7 @@ class _LockScreenState extends State<LockScreen> {
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: AppColors.primary.withValues(alpha:0.35),
+                        color: AppColors.primary.withValues(alpha: 0.35),
                         blurRadius: 24,
                         offset: const Offset(0, 8),
                       ),
@@ -77,22 +81,22 @@ class _LockScreenState extends State<LockScreen> {
                   child: const Icon(Icons.health_and_safety_rounded, size: 46, color: Colors.white),
                 ),
                 const SizedBox(height: 28),
-                const Text(
+                Text(
                   'MedNU',
                   style: TextStyle(
                     fontFamily: 'Poppins',
                     fontSize: 28,
                     fontWeight: FontWeight.w800,
-                    color: AppColors.textPrimary,
+                    color: textPrimary,
                   ),
                 ),
                 const SizedBox(height: 6),
-                const Text(
+                Text(
                   'App is locked',
                   style: TextStyle(
                     fontFamily: 'Poppins',
                     fontSize: 14,
-                    color: AppColors.textSecondary,
+                    color: textSecondary,
                   ),
                 ),
                 const SizedBox(height: 52),
@@ -105,13 +109,13 @@ class _LockScreenState extends State<LockScreen> {
                     height: 80,
                     decoration: BoxDecoration(
                       gradient: _authenticating ? null : AppColors.primaryGradient,
-                      color: _authenticating ? AppColors.background : null,
+                      color: _authenticating ? spinnerBg : null,
                       shape: BoxShape.circle,
                       boxShadow: _authenticating
                           ? []
                           : [
                               BoxShadow(
-                                color: AppColors.primary.withValues(alpha:0.3),
+                                color: AppColors.primary.withValues(alpha: 0.3),
                                 blurRadius: 16,
                                 offset: const Offset(0, 6),
                               ),
@@ -129,12 +133,12 @@ class _LockScreenState extends State<LockScreen> {
                   ),
                 ),
                 const SizedBox(height: 18),
-                const Text(
+                Text(
                   'Use fingerprint or device PIN',
                   style: TextStyle(
                     fontFamily: 'Poppins',
                     fontSize: 13,
-                    color: AppColors.textSecondary,
+                    color: textSecondary,
                   ),
                 ),
 

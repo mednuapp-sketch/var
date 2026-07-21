@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-/// All notification types across every MedNu service module.
+/// All notification types across every MedNU service module.
 /// The raw string values must match what the Cloud Functions write to Firestore.
 enum PatientNotifType {
   // ── Consultation & Quick Connect ──────────────────────────────────────────

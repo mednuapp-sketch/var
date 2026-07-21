@@ -1070,3 +1070,36 @@ class ShimmerPage extends StatelessWidget {
     );
   }
 }
+
+// ──────────────────────────────────────────────────────────────
+// STATIC GRID — non-scrolling grid replacement for GridView.count /
+// GridView.builder(shrinkWrap: true, physics: NeverScrollableScrollPhysics()).
+// A shrinkWrap'd grid still installs a drag GestureRecognizer that competes
+// with an outer Scrollable (CustomScrollView/SingleChildScrollView/ListView)
+// in the gesture arena, causing swipe-up to stall. Use this wherever the item
+// count is fixed/known and the grid sits inside another scrollable.
+// ──────────────────────────────────────────────────────────────
+Widget staticGrid({
+  required List<Widget> children,
+  required int crossAxisCount,
+  required double aspectRatio,
+  double mainAxisSpacing = 10,
+  double crossAxisSpacing = 10,
+}) {
+  final rows = <Widget>[];
+  for (var i = 0; i < children.length; i += crossAxisCount) {
+    final rowChildren = <Widget>[];
+    for (var col = 0; col < crossAxisCount; col++) {
+      final idx = i + col;
+      if (col > 0) rowChildren.add(SizedBox(width: crossAxisSpacing));
+      rowChildren.add(Expanded(
+        child: idx < children.length
+            ? AspectRatio(aspectRatio: aspectRatio, child: children[idx])
+            : const SizedBox(),
+      ));
+    }
+    rows.add(Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: rowChildren));
+    if (i + crossAxisCount < children.length) rows.add(SizedBox(height: mainAxisSpacing));
+  }
+  return Column(children: rows);
+}

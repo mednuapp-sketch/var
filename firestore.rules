@@ -81,7 +81,7 @@ service cloud.firestore {
       );
       // Doctors update their own profile (limited fields); admins can update all;
       // authenticated patients can update rating/totalReviews via review transactions.
-      allow create: if isOwner(doctorId);
+      allow create: if isOwner(doctorId) || isAdmin();
       allow update: if (isOwner(doctorId) &&
                          doesNotModify(['status', 'rating', 'totalReviews', 'reviewCount', 'earnings', 'verificationStatus'])) ||
                        (isAuth() && doctorId != request.auth.uid &&
@@ -616,6 +616,12 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // ── Care Assistants (admin-managed, public read for authenticated patients) ─
+    match /care_assistants/{assistantId} {
+      allow read:  if isAuth();
+      allow write: if isAdmin();
+    }
+
     // ── Medicine catalogue (admin-managed, public read for patients) ─────────
     match /medicines_catalogue/{medicineId} {
       allow read:  if isAuth();
@@ -847,6 +853,13 @@ service cloud.firestore {
     // Each doctor owns exactly one draft document keyed by their UID.
     match /prescription_drafts/{doctorId} {
       allow read, write: if isOwner(doctorId) || isAdmin();
+    }
+
+    // ── App ratings (one-time user feedback after booking) ───────────────────
+    match /app_ratings/{ratingId} {
+      allow create: if isAuth();
+      allow read:   if isAdmin();
+      allow update, delete: if isAdmin();
     }
 
     // ── Deny everything else ──────────────────────────────────────────────────

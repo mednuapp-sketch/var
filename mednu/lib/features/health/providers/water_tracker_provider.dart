@@ -95,6 +95,10 @@ class WaterTrackerNotifier extends StateNotifier<WaterTrackerState> {
     }
   }
 
+  // Re-fetches settings + today's logs without the isLoading flip, so
+  // pull-to-refresh doesn't flash a skeleton over already-visible data.
+  Future<void> refresh() => Future.wait([_loadSettings(), _loadTodayLogs()]);
+
   Future<void> _loadSettings() async {
     if (_settingsRef == null) return;
     try {

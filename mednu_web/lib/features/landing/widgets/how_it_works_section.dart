@@ -144,7 +144,7 @@ class _SectionHeader extends StatelessWidget {
         ),
         const SizedBox(height: 16),
         Text(
-          'How MedNu Works',
+          'How MedNU Works',
           textAlign: textAlign,
           style: GoogleFonts.poppins(
             fontSize: isMobile ? 26 : 34,

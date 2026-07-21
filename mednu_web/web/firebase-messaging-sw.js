@@ -16,7 +16,7 @@ const messaging = firebase.messaging();
 
 // Show notification when app is in the background or closed
 messaging.onBackgroundMessage((payload) => {
-  const title = payload.notification?.title || 'MedNu';
+  const title = payload.notification?.title || 'MedNU';
   const body  = payload.notification?.body  || '';
 
   return self.registration.showNotification(title, {

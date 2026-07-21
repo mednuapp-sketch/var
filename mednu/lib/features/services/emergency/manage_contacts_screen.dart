@@ -33,6 +33,17 @@ class _ManageContactsScreenState extends State<ManageContactsScreen> {
   // Step 1 – show options: pick from contacts OR enter manually.
   // Only used when adding a new contact (not editing).
   void _showAddOptions() {
+    if (_contacts.length >= 5) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+              'Maximum of 5 emergency contacts reached. Remove one to add another.'),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: Color(0xFFE65100),
+        ),
+      );
+      return;
+    }
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -139,7 +150,8 @@ class _ManageContactsScreenState extends State<ManageContactsScreen> {
           top: 24,
           bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
         ),
-        child: Form(
+        child: SingleChildScrollView(
+          child: Form(
           key: formKey,
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -180,6 +192,11 @@ class _ManageContactsScreenState extends State<ManageContactsScreen> {
                 validator: (v) {
                   if (v == null || v.trim().isEmpty) return 'Enter a phone number';
                   if (v.trim().length < 7) return 'Enter a valid number';
+                  final digits = v.replaceAll(RegExp(r'[^0-9]'), '');
+                  final duplicate = _contacts.any((c) =>
+                      c.id != existing?.id &&
+                      c.phone.replaceAll(RegExp(r'[^0-9]'), '') == digits);
+                  if (duplicate) return 'This number is already an emergency contact';
                   return null;
                 },
               ),
@@ -201,10 +218,22 @@ class _ManageContactsScreenState extends State<ManageContactsScreen> {
                       name: nameCtrl.text.trim(),
                       phone: phoneCtrl.text.trim(),
                     );
-                    if (existing == null) {
-                      await EmergencyContactsService.addContact(contact);
-                    } else {
-                      await EmergencyContactsService.updateContact(contact);
+                    try {
+                      if (existing == null) {
+                        await EmergencyContactsService.addContact(contact);
+                      } else {
+                        await EmergencyContactsService.updateContact(contact);
+                      }
+                    } on StateError catch (e) {
+                      if (ctx.mounted) {
+                        ScaffoldMessenger.of(ctx).showSnackBar(
+                          SnackBar(
+                            content: Text(e.message),
+                            backgroundColor: const Color(0xFFE65100),
+                          ),
+                        );
+                      }
+                      return;
                     }
                     if (ctx.mounted) Navigator.pop(ctx);
                     await _load();
@@ -227,6 +256,7 @@ class _ManageContactsScreenState extends State<ManageContactsScreen> {
               ),
             ],
           ),
+        ),
         ),
       ),
     );
@@ -259,7 +289,7 @@ class _ManageContactsScreenState extends State<ManageContactsScreen> {
           IconButton(
             icon: const Icon(Icons.add_rounded),
             tooltip: 'Add contact',
-            onPressed: _showAddOptions,
+            onPressed: _contacts.length >= 5 ? null : _showAddOptions,
           ),
         ],
       ),
@@ -271,47 +301,159 @@ class _ManageContactsScreenState extends State<ManageContactsScreen> {
               : ListView(
                   padding: const EdgeInsets.all(16),
                   children: [
+                    // ── Max contacts info banner ────────────────────────────
                     Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFE53935).withValues(alpha:0.08),
+                        color: _contacts.length >= 5
+                            ? Colors.orange.withValues(alpha: 0.1)
+                            : const Color(0xFFE53935).withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                            color: const Color(0xFFE53935).withValues(alpha:0.3)),
+                            color: _contacts.length >= 5
+                                ? Colors.orange.withValues(alpha: 0.4)
+                                : const Color(0xFFE53935)
+                                    .withValues(alpha: 0.3)),
                       ),
-                      child: const Row(children: [
-                        Icon(Icons.info_outline_rounded,
-                            color: Color(0xFFE53935), size: 18),
-                        SizedBox(width: 8),
+                      child: Row(children: [
+                        Icon(
+                          _contacts.length >= 5
+                              ? Icons.warning_amber_rounded
+                              : Icons.info_outline_rounded,
+                          color: _contacts.length >= 5
+                              ? Colors.orange.shade700
+                              : const Color(0xFFE53935),
+                          size: 18,
+                        ),
+                        const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'When SOS is pressed, a danger message will be sent to all contacts via WhatsApp, then SMS.',
+                            _contacts.length >= 5
+                                ? 'Maximum contacts reached. Remove one to add another.'
+                                : 'You can add up to 5 emergency contacts. ${5 - _contacts.length} slot${5 - _contacts.length == 1 ? '' : 's'} remaining.',
                             style: TextStyle(
                                 fontFamily: 'Poppins',
                                 fontSize: 12,
+                                color: _contacts.length >= 5
+                                    ? Colors.orange.shade800
+                                    : const Color(0xFFB71C1C)),
+                          ),
+                        ),
+                      ]),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE53935).withValues(alpha: 0.06),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Row(children: [
+                        Icon(Icons.swipe_left_rounded,
+                            color: Color(0xFFE53935), size: 16),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Swipe left on a contact to quickly remove it.',
+                            style: TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: 11,
                                 color: Color(0xFFB71C1C)),
                           ),
                         ),
                       ]),
                     ),
                     const SizedBox(height: 16),
-                    ..._contacts.map((c) => _ContactTile(
-                          contact: c,
-                          onEdit: () => _showAddSheet(existing: c),
-                          onDelete: () => _confirmDelete(c),
+                    ..._contacts.map((c) => Dismissible(
+                          key: ValueKey(c.id),
+                          direction: DismissDirection.endToStart,
+                          background: Container(
+                            margin: const EdgeInsets.only(bottom: 10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE53935),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            alignment: Alignment.centerRight,
+                            padding: const EdgeInsets.only(right: 20),
+                            child: const Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.delete_rounded,
+                                    color: Colors.white, size: 26),
+                                SizedBox(height: 4),
+                                Text('Remove',
+                                    style: TextStyle(
+                                        fontFamily: 'Poppins',
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                        color: Colors.white)),
+                              ],
+                            ),
+                          ),
+                          confirmDismiss: (_) async {
+                            final confirm = await showDialog<bool>(
+                              context: context,
+                              builder: (_) => AlertDialog(
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(20)),
+                                title: const Text('Remove Contact?',
+                                    style: TextStyle(
+                                        fontFamily: 'Poppins',
+                                        fontWeight: FontWeight.w700)),
+                                content: Text(
+                                    '${c.name} will no longer receive SOS alerts.',
+                                    style: const TextStyle(
+                                        fontFamily: 'Poppins')),
+                                actions: [
+                                  TextButton(
+                                      onPressed: () =>
+                                          Navigator.pop(context, false),
+                                      child: const Text('Cancel')),
+                                  ElevatedButton(
+                                    onPressed: () =>
+                                        Navigator.pop(context, true),
+                                    style: ElevatedButton.styleFrom(
+                                        backgroundColor:
+                                            const Color(0xFFE53935)),
+                                    child: const Text('Remove',
+                                        style:
+                                            TextStyle(color: Colors.white)),
+                                  ),
+                                ],
+                              ),
+                            );
+                            return confirm == true;
+                          },
+                          onDismissed: (_) => _delete(c.id),
+                          child: _ContactTile(
+                            contact: c,
+                            onEdit: () => _showAddSheet(existing: c),
+                            onDelete: () => _confirmDelete(c),
+                          ),
                         )),
                   ],
                 ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _showAddOptions,
-        backgroundColor: const Color(0xFFE53935),
-        icon: const Icon(Icons.person_add_rounded, color: Colors.white),
-        label: const Text('Add Contact',
-            style: TextStyle(
-                fontFamily: 'Poppins',
-                fontWeight: FontWeight.w600,
-                color: Colors.white)),
-      ),
+      floatingActionButton: _contacts.length >= 5
+          ? FloatingActionButton.extended(
+              onPressed: null,
+              backgroundColor: Colors.grey.shade400,
+              icon: const Icon(Icons.block_rounded, color: Colors.white),
+              label: const Text('Maximum Reached',
+                  style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white)),
+            )
+          : FloatingActionButton.extended(
+              onPressed: _showAddOptions,
+              backgroundColor: const Color(0xFFE53935),
+              icon: const Icon(Icons.person_add_rounded, color: Colors.white),
+              label: const Text('Add Contact',
+                  style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white)),
+            ),
     );
   }
 

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
+import '../../../core/utils/r.dart';
 
 class LanguageScreen extends StatefulWidget {
   const LanguageScreen({super.key});
@@ -11,6 +13,34 @@ class LanguageScreen extends StatefulWidget {
 
 class _LanguageScreenState extends State<LanguageScreen> {
   String _selected = 'English';
+  static const _prefKey = 'app_language';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSaved();
+  }
+
+  Future<void> _loadSaved() async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getString(_prefKey);
+    if (saved != null && mounted) setState(() => _selected = saved);
+  }
+
+  Future<void> _apply() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_prefKey, _selected);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Language changed to $_selected'),
+        backgroundColor: AppColors.accent,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+    context.pop();
+  }
 
   final List<Map<String, String>> _languages = [
     {'name': 'English', 'native': 'English', 'flag': '🇬🇧'},
@@ -26,12 +56,12 @@ class _LanguageScreenState extends State<LanguageScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.appBackground,
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
             pinned: true,
-            expandedHeight: 140,
+            expandedHeight: R.h(context, 140),
             leading: IconButton(
               icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
               onPressed: () => context.pop(),
@@ -59,41 +89,56 @@ class _LanguageScreenState extends State<LanguageScreen> {
                       ),
                     ),
                     SafeArea(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 52, 20, 16),
-                        child: Row(children: [
-                          Container(
-                            width: 44, height: 44,
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha:0.15),
-                              shape: BoxShape.circle,
-                              border: Border.all(color: Colors.white.withValues(alpha:0.3)),
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          return SingleChildScrollView(
+                            physics: const ClampingScrollPhysics(),
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                              child: Padding(
+                                padding: EdgeInsets.fromLTRB(R.p(context, 20), R.p(context, 52), R.p(context, 20), R.p(context, 16)),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Row(children: [
+                                      Container(
+                                        width: R.w(context, 44), height: R.w(context, 44),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white.withValues(alpha:0.15),
+                                          shape: BoxShape.circle,
+                                          border: Border.all(color: Colors.white.withValues(alpha:0.3)),
+                                        ),
+                                        child: const Icon(Icons.language_rounded,
+                                            color: Colors.white, size: 22),
+                                      ),
+                                      const SizedBox(width: 14),
+                                      const Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text('Language',
+                                              style: TextStyle(
+                                                fontFamily: 'Poppins',
+                                                fontSize: 18,
+                                                fontWeight: FontWeight.w700,
+                                                color: Colors.white,
+                                              )),
+                                          SizedBox(height: 2),
+                                          Text('Choose your preferred language',
+                                              style: TextStyle(
+                                                fontFamily: 'Poppins',
+                                                fontSize: 12,
+                                                color: Colors.white70,
+                                              )),
+                                        ],
+                                      ),
+                                    ]),
+                                  ],
+                                ),
+                              ),
                             ),
-                            child: const Icon(Icons.language_rounded,
-                                color: Colors.white, size: 22),
-                          ),
-                          const SizedBox(width: 14),
-                          const Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text('Language',
-                                  style: TextStyle(
-                                    fontFamily: 'Poppins',
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.white,
-                                  )),
-                              SizedBox(height: 2),
-                              Text('Choose your preferred language',
-                                  style: TextStyle(
-                                    fontFamily: 'Poppins',
-                                    fontSize: 12,
-                                    color: Colors.white70,
-                                  )),
-                            ],
-                          ),
-                        ]),
+                          );
+                        },
                       ),
                     ),
                   ],
@@ -123,12 +168,10 @@ class _LanguageScreenState extends State<LanguageScreen> {
                   ]),
                 ),
 
-                ListView.builder(
+                Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: _languages.length,
-                  itemBuilder: (_, i) {
+                  child: Column(
+                  children: List.generate(_languages.length, (i) {
                     final lang = _languages[i];
                     final selected = _selected == lang['name'];
                     return GestureDetector(
@@ -138,10 +181,10 @@ class _LanguageScreenState extends State<LanguageScreen> {
                         margin: const EdgeInsets.only(bottom: 10),
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: selected ? AppColors.primary.withValues(alpha:0.05) : Colors.white,
+                          color: selected ? AppColors.primary.withValues(alpha:0.05) : context.appSurface,
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
-                            color: selected ? AppColors.primary : AppColors.divider,
+                            color: selected ? AppColors.primary : context.appBorder,
                             width: selected ? 2 : 1,
                           ),
                           boxShadow: selected
@@ -154,7 +197,7 @@ class _LanguageScreenState extends State<LanguageScreen> {
                           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                             Text(lang['name']!,
                                 style: AppTextStyles.labelLarge.copyWith(
-                                    color: selected ? AppColors.primary : AppColors.textPrimary)),
+                                    color: selected ? AppColors.primary : context.appTextPrimary)),
                             const SizedBox(height: 2),
                             Text(lang['native']!, style: AppTextStyles.bodySmall),
                           ])),
@@ -168,7 +211,8 @@ class _LanguageScreenState extends State<LanguageScreen> {
                         ]),
                       ),
                     );
-                  },
+                  }),
+                  ),
                 ),
 
                 Padding(
@@ -193,17 +237,7 @@ class _LanguageScreenState extends State<LanguageScreen> {
                         ],
                       ),
                       child: ElevatedButton(
-                        onPressed: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Language changed to $_selected'),
-                              backgroundColor: AppColors.accent,
-                              behavior: SnackBarBehavior.floating,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            ),
-                          );
-                          context.pop();
-                        },
+                        onPressed: _apply,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.transparent,
                           shadowColor: Colors.transparent,

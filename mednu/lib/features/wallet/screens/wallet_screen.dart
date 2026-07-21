@@ -5,14 +5,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:shimmer/shimmer.dart';
-import '../../../core/constants/app_colors.dart';
-import '../../../core/constants/app_text_styles.dart';
-import '../../../core/widgets/ux_widgets.dart';
-import '../../referral/referral_provider.dart';
-import '../../referral/referral_service.dart';
-import '../wallet_provider.dart';
-import '../wallet_service.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:mednu/core/constants/app_colors.dart';
+import 'package:mednu/core/constants/app_text_styles.dart';
+import 'package:mednu/core/utils/r.dart';
+import 'package:mednu/core/widgets/ux_widgets.dart';
+import 'package:mednu/features/referral/referral_provider.dart';
+import 'package:mednu/features/referral/referral_service.dart';
+import 'package:mednu/features/wallet/wallet_provider.dart';
+import 'package:mednu/features/wallet/wallet_service.dart';
 
 // ── Category display helpers ──────────────────────────────
 extension _TxCategory on WalletTransaction {
@@ -54,24 +55,24 @@ class WalletScreen extends ConsumerWidget {
     final screenWidth       = MediaQuery.of(context).size.width;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.appBackground,
       body: CustomScrollView(
         physics: const BouncingScrollPhysics(),
         slivers: [
           // ── Header ─────────────────────────────────────
           SliverAppBar(
             pinned: true,
-            expandedHeight: 240,
+            expandedHeight: R.h(context, 240),
             leading: IconButton(
-              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
+              icon: Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: R.w(context, 20)),
               onPressed: () => context.pop(),
             ),
             actions: [
               IconButton(
-                icon: const Icon(Icons.help_outline_rounded, color: Colors.white70, size: 22),
+                icon: Icon(Icons.help_outline_rounded, color: Colors.white70, size: R.w(context, 22)),
                 onPressed: () => _showHelpSheet(context),
               ),
-              const SizedBox(width: 4),
+              SizedBox(width: R.w(context, 4)),
             ],
             flexibleSpace: FlexibleSpaceBar(
               collapseMode: CollapseMode.pin,
@@ -87,20 +88,20 @@ class WalletScreen extends ConsumerWidget {
           // ── Body ───────────────────────────────────────
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+              padding: EdgeInsets.fromLTRB(R.p(context, 16), R.p(context, 16), R.p(context, 16), 0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // MedNu Money card
+                  // MedNU Money card
                   _MednuMoneyCard(mednuMoneyAsync: mednuMoneyAsync),
-                  const SizedBox(height: 14),
+                  SizedBox(height: R.h(context, 14)),
 
                   // Referral points banner
                   _ReferralBanner(
                     pointsAsync: pointsAsync,
                     configAsync: configAsync,
                   ),
-                  const SizedBox(height: 20),
+                  SizedBox(height: R.h(context, 20)),
 
                   // Quick actions row
                   _QuickActions(
@@ -108,7 +109,14 @@ class WalletScreen extends ConsumerWidget {
                     onTransfer: () => _showTransferSheet(context, ref),
                     onStatement: () => _showStatementSheet(context, ref),
                   ),
-                  const SizedBox(height: 24),
+                  SizedBox(height: R.h(context, 14)),
+
+                  // Refunds section
+                  _RefundsSection(
+                    txAsync: txAsync,
+                    onViewAll: () => _showRefundsSheet(context, ref),
+                  ),
+                  SizedBox(height: R.h(context, 24)),
 
                   // Transaction history header
                   Row(
@@ -118,13 +126,13 @@ class WalletScreen extends ConsumerWidget {
                       txAsync.maybeWhen(
                         data: (list) => list.isNotEmpty
                             ? Text('${list.length} entries',
-                                style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary))
+                                style: AppTextStyles.caption.copyWith(color: context.appTextSecondary))
                             : const SizedBox.shrink(),
                         orElse: () => const SizedBox.shrink(),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
+                  SizedBox(height: R.h(context, 12)),
                 ],
               ),
             ),
@@ -149,7 +157,7 @@ class WalletScreen extends ConsumerWidget {
                 return const SliverToBoxAdapter(child: _EmptyState());
               }
               return SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+                padding: EdgeInsets.fromLTRB(R.p(context, 16), 0, R.p(context, 16), R.p(context, 32)),
                 sliver: SliverList(
                   delegate: SliverChildBuilderDelegate(
                     (_, i) => _TransactionCard(tx: transactions[i]),
@@ -192,22 +200,33 @@ class WalletScreen extends ConsumerWidget {
     );
   }
 
+  void _showRefundsSheet(BuildContext context, WidgetRef ref) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _RefundsSheet(
+        txAsync: ref.read(walletTransactionsProvider),
+      ),
+    );
+  }
+
   void _showHelpSheet(BuildContext context) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (_) => Container(
-        padding: const EdgeInsets.all(24),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      builder: (ctx) => Container(
+        padding: EdgeInsets.all(R.p(ctx, 24)),
+        decoration: BoxDecoration(
+          color: ctx.appSurface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(R.r(ctx, 28))),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('Wallet Help', style: AppTextStyles.h3),
-            const SizedBox(height: 16),
+            SizedBox(height: R.h(ctx, 16)),
             _HelpItem(Icons.add_circle_outline_rounded, 'Add Money',
                 'Add funds using UPI, card, or net banking. Reflects instantly.'),
             _HelpItem(Icons.security_rounded, 'Secure',
@@ -216,7 +235,7 @@ class WalletScreen extends ConsumerWidget {
                 'Refunds are credited automatically within 24 hours.'),
             _HelpItem(Icons.support_agent_rounded, 'Support',
                 'Contact support@mednu.in for any wallet issues.'),
-            const SizedBox(height: 8),
+            SizedBox(height: R.h(ctx, 8)),
           ],
         ),
       ),
@@ -243,8 +262,14 @@ class _HeaderCard extends StatelessWidget {
     return Container(
       decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
       child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 56, 20, 16),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              physics: const ClampingScrollPhysics(),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                child: Padding(
+          padding: EdgeInsets.fromLTRB(R.p(context, 20), R.p(context, 56), R.p(context, 20), R.p(context, 16)),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -252,15 +277,15 @@ class _HeaderCard extends StatelessWidget {
               Row(
                 children: [
                   Container(
-                    width: 40, height: 40,
+                    width: R.w(context, 40), height: R.h(context, 40),
                     decoration: BoxDecoration(
                       color: Colors.white.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(R.r(context, 12)),
                     ),
-                    child: const Icon(Icons.account_balance_wallet_rounded,
-                        color: Colors.white, size: 22),
+                    child: Icon(Icons.account_balance_wallet_rounded,
+                        color: Colors.white, size: R.w(context, 22)),
                   ),
-                  const SizedBox(width: 10),
+                  SizedBox(width: R.w(context, 10)),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -276,18 +301,16 @@ class _HeaderCard extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 10),
+              SizedBox(height: R.h(context, 10)),
 
               // Main wallet balance
               balanceAsync.when(
-                loading: () => Shimmer.fromColors(
-                  baseColor: Colors.white24,
-                  highlightColor: Colors.white38,
+                loading: () => AppShimmer(
                   child: Container(
-                    width: 180, height: 40,
+                    width: R.w(context, 180), height: R.h(context, 40),
                     decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(8),
+                      color: Colors.white30,
+                      borderRadius: BorderRadius.circular(R.r(context, 8)),
                     ),
                   ),
                 ),
@@ -307,25 +330,25 @@ class _HeaderCard extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(height: 12),
+              SizedBox(height: R.h(context, 12)),
 
-              // MedNu Money pill
+              // MedNU Money pill
               mednuMoneyAsync.maybeWhen(
                 data: (mm) => Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                  padding: EdgeInsets.symmetric(horizontal: R.p(context, 12), vertical: R.p(context, 7)),
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(24),
+                    borderRadius: BorderRadius.circular(R.r(context, 24)),
                     border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.stars_rounded,
-                          color: Colors.amber, size: 15),
-                      const SizedBox(width: 6),
+                      Icon(Icons.stars_rounded,
+                          color: Colors.amber, size: R.w(context, 15)),
+                      SizedBox(width: R.w(context, 6)),
                       Text(
-                        'MedNu Money  ₹${NumberFormat('#,##,##0.00').format(mm)}',
+                        'MedNU Money  ₹${NumberFormat('#,##,##0.00').format(mm)}',
                         style: const TextStyle(
                             fontFamily: 'Poppins', fontSize: 12,
                             fontWeight: FontWeight.w600, color: Colors.white),
@@ -337,13 +360,17 @@ class _HeaderCard extends StatelessWidget {
               ),
             ],
           ),
+                ),
+              ),
+            );
+          },
         ),
       ),
     );
   }
 }
 
-// ── MedNu Money Card ──────────────────────────────────────
+// ── MedNU Money Card ──────────────────────────────────────
 class _MednuMoneyCard extends StatelessWidget {
   final AsyncValue<double> mednuMoneyAsync;
   const _MednuMoneyCard({required this.mednuMoneyAsync});
@@ -352,14 +379,14 @@ class _MednuMoneyCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final balance = mednuMoneyAsync.valueOrNull ?? 0.0;
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(R.p(context, 16)),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           colors: [Color(0xFF6A1B9A), Color(0xFFAB47BC)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(R.r(context, 18)),
         boxShadow: [
           BoxShadow(
             color: const Color(0xFF6A1B9A).withValues(alpha: 0.25),
@@ -374,24 +401,24 @@ class _MednuMoneyCard extends StatelessWidget {
           Row(
             children: [
               Container(
-                width: 38, height: 38,
+                width: R.w(context, 38), height: R.h(context, 38),
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.18),
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(R.r(context, 10)),
                 ),
-                child: const Icon(Icons.stars_rounded,
-                    color: Colors.amber, size: 20),
+                child: Icon(Icons.stars_rounded,
+                    color: Colors.amber, size: R.w(context, 20)),
               ),
-              const SizedBox(width: 10),
+              SizedBox(width: R.w(context, 10)),
               const Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('MedNu Money',
+                    Text('MedNU Money',
                         style: TextStyle(
                             fontFamily: 'Poppins', fontSize: 13,
                             fontWeight: FontWeight.w700, color: Colors.white)),
-                    Text('Bonus credits for MedNu bookings only',
+                    Text('Bonus credits for MedNU bookings only',
                         style: TextStyle(
                             fontFamily: 'Poppins', fontSize: 10,
                             color: Colors.white70)),
@@ -399,10 +426,10 @@ class _MednuMoneyCard extends StatelessWidget {
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding: EdgeInsets.symmetric(horizontal: R.p(context, 8), vertical: R.p(context, 4)),
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.18),
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(R.r(context, 8)),
                 ),
                 child: const Text('Non-withdrawable',
                     style: TextStyle(
@@ -411,16 +438,14 @@ class _MednuMoneyCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 14),
+          SizedBox(height: R.h(context, 14)),
           mednuMoneyAsync.when(
-            loading: () => Shimmer.fromColors(
-              baseColor: Colors.white24,
-              highlightColor: Colors.white38,
+            loading: () => AppShimmer(
               child: Container(
-                width: 140, height: 32,
+                width: R.w(context, 140), height: R.h(context, 32),
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(6),
+                  color: Colors.white30,
+                  borderRadius: BorderRadius.circular(R.r(context, 6)),
                 ),
               ),
             ),
@@ -435,29 +460,34 @@ class _MednuMoneyCard extends StatelessWidget {
                   letterSpacing: -0.5),
             ),
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: R.h(context, 10)),
           Row(
             children: [
-              _MednuMoneyBullet(Icons.check_circle_outline_rounded,
-                  'Use for consultations & bookings'),
-              const SizedBox(width: 16),
-              _MednuMoneyBullet(Icons.block_rounded, 'Cannot transfer or withdraw'),
+              Expanded(
+                child: _MednuMoneyBullet(Icons.check_circle_outline_rounded,
+                    'Use for consultations & bookings'),
+              ),
+              SizedBox(width: R.w(context, 12)),
+              Expanded(
+                child: _MednuMoneyBullet(
+                    Icons.block_rounded, 'Cannot transfer or withdraw'),
+              ),
             ],
           ),
           if (balance > 0) ...[
-            const SizedBox(height: 10),
+            SizedBox(height: R.h(context, 10)),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              padding: EdgeInsets.symmetric(horizontal: R.p(context, 10), vertical: R.p(context, 6)),
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(R.r(context, 10)),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.info_outline_rounded,
-                      color: Colors.white70, size: 14),
-                  const SizedBox(width: 6),
+                  Icon(Icons.info_outline_rounded,
+                      color: Colors.white70, size: R.w(context, 14)),
+                  SizedBox(width: R.w(context, 6)),
                   Text(
                     'Apply at checkout to save ₹${NumberFormat('#,##,##0').format(balance)}',
                     style: const TextStyle(
@@ -482,13 +512,16 @@ class _MednuMoneyBullet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(
-      mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 12, color: Colors.white60),
-        const SizedBox(width: 4),
-        Text(label,
-            style: const TextStyle(
-                fontFamily: 'Poppins', fontSize: 10, color: Colors.white70)),
+        Icon(icon, size: R.w(context, 12), color: Colors.white60),
+        SizedBox(width: R.w(context, 4)),
+        Flexible(
+          child: Text(label,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                  fontFamily: 'Poppins', fontSize: 10, color: Colors.white70)),
+        ),
       ],
     );
   }
@@ -514,23 +547,23 @@ class _ReferralBanner extends ConsumerWidget {
     return GestureDetector(
       onTap: () => _showReferralSheet(context, ref, config),
       child: Container(
-        padding: const EdgeInsets.all(14),
+        padding: EdgeInsets.all(R.p(context, 14)),
         decoration: BoxDecoration(
           color: Colors.amber.withValues(alpha:0.08),
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(R.r(context, 16)),
           border: Border.all(color: Colors.amber.withValues(alpha:0.25)),
         ),
         child: Row(
           children: [
             Container(
-              width: 40, height: 40,
+              width: R.w(context, 40), height: R.h(context, 40),
               decoration: BoxDecoration(
                 color: Colors.amber.withValues(alpha:0.15),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.stars_rounded, color: Colors.amber, size: 22),
+              child: Icon(Icons.stars_rounded, color: Colors.amber, size: R.w(context, 22)),
             ),
-            const SizedBox(width: 12),
+            SizedBox(width: R.w(context, 12)),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -546,21 +579,21 @@ class _ReferralBanner extends ConsumerWidget {
                         ? 'Earn ${config.referrerRewardFormatted} per referral'
                         : config.bannerText,
                     style: AppTextStyles.bodySmall
-                        .copyWith(color: AppColors.textSecondary),
+                        .copyWith(color: context.appTextSecondary),
                   ),
                 ],
               ),
             ),
-            const SizedBox(width: 8),
+            SizedBox(width: R.w(context, 8)),
             ElevatedButton(
               onPressed: () => _showReferralSheet(context, ref, config),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.amber,
                 foregroundColor: Colors.black,
                 minimumSize: const Size(68, 34),
-                padding: const EdgeInsets.symmetric(horizontal: 12),
+                padding: EdgeInsets.symmetric(horizontal: R.p(context, 12)),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10)),
+                    borderRadius: BorderRadius.circular(R.r(context, 10))),
                 elevation: 0,
               ),
               child: const Text('Share',
@@ -596,50 +629,50 @@ class _ReferralSheet extends ConsumerWidget {
     final referralCode = uid.isNotEmpty ? uid.substring(0, 8).toUpperCase() : '—';
 
     return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      decoration: BoxDecoration(
+        color: context.appSurface,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(R.r(context, 28))),
       ),
       padding: EdgeInsets.fromLTRB(
-          24, 20, 24, MediaQuery.of(context).viewInsets.bottom + 32),
+          R.p(context, 24), R.p(context, 20), R.p(context, 24), MediaQuery.of(context).viewInsets.bottom + R.p(context, 32)),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           // Handle
           Container(
-            width: 40, height: 4,
+            width: R.w(context, 40), height: R.h(context, 4),
             decoration: BoxDecoration(
               color: Colors.grey.shade300,
-              borderRadius: BorderRadius.circular(2),
+              borderRadius: BorderRadius.circular(R.r(context, 2)),
             ),
           ),
-          const SizedBox(height: 20),
+          SizedBox(height: R.h(context, 20)),
 
           // Icon
           Container(
-            width: 64, height: 64,
+            width: R.w(context, 64), height: R.h(context, 64),
             decoration: BoxDecoration(
               color: Colors.amber.withValues(alpha:0.12),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.card_giftcard_rounded,
-                color: Colors.amber, size: 32),
+            child: Icon(Icons.card_giftcard_rounded,
+                color: Colors.amber, size: R.w(context, 32)),
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: R.h(context, 12)),
 
           Text(config.campaignTitle,
               style: const TextStyle(
                   fontFamily: 'Poppins',
                   fontWeight: FontWeight.w700,
                   fontSize: 20)),
-          const SizedBox(height: 6),
+          SizedBox(height: R.h(context, 6)),
           Text(
             config.campaignMessage,
             textAlign: TextAlign.center,
             style: AppTextStyles.bodyMedium
-                .copyWith(color: AppColors.textSecondary),
+                .copyWith(color: context.appTextSecondary),
           ),
-          const SizedBox(height: 20),
+          SizedBox(height: R.h(context, 20)),
 
           // Reward cards
           if (config.rewardsEnabled) ...[
@@ -653,7 +686,7 @@ class _ReferralSheet extends ConsumerWidget {
                     color: Colors.amber,
                   ),
                 ),
-                const SizedBox(width: 12),
+                SizedBox(width: R.w(context, 12)),
                 Expanded(
                   child: _RewardCard(
                     label: 'Friend gets',
@@ -664,14 +697,14 @@ class _ReferralSheet extends ConsumerWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 20),
+            SizedBox(height: R.h(context, 20)),
           ],
 
           // Referral code box
           Text('Your Referral Code',
               style: AppTextStyles.labelMedium
-                  .copyWith(color: AppColors.textSecondary)),
-          const SizedBox(height: 8),
+                  .copyWith(color: context.appTextSecondary)),
+          SizedBox(height: R.h(context, 8)),
           GestureDetector(
             onTap: () {
               Clipboard.setData(ClipboardData(text: referralCode));
@@ -681,10 +714,10 @@ class _ReferralSheet extends ConsumerWidget {
             },
             child: Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
+              padding: EdgeInsets.symmetric(vertical: R.p(context, 14), horizontal: R.p(context, 20)),
               decoration: BoxDecoration(
-                color: AppColors.background,
-                borderRadius: BorderRadius.circular(14),
+                color: context.appBackground,
+                borderRadius: BorderRadius.circular(R.r(context, 14)),
                 border: Border.all(
                     color: AppColors.primary.withValues(alpha:0.3), width: 1.5),
               ),
@@ -697,18 +730,18 @@ class _ReferralSheet extends ConsumerWidget {
                           fontWeight: FontWeight.w800,
                           fontSize: 20,
                           letterSpacing: 4)),
-                  const Icon(Icons.copy_rounded,
-                      color: AppColors.primary, size: 20),
+                  Icon(Icons.copy_rounded,
+                      color: AppColors.primary, size: R.w(context, 20)),
                 ],
               ),
             ),
           ),
-          const SizedBox(height: 20),
+          SizedBox(height: R.h(context, 20)),
 
           // Share button
           SizedBox(
             width: double.infinity,
-            height: 52,
+            height: R.h(context, 52),
             child: ElevatedButton.icon(
               icon: const Icon(Icons.share_rounded),
               label: const Text('Share with Friends'),
@@ -716,13 +749,13 @@ class _ReferralSheet extends ConsumerWidget {
                 backgroundColor: Colors.amber,
                 foregroundColor: Colors.black,
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14)),
+                    borderRadius: BorderRadius.circular(R.r(context, 14))),
                 elevation: 0,
               ),
               onPressed: () {
                 final msg = '${config.campaignMessage}\n\n'
                     'Use my referral code: *$referralCode*\n'
-                    'Download MedNu and get ${config.referredRewardFormatted} in your wallet!';
+                    'Download MedNU and get ${config.referredRewardFormatted} in your wallet!';
                 Share.share(msg, subject: config.campaignTitle);
               },
             ),
@@ -730,15 +763,15 @@ class _ReferralSheet extends ConsumerWidget {
 
           // Expiry notice
           if (config.offerExpiryDate != null) ...[
-            const SizedBox(height: 12),
+            SizedBox(height: R.h(context, 12)),
             Text(
               'Offer valid till ${DateFormat('d MMM yyyy').format(config.offerExpiryDate!)}',
               style: AppTextStyles.bodySmall
-                  .copyWith(color: AppColors.textSecondary),
+                  .copyWith(color: context.appTextSecondary),
             ),
           ],
 
-          const SizedBox(height: 8),
+          SizedBox(height: R.h(context, 8)),
           TextButton(
             onPressed: () {
               Navigator.pop(context);
@@ -770,16 +803,16 @@ class _RewardCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+      padding: EdgeInsets.symmetric(vertical: R.p(context, 14), horizontal: R.p(context, 12)),
       decoration: BoxDecoration(
         color: color.withValues(alpha:0.07),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(R.r(context, 14)),
         border: Border.all(color: color.withValues(alpha:0.2)),
       ),
       child: Column(
         children: [
-          Icon(icon, color: color, size: 22),
-          const SizedBox(height: 6),
+          Icon(icon, color: color, size: R.w(context, 22)),
+          SizedBox(height: R.h(context, 6)),
           Text(amount,
               style: TextStyle(
                   fontFamily: 'Poppins',
@@ -788,7 +821,7 @@ class _RewardCard extends StatelessWidget {
                   color: color)),
           Text(label,
               style: AppTextStyles.bodySmall
-                  .copyWith(color: AppColors.textSecondary)),
+                  .copyWith(color: context.appTextSecondary)),
         ],
       ),
     );
@@ -818,14 +851,14 @@ class _QuickActions extends StatelessWidget {
               colors: [Color(0xFF2E7D32), Color(0xFF66BB6A)]),
           onTap: onAddMoney,
         )),
-        const SizedBox(width: 12),
+        SizedBox(width: R.w(context, 12)),
         Expanded(child: _ActionButton(
           icon: Icons.send_rounded,
           label: 'Transfer',
           gradient: AppColors.primaryGradient,
           onTap: onTransfer,
         )),
-        const SizedBox(width: 12),
+        SizedBox(width: R.w(context, 12)),
         Expanded(child: _ActionButton(
           icon: Icons.receipt_long_rounded,
           label: 'Statement',
@@ -854,33 +887,33 @@ class _ActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(16),
+      color: context.appSurface,
+      borderRadius: BorderRadius.circular(R.r(context, 16)),
       elevation: 0,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(R.r(context, 16)),
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 14),
+          padding: EdgeInsets.symmetric(vertical: R.p(context, 14)),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.border),
+            borderRadius: BorderRadius.circular(R.r(context, 16)),
+            border: Border.all(color: context.appBorder),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                width: 42, height: 42,
+                width: R.w(context, 42), height: R.h(context, 42),
                 decoration: BoxDecoration(
                   gradient: gradient,
                   shape: BoxShape.circle,
                 ),
-                child: Icon(icon, color: Colors.white, size: 20),
+                child: Icon(icon, color: Colors.white, size: R.w(context, 20)),
               ),
-              const SizedBox(height: 8),
+              SizedBox(height: R.h(context, 8)),
               Text(label,
                   style: AppTextStyles.labelSmall
-                      .copyWith(color: AppColors.textPrimary),
+                      .copyWith(color: context.appTextPrimary),
                   textAlign: TextAlign.center),
             ],
           ),
@@ -898,11 +931,11 @@ class _TransactionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
+      margin: EdgeInsets.only(bottom: R.p(context, 10)),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.divider),
+        color: context.appSurface,
+        borderRadius: BorderRadius.circular(R.r(context, 16)),
+        border: Border.all(color: context.appBorder),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha:0.03),
@@ -912,14 +945,14 @@ class _TransactionCard extends StatelessWidget {
         ],
       ),
       child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        contentPadding: EdgeInsets.symmetric(horizontal: R.p(context, 14), vertical: R.p(context, 6)),
         leading: Container(
-          width: 44, height: 44,
+          width: R.w(context, 44), height: R.h(context, 44),
           decoration: BoxDecoration(
             color: tx.color.withValues(alpha:0.1),
             shape: BoxShape.circle,
           ),
-          child: Icon(tx.icon, color: tx.color, size: 20),
+          child: Icon(tx.icon, color: tx.color, size: R.w(context, 20)),
         ),
         title: Text(tx.title,
             style: AppTextStyles.labelLarge,
@@ -928,7 +961,7 @@ class _TransactionCard extends StatelessWidget {
         subtitle: Text(
           tx.formattedDate,
           style: AppTextStyles.bodySmall
-              .copyWith(color: AppColors.textSecondary),
+              .copyWith(color: context.appTextSecondary),
         ),
         trailing: Text(
           tx.formattedAmount,
@@ -948,19 +981,9 @@ class _TxShimmer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-      child: Shimmer.fromColors(
-        baseColor: const Color(0xFFEEEEEE),
-        highlightColor: const Color(0xFFFAFAFA),
-        child: Container(
-          height: 72,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-          ),
-        ),
-      ),
+    return const Padding(
+      padding: EdgeInsets.fromLTRB(16, 0, 16, 10),
+      child: SkeletonBox(width: double.infinity, height: 72, radius: 16),
     );
   }
 }
@@ -972,27 +995,27 @@ class _EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 32),
+      padding: EdgeInsets.symmetric(vertical: R.p(context, 48), horizontal: R.p(context, 32)),
       child: Column(
         children: [
           Container(
-            width: 80, height: 80,
+            width: R.w(context, 80), height: R.h(context, 80),
             decoration: BoxDecoration(
               color: AppColors.primary.withValues(alpha:0.08),
               shape: BoxShape.circle,
             ),
             child: Icon(Icons.receipt_long_rounded,
-                size: 38, color: AppColors.primary.withValues(alpha:0.6)),
+                size: R.w(context, 38), color: AppColors.primary.withValues(alpha:0.6)),
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: R.h(context, 16)),
           Text('No Transactions Yet',
               style: AppTextStyles.h4
-                  .copyWith(color: AppColors.textSecondary)),
-          const SizedBox(height: 8),
+                  .copyWith(color: context.appTextSecondary)),
+          SizedBox(height: R.h(context, 8)),
           Text(
             'Your transaction history will\nappear here once you start using the wallet.',
             style: AppTextStyles.bodyMedium
-                .copyWith(color: AppColors.textHint),
+                .copyWith(color: context.appTextHint),
             textAlign: TextAlign.center,
           ),
         ],
@@ -1010,33 +1033,33 @@ class _ErrorState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 32),
+      padding: EdgeInsets.symmetric(vertical: R.p(context, 48), horizontal: R.p(context, 32)),
       child: Column(
         children: [
           Container(
-            width: 80, height: 80,
+            width: R.w(context, 80), height: R.h(context, 80),
             decoration: BoxDecoration(
               color: AppColors.error.withValues(alpha:0.08),
               shape: BoxShape.circle,
             ),
             child: Icon(Icons.wifi_off_rounded,
-                size: 38, color: AppColors.error.withValues(alpha:0.7)),
+                size: R.w(context, 38), color: AppColors.error.withValues(alpha:0.7)),
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: R.h(context, 16)),
           Text('Couldn\'t Load Transactions',
               style: AppTextStyles.h4
-                  .copyWith(color: AppColors.textSecondary)),
-          const SizedBox(height: 8),
+                  .copyWith(color: context.appTextSecondary)),
+          SizedBox(height: R.h(context, 8)),
           Text(
             'Check your internet connection and try again.',
             style: AppTextStyles.bodyMedium
-                .copyWith(color: AppColors.textHint),
+                .copyWith(color: context.appTextHint),
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 20),
+          SizedBox(height: R.h(context, 20)),
           ElevatedButton.icon(
             onPressed: onRetry,
-            icon: const Icon(Icons.refresh_rounded, size: 18),
+            icon: Icon(Icons.refresh_rounded, size: R.w(context, 18)),
             label: const Text('Retry'),
           ),
         ],
@@ -1118,10 +1141,10 @@ class _AddMoneySheetState extends ConsumerState<_AddMoneySheet> {
   Widget build(BuildContext context) {
     final bottom = MediaQuery.of(context).viewInsets.bottom;
     return Container(
-      padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + bottom),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      padding: EdgeInsets.fromLTRB(R.p(context, 20), R.p(context, 20), R.p(context, 20), R.p(context, 20) + bottom),
+      decoration: BoxDecoration(
+        color: context.appSurface,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(R.r(context, 28))),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -1130,21 +1153,21 @@ class _AddMoneySheetState extends ConsumerState<_AddMoneySheet> {
           // Handle
           Center(
             child: Container(
-              width: 40, height: 4,
+              width: R.w(context, 40), height: R.h(context, 4),
               decoration: BoxDecoration(
-                color: AppColors.border,
-                borderRadius: BorderRadius.circular(2),
+                color: context.appBorder,
+                borderRadius: BorderRadius.circular(R.r(context, 2)),
               ),
             ),
           ),
-          const SizedBox(height: 20),
+          SizedBox(height: R.h(context, 20)),
 
           Text('Add Money to Wallet', style: AppTextStyles.h3),
-          const SizedBox(height: 6),
+          SizedBox(height: R.h(context, 6)),
           Text('Amount will be credited instantly',
               style: AppTextStyles.bodySmall
-                  .copyWith(color: AppColors.textSecondary)),
-          const SizedBox(height: 20),
+                  .copyWith(color: context.appTextSecondary)),
+          SizedBox(height: R.h(context, 20)),
 
           // Amount input
           TextField(
@@ -1154,22 +1177,22 @@ class _AddMoneySheetState extends ConsumerState<_AddMoneySheet> {
               FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}'))
             ],
             autofocus: true,
-            style: AppTextStyles.h2.copyWith(color: AppColors.textPrimary),
+            style: AppTextStyles.h2.copyWith(color: context.appTextPrimary),
             decoration: InputDecoration(
               prefixText: '₹ ',
               prefixStyle:
-                  AppTextStyles.h2.copyWith(color: AppColors.textSecondary),
+                  AppTextStyles.h2.copyWith(color: context.appTextSecondary),
               hintText: '0.00',
               hintStyle:
-                  AppTextStyles.h2.copyWith(color: AppColors.textHint),
+                  AppTextStyles.h2.copyWith(color: context.appTextHint),
               filled: true,
-              fillColor: AppColors.background,
+              fillColor: context.appBackground,
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(R.r(context, 16)),
                 borderSide: BorderSide.none,
               ),
               focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(R.r(context, 16)),
                 borderSide: BorderSide(
                     color: AppColors.primary.withValues(alpha:0.4), width: 2),
               ),
@@ -1177,7 +1200,7 @@ class _AddMoneySheetState extends ConsumerState<_AddMoneySheet> {
             ),
             onChanged: (_) => setState(() => _error = null),
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: R.h(context, 16)),
 
           // Quick amounts
           Wrap(
@@ -1190,10 +1213,10 @@ class _AddMoneySheetState extends ConsumerState<_AddMoneySheet> {
               },
               child: Container(
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    EdgeInsets.symmetric(horizontal: R.p(context, 14), vertical: R.p(context, 8)),
                 decoration: BoxDecoration(
                   color: AppColors.primary.withValues(alpha:0.06),
-                  borderRadius: BorderRadius.circular(24),
+                  borderRadius: BorderRadius.circular(R.r(context, 24)),
                   border: Border.all(
                       color: AppColors.primary.withValues(alpha:0.2)),
                 ),
@@ -1203,21 +1226,21 @@ class _AddMoneySheetState extends ConsumerState<_AddMoneySheet> {
               ),
             )).toList(),
           ),
-          const SizedBox(height: 24),
+          SizedBox(height: R.h(context, 24)),
 
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
               onPressed: _loading ? null : _submit,
               child: _loading
-                  ? const SizedBox(
-                      width: 20, height: 20,
-                      child: CircularProgressIndicator(
+                  ? SizedBox(
+                      width: R.w(context, 20), height: R.h(context, 20),
+                      child: const CircularProgressIndicator(
                           color: Colors.white, strokeWidth: 2))
                   : const Text('Add Money'),
             ),
           ),
-          const SizedBox(height: 4),
+          SizedBox(height: R.h(context, 4)),
         ],
       ),
     );
@@ -1285,10 +1308,10 @@ class _TransferSheetState extends ConsumerState<_TransferSheet> {
   Widget build(BuildContext context) {
     final bottom = MediaQuery.of(context).viewInsets.bottom;
     return Container(
-      padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + bottom),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      padding: EdgeInsets.fromLTRB(R.p(context, 20), R.p(context, 20), R.p(context, 20), R.p(context, 20) + bottom),
+      decoration: BoxDecoration(
+        color: context.appSurface,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(R.r(context, 28))),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -1296,20 +1319,20 @@ class _TransferSheetState extends ConsumerState<_TransferSheet> {
         children: [
           Center(
             child: Container(
-              width: 40, height: 4,
+              width: R.w(context, 40), height: R.h(context, 4),
               decoration: BoxDecoration(
-                color: AppColors.border,
-                borderRadius: BorderRadius.circular(2),
+                color: context.appBorder,
+                borderRadius: BorderRadius.circular(R.r(context, 2)),
               ),
             ),
           ),
-          const SizedBox(height: 20),
+          SizedBox(height: R.h(context, 20)),
           Text('Transfer Money', style: AppTextStyles.h3),
-          const SizedBox(height: 4),
-          Text('Send wallet balance to another MedNu user',
+          SizedBox(height: R.h(context, 4)),
+          Text('Send wallet balance to another MedNU user',
               style: AppTextStyles.bodySmall
-                  .copyWith(color: AppColors.textSecondary)),
-          const SizedBox(height: 20),
+                  .copyWith(color: context.appTextSecondary)),
+          SizedBox(height: R.h(context, 20)),
 
           // Phone number field
           TextField(
@@ -1322,20 +1345,20 @@ class _TransferSheetState extends ConsumerState<_TransferSheet> {
               prefixText: '+91 ',
               counterText: '',
               filled: true,
-              fillColor: AppColors.background,
+              fillColor: context.appBackground,
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(R.r(context, 14)),
                 borderSide: BorderSide.none,
               ),
               focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(R.r(context, 14)),
                 borderSide: BorderSide(
                     color: AppColors.primary.withValues(alpha:0.4), width: 2),
               ),
             ),
             onChanged: (_) => setState(() => _error = null),
           ),
-          const SizedBox(height: 14),
+          SizedBox(height: R.h(context, 14)),
 
           // Amount field
           TextField(
@@ -1344,18 +1367,18 @@ class _TransferSheetState extends ConsumerState<_TransferSheet> {
             inputFormatters: [
               FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}'))
             ],
-            style: AppTextStyles.h3.copyWith(color: AppColors.textPrimary),
+            style: AppTextStyles.h3.copyWith(color: context.appTextPrimary),
             decoration: InputDecoration(
               labelText: 'Amount',
               prefixText: '₹ ',
               filled: true,
-              fillColor: AppColors.background,
+              fillColor: context.appBackground,
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(R.r(context, 14)),
                 borderSide: BorderSide.none,
               ),
               focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(R.r(context, 14)),
                 borderSide: BorderSide(
                     color: AppColors.primary.withValues(alpha:0.4), width: 2),
               ),
@@ -1363,7 +1386,7 @@ class _TransferSheetState extends ConsumerState<_TransferSheet> {
             ),
             onChanged: (_) => setState(() => _error = null),
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: R.h(context, 12)),
 
           // Quick amounts
           Wrap(
@@ -1375,10 +1398,10 @@ class _TransferSheetState extends ConsumerState<_TransferSheet> {
                 setState(() => _error = null);
               },
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                padding: EdgeInsets.symmetric(horizontal: R.p(context, 14), vertical: R.p(context, 8)),
                 decoration: BoxDecoration(
                   color: AppColors.primary.withValues(alpha:0.06),
-                  borderRadius: BorderRadius.circular(24),
+                  borderRadius: BorderRadius.circular(R.r(context, 24)),
                   border: Border.all(color: AppColors.primary.withValues(alpha:0.2)),
                 ),
                 child: Text('₹$a',
@@ -1387,16 +1410,16 @@ class _TransferSheetState extends ConsumerState<_TransferSheet> {
               ),
             )).toList(),
           ),
-          const SizedBox(height: 24),
+          SizedBox(height: R.h(context, 24)),
 
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
-              icon: const Icon(Icons.send_rounded, size: 18),
+              icon: Icon(Icons.send_rounded, size: R.w(context, 18)),
               label: _loading
-                  ? const SizedBox(
-                      width: 20, height: 20,
-                      child: CircularProgressIndicator(
+                  ? SizedBox(
+                      width: R.w(context, 20), height: R.h(context, 20),
+                      child: const CircularProgressIndicator(
                           color: Colors.white, strokeWidth: 2))
                   : const Text('Transfer Now'),
               style: ElevatedButton.styleFrom(
@@ -1404,13 +1427,13 @@ class _TransferSheetState extends ConsumerState<_TransferSheet> {
                 foregroundColor: Colors.white,
                 minimumSize: const Size(double.infinity, 52),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14)),
+                    borderRadius: BorderRadius.circular(R.r(context, 14))),
                 elevation: 0,
               ),
               onPressed: _loading ? null : _submit,
             ),
           ),
-          const SizedBox(height: 4),
+          SizedBox(height: R.h(context, 4)),
         ],
       ),
     );
@@ -1435,14 +1458,14 @@ class _StatementSheetState extends ConsumerState<_StatementSheet> {
   }
 
   void _share(List<WalletTransaction> txs) {
-    final buf = StringBuffer('MedNu Wallet Statement\n');
+    final buf = StringBuffer('MedNU Wallet Statement\n');
     buf.writeln('Generated: ${DateFormat('d MMM yyyy, h:mm a').format(DateTime.now())}');
     buf.writeln('─' * 32);
     for (final t in txs) {
       buf.writeln(
           '${t.formattedDate}  ${t.title.padRight(22)} ${t.formattedAmount}');
     }
-    Share.share(buf.toString(), subject: 'MedNu Wallet Statement');
+    Share.share(buf.toString(), subject: 'MedNU Wallet Statement');
   }
 
   @override
@@ -1452,26 +1475,26 @@ class _StatementSheetState extends ConsumerState<_StatementSheet> {
 
     return Container(
       constraints: BoxConstraints(maxHeight: maxH),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      decoration: BoxDecoration(
+        color: context.appSurface,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(R.r(context, 28))),
       ),
       child: Column(
         children: [
           // Handle
-          const SizedBox(height: 12),
+          SizedBox(height: R.h(context, 12)),
           Container(
-            width: 40, height: 4,
+            width: R.w(context, 40), height: R.h(context, 4),
             decoration: BoxDecoration(
-              color: AppColors.border,
-              borderRadius: BorderRadius.circular(2),
+              color: context.appBorder,
+              borderRadius: BorderRadius.circular(R.r(context, 2)),
             ),
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: R.h(context, 16)),
 
           // Header
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
+            padding: EdgeInsets.symmetric(horizontal: R.p(context, 20)),
             child: Row(
               children: [
                 Expanded(child: Text('Statement', style: AppTextStyles.h3)),
@@ -1487,35 +1510,35 @@ class _StatementSheetState extends ConsumerState<_StatementSheet> {
               ],
             ),
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: R.h(context, 8)),
 
           // Filter tabs
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
+            padding: EdgeInsets.symmetric(horizontal: R.p(context, 20)),
             child: Row(
               children: [
                 _FilterChip(label: 'All', selected: _filter == 0,
                     onTap: () => setState(() => _filter = 0)),
-                const SizedBox(width: 8),
+                SizedBox(width: R.w(context, 8)),
                 _FilterChip(label: 'Credits', selected: _filter == 1,
                     onTap: () => setState(() => _filter = 1)),
-                const SizedBox(width: 8),
+                SizedBox(width: R.w(context, 8)),
                 _FilterChip(label: 'Debits', selected: _filter == 2,
                     onTap: () => setState(() => _filter = 2)),
               ],
             ),
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: R.h(context, 12)),
           const Divider(height: 1),
 
           // List
           Expanded(
             child: txAsync.when(
               loading: () => ListView.builder(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                padding: EdgeInsets.fromLTRB(R.p(context, 16), R.p(context, 8), R.p(context, 16), R.p(context, 24)),
                 itemCount: 6,
                 itemBuilder: (_, __) => Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
+                  padding: EdgeInsets.only(bottom: R.p(context, 10)),
                   child: SkeletonBox(width: double.infinity, height: 70),
                 ),
               ),
@@ -1533,9 +1556,9 @@ class _StatementSheetState extends ConsumerState<_StatementSheet> {
                   );
                 }
                 return ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                  padding: EdgeInsets.fromLTRB(R.p(context, 16), R.p(context, 8), R.p(context, 16), R.p(context, 24)),
                   itemCount: list.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                  separatorBuilder: (_, __) => SizedBox(height: R.h(context, 8)),
                   itemBuilder: (_, i) => FadeInSlide(
                     delay: Duration(milliseconds: i * 30),
                     child: _TransactionCard(tx: list[i]),
@@ -1563,12 +1586,12 @@ class _FilterChip extends StatelessWidget {
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: EdgeInsets.symmetric(horizontal: R.p(context, 16), vertical: R.p(context, 8)),
         decoration: BoxDecoration(
           color: selected
               ? AppColors.primary
               : AppColors.primary.withValues(alpha:0.07),
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(R.r(context, 24)),
         ),
         child: Text(
           label,
@@ -1576,6 +1599,246 @@ class _FilterChip extends StatelessWidget {
             color: selected ? Colors.white : AppColors.primary,
           ),
         ),
+      ),
+    );
+  }
+}
+
+// ── Refunds Section ──────────────────────────────────────
+class _RefundsSection extends StatelessWidget {
+  final AsyncValue<List<WalletTransaction>> txAsync;
+  final VoidCallback onViewAll;
+  const _RefundsSection({required this.txAsync, required this.onViewAll});
+
+  @override
+  Widget build(BuildContext context) {
+    final refunds = txAsync.valueOrNull
+            ?.where((t) => t.category == 'refund')
+            .toList() ??
+        [];
+    final total = refunds.fold<double>(
+        0, (sum, t) => sum + (t.isCredit ? t.amount : -t.amount));
+    final isLoading = txAsync.isLoading;
+
+    return GestureDetector(
+      onTap: onViewAll,
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: R.p(context, 16), vertical: R.p(context, 14)),
+        decoration: BoxDecoration(
+          color: context.appSurface,
+          borderRadius: BorderRadius.circular(R.r(context, 16)),
+          border: Border.all(color: context.appBorder),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: R.w(context, 42),
+              height: R.h(context, 42),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE3F2FD),
+                borderRadius: BorderRadius.circular(R.r(context, 12)),
+              ),
+              child: Icon(Icons.replay_rounded,
+                  color: const Color(0xFF1565C0), size: R.w(context, 22)),
+            ),
+            SizedBox(width: R.w(context, 12)),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'My Refunds',
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: context.appTextPrimary,
+                    ),
+                  ),
+                  SizedBox(height: R.h(context, 2)),
+                  isLoading
+                      ? Text('Loading...',
+                          style: AppTextStyles.bodySmall
+                              .copyWith(color: context.appTextSecondary))
+                      : Text(
+                          refunds.isEmpty
+                              ? 'No refunds yet'
+                              : '${refunds.length} refund${refunds.length == 1 ? '' : 's'} · ₹${NumberFormat('#,##,##0.00').format(total)} credited',
+                          style: AppTextStyles.bodySmall
+                              .copyWith(color: context.appTextSecondary),
+                        ),
+                ],
+              ),
+            ),
+            if (!isLoading && refunds.isNotEmpty)
+              Container(
+                padding:
+                    EdgeInsets.symmetric(horizontal: R.p(context, 8), vertical: R.p(context, 3)),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE3F2FD),
+                  borderRadius: BorderRadius.circular(R.r(context, 20)),
+                ),
+                child: Text(
+                  '${refunds.length}',
+                  style: const TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF1565C0),
+                  ),
+                ),
+              ),
+            SizedBox(width: R.w(context, 8)),
+            Icon(Icons.arrow_forward_ios_rounded,
+                size: R.w(context, 14), color: context.appTextHint),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Refunds Sheet ─────────────────────────────────────────
+class _RefundsSheet extends StatelessWidget {
+  final AsyncValue<List<WalletTransaction>> txAsync;
+  const _RefundsSheet({required this.txAsync});
+
+  @override
+  Widget build(BuildContext context) {
+    final refunds =
+        txAsync.valueOrNull?.where((t) => t.category == 'refund').toList() ??
+            [];
+    final maxH = MediaQuery.of(context).size.height * 0.75;
+
+    return Container(
+      constraints: BoxConstraints(maxHeight: maxH),
+      decoration: BoxDecoration(
+        color: context.appSurface,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(R.r(context, 28))),
+      ),
+      child: Column(
+        children: [
+          SizedBox(height: R.h(context, 12)),
+          Container(
+            width: R.w(context, 40),
+            height: R.h(context, 4),
+            decoration: BoxDecoration(
+              color: context.appBorder,
+              borderRadius: BorderRadius.circular(R.r(context, 2)),
+            ),
+          ),
+          SizedBox(height: R.h(context, 16)),
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: R.p(context, 20)),
+            child: Row(
+              children: [
+                Container(
+                  width: R.w(context, 38),
+                  height: R.h(context, 38),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE3F2FD),
+                    borderRadius: BorderRadius.circular(R.r(context, 10)),
+                  ),
+                  child: Icon(Icons.replay_rounded,
+                      color: const Color(0xFF1565C0), size: R.w(context, 20)),
+                ),
+                SizedBox(width: R.w(context, 10)),
+                Text('My Refunds', style: AppTextStyles.h3),
+                const Spacer(),
+                if (refunds.isNotEmpty)
+                  Container(
+                    padding:
+                        EdgeInsets.symmetric(horizontal: R.p(context, 10), vertical: R.p(context, 4)),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE3F2FD),
+                      borderRadius: BorderRadius.circular(R.r(context, 20)),
+                    ),
+                    child: Text(
+                      '${refunds.length}',
+                      style: const TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF1565C0),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          SizedBox(height: R.h(context, 12)),
+          const Divider(height: 1),
+          Expanded(
+            child: refunds.isEmpty
+                ? Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(R.p(context, 40)),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: R.w(context, 72),
+                            height: R.h(context, 72),
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFE3F2FD),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(Icons.replay_rounded,
+                                size: R.w(context, 34), color: const Color(0xFF1565C0)),
+                          ),
+                          SizedBox(height: R.h(context, 16)),
+                          Text('No Refunds Yet',
+                              style: AppTextStyles.h4
+                                  .copyWith(color: context.appTextSecondary)),
+                          SizedBox(height: R.h(context, 8)),
+                          Text(
+                            'Refunds from cancelled bookings\nwill appear here.',
+                            textAlign: TextAlign.center,
+                            style: AppTextStyles.bodyMedium
+                                .copyWith(color: context.appTextHint),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                : ListView.separated(
+                    padding: EdgeInsets.fromLTRB(R.p(context, 16), R.p(context, 12), R.p(context, 16), R.p(context, 24)),
+                    itemCount: refunds.length,
+                    separatorBuilder: (_, __) => SizedBox(height: R.h(context, 8)),
+                    itemBuilder: (_, i) => _TransactionCard(tx: refunds[i]),
+                  ),
+          ),
+          const Divider(height: 1),
+          Padding(
+            padding: EdgeInsets.fromLTRB(R.p(context, 16), R.p(context, 12), R.p(context, 16), R.p(context, 20)),
+            child: SizedBox(
+              width: double.infinity,
+              height: R.h(context, 48),
+              child: OutlinedButton.icon(
+                icon: Icon(Icons.support_agent_rounded, size: R.w(context, 18)),
+                label: const Text('Contact MedNU Support'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF1565C0),
+                  side: const BorderSide(color: Color(0xFF1565C0)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(R.r(context, 12))),
+                  textStyle: const TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600),
+                ),
+                onPressed: () async {
+                  final uri = Uri.parse(
+                      'https://wa.me/919999999999?text=Hi%20MedNu%20Support%2C%20I%20have%20a%20query%20about%20my%20refund.');
+                  if (await canLaunchUrl(uri)) {
+                    await launchUrl(uri,
+                        mode: LaunchMode.externalApplication);
+                  }
+                },
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1591,28 +1854,28 @@ class _HelpItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
+      padding: EdgeInsets.only(bottom: R.p(context, 16)),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 36, height: 36,
+            width: R.w(context, 36), height: R.h(context, 36),
             decoration: BoxDecoration(
               color: AppColors.primary.withValues(alpha:0.08),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(R.r(context, 10)),
             ),
-            child: Icon(icon, color: AppColors.primary, size: 18),
+            child: Icon(icon, color: AppColors.primary, size: R.w(context, 18)),
           ),
-          const SizedBox(width: 12),
+          SizedBox(width: R.w(context, 12)),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(title, style: AppTextStyles.labelLarge),
-                const SizedBox(height: 2),
+                SizedBox(height: R.h(context, 2)),
                 Text(desc,
                     style: AppTextStyles.bodySmall
-                        .copyWith(color: AppColors.textSecondary)),
+                        .copyWith(color: context.appTextSecondary)),
               ],
             ),
           ),

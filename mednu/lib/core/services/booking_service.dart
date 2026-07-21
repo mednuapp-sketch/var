@@ -18,6 +18,7 @@ class BookingService {
     required String preferredTime,
     String notes = '',
     Map<String, dynamic> serviceDetails = const {},
+    num? amount,
   }) async {
     final uid = _auth.currentUser?.uid;
     if (uid == null || uid.isEmpty) throw Exception('User not authenticated');
@@ -41,6 +42,7 @@ class BookingService {
         'preferredTime':  preferredTime,
         'notes':          notes,
         'serviceDetails': serviceDetails,
+        'amount':         amount,
         'status':         'pending',
         'assignedTo':     null,
         'createdAt':      FieldValue.serverTimestamp(),

@@ -16,6 +16,9 @@ class MpinPad extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final h = MediaQuery.of(context).size.height;
+    final btnSize = h < 680 ? 58.0 : (h < 760 ? 66.0 : 76.0);
+    final vMargin = h < 680 ? 3.0 : (h < 760 ? 5.0 : 7.0);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 32),
       child: Column(
@@ -27,6 +30,8 @@ class MpinPad extends StatelessWidget {
                       label: key,
                       onTap: key.isEmpty ? null : () => onKey(key),
                       isLoading: isLoading,
+                      size: btnSize,
+                      verticalMargin: vMargin,
                     ))
                 .toList(),
           );
@@ -40,8 +45,16 @@ class _PadKey extends StatefulWidget {
   final String label;
   final VoidCallback? onTap;
   final bool isLoading;
+  final double size;
+  final double verticalMargin;
 
-  const _PadKey({required this.label, this.onTap, required this.isLoading});
+  const _PadKey({
+    required this.label,
+    this.onTap,
+    required this.isLoading,
+    this.size = 76,
+    this.verticalMargin = 7,
+  });
 
   @override
   State<_PadKey> createState() => _PadKeyState();
@@ -73,7 +86,7 @@ class _PadKeyState extends State<_PadKey> with SingleTickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     if (widget.label.isEmpty) {
-      return const SizedBox(width: 76, height: 76);
+      return SizedBox(width: widget.size, height: widget.size);
     }
 
     final isBack = widget.label == '⌫';
@@ -90,9 +103,9 @@ class _PadKeyState extends State<_PadKey> with SingleTickerProviderStateMixin {
       child: ScaleTransition(
         scale: _scale,
         child: Container(
-          width: 76,
-          height: 76,
-          margin: const EdgeInsets.symmetric(vertical: 7),
+          width: widget.size,
+          height: widget.size,
+          margin: EdgeInsets.symmetric(vertical: widget.verticalMargin),
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             gradient: isBack

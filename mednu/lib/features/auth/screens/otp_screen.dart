@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pinput/pinput.dart';
+import '../../../core/constants/app_colors.dart';
 import '../../../core/router/app_router.dart';
 import '../providers/auth_provider.dart';
 
@@ -332,19 +333,22 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
+    final isDark = context.isDarkMode;
 
     final defaultTheme = PinTheme(
       width: 52, height: 60,
-      textStyle: const TextStyle(
+      textStyle: TextStyle(
         fontSize: 24,
         fontWeight: FontWeight.w700,
-        color: Color(0xFF1A0A2E),
+        color: isDark ? Colors.white : const Color(0xFF1A0A2E),
         fontFamily: 'Poppins',
       ),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE0D5F0), width: 1.5),
-        color: const Color(0xFFF8F4FF),
+        border: Border.all(
+            color: isDark ? AppColors.darkBorderMedium : const Color(0xFFE0D5F0),
+            width: 1.5),
+        color: isDark ? AppColors.darkCard : const Color(0xFFF8F4FF),
       ),
     );
 
@@ -352,7 +356,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: const Color(0xFF7b2d6e), width: 2),
-        color: Colors.white,
+        color: isDark ? AppColors.darkCardElevated : Colors.white,
         boxShadow: [
           BoxShadow(
             color: const Color(0xFF7b2d6e).withValues(alpha: 0.15),
@@ -372,8 +376,13 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
               : const Color(0xFF7b2d6e).withValues(alpha: 0.5),
           width: 1.5,
         ),
-        color:
-            _hasError ? const Color(0xFFFFF0F5) : const Color(0xFFF0E8FA),
+        color: isDark
+            ? (_hasError
+                ? const Color(0xFFD4145A).withValues(alpha: 0.18)
+                : const Color(0xFF7b2d6e).withValues(alpha: 0.18))
+            : (_hasError
+                ? const Color(0xFFFFF0F5)
+                : const Color(0xFFF0E8FA)),
       ),
     );
 
@@ -381,7 +390,9 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: const Color(0xFFD4145A), width: 2),
-        color: const Color(0xFFFFF0F5),
+        color: isDark
+            ? const Color(0xFFD4145A).withValues(alpha: 0.18)
+            : const Color(0xFFFFF0F5),
       ),
     );
 
@@ -391,8 +402,11 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
             ? const Color(0xFFFF416C)
             : const Color(0xFFF2A8D8);
 
+    final keyboardBottom = MediaQuery.of(context).viewInsets.bottom;
+
     return Scaffold(
       backgroundColor: const Color(0xFF0D0520),
+      resizeToAvoidBottomInset: false,
       body: Stack(
         children: [
           // ── Background gradient ─────────────────────────────────────────
@@ -492,6 +506,12 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
               opacity: _fadeIn,
               child: Column(
                 children: [
+                  // ── Scrollable top content ──────────────────────────────
+                  Expanded(
+                    child: SingleChildScrollView(
+                      physics: const ClampingScrollPhysics(),
+                      child: Column(
+                        children: [
                   // ── Back button ─────────────────────────────────────────
                   Padding(
                     padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
@@ -653,9 +673,16 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
                     ),
                   ),
 
-                  // ── White card ──────────────────────────────────────────
-                  const Spacer(),
-                  SlideTransition(
+                        ],
+                      ),
+                    ),
+                  ),
+                  // ── White card (pinned above keyboard) ─────────────────
+                  AnimatedPadding(
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeOut,
+                    padding: EdgeInsets.only(bottom: keyboardBottom),
+                    child: SlideTransition(
                     position: _slideUp,
                     child: Container(
                       width: double.infinity,
@@ -665,7 +692,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
                           24,
                           20 + MediaQuery.of(context).padding.bottom),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: isDark ? AppColors.darkSurface : Colors.white,
                         borderRadius:
                             const BorderRadius.vertical(top: Radius.circular(36)),
                         boxShadow: [
@@ -683,7 +710,9 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
                           Container(
                             width: 36, height: 4,
                             decoration: BoxDecoration(
-                              color: const Color(0xFFE0E0E0),
+                              color: isDark
+                                  ? AppColors.darkBorderMedium
+                                  : const Color(0xFFE0E0E0),
                               borderRadius: BorderRadius.circular(2),
                             ),
                           ),
@@ -739,8 +768,9 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
                                     child: CircularProgressIndicator(
                                       value: _secondsLeft / 60,
                                       strokeWidth: 2.2,
-                                      backgroundColor:
-                                          const Color(0xFFEEE8F8),
+                                      backgroundColor: isDark
+                                          ? AppColors.darkBorderMedium
+                                          : const Color(0xFFEEE8F8),
                                       valueColor:
                                           const AlwaysStoppedAnimation(
                                               Color(0xFF7b2d6e)),
@@ -847,7 +877,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
                               Text(
                                 "Didn't receive the code? ",
                                 style: TextStyle(
-                                  color: Colors.grey.shade500,
+                                  color: context.appTextSecondary,
                                   fontSize: 13,
                                   fontFamily: 'Poppins',
                                 ),
@@ -860,7 +890,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
                                     ? Text(
                                         'Resend in ${_secondsLeft}s',
                                         style: TextStyle(
-                                          color: Colors.grey.shade400,
+                                          color: context.appTextHint,
                                           fontSize: 13,
                                           fontFamily: 'Poppins',
                                           fontWeight: FontWeight.w600,
@@ -882,6 +912,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
                           ),
                         ],
                       ),
+                    ),
                     ),
                   ),
                 ],

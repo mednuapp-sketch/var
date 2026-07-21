@@ -7,11 +7,23 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../wallet/wallet_provider.dart';
 
+// ─────────────────────────────────────────────────────────────────────────────
+//  Constants
+// ─────────────────────────────────────────────────────────────────────────────
+
 const _kRazorpayKeyId = 'rzp_test_T1Z9EVjv8paYQ2';
+const _kGreen = Color(0xFF2E7D32);
+const _kBlue = Color(0xFF1565C0);
+const _kPurple = Color(0xFF6A1B9A);
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  PaymentScreen
+// ─────────────────────────────────────────────────────────────────────────────
 
 class PaymentScreen extends ConsumerStatefulWidget {
   final String amount;
   final String description;
+
   const PaymentScreen({
     super.key,
     this.amount = '520',
@@ -22,77 +34,119 @@ class PaymentScreen extends ConsumerStatefulWidget {
   ConsumerState<PaymentScreen> createState() => _PaymentScreenState();
 }
 
-class _PaymentScreenState extends ConsumerState<PaymentScreen> {
+class _PaymentScreenState extends ConsumerState<PaymentScreen>
+    with SingleTickerProviderStateMixin {
   late final Razorpay _razorpay;
+  late final AnimationController _successCtrl;
+
   String _selectedMethod = 'upi';
   bool _useWallet = false;
   bool _useMednuMoney = false;
   bool _isProcessing = false;
+  bool _showPromoField = false;
+  bool _promoApplied = false;
+  String _promoCode = '';
+  int _promoDiscount = 0;
   String? _pendingOrderId;
-  final TextEditingController _upiController = TextEditingController();
 
-  final List<Map<String, dynamic>> _paymentMethods = [
-    {'id': 'upi',        'name': 'UPI',                'icon': Icons.account_balance_rounded,        'color': const Color(0xFF2E7D32), 'desc': 'GPay, PhonePe, Paytm'},
-    {'id': 'card',       'name': 'Credit / Debit Card', 'icon': Icons.credit_card_rounded,            'color': const Color(0xFF1565C0), 'desc': 'Visa, Mastercard, RuPay'},
-    {'id': 'netbanking', 'name': 'Net Banking',          'icon': Icons.account_balance_wallet_rounded, 'color': const Color(0xFF7B1FA2), 'desc': 'All major banks supported'},
+  final _upiController = TextEditingController();
+  final _promoController = TextEditingController();
+
+  // ── Payment methods ────────────────────────────────────
+  static const _paymentMethods = [
+    _PayMethod(
+      id: 'upi',
+      name: 'UPI',
+      desc: 'GPay, PhonePe, Paytm & more',
+      icon: Icons.account_balance_rounded,
+      color: _kGreen,
+    ),
+    _PayMethod(
+      id: 'card',
+      name: 'Credit / Debit Card',
+      desc: 'Visa, Mastercard, RuPay',
+      icon: Icons.credit_card_rounded,
+      color: _kBlue,
+    ),
+    _PayMethod(
+      id: 'netbanking',
+      name: 'Net Banking',
+      desc: 'All major banks supported',
+      icon: Icons.account_balance_wallet_rounded,
+      color: _kPurple,
+    ),
   ];
 
+  // ── Computed balances ──────────────────────────────────
   int get _walletBalance {
-    final balance = ref.watch(walletBalanceProvider);
-    return balance.maybeWhen(data: (b) => b.toInt(), orElse: () => 0);
+    final b = ref.watch(walletBalanceProvider);
+    return b.maybeWhen(data: (v) => v.toInt(), orElse: () => 0);
   }
 
   int get _mednuMoneyBalance {
-    final mm = ref.watch(mednuMoneyBalanceProvider);
-    return mm.maybeWhen(data: (b) => b.toInt(), orElse: () => 0);
+    final b = ref.watch(mednuMoneyBalanceProvider);
+    return b.maybeWhen(data: (v) => v.toInt(), orElse: () => 0);
   }
 
-  int get _totalAmount           => int.tryParse(widget.amount) ?? 0;
-  // MedNu Money is applied first (bonus credits first)
-  int get _mednuMoneyDeduction   => _useMednuMoney ? _totalAmount.clamp(0, _mednuMoneyBalance) : 0;
-  int get _afterMednuMoney       => (_totalAmount - _mednuMoneyDeduction).clamp(0, _totalAmount);
-  int get _walletDeduction       => _useWallet ? _afterMednuMoney.clamp(0, _walletBalance) : 0;
-  int get _amountAfterWallet     => (_afterMednuMoney - _walletDeduction).clamp(0, _totalAmount);
+  int get _totalAmount => int.tryParse(widget.amount) ?? 0;
+  int get _afterPromo => (_totalAmount - _promoDiscount).clamp(0, _totalAmount);
+  int get _mednuMoneyDeduction =>
+      _useMednuMoney ? _afterPromo.clamp(0, _mednuMoneyBalance) : 0;
+  int get _afterMednuMoney =>
+      (_afterPromo - _mednuMoneyDeduction).clamp(0, _afterPromo);
+  int get _walletDeduction =>
+      _useWallet ? _afterMednuMoney.clamp(0, _walletBalance) : 0;
+  int get _amountAfterWallet =>
+      (_afterMednuMoney - _walletDeduction).clamp(0, _totalAmount);
 
+  // ── Lifecycle ──────────────────────────────────────────
   @override
   void initState() {
     super.initState();
     _razorpay = Razorpay();
     _razorpay.on(Razorpay.EVENT_PAYMENT_SUCCESS, _onSuccess);
-    _razorpay.on(Razorpay.EVENT_PAYMENT_ERROR,   _onError);
+    _razorpay.on(Razorpay.EVENT_PAYMENT_ERROR, _onError);
     _razorpay.on(Razorpay.EVENT_EXTERNAL_WALLET, _onExternalWallet);
+    _successCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
   }
 
   @override
   void dispose() {
     _razorpay.clear();
     _upiController.dispose();
+    _promoController.dispose();
+    _successCtrl.dispose();
     super.dispose();
   }
 
+  // ── Razorpay handlers ──────────────────────────────────
   void _onSuccess(PaymentSuccessResponse response) async {
     if (!mounted) return;
-    final paymentId = response.paymentId  ?? '';
-    final orderId   = response.orderId    ?? _pendingOrderId ?? '';
-    final signature = response.signature  ?? '';
+    final paymentId = response.paymentId ?? '';
+    final orderId = response.orderId ?? _pendingOrderId ?? '';
+    final signature = response.signature ?? '';
 
-    // Deduct MedNu Money if it was applied
     if (_mednuMoneyDeduction > 0) {
       try {
         await ref.read(walletServiceProvider).deductMednuMoney(
-          amount: _mednuMoneyDeduction.toDouble(),
-          title: 'MedNu Money Used',
-          category: 'consultation',
-          description: widget.description,
-        );
+              amount: _mednuMoneyDeduction.toDouble(),
+              title: 'MedNU Money Used',
+              category: 'consultation',
+              description: widget.description,
+            );
       } catch (_) {}
     }
 
     if (orderId.isEmpty || signature.isEmpty) {
       setState(() => _isProcessing = false);
-      _showSuccessSheet(paymentId.isNotEmpty
-          ? paymentId
-          : 'WALLET-${DateTime.now().millisecondsSinceEpoch}');
+      _showSuccessSheet(
+        paymentId.isNotEmpty
+            ? paymentId
+            : 'WALLET-${DateTime.now().millisecondsSinceEpoch}',
+      );
       return;
     }
 
@@ -100,9 +154,9 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
       final result = await FirebaseFunctions.instance
           .httpsCallable('verifyRazorpayPayment')
           .call({
-        'razorpay_order_id':   orderId,
+        'razorpay_order_id': orderId,
         'razorpay_payment_id': paymentId,
-        'razorpay_signature':  signature,
+        'razorpay_signature': signature,
       });
       if (!mounted) return;
       setState(() => _isProcessing = false);
@@ -128,17 +182,15 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
   void _onExternalWallet(ExternalWalletResponse response) {
     if (!mounted) return;
     setState(() => _isProcessing = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Opening ${response.walletName}…')),
-    );
+    _showSnackBar('Opening ${response.walletName}…', AppColors.info);
   }
 
+  // ── Open Razorpay ──────────────────────────────────────
   Future<void> _openRazorpay() async {
     if (_amountAfterWallet <= 0) {
       _showSuccessSheet('WALLET-${DateTime.now().millisecondsSinceEpoch}');
       return;
     }
-
     setState(() => _isProcessing = true);
 
     String orderId;
@@ -146,9 +198,9 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
       final result = await FirebaseFunctions.instance
           .httpsCallable('createRazorpayOrder')
           .call({
-        'amount':   _amountAfterWallet * 100,
+        'amount': _amountAfterWallet * 100,
         'currency': 'INR',
-        'receipt':  'mednu_${DateTime.now().millisecondsSinceEpoch}',
+        'receipt': 'mednu_${DateTime.now().millisecondsSinceEpoch}',
       });
       orderId = (result.data as Map)['order_id'] as String;
       _pendingOrderId = orderId;
@@ -166,14 +218,16 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
     }
 
     final options = <String, dynamic>{
-      'key':         _kRazorpayKeyId,
-      'order_id':    orderId,
-      'amount':      _amountAfterWallet * 100,
-      'name':        'MedNU Healthcare',
+      'key': _kRazorpayKeyId,
+      'order_id': orderId,
+      'amount': _amountAfterWallet * 100,
+      'name': 'MedNU Healthcare',
       'description': widget.description,
-      'prefill':     prefill,
-      'theme':       {'color': '#C2185B'},
-      'external':    {'wallets': ['paytm', 'phonepe']},
+      'prefill': prefill,
+      'theme': {'color': '#C2185B'},
+      'external': {
+        'wallets': ['paytm', 'phonepe']
+      },
     };
 
     try {
@@ -185,471 +239,1205 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
     }
   }
 
+  // ── Promo code ─────────────────────────────────────────
+  void _applyPromo() {
+    final code = _promoController.text.trim().toUpperCase();
+    if (code == 'MEDNU100') {
+      setState(() {
+        _promoApplied = true;
+        _promoCode = code;
+        _promoDiscount = 100;
+        _showPromoField = false;
+      });
+      _showSnackBar('Promo applied! ₹100 discount added.', _kGreen);
+    } else if (code == 'FIRST50') {
+      setState(() {
+        _promoApplied = true;
+        _promoCode = code;
+        _promoDiscount = 50;
+        _showPromoField = false;
+      });
+      _showSnackBar('Promo applied! ₹50 discount added.', _kGreen);
+    } else {
+      _showSnackBar('Invalid promo code. Please try again.', AppColors.error);
+    }
+  }
+
+  void _removePromo() {
+    setState(() {
+      _promoApplied = false;
+      _promoCode = '';
+      _promoDiscount = 0;
+      _promoController.clear();
+    });
+  }
+
+  // ── Helpers ────────────────────────────────────────────
   void _showError(String message) {
     if (!mounted) return;
+    _showSnackBar(message, AppColors.error);
+  }
+
+  void _showSnackBar(String message, Color color) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.red.shade600),
+      SnackBar(
+        content: Text(
+          message,
+          style: const TextStyle(fontFamily: 'Poppins', fontSize: 13),
+        ),
+        backgroundColor: color,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+      ),
     );
   }
+
+  // ─────────────────────────────────────────────────────────
+  //  Build
+  // ─────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('Payment'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded),
-          onPressed: () => context.pop(),
-        ),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ── Order summary ──────────────────────────────
+      backgroundColor: context.appBackground,
+      appBar: _buildAppBar(),
+      body: Stack(
+        children: [
+          SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildOrderSummary(),
+                const SizedBox(height: 16),
+                if (_mednuMoneyBalance > 0) ...[
+                  _buildBalanceToggle(
+                    label: 'MedNU Money',
+                    subLabel:
+                        'Available: ₹$_mednuMoneyBalance  •  Bookings only',
+                    icon: Icons.stars_rounded,
+                    iconColor: Colors.amber,
+                    gradient: const LinearGradient(
+                      colors: [_kPurple, Color(0xFFAB47BC)],
+                    ),
+                    active: _useMednuMoney,
+                    activeColor: _kPurple,
+                    onChanged: (v) => setState(() => _useMednuMoney = v),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                _buildBalanceToggle(
+                  label: 'MedNU Wallet',
+                  subLabel: 'Available: ₹$_walletBalance',
+                  icon: Icons.account_balance_wallet_rounded,
+                  iconColor: Colors.white,
+                  gradient: AppColors.primaryGradient,
+                  active: _useWallet,
+                  activeColor: AppColors.primary,
+                  onChanged: (v) => setState(() => _useWallet = v),
+                ),
+                const SizedBox(height: 16),
+                _buildPromoSection(),
+                const SizedBox(height: 20),
+                const Text('Payment Method', style: AppTextStyles.h4),
+                const SizedBox(height: 12),
+                ..._paymentMethods.map(_buildMethodTile),
+                if (_selectedMethod == 'upi') ...[
+                  const SizedBox(height: 10),
+                  _buildUpiInput(),
+                ],
+                const SizedBox(height: 12),
+                _buildSecurityNote(),
+                const SizedBox(height: 20),
+                _buildSecureFooter(),
+              ],
+            ),
+          ),
+
+          // ── Sticky pay button ──────────────────────────
+          Positioned(
+            bottom: 0, left: 0, right: 0,
+            child: _buildPayButton(),
+          ),
+
+          // ── Full-screen processing overlay ─────────────
+          if (_isProcessing)
             Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.divider),
+              color: Colors.black.withValues(alpha: 0.55),
+              child: const Center(
+                child: _ProcessingIndicator(),
               ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  AppBar _buildAppBar() {
+    return AppBar(
+      title: const Text('Secure Payment',
+          style: TextStyle(
+            fontFamily: 'Poppins',
+            fontSize: 17,
+            fontWeight: FontWeight.w700,
+          )),
+      centerTitle: true,
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back_ios_new_rounded),
+        onPressed: () => context.pop(),
+      ),
+      actions: [
+        Padding(
+          padding: const EdgeInsets.only(right: 14),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.lock_rounded, size: 14, color: _kGreen),
+              const SizedBox(width: 4),
+              const Text(
+                'SSL',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: _kGreen,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── Order Summary ──────────────────────────────────────
+  Widget _buildOrderSummary() {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: context.appSurface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: context.appBorder),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 40, height: 40,
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.receipt_long_rounded,
+                    color: AppColors.primary, size: 20),
+              ),
+              const SizedBox(width: 12),
+              const Text('Order Summary', style: AppTextStyles.h4),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: context.appBackground,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.medical_services_rounded,
+                    color: AppColors.primary, size: 18),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(widget.description,
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: context.appTextPrimary,
+                      )),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          _SummaryRow('Subtotal', '₹${widget.amount}'),
+          const SizedBox(height: 8),
+          const _SummaryRow('Platform Fee', '₹0',
+              valueColor: _kGreen, valueNote: 'Waived'),
+          if (_promoApplied) ...[
+            const SizedBox(height: 8),
+            _SummaryRow(
+              'Promo ($_promoCode)',
+              '-₹$_promoDiscount',
+              valueColor: _kGreen,
+            ),
+          ],
+          if (_useMednuMoney && _mednuMoneyDeduction > 0) ...[
+            const SizedBox(height: 8),
+            _SummaryRow(
+              'MedNU Money',
+              '-₹$_mednuMoneyDeduction',
+              valueColor: _kPurple,
+            ),
+          ],
+          if (_useWallet && _walletDeduction > 0) ...[
+            const SizedBox(height: 8),
+            _SummaryRow(
+              'Wallet',
+              '-₹$_walletDeduction',
+              valueColor: _kGreen,
+            ),
+          ],
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: Divider(height: 1),
+          ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Total Payable',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: context.appTextPrimary,
+                  )),
+              Text(
+                '₹$_amountAfterWallet',
+                style: const TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.primary,
+                ),
+              ),
+            ],
+          ),
+          if (_amountAfterWallet < _totalAmount) ...[
+            const SizedBox(height: 4),
+            Text(
+              'You save ₹${_totalAmount - _amountAfterWallet} on this order',
+              style: const TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 11,
+                color: _kGreen,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ── Balance Toggle ─────────────────────────────────────
+  Widget _buildBalanceToggle({
+    required String label,
+    required String subLabel,
+    required IconData icon,
+    required Color iconColor,
+    required Gradient gradient,
+    required bool active,
+    required Color activeColor,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 220),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: active ? activeColor.withValues(alpha: 0.04) : context.appSurface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: active
+              ? activeColor.withValues(alpha: 0.4)
+              : context.appBorder,
+          width: active ? 1.5 : 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 42, height: 42,
+            decoration: BoxDecoration(
+              gradient: gradient,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: iconColor, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: AppTextStyles.labelLarge),
+                const SizedBox(height: 2),
+                Text(
+                  subLabel,
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 11,
+                    color: active ? activeColor : context.appTextSecondary,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Switch(
+            value: active,
+            onChanged: onChanged,
+            activeThumbColor: activeColor,
+            activeTrackColor: activeColor.withValues(alpha: 0.3),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Promo Section ──────────────────────────────────────
+  Widget _buildPromoSection() {
+    if (_promoApplied) {
+      return Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: _kGreen.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: _kGreen.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 36, height: 36,
+              decoration: BoxDecoration(
+                color: _kGreen.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.local_offer_rounded,
+                  color: _kGreen, size: 18),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Order Summary', style: AppTextStyles.h4),
-                  const SizedBox(height: 12),
-                  Text(widget.description, style: AppTextStyles.bodyMedium),
-                  const Divider(height: 20),
-                  _SummaryRow('Subtotal', '₹${widget.amount}'),
-                  const SizedBox(height: 6),
-                  const _SummaryRow('Platform Fee', '₹0'),
-                  if (_useMednuMoney && _mednuMoneyDeduction > 0) ...[
-                    const SizedBox(height: 6),
-                    _SummaryRow('MedNu Money', '-₹$_mednuMoneyDeduction',
-                        color: const Color(0xFF6A1B9A)),
-                  ],
-                  if (_useWallet && _walletDeduction > 0) ...[
-                    const SizedBox(height: 6),
-                    _SummaryRow('Wallet Deduction', '-₹$_walletDeduction',
-                        color: const Color(0xFF2E7D32)),
-                  ],
-                  const Divider(height: 12),
-                  _SummaryRow('Total', '₹$_amountAfterWallet', isBold: true),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // ── MedNu Money toggle ────────────────────────
-            if (_mednuMoneyBalance > 0) ...[
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: _useMednuMoney
-                      ? const Color(0xFF6A1B9A).withValues(alpha: 0.05)
-                      : Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: _useMednuMoney
-                        ? const Color(0xFF6A1B9A).withValues(alpha: 0.4)
-                        : AppColors.divider,
-                    width: _useMednuMoney ? 1.5 : 1,
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 40, height: 40,
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF6A1B9A), Color(0xFFAB47BC)],
-                        ),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Icon(Icons.stars_rounded,
-                          color: Colors.amber, size: 20),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('MedNu Money',
-                              style: AppTextStyles.labelLarge),
-                          Text('Available: ₹$_mednuMoneyBalance  •  Bookings only',
-                              style: AppTextStyles.bodySmall
-                                  .copyWith(color: const Color(0xFF6A1B9A))),
-                        ],
-                      ),
-                    ),
-                    Switch(
-                      value: _useMednuMoney,
-                      onChanged: (v) => setState(() => _useMednuMoney = v),
-                      activeThumbColor: const Color(0xFF6A1B9A),
-                      activeTrackColor: const Color(0xFF6A1B9A).withValues(alpha: 0.3),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-            ],
-
-            // ── Wallet toggle ──────────────────────────────
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: _useWallet
-                      ? AppColors.primary.withValues(alpha: 0.3)
-                      : AppColors.divider,
-                ),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 40, height: 40,
-                    decoration: const BoxDecoration(
-                      gradient: AppColors.primaryGradient,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.account_balance_wallet_rounded,
-                        color: Colors.white, size: 20),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('MedNU Wallet', style: AppTextStyles.labelLarge),
-                        Text('Available: ₹$_walletBalance',
-                            style: AppTextStyles.bodySmall
-                                .copyWith(color: AppColors.accent)),
-                      ],
+                  Text(
+                    'Promo "$_promoCode" applied',
+                    style: const TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: _kGreen,
                     ),
                   ),
-                  Switch(
-                    value: _useWallet,
-                    onChanged: (v) => setState(() => _useWallet = v),
-                    activeThumbColor: AppColors.primary,
-                    activeTrackColor: AppColors.primary.withValues(alpha: 0.3),
+                  Text(
+                    '₹$_promoDiscount discount applied to total',
+                    style: const TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 11,
+                      color: _kGreen,
+                    ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 16),
+            TextButton(
+              onPressed: _removePromo,
+              style:
+                  TextButton.styleFrom(padding: EdgeInsets.zero),
+              child: const Text(
+                'Remove',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 11,
+                  color: AppColors.error,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
 
-            // ── Payment methods ────────────────────────────
-            const Text('Payment Method', style: AppTextStyles.h4),
-            const SizedBox(height: 12),
-            ..._paymentMethods.map((method) {
-              final color    = method['color'] as Color;
-              final selected = _selectedMethod == method['id'];
-              return GestureDetector(
-                onTap: () => setState(
-                    () => _selectedMethod = method['id'] as String),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  margin: const EdgeInsets.only(bottom: 10),
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: selected
-                        ? color.withValues(alpha: 0.05)
-                        : Colors.white,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: selected ? color : AppColors.border,
-                      width: selected ? 2 : 1,
+    return Column(
+      children: [
+        GestureDetector(
+          onTap: () => setState(() => _showPromoField = !_showPromoField),
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: context.appSurface,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: _showPromoField
+                    ? AppColors.primary.withValues(alpha: 0.4)
+                    : context.appBorder,
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.local_offer_outlined,
+                  color: _showPromoField
+                      ? AppColors.primary
+                      : context.appTextSecondary,
+                  size: 20,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Have a promo code?',
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 13,
+                      color: _showPromoField
+                          ? AppColors.primary
+                          : context.appTextSecondary,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
+                ),
+                Icon(
+                  _showPromoField
+                      ? Icons.keyboard_arrow_up_rounded
+                      : Icons.keyboard_arrow_down_rounded,
+                  color: context.appTextHint,
+                  size: 20,
+                ),
+              ],
+            ),
+          ),
+        ),
+        AnimatedSize(
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeInOut,
+          child: _showPromoField
+              ? Padding(
+                  padding: const EdgeInsets.only(top: 10),
                   child: Row(
                     children: [
-                      Container(
-                        width: 44, height: 44,
-                        decoration: BoxDecoration(
-                          color: color.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Icon(method['icon'] as IconData,
-                            color: color, size: 22),
-                      ),
-                      const SizedBox(width: 12),
                       Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(method['name'] as String,
-                                style: AppTextStyles.labelLarge.copyWith(
-                                  color: selected
-                                      ? color
-                                      : AppColors.textPrimary,
-                                )),
-                            Text(method['desc'] as String,
-                                style: AppTextStyles.bodySmall),
-                          ],
+                        child: TextField(
+                          controller: _promoController,
+                          textCapitalization: TextCapitalization.characters,
+                          style: const TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 1.5,
+                          ),
+                          decoration: InputDecoration(
+                            hintText: 'Enter code',
+                            hintStyle: const TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 13,
+                              letterSpacing: 0,
+                              fontWeight: FontWeight.w400,
+                            ),
+                            prefixIcon: const Icon(
+                                Icons.confirmation_number_rounded,
+                                size: 18,
+                                color: AppColors.primary),
+                            filled: true,
+                            fillColor: context.appSurface,
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 14),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                  color: context.appBorder),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                  color: context.appBorder),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(
+                                  color: AppColors.primary, width: 2),
+                            ),
+                          ),
                         ),
                       ),
-                      Container(
-                        width: 22, height: 22,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                              color: selected ? color : AppColors.border,
-                              width: 2),
-                          color: selected ? color : Colors.transparent,
+                      const SizedBox(width: 10),
+                      SizedBox(
+                        height: 52,
+                        child: ElevatedButton(
+                          onPressed: _applyPromo,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 18),
+                          ),
+                          child: const Text(
+                            'Apply',
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
                         ),
-                        child: selected
-                            ? const Icon(Icons.check_rounded,
-                                size: 14, color: Colors.white)
-                            : null,
                       ),
                     ],
                   ),
-                ),
-              );
-            }),
+                )
+              : const SizedBox.shrink(),
+        ),
+      ],
+    );
+  }
 
-            // ── UPI ID input (shown only when UPI method selected) ─
-            if (_selectedMethod == 'upi') ...[
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                      color: const Color(0xFF2E7D32).withValues(alpha: 0.3)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Row(
-                      children: [
-                        Icon(Icons.account_balance_rounded,
-                            size: 16, color: Color(0xFF2E7D32)),
-                        SizedBox(width: 8),
-                        Text('Enter UPI ID (optional)',
-                            style: TextStyle(
-                              fontFamily: 'Poppins',
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF2E7D32),
-                            )),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: _upiController,
-                      keyboardType: TextInputType.emailAddress,
-                      style: const TextStyle(
-                          fontFamily: 'Poppins', fontSize: 14),
-                      decoration: InputDecoration(
-                        hintText: 'yourname@upi',
-                        prefixIcon: const Icon(
-                            Icons.alternate_email_rounded,
-                            size: 18,
-                            color: Color(0xFF2E7D32)),
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 12),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(
-                              color: Color(0xFFE0E0E0)),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(
-                              color: Color(0xFFE0E0E0)),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(
-                              color: Color(0xFF2E7D32), width: 2),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Leave blank — Razorpay will show GPay, PhonePe & other UPI app options automatically.',
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 11,
-                        color: Color(0xFF9E9E9E),
-                        height: 1.5,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-
-            // ── Secure handoff notice ──────────────────────
-            const SizedBox(height: 4),
+  // ── Method tile ────────────────────────────────────────
+  Widget _buildMethodTile(_PayMethod method) {
+    final selected = _selectedMethod == method.id;
+    return GestureDetector(
+      onTap: () => setState(() => _selectedMethod = method.id),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color:
+              selected ? method.color.withValues(alpha: 0.05) : context.appSurface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: selected ? method.color : context.appBorder,
+            width: selected ? 2 : 1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              width: 46, height: 46,
               decoration: BoxDecoration(
-                color: const Color(0xFFF0F7FF),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                    color: const Color(0xFF1565C0).withValues(alpha: 0.18)),
+                color: method.color.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(13),
               ),
-              child: Row(
+              child: Icon(method.icon, color: method.color, size: 22),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    width: 40, height: 40,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1565C0).withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(Icons.lock_rounded,
-                        color: Color(0xFF1565C0), size: 20),
-                  ),
-                  const SizedBox(width: 12),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Secure Razorpay Checkout',
-                            style: TextStyle(
-                              fontFamily: 'Poppins',
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFF1565C0),
-                            )),
-                        SizedBox(height: 2),
-                        Text(
-                          'Your payment details are entered directly in Razorpay\'s encrypted window — we never see your card or UPI credentials.',
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 11,
-                            color: Color(0xFF374151),
-                            height: 1.5,
-                          ),
-                        ),
-                      ],
+                  Text(
+                    method.name,
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: selected
+                          ? method.color
+                          : context.appTextPrimary,
                     ),
                   ),
+                  const SizedBox(height: 2),
+                  Text(method.desc, style: AppTextStyles.bodySmall),
                 ],
               ),
             ),
-
-            const SizedBox(height: 24),
-
-            // ── SSL notice ─────────────────────────────────
-            const Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.lock_rounded,
-                    size: 14, color: AppColors.textHint),
-                SizedBox(width: 5),
-                Text(
-                    '100% Secure • Powered by Razorpay • SSL Encrypted',
-                    style: AppTextStyles.caption),
-              ],
-            ),
-            const SizedBox(height: 16),
-
-            // ── Pay button ─────────────────────────────────
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _isProcessing ? null : _openRazorpay,
-                child: _isProcessing
-                    ? const SizedBox(
-                        width: 20, height: 20,
-                        child: CircularProgressIndicator(
-                            color: Colors.white, strokeWidth: 2),
-                      )
-                    : Text('Pay ₹$_amountAfterWallet'),
+            Container(
+              width: 22, height: 22,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: selected ? method.color : context.appBorder,
+                  width: 2,
+                ),
+                color: selected ? method.color : Colors.transparent,
               ),
+              child: selected
+                  ? const Icon(Icons.check_rounded,
+                      size: 13, color: Colors.white)
+                  : null,
             ),
-            const SizedBox(height: 40),
           ],
         ),
       ),
     );
   }
 
+  // ── UPI Input ──────────────────────────────────────────
+  Widget _buildUpiInput() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: context.appSurface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _kGreen.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.account_balance_rounded, size: 15, color: _kGreen),
+              SizedBox(width: 8),
+              Text(
+                'Enter UPI ID (optional)',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: _kGreen,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _upiController,
+            keyboardType: TextInputType.emailAddress,
+            style: const TextStyle(fontFamily: 'Poppins', fontSize: 14),
+            decoration: InputDecoration(
+              hintText: 'yourname@upi',
+              prefixIcon: const Icon(Icons.alternate_email_rounded,
+                  size: 18, color: _kGreen),
+              contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 14, vertical: 12),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(color: context.appBorder),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(color: context.appBorder),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: _kGreen, width: 2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Leave blank — Razorpay shows GPay, PhonePe & other options automatically.',
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontSize: 10,
+              color: context.appTextHint,
+              height: 1.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Security Note ──────────────────────────────────────
+  Widget _buildSecurityNote() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0F7FF),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _kBlue.withValues(alpha: 0.18)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 38, height: 38,
+            decoration: BoxDecoration(
+              color: _kBlue.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.lock_rounded, color: _kBlue, size: 18),
+          ),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Secure Razorpay Checkout',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: _kBlue,
+                  ),
+                ),
+                SizedBox(height: 3),
+                Text(
+                  'Your payment details are entered directly in Razorpay\'s encrypted window — we never see your card or UPI credentials.',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 10,
+                    color: Color(0xFF374151),
+                    height: 1.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Secure Footer ──────────────────────────────────────
+  Widget _buildSecureFooter() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(Icons.lock_rounded, size: 12, color: context.appTextHint),
+        const SizedBox(width: 5),
+        Text(
+          '100% Secure · Powered by Razorpay · SSL Encrypted',
+          style: TextStyle(
+            fontFamily: 'Poppins',
+            fontSize: 10,
+            color: context.appTextHint,
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── Pay Button ─────────────────────────────────────────
+  Widget _buildPayButton() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
+      decoration: BoxDecoration(
+        color: context.appSurface,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 16,
+            offset: const Offset(0, -4),
+          ),
+        ],
+      ),
+      child: SizedBox(
+        height: 54,
+        child: ElevatedButton(
+          onPressed: _isProcessing ? null : _openRazorpay,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.primary,
+            foregroundColor: Colors.white,
+            disabledBackgroundColor: AppColors.primary.withValues(alpha: 0.5),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            elevation: 0,
+          ),
+          child: _isProcessing
+              ? const SizedBox(
+                  width: 22, height: 22,
+                  child: CircularProgressIndicator(
+                    color: Colors.white, strokeWidth: 2.5),
+                )
+              : Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.lock_rounded, size: 16),
+                    const SizedBox(width: 8),
+                    Text(
+                      _amountAfterWallet <= 0
+                          ? 'Complete with Wallet'
+                          : 'Pay ₹$_amountAfterWallet',
+                      style: const TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
+
+  // ── Success Sheet ──────────────────────────────────────
   void _showSuccessSheet(String paymentId) {
     showModalBottomSheet(
       context: context,
       isDismissible: false,
+      enableDrag: false,
       backgroundColor: Colors.transparent,
-      builder: (_) => Container(
-        padding: const EdgeInsets.all(24),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 80, height: 80,
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                    colors: [Color(0xFF2E7D32), Color(0xFF66BB6A)]),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.check_rounded,
-                  color: Colors.white, size: 44),
-            ),
-            const SizedBox(height: 16),
-            const Text('Payment Successful!', style: AppTextStyles.h3),
-            const SizedBox(height: 8),
-            Text('₹${widget.amount} paid successfully',
-                style: AppTextStyles.bodyMedium),
-            Text('Transaction ID: $paymentId',
-                style: AppTextStyles.caption),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  context.pop(true);
-                },
-                child: const Text('Done'),
-              ),
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
+      builder: (_) => _SuccessSheet(
+        amount: widget.amount,
+        paymentId: paymentId,
+        description: widget.description,
+        onDone: () {
+          Navigator.pop(context);
+          context.pop(true);
+        },
       ),
     );
   }
 }
 
-// ── Summary row ────────────────────────────────────────────────────────────────
-class _SummaryRow extends StatelessWidget {
-  final String label, value;
-  final bool isBold;
-  final Color? color;
+// ─────────────────────────────────────────────────────────────────────────────
+//  Payment method model
+// ─────────────────────────────────────────────────────────────────────────────
 
-  const _SummaryRow(this.label, this.value,
-      {this.isBold = false, this.color});
+class _PayMethod {
+  final String id, name, desc;
+  final IconData icon;
+  final Color color;
+  const _PayMethod({
+    required this.id,
+    required this.name,
+    required this.desc,
+    required this.icon,
+    required this.color,
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Processing Indicator
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _ProcessingIndicator extends StatelessWidget {
+  const _ProcessingIndicator();
 
   @override
-  Widget build(BuildContext context) => Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label,
-              style: isBold
-                  ? AppTextStyles.labelLarge
-                  : AppTextStyles.bodyMedium),
-          Text(value,
-              style: (isBold
-                      ? AppTextStyles.labelLarge
-                      : AppTextStyles.labelMedium)
-                  .copyWith(
-                      color: color ??
-                          (isBold
-                              ? AppColors.primary
-                              : AppColors.textPrimary))),
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(32),
+      decoration: BoxDecoration(
+        color: context.appSurface,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.15),
+            blurRadius: 30,
+            offset: const Offset(0, 10),
+          ),
         ],
-      );
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(
+            width: 56, height: 56,
+            child: CircularProgressIndicator(
+              strokeWidth: 3,
+              valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            'Processing Payment',
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: context.appTextPrimary,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Please do not close this screen',
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontSize: 12,
+              color: context.appTextSecondary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Success Sheet
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _SuccessSheet extends StatefulWidget {
+  final String amount, paymentId, description;
+  final VoidCallback onDone;
+  const _SuccessSheet({
+    required this.amount,
+    required this.paymentId,
+    required this.description,
+    required this.onDone,
+  });
+
+  @override
+  State<_SuccessSheet> createState() => _SuccessSheetState();
+}
+
+class _SuccessSheetState extends State<_SuccessSheet>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _scale;
+  late final Animation<double> _fade;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 500));
+    _scale = CurvedAnimation(parent: _ctrl, curve: Curves.elasticOut);
+    _fade = CurvedAnimation(parent: _ctrl, curve: Curves.easeIn);
+    _ctrl.forward();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(24, 12, 24, 40),
+      decoration: BoxDecoration(
+        color: context.appSurface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 40, height: 4,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade200,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 28),
+
+          // Animated checkmark
+          ScaleTransition(
+            scale: _scale,
+            child: Container(
+              width: 88, height: 88,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF2E7D32), Color(0xFF66BB6A)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF2E7D32).withValues(alpha: 0.3),
+                    blurRadius: 20,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: const Icon(Icons.check_rounded,
+                  color: Colors.white, size: 48),
+            ),
+          ),
+
+          const SizedBox(height: 20),
+          FadeTransition(
+            opacity: _fade,
+            child: Column(
+              children: [
+                Text(
+                  'Payment Successful!',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    color: context.appTextPrimary,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '₹${widget.amount} paid successfully',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 14,
+                    color: context.appTextSecondary,
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                // Receipt card
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: context.appBackground,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Column(
+                    children: [
+                      _ReceiptRow('Service', widget.description),
+                      const SizedBox(height: 8),
+                      _ReceiptRow('Amount Paid', '₹${widget.amount}'),
+                      const SizedBox(height: 8),
+                      _ReceiptRow(
+                        'Transaction ID',
+                        widget.paymentId.length > 16
+                            ? '${widget.paymentId.substring(0, 16)}…'
+                            : widget.paymentId,
+                      ),
+                      const SizedBox(height: 8),
+                      _ReceiptRow(
+                        'Date',
+                        _formatDate(DateTime.now()),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: ElevatedButton(
+                    onPressed: widget.onDone,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
+                      elevation: 0,
+                    ),
+                    child: const Text(
+                      'Done',
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatDate(DateTime dt) {
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    return '${dt.day} ${months[dt.month - 1]} ${dt.year}';
+  }
+}
+
+class _ReceiptRow extends StatelessWidget {
+  final String label, value;
+  const _ReceiptRow(this.label, this.value);
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label,
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontSize: 12,
+              color: context.appTextSecondary,
+            )),
+        Flexible(
+          child: Text(
+            value,
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: context.appTextPrimary,
+            ),
+            textAlign: TextAlign.right,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Summary row
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _SummaryRow extends StatelessWidget {
+  final String label, value;
+  final Color? valueColor;
+  final String? valueNote;
+
+  const _SummaryRow(
+    this.label,
+    this.value, {
+    this.valueColor,
+    this.valueNote,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: AppTextStyles.bodyMedium),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (valueNote != null) ...[
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: _kGreen.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(5),
+                ),
+                child: Text(
+                  valueNote!,
+                  style: const TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                    color: _kGreen,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+            ],
+            Text(
+              value,
+              style: AppTextStyles.labelMedium.copyWith(
+                color: valueColor ?? context.appTextPrimary,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
 }

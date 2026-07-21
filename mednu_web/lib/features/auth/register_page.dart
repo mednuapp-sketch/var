@@ -92,7 +92,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                   Text('Complete Your Profile', style: GoogleFonts.poppins(fontSize: 26, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
                   const SizedBox(height: 8),
                   Text(
-                    "We're new here — let's set up your MedNu account",
+                    "We're new here — let's set up your MedNU account",
                     textAlign: TextAlign.center,
                     style: GoogleFonts.poppins(fontSize: 14, color: AppColors.textSecondary, height: 1.6),
                   ),

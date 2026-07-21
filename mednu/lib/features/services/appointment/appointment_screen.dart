@@ -73,7 +73,7 @@ class _AppointmentScreenState extends State<AppointmentScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.appBackground,
       appBar: AppBar(
         title: const Text(
           'My Appointments',
@@ -98,9 +98,18 @@ class _AppointmentScreenState extends State<AppointmentScreen>
           indicatorColor: Colors.white,
           indicatorWeight: 3,
           tabs: const [
-            Tab(text: 'Upcoming'),
-            Tab(text: 'Past'),
-            Tab(text: 'Cancelled'),
+            Tab(
+              child: Text('Upcoming',
+                  maxLines: 1, overflow: TextOverflow.ellipsis),
+            ),
+            Tab(
+              child: Text('Past',
+                  maxLines: 1, overflow: TextOverflow.ellipsis),
+            ),
+            Tab(
+              child: Text('Cancelled',
+                  maxLines: 1, overflow: TextOverflow.ellipsis),
+            ),
           ],
         ),
       ),
@@ -210,24 +219,102 @@ class _AppointmentScreenState extends State<AppointmentScreen>
     String statusLabel,
   ) {
     if (appointments.isEmpty) {
+      if (statusLabel == 'Confirmed') {
+        return Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 100,
+                  height: 100,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        AppColors.primary.withValues(alpha: 0.12),
+                        AppColors.secondary.withValues(alpha: 0.06),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.calendar_today_outlined,
+                      size: 44, color: AppColors.primary),
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  'No Upcoming Appointments',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: context.appTextPrimary,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Stay on top of your health.\nBook a consultation with a specialist today.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 13,
+                    color: context.appTextSecondary,
+                    height: 1.6,
+                  ),
+                ),
+                const SizedBox(height: 28),
+                GestureDetector(
+                  onTap: () => context.push(AppRoutes.doctors),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 32, vertical: 15),
+                    decoration: BoxDecoration(
+                      gradient: AppColors.primaryGradient,
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.primary.withValues(alpha: 0.35),
+                          blurRadius: 16,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.add_rounded,
+                            size: 18, color: Colors.white),
+                        SizedBox(width: 8),
+                        Text(
+                          'Book Your First Appointment',
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
       return AppEmptyState(
         icon: statusLabel == 'Cancelled'
             ? Icons.cancel_presentation_rounded
-            : statusLabel == 'Completed'
-                ? Icons.event_available_rounded
-                : Icons.calendar_today_outlined,
+            : Icons.event_available_rounded,
         title: statusLabel == 'Cancelled'
             ? 'No cancelled appointments'
-            : statusLabel == 'Completed'
-                ? 'No completed appointments'
-                : 'No upcoming appointments',
-        message: statusLabel == 'Confirmed'
-            ? 'Book an appointment with a top doctor to get started.'
-            : 'Your ${statusLabel.toLowerCase()} appointments will appear here.',
-        actionLabel: statusLabel == 'Confirmed' ? 'Find a Doctor' : null,
-        onAction: statusLabel == 'Confirmed'
-            ? () => context.push(AppRoutes.doctors)
-            : null,
+            : 'No completed appointments',
+        message:
+            'Your ${statusLabel.toLowerCase()} appointments will appear here.',
       );
     }
 
@@ -277,7 +364,7 @@ class _AppointmentScreenState extends State<AppointmentScreen>
         return Container(
           margin: const EdgeInsets.only(bottom: 14),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: context.appSurface,
             borderRadius: BorderRadius.circular(18),
             boxShadow: [
               BoxShadow(
@@ -359,15 +446,15 @@ class _AppointmentScreenState extends State<AppointmentScreen>
               Container(
                 padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
                 decoration: BoxDecoration(
-                    color: AppColors.background,
+                    color: context.appBackground,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.border.withValues(alpha: 0.5))),
+                    border: Border.all(color: context.appBorder.withValues(alpha: 0.5))),
                 child: Row(
                   children: [
                     Expanded(child: _AptDetail(Icons.calendar_today_rounded, displayDate)),
-                    Container(width: 1, height: 28, color: AppColors.border),
+                    Container(width: 1, height: 28, color: context.appBorder),
                     Expanded(child: _AptDetail(Icons.access_time_rounded, time)),
-                    Container(width: 1, height: 28, color: AppColors.border),
+                    Container(width: 1, height: 28, color: context.appBorder),
                     Expanded(child: _AptDetail(
                       type == 'Video'
                           ? Icons.video_call_rounded
@@ -391,8 +478,47 @@ class _AppointmentScreenState extends State<AppointmentScreen>
                   specialty: specialty,
                   onCancel: () => _cancelAppointment(appointments[i].id),
                 ),
+                const SizedBox(height: 10),
+                // ── Reschedule button ──────────────────────────────────────
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.secondary,
+                      side: BorderSide(
+                          color: AppColors.secondary.withValues(alpha: 0.5)),
+                      backgroundColor:
+                          AppColors.secondary.withValues(alpha: 0.04),
+                      padding: const EdgeInsets.symmetric(vertical: 11),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                    icon: const Icon(Icons.edit_calendar_rounded, size: 16),
+                    label: const Text('Reschedule',
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        )),
+                    onPressed: () {
+                      final doctorId =
+                          data['doctorId'] as String? ?? '';
+                      if (doctorId.isNotEmpty) {
+                        context.push('/doctors/$doctorId');
+                      } else {
+                        context.push(AppRoutes.doctors);
+                      }
+                    },
+                  ),
+                ),
               ],
               if (isCompleted) ...[
+                const SizedBox(height: 12),
+                // ── Status timeline ────────────────────────────────────────
+                _StatusTimeline(
+                  steps: const ['Booked', 'Consulting', 'Completed'],
+                  currentIndex: actualStatus == 'completed' ? 2 : 1,
+                ),
                 const SizedBox(height: 12),
                 Row(children: [
                   Expanded(
@@ -531,7 +657,7 @@ class _AppointmentCardSkeleton extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.appSurface,
         borderRadius: BorderRadius.circular(18),
         boxShadow: const [BoxShadow(color: Color(0x08000000), blurRadius: 12, offset: Offset(0, 4))],
       ),
@@ -595,7 +721,7 @@ class _AptDetail extends StatelessWidget {
             child: Text(
               label,
               style: AppTextStyles.labelSmall
-                  .copyWith(color: AppColors.textPrimary),
+                  .copyWith(color: context.appTextPrimary),
               overflow: TextOverflow.ellipsis,
               maxLines: 1,
             ),
@@ -675,6 +801,65 @@ class _RateButton extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+// ── Status timeline for completed appointments ────────────────────────────────
+
+class _StatusTimeline extends StatelessWidget {
+  final List<String> steps;
+  final int currentIndex;
+  const _StatusTimeline({required this.steps, required this.currentIndex});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: List.generate(steps.length * 2 - 1, (i) {
+        if (i.isOdd) {
+          // Connector line
+          final filled = (i ~/ 2) < currentIndex;
+          return Expanded(
+            child: Container(
+              height: 2,
+              color: filled
+                  ? const Color(0xFF43A047)
+                  : context.appBorder,
+            ),
+          );
+        }
+        final stepIdx = i ~/ 2;
+        final isDone = stepIdx < currentIndex;
+        final isCurrent = stepIdx == currentIndex;
+        final color = isDone || isCurrent
+            ? const Color(0xFF43A047)
+            : AppColors.textHint;
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(
+                color: isDone || isCurrent ? color : Colors.transparent,
+                shape: BoxShape.circle,
+                border: Border.all(color: color, width: 2),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              steps[stepIdx],
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 9,
+                fontWeight:
+                    isCurrent ? FontWeight.w700 : FontWeight.w500,
+                color: color,
+              ),
+            ),
+          ],
+        );
+      }),
     );
   }
 }
@@ -1124,19 +1309,19 @@ class _ScheduledJoinSectionState extends State<_ScheduledJoinSection>
         child: Container(
           height: 44,
           decoration: BoxDecoration(
-            color: AppColors.background,
+            color: context.appBackground,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.border),
+            border: Border.all(color: context.appBorder),
           ),
           child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-            const Icon(Icons.lock_clock_rounded,
-                size: 14, color: AppColors.textHint),
+            Icon(Icons.lock_clock_rounded,
+                size: 14, color: context.appTextHint),
             const SizedBox(width: 6),
             Text(
               'Join opens at $label',
-              style: const TextStyle(
+              style: TextStyle(
                 fontFamily: 'Poppins', fontSize: 11,
-                fontWeight: FontWeight.w500, color: AppColors.textHint),
+                fontWeight: FontWeight.w500, color: context.appTextHint),
             ),
           ]),
         ),

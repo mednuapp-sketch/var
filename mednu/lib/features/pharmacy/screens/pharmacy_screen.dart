@@ -2,11 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/constants/app_spacing.dart';
 import '../../../core/constants/app_text_styles.dart';
+import '../../../core/router/app_router.dart';
 import '../../../core/utils/r.dart';
 
-class PharmacyScreen extends StatelessWidget {
+class PharmacyScreen extends StatefulWidget {
   const PharmacyScreen({super.key});
+
+  @override
+  State<PharmacyScreen> createState() => _PharmacyScreenState();
+}
+
+class _PharmacyScreenState extends State<PharmacyScreen> {
+  String _search = '';
 
   @override
   Widget build(BuildContext context) {
@@ -16,6 +25,13 @@ class PharmacyScreen extends StatelessWidget {
       {'name': 'Wellness Forever', 'location': 'Madhapur', 'distance': '2.1 km', 'open': false, 'rating': 4.5, 'timing': 'Opens at 8 AM', 'phone': '18002667736', 'query': 'Wellness Forever Madhapur Hyderabad'},
       {'name': 'Netmeds Store', 'location': 'HITEC City', 'distance': '3.0 km', 'open': true, 'rating': 4.7, 'timing': 'Open till 11 PM', 'phone': '18001232345', 'query': 'Netmeds HITEC City Hyderabad'},
     ];
+
+    final filtered = _search.isEmpty
+        ? pharmacies
+        : pharmacies.where((p) =>
+            (p['name'] as String).toLowerCase().contains(_search.toLowerCase()) ||
+            (p['location'] as String).toLowerCase().contains(_search.toLowerCase()),
+          ).toList();
 
     final categories = [
       {'name': 'Tablets', 'icon': Icons.medication_rounded, 'color': const Color(0xFF1565C0)},
@@ -27,12 +43,12 @@ class PharmacyScreen extends StatelessWidget {
     ];
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.appBackground,
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
             pinned: true,
-            expandedHeight: R.h(context, 160),
+            expandedHeight: AppSpacing.headerHeight(context),
             leading: IconButton(
               icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
               onPressed: () => context.pop(),
@@ -47,21 +63,29 @@ class PharmacyScreen extends StatelessWidget {
                   ),
                 ),
                 child: SafeArea(
-                  child: Padding(
-                    padding: EdgeInsets.fromLTRB(
-                      R.p(context, 20), R.p(context, 48),
-                      R.p(context, 20), R.p(context, 16),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.local_pharmacy_rounded, color: Colors.white, size: R.w(context, 36)),
-                        SizedBox(height: R.h(context, 6)),
-                        Text('Pharmacy & Medical Shops', style: AppTextStyles.onPrimaryH2),
-                        Text('Find nearby pharmacies • Order online', style: AppTextStyles.onPrimaryBody),
-                      ],
-                    ),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      return SingleChildScrollView(
+                        physics: const ClampingScrollPhysics(),
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                          child: Padding(
+                            padding: AppSpacing.headerPadding(context),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.local_pharmacy_rounded, color: Colors.white, size: AppSpacing.headerIconSize(context)),
+                                SizedBox(height: AppSpacing.headerIconGap(context)),
+                                Text('Pharmacy & Medical Shops', style: AppTextStyles.onPrimaryH2),
+                                Text('Find nearby pharmacies • Order online', style: AppTextStyles.onPrimaryBody),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ),
               ),
@@ -76,15 +100,59 @@ class PharmacyScreen extends StatelessWidget {
                 Padding(
                   padding: EdgeInsets.all(R.p(context, 16)),
                   child: TextField(
+                    onChanged: (v) => setState(() => _search = v),
                     decoration: InputDecoration(
                       hintText: 'Search medicines or pharmacies...',
-                      prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textHint),
+                      prefixIcon: Icon(Icons.search_rounded, color: context.appTextHint),
+                      suffixIcon: _search.isNotEmpty
+                          ? IconButton(
+                              icon: Icon(Icons.close_rounded, color: context.appTextHint, size: 18),
+                              onPressed: () => setState(() => _search = ''),
+                            )
+                          : null,
                       filled: true,
-                      fillColor: Colors.white,
+                      fillColor: context.appSurface,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(R.r(context, 14)),
                         borderSide: BorderSide.none,
                       ),
+                    ),
+                  ),
+                ),
+
+                // ── Home Delivery Banner ─────────────────────────────────────
+                Padding(
+                  padding: EdgeInsets.fromLTRB(R.p(context, 16), 0, R.p(context, 16), R.p(context, 14)),
+                  child: GestureDetector(
+                    onTap: () => context.push(AppRoutes.medicine),
+                    child: Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFFE8F5E9), Color(0xFFE3F2FD)],
+                        ),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: const Color(0xFF2E7D32).withValues(alpha: 0.3)),
+                      ),
+                      child: Row(children: [
+                        Container(
+                          width: 44, height: 44,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF2E7D32).withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(Icons.delivery_dining_rounded, color: Color(0xFF2E7D32), size: 26),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          const Text('Order Medicines at Home', style: TextStyle(
+                              fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w700,
+                              color: Color(0xFF2E7D32))),
+                          Text('Delivary at your doorstep • Genuine medicines',
+                              style: TextStyle(fontFamily: 'Poppins', fontSize: 11, color: context.appTextSecondary)),
+                        ])),
+                        const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Color(0xFF2E7D32)),
+                      ]),
                     ),
                   ),
                 ),
@@ -138,9 +206,23 @@ class PharmacyScreen extends StatelessWidget {
                 // ── Nearby Pharmacies ────────────────────────────────────────
                 Padding(
                   padding: EdgeInsets.fromLTRB(R.p(context, 16), 0, R.p(context, 16), R.p(context, 12)),
-                  child: Text('Nearby Pharmacies', style: AppTextStyles.h4),
+                  child: Text(
+                    _search.isEmpty ? 'Nearby Pharmacies' : '${filtered.length} result${filtered.length == 1 ? '' : 's'} for "$_search"',
+                    style: AppTextStyles.h4,
+                  ),
                 ),
-                ...pharmacies.map((p) => _PharmacyCard(pharmacy: p)),
+                if (filtered.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 40),
+                    child: Column(children: [
+                      Icon(Icons.search_off_rounded, size: 48, color: context.appTextHint),
+                      const SizedBox(height: 12),
+                      Text('No pharmacy found for "$_search"',
+                          style: AppTextStyles.bodyMedium.copyWith(color: context.appTextHint)),
+                    ]),
+                  )
+                else
+                  ...filtered.map((p) => _PharmacyCard(pharmacy: p)),
                 SizedBox(height: R.h(context, 40)),
               ],
             ),
@@ -165,9 +247,9 @@ class _PharmacyCard extends StatelessWidget {
       margin: EdgeInsets.fromLTRB(R.p(context, 16), 0, R.p(context, 16), R.p(context, 12)),
       padding: EdgeInsets.all(R.p(context, 16)),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.appSurface,
         borderRadius: BorderRadius.circular(R.r(context, 18)),
-        border: Border.all(color: AppColors.divider),
+        border: Border.all(color: context.appBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -200,7 +282,7 @@ class _PharmacyCard extends StatelessWidget {
                         SizedBox(width: R.p(context, 3)),
                         Text('${p['rating']}', style: AppTextStyles.labelSmall),
                         SizedBox(width: R.p(context, 8)),
-                        Icon(Icons.location_on_outlined, size: R.w(context, 13), color: AppColors.textHint),
+                        Icon(Icons.location_on_outlined, size: R.w(context, 13), color: context.appTextHint),
                         SizedBox(width: R.p(context, 3)),
                         Flexible(
                           child: Text(p['distance'] as String, style: AppTextStyles.labelSmall, overflow: TextOverflow.ellipsis),

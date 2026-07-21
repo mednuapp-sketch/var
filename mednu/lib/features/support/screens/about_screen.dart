@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/utils/r.dart';
 
 class AboutScreen extends StatefulWidget {
   const AboutScreen({super.key});
@@ -35,12 +35,12 @@ class _AboutScreenState extends State<AboutScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.appBackground,
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
             pinned: true,
-            expandedHeight: 220,
+            expandedHeight: R.h(context, 220),
             leading: IconButton(
               icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
               onPressed: () => context.pop(),
@@ -49,14 +49,20 @@ class _AboutScreenState extends State<AboutScreen> {
               background: Container(
                 decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
                 child: SafeArea(
-                  child: Column(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      return SingleChildScrollView(
+                        physics: const ClampingScrollPhysics(),
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                          child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const SizedBox(height: 20),
+                      SizedBox(height: R.h(context, 20)),
                       Container(
-                        width: 80, height: 80,
+                        width: R.w(context, 80), height: R.h(context, 80),
                         decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(22),
+                          borderRadius: BorderRadius.circular(R.r(context, 22)),
                           boxShadow: [
                             BoxShadow(
                               color: Colors.black.withValues(alpha: 0.25),
@@ -66,28 +72,32 @@ class _AboutScreenState extends State<AboutScreen> {
                           ],
                         ),
                         child: ClipRRect(
-                          borderRadius: BorderRadius.circular(22),
-                          child: SvgPicture.asset(
-                            'assets/icons/mednu_logo.svg',
+                          borderRadius: BorderRadius.circular(R.r(context, 22)),
+                          child: Image.asset(
+                            'assets/icons/mednu_logo.png',
                             fit: BoxFit.contain,
                           ),
                         ),
                       ),
-                      const SizedBox(height: 12),
-                      const Text('MedNu', style: TextStyle(fontFamily: 'Poppins', fontSize: 24, fontWeight: FontWeight.w800, color: Colors.white)),
-                      const SizedBox(height: 4),
+                      SizedBox(height: R.h(context, 12)),
+                      const Text('MedNU', style: TextStyle(fontFamily: 'Poppins', fontSize: 24, fontWeight: FontWeight.w800, color: Colors.white)),
+                      SizedBox(height: R.h(context, 4)),
                       const Text('Your Family Healthcare Partner', style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: Colors.white70)),
-                      const SizedBox(height: 4),
+                      SizedBox(height: R.h(context, 4)),
                       if (_version.isNotEmpty)
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                          padding: EdgeInsets.symmetric(horizontal: R.p(context, 12), vertical: R.p(context, 4)),
                           decoration: BoxDecoration(
                             color: Colors.white.withValues(alpha:0.15),
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(R.r(context, 12)),
                           ),
                           child: Text(_version, style: const TextStyle(fontFamily: 'Poppins', fontSize: 11, color: Colors.white70)),
                         ),
                     ],
+                  ),
+                        ),
+                      );
+                    },
                   ),
                 ),
               ),
@@ -96,7 +106,7 @@ class _AboutScreenState extends State<AboutScreen> {
 
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.all(R.p(context, 16)),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
 
                 // Mission
@@ -104,42 +114,17 @@ class _AboutScreenState extends State<AboutScreen> {
                   icon: Icons.favorite_rounded,
                   color: AppColors.primary,
                   title: 'Our Mission',
-                  content: 'MedNu is on a mission to make quality healthcare accessible, affordable, and convenient for every Indian family. We connect patients with doctors, hospitals, pharmacies, and medical services — all in one place.',
+                  content: 'MedNU is on a mission to make quality healthcare accessible, affordable, and convenient for every Indian family. We connect patients with doctors, hospitals, pharmacies, and medical services — all in one place.',
                 ),
 
-                const SizedBox(height: 16),
-
-                // Services grid
-                const _SectionHeader('Our Services', Icons.grid_view_rounded, Color(0xFF1565C0)),
-                const SizedBox(height: 12),
-                GridView.count(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  crossAxisCount: 3,
-                  childAspectRatio: 1.1,
-                  crossAxisSpacing: 10,
-                  mainAxisSpacing: 10,
-                  children: const [
-                    _ServiceTile(Icons.video_call_rounded, 'Teleconsult', Color(0xFF7B1FA2)),
-                    _ServiceTile(Icons.local_shipping_rounded, 'Medicines', Color(0xFF1565C0)),
-                    _ServiceTile(Icons.local_hospital_rounded, 'Hospitals', Color(0xFFB71C1C)),
-                    _ServiceTile(Icons.science_rounded, 'Diagnostics', Color(0xFF2E7D32)),
-                    _ServiceTile(Icons.pregnant_woman_rounded, 'Pregnancy', Color(0xFFC2185B)),
-                    _ServiceTile(Icons.psychology_rounded, 'Therapy', Color(0xFF4A148C)),
-                    _ServiceTile(Icons.emergency_rounded, 'Emergency', Color(0xFFE53935)),
-                    _ServiceTile(Icons.fitness_center_rounded, 'Physio', Color(0xFF00897B)),
-                    _ServiceTile(Icons.restaurant_rounded, 'Nutrition', Color(0xFFE65100)),
-                  ],
-                ),
-
-                const SizedBox(height: 20),
+                SizedBox(height: R.h(context, 16)),
 
                 // Stats
                 Container(
-                  padding: const EdgeInsets.all(18),
+                  padding: EdgeInsets.all(R.p(context, 18)),
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(colors: [Color(0xFF1A237E), Color(0xFF5C6BC0)]),
-                    borderRadius: BorderRadius.circular(18),
+                    borderRadius: BorderRadius.circular(R.r(context, 18)),
                   ),
                   child: Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: const [
                     _Stat('50K+', 'Patients'),
@@ -152,56 +137,56 @@ class _AboutScreenState extends State<AboutScreen> {
                   ]),
                 ),
 
-                const SizedBox(height: 20),
+                SizedBox(height: R.h(context, 20)),
 
                 // Company info
                 _SectionCard(
                   icon: Icons.business_rounded,
                   color: const Color(0xFF1565C0),
                   title: 'Company',
-                  content: 'MedNu Healthcare Services Private Limited\n'
+                  content: 'MedNU Healthcare Services Private Limited\n'
                       'Registered in India under the Companies Act, 2013',
                 ),
 
-                const SizedBox(height: 16),
+                SizedBox(height: R.h(context, 16)),
 
                 // Contact
                 const _SectionHeader('Contact Us', Icons.contact_mail_rounded, Color(0xFFE65100)),
-                const SizedBox(height: 12),
+                SizedBox(height: R.h(context, 12)),
                 _ContactRow(Icons.email_rounded, 'support@mednu.in', () async {
                   final uri = Uri(scheme: 'mailto', path: 'support@mednu.in');
                   if (await canLaunchUrl(uri)) await launchUrl(uri);
                 }),
-                const SizedBox(height: 8),
+                SizedBox(height: R.h(context, 8)),
                 _ContactRow(Icons.phone_rounded, '+91 99999 99999', () async {
                   final uri = Uri(scheme: 'tel', path: '+919999999999');
                   if (await canLaunchUrl(uri)) await launchUrl(uri);
                 }),
-                const SizedBox(height: 8),
+                SizedBox(height: R.h(context, 8)),
                 _ContactRow(Icons.language_rounded, 'www.mednu.in', () async {
                   final uri = Uri.parse('https://www.mednu.in');
                   if (await canLaunchUrl(uri)) await launchUrl(uri, mode: LaunchMode.externalApplication);
                 }),
 
-                const SizedBox(height: 20),
+                SizedBox(height: R.h(context, 20)),
 
                 // Legal
                 const _SectionHeader('Legal', Icons.gavel_rounded, Color(0xFF37474F)),
-                const SizedBox(height: 12),
+                SizedBox(height: R.h(context, 12)),
                 _LegalTile('Privacy Policy', () => context.push(AppRoutes.privacyPolicy)),
-                const SizedBox(height: 8),
+                SizedBox(height: R.h(context, 8)),
                 _LegalTile('Terms of Service', () => context.push(AppRoutes.termsOfService)),
-                const SizedBox(height: 8),
+                SizedBox(height: R.h(context, 8)),
                 _LegalTile('Medical Disclaimer', () {
                   showDialog(
                     context: context,
                     builder: (dialogCtx) => AlertDialog(
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.r(context, 20))),
                       title: const Text('Medical Disclaimer',
                           style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
                       content: const SingleChildScrollView(
                         child: Text(
-                          'The information provided in MedNu is for general informational and educational purposes only. '
+                          'The information provided in MedNU is for general informational and educational purposes only. '
                           'It is not intended as a substitute for professional medical advice, diagnosis, or treatment.\n\n'
                           'Always seek the advice of your physician or other qualified health provider with any questions '
                           'you may have regarding a medical condition. Never disregard professional medical advice or delay '
@@ -221,21 +206,21 @@ class _AboutScreenState extends State<AboutScreen> {
                   );
                 }),
 
-                const SizedBox(height: 24),
+                SizedBox(height: R.h(context, 24)),
 
                 // Copyright
                 Center(
                   child: Column(children: [
                     const Icon(Icons.favorite_rounded, size: 18, color: AppColors.primary),
-                    const SizedBox(height: 8),
+                    SizedBox(height: R.h(context, 8)),
                     Text(
-                      '© 2024–2026 MedNu Healthcare Services Pvt. Ltd.\nAll rights reserved.',
+                      '© 2024–2026 MedNU Healthcare Services Pvt. Ltd.\nAll rights reserved.',
                       textAlign: TextAlign.center,
-                      style: AppTextStyles.caption.copyWith(color: AppColors.textHint, height: 1.6),
+                      style: AppTextStyles.caption.copyWith(color: context.appTextHint, height: 1.6),
                     ),
                   ]),
                 ),
-                const SizedBox(height: 32),
+                SizedBox(height: R.h(context, 32)),
               ]),
             ),
           ),
@@ -254,22 +239,22 @@ class _SectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(16),
+    padding: EdgeInsets.all(R.p(context, 16)),
     decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(16),
-      border: Border.all(color: AppColors.divider),
+      color: context.appSurface,
+      borderRadius: BorderRadius.circular(R.r(context, 16)),
+      border: Border.all(color: context.appBorder),
       boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:0.04), blurRadius: 8, offset: const Offset(0, 2))],
     ),
     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(children: [
-        Container(width: 32, height: 32, decoration: BoxDecoration(color: color.withValues(alpha:0.1), borderRadius: BorderRadius.circular(10)),
-            child: Icon(icon, color: color, size: 17)),
-        const SizedBox(width: 10),
+        Container(width: R.w(context, 32), height: R.h(context, 32), decoration: BoxDecoration(color: color.withValues(alpha:0.1), borderRadius: BorderRadius.circular(R.r(context, 10))),
+            child: Icon(icon, color: color, size: R.w(context, 17))),
+        SizedBox(width: R.w(context, 10)),
         Text(title, style: TextStyle(fontFamily: 'Poppins', fontSize: 14, fontWeight: FontWeight.w700, color: color)),
       ]),
-      const SizedBox(height: 12),
-      Text(content, style: const TextStyle(fontFamily: 'Poppins', fontSize: 13, color: AppColors.textSecondary, height: 1.6)),
+      SizedBox(height: R.h(context, 12)),
+      Text(content, style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: context.appTextSecondary, height: 1.6)),
     ]),
   );
 }
@@ -282,29 +267,11 @@ class _SectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Row(children: [
-    Container(width: 28, height: 28, decoration: BoxDecoration(color: color.withValues(alpha:0.1), borderRadius: BorderRadius.circular(8)),
-        child: Icon(icon, size: 15, color: color)),
-    const SizedBox(width: 8),
+    Container(width: R.w(context, 28), height: R.h(context, 28), decoration: BoxDecoration(color: color.withValues(alpha:0.1), borderRadius: BorderRadius.circular(R.r(context, 8))),
+        child: Icon(icon, size: R.w(context, 15), color: color)),
+    SizedBox(width: R.w(context, 8)),
     Text(title, style: TextStyle(fontFamily: 'Poppins', fontSize: 14, fontWeight: FontWeight.w700, color: color)),
   ]);
-}
-
-class _ServiceTile extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-  const _ServiceTile(this.icon, this.label, this.color);
-
-  @override
-  Widget build(BuildContext context) => Container(
-    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.divider)),
-    child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-      Container(width: 36, height: 36, decoration: BoxDecoration(color: color.withValues(alpha:0.1), shape: BoxShape.circle),
-          child: Icon(icon, color: color, size: 18)),
-      const SizedBox(height: 6),
-      Text(label, textAlign: TextAlign.center, style: const TextStyle(fontFamily: 'Poppins', fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
-    ]),
-  );
 }
 
 class _Stat extends StatelessWidget {
@@ -320,7 +287,7 @@ class _Stat extends StatelessWidget {
 class _StatDivider extends StatelessWidget {
   const _StatDivider();
   @override
-  Widget build(BuildContext context) => Container(width: 1, height: 36, color: Colors.white24);
+  Widget build(BuildContext context) => Container(width: R.w(context, 1), height: R.h(context, 36), color: Colors.white24);
 }
 
 class _ContactRow extends StatelessWidget {
@@ -333,18 +300,18 @@ class _ContactRow extends StatelessWidget {
   Widget build(BuildContext context) => GestureDetector(
     onTap: onTap,
     child: Container(
-      padding: const EdgeInsets.all(12),
+      padding: EdgeInsets.all(R.p(context, 12)),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.divider),
+        color: context.appSurface,
+        borderRadius: BorderRadius.circular(R.r(context, 12)),
+        border: Border.all(color: context.appBorder),
       ),
       child: Row(children: [
-        Icon(icon, color: AppColors.primary, size: 18),
-        const SizedBox(width: 12),
+        Icon(icon, color: AppColors.primary, size: R.w(context, 18)),
+        SizedBox(width: R.w(context, 12)),
         Text(text, style: const TextStyle(fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary)),
         const Spacer(),
-        const Icon(Icons.arrow_forward_ios_rounded, size: 12, color: AppColors.textHint),
+        Icon(Icons.arrow_forward_ios_rounded, size: R.w(context, 12), color: context.appTextHint),
       ]),
     ),
   );
@@ -359,18 +326,18 @@ class _LegalTile extends StatelessWidget {
   Widget build(BuildContext context) => GestureDetector(
     onTap: onTap,
     child: Container(
-      padding: const EdgeInsets.all(12),
+      padding: EdgeInsets.all(R.p(context, 12)),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.divider),
+        color: context.appSurface,
+        borderRadius: BorderRadius.circular(R.r(context, 12)),
+        border: Border.all(color: context.appBorder),
       ),
       child: Row(children: [
-        const Icon(Icons.article_outlined, color: AppColors.textSecondary, size: 18),
-        const SizedBox(width: 12),
-        Text(title, style: AppTextStyles.labelLarge),
+        Icon(Icons.article_outlined, color: context.appTextSecondary, size: R.w(context, 18)),
+        SizedBox(width: R.w(context, 12)),
+        Text(title, style: AppTextStyles.labelLarge.copyWith(color: context.appTextPrimary)),
         const Spacer(),
-        const Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.textHint),
+        Icon(Icons.chevron_right_rounded, size: R.w(context, 18), color: context.appTextHint),
       ]),
     ),
   );

@@ -23,6 +23,7 @@ import 'global_search_screen.dart';
 import 'location_picker_screen.dart';
 import '../../my_services/screens/my_services_screen.dart';
 import '../../doctors/screens/doctors_list_screen.dart';
+import '../../notifications/providers/notification_provider.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -263,18 +264,19 @@ class _HomeBodyState extends ConsumerState<_HomeBody>
                             onPressed: () =>
                                 context.push(AppRoutes.notifications),
                           ),
-                          Positioned(
-                            top: 8,
-                            right: 8,
-                            child: Container(
-                              width: 8,
-                              height: 8,
-                              decoration: const BoxDecoration(
-                                color: AppColors.primary,
-                                shape: BoxShape.circle,
+                          if (ref.watch(patientUnreadCountProvider) > 0)
+                            Positioned(
+                              top: 8,
+                              right: 8,
+                              child: Container(
+                                width: 8,
+                                height: 8,
+                                decoration: const BoxDecoration(
+                                  color: AppColors.primary,
+                                  shape: BoxShape.circle,
+                                ),
                               ),
                             ),
-                          ),
                         ],
                       ),
                     ],
@@ -749,17 +751,19 @@ class _ConsultTopDoctorsBanner extends StatelessWidget {
                     border: Border.all(color: Colors.white.withOpacity(0.4), width: 2),
                   ),
                   child: ClipOval(
-                    child: CachedNetworkImage(
-                      imageUrl: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=200&h=200&fit=crop&crop=face&q=80',
-                      width: 80, height: 80,
-                      fit: BoxFit.cover,
-                      placeholder: (_, __) => Container(
-                        color: Colors.white.withOpacity(0.18),
-                        child: const Icon(Icons.medical_services_rounded, color: Colors.white, size: 32),
-                      ),
-                      errorWidget: (_, __, ___) => Container(
-                        color: Colors.white.withOpacity(0.18),
-                        child: const Icon(Icons.medical_services_rounded, color: Colors.white, size: 32),
+                    child: Transform.scale(
+                      // Source is a full square marketing graphic (face + badges + text);
+                      // zoom into the doctor's face instead of shrinking the whole scene.
+                      scale: 2.6,
+                      alignment: const Alignment(0.0, -0.55),
+                      child: Image.asset(
+                        'assets/images/home_hero_doctor.png',
+                        width: 80, height: 80,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          color: Colors.white.withOpacity(0.18),
+                          child: const Icon(Icons.medical_services_rounded, color: Colors.white, size: 32),
+                        ),
                       ),
                     ),
                   ),
@@ -821,7 +825,7 @@ class _FindDoctorList extends StatelessWidget {
                       ? 'No doctors available right now'
                       : 'No doctors match your filter',
                   style: AppTextStyles.bodySmall
-                      .copyWith(color: AppColors.textHint),
+                      .copyWith(color: context.appTextHint),
                   textAlign: TextAlign.center,
                 ),
               ]),
@@ -868,7 +872,7 @@ class _DoctorCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.divider),
+        border: Border.all(color: context.appBorder),
         boxShadow: [
           BoxShadow(
               color: AppColors.shadow,
@@ -929,7 +933,7 @@ class _DoctorCard extends StatelessWidget {
                     Text(rating,
                         style: AppTextStyles.caption.copyWith(
                             fontWeight: FontWeight.w700,
-                            color: AppColors.textPrimary)),
+                            color: context.appTextPrimary)),
                     Text(' ($reviews)',
                         style: AppTextStyles.caption),
                     if (exp.isNotEmpty) ...[
@@ -1162,14 +1166,14 @@ class _RecordsBodyState extends State<_RecordsBody> with SingleTickerProviderSta
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.appBackground,
       appBar: AppBar(
         automaticallyImplyLeading: false,
         title: const Text('My Health Records'),
         bottom: TabBar(
           controller: _tab,
           labelColor: AppColors.primary,
-          unselectedLabelColor: AppColors.textHint,
+          unselectedLabelColor: context.appTextHint,
           indicatorColor: AppColors.primary,
           tabs: const [Tab(text: 'Prescriptions'), Tab(text: 'Reports'), Tab(text: 'Consultations')],
         ),
@@ -1191,7 +1195,7 @@ class _RecordsBodyState extends State<_RecordsBody> with SingleTickerProviderSta
       return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
         Container(width: 80, height: 80, decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.08), shape: BoxShape.circle), child: const Icon(Icons.receipt_long_rounded, size: 40, color: AppColors.primary)),
         const SizedBox(height: 16),
-        Text('No prescriptions yet', style: AppTextStyles.h4.copyWith(color: AppColors.textPrimary)),
+        Text('No prescriptions yet', style: AppTextStyles.h4.copyWith(color: context.appTextPrimary)),
         const SizedBox(height: 6),
         Text('Prescriptions from your doctors\nwill appear here after consultations', style: AppTextStyles.bodySmall, textAlign: TextAlign.center),
       ]));
@@ -1206,7 +1210,7 @@ class _RecordsBodyState extends State<_RecordsBody> with SingleTickerProviderSta
         final isSharingThis = _sharingRxId == (rx['id'] as String? ?? '');
         return Container(
           margin: const EdgeInsets.only(bottom: 12),
-          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: AppColors.divider),
+          decoration: BoxDecoration(color: context.appSurface, borderRadius: BorderRadius.circular(16), border: Border.all(color: context.appBorder),
             boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))]),
           child: Material(
             color: Colors.transparent,
@@ -1229,7 +1233,7 @@ class _RecordsBodyState extends State<_RecordsBody> with SingleTickerProviderSta
                   isSharingThis
                       ? const SizedBox(width: 48, height: 48, child: Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary))))
                       : IconButton(
-                          icon: const Icon(Icons.share_rounded, color: AppColors.textHint),
+                          icon: Icon(Icons.share_rounded, color: context.appTextHint),
                           tooltip: 'Share Prescription',
                           onPressed: () => _sharePrescription(rx),
                         ),
@@ -1248,7 +1252,7 @@ class _RecordsBodyState extends State<_RecordsBody> with SingleTickerProviderSta
       return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
         Container(width: 80, height: 80, decoration: BoxDecoration(color: const Color(0xFF0097A7).withValues(alpha: 0.08), shape: BoxShape.circle), child: const Icon(Icons.science_rounded, size: 40, color: Color(0xFF0097A7))),
         const SizedBox(height: 16),
-        Text('No reports uploaded yet', style: AppTextStyles.h4.copyWith(color: AppColors.textPrimary)),
+        Text('No reports uploaded yet', style: AppTextStyles.h4.copyWith(color: context.appTextPrimary)),
         const SizedBox(height: 6),
         Text('Go to Records to upload your lab reports', style: AppTextStyles.bodySmall, textAlign: TextAlign.center),
         const SizedBox(height: 16),
@@ -1277,7 +1281,7 @@ class _RecordsBodyState extends State<_RecordsBody> with SingleTickerProviderSta
         }
         return Container(
           margin: const EdgeInsets.only(bottom: 12),
-          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: AppColors.divider)),
+          decoration: BoxDecoration(color: context.appSurface, borderRadius: BorderRadius.circular(16), border: Border.all(color: context.appBorder)),
           child: Material(
             color: Colors.transparent,
             borderRadius: BorderRadius.circular(16),
@@ -1305,7 +1309,7 @@ class _RecordsBodyState extends State<_RecordsBody> with SingleTickerProviderSta
                     child: Text(status, style: TextStyle(fontFamily: 'Poppins', fontSize: 11, fontWeight: FontWeight.w600, color: statusColor)),
                   ),
                   const SizedBox(width: 4),
-                  const Icon(Icons.chevron_right_rounded, color: AppColors.textHint, size: 20),
+                  Icon(Icons.chevron_right_rounded, color: context.appTextHint, size: 20),
                 ]),
               ),
             ),
@@ -1321,7 +1325,7 @@ class _RecordsBodyState extends State<_RecordsBody> with SingleTickerProviderSta
       return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
         Container(width: 80, height: 80, decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.08), shape: BoxShape.circle), child: const Icon(Icons.video_call_rounded, size: 40, color: AppColors.primary)),
         const SizedBox(height: 16),
-        Text('No consultations yet', style: AppTextStyles.h4.copyWith(color: AppColors.textHint)),
+        Text('No consultations yet', style: AppTextStyles.h4.copyWith(color: context.appTextHint)),
         const SizedBox(height: 4),
         Text('Start a video consultation to see history here', style: AppTextStyles.bodySmall),
       ]));
@@ -1335,7 +1339,7 @@ class _RecordsBodyState extends State<_RecordsBody> with SingleTickerProviderSta
         return Container(
           margin: const EdgeInsets.only(bottom: 12),
           padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: AppColors.divider),
+          decoration: BoxDecoration(color: context.appSurface, borderRadius: BorderRadius.circular(16), border: Border.all(color: context.appBorder),
             boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))]),
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Container(width: 48, height: 48, decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(14)), child: Icon(Icons.local_hospital_rounded, color: color, size: 24)),
@@ -1397,7 +1401,7 @@ class _ProfileBody extends ConsumerWidget {
         : 'M';
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.appBackground,
       body: CustomScrollView(
         slivers: [
           // ── Header: gradient bar + floating avatar + name ──
@@ -1471,8 +1475,8 @@ class _ProfileBody extends ConsumerWidget {
                       referralCode: referralCode,
                       onShare: () {
                         Share.share(
-                          'Join MedNu — your personal health companion! Use my referral code $referralCode to get started.\nDownload: https://mednu.app',
-                          subject: 'Join MedNu with my referral code',
+                          'Join MedNU — your personal health companion! Use my referral code $referralCode to get started.\nDownload: https://mednu.app',
+                          subject: 'Join MedNU with my referral code',
                         );
                       },
                     ),
@@ -1493,9 +1497,7 @@ class _ProfileBody extends ConsumerWidget {
                   if (!isMale)
                     _MenuItem(icon: Icons.favorite_rounded, iconColor: const Color(0xFFE91E8C), label: 'Period Tracker', onTap: () => context.push(AppRoutes.periodTracker)),
                   _MenuItem(icon: Icons.water_drop_rounded, iconColor: const Color(0xFF1565C0), label: 'Water Reminder', onTap: () => context.push(AppRoutes.waterReminder)),
-                  _MenuItem(icon: Icons.receipt_long_rounded, iconColor: const Color(0xFF2E7D32), label: 'Prescription Viewer', onTap: () => context.push(AppRoutes.prescriptionViewer)),
                   _MenuItem(icon: Icons.local_shipping_rounded, iconColor: const Color(0xFFE65100), label: 'Track Order', onTap: () => context.push(AppRoutes.orderTracking)),
-                  _MenuItem(icon: Icons.health_and_safety_rounded, iconColor: const Color(0xFF0097A7), label: 'Post-Consultation', onTap: () => context.push(AppRoutes.postConsultation)),
                 ]),
 
                 const SizedBox(height: 12),
@@ -1510,10 +1512,9 @@ class _ProfileBody extends ConsumerWidget {
 
                 _MenuSection(title: 'MORE', items: [
                   _MenuItem(icon: Icons.school_rounded, iconColor: const Color(0xFF0097A7), label: 'Health Education', onTap: () => context.push(AppRoutes.education)),
-                  _MenuItem(icon: Icons.language_rounded, iconColor: const Color(0xFF283593), label: 'Language', onTap: () => context.push(AppRoutes.language)),
                   _MenuItem(icon: Icons.help_outline_rounded, iconColor: const Color(0xFF00695C), label: 'Help & Support', onTap: () => context.push(AppRoutes.helpSupport)),
-                  _MenuItem(icon: Icons.privacy_tip_outlined, iconColor: AppColors.textSecondary, label: 'Privacy Policy', onTap: () => context.push(AppRoutes.privacyPolicy)),
-                  _MenuItem(icon: Icons.info_outline_rounded, iconColor: AppColors.textSecondary, label: 'About MedNU', onTap: () => context.push(AppRoutes.about)),
+                  _MenuItem(icon: Icons.privacy_tip_outlined, iconColor: context.appTextSecondary, label: 'Privacy Policy', onTap: () => context.push(AppRoutes.privacyPolicy)),
+                  _MenuItem(icon: Icons.info_outline_rounded, iconColor: context.appTextSecondary, label: 'About MedNU', onTap: () => context.push(AppRoutes.about)),
                 ]),
 
                 const SizedBox(height: 20),
@@ -1527,7 +1528,7 @@ class _ProfileBody extends ConsumerWidget {
                 Center(
                   child: Text(
                     'MedNU v1.0.0 · Made with ❤️ in India',
-                    style: AppTextStyles.caption.copyWith(color: AppColors.textHint),
+                    style: AppTextStyles.caption.copyWith(color: context.appTextHint),
                   ),
                 ),
                 const SizedBox(height: 100),
@@ -1622,11 +1623,11 @@ class _ProfileHeader extends StatelessWidget {
             textAlign: TextAlign.center,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
+            style: TextStyle(
               fontFamily: 'Poppins',
               fontSize: 20,
               fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary,
+              color: context.appTextPrimary,
               height: 1.25,
             ),
           ),
@@ -1637,7 +1638,7 @@ class _ProfileHeader extends StatelessWidget {
           const SizedBox(height: 5),
           Text(
             contact,
-            style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+            style: AppTextStyles.bodySmall.copyWith(color: context.appTextSecondary),
           ),
         ],
 
@@ -1834,14 +1835,14 @@ class _StatCard extends StatelessWidget {
                   fontFamily: 'Poppins',
                   fontSize: 14,
                   fontWeight: FontWeight.w800,
-                  color: isDark ? Colors.white : AppColors.textPrimary,
+                  color: context.appTextPrimary,
                 ),
               ),
             ),
             const SizedBox(height: 3),
             Text(
               label,
-              style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+              style: AppTextStyles.caption.copyWith(color: context.appTextSecondary),
               textAlign: TextAlign.center,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -1896,7 +1897,7 @@ class _ReferralBanner extends StatelessWidget {
                 children: [
                   Text(
                     'Your Referral Code',
-                    style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+                    style: AppTextStyles.caption.copyWith(color: context.appTextSecondary),
                   ),
                   const SizedBox(height: 3),
                   Text(
@@ -2220,7 +2221,7 @@ class _MedNUBottomNav extends StatelessWidget {
               _NavItem(icon: Icons.home_rounded, label: 'Home', index: 0, currentIndex: currentIndex, onTap: onTap),
               _NavItem(icon: Icons.person_search_rounded, label: 'Doctors', index: 1, currentIndex: currentIndex, onTap: onTap),
               GestureDetector(
-                onTap: () => context.push(AppRoutes.sos),
+                onTap: () => context.push(AppRoutes.emergency),
                 child: Container(
                   width: 54,
                   height: 54,

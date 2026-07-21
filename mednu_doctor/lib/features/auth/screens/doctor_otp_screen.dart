@@ -9,13 +9,11 @@ import '../../../core/widgets/ux_widgets.dart';
 
 class DoctorOtpScreen extends StatefulWidget {
   final String phone;
-  final String verificationId;
   final bool isLogin;
 
   const DoctorOtpScreen({
     super.key,
     required this.phone,
-    required this.verificationId,
     this.isLogin = true,
   });
 
@@ -29,13 +27,11 @@ class _DoctorOtpScreenState extends State<DoctorOtpScreen> {
   bool _isResending = false;
   int _resendSeconds = 60;
   String? _error;
-  late String _verificationId;
   bool _timerActive = false;
 
   @override
   void initState() {
     super.initState();
-    _verificationId = widget.verificationId;
     _startTimer();
   }
 
@@ -48,6 +44,7 @@ class _DoctorOtpScreenState extends State<DoctorOtpScreen> {
 
   void _startTimer() {
     _timerActive = true;
+    _resendSeconds = 60;
     Future.doWhile(() async {
       await Future.delayed(const Duration(seconds: 1));
       if (!mounted || !_timerActive) return false;
@@ -62,32 +59,73 @@ class _DoctorOtpScreenState extends State<DoctorOtpScreen> {
       _error = null;
       _otpController.clear();
     });
-    await DoctorAuthService.sendOTP(
-      phone: widget.phone,
-      onCodeSent: (newVerificationId) {
+    try {
+      await DoctorAuthService.resendOTP(widget.phone);
+      if (!mounted) return;
+      _timerActive = false;
+      _startTimer();
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('OTP resent successfully'),
+        behavior: SnackBarBehavior.floating,
+      ));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(e.toString().replaceFirst('Exception: ', '')),
+        backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
+      ));
+    } finally {
+      if (mounted) setState(() => _isResending = false);
+    }
+  }
+
+  Future<void> _verifyOTP(String pin) async {
+    if (pin.length != 4) return;
+    setState(() {
+      _isVerifying = true;
+      _error = null;
+    });
+
+    try {
+      final user = await DoctorAuthService.verifyOTP(widget.phone, pin);
+      if (user == null) {
         if (!mounted) return;
         setState(() {
-          _verificationId = newVerificationId;
-          _resendSeconds = 60;
-          _isResending = false;
+          _isVerifying = false;
+          _error = 'Authentication failed. Please try again.';
         });
-        _timerActive = false; // stop any previous timer loop
-        _startTimer();
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('OTP resent successfully'),
-          behavior: SnackBarBehavior.floating,
-        ));
-      },
-      onError: (error) {
+        return;
+      }
+
+      if (!mounted) return;
+
+      if (widget.isLogin) {
+        final exists = await DoctorAuthService.profileExists(user.uid);
         if (!mounted) return;
-        setState(() => _isResending = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(error),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-        ));
-      },
-    );
+        if (exists) {
+          final profile = await DoctorAuthService.getProfile(user.uid);
+          if (!mounted) return;
+          final status = profile?['status'] as String?;
+          if (status == 'active') {
+            context.go(AppRoutes.dashboard);
+          } else {
+            context.go(AppRoutes.verificationPending);
+          }
+        } else {
+          context.go(AppRoutes.register);
+        }
+      } else {
+        context.go(AppRoutes.register);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      final msg = e.toString().replaceFirst('Exception: ', '');
+      setState(() {
+        _isVerifying = false;
+        _error = msg;
+      });
+    }
   }
 
   @override
@@ -152,14 +190,14 @@ class _DoctorOtpScreenState extends State<DoctorOtpScreen> {
               Text('OTP Verification', style: AppTextStyles.h3),
               const SizedBox(height: 8),
               Text(
-                'Enter the 6-digit OTP sent to\n${widget.phone}',
+                'Enter the 4-digit OTP sent to\n${widget.phone}',
                 textAlign: TextAlign.center,
                 style: AppTextStyles.bodyMedium,
               ),
               const SizedBox(height: 36),
               Pinput(
                 controller: _otpController,
-                length: 6,
+                length: 4,
                 defaultPinTheme: defaultPinTheme,
                 focusedPinTheme: defaultPinTheme.copyWith(
                   decoration: defaultPinTheme.decoration!.copyWith(
@@ -173,6 +211,8 @@ class _DoctorOtpScreenState extends State<DoctorOtpScreen> {
                     ],
                   ),
                 ),
+                autofocus: true,
+                keyboardType: TextInputType.number,
                 onCompleted: (pin) => _verifyOTP(pin),
               ),
               if (_error != null) ...[
@@ -207,7 +247,9 @@ class _DoctorOtpScreenState extends State<DoctorOtpScreen> {
                 isLoading: _isVerifying,
                 width: double.infinity,
                 height: 54,
-                onTap: _isVerifying ? () {} : () => _verifyOTP(_otpController.text),
+                onTap: _isVerifying
+                    ? () {}
+                    : () => _verifyOTP(_otpController.text),
               ),
               const SizedBox(height: 20),
               _isResending
@@ -240,84 +282,5 @@ class _DoctorOtpScreenState extends State<DoctorOtpScreen> {
         ),
       ),
     );
-  }
-
-  Future<void> _verifyOTP(String pin) async {
-    if (pin.length != 6) return;
-    setState(() {
-      _isVerifying = true;
-      _error = null;
-    });
-
-    // Step 1: Verify OTP with Firebase Auth
-    String uid;
-    try {
-      final credential = await DoctorAuthService.verifyOTP(
-        verificationId: _verificationId,
-        otp: pin,
-      );
-      final firebaseUser = credential.user;
-      if (firebaseUser == null) {
-        if (!mounted) return;
-        setState(() {
-          _isVerifying = false;
-          _error = 'Authentication failed. Please try again.';
-        });
-        return;
-      }
-      uid = firebaseUser.uid;
-    } catch (e) {
-      if (!mounted) return;
-      final msg = e.toString().toLowerCase();
-      String errorText;
-      if (msg.contains('session-expired') || msg.contains('expired')) {
-        errorText = 'OTP expired. Please tap Resend OTP.';
-      } else if (msg.contains('invalid-verification-code') || msg.contains('invalid-code')) {
-        errorText = 'Incorrect OTP. Please check and try again.';
-      } else if (msg.contains('too-many-requests')) {
-        errorText = 'Too many attempts. Please wait a moment and try again.';
-      } else {
-        errorText = 'Verification failed. Please try again.';
-      }
-      setState(() {
-        _isVerifying = false;
-        _error = errorText;
-      });
-      return;
-    }
-
-    if (!mounted) return;
-
-    // Step 2: Check profile existence
-    if (widget.isLogin) {
-      bool exists = false;
-      try {
-        exists = await DoctorAuthService.profileExists(uid);
-      } catch (e) {
-        if (!mounted) return;
-        setState(() {
-          _isVerifying = false;
-          _error = 'Could not connect to server. Please check your connection and try again.';
-        });
-        return;
-      }
-      if (!mounted) return;
-      if (exists) {
-        final profile = await DoctorAuthService.getProfile(uid);
-        if (!mounted) return;
-        final status = profile?['status'] as String?;
-        if (status == 'active') {
-          context.go(AppRoutes.dashboard);
-        } else {
-          // Pending admin approval or suspended — show status screen
-          context.go(AppRoutes.verificationPending);
-        }
-      } else {
-        // No profile found — guide to registration
-        context.go(AppRoutes.register);
-      }
-    } else {
-      context.go(AppRoutes.register);
-    }
   }
 }

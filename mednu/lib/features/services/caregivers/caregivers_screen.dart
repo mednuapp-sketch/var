@@ -1,19 +1,42 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/constants/app_spacing.dart';
 import '../../../core/constants/app_text_styles.dart';
-import '../../../core/widgets/service_booking_sheet.dart';
+import '../../../core/services/feedback_service.dart';
+import '../../../core/utils/r.dart';
+import '../../../core/widgets/add_to_cart_button.dart';
 import '../../../core/widgets/ux_widgets.dart';
+import '../../cart/providers/cart_provider.dart';
 
-class CaregiversScreen extends StatefulWidget {
+// ─────────────────────────────────────────────────────────────
+//  Filter state
+// ─────────────────────────────────────────────────────────────
+class _CaregiverFilterState {
+  final String type;   // 'All' | 'Nurse' | 'Maid'
+  final String gender; // 'Any' | 'Male' | 'Female'
+
+  const _CaregiverFilterState({this.type = 'All', this.gender = 'Any'});
+
+  bool get hasActiveFilters => type != 'All' || gender != 'Any';
+
+  _CaregiverFilterState copyWith({String? type, String? gender}) =>
+      _CaregiverFilterState(
+        type: type ?? this.type,
+        gender: gender ?? this.gender,
+      );
+}
+
+class CaregiversScreen extends ConsumerStatefulWidget {
   const CaregiversScreen({super.key});
 
   @override
-  State<CaregiversScreen> createState() => _CaregiversScreenState();
+  ConsumerState<CaregiversScreen> createState() => _CaregiversScreenState();
 }
 
-class _CaregiversScreenState extends State<CaregiversScreen> {
+class _CaregiversScreenState extends ConsumerState<CaregiversScreen> {
   static const _palette = [
     Color(0xFFC2185B), Color(0xFF1565C0), Color(0xFF2E7D32),
     Color(0xFF6A1B9A), Color(0xFF0097A7), Color(0xFFE65100),
@@ -30,59 +53,202 @@ class _CaregiversScreenState extends State<CaregiversScreen> {
   }
 
   String _query       = '';
-  String _typeFilter  = 'all';    // all / Nurse / Maid / Attendant / Physiotherapist
-  String _genderFilter = 'all';   // all / Male / Female / Other
   String _locationFilter = '';    // free-text city filter
+  _CaregiverFilterState _filters = const _CaregiverFilterState();
 
-  static const _typeOptions    = ['all', 'Nurse', 'Maid', 'Attendant', 'Physiotherapist'];
-  static const _genderOptions  = ['all', 'Female', 'Male', 'Other'];
+  void _openFilterSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _CaregiverFilterSheet(
+        initial: _filters,
+        onApply: (f) => setState(() => _filters = f),
+      ),
+    );
+  }
+
+  // Shift options: 8-hour shifts (morning/evening/night) and 12-hour shifts
+  // (8am-8pm day / 8pm-8am night). Charges scale with shift length.
+  static const _shiftOptions = [
+    {'key': 'morning',  'label': 'Morning',  'time': '8 AM – 4 PM',  'hours': 8,  'group': '8-Hour Shift'},
+    {'key': 'evening',  'label': 'Evening',  'time': '4 PM – 12 AM', 'hours': 8,  'group': '8-Hour Shift'},
+    {'key': 'night',    'label': 'Night',    'time': '12 AM – 8 AM', 'hours': 8,  'group': '8-Hour Shift'},
+    {'key': 'day12',    'label': 'Day',      'time': '8 AM – 8 PM',  'hours': 12, 'group': '12-Hour Shift'},
+    {'key': 'night12',  'label': 'Night',    'time': '8 PM – 8 AM',  'hours': 12, 'group': '12-Hour Shift'},
+  ];
+
+  Map<String, dynamic> _shiftOption(String key) =>
+      _shiftOptions.firstWhere((s) => s['key'] == key);
 
   Map<String, dynamic> _normalize(Map<String, dynamic> raw, int idx) {
-    final rateNum = (raw['ratePerDay'] as num?)?.toInt() ?? 0;
-    final type    = raw['type'] as String? ?? 'Caregiver';
+    // ratePerDay is the base rate for an 8-hour shift (morning/evening/night).
+    final rateNum    = (raw['ratePerDay']  as num?)?.toInt() ?? 0;
+    final rateHour   = (raw['ratePerHour'] as num?)?.toInt() ?? (rateNum > 0 ? (rateNum ~/ 8) : 0);
+    final rate12     = (raw['ratePer12Hr'] as num?)?.toInt() ?? (rateHour > 0 ? rateHour * 12 : 0);
+    final type       = raw['type'] as String? ?? 'Caregiver';
+    final isVerified = raw['isVerified'] as bool? ?? false;
     return {
-      'name':      raw['name']       as String? ?? 'Caregiver',
-      'exp':       raw['experience'] as String? ?? raw['exp'] as String? ?? '',
-      'rating':    (raw['rating']    as num?)?.toDouble() ?? 0.0,
-      'specialty': raw['specialty']  as String? ?? 'Home Care',
-      'rate':      raw['rate']       as String? ?? (rateNum > 0 ? '₹$rateNum/day' : '—'),
-      'rateNum':   rateNum,
-      'type':      type,
-      'gender':    raw['gender']     as String? ?? '',
-      'location':  raw['location']   as String? ?? '',
-      'color':     _colorFor(type),
+      'name':       raw['name']       as String? ?? 'Caregiver',
+      'exp':        raw['experience'] as String? ?? raw['exp'] as String? ?? '',
+      'rating':     (raw['rating']    as num?)?.toDouble() ?? 0.0,
+      'specialty':  raw['specialty']  as String? ?? 'Home Care',
+      'rate':       raw['rate']       as String? ?? (rateNum > 0 ? '₹$rateNum/8hr shift' : '—'),
+      'rateNum':    rateNum,
+      'rateHour':   rateHour,
+      'rate12':     rate12,
+      'shiftRates': {
+        'morning':  rateNum,
+        'evening':  rateNum,
+        'night':    rateNum,
+        'day12':    rate12,
+        'night12':  rate12,
+      },
+      'type':       type,
+      'gender':     raw['gender']     as String? ?? '',
+      'location':   raw['location']   as String? ?? '',
+      'color':      _colorFor(type),
+      'isVerified': isVerified,
     };
   }
 
-  void _book(Map<String, dynamic> c) {
-    ServiceBookingSheet.show(
-      context,
-      type:        'caregivers',
-      serviceName: '${c['name']} – ${c['specialty']}',
-      themeColor:  c['color'] as Color,
-      priceLabel:  '${c['rate']} • ${c['exp']} experience'
-          '${(c['rating'] as double) > 0 ? ' • ⭐ ${(c['rating'] as double).toStringAsFixed(1)}' : ''}',
-      amount: (c['rateNum'] as num?)?.toInt() ?? 0,
-      paymentDescription: 'Caregiver: ${c['name']} – ${c['specialty']}',
-      serviceDetails: {
-        'caregiverName': c['name'],
-        'specialty':     c['specialty'],
-        'experience':    c['exp'],
-        'ratePerDay':    c['rateNum'],
-        'rating':        c['rating'],
-        'type':          c['type'],
-        'gender':        c['gender'],
-        'location':      c['location'],
-      },
+  int _amountFor(Map<String, dynamic> c, String shiftType) =>
+      (c['shiftRates'] as Map<String, dynamic>)[shiftType] as int? ?? 0;
+
+  String _displayRate(Map<String, dynamic> c) {
+    final d = c['rateNum'] as int;
+    return d > 0 ? '₹$d onwards' : (c['rate'] as String);
+  }
+
+  Future<void> _book(Map<String, dynamic> c) async {
+    final shiftType = await _pickShift(c);
+    if (shiftType == null || !mounted) return;
+
+    final amount   = _amountFor(c, shiftType);
+    final shiftOpt = _shiftOption(shiftType);
+    ref.read(cartProvider.notifier).addItem(
+          type: 'caregivers',
+          serviceName: '${c['name']} – ${c['specialty']}',
+          themeColor: c['color'] as Color,
+          unitAmount: amount,
+          serviceDetails: {
+            'caregiverName':  c['name'],
+            'specialty':      c['specialty'],
+            'experience':     c['exp'],
+            'ratePerDay':     c['rateNum'],
+            'ratePerHour':    c['rateHour'],
+            'ratePer12Hr':    c['rate12'],
+            'shiftType':      shiftOpt['key'],
+            'shiftLabel':     shiftOpt['label'],
+            'shiftTiming':    shiftOpt['time'],
+            'shiftHours':     shiftOpt['hours'],
+            'rating':         c['rating'],
+            'type':           c['type'],
+            'gender':         c['gender'],
+            'location':       c['location'],
+            'isVerified':     c['isVerified'],
+          },
+        );
+    if (mounted) {
+      FeedbackService.showSuccess(context, '${c['name']} added to cart');
+    }
+  }
+
+  // Shift-duration picker shown at booking time, per caregiver.
+  Future<String?> _pickShift(Map<String, dynamic> c) {
+    var selected = 'morning';
+    final color = c['color'] as Color;
+    return showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => Container(
+          padding: EdgeInsets.fromLTRB(
+              20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
+          decoration: BoxDecoration(
+            color: ctx.appSurface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(2)),
+                ),
+              ),
+              Text('Select Shift Duration', style: AppTextStyles.h4),
+              const SizedBox(height: 2),
+              Text('${c['name']} – ${c['specialty']}',
+                  style: AppTextStyles.bodySmall),
+              const SizedBox(height: 16),
+              _ShiftSelector(
+                options: _shiftOptions,
+                selected: selected,
+                onChanged: (v) => setModalState(() => selected = v),
+              ),
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(children: [
+                  Icon(Icons.payments_outlined, size: 18, color: color),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '₹${_amountFor(c, selected)} for ${_shiftOption(selected)['label']} '
+                      '(${_shiftOption(selected)['hours']}h) shift',
+                      style: AppTextStyles.labelLarge.copyWith(color: color),
+                    ),
+                  ),
+                ]),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx, selected),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: color,
+                    minimumSize: const Size(double.infinity, 52),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                    elevation: 0,
+                  ),
+                  child: const Text('Continue to Booking',
+                      style: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontWeight: FontWeight.w700,
+                          fontSize: 16,
+                          color: Colors.white)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
   List<Map<String, dynamic>> _applyFilters(List<Map<String, dynamic>> list) {
     return list.where((c) {
-      if (_typeFilter != 'all' && (c['type'] as String) != _typeFilter) return false;
-      if (_genderFilter != 'all' && (c['gender'] as String) != _genderFilter) return false;
+      if (_filters.type != 'All' && (c['type'] as String) != _filters.type) return false;
+      if (_filters.gender != 'Any' && (c['gender'] as String) != _filters.gender) return false;
       if (_locationFilter.isNotEmpty &&
-          !(c['location'] as String).toLowerCase().contains(_locationFilter.toLowerCase())) return false;
+          !(c['location'] as String).toLowerCase().contains(_locationFilter.toLowerCase())) {
+        return false;
+      }
       if (_query.isNotEmpty) {
         final q = _query.toLowerCase();
         return (c['name'] as String).toLowerCase().contains(q) ||
@@ -94,41 +260,12 @@ class _CaregiversScreenState extends State<CaregiversScreen> {
   }
 
   bool get _hasActiveFilters =>
-      _typeFilter != 'all' || _genderFilter != 'all' || _locationFilter.isNotEmpty;
-
-  Widget _filterChips() {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(children: [
-        // Type filters
-        ..._typeOptions.map((t) => Padding(
-          padding: const EdgeInsets.only(right: 8),
-          child: _Chip(
-            label: t == 'all' ? 'All Types' : t,
-            selected: _typeFilter == t,
-            onTap: () => setState(() => _typeFilter = t),
-          ),
-        )),
-        const SizedBox(width: 4),
-        Container(width: 1, height: 24, color: AppColors.divider),
-        const SizedBox(width: 8),
-        // Gender filters
-        ..._genderOptions.map((g) => Padding(
-          padding: const EdgeInsets.only(right: 8),
-          child: _Chip(
-            label: g == 'all' ? 'Any Gender' : g,
-            selected: _genderFilter == g,
-            onTap: () => setState(() => _genderFilter = g),
-          ),
-        )),
-      ]),
-    );
-  }
+      _filters.hasActiveFilters || _locationFilter.isNotEmpty;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.appBackground,
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('caregivers')
@@ -160,11 +297,29 @@ class _CaregiversScreenState extends State<CaregiversScreen> {
             slivers: [
               SliverAppBar(
                 pinned: true,
-                expandedHeight: 160,
+                expandedHeight: AppSpacing.headerHeight(context),
                 leading: IconButton(
                   icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
                   onPressed: () => context.pop(),
                 ),
+                actions: [
+                  IconButton(
+                    icon: Stack(children: [
+                      const Icon(Icons.tune_rounded, color: Colors.white),
+                      if (_filters.hasActiveFilters)
+                        Positioned(
+                          top: 0, right: 0,
+                          child: Container(
+                            width: 8, height: 8,
+                            decoration: const BoxDecoration(
+                                color: Colors.amber, shape: BoxShape.circle),
+                          ),
+                        ),
+                    ]),
+                    onPressed: _openFilterSheet,
+                  ),
+                  const CartBadgeAction(),
+                ],
                 flexibleSpace: FlexibleSpaceBar(
                   background: Container(
                     decoration: const BoxDecoration(
@@ -175,14 +330,29 @@ class _CaregiversScreenState extends State<CaregiversScreen> {
                       ),
                     ),
                     child: SafeArea(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 50, 20, 16),
-                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          const Icon(Icons.elderly_rounded, color: Colors.white, size: 36),
-                          const SizedBox(height: 8),
-                          Text('Caregivers', style: AppTextStyles.onPrimaryH2),
-                          Text('Trained & verified home caregivers', style: AppTextStyles.onPrimaryBody),
-                        ]),
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          return SingleChildScrollView(
+                            physics: const ClampingScrollPhysics(),
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                              child: Padding(
+                                padding: AppSpacing.headerPadding(context),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.elderly_rounded, color: Colors.white, size: AppSpacing.headerIconSize(context)),
+                                    SizedBox(height: AppSpacing.headerIconGap(context)),
+                                    Text('Caregivers', style: AppTextStyles.onPrimaryH2),
+                                    Text('Trained & verified home caregivers', style: AppTextStyles.onPrimaryBody),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        },
                       ),
                     ),
                   ),
@@ -190,62 +360,57 @@ class _CaregiversScreenState extends State<CaregiversScreen> {
               ),
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.all(16),
+                  padding: AppSpacing.page(context),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     // Search bar
                     TextField(
                       onChanged: (v) => setState(() => _query = v),
                       decoration: InputDecoration(
                         hintText: 'Search by name, specialty, city...',
-                        prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textHint),
+                        prefixIcon: Icon(Icons.search_rounded, color: context.appTextHint),
                         suffixIcon: _query.isNotEmpty
                             ? IconButton(
-                                icon: const Icon(Icons.clear_rounded, size: 18, color: AppColors.textHint),
+                                icon: Icon(Icons.clear_rounded, size: 18, color: context.appTextHint),
                                 onPressed: () => setState(() => _query = ''))
                             : null,
                         filled: true,
-                        fillColor: Colors.white,
+                        fillColor: context.appSurface,
                         border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                            borderRadius: BorderRadius.circular(R.r(context, 14)), borderSide: BorderSide.none),
                       ),
                     ),
-                    const SizedBox(height: 10),
+                    SizedBox(height: R.h(context, 10)),
 
                     // Location filter
                     TextField(
                       onChanged: (v) => setState(() => _locationFilter = v),
                       decoration: InputDecoration(
                         hintText: 'Filter by city / location...',
-                        prefixIcon: const Icon(Icons.location_on_outlined, color: AppColors.textHint, size: 20),
+                        prefixIcon: Icon(Icons.location_on_outlined, color: context.appTextHint, size: 20),
                         suffixIcon: _locationFilter.isNotEmpty
                             ? IconButton(
-                                icon: const Icon(Icons.clear_rounded, size: 18, color: AppColors.textHint),
+                                icon: Icon(Icons.clear_rounded, size: 18, color: context.appTextHint),
                                 onPressed: () => setState(() => _locationFilter = ''))
                             : null,
                         filled: true,
-                        fillColor: Colors.white,
+                        fillColor: context.appSurface,
                         contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
                         border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+                            borderRadius: BorderRadius.circular(R.r(context, 14)), borderSide: BorderSide.none),
                       ),
                     ),
-                    const SizedBox(height: 10),
-
-                    // Type + Gender chip filters
-                    _filterChips(),
+                    SizedBox(height: R.h(context, 10)),
 
                     // Active filter summary
                     if (_hasActiveFilters) ...[
-                      const SizedBox(height: 8),
                       Row(children: [
-                        const Icon(Icons.filter_list_rounded, size: 14, color: AppColors.textHint),
+                        Icon(Icons.filter_list_rounded, size: 14, color: context.appTextHint),
                         const SizedBox(width: 4),
-                        Text('Filters active', style: AppTextStyles.labelSmall.copyWith(color: AppColors.textHint)),
+                        Text('Filters active', style: AppTextStyles.labelSmall.copyWith(color: context.appTextHint)),
                         const Spacer(),
                         GestureDetector(
                           onTap: () => setState(() {
-                            _typeFilter = 'all';
-                            _genderFilter = 'all';
+                            _filters = const _CaregiverFilterState();
                             _locationFilter = '';
                           }),
                           child: Text('Clear all',
@@ -256,7 +421,7 @@ class _CaregiversScreenState extends State<CaregiversScreen> {
                       ]),
                     ],
 
-                    const SizedBox(height: 16),
+                    SizedBox(height: AppSpacing.sectionGap(context)),
 
                     // Content
                     if (!snap.hasData && !snap.hasError)
@@ -283,48 +448,88 @@ class _CaregiversScreenState extends State<CaregiversScreen> {
                         actionLabel: 'Clear Filters',
                         onAction: () => setState(() {
                           _query = '';
-                          _typeFilter = 'all';
-                          _genderFilter = 'all';
+                          _filters = const _CaregiverFilterState();
                           _locationFilter = '';
                         }),
                       )
                     else
                       ...filtered.map((c) {
-                        final color  = c['color'] as Color;
-                        final rating = c['rating'] as double;
+                        final color      = c['color'] as Color;
+                        final rating     = c['rating'] as double;
+                        final isVerified = c['isVerified'] as bool;
                         return Container(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          padding: const EdgeInsets.all(16),
+                          margin: EdgeInsets.only(bottom: R.h(context, 12)),
+                          padding: EdgeInsets.all(R.p(context, 16)),
                           decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(18),
-                            border: Border.all(color: AppColors.divider),
+                            color: context.appSurface,
+                            borderRadius: BorderRadius.circular(R.r(context, 18)),
+                            border: Border.all(
+                              color: isVerified
+                                  ? const Color(0xFF2E7D32).withValues(alpha: 0.35)
+                                  : context.appBorder,
+                            ),
                           ),
                           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                             Row(children: [
-                              Container(
-                                width: 56, height: 56,
-                                decoration: BoxDecoration(
-                                    color: color.withValues(alpha: 0.15),
-                                    shape: BoxShape.circle),
-                                child: Icon(Icons.person_rounded, size: 30, color: color),
-                              ),
+                              Stack(children: [
+                                Container(
+                                  width: 56, height: 56,
+                                  decoration: BoxDecoration(
+                                      color: color.withValues(alpha: 0.15),
+                                      shape: BoxShape.circle),
+                                  child: Icon(Icons.person_rounded, size: 30, color: color),
+                                ),
+                                if (isVerified)
+                                  Positioned(
+                                    right: 0, bottom: 0,
+                                    child: Container(
+                                      width: 18, height: 18,
+                                      decoration: const BoxDecoration(
+                                        color: Color(0xFF2E7D32),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(Icons.check_rounded, size: 12, color: Colors.white),
+                                    ),
+                                  ),
+                              ]),
                               const SizedBox(width: 14),
                               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                                Text(c['name'] as String, style: AppTextStyles.labelLarge),
+                                Row(children: [
+                                  Expanded(child: Text(c['name'] as String, style: AppTextStyles.labelLarge)),
+                                  if (isVerified)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF2E7D32).withValues(alpha: 0.1),
+                                        borderRadius: BorderRadius.circular(20),
+                                        border: Border.all(color: const Color(0xFF2E7D32).withValues(alpha: 0.3)),
+                                      ),
+                                      child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                                        Icon(Icons.verified_rounded, size: 11, color: Color(0xFF2E7D32)),
+                                        SizedBox(width: 3),
+                                        Text('Verified', style: TextStyle(fontFamily: 'Poppins', fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF2E7D32))),
+                                      ]),
+                                    ),
+                                ]),
                                 const SizedBox(height: 2),
                                 Text(c['specialty'] as String, style: AppTextStyles.bodySmall),
                                 if ((c['location'] as String).isNotEmpty) ...[
                                   const SizedBox(height: 2),
                                   Row(children: [
-                                    Icon(Icons.location_on_outlined, size: 13, color: AppColors.textHint),
+                                    Icon(Icons.location_on_outlined, size: 13, color: context.appTextHint),
                                     const SizedBox(width: 2),
-                                    Text(c['location'] as String, style: AppTextStyles.labelSmall),
+                                    Flexible(
+                                      child: Text(c['location'] as String,
+                                          style: AppTextStyles.labelSmall,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis),
+                                    ),
                                   ]),
                                 ],
                               ])),
+                              const SizedBox(width: 8),
                               Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                                Text(c['rate'] as String,
+                                Text(_displayRate(c),
                                     style: AppTextStyles.labelLarge.copyWith(color: color)),
                                 const SizedBox(height: 6),
                                 GestureDetector(
@@ -335,7 +540,7 @@ class _CaregiversScreenState extends State<CaregiversScreen> {
                                       gradient: AppColors.primaryGradient,
                                       borderRadius: BorderRadius.circular(10),
                                     ),
-                                    child: const Text('Book',
+                                    child: const Text('Add to Cart',
                                         style: TextStyle(
                                             fontFamily: 'Poppins',
                                             fontSize: 12,
@@ -346,7 +551,7 @@ class _CaregiversScreenState extends State<CaregiversScreen> {
                               ]),
                             ]),
                             const SizedBox(height: 10),
-                            Wrap(spacing: 6, children: [
+                            Wrap(spacing: 6, runSpacing: 4, children: [
                               _Badge(label: c['type'] as String, color: color),
                               if ((c['gender'] as String).isNotEmpty)
                                 _Badge(label: c['gender'] as String, color: const Color(0xFF6A1B9A)),
@@ -358,7 +563,7 @@ class _CaregiversScreenState extends State<CaregiversScreen> {
                           ]),
                         );
                       }),
-                    const SizedBox(height: 40),
+                    SizedBox(height: R.h(context, 40)),
                   ]),
                 ),
               ),
@@ -402,10 +607,10 @@ class _Chip extends StatelessWidget {
       duration: const Duration(milliseconds: 150),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: selected ? const Color(0xFFC2185B) : Colors.white,
+        color: selected ? const Color(0xFFC2185B) : context.appSurface,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: selected ? const Color(0xFFC2185B) : AppColors.divider,
+          color: selected ? const Color(0xFFC2185B) : context.appBorder,
         ),
       ),
       child: Text(label,
@@ -413,9 +618,185 @@ class _Chip extends StatelessWidget {
               fontFamily: 'Poppins',
               fontSize: 12,
               fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-              color: selected ? Colors.white : AppColors.textSecondary)),
+              color: selected ? Colors.white : context.appTextSecondary)),
     ),
   );
+}
+
+class _CaregiverFilterSheet extends StatefulWidget {
+  final _CaregiverFilterState initial;
+  final ValueChanged<_CaregiverFilterState> onApply;
+  const _CaregiverFilterSheet({required this.initial, required this.onApply});
+
+  @override
+  State<_CaregiverFilterSheet> createState() => _CaregiverFilterSheetState();
+}
+
+class _CaregiverFilterSheetState extends State<_CaregiverFilterSheet> {
+  late _CaregiverFilterState _state;
+
+  static const _typeOptions   = ['All', 'Nurse', 'Maid'];
+  static const _genderOptions = ['Any', 'Male', 'Female'];
+
+  @override
+  void initState() {
+    super.initState();
+    _state = widget.initial;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: context.appSurface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: EdgeInsets.fromLTRB(
+          20, 16, 20, MediaQuery.of(context).padding.bottom + 20),
+      child: SingleChildScrollView(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Center(
+            child: Container(
+              width: 40, height: 4,
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                  color: context.appBorder,
+                  borderRadius: BorderRadius.circular(2)),
+            ),
+          ),
+          Row(children: [
+            Text('Filter Caregivers', style: AppTextStyles.h3),
+            const Spacer(),
+            TextButton(
+              onPressed: () => setState(
+                  () => _state = const _CaregiverFilterState()),
+              child: const Text('Reset All'),
+            ),
+          ]),
+          const SizedBox(height: 16),
+
+          // Caregiver type
+          Text('Caregiver Type', style: AppTextStyles.labelLarge),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8, runSpacing: 8,
+            children: _typeOptions.map((t) => _Chip(
+              label: t,
+              selected: _state.type == t,
+              onTap: () => setState(() => _state = _state.copyWith(type: t)),
+            )).toList(),
+          ),
+          const SizedBox(height: 20),
+
+          // Gender
+          Text('Gender', style: AppTextStyles.labelLarge),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8, runSpacing: 8,
+            children: _genderOptions.map((g) => _Chip(
+              label: g,
+              selected: _state.gender == g,
+              onTap: () => setState(() => _state = _state.copyWith(gender: g)),
+            )).toList(),
+          ),
+          const SizedBox(height: 28),
+
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () {
+                widget.onApply(_state);
+                Navigator.pop(context);
+              },
+              child: const Text('Apply Filters'),
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
+class _ShiftSelector extends StatelessWidget {
+  final List<Map<String, Object>> options;
+  final String selected;
+  final void Function(String) onChanged;
+  const _ShiftSelector({
+    required this.options,
+    required this.selected,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final groups = <String, List<Map<String, Object>>>{};
+    for (final o in options) {
+      groups.putIfAbsent(o['group'] as String, () => []).add(o);
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: groups.entries.map((entry) {
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(entry.key,
+                  style: AppTextStyles.labelSmall.copyWith(color: context.appTextHint)),
+              const SizedBox(height: 4),
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                children: entry.value.map((o) {
+                  final key        = o['key'] as String;
+                  final isSelected = selected == key;
+                  return GestureDetector(
+                    onTap: () => onChanged(key),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: isSelected ? const Color(0xFFC2185B) : context.appSurface,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: isSelected ? const Color(0xFFC2185B) : context.appBorder,
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            o['label'] as String,
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 12,
+                              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                              color: isSelected ? Colors.white : context.appTextSecondary,
+                            ),
+                          ),
+                          Text(
+                            o['time'] as String,
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 9,
+                              color: isSelected
+                                  ? Colors.white.withValues(alpha: 0.85)
+                                  : AppColors.textHint,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
+          ),
+        );
+      }).toList(),
+    );
+  }
 }
 
 class _CaregiverCardSkeleton extends StatelessWidget {
@@ -426,7 +807,7 @@ class _CaregiverCardSkeleton extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.appSurface,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: const Color(0xFFEEEEEE)),
       ),

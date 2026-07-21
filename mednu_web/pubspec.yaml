@@ -1,5 +1,5 @@
 name: mednu_web
-description: MedNu Patient Web Portal — Premium Healthcare Platform
+description: MedNU Patient Web Portal — Premium Healthcare Platform
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -34,6 +34,7 @@ dependencies:
   # ── Utilities ─────────────────────────────────────────
   intl: ^0.20.0
   url_launcher: ^6.2.4
+  http: ^1.2.0
 
 dev_dependencies:
   flutter_test:

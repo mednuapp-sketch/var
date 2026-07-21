@@ -79,18 +79,34 @@ class _WebNavbarState extends State<WebNavbar> {
               child: Row(
                 children: [
                   _Logo(),
-                  const Spacer(),
                   if (!isMobile) ...[
-                    _NavLinks(
-                      activeItem: _activeItem,
-                      onItemTap: (item) {
-                        setState(() => _activeItem = item);
-                        widget.onNavTap?.call(item);
-                      },
+                    Expanded(
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Flexible(
+                              child: SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                physics: const ClampingScrollPhysics(),
+                                child: _NavLinks(
+                                  activeItem: _activeItem,
+                                  onItemTap: (item) {
+                                    setState(() => _activeItem = item);
+                                    widget.onNavTap?.call(item);
+                                  },
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 32),
+                            _AuthButtons(onLoginTap: widget.onLoginTap),
+                          ],
+                        ),
+                      ),
                     ),
-                    const SizedBox(width: 32),
-                    _AuthButtons(onLoginTap: widget.onLoginTap),
                   ] else ...[
+                    const Spacer(),
                     GestureDetector(
                       onTap: () => setState(() => _mobileMenuOpen = !_mobileMenuOpen),
                       child: Container(
@@ -139,22 +155,12 @@ class _Logo extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            gradient: AppColors.primaryGradient,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: const Center(
-            child: Text('M', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800)),
-          ),
-        ),
+        Image.asset('assets/images/mednu_logo.png', width: 36, height: 36, filterQuality: FilterQuality.high),
         const SizedBox(width: 10),
         ShaderMask(
           shaderCallback: (bounds) => AppColors.primaryGradient.createShader(bounds),
           child: Text(
-            'MedNu',
+            'MedNU',
             style: GoogleFonts.poppins(
               fontSize: 22,
               fontWeight: FontWeight.w800,

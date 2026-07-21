@@ -1,15 +1,15 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/constants/app_spacing.dart';
 import '../../../core/constants/app_text_styles.dart';
-import '../../../core/router/app_router.dart';
+import '../../../core/services/connectivity_service.dart';
+import '../../../core/utils/r.dart';
 import 'emergency_contacts_service.dart';
 import 'manage_contacts_screen.dart';
-import '../../hospitals/services/hospital_service.dart';
+import 'nearby_ambulances_sheet.dart';
 
 class EmergencyScreen extends StatefulWidget {
   const EmergencyScreen({super.key});
@@ -18,78 +18,64 @@ class EmergencyScreen extends StatefulWidget {
   State<EmergencyScreen> createState() => _EmergencyScreenState();
 }
 
-class _EmergencyScreenState extends State<EmergencyScreen> {
+class _EmergencyScreenState extends State<EmergencyScreen>
+    with SingleTickerProviderStateMixin {
+  static const String _mednuCallCenterNumber = '+918977018597';
+
   List<EmergencyContact> _contacts = [];
+  late AnimationController _pulseCtrl;
 
   @override
   void initState() {
     super.initState();
     _loadContacts();
+    _pulseCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat(reverse: true);
   }
 
-  bool _requestingDoctor = false;
+  @override
+  void dispose() {
+    _pulseCtrl.dispose();
+    super.dispose();
+  }
 
   Future<void> _loadContacts() async {
     final contacts = await EmergencyContactsService.getContacts();
     if (mounted) setState(() => _contacts = contacts);
   }
 
-  Future<void> _requestEmergencyDoctor() async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
-
-    setState(() => _requestingDoctor = true);
-
+  Future<void> _callMedNuCenter() async {
+    final uri = Uri.parse('tel:$_mednuCallCenterNumber');
     try {
-      final position = await _fetchLocation();
-
-      await FirebaseFirestore.instance.collection('service_requests').add({
-        'type': 'emergency_doctor',
-        'priority': 'high',
-        'patientId': uid,
-        'status': 'pending',
-        if (position != null) ...{
-          'latitude': position.latitude,
-          'longitude': position.longitude,
-        },
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-
-      if (!mounted) return;
-      setState(() => _requestingDoctor = false);
-
-      showDialog(
-        context: context,
-        builder: (dialogCtx) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Row(children: [
-            Icon(Icons.medical_services_rounded, color: Color(0xFF6A1B9A)),
-            SizedBox(width: 8),
-            Text('Request Sent!', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
-          ]),
-          content: const Text(
-            'A doctor will be assigned to your case shortly.\nProceed to consultation to connect when available.',
-            style: TextStyle(fontFamily: 'Poppins', fontSize: 13, height: 1.5),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(dialogCtx), child: const Text('Stay Here')),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(dialogCtx);
-                context.push(AppRoutes.consultation);
-              },
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6A1B9A)),
-              child: const Text('Go to Consultation', style: TextStyle(color: Colors.white, fontFamily: 'Poppins', fontSize: 12)),
+      if (await canLaunchUrl(uri)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Connecting Call With MedNU'),
+              backgroundColor: Color(0xFF2E7D32),
             ),
-          ],
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _requestingDoctor = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to request doctor. Please try again.')),
-      );
+          );
+        }
+        await launchUrl(uri);
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Cannot launch call to MedNU Call Center'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to call MedNU Call Center'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -132,11 +118,11 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.appBackground,
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
-            expandedHeight: 180,
+            expandedHeight: AppSpacing.headerHeight(context),
             pinned: true,
             leading: IconButton(
               icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
@@ -152,17 +138,29 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
                   ),
                 ),
                 child: SafeArea(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 50, 20, 20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Icon(Icons.emergency_rounded, color: Colors.white, size: 40),
-                        const SizedBox(height: 8),
-                        Text('Emergency Services', style: AppTextStyles.onPrimaryH2),
-                        Text('Quick help when you need it most', style: AppTextStyles.onPrimaryBody),
-                      ],
-                    ),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      return SingleChildScrollView(
+                        physics: const ClampingScrollPhysics(),
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                          child: Padding(
+                            padding: AppSpacing.headerPadding(context),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.emergency_rounded, color: Colors.white, size: AppSpacing.headerIconSize(context)),
+                                SizedBox(height: AppSpacing.headerIconGap(context)),
+                                Text('Emergency', style: AppTextStyles.onPrimaryH2),
+                                Text('Instant High Priority Assistence', style: AppTextStyles.onPrimaryBody),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ),
               ),
@@ -170,25 +168,64 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
           ),
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.all(20),
+              padding: AppSpacing.page(context),
               child: Column(
                 children: [
-                  // ── Emergency Doctor Support ────────────────────────────
+                  // ── SOS Button (pulsing) ────────────────────────────────
+                  AnimatedBuilder(
+                    animation: _pulseCtrl,
+                    builder: (_, child) => Transform.scale(
+                      scale: 1.0 + _pulseCtrl.value * 0.03,
+                      child: child,
+                    ),
+                    child: GestureDetector(
+                      onTap: () => _handleSOSTap(context),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(24),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(colors: [Color(0xFFB71C1C), Color(0xFFE53935)]),
+                          borderRadius: BorderRadius.circular(24),
+                          boxShadow: [BoxShadow(color: const Color(0xFFE53935).withValues(alpha:0.4), blurRadius: 20, offset: const Offset(0, 8))],
+                        ),
+                        child: Column(
+                          children: [
+                            Container(
+                              width: 100, height: 100,
+                              decoration: BoxDecoration(color: Colors.white.withValues(alpha:0.2), shape: BoxShape.circle),
+                              child: const Icon(Icons.sos_rounded, color: Colors.white, size: 56),
+                            ),
+                            const SizedBox(height: 16),
+                            const Text('PRESS FOR SOS', style: TextStyle(fontFamily: 'Poppins', fontSize: 20, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 2)),
+                            const SizedBox(height: 4),
+                            Text(
+                              _contacts.isEmpty
+                                  ? 'No contacts added yet — tap to set up'
+                                  : 'Sends SMS with location to ${_contacts.length} contact${_contacts.length == 1 ? '' : 's'}',
+                              style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: Colors.white70),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: AppSpacing.cardGap(context)),
+                  // ── Call MedNU Emergency Call Center ────────────────────
                   GestureDetector(
-                    onTap: _requestingDoctor ? null : _requestEmergencyDoctor,
+                    onTap: _callMedNuCenter,
                     child: Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
                         gradient: const LinearGradient(
-                          colors: [Color(0xFF4A148C), Color(0xFF7B1FA2)],
+                          colors: [Color(0xFF2E7D32), Color(0xFF43A047)],
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                         ),
                         borderRadius: BorderRadius.circular(20),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFF7B1FA2).withValues(alpha:0.35),
+                            color: const Color(0xFF43A047).withValues(alpha:0.35),
                             blurRadius: 16,
                             offset: const Offset(0, 6),
                           ),
@@ -202,70 +239,31 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
                               color: Colors.white.withValues(alpha:0.18),
                               shape: BoxShape.circle,
                             ),
-                            child: _requestingDoctor
-                                ? const Padding(
-                                    padding: EdgeInsets.all(14),
-                                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
-                                  )
-                                : const Icon(Icons.medical_services_rounded, color: Colors.white, size: 30),
+                            child: const Icon(Icons.support_agent_rounded, color: Colors.white, size: 30),
                           ),
                           const SizedBox(width: 16),
-                          Expanded(
+                          const Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text(
-                                  'Emergency Doctor',
+                                Text(
+                                  'Call MedNU Emergency Center',
                                   style: TextStyle(fontFamily: 'Poppins', fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white),
                                 ),
-                                const SizedBox(height: 2),
+                                SizedBox(height: 2),
                                 Text(
-                                  _requestingDoctor
-                                      ? 'Finding a doctor for you…'
-                                      : 'Instant high-priority doctor assignment',
-                                  style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: Colors.white70),
+                                  'Reach our emergency call center immediately',
+                                  style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: Colors.white70),
                                 ),
                               ],
                             ),
                           ),
-                          const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white54, size: 16),
+                          const Icon(Icons.call_rounded, color: Colors.white, size: 22),
                         ],
                       ),
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  // ── SOS Button ──────────────────────────────────────────
-                  GestureDetector(
-                    onTap: () => _showSOSDialog(context),
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(colors: [Color(0xFFB71C1C), Color(0xFFE53935)]),
-                        borderRadius: BorderRadius.circular(24),
-                        boxShadow: [BoxShadow(color: const Color(0xFFE53935).withValues(alpha:0.4), blurRadius: 20, offset: const Offset(0, 8))],
-                      ),
-                      child: Column(
-                        children: [
-                          Container(
-                            width: 100, height: 100,
-                            decoration: BoxDecoration(color: Colors.white.withValues(alpha:0.2), shape: BoxShape.circle),
-                            child: const Icon(Icons.sos_rounded, color: Colors.white, size: 56),
-                          ),
-                          const SizedBox(height: 16),
-                          const Text('PRESS FOR SOS', style: TextStyle(fontFamily: 'Poppins', fontSize: 20, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 2)),
-                          const SizedBox(height: 4),
-                          Text(
-                            _contacts.isEmpty
-                                ? 'No contacts added yet — tap to set up'
-                                : 'Sends SMS with location to ${_contacts.length} contact${_contacts.length == 1 ? '' : 's'}',
-                            style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: Colors.white70),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
+                  SizedBox(height: AppSpacing.cardGap(context)),
                   // Manage contacts button
                   GestureDetector(
                     onTap: _openManageContacts,
@@ -292,102 +290,108 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
                       ]),
                     ),
                   ),
-                  const SizedBox(height: 24),
-                  Align(alignment: Alignment.centerLeft, child: Text('Quick Emergency Contacts', style: AppTextStyles.h4)),
-                  const SizedBox(height: 12),
-                  GridView.count(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    crossAxisCount: 2,
-                    childAspectRatio: 1.6,
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12,
-                    children: const [
-                      _EmergencyCard('👮', 'Police', '100', Color(0xFF1565C0)),
-                      _EmergencyCard('🚒', 'Fire', '101', Color(0xFFE65100)),
-                      _EmergencyCard('🏥', 'Hospital', '104', Color(0xFF2E7D32)),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  Align(alignment: Alignment.centerLeft, child: Text('Nearby Emergency Services', style: AppTextStyles.h4)),
-                  const SizedBox(height: 12),
-                  StreamBuilder<List<Hospital>>(
-                    stream: HospitalService.emergencyStream(),
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.waiting) {
-                        return const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 20),
-                          child: Center(
-                            child: CircularProgressIndicator(
-                              color: Color(0xFFE53935), strokeWidth: 3),
+                  SizedBox(height: AppSpacing.sectionGap(context)),
+                  // ── Find Nearby Ambulances (admin-managed, radius search) ──
+                  GestureDetector(
+                    onTap: () => showModalBottomSheet(
+                      context: context,
+                      isScrollControlled: true,
+                      backgroundColor: Colors.transparent,
+                      builder: (_) => const NearbyAmbulancesSheet(),
+                    ),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF00838F), Color(0xFF00ACC1)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF00ACC1).withValues(alpha:0.35),
+                            blurRadius: 16,
+                            offset: const Offset(0, 6),
                           ),
-                        );
-                      }
-                      if (snapshot.hasError) {
-                        return Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: AppColors.divider),
-                          ),
-                          child: const Row(children: [
-                            Icon(Icons.wifi_off_rounded, color: AppColors.textHint),
-                            SizedBox(width: 10),
-                            Expanded(child: Text('Could not load emergency services. Check your connection.',
-                                style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: AppColors.textHint))),
-                          ]),
-                        );
-                      }
-                      final hospitals = snapshot.data ?? [];
-                      if (hospitals.isEmpty) {
-                        return Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: AppColors.divider),
-                          ),
-                          child: const Row(children: [
-                            Icon(Icons.info_outline_rounded, color: AppColors.textHint),
-                            SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                'No emergency hospitals listed yet',
-                                style: TextStyle(
-                                  fontFamily: 'Poppins',
-                                  fontSize: 13,
-                                  color: AppColors.textHint,
-                                ),
-                              ),
-                            ),
-                          ]),
-                        );
-                      }
-                      return Column(
-                        children: [
-                          for (int i = 0; i < hospitals.length; i++) ...[
-                            if (i > 0) const SizedBox(height: 10),
-                            _NearbyCard(
-                              hospitals[i].name,
-                              hospitals[i].isEmergency
-                                  ? 'Emergency Hospital'
-                                  : 'Hospital',
-                              hospitals[i].address,
-                              hospitals[i].phone,
-                              Icons.local_hospital_rounded,
-                              const Color(0xFF1565C0),
-                              mapsUrl: hospitals[i].mapsUrl,
-                            ),
-                          ],
                         ],
-                      );
-                    },
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 60, height: 60,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha:0.18),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.local_shipping_rounded, color: Colors.white, size: 30),
+                          ),
+                          const SizedBox(width: 16),
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Find Available Ambulances',
+                                  style: TextStyle(fontFamily: 'Poppins', fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white),
+                                ),
+                                SizedBox(height: 2),
+                                Text(
+                                  'See ambulances near you within a chosen radius',
+                                  style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: Colors.white70),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white54, size: 16),
+                        ],
+                      ),
+                    ),
                   ),
-                  const SizedBox(height: 80),
+                  SizedBox(height: R.h(context, 80)),
                 ],
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _handleSOSTap(BuildContext context) async {
+    final online = await ConnectivityService.isOnline();
+    if (!context.mounted) return;
+    if (!online) {
+      _showOfflineDialog(context);
+      return;
+    }
+    _showSOSDialog(context);
+  }
+
+  void _showOfflineDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(children: [
+          Icon(Icons.wifi_off_rounded, color: Color(0xFFB71C1C)),
+          SizedBox(width: 8),
+          Text('You are Offline', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
+        ]),
+        content: Text(
+          'Please check your connection. You can try calling $_mednuCallCenterNumber to receive immediate assistance.',
+          style: const TextStyle(fontFamily: 'Poppins'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _callMedNuCenter();
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFB71C1C)),
+            child: const Text('Call Now', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -476,14 +480,21 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: _contacts.map((c) => Padding(
-            padding: const EdgeInsets.only(bottom: 6),
-            child: Row(children: [
-              const Icon(Icons.sms_rounded, size: 16, color: Color(0xFF2E7D32)),
-              const SizedBox(width: 6),
-              Text('SMS sent to ${c.name}', style: const TextStyle(fontFamily: 'Poppins', fontSize: 13)),
-            ]),
-          )).toList(),
+          children: [
+            ..._contacts.map((c) => Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(children: [
+                const Icon(Icons.sms_rounded, size: 16, color: Color(0xFF2E7D32)),
+                const SizedBox(width: 6),
+                Text('SMS sent to ${c.name}', style: const TextStyle(fontFamily: 'Poppins', fontSize: 13)),
+              ]),
+            )),
+            const SizedBox(height: 10),
+            const Text(
+              'Emergency assistance will be provided through a MedNU partner',
+              style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: Colors.grey, fontStyle: FontStyle.italic),
+            ),
+          ],
         ),
         actions: [
           ElevatedButton(
@@ -495,73 +506,6 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
       ),
     );
   }
-}
-
-class _EmergencyCard extends StatelessWidget {
-  final String emoji, label, number;
-  final Color color;
-  const _EmergencyCard(this.emoji, this.label, this.number, this.color);
-
-  @override
-  Widget build(BuildContext context) => GestureDetector(
-    onTap: () async {
-      final uri = Uri.parse('tel:$number');
-      if (await canLaunchUrl(uri)) await launchUrl(uri);
-    },
-    child: Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: color.withValues(alpha:0.1), borderRadius: BorderRadius.circular(16), border: Border.all(color: color.withValues(alpha:0.3))),
-      child: Row(children: [
-        Text(emoji, style: const TextStyle(fontSize: 28)),
-        const SizedBox(width: 10),
-        Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
-          Text(label, style: AppTextStyles.labelLarge.copyWith(color: color)),
-          Text(number, style: AppTextStyles.h3.copyWith(color: color)),
-        ]),
-      ]),
-    ),
-  );
-}
-
-class _NearbyCard extends StatelessWidget {
-  final String name, type, subtitle, phone, mapsUrl;
-  final IconData icon;
-  final Color color;
-  const _NearbyCard(this.name, this.type, this.subtitle, this.phone, this.icon, this.color, {this.mapsUrl = ''});
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(16),
-    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: AppColors.divider)),
-    child: Row(children: [
-      Container(width: 48, height: 48, decoration: BoxDecoration(color: color.withValues(alpha:0.1), borderRadius: BorderRadius.circular(12)), child: Icon(icon, color: color, size: 24)),
-      const SizedBox(width: 12),
-      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(name, style: AppTextStyles.labelLarge, maxLines: 1, overflow: TextOverflow.ellipsis),
-        Text('$type • $subtitle', style: AppTextStyles.bodySmall, maxLines: 1, overflow: TextOverflow.ellipsis),
-        if (phone.isNotEmpty)
-          Text(phone, style: AppTextStyles.bodySmall.copyWith(color: color)),
-      ])),
-      Column(children: [
-        IconButton(
-          icon: Icon(Icons.call_rounded, color: color),
-          onPressed: () async {
-            final clean = phone.replaceAll(RegExp(r'\s'), '');
-            if (clean.isNotEmpty) await launchUrl(Uri.parse('tel:$clean'));
-          },
-        ),
-        IconButton(
-          icon: const Icon(Icons.map_rounded, color: AppColors.textHint),
-          onPressed: () async {
-            final url = mapsUrl.isNotEmpty
-                ? mapsUrl
-                : 'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(name)}';
-            await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-          },
-        ),
-      ]),
-    ]),
-  );
 }
 
 class _SendingDialog extends StatelessWidget {

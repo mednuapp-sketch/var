@@ -126,18 +126,22 @@ class _PregnancyPatientDetailScreenState
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   Text(widget.patientName,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(
                                           color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800)),
                                   const SizedBox(height: 4),
-                                  Row(children: [
-                                    _headerChip('Week $week'),
-                                    const SizedBox(width: 6),
-                                    if (dueDate != null)
-                                      _headerChip('Due ${DateFormat('dd MMM yy').format(dueDate)}'),
-                                    const SizedBox(width: 6),
-                                    if (isHighRisk)
-                                      _headerChip('HIGH RISK', color: const Color(0xFFFFEBEE), textColor: const Color(0xFFB71C1C)),
-                                  ]),
+                                  Wrap(
+                                    spacing: 6,
+                                    runSpacing: 4,
+                                    children: [
+                                      _headerChip('Week $week'),
+                                      if (dueDate != null)
+                                        _headerChip('Due ${DateFormat('dd MMM yy').format(dueDate)}'),
+                                      if (isHighRisk)
+                                        _headerChip('HIGH RISK', color: const Color(0xFFFFEBEE), textColor: const Color(0xFFB71C1C)),
+                                    ],
+                                  ),
                                 ],
                               ),
                             ),
@@ -636,7 +640,11 @@ class _PregnancyPatientDetailScreenState
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) => Padding(
+      builder: (ctx) => Container(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(ctx).size.height * 0.9,
+        ),
+        child: SingleChildScrollView(
         padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -693,6 +701,7 @@ class _PregnancyPatientDetailScreenState
               ),
             ),
           ],
+        ),
         ),
       ),
     );

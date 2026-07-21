@@ -97,14 +97,12 @@ class _LoginHeroPanel extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(children: [
-                    Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(12)),
-                      child: const Center(child: Text('M', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w800))),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Image.asset('assets/images/mednu_logo.png', width: 44, height: 44, fit: BoxFit.contain),
                     ),
                     const SizedBox(width: 12),
-                    Text('MedNu', style: GoogleFonts.poppins(fontSize: 26, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: -0.5)),
+                    Text('MedNU', style: GoogleFonts.poppins(fontSize: 26, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: -0.5)),
                   ]),
                   const SizedBox(height: 48),
                   Text(
@@ -132,7 +130,12 @@ class _LoginHeroPanel extends StatelessWidget {
                         child: Center(child: Text(item.$1, style: const TextStyle(fontSize: 18))),
                       ),
                       const SizedBox(width: 14),
-                      Text(item.$2, style: GoogleFonts.poppins(fontSize: 14, color: Colors.white, fontWeight: FontWeight.w500)),
+                      Expanded(
+                        child: Text(item.$2,
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 2,
+                            style: GoogleFonts.poppins(fontSize: 14, color: Colors.white, fontWeight: FontWeight.w500)),
+                      ),
                     ]),
                   )),
                 ],
@@ -204,14 +207,12 @@ class _LoginFormPanel extends StatelessWidget {
                     if (Responsive.isMobile(context)) ...[
                       const SizedBox(width: 12),
                       Row(children: [
-                        Container(
-                          width: 32,
-                          height: 32,
-                          decoration: BoxDecoration(gradient: AppColors.primaryGradient, borderRadius: BorderRadius.circular(8)),
-                          child: const Center(child: Text('M', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800))),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.asset('assets/images/mednu_logo.png', width: 32, height: 32, fit: BoxFit.contain),
                         ),
                         const SizedBox(width: 8),
-                        Text('MedNu', style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.primary)),
+                        Text('MedNU', style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.primary)),
                       ]),
                     ],
                   ]),

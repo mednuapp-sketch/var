@@ -9,6 +9,7 @@ import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/utils/r.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../data/doctors_data.dart';
 import '../models/doctor_review.dart';
@@ -27,9 +28,17 @@ const _kConsultMeta = {
   'In-Person': {'icon': Icons.local_hospital_rounded,   'color': Color(0xFFB71C1C), 'label': 'In-Person',      'desc': 'Visit clinic'},
 };
 
+// Session durations patients can pick when booking, in minutes.
+// Fees scale linearly off the doctor's listed fee, which is the 30-min rate.
+const _kSessionDurations = [15, 30, 45, 60];
+
+int _feeForDuration(int baseFee, int minutes) =>
+    baseFee <= 0 ? 0 : ((baseFee * minutes) / 30).round();
+
 class DoctorProfileScreen extends StatefulWidget {
   final String doctorId;
-  const DoctorProfileScreen({super.key, required this.doctorId});
+  final int? initialDuration;
+  const DoctorProfileScreen({super.key, required this.doctorId, this.initialDuration});
   @override
   State<DoctorProfileScreen> createState() => _DoctorProfileScreenState();
 }
@@ -39,6 +48,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
   int _selectedDateIndex = 0;
   String? _selectedSlot;
   String _consultationType = 'Video';
+  late int _selectedDuration;
   bool _booking = false;
 
   DocData? _doc;
@@ -62,6 +72,9 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
     super.initState();
     final today = DateTime.now();
     _dates = List.generate(10, (i) => today.add(Duration(days: i)));
+    _selectedDuration = _kSessionDurations.contains(widget.initialDuration)
+        ? widget.initialDuration!
+        : 30;
     _subscribeDoctor();
     _subscribeFavouriteState();
     _slotTimer = Timer.periodic(const Duration(minutes: 1), (_) { if (mounted) setState(() {}); });
@@ -175,7 +188,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
         '${doc.spec} • ${doc.qual}\n'
         '⭐ ${doc.rating} rating • ${doc.exp}+ years experience\n'
         '💊 Consultation fee: ₹${doc.fee}\n\n'
-        'Book an appointment on MedNu — your trusted healthcare partner.\n'
+        'Book an appointment on MedNU — your trusted healthcare partner.\n'
         'Download: https://play.google.com/store/apps/details?id=com.mednu.app';
     await Share.share(text, subject: 'Doctor Profile – ${doc.name}');
   }
@@ -275,6 +288,8 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
 
     final dateKey = _selectedDateKey;
     final slot    = _selectedSlot!;
+    final duration = _selectedDuration;
+    final amount  = _feeForDuration(doc.fee, duration);
     final db      = FirebaseFirestore.instance;
 
     // ── Resolve patient name ─────────────────────────────────────────────────
@@ -321,8 +336,8 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
     final paid = await context.push<bool>(
       AppRoutes.payment,
       extra: {
-        'amount':      doc.fee.toString(),
-        'description': 'Appointment with Dr. ${doc.name} · $slot · ${DateFormat('d MMM').format(_dates[_selectedDateIndex])}',
+        'amount':      amount.toString(),
+        'description': 'Appointment with Dr. ${doc.name} · $slot ($duration min) · ${DateFormat('d MMM').format(_dates[_selectedDateIndex])}',
       },
     );
 
@@ -345,7 +360,8 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
         'date':              dateKey,
         'time':              slot,
         'consultationType':  _consultationType,
-        'fee':               doc.fee,
+        'duration':          duration,
+        'fee':               amount,
         'status':            'booked',
         'createdAt':         now,
         'updatedAt':         now,
@@ -354,7 +370,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
         'userId':        uid,
         'doctorId':      widget.doctorId,
         'appointmentId': apptRef.id,
-        'amount':        doc.fee,
+        'amount':        amount,
         'type':          'appointment',
         'status':        'paid',
         'gateway':       'razorpay',
@@ -366,6 +382,14 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
         final bookedSlot = slot;
         final bookedDate = _dates[_selectedDateIndex];
         setState(() { _selectedSlot = null; _booking = false; });
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+            'Appointment confirmed for ${DateFormat('d MMM').format(bookedDate)} at $bookedSlot',
+          ),
+          backgroundColor: const Color(0xFF2E7D32),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 4),
+        ));
         _showBookingConfirmation(doc, bookedSlot, bookedDate);
       }
     } catch (e) {
@@ -401,15 +425,15 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
               child: const Icon(Icons.check_rounded, color: Colors.white, size: 36),
             ),
             const SizedBox(height: 20),
-            const Text('Appointment Booked!',
-                style: TextStyle(fontFamily: 'Poppins', fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+            Text('Appointment Booked!',
+                style: TextStyle(fontFamily: 'Poppins', fontSize: 20, fontWeight: FontWeight.w800, color: context.appTextPrimary)),
             const SizedBox(height: 6),
-            Text('Your slot is confirmed', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary)),
+            Text('Your slot is confirmed', style: AppTextStyles.bodyMedium.copyWith(color: context.appTextSecondary)),
             const SizedBox(height: 20),
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: AppColors.background,
+                color: context.appBackground,
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Column(children: [
@@ -421,6 +445,10 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                 _ConfirmRow(Icons.schedule_rounded, slot, const Color(0xFF2E7D32)),
                 const SizedBox(height: 10),
                 _ConfirmRow(Icons.videocam_rounded, _consultationType, const Color(0xFF6A1B9A)),
+                const SizedBox(height: 10),
+                _ConfirmRow(Icons.timer_outlined,
+                    '$_selectedDuration min · ₹${_feeForDuration(doc.fee, _selectedDuration)}',
+                    const Color(0xFF00897B)),
               ]),
             ),
             const SizedBox(height: 24),
@@ -446,7 +474,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
             const SizedBox(height: 10),
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('Done', style: TextStyle(fontFamily: 'Poppins', color: AppColors.textSecondary)),
+              child: Text('Done', style: TextStyle(fontFamily: 'Poppins', color: context.appTextSecondary)),
             ),
           ]),
         ),
@@ -470,7 +498,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
     final doc = _doc!;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.appBackground,
       body: CustomScrollView(
         slivers: [
           _buildHeroHeader(doc),
@@ -489,6 +517,13 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: _buildConsultationTypes(),
+                ),
+                const SizedBox(height: 24),
+
+                // ── Session Duration ─────────────────────
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: _buildDurationSelector(doc),
                 ),
                 const SizedBox(height: 24),
 
@@ -536,17 +571,17 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
 
                 // ── Date Picker ───────────────────────────
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  padding: EdgeInsets.symmetric(horizontal: R.p(context, 20)),
                   child: _buildDatePicker(),
                 ),
-                const SizedBox(height: 24),
+                SizedBox(height: R.h(context, 24)),
 
                 // ── Time Slots ────────────────────────────
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  padding: EdgeInsets.symmetric(horizontal: R.p(context, 20)),
                   child: _buildSlotsSection(),
                 ),
-                const SizedBox(height: 120),
+                SizedBox(height: R.h(context, 120)),
               ],
             ),
           ),
@@ -560,7 +595,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
   SliverAppBar _buildHeroHeader(DocData doc) {
     return SliverAppBar(
       pinned: true,
-      expandedHeight: 320,
+      expandedHeight: R.h(context, 320),
       elevation: 0,
       backgroundColor: AppColors.primary,
       leading: Container(
@@ -630,7 +665,13 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
 
               Positioned.fill(
                 child: SafeArea(
-                child: Padding(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    return SingleChildScrollView(
+                      physics: const ClampingScrollPhysics(),
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                        child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -738,6 +779,10 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                       ),
                     ],
                   ),
+                        ),
+                      ),
+                    );
+                  },
                 ),
                 ),
               ),
@@ -755,13 +800,9 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
       children: [
         _PremiumSectionTitle('Consultation Type', Icons.medical_services_rounded, AppColors.primary),
         const SizedBox(height: 14),
-        GridView.count(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
+        staticGrid(
           crossAxisCount: 2,
-          childAspectRatio: 2.9,
-          crossAxisSpacing: 10,
-          mainAxisSpacing: 10,
+          aspectRatio: 2.5,
           children: _supportedModes.map((t) {
             final meta = _kConsultMeta[t] ?? _kConsultMeta['Video']!;
             final sel = _consultationType == t;
@@ -797,10 +838,20 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                     ),
                     const SizedBox(width: 10),
                     Expanded(
-                      child: Text(label, style: TextStyle(
-                        fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w600,
-                        color: sel ? Colors.white : const Color(0xFF1F2937),
-                      ), overflow: TextOverflow.ellipsis),
+                      child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(label, style: TextStyle(
+                          fontFamily: 'Poppins', fontSize: 12, fontWeight: FontWeight.w700,
+                          color: sel ? Colors.white : const Color(0xFF1F2937),
+                        ), overflow: TextOverflow.ellipsis),
+                        Text(meta['desc'] as String, style: TextStyle(
+                          fontFamily: 'Poppins', fontSize: 10, fontWeight: FontWeight.w400,
+                          color: sel ? Colors.white70 : const Color(0xFF9CA3AF),
+                        ), overflow: TextOverflow.ellipsis),
+                      ],
+                    ),
                     ),
                     if (sel)
                       const Icon(Icons.check_circle_rounded, color: Colors.white, size: 16),
@@ -828,12 +879,88 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                     Text(_hospital!, style: AppTextStyles.labelMedium.copyWith(color: const Color(0xFFB71C1C))),
                   if (_hospitalAddress != null) ...[
                     const SizedBox(height: 3),
-                    Text(_hospitalAddress!, style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
+                    Text(_hospitalAddress!, style: AppTextStyles.caption.copyWith(color: context.appTextSecondary)),
                   ],
                 ])),
               ]),
             ),
           ),
+      ],
+    );
+  }
+
+  // ── Session Duration ───────────────────────────────────
+  Widget _buildDurationSelector(DocData doc) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _PremiumSectionTitle('Session Duration', Icons.timer_outlined, const Color(0xFF00897B)),
+        const SizedBox(height: 14),
+        Row(
+          children: _kSessionDurations.map((mins) {
+            final sel = _selectedDuration == mins;
+            final price = _feeForDuration(doc.fee, mins);
+            return Expanded(
+              child: GestureDetector(
+                onTap: () => setState(() => _selectedDuration = mins),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(
+                    gradient: sel ? AppColors.primaryGradient : null,
+                    color: sel ? null : Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: sel ? Colors.transparent : const Color(0xFFE5E7EB),
+                      width: 1.5,
+                    ),
+                    boxShadow: sel
+                        ? [BoxShadow(color: AppColors.primary.withValues(alpha: 0.28), blurRadius: 14, offset: const Offset(0, 5))]
+                        : null,
+                  ),
+                  child: Column(children: [
+                    Text('$mins min', style: TextStyle(
+                      fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w700,
+                      color: sel ? Colors.white : const Color(0xFF1F2937),
+                    )),
+                    const SizedBox(height: 3),
+                    Text(
+                      doc.fee > 0 ? '₹$price' : 'Free',
+                      style: TextStyle(
+                        fontFamily: 'Poppins', fontSize: 11, fontWeight: FontWeight.w500,
+                        color: sel ? Colors.white70 : const Color(0xFF9CA3AF),
+                      ),
+                    ),
+                  ]),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: Colors.amber.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+          ),
+          child: Row(children: [
+            Icon(Icons.lightbulb_outline_rounded, size: 16, color: Colors.amber.shade800),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Longer sessions are recommended for better results',
+                style: TextStyle(
+                  fontFamily: 'Poppins', fontSize: 11.5, fontWeight: FontWeight.w500,
+                  color: Colors.amber.shade900,
+                ),
+              ),
+            ),
+          ]),
+        ),
       ],
     );
   }
@@ -950,7 +1077,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                     color: sel ? null : (!isWorking ? Colors.grey.shade100 : Colors.white),
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
-                      color: sel ? AppColors.primary : (!isWorking ? Colors.grey.shade200 : AppColors.border),
+                      color: sel ? AppColors.primary : (!isWorking ? Colors.grey.shade200 : context.appBorder),
                       width: sel ? 1.5 : 1,
                     ),
                     boxShadow: sel
@@ -959,10 +1086,10 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                   ),
                   child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
                     Text(
-                      isToday ? 'Today' : DateFormat('EEE').format(d),
+                      isToday ? 'Today' : (i == 1 ? 'Tmrw' : DateFormat('EEE').format(d)),
                       style: TextStyle(
                         fontFamily: 'Poppins', fontSize: 10,
-                        color: sel ? Colors.white70 : (!isWorking ? Colors.grey.shade400 : AppColors.textSecondary),
+                        color: sel ? Colors.white70 : (!isWorking ? Colors.grey.shade400 : context.appTextSecondary),
                       ),
                     ),
                     const SizedBox(height: 3),
@@ -970,14 +1097,14 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                       DateFormat('d').format(d),
                       style: TextStyle(
                         fontFamily: 'Poppins', fontSize: 20, fontWeight: FontWeight.w800,
-                        color: sel ? Colors.white : (!isWorking ? Colors.grey.shade400 : AppColors.textPrimary),
+                        color: sel ? Colors.white : (!isWorking ? Colors.grey.shade400 : context.appTextPrimary),
                       ),
                     ),
                     Text(
                       DateFormat('MMM').format(d),
                       style: TextStyle(
                         fontFamily: 'Poppins', fontSize: 9,
-                        color: sel ? Colors.white60 : (!isWorking ? Colors.grey.shade400 : AppColors.textHint),
+                        color: sel ? Colors.white60 : (!isWorking ? Colors.grey.shade400 : context.appTextHint),
                       ),
                     ),
                   ]),
@@ -1067,18 +1194,14 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
     } catch (_) { return 0; }
   }
 
-  Widget _buildSlotSkeleton() => GridView.builder(
-    shrinkWrap: true,
-    physics: const NeverScrollableScrollPhysics(),
-    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-      crossAxisCount: 3, childAspectRatio: 2.5, crossAxisSpacing: 10, mainAxisSpacing: 10,
-    ),
-    itemCount: 6,
-    itemBuilder: (_, __) => Container(
+  Widget _buildSlotSkeleton() => staticGrid(
+    crossAxisCount: 3,
+    aspectRatio: 2.5,
+    children: List.generate(6, (_) => Container(
       decoration: BoxDecoration(
         color: Colors.grey.shade200, borderRadius: BorderRadius.circular(10),
       ),
-    ),
+    )),
   );
 
   Widget _buildSlotEmpty(IconData icon, String title, String subtitle, Color color) {
@@ -1094,7 +1217,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
         const SizedBox(height: 10),
         Text(title, style: AppTextStyles.labelLarge.copyWith(color: color)),
         const SizedBox(height: 4),
-        Text(subtitle, style: AppTextStyles.bodySmall.copyWith(color: AppColors.textHint),
+        Text(subtitle, style: AppTextStyles.bodySmall.copyWith(color: context.appTextHint),
             textAlign: TextAlign.center),
       ]),
     );
@@ -1104,10 +1227,10 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
   Widget _buildBottomBar(DocData doc) {
     return Container(
       padding: EdgeInsets.fromLTRB(20, 14, 20, MediaQuery.of(context).padding.bottom + 14),
-      decoration: const BoxDecoration(
-        color: Colors.white,
+      decoration: BoxDecoration(
+        color: context.appSurface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-        boxShadow: [BoxShadow(color: Color(0x12000000), blurRadius: 24, offset: Offset(0, -6))],
+        boxShadow: const [BoxShadow(color: Color(0x12000000), blurRadius: 24, offset: Offset(0, -6))],
       ),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         Container(width: 36, height: 4, decoration: BoxDecoration(
@@ -1143,7 +1266,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '$_consultationType · ₹${doc.fee}',
+                  '$_consultationType · $_selectedDuration min · ₹${_feeForDuration(doc.fee, _selectedDuration)}',
                   style: const TextStyle(
                     fontFamily: 'Poppins', fontSize: 11.5, color: Color(0xFF6B7280),
                     fontWeight: FontWeight.w500,
@@ -1212,7 +1335,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                       child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                         const Icon(Icons.calendar_month_rounded, size: 19, color: Colors.white),
                         const SizedBox(width: 8),
-                        Text('Book Appointment · ₹${doc.fee}',
+                        Text('Book Appointment · ₹${_feeForDuration(doc.fee, _selectedDuration)}',
                           style: const TextStyle(
                             fontFamily: 'Poppins', fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white,
                           )),
@@ -1231,7 +1354,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
         slivers: [
           SliverAppBar(
             pinned: true,
-            expandedHeight: 320,
+            expandedHeight: R.h(context, 320),
             backgroundColor: AppColors.primary,
             leading: IconButton(
               icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
@@ -1417,7 +1540,7 @@ class _TrustStatsRow extends StatelessWidget {
         return Container(
           padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 8),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: context.appSurface,
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(color: Colors.black.withValues(alpha:0.06), blurRadius: 20, offset: const Offset(0, 4)),
@@ -1495,11 +1618,11 @@ class _AboutSectionState extends State<_AboutSection> {
         firstChild: Text(
           widget.about,
           maxLines: maxLines, overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontFamily: 'Poppins', fontSize: 13, color: AppColors.textSecondary, height: 1.7),
+          style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: context.appTextSecondary, height: 1.7),
         ),
         secondChild: Text(
           widget.about,
-          style: const TextStyle(fontFamily: 'Poppins', fontSize: 13, color: AppColors.textSecondary, height: 1.7),
+          style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: context.appTextSecondary, height: 1.7),
         ),
       ),
       if (widget.about.length > 120) ...[
@@ -1531,7 +1654,7 @@ class _HospitalCard extends StatelessWidget {
       Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: context.appSurface,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: const Color(0xFF1565C0).withValues(alpha:0.1)),
           boxShadow: [BoxShadow(color: const Color(0xFF1565C0).withValues(alpha:0.06), blurRadius: 12, offset: const Offset(0, 4))],
@@ -1547,14 +1670,14 @@ class _HospitalCard extends StatelessWidget {
           ),
           const SizedBox(width: 14),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(name, style: AppTextStyles.labelLarge.copyWith(color: AppColors.textPrimary)),
+            Text(name, style: AppTextStyles.labelLarge.copyWith(color: context.appTextPrimary)),
             if (address != null) ...[
               const SizedBox(height: 4),
               Row(children: [
-                const Icon(Icons.place_rounded, size: 12, color: AppColors.textHint),
+                Icon(Icons.place_rounded, size: 12, color: context.appTextHint),
                 const SizedBox(width: 3),
                 Expanded(child: Text(address!,
-                    style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+                    style: AppTextStyles.caption.copyWith(color: context.appTextSecondary),
                     overflow: TextOverflow.ellipsis)),
               ]),
             ],
@@ -1658,7 +1781,7 @@ class _ConfirmRow extends StatelessWidget {
       color: color.withValues(alpha:0.1), borderRadius: BorderRadius.circular(8)),
       child: Icon(icon, size: 16, color: color)),
     const SizedBox(width: 10),
-    Expanded(child: Text(text, style: AppTextStyles.labelMedium.copyWith(color: AppColors.textPrimary))),
+    Expanded(child: Text(text, style: AppTextStyles.labelMedium.copyWith(color: context.appTextPrimary))),
   ]);
 }
 
@@ -1732,7 +1855,7 @@ class _ReviewsSectionState extends State<_ReviewsSection> {
               Container(
                 padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: context.appSurface,
                   borderRadius: BorderRadius.circular(20),
                   boxShadow: [BoxShadow(color: Colors.amber.withValues(alpha:0.1), blurRadius: 16, offset: const Offset(0, 4))],
                 ),
@@ -1751,10 +1874,10 @@ class _ReviewsSectionState extends State<_ReviewsSection> {
                       )),
                     ),
                     const SizedBox(height: 4),
-                    Text('out of 5', style: AppTextStyles.caption.copyWith(color: AppColors.textHint)),
+                    Text('out of 5', style: AppTextStyles.caption.copyWith(color: context.appTextHint)),
                   ]),
                   const SizedBox(width: 20),
-                  Container(width: 1, height: 70, color: AppColors.divider),
+                  Container(width: 1, height: 70, color: context.appDivider),
                   const SizedBox(width: 20),
                   Expanded(child: Column(
                     children: [5, 4, 3, 2, 1].map((star) {
@@ -1765,7 +1888,7 @@ class _ReviewsSectionState extends State<_ReviewsSection> {
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 6),
                         child: Row(children: [
-                          Text('$star', style: AppTextStyles.caption.copyWith(color: AppColors.textHint)),
+                          Text('$star', style: AppTextStyles.caption.copyWith(color: context.appTextHint)),
                           const SizedBox(width: 3),
                           const Icon(Icons.star_rounded, size: 10, color: Colors.amber),
                           const SizedBox(width: 6),
@@ -1773,13 +1896,13 @@ class _ReviewsSectionState extends State<_ReviewsSection> {
                             borderRadius: BorderRadius.circular(4),
                             child: LinearProgressIndicator(
                               value: fraction, minHeight: 6,
-                              backgroundColor: AppColors.divider,
+                              backgroundColor: context.appDivider,
                               valueColor: AlwaysStoppedAnimation<Color>(barColor),
                             ),
                           )),
                           const SizedBox(width: 6),
                           SizedBox(width: 20,
-                              child: Text('$count', style: AppTextStyles.caption.copyWith(color: AppColors.textHint))),
+                              child: Text('$count', style: AppTextStyles.caption.copyWith(color: context.appTextHint))),
                         ]),
                       );
                     }).toList(),
@@ -1808,7 +1931,7 @@ class _ReviewsSectionState extends State<_ReviewsSection> {
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
                   color: Colors.white, borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: AppColors.divider),
+                  border: Border.all(color: context.appBorder),
                 ),
                 child: Column(children: [
                   Container(width: 56, height: 56,
@@ -1816,10 +1939,10 @@ class _ReviewsSectionState extends State<_ReviewsSection> {
                       color: Colors.amber.withValues(alpha:0.1), shape: BoxShape.circle),
                     child: const Icon(Icons.rate_review_outlined, size: 28, color: Colors.amber)),
                   const SizedBox(height: 12),
-                  Text('No Reviews Yet', style: AppTextStyles.labelLarge.copyWith(color: AppColors.textSecondary)),
+                  Text('No Reviews Yet', style: AppTextStyles.labelLarge.copyWith(color: context.appTextSecondary)),
                   const SizedBox(height: 4),
                   Text('Be the first to review after your consultation',
-                      style: AppTextStyles.caption.copyWith(color: AppColors.textHint),
+                      style: AppTextStyles.caption.copyWith(color: context.appTextHint),
                       textAlign: TextAlign.center),
                 ]),
               ),
@@ -1841,7 +1964,7 @@ class _ReviewsSectionState extends State<_ReviewsSection> {
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
                 color: Colors.white, borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: AppColors.divider),
+                border: Border.all(color: context.appBorder),
               ),
               child: Column(children: [
                 Container(width: 56, height: 56,
@@ -1849,10 +1972,10 @@ class _ReviewsSectionState extends State<_ReviewsSection> {
                     color: Colors.amber.withValues(alpha:0.1), shape: BoxShape.circle),
                   child: const Icon(Icons.rate_review_outlined, size: 28, color: Colors.amber)),
                 const SizedBox(height: 12),
-                Text('No Reviews Yet', style: AppTextStyles.labelLarge.copyWith(color: AppColors.textSecondary)),
+                Text('No Reviews Yet', style: AppTextStyles.labelLarge.copyWith(color: context.appTextSecondary)),
                 const SizedBox(height: 4),
                 Text('Be the first to review after your consultation',
-                    style: AppTextStyles.caption.copyWith(color: AppColors.textHint),
+                    style: AppTextStyles.caption.copyWith(color: context.appTextHint),
                     textAlign: TextAlign.center),
               ]),
             );
@@ -1877,7 +2000,7 @@ class _ReviewCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.appSurface,
         borderRadius: BorderRadius.circular(18),
         boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:0.05), blurRadius: 12, offset: const Offset(0, 4))],
       ),
@@ -1898,7 +2021,7 @@ class _ReviewCard extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
-              Flexible(child: Text(review.patientName, style: AppTextStyles.labelLarge.copyWith(color: AppColors.textPrimary))),
+              Flexible(child: Text(review.patientName, style: AppTextStyles.labelLarge.copyWith(color: context.appTextPrimary))),
               const SizedBox(width: 6),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
@@ -1915,7 +2038,7 @@ class _ReviewCard extends StatelessWidget {
               ),
             ]),
             const SizedBox(height: 2),
-            Text(timeAgo, style: AppTextStyles.caption.copyWith(color: AppColors.textHint)),
+            Text(timeAgo, style: AppTextStyles.caption.copyWith(color: context.appTextHint)),
           ])),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
             Row(mainAxisSize: MainAxisSize.min,
@@ -1934,10 +2057,10 @@ class _ReviewCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: AppColors.background, borderRadius: BorderRadius.circular(10),
+              color: context.appBackground, borderRadius: BorderRadius.circular(10),
             ),
-            child: Text(review.reviewText, style: const TextStyle(
-                fontFamily: 'Poppins', fontSize: 12.5, color: AppColors.textSecondary, height: 1.6)),
+            child: Text(review.reviewText, style: TextStyle(
+                fontFamily: 'Poppins', fontSize: 12.5, color: context.appTextSecondary, height: 1.6)),
           ),
         ],
         const SizedBox(height: 10),
@@ -1978,7 +2101,7 @@ class _ReviewCardSkeleton extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.appSurface,
         borderRadius: BorderRadius.circular(18),
         boxShadow: const [BoxShadow(color: Color(0x0D000000), blurRadius: 12, offset: Offset(0, 4))],
       ),

@@ -58,7 +58,6 @@ class _LocationPickerScreenState extends ConsumerState<LocationPickerScreen>
     );
     _searchCtrl.addListener(_onChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _focusNode.requestFocus();
       _fetchMyPosition();
     });
   }

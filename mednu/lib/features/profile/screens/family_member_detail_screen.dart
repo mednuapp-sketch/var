@@ -7,8 +7,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/services/operation_logger.dart';
 import '../../auth/providers/auth_provider.dart';
 import 'family_management_screen.dart';
+import '../../../core/utils/r.dart';
 
 class FamilyMemberDetailScreen extends ConsumerStatefulWidget {
   final Map<String, dynamic> member;
@@ -34,7 +36,10 @@ class _FamilyMemberDetailScreenState extends ConsumerState<FamilyMemberDetailScr
   int _prescCount = 0;
   int _consultCount = 0;
   int _reportCount = 0;
-  bool _countsLoaded = false;
+  bool _prescLoaded = false;
+  bool _consultLoaded = false;
+  bool _reportLoaded = false;
+  bool get _countsLoaded => _prescLoaded && _consultLoaded && _reportLoaded;
 
   @override
   void initState() {
@@ -57,7 +62,7 @@ class _FamilyMemberDetailScreenState extends ConsumerState<FamilyMemberDetailScr
       if (!mounted) return;
       setState(() {
         _prescCount = snap.docs.length;
-        _countsLoaded = true;
+        _prescLoaded = true;
       });
     });
 
@@ -69,7 +74,10 @@ class _FamilyMemberDetailScreenState extends ConsumerState<FamilyMemberDetailScr
         .snapshots()
         .listen((snap) {
       if (!mounted) return;
-      setState(() => _consultCount = snap.docs.length);
+      setState(() {
+        _consultCount = snap.docs.length;
+        _consultLoaded = true;
+      });
     });
 
     _reportCountSub = FirebaseFirestore.instance
@@ -79,7 +87,10 @@ class _FamilyMemberDetailScreenState extends ConsumerState<FamilyMemberDetailScr
         .snapshots()
         .listen((snap) {
       if (!mounted) return;
-      setState(() => _reportCount = snap.docs.length);
+      setState(() {
+        _reportCount = snap.docs.length;
+        _reportLoaded = true;
+      });
     });
   }
 
@@ -99,6 +110,46 @@ class _FamilyMemberDetailScreenState extends ConsumerState<FamilyMemberDetailScr
     });
   }
 
+  Future<void> _removeMember(BuildContext context, String name) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.r(dialogCtx, 20))),
+        title: const Text('Remove Member',
+            style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
+        content: Text('Remove $name from your family?',
+            style: const TextStyle(fontFamily: 'Poppins')),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(dialogCtx, false),
+              child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.pop(dialogCtx, true),
+              child: const Text('Remove', style: TextStyle(color: AppColors.error))),
+        ],
+      ),
+    );
+    if (confirm != true || !context.mounted) return;
+    try {
+      await ref.read(authProvider.notifier).removeFamilyMember(widget.member);
+      OperationLogger.logSuccess(
+        action: OpAction.familyMemberDeleted,
+        message: 'Removed family member: $name',
+      );
+      if (context.mounted) context.pop();
+    } catch (e) {
+      OperationLogger.logError(
+        action: OpAction.familyMemberDeleted,
+        errorDetails: e.toString(),
+      );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to remove: $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final name     = widget.member['name']     as String? ?? '';
@@ -111,11 +162,11 @@ class _FamilyMemberDetailScreenState extends ConsumerState<FamilyMemberDetailScr
     final uid      = ref.watch(authProvider).user?.uid ?? '';
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.appBackground,
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
-            expandedHeight: 210,
+            expandedHeight: R.h(context, 210),
             pinned: true,
             leading: IconButton(
               icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
@@ -125,6 +176,11 @@ class _FamilyMemberDetailScreenState extends ConsumerState<FamilyMemberDetailScr
               IconButton(
                 icon: const Icon(Icons.edit_rounded, color: Colors.white),
                 onPressed: () => showAddFamilyMemberSheet(context, ref, uid, existing: widget.member),
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete_outline_rounded, color: Colors.white),
+                tooltip: 'Remove Member',
+                onPressed: () => _removeMember(context, name),
               ),
             ],
             flexibleSpace: FlexibleSpaceBar(
@@ -139,13 +195,19 @@ class _FamilyMemberDetailScreenState extends ConsumerState<FamilyMemberDetailScr
                 child: Stack(
                   children: [
                     Positioned(right: -30, top: -30,
-                        child: Container(width: 140, height: 140,
+                        child: Container(width: R.w(context, 140), height: R.h(context, 140),
                             decoration: BoxDecoration(color: Colors.white.withValues(alpha:0.07), shape: BoxShape.circle))),
                     Positioned(left: -20, bottom: -20,
-                        child: Container(width: 100, height: 100,
+                        child: Container(width: R.w(context, 100), height: R.h(context, 100),
                             decoration: BoxDecoration(color: Colors.white.withValues(alpha:0.05), shape: BoxShape.circle))),
                     SafeArea(
-                      child: Column(
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          return SingleChildScrollView(
+                            physics: const ClampingScrollPhysics(),
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                              child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           const SizedBox(height: 40),
@@ -165,6 +227,10 @@ class _FamilyMemberDetailScreenState extends ConsumerState<FamilyMemberDetailScr
                               fontWeight: FontWeight.w700, color: Colors.white)),
                           Text(relation, style: const TextStyle(fontFamily: 'Poppins', fontSize: 13, color: Colors.white70)),
                         ],
+                      ),
+                            ),
+                          );
+                        },
                       ),
                     ),
                   ],
@@ -278,14 +344,27 @@ class _FamilyMemberDetailScreenState extends ConsumerState<FamilyMemberDetailScr
                     title: 'Health Status',
                     icon: Icons.monitor_heart_rounded,
                     color: AppColors.primary,
-                    child: const Column(children: [
-                      _StatusTile(label: 'Last Checkup',        value: 'Not recorded'),
-                      Divider(height: 1, indent: 16),
-                      _StatusTile(label: 'Allergies',           value: 'None recorded'),
-                      Divider(height: 1, indent: 16),
-                      _StatusTile(label: 'Chronic Conditions',  value: 'None recorded'),
-                      Divider(height: 1, indent: 16),
-                      _StatusTile(label: 'Current Medications', value: 'None recorded'),
+                    child: Column(children: [
+                      _StatusTile(
+                        label: 'Last Checkup',
+                        value: (widget.member['lastCheckup'] as String?)?.trim().isNotEmpty == true
+                            ? widget.member['lastCheckup'] as String
+                            : 'Not recorded',
+                      ),
+                      const Divider(height: 1, indent: 16),
+                      _StatusTile(
+                        label: 'Allergies',
+                        value: (widget.member['allergies'] as String?)?.trim().isNotEmpty == true
+                            ? widget.member['allergies'] as String
+                            : 'None recorded',
+                      ),
+                      const Divider(height: 1, indent: 16),
+                      _StatusTile(
+                        label: 'Chronic Conditions',
+                        value: (widget.member['chronicConditions'] as String?)?.trim().isNotEmpty == true
+                            ? widget.member['chronicConditions'] as String
+                            : 'None recorded',
+                      ),
                     ]),
                   ),
 
@@ -326,10 +405,10 @@ class _SectionCard extends StatelessWidget {
         const SizedBox(height: 10),
         Container(
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: context.appSurface,
             borderRadius: BorderRadius.circular(16),
             boxShadow: [BoxShadow(color: AppColors.shadow, blurRadius: 8, offset: const Offset(0, 2))],
-            border: Border.all(color: AppColors.divider),
+            border: Border.all(color: context.appBorder),
           ),
           child: child,
         ),
@@ -350,12 +429,12 @@ class _InfoRow extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
       child: Row(children: [
-        Icon(icon, size: 18, color: AppColors.textHint),
+        Icon(icon, size: 18, color: context.appTextHint),
         const SizedBox(width: 12),
-        Text(label, style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
+        Text(label, style: AppTextStyles.bodySmall.copyWith(color: context.appTextSecondary)),
         const Spacer(),
         Text(value, style: AppTextStyles.labelLarge.copyWith(
-            color: valueColor ?? AppColors.textPrimary)),
+            color: valueColor ?? context.appTextPrimary)),
       ]),
     );
   }
@@ -418,7 +497,7 @@ class _RecordTile extends StatelessWidget {
             Text(label, style: AppTextStyles.labelLarge),
             Text(sub, style: AppTextStyles.bodySmall),
           ])),
-          Icon(Icons.chevron_right_rounded, color: AppColors.textHint, size: 20),
+          Icon(Icons.chevron_right_rounded, color: context.appTextHint, size: 20),
         ]),
       ),
     );
@@ -436,9 +515,9 @@ class _StatusTile extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
       child: Row(children: [
         Expanded(child: Text(label,
-            style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary))),
+            style: AppTextStyles.bodySmall.copyWith(color: context.appTextSecondary))),
         Text(value,
-            style: AppTextStyles.labelLarge.copyWith(color: AppColors.textHint, fontSize: 12)),
+            style: AppTextStyles.labelLarge.copyWith(color: context.appTextHint, fontSize: 12)),
       ]),
     );
   }

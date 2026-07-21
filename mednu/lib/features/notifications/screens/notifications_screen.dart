@@ -3,18 +3,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
-import '../../../core/constants/app_colors.dart';
-import '../../../core/constants/app_text_styles.dart';
-import '../../../core/router/app_router.dart';
-import '../../../core/widgets/ux_widgets.dart';
+import 'package:mednu/core/constants/app_colors.dart';
+import 'package:mednu/core/constants/app_text_styles.dart';
+import 'package:mednu/core/router/app_router.dart';
+import 'package:mednu/core/widgets/ux_widgets.dart';
 import '../models/notification_model.dart';
 import '../providers/notification_provider.dart';
 import '../services/notification_service.dart';
+import 'package:mednu/core/utils/r.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Notifications Screen
-// Groups notifications into Today / Yesterday / This Week / Older.
-// Swipe right to delete, tap to navigate, pull-to-refresh, mark all read.
+// Tabs: All / Appointments / Health / Promotions
+// Groups by Today / Yesterday / Earlier
+// Shimmer loading, swipe-to-dismiss, pull-to-refresh, mark-all-read
 // ─────────────────────────────────────────────────────────────────────────────
 
 class NotificationsScreen extends ConsumerStatefulWidget {
@@ -30,10 +32,12 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
   late final TabController _tab;
   final _uid = FirebaseAuth.instance.currentUser?.uid ?? '';
 
+  static const _tabs = ['All', 'Appointments', 'Health', 'Promotions'];
+
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 2, vsync: this);
+    _tab = TabController(length: _tabs.length, vsync: this);
     _tab.addListener(() => setState(() {}));
   }
 
@@ -47,10 +51,20 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
     await PatientNotificationService.markAllRead(_uid);
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('All notifications marked as read'),
+        SnackBar(
+          content: Row(
+            children: [
+              Icon(Icons.done_all_rounded, color: Colors.white, size: R.w(context, 18)),
+              SizedBox(width: R.w(context, 10)),
+              const Text('All notifications marked as read',
+                  style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w500)),
+            ],
+          ),
+          backgroundColor: AppColors.success,
           behavior: SnackBarBehavior.floating,
-          duration: Duration(seconds: 2),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.r(context, 12))),
+          margin: EdgeInsets.all(R.p(context, 16)),
+          duration: const Duration(seconds: 2),
         ),
       );
     }
@@ -61,24 +75,31 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
     if (readCount == 0) return;
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Clear Read Notifications',
-            style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
-        content: Text('Remove $readCount read notification${readCount == 1 ? '' : 's'}?',
-            style: const TextStyle(fontFamily: 'Poppins')),
+      builder: (dialogCtx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.r(dialogCtx, 20))),
+        title: const Text(
+          'Clear Read Notifications',
+          style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700),
+        ),
+        content: Text(
+          'Remove $readCount read notification${readCount == 1 ? '' : 's'}?',
+          style: const TextStyle(fontFamily: 'Poppins'),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: const Text('Cancel',
+                style: TextStyle(fontFamily: 'Poppins')),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.error,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(R.r(dialogCtx, 10))),
             ),
-            child: const Text('Clear', style: TextStyle(color: Colors.white)),
+            child: const Text('Clear',
+                style: TextStyle(fontFamily: 'Poppins', color: Colors.white)),
           ),
         ],
       ),
@@ -91,52 +112,122 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
   @override
   Widget build(BuildContext context) {
     final notifAsync = ref.watch(patientNotificationsProvider);
-    final unreadAsync = ref.watch(patientUnreadCountProvider);
+    final unreadCount = ref.watch(patientUnreadCountProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.appBackground,
       body: NestedScrollView(
         headerSliverBuilder: (_, __) => [
           SliverAppBar(
             pinned: true,
-            expandedHeight: 200,
+            expandedHeight: R.h(context, 196),
             backgroundColor: AppColors.primary,
             foregroundColor: Colors.white,
+            elevation: 0,
             leading: IconButton(
-              icon: const Icon(Icons.arrow_back_ios_new_rounded,
-                  color: Colors.white, size: 20),
+              icon: Icon(Icons.arrow_back_ios_new_rounded,
+                  color: Colors.white, size: R.w(context, 20)),
               onPressed: () => context.pop(),
+            ),
+            title: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Notifications',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                ),
+                if (unreadCount > 0) ...[
+                  SizedBox(width: R.w(context, 8)),
+                  Container(
+                    padding: EdgeInsets.symmetric(
+                        horizontal: R.p(context, 7), vertical: R.p(context, 2)),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.25),
+                      borderRadius: BorderRadius.circular(R.r(context, 10)),
+                    ),
+                    child: Text(
+                      '$unreadCount',
+                      style: const TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
             ),
             actions: [
               notifAsync.when(
-                data: (list) => _AppBarActions(
-                  list: list,
-                  uid: _uid,
-                  onMarkAll: _markAllRead,
-                  onClearRead: () => _clearAllRead(list),
-                ),
+                data: (list) {
+                  final hasUnread = list.any((n) => !n.isRead);
+                  final hasRead = list.any((n) => n.isRead);
+                  if (!hasUnread && !hasRead) return const SizedBox.shrink();
+                  return PopupMenuButton<String>(
+                    icon: const Icon(Icons.more_vert_rounded,
+                        color: Colors.white),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(R.r(context, 14))),
+                    onSelected: (v) {
+                      if (v == 'mark_all') _markAllRead();
+                      if (v == 'clear_read') _clearAllRead(list);
+                    },
+                    itemBuilder: (menuCtx) => [
+                      if (hasUnread)
+                        PopupMenuItem(
+                          value: 'mark_all',
+                          child: Row(children: [
+                            Icon(Icons.done_all_rounded,
+                                size: R.w(menuCtx, 18), color: AppColors.primary),
+                            SizedBox(width: R.w(menuCtx, 10)),
+                            const Text('Mark all as read',
+                                style: TextStyle(
+                                    fontFamily: 'Poppins', fontSize: 14)),
+                          ]),
+                        ),
+                      if (hasRead)
+                        PopupMenuItem(
+                          value: 'clear_read',
+                          child: Row(children: [
+                            Icon(Icons.delete_sweep_rounded,
+                                size: R.w(menuCtx, 18), color: AppColors.error),
+                            SizedBox(width: R.w(menuCtx, 10)),
+                            const Text('Clear read',
+                                style: TextStyle(
+                                    fontFamily: 'Poppins', fontSize: 14)),
+                          ]),
+                        ),
+                    ],
+                  );
+                },
                 loading: () => const SizedBox.shrink(),
                 error: (_, __) => const SizedBox.shrink(),
               ),
             ],
             flexibleSpace: FlexibleSpaceBar(
               collapseMode: CollapseMode.pin,
-              background: _HeaderBackground(unreadCount: unreadAsync),
+              background: _HeaderBackground(unreadCount: unreadCount),
             ),
             bottom: PreferredSize(
-              preferredSize: const Size.fromHeight(46),
+              preferredSize: Size.fromHeight(R.h(context, 44)),
               child: Container(
                 color: AppColors.primary,
                 child: TabBar(
                   controller: _tab,
                   labelStyle: const TextStyle(
                     fontFamily: 'Poppins',
-                    fontSize: 13,
+                    fontSize: 12,
                     fontWeight: FontWeight.w700,
                   ),
                   unselectedLabelStyle: const TextStyle(
                     fontFamily: 'Poppins',
-                    fontSize: 13,
+                    fontSize: 12,
                     fontWeight: FontWeight.w500,
                   ),
                   labelColor: Colors.white,
@@ -145,36 +236,17 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                   indicatorWeight: 3,
                   indicatorSize: TabBarIndicatorSize.label,
                   dividerColor: Colors.transparent,
-                  tabs: [
-                    Tab(
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Text('All'),
-                          if (unreadAsync > 0) ...[
-                            const SizedBox(width: 6),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha:0.25),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Text(
-                                '$unreadAsync',
-                                style: const TextStyle(
-                                    fontSize: 11,
-                                    fontFamily: 'Poppins',
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.white),
-                              ),
+                  isScrollable: true,
+                  tabAlignment: TabAlignment.start,
+                  tabs: _tabs
+                      .map((t) => Tab(
+                            child: Padding(
+                              padding:
+                                  EdgeInsets.symmetric(horizontal: R.p(context, 4)),
+                              child: Text(t),
                             ),
-                          ],
-                        ],
-                      ),
-                    ),
-                    const Tab(text: 'Unread'),
-                  ],
+                          ))
+                      .toList(),
                 ),
               ),
             ),
@@ -183,8 +255,10 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
         body: TabBarView(
           controller: _tab,
           children: [
-            _NotifListView(uid: _uid, filterUnread: false),
-            _NotifListView(uid: _uid, filterUnread: true),
+            _NotifListView(uid: _uid, filter: _TabFilter.all),
+            _NotifListView(uid: _uid, filter: _TabFilter.appointments),
+            _NotifListView(uid: _uid, filter: _TabFilter.health),
+            _NotifListView(uid: _uid, filter: _TabFilter.promotions),
           ],
         ),
       ),
@@ -192,59 +266,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
   }
 }
 
-// ── App bar overflow actions ──────────────────────────────────────────────────
+// ── Tab filter enum ────────────────────────────────────────────────────────────
 
-class _AppBarActions extends StatelessWidget {
-  final List<NotificationModel> list;
-  final String uid;
-  final VoidCallback onMarkAll;
-  final VoidCallback onClearRead;
-
-  const _AppBarActions({
-    required this.list,
-    required this.uid,
-    required this.onMarkAll,
-    required this.onClearRead,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final hasUnread = list.any((n) => !n.isRead);
-    final hasRead   = list.any((n) => n.isRead);
-    if (!hasUnread && !hasRead) return const SizedBox.shrink();
-
-    return PopupMenuButton<String>(
-      icon: const Icon(Icons.more_vert_rounded, color: Colors.white),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      onSelected: (v) {
-        if (v == 'mark_all') onMarkAll();
-        if (v == 'clear_read') onClearRead();
-      },
-      itemBuilder: (_) => [
-        if (hasUnread)
-          const PopupMenuItem(
-            value: 'mark_all',
-            child: Row(children: [
-              Icon(Icons.done_all_rounded, size: 18, color: AppColors.primary),
-              SizedBox(width: 10),
-              Text('Mark all as read',
-                  style: TextStyle(fontFamily: 'Poppins', fontSize: 14)),
-            ]),
-          ),
-        if (hasRead)
-          const PopupMenuItem(
-            value: 'clear_read',
-            child: Row(children: [
-              Icon(Icons.delete_sweep_rounded, size: 18, color: AppColors.error),
-              SizedBox(width: 10),
-              Text('Clear read notifications',
-                  style: TextStyle(fontFamily: 'Poppins', fontSize: 14)),
-            ]),
-          ),
-      ],
-    );
-  }
-}
+enum _TabFilter { all, appointments, health, promotions }
 
 // ── Gradient header background ────────────────────────────────────────────────
 
@@ -257,7 +281,7 @@ class _HeaderBackground extends StatelessWidget {
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
-          colors: [Color(0xFF880E4F), Color(0xFFC2185B), Color(0xFF7B1FA2)],
+          colors: [AppColors.primaryDark, AppColors.primary, AppColors.secondary],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -265,48 +289,47 @@ class _HeaderBackground extends StatelessWidget {
       child: Stack(
         children: [
           Positioned(
-            top: -24,
-            right: -24,
+            top: -24, right: -24,
             child: Container(
-              width: 130,
-              height: 130,
+              width: R.w(context, 130), height: R.h(context, 130),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Colors.white.withValues(alpha:0.06),
+                color: Colors.white.withValues(alpha: 0.06),
               ),
             ),
           ),
           Positioned(
-            bottom: 40,
-            left: -30,
+            bottom: 44, left: -30,
             child: Container(
-              width: 90,
-              height: 90,
+              width: R.w(context, 90), height: R.h(context, 90),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Colors.white.withValues(alpha:0.04),
+                color: Colors.white.withValues(alpha: 0.04),
               ),
             ),
           ),
           SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 60, 20, 16),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return SingleChildScrollView(
+                  physics: const ClampingScrollPhysics(),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                    child: Padding(
+              padding: EdgeInsets.fromLTRB(R.p(context, 20), R.p(context, 24), R.p(context, 20), R.p(context, 16)),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Container(
-                    width: 44,
-                    height: 44,
+                    width: R.w(context, 44), height: R.h(context, 44),
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha:0.18),
-                      borderRadius: BorderRadius.circular(14),
+                      color: Colors.white.withValues(alpha: 0.18),
+                      borderRadius: BorderRadius.circular(R.r(context, 14)),
                     ),
-                    child: const Icon(
-                      Icons.notifications_rounded,
-                      color: Colors.white,
-                      size: 24,
-                    ),
+                    child: Icon(Icons.notifications_rounded,
+                        color: Colors.white, size: R.w(context, 24)),
                   ),
-                  const SizedBox(width: 14),
+                  SizedBox(width: R.w(context, 14)),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
@@ -322,7 +345,7 @@ class _HeaderBackground extends StatelessWidget {
                       ),
                       Text(
                         unreadCount > 0
-                            ? '$unreadCount unread'
+                            ? '$unreadCount unread notification${unreadCount == 1 ? '' : 's'}'
                             : 'All caught up',
                         style: const TextStyle(
                           fontFamily: 'Poppins',
@@ -332,8 +355,33 @@ class _HeaderBackground extends StatelessWidget {
                       ),
                     ],
                   ),
+                  if (unreadCount > 0) ...[
+                    const Spacer(),
+                    Container(
+                      width: R.w(context, 46), height: R.h(context, 46),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Center(
+                        child: Text(
+                          '$unreadCount',
+                          style: const TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
               ),
+                    ),
+                  ),
+                );
+              },
             ),
           ),
         ],
@@ -346,51 +394,45 @@ class _HeaderBackground extends StatelessWidget {
 
 class _NotifListView extends ConsumerWidget {
   final String uid;
-  final bool filterUnread;
+  final _TabFilter filter;
 
-  const _NotifListView({required this.uid, required this.filterUnread});
+  const _NotifListView({required this.uid, required this.filter});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final notifAsync = ref.watch(patientNotificationsProvider);
 
     return notifAsync.when(
-      loading: () => ListView.builder(
-        padding: const EdgeInsets.fromLTRB(0, 12, 0, 32),
-        itemCount: 7,
-        itemBuilder: (_, __) => const SkeletonNotificationTile(),
-      ),
+      loading: () => _ShimmerList(),
       error: (e, _) => AppErrorState(
         message: 'Unable to load notifications.\nPull down to refresh.',
         onRetry: () => ref.invalidate(patientNotificationsProvider),
       ),
       data: (all) {
-        final notifications =
-            filterUnread ? all.where((n) => !n.isRead).toList() : all;
+        final notifications = _applyFilter(all, filter);
 
         if (notifications.isEmpty) {
-          return filterUnread
-              ? const _AllReadState()
-              : const _EmptyState();
+          return _EmptyState(filter: filter);
         }
 
         final groups = _groupByDate(notifications);
 
         return RefreshIndicator(
           color: AppColors.primary,
-          onRefresh: () async => ref.invalidate(patientNotificationsProvider),
+          onRefresh: () async =>
+              ref.invalidate(patientNotificationsProvider),
           child: CustomScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
               for (final group in groups) ...[
                 SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+                  padding: EdgeInsets.fromLTRB(R.p(context, 16), R.p(context, 16), R.p(context, 16), R.p(context, 4)),
                   sliver: SliverToBoxAdapter(
                     child: _DateHeader(label: group.label),
                   ),
                 ),
                 SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+                  padding: EdgeInsets.fromLTRB(R.p(context, 16), 0, R.p(context, 16), 0),
                   sliver: SliverList(
                     delegate: SliverChildBuilderDelegate(
                       (_, i) {
@@ -398,7 +440,7 @@ class _NotifListView extends ConsumerWidget {
                         return Dismissible(
                           key: ValueKey(notif.id),
                           direction: DismissDirection.endToStart,
-                          background: _SwipeDeleteBg(),
+                          background: const _SwipeDeleteBg(),
                           onDismissed: (_) =>
                               PatientNotificationService.deleteNotification(
                                   uid, notif.id),
@@ -413,9 +455,7 @@ class _NotifListView extends ConsumerWidget {
                   ),
                 ),
               ],
-              const SliverToBoxAdapter(
-                child: SizedBox(height: 32),
-              ),
+              SliverToBoxAdapter(child: SizedBox(height: R.h(context, 32))),
             ],
           ),
         );
@@ -423,11 +463,68 @@ class _NotifListView extends ConsumerWidget {
     );
   }
 
+  List<NotificationModel> _applyFilter(
+      List<NotificationModel> all, _TabFilter filter) {
+    switch (filter) {
+      case _TabFilter.all:
+        return all;
+      case _TabFilter.appointments:
+        return all.where((n) => _appointmentTypes.contains(n.type)).toList();
+      case _TabFilter.health:
+        return all.where((n) => _healthTypes.contains(n.type)).toList();
+      case _TabFilter.promotions:
+        return all.where((n) => _promotionTypes.contains(n.type)).toList();
+    }
+  }
+
+  static const _appointmentTypes = {
+    PatientNotifType.appointmentBooked,
+    PatientNotifType.appointmentAccepted,
+    PatientNotifType.appointmentRejected,
+    PatientNotifType.appointmentRescheduled,
+    PatientNotifType.appointmentCompleted,
+    PatientNotifType.appointmentCancelled,
+    PatientNotifType.appointmentReminder,
+    PatientNotifType.consultationDone,
+    PatientNotifType.consultationUpdate,
+    PatientNotifType.followupDay1,
+    PatientNotifType.followupDay2,
+    PatientNotifType.doctorStartedCall,
+    PatientNotifType.quickConnectAccepted,
+    PatientNotifType.quickConnectStarted,
+    PatientNotifType.quickConnectCompleted,
+    PatientNotifType.quickConnectRejected,
+    PatientNotifType.quickConnectCancelled,
+    PatientNotifType.prescriptionUploaded,
+    PatientNotifType.reviewPrompt,
+  };
+
+  static const _healthTypes = {
+    PatientNotifType.waterReminder,
+    PatientNotifType.periodTracker,
+    PatientNotifType.medicineReminder,
+    PatientNotifType.healthTip,
+    PatientNotifType.nutritionAccepted,
+    PatientNotifType.nutritionStarted,
+    PatientNotifType.nutritionCompleted,
+    PatientNotifType.nutritionCancelled,
+    PatientNotifType.nutritionRejected,
+    PatientNotifType.pregnancyCheckupBooked,
+    PatientNotifType.pregnancyCheckupReminder,
+    PatientNotifType.pregnancyCheckupConfirmed,
+    PatientNotifType.pregnancyCheckupCompleted,
+    PatientNotifType.pregnancyCheckupCancelled,
+  };
+
+  static const _promotionTypes = {
+    PatientNotifType.referralReward,
+    PatientNotifType.welcomeBonus,
+  };
+
   List<_DateGroup> _groupByDate(List<NotificationModel> notifications) {
     final now = DateTime.now();
-    final today     = DateTime(now.year, now.month, now.day);
+    final today = DateTime(now.year, now.month, now.day);
     final yesterday = today.subtract(const Duration(days: 1));
-    final weekAgo   = today.subtract(const Duration(days: 7));
 
     final groups = <String, List<NotificationModel>>{};
 
@@ -438,15 +535,13 @@ class _NotifListView extends ConsumerWidget {
         label = 'Today';
       } else if (!d.isBefore(yesterday)) {
         label = 'Yesterday';
-      } else if (!d.isBefore(weekAgo)) {
-        label = 'This Week';
       } else {
-        label = 'Older';
+        label = 'Earlier';
       }
       (groups[label] ??= []).add(n);
     }
 
-    const order = ['Today', 'Yesterday', 'This Week', 'Older'];
+    const order = ['Today', 'Yesterday', 'Earlier'];
     return order
         .where((l) => groups.containsKey(l))
         .map((l) => _DateGroup(label: l, items: groups[l]!))
@@ -460,6 +555,49 @@ class _DateGroup {
   const _DateGroup({required this.label, required this.items});
 }
 
+// ── Shimmer loading list ───────────────────────────────────────────────────────
+
+class _ShimmerList extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return AppShimmer(
+      child: ListView.separated(
+        padding: EdgeInsets.fromLTRB(R.p(context, 16), R.p(context, 20), R.p(context, 16), R.p(context, 32)),
+        itemCount: 5,
+        separatorBuilder: (_, __) => SizedBox(height: R.h(context, 12)),
+        itemBuilder: (_, __) => Container(
+          padding: EdgeInsets.all(R.p(context, 14)),
+          decoration: BoxDecoration(
+            color: context.appSurface,
+            borderRadius: BorderRadius.circular(R.r(context, 16)),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SkeletonCircle(size: R.w(context, 46)),
+              SizedBox(width: R.w(context, 12)),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SkeletonBox(width: R.w(context, 160), height: R.h(context, 13), radius: R.r(context, 6)),
+                    SizedBox(height: R.h(context, 8)),
+                    SkeletonBox(width: double.infinity, height: R.h(context, 11), radius: R.r(context, 5)),
+                    SizedBox(height: R.h(context, 6)),
+                    SkeletonBox(width: R.w(context, 180), height: R.h(context, 11), radius: R.r(context, 5)),
+                    SizedBox(height: R.h(context, 10)),
+                    SkeletonBox(width: R.w(context, 70), height: R.h(context, 20), radius: R.r(context, 8)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 // ── Date section header ───────────────────────────────────────────────────────
 
 class _DateHeader extends StatelessWidget {
@@ -471,23 +609,17 @@ class _DateHeader extends StatelessWidget {
     return Row(
       children: [
         Text(
-          label,
-          style: const TextStyle(
+          label.toUpperCase(),
+          style: TextStyle(
             fontFamily: 'Poppins',
-            fontSize: 12,
+            fontSize: 11,
             fontWeight: FontWeight.w700,
-            color: AppColors.textSecondary,
-            letterSpacing: 0.5,
+            color: context.appTextSecondary,
+            letterSpacing: 0.8,
           ),
         ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Divider(
-            color: AppColors.divider,
-            thickness: 1,
-            height: 1,
-          ),
-        ),
+        SizedBox(width: R.w(context, 10)),
+        Expanded(child: Divider(color: context.appDivider, thickness: 1, height: 1)),
       ],
     );
   }
@@ -496,29 +628,26 @@ class _DateHeader extends StatelessWidget {
 // ── Swipe-to-delete background ────────────────────────────────────────────────
 
 class _SwipeDeleteBg extends StatelessWidget {
+  const _SwipeDeleteBg();
+
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
+      margin: EdgeInsets.only(bottom: R.p(context, 10)),
       decoration: BoxDecoration(
-        color: AppColors.error.withValues(alpha:0.12),
-        borderRadius: BorderRadius.circular(16),
+        color: AppColors.error.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(R.r(context, 16)),
       ),
       alignment: Alignment.centerRight,
-      padding: const EdgeInsets.only(right: 20),
+      padding: EdgeInsets.only(right: R.p(context, 20)),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.delete_rounded, color: AppColors.error, size: 24),
-          const SizedBox(height: 4),
+          Icon(Icons.delete_rounded, color: AppColors.error, size: R.w(context, 24)),
+          SizedBox(height: R.h(context, 4)),
           Text(
             'Delete',
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: AppColors.error,
-            ),
+            style: AppTextStyles.labelSmall.copyWith(color: AppColors.error),
           ),
         ],
       ),
@@ -542,20 +671,38 @@ class _NotifTile extends StatelessWidget {
       onTap: () => _onTap(context),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        margin: const EdgeInsets.only(bottom: 10),
+        margin: EdgeInsets.only(bottom: R.p(context, 10)),
         decoration: BoxDecoration(
-          color: notif.isRead ? Colors.white : meta.color.withValues(alpha:0.04),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: notif.isRead
-                ? AppColors.divider
-                : meta.color.withValues(alpha:0.22),
+          color: notif.isRead
+              ? context.appSurface
+              : meta.color.withValues(alpha: 0.04),
+          borderRadius: BorderRadius.circular(R.r(context, 16)),
+          border: Border(
+            left: BorderSide(
+              color: notif.isRead ? Colors.transparent : meta.color,
+              width: 3.5,
+            ),
+            top: BorderSide(
+              color: notif.isRead
+                  ? context.appBorder
+                  : meta.color.withValues(alpha: 0.2),
+            ),
+            right: BorderSide(
+              color: notif.isRead
+                  ? context.appBorder
+                  : meta.color.withValues(alpha: 0.2),
+            ),
+            bottom: BorderSide(
+              color: notif.isRead
+                  ? context.appBorder
+                  : meta.color.withValues(alpha: 0.2),
+            ),
           ),
           boxShadow: [
             BoxShadow(
               color: notif.isRead
-                  ? Colors.black.withValues(alpha:0.03)
-                  : meta.color.withValues(alpha:0.08),
+                  ? Colors.black.withValues(alpha: 0.03)
+                  : meta.color.withValues(alpha: 0.08),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),
@@ -565,30 +712,30 @@ class _NotifTile extends StatelessWidget {
           color: Colors.transparent,
           child: InkWell(
             onTap: () => _onTap(context),
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(R.r(context, 16)),
             child: Padding(
-              padding: const EdgeInsets.all(14),
+              padding: EdgeInsets.all(R.p(context, 14)),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // ── Icon ────────────────────────────────────────────────
+                  // Icon with colored background
                   Container(
-                    width: 46,
-                    height: 46,
+                    width: R.w(context, 46), height: R.h(context, 46),
                     decoration: BoxDecoration(
-                      color: meta.color.withValues(alpha:0.13),
-                      borderRadius: BorderRadius.circular(13),
+                      color: meta.color.withValues(alpha: 0.13),
+                      borderRadius: BorderRadius.circular(R.r(context, 13)),
                     ),
-                    child: Icon(meta.icon, color: meta.color, size: 22),
+                    child: Icon(meta.icon, color: meta.color, size: R.w(context, 22)),
                   ),
-                  const SizedBox(width: 12),
+                  SizedBox(width: R.w(context, 12)),
 
-                  // ── Content ──────────────────────────────────────────────
+                  // Content
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Expanded(
                               child: Text(
@@ -597,16 +744,17 @@ class _NotifTile extends StatelessWidget {
                                   fontWeight: notif.isRead
                                       ? FontWeight.w600
                                       : FontWeight.w700,
+                                  fontSize: 13,
                                 ),
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                            const SizedBox(width: 6),
+                            SizedBox(width: R.w(context, 6)),
                             if (!notif.isRead)
                               Container(
-                                width: 8,
-                                height: 8,
+                                width: R.w(context, 8), height: R.h(context, 8),
+                                margin: EdgeInsets.only(top: R.p(context, 4)),
                                 decoration: BoxDecoration(
                                   color: meta.color,
                                   shape: BoxShape.circle,
@@ -614,24 +762,23 @@ class _NotifTile extends StatelessWidget {
                               ),
                           ],
                         ),
-                        const SizedBox(height: 4),
+                        SizedBox(height: R.h(context, 4)),
                         Text(
                           notif.body,
                           style: AppTextStyles.bodySmall,
-                          maxLines: 3,
+                          maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        const SizedBox(height: 8),
+                        SizedBox(height: R.h(context, 8)),
                         Row(
                           children: [
-                            // Service type chip
                             if (notif.serviceType.isNotEmpty)
                               Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 3),
+                                padding: EdgeInsets.symmetric(
+                                    horizontal: R.p(context, 8), vertical: R.p(context, 3)),
                                 decoration: BoxDecoration(
-                                  color: meta.color.withValues(alpha:0.1),
-                                  borderRadius: BorderRadius.circular(8),
+                                  color: meta.color.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(R.r(context, 8)),
                                 ),
                                 child: Text(
                                   _serviceLabel(notif.serviceType),
@@ -646,32 +793,29 @@ class _NotifTile extends StatelessWidget {
                             const Spacer(),
                             Text(
                               _formatTime(notif.createdAt),
-                              style: AppTextStyles.caption,
+                              style: AppTextStyles.caption
+                                  .copyWith(color: context.appTextHint),
                             ),
                           ],
                         ),
-                        // CTA button for actionable notifications
                         if (_ctaLabel(notif) != null) ...[
-                          const SizedBox(height: 10),
+                          SizedBox(height: R.h(context, 10)),
                           SizedBox(
                             width: double.infinity,
                             child: ElevatedButton(
                               onPressed: () {
-                                PatientNotificationService.markRead(
-                                    uid, notif.id);
+                                PatientNotificationService.markRead(uid, notif.id);
                                 _navigate(context);
                               },
                               style: ElevatedButton.styleFrom(
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 10),
+                                padding: EdgeInsets.symmetric(vertical: R.p(context, 10)),
                                 backgroundColor: meta.color,
                                 foregroundColor: Colors.white,
                                 shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
+                                  borderRadius: BorderRadius.circular(R.r(context, 10)),
                                 ),
                                 elevation: 0,
-                                minimumSize:
-                                    const Size(double.infinity, 38),
+                                minimumSize: Size(double.infinity, R.h(context, 38)),
                               ),
                               child: Text(
                                 _ctaLabel(notif)!,
@@ -708,27 +852,17 @@ class _NotifTile extends StatelessWidget {
 
   String? _routeFor(NotificationModel n) {
     switch (n.actionType) {
-      case 'open_call':
-        return AppRoutes.consultation;
-      case 'open_prescription':
-        return AppRoutes.prescriptionViewer;
-      case 'open_order':
-        return AppRoutes.orderTracking;
-      case 'open_diagnostics':
-        return AppRoutes.diagnostics;
-      case 'open_ambulance':
-        return AppRoutes.ambulance;
-      case 'open_pregnancy':
-        return AppRoutes.pregnancyCheckups;
-      case 'open_appointment':
-        return AppRoutes.appointment;
-      case 'open_service':
-        return _serviceRoute(n.serviceType);
-      default:
-        break;
+      case 'open_call':       return AppRoutes.consultation;
+      case 'open_prescription': return AppRoutes.prescriptionViewer;
+      case 'open_order':      return AppRoutes.orderTracking;
+      case 'open_diagnostics': return AppRoutes.diagnostics;
+      case 'open_ambulance':  return AppRoutes.ambulance;
+      case 'open_pregnancy':  return AppRoutes.pregnancyCheckups;
+      case 'open_appointment': return AppRoutes.appointment;
+      case 'open_service':    return _serviceRoute(n.serviceType);
+      default:                break;
     }
 
-    // Fallback: route by type
     switch (n.type) {
       case PatientNotifType.consultationDone:
       case PatientNotifType.followupDay1:
@@ -897,36 +1031,36 @@ class _NotifTile extends StatelessWidget {
 
   String _formatTime(DateTime dt) {
     final diff = DateTime.now().difference(dt);
-    if (diff.inSeconds < 60)  return 'Just now';
-    if (diff.inMinutes < 60)  return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24)    return '${diff.inHours}h ago';
-    if (diff.inDays == 1)     return 'Yesterday';
-    if (diff.inDays < 7)      return '${diff.inDays}d ago';
+    if (diff.inSeconds < 60) return 'Just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    if (diff.inDays == 1) return 'Yesterday';
+    if (diff.inDays < 7) return '${diff.inDays}d ago';
     return DateFormat('d MMM').format(dt);
   }
 
   String _serviceLabel(String svc) {
     const labels = {
-      'appointment':    'Appointment',
-      'medicine':       'Medicine',
-      'diagnostics':    'Lab Test',
-      'lab':            'Lab Test',
-      'ambulance':      'Ambulance',
-      'home_care':      'Home Care',
-      'caregiver':      'Caregiver',
-      'physiotherapy':  'Physio',
-      'hospital':       'Hospital',
-      'pregnancy':      'Pregnancy',
-      'nutrition':      'Nutrition',
-      'quick_connect':  'Quick Connect',
-      'counselling':    'Counselling',
-      'general':        'General',
+      'appointment':   'Appointment',
+      'medicine':      'Pharmacy',
+      'diagnostics':   'Lab Test',
+      'lab':           'Lab Test',
+      'ambulance':     'Ambulance',
+      'home_care':     'Home Care',
+      'caregiver':     'Caregiver',
+      'physiotherapy': 'Physio',
+      'hospital':      'Hospital',
+      'pregnancy':     'Pregnancy',
+      'nutrition':     'Nutrition',
+      'quick_connect': 'Quick Connect',
+      'counselling':   'Counselling',
+      'general':       'General',
     };
     return labels[svc.toLowerCase()] ?? svc;
   }
 }
 
-// ── Icon + colour metadata for each notification type ─────────────────────────
+// ── Icon + colour metadata ─────────────────────────────────────────────────────
 
 class _NotifMeta {
   final IconData icon;
@@ -936,257 +1070,183 @@ class _NotifMeta {
 
   static _NotifMeta of(PatientNotifType type) {
     switch (type) {
-      // Consultation / call
       case PatientNotifType.consultationDone:
       case PatientNotifType.consultationUpdate:
       case PatientNotifType.followupDay1:
       case PatientNotifType.followupDay2:
-        return const _NotifMeta(
-            Icons.video_call_rounded, Color(0xFFC2185B));
+        return const _NotifMeta(Icons.video_call_rounded, Color(0xFFC2185B));
       case PatientNotifType.doctorStartedCall:
       case PatientNotifType.quickConnectStarted:
-        return const _NotifMeta(
-            Icons.phone_in_talk_rounded, Color(0xFF1565C0));
-
-      // Appointments
+        return const _NotifMeta(Icons.phone_in_talk_rounded, Color(0xFF1565C0));
       case PatientNotifType.appointmentBooked:
       case PatientNotifType.appointmentAccepted:
-        return const _NotifMeta(
-            Icons.check_circle_rounded, Color(0xFF2E7D32));
+        return const _NotifMeta(Icons.check_circle_rounded, Color(0xFF2E7D32));
       case PatientNotifType.appointmentRejected:
       case PatientNotifType.appointmentCancelled:
-        return const _NotifMeta(
-            Icons.cancel_rounded, Color(0xFFD32F2F));
+        return const _NotifMeta(Icons.cancel_rounded, Color(0xFFD32F2F));
       case PatientNotifType.appointmentRescheduled:
-        return const _NotifMeta(
-            Icons.schedule_rounded, Color(0xFFE65100));
+        return const _NotifMeta(Icons.schedule_rounded, Color(0xFFE65100));
       case PatientNotifType.appointmentCompleted:
       case PatientNotifType.appointmentReminder:
-        return const _NotifMeta(
-            Icons.event_available_rounded, Color(0xFF1B5E20));
+        return const _NotifMeta(Icons.event_available_rounded, Color(0xFF1B5E20));
       case PatientNotifType.prescriptionUploaded:
-        return const _NotifMeta(
-            Icons.receipt_long_rounded, Color(0xFF6A1B9A));
+        return const _NotifMeta(Icons.receipt_long_rounded, Color(0xFF6A1B9A));
       case PatientNotifType.reviewPrompt:
         return const _NotifMeta(Icons.star_rounded, Color(0xFFF9A825));
-
-      // Medicine
       case PatientNotifType.medicineReminder:
       case PatientNotifType.medicineAccepted:
       case PatientNotifType.medicineProcessing:
       case PatientNotifType.medicineVerified:
       case PatientNotifType.medicinePacked:
-        return const _NotifMeta(
-            Icons.medication_rounded, Color(0xFFE65100));
+        return const _NotifMeta(Icons.medication_rounded, Color(0xFFE65100));
       case PatientNotifType.medicineOutForDelivery:
-        return const _NotifMeta(
-            Icons.local_shipping_rounded, Color(0xFF0277BD));
+        return const _NotifMeta(Icons.local_shipping_rounded, Color(0xFF0277BD));
       case PatientNotifType.medicineDelivered:
       case PatientNotifType.orderUpdate:
-        return const _NotifMeta(
-            Icons.inventory_2_rounded, Color(0xFF2E7D32));
+        return const _NotifMeta(Icons.inventory_2_rounded, Color(0xFF2E7D32));
       case PatientNotifType.medicineRejected:
       case PatientNotifType.medicineCancelled:
       case PatientNotifType.medicineReturned:
-        return const _NotifMeta(
-            Icons.remove_shopping_cart_rounded, Color(0xFFD32F2F));
-
-      // Lab / Diagnostics
+        return const _NotifMeta(Icons.remove_shopping_cart_rounded, Color(0xFFD32F2F));
       case PatientNotifType.labAccepted:
       case PatientNotifType.labAssigned:
       case PatientNotifType.labInProgress:
       case PatientNotifType.labSampleCollected:
       case PatientNotifType.labProcessing:
-        return const _NotifMeta(
-            Icons.science_rounded, Color(0xFF0097A7));
+        return const _NotifMeta(Icons.science_rounded, Color(0xFF0097A7));
       case PatientNotifType.labReportReady:
-        return const _NotifMeta(
-            Icons.assignment_turned_in_rounded, Color(0xFF00695C));
+        return const _NotifMeta(Icons.assignment_turned_in_rounded, Color(0xFF00695C));
       case PatientNotifType.labCompleted:
-        return const _NotifMeta(
-            Icons.biotech_rounded, Color(0xFF2E7D32));
+        return const _NotifMeta(Icons.biotech_rounded, Color(0xFF2E7D32));
       case PatientNotifType.labRejected:
       case PatientNotifType.labCancelled:
-        return const _NotifMeta(
-            Icons.cancel_rounded, Color(0xFFD32F2F));
-
-      // Ambulance
+        return const _NotifMeta(Icons.cancel_rounded, Color(0xFFD32F2F));
       case PatientNotifType.ambulanceAccepted:
       case PatientNotifType.ambulanceAssigned:
       case PatientNotifType.ambulanceEnRoute:
-        return const _NotifMeta(
-            Icons.emergency_rounded, Color(0xFFD32F2F));
+        return const _NotifMeta(Icons.emergency_rounded, Color(0xFFD32F2F));
       case PatientNotifType.ambulanceReached:
-        return const _NotifMeta(
-            Icons.local_hospital_rounded, Color(0xFFC62828));
+        return const _NotifMeta(Icons.local_hospital_rounded, Color(0xFFC62828));
       case PatientNotifType.ambulanceCompleted:
-        return const _NotifMeta(
-            Icons.check_circle_rounded, Color(0xFF2E7D32));
+        return const _NotifMeta(Icons.check_circle_rounded, Color(0xFF2E7D32));
       case PatientNotifType.ambulanceRejected:
       case PatientNotifType.ambulanceCancelled:
-        return const _NotifMeta(
-            Icons.cancel_rounded, Color(0xFFD32F2F));
-
-      // Home Care / Caregiver
+        return const _NotifMeta(Icons.cancel_rounded, Color(0xFFD32F2F));
       case PatientNotifType.homecareAccepted:
       case PatientNotifType.caregiverAssigned:
       case PatientNotifType.caregiverStarted:
-        return const _NotifMeta(
-            Icons.home_rounded, Color(0xFF6A1B9A));
+        return const _NotifMeta(Icons.home_rounded, Color(0xFF6A1B9A));
       case PatientNotifType.homecareCompleted:
-        return const _NotifMeta(
-            Icons.check_circle_rounded, Color(0xFF2E7D32));
+        return const _NotifMeta(Icons.check_circle_rounded, Color(0xFF2E7D32));
       case PatientNotifType.homecareRejected:
       case PatientNotifType.homecareCancelled:
-        return const _NotifMeta(
-            Icons.cancel_rounded, Color(0xFFD32F2F));
-
-      // Physiotherapy
+        return const _NotifMeta(Icons.cancel_rounded, Color(0xFFD32F2F));
       case PatientNotifType.physioAccepted:
       case PatientNotifType.physioAssigned:
       case PatientNotifType.physioStarted:
-        return const _NotifMeta(
-            Icons.accessibility_new_rounded, Color(0xFF00838F));
+        return const _NotifMeta(Icons.accessibility_new_rounded, Color(0xFF00838F));
       case PatientNotifType.physioCompleted:
-        return const _NotifMeta(
-            Icons.check_circle_rounded, Color(0xFF2E7D32));
+        return const _NotifMeta(Icons.check_circle_rounded, Color(0xFF2E7D32));
       case PatientNotifType.physioRejected:
       case PatientNotifType.physioCancelled:
-        return const _NotifMeta(
-            Icons.cancel_rounded, Color(0xFFD32F2F));
-
-      // Hospital
+        return const _NotifMeta(Icons.cancel_rounded, Color(0xFFD32F2F));
       case PatientNotifType.hospitalAccepted:
       case PatientNotifType.hospitalAssigned:
       case PatientNotifType.hospitalAdmitted:
-        return const _NotifMeta(
-            Icons.local_hospital_rounded, Color(0xFF1565C0));
+        return const _NotifMeta(Icons.local_hospital_rounded, Color(0xFF1565C0));
       case PatientNotifType.hospitalDischarged:
-        return const _NotifMeta(
-            Icons.directions_walk_rounded, Color(0xFF2E7D32));
+        return const _NotifMeta(Icons.directions_walk_rounded, Color(0xFF2E7D32));
       case PatientNotifType.hospitalRejected:
       case PatientNotifType.hospitalCancelled:
-        return const _NotifMeta(
-            Icons.cancel_rounded, Color(0xFFD32F2F));
-
-      // Pregnancy
+        return const _NotifMeta(Icons.cancel_rounded, Color(0xFFD32F2F));
       case PatientNotifType.pregnancyCheckupBooked:
       case PatientNotifType.pregnancyCheckupConfirmed:
-        return const _NotifMeta(
-            Icons.pregnant_woman_rounded, Color(0xFFAD1457));
+        return const _NotifMeta(Icons.pregnant_woman_rounded, Color(0xFFAD1457));
       case PatientNotifType.pregnancyCheckupReminder:
-        return const _NotifMeta(
-            Icons.alarm_rounded, Color(0xFFE65100));
+        return const _NotifMeta(Icons.alarm_rounded, Color(0xFFE65100));
       case PatientNotifType.pregnancyCheckupCompleted:
-        return const _NotifMeta(
-            Icons.favorite_rounded, Color(0xFFC2185B));
+        return const _NotifMeta(Icons.favorite_rounded, Color(0xFFC2185B));
       case PatientNotifType.pregnancyCheckupCancelled:
-        return const _NotifMeta(
-            Icons.cancel_rounded, Color(0xFFD32F2F));
-
-      // Nutrition
+        return const _NotifMeta(Icons.cancel_rounded, Color(0xFFD32F2F));
       case PatientNotifType.nutritionAccepted:
       case PatientNotifType.nutritionStarted:
-        return const _NotifMeta(
-            Icons.restaurant_rounded, Color(0xFF558B2F));
+        return const _NotifMeta(Icons.restaurant_rounded, Color(0xFF558B2F));
       case PatientNotifType.nutritionCompleted:
-        return const _NotifMeta(
-            Icons.check_circle_rounded, Color(0xFF2E7D32));
+        return const _NotifMeta(Icons.check_circle_rounded, Color(0xFF2E7D32));
       case PatientNotifType.nutritionRejected:
       case PatientNotifType.nutritionCancelled:
-        return const _NotifMeta(
-            Icons.cancel_rounded, Color(0xFFD32F2F));
-
-      // Counselling
+        return const _NotifMeta(Icons.cancel_rounded, Color(0xFFD32F2F));
       case PatientNotifType.counsellingAccepted:
       case PatientNotifType.counsellingStarted:
-        return const _NotifMeta(
-            Icons.psychology_rounded, Color(0xFF4527A0));
+        return const _NotifMeta(Icons.psychology_rounded, Color(0xFF4527A0));
       case PatientNotifType.counsellingCompleted:
-        return const _NotifMeta(
-            Icons.check_circle_rounded, Color(0xFF2E7D32));
+        return const _NotifMeta(Icons.check_circle_rounded, Color(0xFF2E7D32));
       case PatientNotifType.counsellingCancelled:
-        return const _NotifMeta(
-            Icons.cancel_rounded, Color(0xFFD32F2F));
-
-      // Generic bookings
+        return const _NotifMeta(Icons.cancel_rounded, Color(0xFFD32F2F));
       case PatientNotifType.bookingAccepted:
       case PatientNotifType.bookingAssigned:
       case PatientNotifType.bookingStarted:
-        return const _NotifMeta(
-            Icons.event_note_rounded, AppColors.primary);
+        return const _NotifMeta(Icons.event_note_rounded, AppColors.primary);
       case PatientNotifType.bookingCompleted:
-        return const _NotifMeta(
-            Icons.check_circle_rounded, Color(0xFF2E7D32));
+        return const _NotifMeta(Icons.check_circle_rounded, Color(0xFF2E7D32));
       case PatientNotifType.bookingRejected:
       case PatientNotifType.bookingCancelled:
-        return const _NotifMeta(
-            Icons.cancel_rounded, Color(0xFFD32F2F));
-
-      // Quick connect
+        return const _NotifMeta(Icons.cancel_rounded, Color(0xFFD32F2F));
       case PatientNotifType.quickConnectAccepted:
-        return const _NotifMeta(
-            Icons.flash_on_rounded, Color(0xFFFF6F00));
+        return const _NotifMeta(Icons.flash_on_rounded, Color(0xFFFF6F00));
       case PatientNotifType.quickConnectCompleted:
-        return const _NotifMeta(
-            Icons.check_circle_rounded, Color(0xFF2E7D32));
+        return const _NotifMeta(Icons.check_circle_rounded, Color(0xFF2E7D32));
       case PatientNotifType.quickConnectRejected:
       case PatientNotifType.quickConnectCancelled:
-        return const _NotifMeta(
-            Icons.cancel_rounded, Color(0xFFD32F2F));
-
-      // Health
+        return const _NotifMeta(Icons.cancel_rounded, Color(0xFFD32F2F));
       case PatientNotifType.waterReminder:
-        return const _NotifMeta(
-            Icons.water_drop_rounded, Color(0xFF1565C0));
+        return const _NotifMeta(Icons.water_drop_rounded, Color(0xFF1565C0));
       case PatientNotifType.periodTracker:
-        return const _NotifMeta(
-            Icons.favorite_rounded, Color(0xFFC2185B));
+        return const _NotifMeta(Icons.favorite_rounded, Color(0xFFC2185B));
       case PatientNotifType.healthTip:
         return const _NotifMeta(Icons.star_rounded, Color(0xFFF9A825));
-
-      // Rewards
       case PatientNotifType.referralReward:
       case PatientNotifType.welcomeBonus:
-        return const _NotifMeta(
-            Icons.card_giftcard_rounded, Color(0xFF6A1B9A));
-
+        return const _NotifMeta(Icons.card_giftcard_rounded, Color(0xFF6A1B9A));
       default:
-        return const _NotifMeta(
-            Icons.notifications_rounded, AppColors.textSecondary);
+        return const _NotifMeta(Icons.notifications_rounded, AppColors.textSecondary);
     }
   }
 }
 
-// ── Empty / all-read states ───────────────────────────────────────────────────
+// ── Empty state per tab ───────────────────────────────────────────────────────
 
 class _EmptyState extends StatelessWidget {
-  const _EmptyState();
+  final _TabFilter filter;
+  const _EmptyState({required this.filter});
 
   @override
   Widget build(BuildContext context) {
-    return FadeInSlide(
-      child: AppEmptyState(
-        icon: Icons.notifications_none_rounded,
-        title: 'All caught up!',
-        message:
-            "You're all caught up!\nWe'll notify you when something needs your attention.",
-      ),
-    );
-  }
-}
+    final (icon, title, message) = switch (filter) {
+      _TabFilter.all => (
+          Icons.notifications_none_rounded,
+          'All caught up!',
+          "You're all caught up!\nWe'll notify you when something needs attention.",
+        ),
+      _TabFilter.appointments => (
+          Icons.calendar_today_outlined,
+          'No appointment notifications',
+          'Appointment updates and reminders\nwill appear here.',
+        ),
+      _TabFilter.health => (
+          Icons.favorite_border_rounded,
+          'No health notifications',
+          'Water reminders, period tracker alerts,\nand health tips will appear here.',
+        ),
+      _TabFilter.promotions => (
+          Icons.local_offer_outlined,
+          'No promotions',
+          'Rewards, referral bonuses, and\nspecial offers will appear here.',
+        ),
+    };
 
-class _AllReadState extends StatelessWidget {
-  const _AllReadState();
-
-  @override
-  Widget build(BuildContext context) {
     return FadeInSlide(
-      child: AppEmptyState(
-        icon: Icons.done_all_rounded,
-        title: 'No unread notifications',
-        message: 'All your notifications are read. Check the All tab for history.',
-      ),
+      child: AppEmptyState(icon: icon, title: title, message: message),
     );
   }
 }

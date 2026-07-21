@@ -1,7 +1,7 @@
 class AppConstants {
   AppConstants._();
 
-  static const String appName = 'MedNu';
+  static const String appName = 'MedNU';
   static const String appTagline = 'Your Healthcare Companion';
   static const String appDescription =
       'Book doctors, access health records, manage prescriptions — all in one place.';
@@ -12,7 +12,7 @@ class AppConstants {
 
   static const String contactEmail = 'support@mednu.in';
   static const String contactPhone = '+91 93907 58684';
-  static const String contactAddress = 'MedNu Healthcare Services Pvt. Ltd., Visakhapatnam, Andhra Pradesh, India';
+  static const String contactAddress = 'MedNU Healthcare Services Pvt. Ltd., Visakhapatnam, Andhra Pradesh, India';
 
   static const List<String> navItems = [
     'Home', 'Services', 'How It Works', 'Doctors', 'About Us', 'Contact',
@@ -46,14 +46,14 @@ class AppConstants {
     {
       'name': 'Priya Sharma',
       'location': 'Bengaluru',
-      'review': 'MedNu has completely transformed how I manage my family\'s health. Booking a doctor used to take hours — now it\'s just a few taps!',
+      'review': 'MedNU has completely transformed how I manage my family\'s health. Booking a doctor used to take hours — now it\'s just a few taps!',
       'rating': '5',
       'avatar': 'PS',
     },
     {
       'name': 'Rahul Verma',
       'location': 'Mumbai',
-      'review': 'The emergency service feature saved my father\'s life. The ambulance arrived in under 10 minutes. Cannot thank MedNu enough.',
+      'review': 'The emergency service feature saved my father\'s life. The ambulance arrived in under 10 minutes. Cannot thank MedNU enough.',
       'rating': '5',
       'avatar': 'RV',
     },
@@ -74,7 +74,7 @@ class AppConstants {
     {
       'name': 'Deepa Nair',
       'location': 'Kochi',
-      'review': 'MedNu\'s pregnancy tracking kept me informed throughout my journey. The weekly updates and checkup reminders were invaluable.',
+      'review': 'MedNU\'s pregnancy tracking kept me informed throughout my journey. The weekly updates and checkup reminders were invaluable.',
       'rating': '5',
       'avatar': 'DN',
     },
