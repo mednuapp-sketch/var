@@ -507,6 +507,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // ── Quick Trust Stats ───────────────────
+                Container(color: Colors.blue, height: 30, width: double.infinity, child: const Text('DEBUG: STATS ROW STARTS HERE', style: TextStyle(color: Colors.white, fontSize: 10))),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
                   child: _TrustStatsRow(doc: doc, doctorId: widget.doctorId),
@@ -514,6 +515,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                 const SizedBox(height: 24),
 
                 // ── Consultation Type Cards ──────────────
+                Container(color: Colors.orange, height: 30, width: double.infinity, child: const Text('DEBUG: CONSULT TYPE STARTS HERE', style: TextStyle(color: Colors.black, fontSize: 10))),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: _buildConsultationTypes(),
@@ -1512,7 +1514,7 @@ class _PremiumSectionTitle extends StatelessWidget {
           color: color, borderRadius: BorderRadius.circular(2),
         ),
       ),
-      const SizedBox(width: 10),
+      const SizedBox(width: 14),
       Text(title, style: const TextStyle(
         fontFamily: 'Poppins', fontSize: 15, fontWeight: FontWeight.w700,
         color: Color(0xFF111827), letterSpacing: -0.2,

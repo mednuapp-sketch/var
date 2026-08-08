@@ -336,10 +336,16 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
                 child: SafeArea(
                   child: LayoutBuilder(
                     builder: (context, constraints) {
+                      // The TabBar below is pinned on top of the last 48px of this
+                      // FlexibleSpaceBar's area, so the centered title/subtitle must
+                      // be constrained to the space above it — otherwise they sink
+                      // down and get visually covered by the tab bar.
+                      const tabBarHeight = 48.0;
                       return SingleChildScrollView(
                         physics: const ClampingScrollPhysics(),
                         child: ConstrainedBox(
-                          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                          constraints: BoxConstraints(
+                              minHeight: constraints.maxHeight - tabBarHeight),
                           child: Padding(
                             padding: AppSpacing.headerPaddingWithBottomWidget(context),
                             child: Column(

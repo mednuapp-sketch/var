@@ -65,6 +65,7 @@ class _MapLocationPickerScreenState
   Timer? _mapLoadTimer;
   int _geocodeSeq = 0;
   Key _mapKey = UniqueKey();
+  bool _userMovedMap = false;
 
   static const double _defaultZoom = 16.5;
   static const double _fallbackLat = 17.3850; // Hyderabad
@@ -161,6 +162,7 @@ class _MapLocationPickerScreenState
   // ── Map callbacks ─────────────────────────────────────────────────────────
 
   void _onMapCreated(GoogleMapController ctrl) {
+    debugPrint('MAP_DEBUG: onMapCreated');
     _mapLoadTimer?.cancel();
     _mapCtrl = ctrl;
     setState(() => _mapReady = true);
@@ -183,13 +185,22 @@ class _MapLocationPickerScreenState
     }
   }
 
+  void _onCameraMoveStarted() {
+    debugPrint('MAP_DEBUG: onCameraMoveStarted');
+    _userMovedMap = true;
+  }
+
   void _onCameraMove(CameraPosition pos) {
+    debugPrint('MAP_DEBUG: onCameraMove ${pos.target}');
     _center = pos.target;
     _geocodingFailed = false;
     if (!_geocoding) setState(() => _geocoding = true);
   }
 
-  void _onCameraIdle() => _scheduleGeocode();
+  void _onCameraIdle() {
+    debugPrint('MAP_DEBUG: onCameraIdle');
+    _scheduleGeocode();
+  }
 
   void _scheduleGeocode() {
     _debounceTimer?.cancel();
@@ -201,6 +212,7 @@ class _MapLocationPickerScreenState
 
   Future<void> _moveToCurrentPos() async {
     if (!mounted) return;
+    _userMovedMap = false;
     setState(() => _geocoding = true);
 
     try {
@@ -210,7 +222,7 @@ class _MapLocationPickerScreenState
           desiredAccuracy: LocationAccuracy.low,
           timeLimit: const Duration(seconds: 4),
         );
-        if (mounted && _mapCtrl != null) {
+        if (mounted && _mapCtrl != null && !_userMovedMap) {
           _animateTo(LatLng(quick.latitude, quick.longitude));
         }
       } catch (_) {}
@@ -220,11 +232,11 @@ class _MapLocationPickerScreenState
         desiredAccuracy: LocationAccuracy.high,
         timeLimit: const Duration(seconds: 8),
       );
-      if (mounted && _mapCtrl != null) {
+      if (mounted && _mapCtrl != null && !_userMovedMap) {
         _animateTo(LatLng(pos.latitude, pos.longitude));
       }
     } catch (_) {
-      if (mounted && _mapCtrl != null) {
+      if (mounted && _mapCtrl != null && !_userMovedMap) {
         _center = LatLng(_initLat, _initLng);
         // Same padding fix as _onMapCreated: force a camera move to the
         // fallback position so it's rendered padding-aware instead of at
@@ -413,6 +425,10 @@ class _MapLocationPickerScreenState
   }
 
   Widget _buildMapStack(bool isDark) {
+    debugPrint(
+        'MAP_DEBUG: buildMapStack MediaQuery.size=${MediaQuery.sizeOf(context)} '
+        'viewInsets=${MediaQuery.viewInsetsOf(context)} '
+        'padding=${MediaQuery.paddingOf(context)}');
     final String addressText;
     if (_geocoding) {
       addressText = 'Finding address...';
@@ -422,6 +438,13 @@ class _MapLocationPickerScreenState
       addressText = _picked?.short ?? 'Move map to set location';
     }
 
+    return LayoutBuilder(builder: (context, constraints) {
+      debugPrint('MAP_DEBUG: Stack constraints=$constraints');
+      return _buildInnerStack(isDark, addressText);
+    });
+  }
+
+  Widget _buildInnerStack(bool isDark, String addressText) {
     return Stack(
       children: [
         // ── Google Map ─────────────────────────────────────────────────────
@@ -433,6 +456,7 @@ class _MapLocationPickerScreenState
               zoom: _defaultZoom,
             ),
             onMapCreated: _onMapCreated,
+            onCameraMoveStarted: _onCameraMoveStarted,
             onCameraMove: _onCameraMove,
             onCameraIdle: _onCameraIdle,
             myLocationEnabled: true,

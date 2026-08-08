@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
-import '../../../core/utils/r.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../../home/providers/home_nav_provider.dart' show bottomNavIndexProvider;
 import '../models/unified_booking.dart';
@@ -42,106 +41,65 @@ class _MyServicesScreenState extends ConsumerState<MyServicesScreen>
 
   @override
   Widget build(BuildContext context) {
-    final top = MediaQuery.of(context).padding.top;
-
     return Scaffold(
       backgroundColor: context.appBackground,
-      body: NestedScrollView(
-        physics: const BouncingScrollPhysics(),
-        headerSliverBuilder: (_, __) => [
-          SliverAppBar(
-            pinned: true,
-            floating: true,
-            snap: true,
-            expandedHeight: R.h(context, 200) + top,
-            backgroundColor: context.appSurface,
-            elevation: 0,
-            scrolledUnderElevation: 0.5,
-            leading: Padding(
-              padding: const EdgeInsets.all(8),
-              child: Material(
-                color: AppColors.primary.withValues(alpha: 0.08),
-                shape: const CircleBorder(),
-                child: InkWell(
-                  onTap: () => context.pop(),
-                  customBorder: const CircleBorder(),
-                  child: const Padding(
-                    padding: EdgeInsets.all(8),
-                    child: Icon(Icons.arrow_back_ios_new_rounded,
-                        size: 18, color: AppColors.primary),
-                  ),
-                ),
-              ),
-            ),
-            actions: [
-              Padding(
-                padding: const EdgeInsets.only(right: 12),
-                child: IconButton(
-                  onPressed: () => ref.invalidate(allBookingsProvider),
-                  icon: Icon(Icons.refresh_rounded,
-                      color: context.appTextSecondary),
-                  tooltip: 'Refresh',
-                ),
-              ),
-            ],
-            flexibleSpace: FlexibleSpaceBar(
-              collapseMode: CollapseMode.pin,
-              background: Container(
-                color: context.appSurface,
-                padding: EdgeInsets.fromLTRB(R.p(context, 20), top + R.p(context, 60), R.p(context, 20), R.p(context, 16)),
-                child: SingleChildScrollView(
-                  physics: const ClampingScrollPhysics(),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text('My Services',
-                          style: AppTextStyles.h1
-                              .copyWith(color: context.appTextPrimary)),
-                      const SizedBox(height: 4),
-                      Text('Track all your booked services',
-                          style: AppTextStyles.bodyMedium
-                              .copyWith(color: context.appTextSecondary)),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            bottom: PreferredSize(
-              preferredSize: const Size.fromHeight(48),
-              child: Container(
-                color: context.appSurface,
-                child: TabBar(
-                  controller: _tab,
-                  isScrollable: true,
-                  tabAlignment: TabAlignment.start,
-                  labelStyle: AppTextStyles.labelMedium
-                      .copyWith(fontWeight: FontWeight.w700),
-                  unselectedLabelStyle: AppTextStyles.labelMedium,
-                  labelColor: AppColors.primary,
-                  unselectedLabelColor: context.appTextSecondary,
-                  indicator: const UnderlineTabIndicator(
-                    borderSide:
-                        BorderSide(color: AppColors.primary, width: 2.5),
-                    insets: EdgeInsets.symmetric(horizontal: 4),
-                  ),
-                  indicatorSize: TabBarIndicatorSize.label,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  tabs: _tabLabels.map((t) => Tab(text: t)).toList(),
-                ),
-              ),
-            ),
+      appBar: AppBar(
+        title: const Text(
+          'My Services',
+          style: TextStyle(
+            fontFamily: 'Poppins',
+            fontWeight: FontWeight.w700,
+            color: Colors.white,
+            fontSize: 18,
+          ),
+        ),
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
+          onPressed: () => context.pop(),
+        ),
+        actions: [
+          IconButton(
+            onPressed: () => ref.invalidate(allBookingsProvider),
+            icon: const Icon(Icons.refresh_rounded, color: Colors.white),
+            tooltip: 'Refresh',
           ),
         ],
-        body: TabBarView(
+        bottom: TabBar(
           controller: _tab,
-          children: const [
-            _BookingsList(filter: _BookingFilter.active),
-            _BookingsList(filter: _BookingFilter.upcoming),
-            _BookingsList(filter: _BookingFilter.completed),
-            _BookingsList(filter: _BookingFilter.cancelled),
-          ],
+          isScrollable: true,
+          tabAlignment: TabAlignment.start,
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white60,
+          indicatorColor: Colors.white,
+          indicatorWeight: 3,
+          labelStyle: const TextStyle(
+            fontFamily: 'Poppins',
+            fontWeight: FontWeight.w600,
+            fontSize: 13,
+          ),
+          unselectedLabelStyle: const TextStyle(
+            fontFamily: 'Poppins',
+            fontWeight: FontWeight.w500,
+            fontSize: 13,
+          ),
+          tabs: _tabLabels
+              .map((t) => Tab(
+                    child: Text(t, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ))
+              .toList(),
         ),
+      ),
+      body: TabBarView(
+        controller: _tab,
+        children: const [
+          _BookingsList(filter: _BookingFilter.active),
+          _BookingsList(filter: _BookingFilter.upcoming),
+          _BookingsList(filter: _BookingFilter.completed),
+          _BookingsList(filter: _BookingFilter.cancelled),
+        ],
       ),
     );
   }
@@ -244,21 +202,28 @@ class _BookingsList extends ConsumerWidget {
         data: (all) {
           final items = _filtered(all);
           if (items.isEmpty) {
-            return ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              children: [
-                SizedBox(height: MediaQuery.of(context).size.height * 0.18),
-                AppEmptyState(
-                  icon: _emptyIcon,
-                  title: _emptyTitle,
-                  message: _emptyMessage,
-                  actionLabel: _showBrowseAction ? 'Browse Services' : null,
-                  onAction: _showBrowseAction
-                      ? () =>
-                          ref.read(bottomNavIndexProvider.notifier).state = 0
-                      : null,
-                ),
-              ],
+            return LayoutBuilder(
+              builder: (context, constraints) => ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                children: [
+                  ConstrainedBox(
+                    constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                    child: Center(
+                      child: AppEmptyState(
+                        icon: _emptyIcon,
+                        title: _emptyTitle,
+                        message: _emptyMessage,
+                        actionLabel: _showBrowseAction ? 'Browse Services' : null,
+                        onAction: _showBrowseAction
+                            ? () => ref
+                                .read(bottomNavIndexProvider.notifier)
+                                .state = 0
+                            : null,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             );
           }
           return ListView.builder(

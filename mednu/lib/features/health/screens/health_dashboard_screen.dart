@@ -168,166 +168,143 @@ class _DashboardContent extends ConsumerWidget {
         (userDocAsync.value?['gender'] as String? ?? '').toLowerCase();
     final isMale = gender == 'male';
 
-    return RefreshIndicator(
-      color: AppColors.primary,
-      onRefresh: () => Future.wait([
-        waterNotifier.refresh(),
-        ref.refresh(userDocProvider(uid).future),
-      ]),
-      child: CustomScrollView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      slivers: [
-        _appBar(context, userName),
-        SliverPadding(
-          padding: EdgeInsets.fromLTRB(R.p(context, 16), R.p(context, 14),
-              R.p(context, 16), R.p(context, 40)),
-          sliver: SliverList(
-            delegate: SliverChildListDelegate([
-              // ── Health Score ───────────────────────────────────────────────
-              RepaintBoundary(
-                  child: _HealthScoreCard(waterState: waterState, uid: uid)),
-              SizedBox(height: R.h(context, 22)),
-
-              // ── Vitals ────────────────────────────────────────────────────
-              _SecHead('Health Summary', Icons.monitor_heart_rounded,
-                  AppColors.error,
-                  btn: _btn(context, 'Log Vitals',
-                      () => _logVitalsSheet(context))),
-              SizedBox(height: R.h(context, 10)),
-              RepaintBoundary(child: _VitalsSection(uid: uid)),
-              SizedBox(height: R.h(context, 22)),
-
-              // â”€â”€ Water â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-              _SecHead('Water Intake', Icons.water_drop_rounded,
-                  const Color(0xFF1565C0)),
-              SizedBox(height: R.h(context, 10)),
-              RepaintBoundary(
-                  child: _WaterCard(state: waterState, notifier: waterNotifier)),
-              SizedBox(height: R.h(context, 22)),
-
-              // â”€â”€ Appointments â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-              _SecHead('Upcoming Appointments',
-                  Icons.calendar_today_rounded, AppColors.info,
-                  btn: _btn(context, 'View All',
-                      () => context.push(AppRoutes.appointment))),
-              SizedBox(height: R.h(context, 10)),
-              RepaintBoundary(child: _AppointmentsSection(uid: uid)),
-              SizedBox(height: R.h(context, 22)),
-
-              // â”€â”€ Prescriptions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-              _SecHead('Active Prescriptions', Icons.medication_rounded,
-                  const Color(0xFF2E7D32),
-                  btn: _btn(
-                      context, 'View All', () => context.push(AppRoutes.records))),
-              SizedBox(height: R.h(context, 10)),
-              RepaintBoundary(child: _PrescriptionsSection(uid: uid)),
-              SizedBox(height: R.h(context, 22)),
-
-              // â”€â”€ Health Records Quick Links â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-              _SecHead('Health Records', Icons.folder_open_rounded,
-                  const Color(0xFF6A1B9A)),
-              SizedBox(height: R.h(context, 10)),
-              RepaintBoundary(child: _QuickActions(uid: uid)),
-              SizedBox(height: R.h(context, 22)),
-
-              // â”€â”€ Women's Health â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-              if (!isMale) ...[
-                _SecHead("Women's Health", Icons.favorite_rounded,
-                    AppColors.primary),
-                SizedBox(height: R.h(context, 10)),
-                const RepaintBoundary(child: _WomensHealth()),
+    return Column(
+      children: [
+        _header(context, userName),
+        Expanded(
+          child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: EdgeInsets.fromLTRB(R.p(context, 16), R.p(context, 14),
+                  R.p(context, 16), R.p(context, 40)),
+              children: [
+                // ── Health Score ───────────────────────────────────────────────
+                RepaintBoundary(
+                    child: _HealthScoreCard(waterState: waterState, uid: uid)),
                 SizedBox(height: R.h(context, 22)),
-              ],
 
-              // â”€â”€ BMI â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-              _SecHead('BMI Calculator', Icons.monitor_weight_rounded,
-                  const Color(0xFF2E7D32)),
-              SizedBox(height: R.h(context, 10)),
-              RepaintBoundary(child: _BMICard(uid: uid)),
-            ]),
-          ),
+                // ── Vitals ────────────────────────────────────────────────────
+                _SecHead('Health Summary', Icons.monitor_heart_rounded,
+                    AppColors.error,
+                    btn: _btn(context, 'Log Vitals',
+                        () => _logVitalsSheet(context))),
+                SizedBox(height: R.h(context, 10)),
+                RepaintBoundary(child: _VitalsSection(uid: uid)),
+                SizedBox(height: R.h(context, 22)),
+
+                // ── Water ─────────────────────────────────────────────────────
+                _SecHead('Water Intake', Icons.water_drop_rounded,
+                    const Color(0xFF1565C0)),
+                SizedBox(height: R.h(context, 10)),
+                RepaintBoundary(
+                    child: _WaterCard(state: waterState, notifier: waterNotifier)),
+                SizedBox(height: R.h(context, 22)),
+
+                // ── Appointments ──────────────────────────────────────────────
+                _SecHead('Upcoming Appointments',
+                    Icons.calendar_today_rounded, AppColors.info,
+                    btn: _btn(context, 'View All',
+                        () => context.push(AppRoutes.appointment))),
+                SizedBox(height: R.h(context, 10)),
+                RepaintBoundary(child: _AppointmentsSection(uid: uid)),
+                SizedBox(height: R.h(context, 22)),
+
+                // ── Prescriptions ─────────────────────────────────────────────
+                _SecHead('Active Prescriptions', Icons.medication_rounded,
+                    const Color(0xFF2E7D32),
+                    btn: _btn(
+                        context, 'View All', () => context.push(AppRoutes.records))),
+                SizedBox(height: R.h(context, 10)),
+                RepaintBoundary(child: _PrescriptionsSection(uid: uid)),
+                SizedBox(height: R.h(context, 22)),
+
+                // ── Health Records Quick Links ────────────────────────────────
+                _SecHead('Health Records', Icons.folder_open_rounded,
+                    const Color(0xFF6A1B9A)),
+                SizedBox(height: R.h(context, 10)),
+                RepaintBoundary(child: _QuickActions(uid: uid)),
+                SizedBox(height: R.h(context, 22)),
+
+                // ── Women's Health ────────────────────────────────────────────
+                if (!isMale) ...[
+                  _SecHead("Women's Health", Icons.favorite_rounded,
+                      AppColors.primary),
+                  SizedBox(height: R.h(context, 10)),
+                  const RepaintBoundary(child: _WomensHealth()),
+                  SizedBox(height: R.h(context, 22)),
+                ],
+
+                // ── BMI ───────────────────────────────────────────────────────
+                _SecHead('BMI Calculator', Icons.monitor_weight_rounded,
+                    const Color(0xFF2E7D32)),
+                SizedBox(height: R.h(context, 10)),
+                RepaintBoundary(child: _BMICard(uid: uid)),
+              ],
+            ),
         ),
       ],
-      ),
     );
   }
 
-  SliverAppBar _appBar(BuildContext context, String name) {
+  Widget _header(BuildContext context, String name) {
     final h = DateTime.now().hour;
     final greet =
         h < 12 ? 'Good Morning' : h < 17 ? 'Good Afternoon' : 'Good Evening';
     final first =
         name.isNotEmpty ? ', ${name.split(' ').first}' : '';
-    return SliverAppBar(
-      pinned: true,
-      expandedHeight: R.h(context, 150),
-      backgroundColor: AppColors.primary,
-      foregroundColor: Colors.white,
-      leading: IconButton(
-        icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-        onPressed: () => context.pop(),
-      ),
-      flexibleSpace: FlexibleSpaceBar(
-        collapseMode: CollapseMode.parallax,
-        background: Container(
-          decoration:
-              const BoxDecoration(gradient: AppColors.primaryGradient),
-          child: SafeArea(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                return SingleChildScrollView(
-                  physics: const NeverScrollableScrollPhysics(),
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                    child: Padding(
-                      padding: EdgeInsets.fromLTRB(R.p(context, 20),
-                          R.p(context, 44), R.p(context, 20), R.p(context, 12)),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Row(children: [
-                            Container(
-                              width: R.w(context, 36),
-                              height: R.w(context, 36),
-                              decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha:0.2),
-                                  shape: BoxShape.circle),
-                              child: Icon(Icons.monitor_heart_rounded,
-                                  color: Colors.white, size: R.w(context, 20)),
-                            ),
-                            SizedBox(width: R.w(context, 10)),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text('$greet$first',
-                                    style: TextStyle(
-                                        fontFamily: 'Poppins',
-                                        fontSize: R.sp(context, 12),
-                                        color: Colors.white70)),
-                                Text('Health Dashboard',
-                                    style: TextStyle(
-                                        fontFamily: 'Poppins',
-                                        fontSize: R.sp(context, 19),
-                                        fontWeight: FontWeight.w800,
-                                        color: Colors.white)),
-                              ],
-                            ),
-                          ]),
-                          SizedBox(height: R.h(context, 6)),
-                          Text(DateFormat('EEEE, d MMMM yyyy').format(DateTime.now()),
-                              style: TextStyle(
-                                  fontFamily: 'Poppins',
-                                  fontSize: R.sp(context, 11),
-                                  color: Colors.white54)),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
+    return Container(
+      decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(
+              R.p(context, 20), R.p(context, 4), R.p(context, 20), R.p(context, 16)),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
+                onPressed: () => context.pop(),
+              ),
+              SizedBox(height: R.h(context, 4)),
+              Row(children: [
+                Container(
+                  width: R.w(context, 36),
+                  height: R.w(context, 36),
+                  decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha:0.2),
+                      shape: BoxShape.circle),
+                  child: Icon(Icons.monitor_heart_rounded,
+                      color: Colors.white, size: R.w(context, 20)),
+                ),
+                SizedBox(width: R.w(context, 10)),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('$greet$first',
+                        style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: R.sp(context, 12),
+                            color: Colors.white70)),
+                    Text('Health Dashboard',
+                        style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: R.sp(context, 19),
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white)),
+                  ],
+                ),
+              ]),
+              SizedBox(height: R.h(context, 6)),
+              Text(DateFormat('EEEE, d MMMM yyyy').format(DateTime.now()),
+                  style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: R.sp(context, 11),
+                      color: Colors.white54)),
+            ],
           ),
         ),
       ),
@@ -1019,62 +996,6 @@ class _WaterCard extends StatelessWidget {
                 ),
               ),
             ),
-          ),
-          const SizedBox(height: 12),
-          Container(
-            color: const Color(0x33FF00FF),
-            child: Row(children: [
-            Expanded(
-              child: FilledButton.icon(
-                style: FilledButton.styleFrom(
-                  backgroundColor: c,
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10)),
-                ),
-                onPressed: state.goalReached
-                    ? null
-                    : () async {
-                        await notifier.logWater();
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                            content:
-                                Text('💧 ${state.glassSizeMl} ml logged!'),
-                            backgroundColor: c,
-                            behavior: SnackBarBehavior.floating,
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12)),
-                            duration: const Duration(seconds: 1),
-                          ));
-                        }
-                      },
-                icon: const Icon(Icons.add_rounded, size: 18),
-                label: Text(
-                    state.goalReached ? 'Goal Reached!' : 'Log a Glass',
-                    style: const TextStyle(
-                        fontFamily: 'Poppins',
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13)),
-              ),
-            ),
-            const SizedBox(width: 8),
-            OutlinedButton(
-              style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: c),
-                foregroundColor: c,
-                padding: const EdgeInsets.symmetric(
-                    vertical: 10, horizontal: 14),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10)),
-              ),
-              onPressed: () => context.push(AppRoutes.waterReminder),
-              child: const Text('Details',
-                  style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13)),
-            ),
-          ]),
           ),
         ],
       ),
@@ -2011,7 +1932,6 @@ Widget _staticGrid({
   for (var i = 0; i < children.length; i += 2) {
     final second = i + 1 < children.length ? children[i + 1] : null;
     rows.add(Row(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Expanded(child: AspectRatio(aspectRatio: aspectRatio, child: children[i])),
         SizedBox(width: spacing),
