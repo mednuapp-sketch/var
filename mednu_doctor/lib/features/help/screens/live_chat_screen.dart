@@ -386,7 +386,7 @@ class _LiveChatScreenState extends State<LiveChatScreen> {
                   color: AppColors.secondary, size: 36),
             ),
             const SizedBox(height: 16),
-            Text('Start a Conversation', style: AppTextStyles.h4),
+            const Text('Start a Conversation', style: AppTextStyles.h4),
             const SizedBox(height: 8),
             Text(
               'Type your message below to connect with\nour 24/7 support team.',

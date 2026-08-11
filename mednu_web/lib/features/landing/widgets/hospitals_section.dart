@@ -54,7 +54,7 @@ class HospitalsSection extends StatelessWidget {
                     : _HospitalCard(hospital: _hospitals[i]),
               ),
               const SizedBox(height: 40),
-              GradientButton(
+              const GradientButton(
                 label: 'View All Hospitals',
                 width: 220,
                 icon: Icons.arrow_forward_rounded,
@@ -90,10 +90,10 @@ class _HospitalCardState extends State<_HospitalCard> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: _hovered ? AppColors.primary.withOpacity(0.3) : AppColors.border),
+          border: Border.all(color: _hovered ? AppColors.primary.withValues(alpha: 0.3) : AppColors.border),
           boxShadow: _hovered
-              ? [BoxShadow(color: AppColors.primary.withOpacity(0.15), blurRadius: 24, offset: const Offset(0, 12))]
-              : [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
+              ? [BoxShadow(color: AppColors.primary.withValues(alpha: 0.15), blurRadius: 24, offset: const Offset(0, 12))]
+              : [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
         ),
         child: Padding(
           padding: const EdgeInsets.all(20),
@@ -115,7 +115,7 @@ class _HospitalCardState extends State<_HospitalCard> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: AppColors.primary.withOpacity(0.1),
+                      color: AppColors.primary.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(h['tag']!, style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.primary)),
@@ -155,7 +155,7 @@ class _HospitalCardState extends State<_HospitalCard> {
                   ),
                 ),
                 const SizedBox(width: 10),
-                Expanded(child: GradientButton(label: 'Directions', height: 40, fontSize: 13, icon: Icons.directions_outlined)),
+                const Expanded(child: GradientButton(label: 'Directions', height: 40, fontSize: 13, icon: Icons.directions_outlined)),
               ]),
             ],
           ),
@@ -177,7 +177,7 @@ class _HospitalCardH extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.border),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 8)],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8)],
       ),
       child: Padding(
         padding: const EdgeInsets.all(14),
@@ -203,7 +203,7 @@ class _HospitalCardH extends StatelessWidget {
             const SizedBox(height: 4),
             Text(h['type']!, style: GoogleFonts.poppins(fontSize: 11, color: AppColors.primary, fontWeight: FontWeight.w500)),
           ])),
-          Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+          const Column(mainAxisAlignment: MainAxisAlignment.center, children: [
             GradientButton(label: 'View', width: 70, height: 32, fontSize: 12),
           ]),
         ]),

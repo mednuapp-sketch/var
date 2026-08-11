@@ -24,6 +24,9 @@ class DashboardShell extends StatefulWidget {
 class _DashboardShellState extends State<DashboardShell> {
   int _selectedIndex = 0;
   bool _sidebarCollapsed = false;
+  // Scaffold.of() cannot be used here: this State's `context` sits ABOVE the
+  // Scaffold created in build(), so the lookup walks past it and throws.
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   static final List<Widget> _pages = [
     const DashboardHomePage(),
@@ -42,6 +45,7 @@ class _DashboardShellState extends State<DashboardShell> {
     final isMobile = Responsive.isMobile(context);
 
     return Scaffold(
+      key: _scaffoldKey,
       backgroundColor: AppColors.background,
       drawer: isMobile ? Drawer(
         child: DashboardSidebar(
@@ -58,7 +62,7 @@ class _DashboardShellState extends State<DashboardShell> {
           ? Column(children: [
               _MobileTopBar(
                 selectedIndex: _selectedIndex,
-                onMenuTap: () => Scaffold.of(context).openDrawer(),
+                onMenuTap: () => _scaffoldKey.currentState?.openDrawer(),
                 onLogout: widget.onLogout,
               ),
               Expanded(child: _pages[_selectedIndex]),
@@ -248,7 +252,7 @@ class _UserAvatar extends StatelessWidget {
       child: Container(
         width: 38,
         height: 38,
-        decoration: BoxDecoration(gradient: AppColors.primaryGradient, shape: BoxShape.circle),
+        decoration: const BoxDecoration(gradient: AppColors.primaryGradient, shape: BoxShape.circle),
         child: const Center(child: Text('👤', style: TextStyle(fontSize: 18))),
       ),
       itemBuilder: (_) => [

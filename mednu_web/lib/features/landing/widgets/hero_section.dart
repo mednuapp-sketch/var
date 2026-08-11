@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
@@ -111,7 +111,7 @@ class _MobileHero extends StatelessWidget {
       children: [
         _HeroContent(onGetStarted: onGetStarted, isMobile: true),
         const SizedBox(height: 40),
-        Center(child: _HeroVisual(compact: true, mobile: true)),
+        const Center(child: _HeroVisual(compact: true, mobile: true)),
       ],
     );
   }
@@ -142,13 +142,13 @@ class _HeroContent extends StatelessWidget {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           decoration: BoxDecoration(
-            color: AppColors.primary.withOpacity(0.07),
+            color: AppColors.primary.withValues(alpha: 0.07),
             borderRadius: BorderRadius.circular(50),
             border: Border.all(
-                color: AppColors.primary.withOpacity(0.2), width: 1),
+                color: AppColors.primary.withValues(alpha: 0.2), width: 1),
           ),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
-            Icon(Icons.favorite_rounded,
+            const Icon(Icons.favorite_rounded,
                 size: 13, color: AppColors.primary),
             const SizedBox(width: 6),
             Text('Your Health, Our Priority',
@@ -280,7 +280,7 @@ class _DownloadBtnState extends State<_DownloadBtn> {
           padding: const EdgeInsets.symmetric(horizontal: 20),
           decoration: BoxDecoration(
             color: _hovered
-                ? AppColors.primary.withOpacity(0.06)
+                ? AppColors.primary.withValues(alpha: 0.06)
                 : Colors.transparent,
             borderRadius: BorderRadius.circular(14),
             border:
@@ -289,7 +289,7 @@ class _DownloadBtnState extends State<_DownloadBtn> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.download_rounded,
+              const Icon(Icons.download_rounded,
                   size: 18,
                   color: AppColors.primary),
               const SizedBox(width: 8),
@@ -318,14 +318,14 @@ class _TrustRow extends StatelessWidget {
       mainAxisAlignment:
           center ? MainAxisAlignment.center : MainAxisAlignment.start,
       children: [
-        SizedBox(
+        const SizedBox(
           width: 76,
           height: 34,
           child: Stack(children: [
             _AvatarBubble(offset: 0, color: AppColors.primary),
             _AvatarBubble(offset: 22, color: AppColors.secondary),
             _AvatarBubble(
-                offset: 44, color: const Color(0xFF00897B)),
+                offset: 44, color: Color(0xFF00897B)),
           ]),
         ),
         const SizedBox(width: 10),
@@ -408,7 +408,7 @@ class _HeroVisual extends StatelessWidget {
         final totalH = phoneH + 60;
 
         // Phone sits left-center; doctor occupies right ~55%
-        final phoneLeft = 0.0;
+        const phoneLeft = 0.0;
         final doctorLeft = availW * 0.38;
         final doctorW = availW - doctorLeft;
 
@@ -429,8 +429,8 @@ class _HeroVisual extends StatelessWidget {
                     shape: BoxShape.circle,
                     gradient: RadialGradient(
                       colors: [
-                        AppColors.primary.withOpacity(0.18),
-                        AppColors.secondary.withOpacity(0.09),
+                        AppColors.primary.withValues(alpha: 0.18),
+                        AppColors.secondary.withValues(alpha: 0.09),
                         Colors.transparent,
                       ],
                       stops: const [0.0, 0.5, 1.0],
@@ -459,19 +459,19 @@ class _HeroVisual extends StatelessWidget {
               Positioned(
                 top: 24,
                 left: phoneW - 16,
-                child: _FloatingCard(
+                child: const _FloatingCard(
                   icon: Icons.calendar_month_rounded,
                   iconColor: AppColors.primary,
                   title: 'Next Appointment',
                   subtitle: 'Dr. Priya · Today 3PM',
                 ),
               ),
-              Positioned(
+              const Positioned(
                 bottom: 90,
                 left: 0,
                 child: _FloatingCard(
                   icon: Icons.bolt_rounded,
-                  iconColor: const Color(0xFFF59E0B),
+                  iconColor: Color(0xFFF59E0B),
                   title: 'Book in 60 sec',
                   subtitle: 'Instant confirmation',
                 ),
@@ -489,7 +489,7 @@ class _HeroVisual extends StatelessWidget {
                     borderRadius: BorderRadius.circular(14),
                     boxShadow: [
                       BoxShadow(
-                        color: AppColors.primary.withOpacity(0.35),
+                        color: AppColors.primary.withValues(alpha: 0.35),
                         blurRadius: 20,
                         offset: const Offset(0, 8),
                       ),
@@ -538,15 +538,15 @@ class _PhoneMockup extends StatelessWidget {
         color: const Color(0xFF1A1A2E),
         borderRadius: BorderRadius.circular(36),
         border: Border.all(
-            color: Colors.white.withOpacity(0.12), width: 1.5),
+            color: Colors.white.withValues(alpha: 0.12), width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primary.withOpacity(0.18),
+            color: AppColors.primary.withValues(alpha: 0.18),
             blurRadius: 40,
             offset: const Offset(0, 20),
           ),
           BoxShadow(
-            color: Colors.black.withOpacity(0.22),
+            color: Colors.black.withValues(alpha: 0.22),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -678,7 +678,7 @@ class _AppHeader extends StatelessWidget {
           Container(
             width: w * 0.11,
             height: w * 0.11,
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: AppColors.primaryGradient),
             child: Center(
@@ -777,7 +777,7 @@ class _ConsultCard extends StatelessWidget {
           width: w * 0.18,
           height: w * 0.18,
           decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
+              color: Colors.white.withValues(alpha: 0.2),
               shape: BoxShape.circle),
           child: Icon(Icons.medical_services_rounded,
               size: w * 0.1, color: Colors.white),
@@ -827,7 +827,7 @@ class _ServicesRow extends StatelessWidget {
                       width: w * 0.13,
                       height: w * 0.13,
                       decoration: BoxDecoration(
-                          color: AppColors.primary.withOpacity(0.1),
+                          color: AppColors.primary.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(10)),
                       child: Icon(item.icon,
                           size: w * 0.07, color: AppColors.primary),
@@ -884,7 +884,7 @@ class _AppointmentCard extends StatelessWidget {
               Container(
                 width: w * 0.11,
                 height: w * 0.11,
-                decoration: BoxDecoration(
+                decoration: const BoxDecoration(
                     shape: BoxShape.circle,
                     gradient: AppColors.primaryGradient),
                 child: Center(
@@ -969,7 +969,7 @@ class _BottomNav extends StatelessWidget {
                         width: 4,
                         height: 4,
                         margin: const EdgeInsets.only(bottom: 2),
-                        decoration: BoxDecoration(
+                        decoration: const BoxDecoration(
                             shape: BoxShape.circle,
                             color: AppColors.primary),
                       )
@@ -1010,7 +1010,7 @@ class _FloatingCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.1),
+              color: Colors.black.withValues(alpha: 0.1),
               blurRadius: 20,
               offset: const Offset(0, 6)),
         ],
@@ -1021,7 +1021,7 @@ class _FloatingCard extends StatelessWidget {
           width: 32,
           height: 32,
           decoration: BoxDecoration(
-              color: iconColor.withOpacity(0.1),
+              color: iconColor.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(9)),
           child: Icon(icon, size: 16, color: iconColor),
         ),
@@ -1096,7 +1096,7 @@ class _DoctorImage extends StatelessWidget {
                 borderRadius: BorderRadius.circular(12),
                 boxShadow: [
                   BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
+                      color: Colors.black.withValues(alpha: 0.1),
                       blurRadius: 16,
                       offset: const Offset(0, 5)),
                 ],
@@ -1141,7 +1141,7 @@ class _DoctorImage extends StatelessWidget {
                 borderRadius: BorderRadius.circular(12),
                 boxShadow: [
                   BoxShadow(
-                      color: AppColors.primary.withOpacity(0.35),
+                      color: AppColors.primary.withValues(alpha: 0.35),
                       blurRadius: 14,
                       offset: const Offset(0, 5)),
                 ],

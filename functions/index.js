@@ -105,6 +105,58 @@ exports.onNewConsultation = onDocumentCreated(
   }
 );
 
+// ── Doctor Rating Aggregation (server-authoritative) ────────────────────────
+//
+// `doctors/{id}.rating`, `doctors/{id}.totalReviews` and the whole
+// `doctor_rating_summary/{id}` document are Cloud-Function-only: firestore.rules
+// denies every client write to them (admin-only), exactly like the *_transactions
+// ledgers. This helper is the single place that folds one new star rating into
+// both aggregates, so the two can never disagree.
+//
+// NOTE: a Firestore transaction requires every read to happen before every
+// write — the mirror onto `doctors/{id}` therefore reuses the value computed
+// here instead of re-reading the summary after writing it.
+async function _applyDoctorRating(db, doctorId, rating) {
+  const summaryRef = db.collection("doctor_rating_summary").doc(doctorId);
+  const doctorRef = db.collection("doctors").doc(doctorId);
+
+  await db.runTransaction(async (tx) => {
+    const summarySnap = await tx.get(summaryRef);
+    const doctorSnap = await tx.get(doctorRef);
+
+    const data = summarySnap.exists ? summarySnap.data() : {};
+    const oldTotal = data.totalReviews || 0;
+    const oldAvg = data.averageRating || 0;
+    const newTotal = oldTotal + 1;
+    const newAvg = parseFloat(((oldAvg * oldTotal + rating) / newTotal).toFixed(2));
+
+    const dist = data.ratingDistribution || { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    const bucket = String(Math.min(5, Math.max(1, Math.round(rating))));
+    dist[bucket] = (dist[bucket] || 0) + 1;
+
+    tx.set(
+      summaryRef,
+      {
+        doctorId,
+        averageRating: newAvg,
+        totalReviews: newTotal,
+        ratingDistribution: dist,
+        lastUpdated: FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+
+    // Mirror onto the doctors document for query-time sorting/listing. The doc
+    // may legitimately not exist (deleted doctor) — skip rather than fail the
+    // whole transaction, since this function is now the only writer.
+    if (doctorSnap.exists) {
+      tx.update(doctorRef, { rating: newAvg, totalReviews: newTotal });
+    }
+  });
+
+  console.log(`Rating aggregate updated for doctor ${doctorId}`);
+}
+
 // ── Review Created: Aggregate Rating ────────────────────────────────────────
 //
 // Fires when a patient submits a new review. Updates the doctor_rating_summary
@@ -119,52 +171,34 @@ exports.onReviewCreated = onDocumentCreated(
     const doctorId = review.doctorId;
     const rating = review.rating;
 
-    if (!doctorId || typeof rating !== "number") return;
+    if (!doctorId || typeof rating !== "number" || !isFinite(rating) || rating <= 0) return;
+    if (doctorId === review.patientId) return;
 
-    const db = getFirestore();
-    const summaryRef = db.collection("doctor_rating_summary").doc(doctorId);
+    await _applyDoctorRating(getFirestore(), doctorId, rating);
+  }
+);
 
-    await db.runTransaction(async (tx) => {
-      const summarySnap = await tx.get(summaryRef);
+// ── Post-consultation Feedback Created: Aggregate Rating ────────────────────
+//
+// The post-consultation feedback screen writes a `feedbacks` document (a
+// separate entry point from `doctor_reviews`) carrying a star rating. It used
+// to fold that star into the aggregates client-side; now that the aggregates
+// are Cloud-Function-only, that fold happens here instead. Feedback rows
+// without a usable rating/doctorId are ignored.
+exports.onFeedbackCreated = onDocumentCreated(
+  "feedbacks/{feedbackId}",
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
 
-      if (!summarySnap.exists) {
-        tx.set(summaryRef, {
-          averageRating: rating,
-          totalReviews: 1,
-          ratingDistribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, [Math.round(rating)]: 1 },
-          lastUpdated: FieldValue.serverTimestamp(),
-        });
-      } else {
-        const data = summarySnap.data();
-        const oldTotal = data.totalReviews || 0;
-        const oldAvg = data.averageRating || 0;
-        const newTotal = oldTotal + 1;
-        const newAvg = parseFloat(((oldAvg * oldTotal + rating) / newTotal).toFixed(2));
-        const dist = data.ratingDistribution || { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
-        const bucket = Math.round(rating).toString();
-        dist[bucket] = (dist[bucket] || 0) + 1;
+    const fb = snap.data();
+    const doctorId = fb.doctorId;
+    const rating = fb.rating;
 
-        tx.update(summaryRef, {
-          averageRating: newAvg,
-          totalReviews: newTotal,
-          ratingDistribution: dist,
-          lastUpdated: FieldValue.serverTimestamp(),
-        });
-      }
+    if (!doctorId || typeof rating !== "number" || !isFinite(rating) || rating <= 0) return;
+    if (doctorId === fb.patientId) return;
 
-      // Also mirror rating onto the doctors document for query-time sorting.
-      const doctorRef = db.collection("doctors").doc(doctorId);
-      const summaryAfter = await tx.get(summaryRef);
-      const newAvgMirrored = summaryAfter.exists
-        ? summaryAfter.data().averageRating
-        : rating;
-      tx.update(doctorRef, {
-        rating: newAvgMirrored,
-        totalReviews: FieldValue.increment(1),
-      });
-    });
-
-    console.log(`Rating summary updated for doctor ${doctorId}`);
+    await _applyDoctorRating(getFirestore(), doctorId, rating);
   }
 );
 
@@ -955,20 +989,20 @@ exports.expireStaleConsultations = onSchedule(
       .collection("consultations")
       .where("status", "==", "pending")
       .where("createdAt", "<=", cutoff)
-      .get();
+      .limit(300) // bounded per run (and under the 500-write batch ceiling);
+      .get();     // this runs every 2 minutes, so any remainder drains fast.
 
     if (staleSnap.empty) return;
 
-    const batch = db.batch();
-    staleSnap.forEach((doc) => {
-      batch.update(doc.ref, {
-        status: "missed",
-        missedAt: FieldValue.serverTimestamp(),
-        expiredBy: "auto_cleanup",
-      });
+    // Precondition-guarded per doc: a doctor accepting a consultation in the
+    // seconds between this query and the write must not be clobbered back to
+    // 'missed'. See _expireStaleDocs.
+    const { updated, skipped } = await _expireStaleDocs(staleSnap.docs, {
+      status: "missed",
+      missedAt: FieldValue.serverTimestamp(),
+      expiredBy: "auto_cleanup",
     });
-    await batch.commit();
-    console.log(`Auto-expired ${staleSnap.size} stale pending consultation(s).`);
+    console.log(`Auto-expired ${updated} stale pending consultation(s); ${skipped} skipped (concurrently modified).`);
   }
 );
 
@@ -1275,6 +1309,11 @@ exports.onServiceRequestStatusChange = onDocumentUpdated(
         accepted:     ["Diagnostics Confirmed", "Your diagnostic booking has been accepted.", "lab_accepted"],
         assigned:     ["Technician Assigned", "A diagnostic technician has been assigned.", "lab_assigned"],
         in_progress:  ["Diagnostics In Progress", "Your diagnostic test is in progress.", "lab_in_progress"],
+        // _LAB_TO_SERVICE_REQUEST_STATUS mirrors 'sample_collected' for BOTH
+        // diagnostic types; without this key the type='diagnostics' variant
+        // fell through to genericMap, which has no such status, and the
+        // patient notification was silently dropped.
+        sample_collected: ["Sample Collected", "Your sample has been collected and sent to the lab.", "lab_sample_collected"],
         report_ready: ["Report Ready", "Your diagnostic report is now available.", "lab_report_ready"],
         completed:    ["Diagnostics Completed", "Your diagnostic test has been completed.", "lab_completed"],
         rejected:     ["Diagnostics Rejected", "Your diagnostic booking was not accepted. Please try again.", "lab_rejected"],
@@ -1289,6 +1328,27 @@ exports.onServiceRequestStatusChange = onDocumentUpdated(
         cancelled:   ["Home Care Cancelled", "Your home care booking has been cancelled.", "homecare_cancelled"],
       },
       caregiver: {
+        accepted:    ["Caregiver Booking Accepted", "Your caregiver request has been accepted.", "caregiver_accepted"],
+        assigned:    ["Caregiver Assigned", "A caregiver has been assigned to you.", "caregiver_assigned"],
+        in_progress: ["Caregiver Service Started", "Your caregiver has arrived and the service has started.", "caregiver_started"],
+        completed:   ["Caregiver Service Completed", "Your caregiver service has been completed.", "caregiver_completed"],
+        rejected:    ["Caregiver Booking Rejected", "Your caregiver booking could not be accepted.", "caregiver_rejected"],
+        cancelled:   ["Caregiver Booking Cancelled", "Your caregiver booking has been cancelled.", "caregiver_cancelled"],
+      },
+      // The patient app never writes the literal type 'caregiver' (singular)
+      // — the cart checkout path writes 'care_assistant' or 'caregivers'
+      // (see mednu/lib/features/cart/screens/cart_screen.dart). These two
+      // keys reuse the `caregiver` copy verbatim so real bookings get
+      // tailored notification text instead of the generic fallback.
+      care_assistant: {
+        accepted:    ["Caregiver Booking Accepted", "Your caregiver request has been accepted.", "caregiver_accepted"],
+        assigned:    ["Caregiver Assigned", "A caregiver has been assigned to you.", "caregiver_assigned"],
+        in_progress: ["Caregiver Service Started", "Your caregiver has arrived and the service has started.", "caregiver_started"],
+        completed:   ["Caregiver Service Completed", "Your caregiver service has been completed.", "caregiver_completed"],
+        rejected:    ["Caregiver Booking Rejected", "Your caregiver booking could not be accepted.", "caregiver_rejected"],
+        cancelled:   ["Caregiver Booking Cancelled", "Your caregiver booking has been cancelled.", "caregiver_cancelled"],
+      },
+      caregivers: {
         accepted:    ["Caregiver Booking Accepted", "Your caregiver request has been accepted.", "caregiver_accepted"],
         assigned:    ["Caregiver Assigned", "A caregiver has been assigned to you.", "caregiver_assigned"],
         in_progress: ["Caregiver Service Started", "Your caregiver has arrived and the service has started.", "caregiver_started"],
@@ -1636,16 +1696,111 @@ exports.onBroadcastCreated = onDocumentCreated(
   }
 );
 
+// ═══════════════════════════════════════════════════════════════════════════
+//  WALLET — server-authoritative balances
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// `users/{uid}.walletBalance`, `.mednuMoneyBalance` and `.referralPoints` are
+// written ONLY from here (Admin SDK). firestore.rules blocks every client write
+// to those fields. Every mutation writes, in ONE Firestore transaction:
+//   1. the `users/{uid}` balance field,
+//   2. an immutable `wallet_ledger/{entryId}` entry (new canonical audit trail),
+//   3. the legacy `users/{uid}/transactions/{txId}` doc the app's existing
+//      transactionsStream()/mednuMoneyTransactionsStream() already render.
+// The dual-write keeps the shipped Flutter UI working with zero model changes.
+
+function _logWallet(severity, event, data = {}) {
+  const payload = { severity, module: "wallet", event, ...data };
+  if (severity === "ERROR" || severity === "WARNING") {
+    console.error(JSON.stringify(payload));
+  } else {
+    console.log(JSON.stringify(payload));
+  }
+}
+
+const _WALLET_MAX_AMOUNT = 500000; // ₹5,00,000 — sanity ceiling on any single entry
+
+// 'main' -> walletBalance, 'mednu_money' -> mednuMoneyBalance
+function _walletField(walletType) {
+  return walletType === "mednu_money" ? "mednuMoneyBalance" : "walletBalance";
+}
+
+// Reads a numeric balance field defensively (missing/legacy docs -> 0).
+function _walletBalanceOf(snap, field) {
+  if (!snap.exists) return 0;
+  const raw = snap.get(field);
+  return typeof raw === "number" && isFinite(raw) ? raw : 0;
+}
+
+// Deterministic `wallet_ledger` doc id derived from a stable `source` string.
+// Firestore doc ids may not contain '/' and are capped at 1500 bytes.
+function _ledgerId(source) {
+  return String(source).replace(/[^A-Za-z0-9_:.\-]/g, "_").slice(0, 400);
+}
+
+// Validates and normalises a client-supplied rupee amount.
+function _assertWalletAmount(amount) {
+  if (typeof amount !== "number" || !isFinite(amount) || amount <= 0) {
+    throw new HttpsError("invalid-argument", "Amount must be a positive number.");
+  }
+  if (amount > _WALLET_MAX_AMOUNT) {
+    throw new HttpsError("invalid-argument", "Amount exceeds the permitted limit.");
+  }
+  return Math.round(amount * 100) / 100;
+}
+
+// Shape of the legacy per-user transaction doc — must stay byte-compatible with
+// WalletTransaction.fromDoc() in mednu/lib/features/wallet/wallet_service.dart.
+function _legacyTxDoc({ title, amount, type, category, description, walletType }) {
+  const doc = {
+    title,
+    amount,
+    type,
+    category,
+    timestamp: FieldValue.serverTimestamp(),
+    walletType: walletType || "main",
+  };
+  if (description) doc.description = description;
+  return doc;
+}
+
+function _ledgerDoc({ uid, walletType, type, amount, category, title, description, source, balanceAfter }) {
+  return {
+    uid,
+    walletType: walletType || "main",
+    type,
+    amount,
+    category,
+    title,
+    description: description || null,
+    source,
+    balanceAfter,
+    createdAt: FieldValue.serverTimestamp(),
+  };
+}
+
 // ── Razorpay: Create Order ────────────────────────────────────────────────────
 //
 // Called from the Flutter app before opening the Razorpay checkout modal.
 // Creates an order on Razorpay's servers and returns the order_id so the
 // client can include it in the checkout options (required for Standard Checkout).
 //
-// Request data: { amount: number (paise), currency?: string, receipt?: string }
+// The created order is ALSO persisted to `razorpay_orders/{order_id}` so that
+// verifyRazorpayPayment can later determine the credited amount from a
+// server-side record of what was actually ordered, rather than from anything
+// the client sends at credit time. That persistence is what makes the wallet
+// top-up amount server-authoritative.
+//
+// Request data: { amount: number (paise), currency?: string, receipt?: string,
+//                 purpose?: string }
 // Response:     { order_id: string, amount: number, currency: string }
 exports.createRazorpayOrder = onCall({ enforceAppCheck: true }, async (request) => {
-  const { amount, currency = "INR", receipt } = request.data || {};
+  const { amount, currency = "INR", receipt, purpose } = request.data || {};
+
+  const uid = request.auth?.uid;
+  if (!uid) {
+    throw new HttpsError("unauthenticated", "Sign in to start a payment.");
+  }
 
   if (!amount || typeof amount !== "number" || amount < 100) {
     throw new HttpsError("invalid-argument", "Amount must be a number ≥ 100 paise.");
@@ -1662,6 +1817,26 @@ exports.createRazorpayOrder = onCall({ enforceAppCheck: true }, async (request) 
       currency,
       receipt: receipt || `rcpt_${Date.now()}`,
     });
+
+    // Server-side record of what was ordered. verifyRazorpayPayment reads
+    // `amountPaise` from here — never from its own request payload — so a
+    // modified client cannot verify a small payment and credit a large amount.
+    try {
+      await getFirestore().collection("razorpay_orders").doc(order.id).set({
+        uid,
+        amountPaise: order.amount,
+        currency: order.currency,
+        purpose: typeof purpose === "string" && purpose ? purpose : "checkout",
+        status: "created",
+        createdAt: FieldValue.serverTimestamp(),
+      });
+    } catch (err) {
+      _logWallet("ERROR", "razorpay_order_persist_failed", {
+        uid, orderId: order.id, error: err.message,
+      });
+      throw new HttpsError("internal", "Failed to create Razorpay order.");
+    }
+
     return {
       order_id: order.id,
       amount: order.amount,
@@ -1713,7 +1888,567 @@ exports.verifyRazorpayPayment = onCall({ enforceAppCheck: true }, async (request
     console.error("Failed to write payment audit record:", err);
   }
 
-  return { verified: true };
+  // ── Server-authoritative wallet credit ─────────────────────────────────────
+  // The credited amount comes from `razorpay_orders/{order_id}.amountPaise`,
+  // written by createRazorpayOrder — never from this call's request payload.
+  const uid = request.auth?.uid || null;
+  const orderRef = db.collection("razorpay_orders").doc(razorpay_order_id);
+  let orderSnap;
+  try {
+    orderSnap = await orderRef.get();
+  } catch (err) {
+    _logWallet("ERROR", "razorpay_order_read_failed", {
+      uid, orderId: razorpay_order_id, error: err.message,
+    });
+    throw new HttpsError("internal", "Could not confirm the payment. Contact support.");
+  }
+
+  // Orders created before this function persisted them (older app builds) have
+  // no record; the signature is still valid so the gateway leg succeeded, there
+  // is simply nothing this server can authoritatively credit.
+  if (!orderSnap.exists) {
+    _logWallet("WARNING", "razorpay_order_not_found", { uid, orderId: razorpay_order_id });
+    return { verified: true, credited: false };
+  }
+
+  const order = orderSnap.data() || {};
+  if (order.purpose !== "wallet_topup") {
+    // Checkout leg — nothing is credited to the wallet for these.
+    return { verified: true, credited: false };
+  }
+  if (!uid || order.uid !== uid) {
+    _logWallet("WARNING", "razorpay_order_uid_mismatch", {
+      uid, orderUid: order.uid || null, orderId: razorpay_order_id,
+    });
+    throw new HttpsError("permission-denied", "This payment belongs to another account.");
+  }
+  if (order.status === "consumed") {
+    // Legitimate retry after a flaky response — idempotent no-op, not an error.
+    return { verified: true, credited: false, alreadyCredited: true };
+  }
+
+  const amount = Math.round(Number(order.amountPaise || 0)) / 100;
+  if (!(amount > 0)) {
+    _logWallet("ERROR", "razorpay_order_bad_amount", { uid, orderId: razorpay_order_id });
+    throw new HttpsError("internal", "Order amount is invalid. Contact support.");
+  }
+
+  // `source` doubles as the wallet_ledger doc id, so one Razorpay payment can
+  // only ever credit once even under at-least-once callable delivery.
+  const source = `razorpay:${razorpay_payment_id}`;
+  const ledgerRef = db.collection("wallet_ledger").doc(_ledgerId(source));
+  const userRef = db.collection("users").doc(uid);
+
+  try {
+    const outcome = await db.runTransaction(async (t) => {
+      const ledgerSnap = await t.get(ledgerRef);
+      const freshOrder = await t.get(orderRef);
+      const userSnap = await t.get(userRef);
+      if (ledgerSnap.exists || freshOrder.get("status") === "consumed") {
+        return { alreadyCredited: true, balanceAfter: null };
+      }
+
+      const balanceAfter = _walletBalanceOf(userSnap, "walletBalance") + amount;
+      t.set(userRef, { walletBalance: balanceAfter }, { merge: true });
+      t.set(
+        userRef.collection("transactions").doc(),
+        _legacyTxDoc({
+          title: "Money Added",
+          amount,
+          type: "credit",
+          category: "add_money",
+          walletType: "main",
+        })
+      );
+      t.set(
+        ledgerRef,
+        _ledgerDoc({
+          uid,
+          walletType: "main",
+          type: "credit",
+          amount,
+          category: "add_money",
+          title: "Money Added",
+          source,
+          balanceAfter,
+        })
+      );
+      t.update(orderRef, {
+        status: "consumed",
+        paymentId: razorpay_payment_id,
+        consumedAt: FieldValue.serverTimestamp(),
+      });
+      return { alreadyCredited: false, balanceAfter };
+    });
+
+    if (outcome.alreadyCredited) {
+      return { verified: true, credited: false, alreadyCredited: true };
+    }
+    _logWallet("INFO", "wallet_topup_credited", {
+      uid, orderId: razorpay_order_id, paymentId: razorpay_payment_id, amount,
+      balanceAfter: outcome.balanceAfter,
+    });
+    return {
+      verified: true,
+      credited: true,
+      amount,
+      balanceAfter: outcome.balanceAfter,
+    };
+  } catch (err) {
+    if (err instanceof HttpsError) throw err;
+    _logWallet("ERROR", "wallet_topup_credit_failed", {
+      uid, orderId: razorpay_order_id, paymentId: razorpay_payment_id, error: err.message,
+    });
+    throw new HttpsError("internal", "Payment verified but the wallet credit failed. Contact support.");
+  }
+});
+
+// ── Wallet: Spend balance ─────────────────────────────────────────────────────
+//
+// Debits the caller's own wallet for an in-app purchase. Replaces the old
+// client-side WalletService.deductPayment / deductMednuMoney transactions.
+//
+// Request data: { walletType: 'main'|'mednu_money', amount, title, category?,
+//                 description? }
+// Response:     { success: true, balanceAfter }
+//
+// KNOWN RESIDUAL LIMITATION: there is no independent server-side authority for
+// what a checkout amount *should* be (the checkout flow itself is not yet
+// server-authoritative), so this trusts the client's stated spend amount,
+// subject to a sufficiency check. It closes the arbitrary-self-CREDIT exploit;
+// a client under-reporting its own spend is a separate, narrower risk that
+// needs the checkout flow to become server-authoritative.
+exports.spendWalletBalance = onCall({ enforceAppCheck: true }, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Sign in to continue.");
+
+  const {
+    walletType = "main",
+    amount: rawAmount,
+    title,
+    category = "payment",
+    description,
+    idempotencyKey,
+  } = request.data || {};
+
+  if (walletType !== "main" && walletType !== "mednu_money") {
+    throw new HttpsError("invalid-argument", "Unknown wallet type.");
+  }
+  // Optional. When a caller supplies one, the debit is replay-safe: a client
+  // retry after a timeout resolves to the same deterministic wallet_ledger doc
+  // and becomes a no-op instead of a second debit. Callers that omit it keep
+  // the previous at-least-once behaviour.
+  if (idempotencyKey !== undefined &&
+      (typeof idempotencyKey !== "string" || !idempotencyKey.trim() || idempotencyKey.length > 200)) {
+    throw new HttpsError("invalid-argument", "idempotencyKey must be a short non-empty string.");
+  }
+  if (typeof title !== "string" || !title.trim()) {
+    throw new HttpsError("invalid-argument", "A transaction title is required.");
+  }
+  const amount = _assertWalletAmount(rawAmount);
+
+  const db = getFirestore();
+  const userRef = db.collection("users").doc(uid);
+  const field = _walletField(walletType);
+  const label = walletType === "mednu_money" ? "MedNU Money" : "wallet";
+
+  // `source` doubles as the wallet_ledger doc id when the caller opted in, so a
+  // retried checkout can only ever debit once.
+  const source = idempotencyKey
+    ? `spend:${uid}:${idempotencyKey.trim()}`
+    : `spend:${uid}:${Date.now()}`;
+  const ledgerRef = idempotencyKey
+    ? db.collection("wallet_ledger").doc(_ledgerId(source))
+    : db.collection("wallet_ledger").doc();
+
+  try {
+    const balanceAfter = await db.runTransaction(async (t) => {
+      const userSnap = await t.get(userRef);
+      if (idempotencyKey) {
+        const existing = await t.get(ledgerRef);
+        if (existing.exists) {
+          // Legitimate retry after a flaky response — idempotent no-op.
+          const seen = existing.get("balanceAfter");
+          return typeof seen === "number" ? seen : _walletBalanceOf(userSnap, field);
+        }
+      }
+      const current = _walletBalanceOf(userSnap, field);
+      if (current < amount) {
+        throw new HttpsError("failed-precondition", `Insufficient ${label} balance`);
+      }
+      const next = Math.round((current - amount) * 100) / 100;
+
+      t.set(userRef, { [field]: next }, { merge: true });
+      t.set(
+        userRef.collection("transactions").doc(),
+        _legacyTxDoc({
+          title: title.trim(),
+          amount,
+          type: "debit",
+          category,
+          description,
+          walletType,
+        })
+      );
+      // Deterministic id when the caller supplied an idempotency key, random
+      // otherwise; transaction atomicity is the guarantee in the latter case.
+      t.set(
+        ledgerRef,
+        _ledgerDoc({
+          uid,
+          walletType,
+          type: "debit",
+          amount,
+          category,
+          title: title.trim(),
+          description,
+          source,
+          balanceAfter: next,
+        })
+      );
+      return next;
+    });
+
+    _logWallet("INFO", "wallet_spend", { uid, walletType, amount, balanceAfter });
+    return { success: true, balanceAfter };
+  } catch (err) {
+    if (err instanceof HttpsError) throw err;
+    _logWallet("ERROR", "wallet_spend_failed", { uid, walletType, amount, error: err.message });
+    throw new HttpsError("internal", `Could not debit your ${label}. Please try again.`);
+  }
+});
+
+// ── Wallet: Transfer to another MedNU user ────────────────────────────────────
+//
+// Request data: { recipientPhone: string, amount: number }
+// Response:     { success: true, balanceAfter }
+exports.transferWalletBalance = onCall({ enforceAppCheck: true }, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Sign in to continue.");
+
+  const { recipientPhone, amount: rawAmount } = request.data || {};
+  if (typeof recipientPhone !== "string" || !recipientPhone.trim()) {
+    throw new HttpsError("invalid-argument", "Enter a valid phone number");
+  }
+  const amount = _assertWalletAmount(rawAmount);
+  const phone = recipientPhone.trim();
+
+  const db = getFirestore();
+  const match = await db.collection("users").where("phone", "==", phone).limit(1).get();
+  if (match.empty) {
+    throw new HttpsError("not-found", "No MedNU account found with this phone number");
+  }
+  const recipientRef = match.docs[0].ref;
+  if (recipientRef.id === uid) {
+    throw new HttpsError("invalid-argument", "Cannot transfer to your own wallet");
+  }
+
+  // Sender label comes from the verified auth token, never from the client.
+  const senderLabel =
+    request.auth?.token?.phone_number || request.auth?.token?.email || "a MedNU user";
+  const senderRef = db.collection("users").doc(uid);
+  const stamp = Date.now();
+
+  try {
+    const balanceAfter = await db.runTransaction(async (t) => {
+      const senderSnap = await t.get(senderRef);
+      const recipientSnap = await t.get(recipientRef);
+
+      const senderBalance = _walletBalanceOf(senderSnap, "walletBalance");
+      if (senderBalance < amount) {
+        throw new HttpsError("failed-precondition", "Insufficient wallet balance");
+      }
+      const senderAfter = Math.round((senderBalance - amount) * 100) / 100;
+      const recipientAfter =
+        Math.round((_walletBalanceOf(recipientSnap, "walletBalance") + amount) * 100) / 100;
+
+      t.set(senderRef, { walletBalance: senderAfter }, { merge: true });
+      t.set(recipientRef, { walletBalance: recipientAfter }, { merge: true });
+
+      t.set(
+        senderRef.collection("transactions").doc(),
+        _legacyTxDoc({
+          title: "Transfer Sent",
+          amount,
+          type: "debit",
+          category: "transfer",
+          description: `To: ${phone}`,
+          walletType: "main",
+        })
+      );
+      t.set(
+        recipientRef.collection("transactions").doc(),
+        _legacyTxDoc({
+          title: "Transfer Received",
+          amount,
+          type: "credit",
+          category: "transfer",
+          description: `From: ${senderLabel}`,
+          walletType: "main",
+        })
+      );
+
+      t.set(
+        db.collection("wallet_ledger").doc(),
+        _ledgerDoc({
+          uid,
+          walletType: "main",
+          type: "debit",
+          amount,
+          category: "transfer",
+          title: "Transfer Sent",
+          description: `To: ${phone}`,
+          source: `transfer:${uid}:${recipientRef.id}:${stamp}`,
+          balanceAfter: senderAfter,
+        })
+      );
+      t.set(
+        db.collection("wallet_ledger").doc(),
+        _ledgerDoc({
+          uid: recipientRef.id,
+          walletType: "main",
+          type: "credit",
+          amount,
+          category: "transfer",
+          title: "Transfer Received",
+          description: `From: ${senderLabel}`,
+          source: `transfer:${uid}:${recipientRef.id}:${stamp}`,
+          balanceAfter: recipientAfter,
+        })
+      );
+
+      return senderAfter;
+    });
+
+    _logWallet("INFO", "wallet_transfer", {
+      uid, recipientId: recipientRef.id, amount, balanceAfter,
+    });
+    return { success: true, balanceAfter };
+  } catch (err) {
+    if (err instanceof HttpsError) throw err;
+    _logWallet("ERROR", "wallet_transfer_failed", { uid, amount, error: err.message });
+    throw new HttpsError("internal", "Transfer failed. Please try again.");
+  }
+});
+
+// ── Wallet: Grant referral reward ─────────────────────────────────────────────
+//
+// Credits BOTH parties of a referral in MedNU Money and increments the
+// referrer's referralPoints. Replaces ReferralService._creditRewards' client
+// batch write. Covers both Dart call sites — signup (`applyReferralCode`) and
+// condition-based (`triggerReferralReward`) — because both know the referral
+// doc id, which is all this needs: every amount is read from the referral doc
+// server-side, never from the request payload.
+//
+// Request data: { referralId: string }
+// Response:     { success: true, alreadyRewarded?: true }
+exports.grantReferralReward = onCall({ enforceAppCheck: true }, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Sign in to continue.");
+
+  const { referralId } = request.data || {};
+  if (typeof referralId !== "string" || !referralId.trim()) {
+    throw new HttpsError("invalid-argument", "A referral id is required.");
+  }
+
+  const db = getFirestore();
+  const referralRef = db.collection("referrals").doc(referralId.trim());
+
+  // Admin-configured ceilings — the referral doc is written by the client at
+  // signup, so its stored amounts are capped by live config server-side.
+  let capReferrer = Infinity;
+  let capReferred = Infinity;
+  try {
+    const cfg = await db.collection("referralConfig").doc("settings").get();
+    if (cfg.exists) {
+      if (cfg.get("rewardsEnabled") === false) {
+        throw new HttpsError("failed-precondition", "Referral rewards are currently disabled.");
+      }
+      const r = cfg.get("referrerReward");
+      const d = cfg.get("referredReward");
+      if (typeof r === "number") capReferrer = r;
+      if (typeof d === "number") capReferred = d;
+    }
+  } catch (err) {
+    if (err instanceof HttpsError) throw err;
+    _logWallet("WARNING", "referral_config_read_failed", { uid, referralId, error: err.message });
+  }
+
+  try {
+    const outcome = await db.runTransaction(async (t) => {
+      const refSnap = await t.get(referralRef);
+      if (!refSnap.exists) {
+        throw new HttpsError("not-found", "Referral not found.");
+      }
+      const r = refSnap.data() || {};
+
+      // The referred user is the only party allowed to trigger the payout —
+      // matching the existing Dart logic, where both call sites run as the
+      // referred user.
+      if (r.referredUserId !== uid) {
+        throw new HttpsError("permission-denied", "You cannot trigger this referral reward.");
+      }
+      // Status doubles as the idempotency guard: a second call is a no-op.
+      if (r.status === "rewarded") {
+        return { alreadyRewarded: true };
+      }
+      if (r.status !== "pending") {
+        throw new HttpsError("failed-precondition", "This referral is not eligible for a reward.");
+      }
+
+      const referrerId = typeof r.referrerId === "string" ? r.referrerId : "";
+      if (!referrerId || referrerId === uid) {
+        throw new HttpsError("failed-precondition", "Referral is malformed.");
+      }
+
+      const referrerReward = Math.max(
+        0, Math.min(Number(r.referrerRewardAmount) || 0, capReferrer)
+      );
+      const referredReward = Math.max(
+        0, Math.min(Number(r.referredRewardAmount) || 0, capReferred)
+      );
+
+      const referrerRef = db.collection("users").doc(referrerId);
+      const referredRef = db.collection("users").doc(uid);
+      const referrerLedger = db
+        .collection("wallet_ledger")
+        .doc(_ledgerId(`referral:${referralRef.id}:referrer`));
+      const referredLedger = db
+        .collection("wallet_ledger")
+        .doc(_ledgerId(`referral:${referralRef.id}:referred`));
+
+      const referrerSnap = await t.get(referrerRef);
+      const referredSnap = await t.get(referredRef);
+      const referrerLedgerSnap = await t.get(referrerLedger);
+      const referredLedgerSnap = await t.get(referredLedger);
+      if (referrerLedgerSnap.exists || referredLedgerSnap.exists) {
+        return { alreadyRewarded: true };
+      }
+
+      if (referrerReward > 0) {
+        const balanceAfter =
+          Math.round((_walletBalanceOf(referrerSnap, "mednuMoneyBalance") + referrerReward) * 100) / 100;
+        const points = Number(referrerSnap.get("referralPoints")) || 0;
+        t.set(
+          referrerRef,
+          { mednuMoneyBalance: balanceAfter, referralPoints: points + 1 },
+          { merge: true }
+        );
+        t.set(
+          referrerRef.collection("transactions").doc(),
+          _legacyTxDoc({
+            title: "Referral Bonus",
+            amount: referrerReward,
+            type: "credit",
+            category: "referral",
+            description: "Your friend joined using your referral code",
+            walletType: "mednu_money",
+          })
+        );
+        t.set(
+          referrerLedger,
+          _ledgerDoc({
+            uid: referrerId,
+            walletType: "mednu_money",
+            type: "credit",
+            amount: referrerReward,
+            category: "referral",
+            title: "Referral Bonus",
+            description: "Your friend joined using your referral code",
+            source: `referral:${referralRef.id}:referrer`,
+            balanceAfter,
+          })
+        );
+      }
+
+      if (referredReward > 0) {
+        const balanceAfter =
+          Math.round((_walletBalanceOf(referredSnap, "mednuMoneyBalance") + referredReward) * 100) / 100;
+        t.set(referredRef, { mednuMoneyBalance: balanceAfter }, { merge: true });
+        t.set(
+          referredRef.collection("transactions").doc(),
+          _legacyTxDoc({
+            title: "Welcome Bonus",
+            amount: referredReward,
+            type: "credit",
+            category: "referral",
+            description: "Joined via referral code — use as MedNU Money for bookings",
+            walletType: "mednu_money",
+          })
+        );
+        t.set(
+          referredLedger,
+          _ledgerDoc({
+            uid,
+            walletType: "mednu_money",
+            type: "credit",
+            amount: referredReward,
+            category: "referral",
+            title: "Welcome Bonus",
+            description: "Joined via referral code — use as MedNU Money for bookings",
+            source: `referral:${referralRef.id}:referred`,
+            balanceAfter,
+          })
+        );
+      }
+
+      t.update(referralRef, {
+        status: "rewarded",
+        rewardedAt: FieldValue.serverTimestamp(),
+      });
+
+      return { alreadyRewarded: false, referrerId, referrerReward, referredReward };
+    });
+
+    if (outcome.alreadyRewarded) {
+      return { success: true, alreadyRewarded: true };
+    }
+
+    // ── In-app notifications (non-fatal, outside the transaction) ────────────
+    const now = FieldValue.serverTimestamp();
+    try {
+      if (outcome.referrerReward > 0) {
+        await db
+          .collection("patient_notifications").doc(outcome.referrerId)
+          .collection("items").add({
+            type: "referral_reward",
+            title: "Referral Reward Earned! 🎉",
+            body: `You earned ₹${outcome.referrerReward.toFixed(0)} MedNU Money because a friend joined MedNU using your referral code. Use it for your next booking!`,
+            createdAt: now,
+            deliverAt: now,
+            isRead: false,
+            data: { ctaRoute: "/referral", screen: "referral" },
+          });
+      }
+      if (outcome.referredReward > 0) {
+        await db
+          .collection("patient_notifications").doc(uid)
+          .collection("items").add({
+            type: "welcome_bonus",
+            title: "Welcome Bonus Added! 🎁",
+            body: `₹${outcome.referredReward.toFixed(0)} MedNU Money has been added as a welcome gift! Use it for any MedNU booking.`,
+            createdAt: now,
+            deliverAt: now,
+            isRead: false,
+            data: { ctaRoute: "/wallet", screen: "wallet" },
+          });
+      }
+    } catch (err) {
+      _logWallet("WARNING", "referral_notification_failed", { uid, referralId, error: err.message });
+    }
+
+    _logWallet("INFO", "referral_rewarded", {
+      uid, referralId,
+      referrerId: outcome.referrerId,
+      referrerReward: outcome.referrerReward,
+      referredReward: outcome.referredReward,
+    });
+    return { success: true };
+  } catch (err) {
+    if (err instanceof HttpsError) throw err;
+    _logWallet("ERROR", "referral_reward_failed", { uid, referralId, error: err.message });
+    throw new HttpsError("internal", "Could not grant the referral reward.");
+  }
 });
 
 // ── MSG91: Send OTP ───────────────────────────────────────────────────────────
@@ -1975,4 +2710,1421 @@ exports.msg91VerifyOtp = onCall(async (request) => {
   // ── Step 3: Issue Firebase custom token ──────────────────────────────────
   const customToken = await auth.createCustomToken(uid);
   return { customToken };
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+// ── Lab & Diagnostics module ────────────────────────────────────────────────
+//
+// The MedNu Patient app books diagnostics/lab tests through the existing,
+// shared `service_requests` collection (type: 'diagnostics' | 'lab_tests') —
+// it is NOT changed here. The Lab Partner module (mednu_doctor) instead
+// operates against a dedicated `diagnostic_bookings` collection shaped for a
+// lab's workflow (technician assignment, sample collection, report upload).
+//
+// These three triggers keep the two collections in sync with no possibility
+// of an infinite loop, because writes only ever flow in one direction per
+// hop:
+//   service_requests  (create)          -> diagnostic_bookings (create)
+//   service_requests  (patient cancels) -> diagnostic_bookings (status only)
+//   diagnostic_bookings (lab updates)   -> service_requests (status/fields
+//                                          the lab module recognizes only)
+// Neither of the two "-> service_requests" hops writes back to
+// diagnostic_bookings, and neither of the two "-> diagnostic_bookings" hops
+// writes back to service_requests, so there is no cycle.
+// ══════════════════════════════════════════════════════════════════════════
+
+const _DIAGNOSTIC_TYPES = ["diagnostics", "lab_tests"];
+
+// Lab-side status -> the exact service_requests status vocabulary already
+// consumed by onServiceRequestStatusChange's `lab_tests`/`diagnostics` maps
+// above (accepted, assigned, in_progress, sample_collected, report_ready,
+// completed, rejected, cancelled). Statuses not present here (e.g. a
+// lab-side 'pending') are intentionally not mirrored — 'pending' is in the
+// internal-only skip list in onServiceRequestStatusChange already.
+// 'expired' (see cleanupStaleDiagnosticBookings) maps onto the same patient
+// message as 'cancelled' — from the patient's point of view an unclaimed
+// booking that timed out and one they cancelled themselves both just mean
+// "this booking didn't happen."
+const _LAB_TO_SERVICE_REQUEST_STATUS = {
+  accepted:            "accepted",
+  rejected:             "rejected",
+  technician_assigned: "assigned",
+  sample_collected:    "sample_collected",
+  processing:          "in_progress",
+  report_uploaded:     "report_ready",
+  completed:           "completed",
+  expired:             "cancelled",
+};
+
+const _STALE_PENDING_HOURS = 24;
+
+// Structured logging for every Lab module Cloud Function — one shape so
+// these are easy to filter/alert on in Cloud Logging (`jsonPayload.module
+// == "lab"`), independent of the free-text console.log calls the rest of
+// this file already uses.
+function _logLab(severity, event, data = {}) {
+  const payload = { severity, module: "lab", event, ...data };
+  if (severity === "ERROR" || severity === "WARNING") {
+    console.error(JSON.stringify(payload));
+  } else {
+    console.log(JSON.stringify(payload));
+  }
+}
+
+// ── 1) Mirror new diagnostics/lab_tests service_requests into diagnostic_bookings ──
+exports.onDiagnosticServiceRequestCreated = onDocumentCreated(
+  "service_requests/{requestId}",
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+    const data = snap.data();
+    if (!_DIAGNOSTIC_TYPES.includes(data.type)) return;
+
+    const db = getFirestore();
+    const requestId = event.params.requestId;
+    const details = data.serviceDetails || {};
+    const bookingRef = db.collection("diagnostic_bookings").doc(requestId);
+
+    // Idempotency guard: at-least-once delivery can redeliver this event.
+    // The write below is itself idempotent (same deterministic ID, same
+    // content), but skipping entirely once the booking already exists
+    // avoids bumping `updatedAt` and re-triggering downstream watchers
+    // (e.g. the dashboard's realtime listeners) on a pure retry.
+    const existing = await bookingRef.get();
+    if (existing.exists) {
+      _logLab("INFO", "service_request_create_skipped_existing", { requestId });
+      return;
+    }
+
+    await bookingRef.set({
+      sourceRequestId: requestId,
+      type: data.type,
+      testName: details.testName || data.serviceName || "Diagnostic Test",
+      price: details.price ?? data.amount ?? 0,
+      amount: data.amount ?? details.price ?? 0,
+      patientId: data.patientId,
+      patientName: data.patientName || "Patient",
+      patientPhone: data.patientPhone || "",
+      address: data.address || "",
+      preferredDate: data.preferredDate || "",
+      preferredTime: data.preferredTime || "",
+      notes: data.notes || "",
+      labId: null,
+      status: "pending",
+      technicianId: null,
+      technicianName: null,
+      collectionTime: null,
+      reportUrl: null,
+      reportUploadedAt: null,
+      reportVersion: 0,
+      latestReportId: null,
+      createdAt: data.createdAt || FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    _logLab("INFO", "diagnostic_booking_created", { requestId, type: data.type });
+  }
+);
+
+// ── 2) Mirror a patient-initiated cancellation onto diagnostic_bookings ──────
+exports.onDiagnosticServiceRequestCancelled = onDocumentUpdated(
+  "service_requests/{requestId}",
+  async (event) => {
+    const before = event.data.before.data();
+    const after  = event.data.after.data();
+    if (!_DIAGNOSTIC_TYPES.includes(after.type)) return;
+    if (before.status === after.status) return;
+    if (after.status !== "cancelled") return;
+
+    const db = getFirestore();
+    const requestId = event.params.requestId;
+    const bookingRef = db.collection("diagnostic_bookings").doc(requestId);
+
+    // Idempotency guard doubles as the terminal-state guard: whether this
+    // is a genuine first delivery or a redelivered retry, re-checking the
+    // *current* stored status (not the before/after off this specific
+    // event) is what makes repeated invocations converge safely.
+    await db.runTransaction(async (tx) => {
+      const bookingSnap = await tx.get(bookingRef);
+      if (!bookingSnap.exists) return;
+      const currentStatus = bookingSnap.data().status;
+      if (["completed", "cancelled", "rejected", "expired"].includes(currentStatus)) {
+        _logLab("INFO", "cancel_mirror_skipped_terminal", { requestId, currentStatus });
+        return;
+      }
+      tx.update(bookingRef, { status: "cancelled", updatedAt: FieldValue.serverTimestamp() });
+    });
+    _logLab("INFO", "diagnostic_booking_cancelled_by_patient", { requestId });
+  }
+);
+
+// ── 3) Mirror lab-side booking updates back onto service_requests ───────────
+// Also writes the immutable lab_transactions ledger entry once a booking is
+// marked completed — mirrors the wallet architecture's
+// "balance is never written directly by the client" rule: this is the one
+// and only writer of lab_transactions.
+exports.onDiagnosticBookingStatusChange = onDocumentUpdated(
+  "diagnostic_bookings/{bookingId}",
+  async (event) => {
+    const before = event.data.before.data();
+    const after  = event.data.after.data();
+    const bookingId = event.params.bookingId;
+    const db = getFirestore();
+
+    const statusChanged = before.status !== after.status;
+    const technicianChanged = before.technicianName !== after.technicianName;
+    const reportChanged = before.reportUrl !== after.reportUrl;
+
+    // A failed mirror is remembered and rethrown at the very end rather than
+    // immediately, so a mirror failure can never skip the ledger credit
+    // below — the credit is transactionally idempotent, so it is safe to
+    // have already run when the retry re-executes this function.
+    let mirrorError = null;
+
+    if (statusChanged || technicianChanged || reportChanged) {
+      const update = { updatedAt: FieldValue.serverTimestamp() };
+
+      const mappedStatus = _LAB_TO_SERVICE_REQUEST_STATUS[after.status];
+      if (statusChanged && mappedStatus) update.status = mappedStatus;
+      if (technicianChanged && after.technicianName) update.technicianName = after.technicianName;
+      if (reportChanged && after.reportUrl) update["serviceDetails.reportUrl"] = after.reportUrl;
+
+      if (Object.keys(update).length > 1) {
+        const serviceRequestRef = db.collection("service_requests").doc(after.sourceRequestId || bookingId);
+        // Idempotency: skip the write entirely if every field we're about
+        // to set already matches what's stored — a redelivered event that
+        // already landed becomes a no-op read instead of a redundant write
+        // (and a redundant downstream patient notification).
+        // Not caught: a failed read is transient and must surface as a
+        // function failure (see the update below) rather than be silently
+        // downgraded into "not applied yet".
+        const current = await serviceRequestRef.get();
+        const currentData = current.exists ? current.data() : null;
+        const alreadyApplied = !!currentData &&
+          (!update.status || currentData.status === update.status) &&
+          (!update.technicianName || currentData.technicianName === update.technicianName) &&
+          (!update["serviceDetails.reportUrl"] ||
+            currentData.serviceDetails?.reportUrl === update["serviceDetails.reportUrl"]);
+
+        if (!currentData) {
+          // Permanent, not retryable — the source doc is gone. Logged loudly
+          // instead of throwing, so this doesn't become an error that can
+          // never succeed.
+          _logLab("WARNING", "mirror_target_missing", { bookingId });
+        } else if (alreadyApplied) {
+          _logLab("INFO", "mirror_skipped_already_applied", { bookingId });
+        } else {
+          // Rethrown on failure: swallowing here would report success to the
+          // platform and leave service_requests permanently stale.
+          await serviceRequestRef.update(update).then(
+            () => _logLab("INFO", "mirrored_to_service_request", { bookingId, fields: Object.keys(update) }),
+            (err) => {
+              _logLab("ERROR", "mirror_to_service_request_failed", { bookingId, error: err.message });
+              mirrorError = err;
+            },
+          );
+        }
+      }
+    }
+
+    // Credit the lab's ledger exactly once, on the pending->completed edge.
+    // Retry-safe: a deterministic doc ID (one ledger row per booking) plus a
+    // transactional existence check means a redelivered event — or any
+    // other code path that somehow re-fires this trigger for the same
+    // completed booking — can never double-credit the lab.
+    if (statusChanged && after.status === "completed" && before.status !== "completed" && after.labId) {
+      const ledgerRef = db.collection("lab_transactions").doc(bookingId);
+      const credited = await db.runTransaction(async (tx) => {
+        const existing = await tx.get(ledgerRef);
+        if (existing.exists) return false;
+        tx.set(ledgerRef, {
+          labId: after.labId,
+          bookingId,
+          type: "earning",
+          amount: after.amount ?? after.price ?? 0,
+          status: "credited",
+          testName: after.testName || "Diagnostic Test",
+          patientName: after.patientName || "Patient",
+          createdAt: FieldValue.serverTimestamp(),
+        });
+        return true;
+      });
+      _logLab("INFO", credited ? "lab_ledger_credited" : "lab_ledger_credit_skipped_duplicate", {
+        bookingId, labId: after.labId, amount: after.amount ?? after.price ?? 0,
+      });
+    }
+
+    if (mirrorError) throw mirrorError;
+  }
+);
+
+// ── 4) Stale-booking cleanup ─────────────────────────────────────────────────
+// A booking nobody claims eventually needs to stop showing up as "available"
+// forever. Runs hourly; expires anything still `pending` after 24h, mirrored
+// onto service_requests as 'cancelled' via the existing trigger #3 (by
+// simply setting status: 'expired' here and letting _LAB_TO_SERVICE_REQUEST_
+// STATUS + onDiagnosticBookingStatusChange do the rest — no duplicated
+// mirroring logic).
+// Shared by every stale-cleanup scheduled function below (Lab / Pharmacy /
+// Ambulance / Caregiver). A plain batched update over a query snapshot is a
+// lost-update race: a partner can claim (or a patient can cancel) one of
+// these docs in the seconds between the query and the commit, and the batch
+// would clobber that legitimate write back to expired/cancelled/missed.
+// Each doc is instead written under a `lastUpdateTime` precondition, so a
+// doc that changed after it was read is skipped rather than overwritten —
+// and if it is still genuinely stale, the next hourly run picks it up.
+// Per-doc (not batched) on purpose: one concurrently-modified doc must not
+// fail the other 199.
+async function _expireStaleDocs(docs, patch) {
+  let updated = 0;
+  let skipped = 0;
+  await Promise.all(docs.map(async (doc) => {
+    try {
+      await doc.ref.update(patch, { lastUpdateTime: doc.updateTime });
+      updated++;
+    } catch {
+      // FAILED_PRECONDITION == the doc moved on under us; anything else is
+      // reported by the caller's log line as a skip too, deliberately: this
+      // runs hourly and is fully self-healing on the next pass.
+      skipped++;
+    }
+  }));
+  return { updated, skipped };
+}
+
+exports.cleanupStaleDiagnosticBookings = onSchedule({ schedule: "every 60 minutes", timeZone: "UTC" }, async () => {
+  const db = getFirestore();
+  const cutoff = Timestamp.fromDate(new Date(Date.now() - _STALE_PENDING_HOURS * 60 * 60 * 1000));
+
+  const staleSnap = await db.collection("diagnostic_bookings")
+    .where("status", "==", "pending")
+    .where("createdAt", "<", cutoff)
+    .limit(200) // bounded per run; the next hourly run picks up any remainder.
+    .get();
+
+  if (staleSnap.empty) {
+    _logLab("INFO", "stale_cleanup_none_found");
+    return;
+  }
+
+  const { updated, skipped } = await _expireStaleDocs(staleSnap.docs, { status: "expired", updatedAt: FieldValue.serverTimestamp() });
+  _logLab("INFO", "stale_cleanup_expired", { count: updated, skippedConcurrentlyModified: skipped });
+});
+
+// ── 5) Patient-visible report consistency audit ─────────────────────────────
+// Detects (does not silently "fix") drift between a booking's own reportUrl
+// and what the patient app actually sees on the mirrored service_requests
+// doc. Auto-correcting here would risk masking a real bug in trigger #3
+// behind a second, less-observable write path — this only ever logs, so a
+// genuine mismatch surfaces to whoever's watching Cloud Logging rather than
+// disappearing silently.
+exports.auditDiagnosticReportConsistency = onSchedule({ schedule: "every 24 hours", timeZone: "UTC" }, async () => {
+  const db = getFirestore();
+  const cutoff = Timestamp.fromDate(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
+
+  // Firestore only allows an inequality filter (>, <, !=, ...) on a single
+  // field per query, and `updatedAt > cutoff` is the one that matters for
+  // bounding this scan — `reportUrl` presence is filtered client-side
+  // instead of adding a second inequality field.
+  const snap = await db.collection("diagnostic_bookings")
+    .where("updatedAt", ">", cutoff)
+    .limit(500)
+    .get();
+
+  let mismatches = 0;
+  for (const doc of snap.docs) {
+    const booking = doc.data();
+    if (!booking.reportUrl) continue;
+    const requestId = booking.sourceRequestId || doc.id;
+    const reqSnap = await db.collection("service_requests").doc(requestId).get();
+    if (!reqSnap.exists) {
+      _logLab("WARNING", "report_audit_missing_service_request", { bookingId: doc.id, requestId });
+      mismatches++;
+      continue;
+    }
+    const mirroredUrl = reqSnap.data().serviceDetails?.reportUrl;
+    if (mirroredUrl !== booking.reportUrl) {
+      _logLab("WARNING", "report_audit_url_mismatch", {
+        bookingId: doc.id,
+        requestId,
+        bookingReportUrl: booking.reportUrl,
+        mirroredReportUrl: mirroredUrl || null,
+      });
+      mismatches++;
+    }
+  }
+  _logLab("INFO", "report_audit_complete", { checked: snap.size, mismatches });
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+// ── Pharmacy & Medical Equipment module ─────────────────────────────────────
+//
+// Unlike Lab (single source collection), Pharmacy bridges TWO real,
+// already-live patient-side collections that were never designed to share a
+// vocabulary:
+//   - `orders`            — medicine line-item checkouts (multi-item, no
+//                            existing status-notification pipeline at all).
+//   - `service_requests`  — medical equipment rent/buy requests
+//                            (type: 'equipment'), which DOES already ride
+//                            onServiceRequestStatusChange's generic
+//                            notification fallback, same as Lab's diagnostics
+//                            bookings did.
+// A dormant `medicine_orders` collection + `onMedicineOrderStatusChange`
+// trigger already existed in this file before this module — nothing writes
+// to it (confirmed: no patient-app code references it). It is NOT used
+// here, deliberately, for the same reason `lab_bookings` wasn't used for
+// Lab: mirroring from it would silently receive zero real orders.
+//
+// Both sources mirror into one unified `pharmacy_orders` collection (same
+// doc ID as the source, `sourceCollection` records which one), so the
+// Pharmacy Partner client only ever has to know one shape. Status flows
+// one-directional per hop exactly like Lab's mirrors, so there is no cycle:
+//   orders (create)                    -> pharmacy_orders (create)
+//   service_requests[equipment] create -> pharmacy_orders (create)
+//   pharmacy_orders (pharmacy updates) -> orders (status only, medicine)
+//                                       -> service_requests (status only, equipment)
+// ══════════════════════════════════════════════════════════════════════════
+
+const _PHARMACY_STALE_PENDING_HOURS = 24;
+
+function _logPharmacy(severity, event, data = {}) {
+  const payload = { severity, module: "pharmacy", event, ...data };
+  if (severity === "ERROR" || severity === "WARNING") {
+    console.error(JSON.stringify(payload));
+  } else {
+    console.log(JSON.stringify(payload));
+  }
+}
+
+// Pharmacy-side status -> `orders.status` (medicine). `orders` has no
+// pre-existing consumer of this field beyond the owning patient's own
+// cancel-only self-update, so these values are written verbatim rather than
+// translated into some other app's vocabulary — there isn't one yet.
+const _PHARMACY_TO_ORDER_STATUS = {
+  verified:          "verified",
+  packed:            "packed",
+  out_for_delivery:  "out_for_delivery",
+  delivered:         "delivered",
+  cancelled:         "cancelled",
+};
+
+// Pharmacy-side status -> the existing service_requests vocabulary, reusing
+// onServiceRequestStatusChange's generic fallback map (equipment isn't a
+// named type in its per-service statusMap, so it already falls through to
+// genericMap: accepted/assigned/in_progress/completed/rejected/cancelled).
+const _PHARMACY_TO_SERVICE_REQUEST_STATUS = {
+  verified:          "accepted",
+  packed:            "assigned",
+  out_for_delivery:  "in_progress",
+  delivered:         "completed",
+  cancelled:         "cancelled",
+};
+
+// Same-status-or-listed-forward-transition guard, mirrored server-side in
+// firestore.rules too (client and Cloud Function agree on the same graph).
+const _PHARMACY_VALID_TRANSITIONS = {
+  pending:              ["prescription_required", "verified", "cancelled"],
+  prescription_required: ["verified", "cancelled"],
+  verified:             ["packed", "cancelled"],
+  packed:               ["out_for_delivery", "cancelled"],
+  out_for_delivery:     ["delivered", "cancelled"],
+};
+
+function _pharmacyStatusMessage(orderType, status) {
+  const map = {
+    // The pharmacy can move an order to 'prescription_required' (see
+    // _PHARMACY_VALID_TRANSITIONS / firestore.rules). It is deliberately not
+    // in _PHARMACY_TO_ORDER_STATUS — the patient-facing `orders.status`
+    // vocabulary has no equivalent — but the patient still has to be told,
+    // otherwise the order silently stalls until the 24h stale cleanup
+    // cancels it.
+    prescription_required: ["Prescription Required", "Your order needs a valid prescription. Tap to upload it."],
+    verified:         ["Order Verified", "Your pharmacy order has been verified and is being prepared."],
+    packed:           ["Order Packed", "Your order has been packed and will be dispatched soon."],
+    out_for_delivery: ["Out for Delivery", "Your order is out for delivery."],
+    delivered:        ["Order Delivered", "Your order has been delivered. Feel better soon!"],
+    cancelled:        ["Order Cancelled", `Your ${orderType === "equipment" ? "equipment" : "pharmacy"} order was cancelled.`],
+  };
+  return map[status] || null;
+}
+
+// ── 1) Mirror new medicine `orders` into pharmacy_orders + pharmacy_order_items ──
+exports.onMedicineOrderCreated = onDocumentCreated(
+  "orders/{orderDocId}",
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+    const data = snap.data();
+    const orderId = event.params.orderDocId;
+    const db = getFirestore();
+
+    const pharmacyOrderRef = db.collection("pharmacy_orders").doc(orderId);
+    const existing = await pharmacyOrderRef.get();
+    if (existing.exists) {
+      _logPharmacy("INFO", "medicine_order_create_skipped_existing", { orderId });
+      return;
+    }
+
+    const items = Array.isArray(data.items) ? data.items.slice(0, 50) : [];
+
+    // A medicine requires a prescription per its `medicines_catalogue` doc,
+    // not per order-line-item (the order snapshot doesn't carry the flag) —
+    // look each one up. Bounded by `items.length` (already capped above).
+    let requiresPrescription = false;
+    try {
+      const catalogueSnaps = await Promise.all(
+        items
+          .map((i) => i.id)
+          .filter(Boolean)
+          .map((id) => db.collection("medicines_catalogue").doc(String(id)).get()),
+      );
+      requiresPrescription = catalogueSnaps.some((s) => s.exists && s.data().requiresPrescription === true);
+    } catch (err) {
+      // Fail CLOSED. A transient read failure previously left this `false`,
+      // which would let a prescription-only medicine through the pharmacy
+      // pipeline with no prescription ever requested. Defaulting to `true`
+      // costs at worst one unnecessary prescription prompt.
+      requiresPrescription = true;
+      _logPharmacy("ERROR", "prescription_lookup_failed_defaulting_required", { orderId, error: err.message });
+    }
+
+    const totalAmount = data.total ?? items.reduce((sum, i) => sum + (i.price || 0) * (i.count || 1), 0);
+
+    // The order doc and its line items are written in ONE batch with
+    // deterministic item IDs (`{orderId}_{index}`). Previously the items used
+    // auto-IDs in a second commit: two concurrent redeliveries could both
+    // pass the existence check above and duplicate every line item, and a
+    // failure between the two writes left an order with no items at all that
+    // the existence check would then never repair.
+    const batch = db.batch();
+    batch.set(pharmacyOrderRef, {
+      sourceCollection: "orders",
+      sourceId: orderId,
+      orderType: "medicine",
+      pharmacyId: null,
+      status: "pending",
+      requiresPrescription,
+      prescriptionUrl: null,
+      patientId: data.patientId,
+      patientName: data.deliveryName || "Patient",
+      patientPhone: data.deliveryPhone || "",
+      deliveryAddress: data.deliveryAddress || "",
+      itemCount: items.length,
+      totalAmount,
+      deliveryPersonName: null,
+      createdAt: data.createdAt || FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    items.forEach((item, i) => {
+      batch.set(db.collection("pharmacy_order_items").doc(`${orderId}_${i}`), {
+        orderId,
+        name: item.name || "Item",
+        brand: item.brand || "",
+        price: item.price ?? 0,
+        count: item.count ?? 1,
+        subtotal: (item.price ?? 0) * (item.count ?? 1),
+      });
+    });
+    await batch.commit();
+
+    _logPharmacy("INFO", "pharmacy_order_created", { orderId, orderType: "medicine", items: items.length, requiresPrescription });
+  }
+);
+
+// ── 2) Mirror new equipment service_requests into pharmacy_orders ───────────
+exports.onEquipmentServiceRequestCreated = onDocumentCreated(
+  "service_requests/{requestId}",
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+    const data = snap.data();
+    if (data.type !== "equipment") return;
+
+    const db = getFirestore();
+    const requestId = event.params.requestId;
+    const pharmacyOrderRef = db.collection("pharmacy_orders").doc(requestId);
+
+    const existing = await pharmacyOrderRef.get();
+    if (existing.exists) {
+      _logPharmacy("INFO", "equipment_request_create_skipped_existing", { requestId });
+      return;
+    }
+
+    const details = data.serviceDetails || {};
+    const amount = data.amount ?? details.purchasePrice ?? details.pricePerDay ?? 0;
+
+    // One batch + a deterministic line-item ID, same reasoning as
+    // onMedicineOrderCreated above (no duplicate item on a redelivery, no
+    // order left permanently item-less by a partial failure).
+    const batch = db.batch();
+    batch.set(pharmacyOrderRef, {
+      sourceCollection: "service_requests",
+      sourceId: requestId,
+      orderType: "equipment",
+      pharmacyId: null,
+      status: "pending",
+      requiresPrescription: false,
+      prescriptionUrl: null,
+      patientId: data.patientId,
+      patientName: data.patientName || "Patient",
+      patientPhone: data.patientPhone || "",
+      deliveryAddress: data.address || "",
+      itemCount: 1,
+      totalAmount: amount,
+      deliveryPersonName: null,
+      createdAt: data.createdAt || FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    batch.set(db.collection("pharmacy_order_items").doc(`${requestId}_0`), {
+      orderId: requestId,
+      name: details.equipmentName || data.serviceName || "Medical Equipment",
+      brand: details.mode === "rent" ? `Rental • ${details.rentalDays || 1} day(s)` : "Purchase",
+      price: amount,
+      count: 1,
+      subtotal: amount,
+    });
+
+    await batch.commit();
+
+    _logPharmacy("INFO", "pharmacy_order_created", { orderId: requestId, orderType: "equipment" });
+  }
+);
+
+// ── 2b) Mirror a patient's prescription upload onto pharmacy_orders ─────────
+// Patients upload directly onto their own `orders` doc (see
+// firestore.rules — patient can self-write prescriptionUrl/
+// prescriptionFileType/prescriptionUploadedAt only, never the verification
+// verdict). This one-way mirror is what makes it show up on the pharmacy
+// side in realtime, and — since a re-upload should always restart
+// verification — resets prescriptionVerified/prescriptionRejectedReason
+// back to null on the SAME `orders` doc after mirroring. That reset write
+// re-triggers this function, but the guard on `before.prescriptionUrl !==
+// after.prescriptionUrl` makes the second pass a no-op (the URL didn't
+// change on that hop), so this converges in exactly two invocations and
+// never loops.
+exports.onOrderPrescriptionUploaded = onDocumentUpdated(
+  "orders/{orderId}",
+  async (event) => {
+    const before = event.data.before.data();
+    const after  = event.data.after.data();
+    if (before.prescriptionUrl === after.prescriptionUrl) return;
+
+    const orderId = event.params.orderId;
+    const db = getFirestore();
+
+    const pharmacyOrderRef = db.collection("pharmacy_orders").doc(orderId);
+
+    // The create-mirror (onMedicineOrderCreated) normally lands well before
+    // any realistic upload timing, but Cloud Functions give no ordering
+    // guarantee between two independent triggers on two different
+    // documents. Rather than skip the mirror outright on a cold race,
+    // retry with backoff for a few seconds — cheap, and turns a
+    // theoretical race into a practical non-issue instead of a silently
+    // dropped prescription.
+    let pharmacyOrderSnap = await pharmacyOrderRef.get();
+    let attempts = 0;
+    while (!pharmacyOrderSnap.exists && attempts < 4) {
+      attempts++;
+      await new Promise((resolve) => setTimeout(resolve, 1500 * attempts));
+      pharmacyOrderSnap = await pharmacyOrderRef.get();
+    }
+    if (!pharmacyOrderSnap.exists) {
+      // Still missing after ~15s of backoff — genuinely abnormal (e.g.
+      // onMedicineOrderCreated itself failed). Logged loudly so it's
+      // actionable rather than silently creating a partial doc that
+      // onMedicineOrderCreated's own idempotency guard would then never
+      // fully populate.
+      _logPharmacy("ERROR", "prescription_mirror_failed_no_pharmacy_order", { orderId, attempts });
+      return;
+    }
+
+    // A fresh upload (or a removal) always invalidates any prior
+    // verification decision on BOTH copies — pharmacy_orders (so the
+    // pharmacist doesn't see a stale "rejected" badge next to a brand-new
+    // file) and the source `orders` doc itself (reset separately below).
+    await pharmacyOrderRef.update({
+      prescriptionUrl: after.prescriptionUrl ?? null,
+      prescriptionFileType: after.prescriptionFileType ?? null,
+      prescriptionUploadedAt: after.prescriptionUploadedAt ?? FieldValue.serverTimestamp(),
+      prescriptionVerified: null,
+      prescriptionRejectedReason: null,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    _logPharmacy("INFO", "prescription_mirrored_to_pharmacy", { orderId });
+
+    // Reset verification state on the source doc too — idempotent (only
+    // writes if something would actually change), see the function-level
+    // comment above for why this can't loop.
+    if (after.prescriptionVerified != null || after.prescriptionRejectedReason != null) {
+      await db.collection("orders").doc(orderId).update({
+        prescriptionVerified: null,
+        prescriptionRejectedReason: null,
+      });
+      _logPharmacy("INFO", "prescription_verification_reset", { orderId });
+    }
+  }
+);
+
+// ── 2c) Mirror a patient-initiated cancellation onto pharmacy_orders ────────
+// Lab, Ambulance and Caregiver each already have this hop; Pharmacy was the
+// one module missing it, so a patient cancelling their own `orders` doc (the
+// only status write firestore.rules lets them make) or their equipment
+// service_request left the pharmacy still seeing — and still fulfilling — an
+// order the patient had already cancelled.
+//
+// No cycle: trigger #3's reverse mirror writes 'cancelled' onto the source,
+// which re-fires this function, but by then pharmacy_orders is already
+// 'cancelled' and the terminal-state guard below makes it a no-op.
+async function _mirrorPharmacyCancellation(db, orderId) {
+  const pharmacyOrderRef = db.collection("pharmacy_orders").doc(orderId);
+  await db.runTransaction(async (tx) => {
+    const orderSnap = await tx.get(pharmacyOrderRef);
+    if (!orderSnap.exists) return;
+    const currentStatus = orderSnap.data().status;
+    if (["delivered", "cancelled"].includes(currentStatus)) {
+      _logPharmacy("INFO", "cancel_mirror_skipped_terminal", { orderId, currentStatus });
+      return;
+    }
+    tx.update(pharmacyOrderRef, { status: "cancelled", updatedAt: FieldValue.serverTimestamp() });
+  });
+  _logPharmacy("INFO", "pharmacy_order_cancelled_by_patient", { orderId });
+}
+
+exports.onMedicineOrderCancelledByPatient = onDocumentUpdated(
+  "orders/{orderId}",
+  async (event) => {
+    const before = event.data.before.data();
+    const after  = event.data.after.data();
+    if (before.status === after.status) return;
+    if (after.status !== "cancelled") return;
+    await _mirrorPharmacyCancellation(getFirestore(), event.params.orderId);
+  }
+);
+
+exports.onEquipmentServiceRequestCancelled = onDocumentUpdated(
+  "service_requests/{requestId}",
+  async (event) => {
+    const before = event.data.before.data();
+    const after  = event.data.after.data();
+    if (after.type !== "equipment") return;
+    if (before.status === after.status) return;
+    if (after.status !== "cancelled") return;
+    await _mirrorPharmacyCancellation(getFirestore(), event.params.requestId);
+  }
+);
+
+// ── 3) Mirror pharmacy-side updates back onto the correct source collection ──
+// Also credits the immutable pharmacy_transactions ledger exactly once, on
+// the ->delivered edge — same deterministic-ID-plus-transaction pattern
+// used for lab_transactions, for the same double-credit-proofing reason.
+exports.onPharmacyOrderStatusChange = onDocumentUpdated(
+  "pharmacy_orders/{orderId}",
+  async (event) => {
+    const before = event.data.before.data();
+    const after  = event.data.after.data();
+    const orderId = event.params.orderId;
+    const db = getFirestore();
+
+    const statusChanged = before.status !== after.status;
+    const deliveryPersonChanged = before.deliveryPersonName !== after.deliveryPersonName;
+    const prescriptionDecisionChanged = before.prescriptionVerified !== after.prescriptionVerified;
+    const isMedicine = after.sourceCollection === "orders";
+
+    // Remembered and rethrown at the end (see the Lab mirror) so a failed
+    // mirror never skips the notification or the ledger credit below, while
+    // still failing the invocation instead of reporting a false success.
+    let mirrorError = null;
+
+    if (statusChanged || deliveryPersonChanged) {
+      const mappedStatus = isMedicine
+        ? _PHARMACY_TO_ORDER_STATUS[after.status]
+        : _PHARMACY_TO_SERVICE_REQUEST_STATUS[after.status];
+
+      if (statusChanged && mappedStatus) {
+        const sourceRef = db.collection(after.sourceCollection).doc(after.sourceId || orderId);
+        const current = await sourceRef.get();
+        const alreadyApplied = current.exists && current.data().status === mappedStatus;
+
+        if (!current.exists) {
+          _logPharmacy("WARNING", "mirror_target_missing", { orderId, sourceCollection: after.sourceCollection });
+        } else if (alreadyApplied) {
+          _logPharmacy("INFO", "mirror_skipped_already_applied", { orderId });
+        } else {
+          await sourceRef.update({ status: mappedStatus, updatedAt: FieldValue.serverTimestamp() }).then(
+            () => _logPharmacy("INFO", "mirrored_to_source", { orderId, sourceCollection: after.sourceCollection, mappedStatus }),
+            (err) => {
+              _logPharmacy("ERROR", "mirror_to_source_failed", { orderId, error: err.message });
+              mirrorError = err;
+            },
+          );
+        }
+      }
+    }
+
+    // ── Prescription decision (medicine orders only) ──────────────────────
+    // A pharmacist's verify/reject/re-request action writes
+    // prescriptionVerified/prescriptionRejectedReason on pharmacy_orders —
+    // mirrored back onto the real `orders` doc here, since the client never
+    // writes those two fields on `orders` directly (see firestore.rules:
+    // patient can only self-write prescriptionUrl/prescriptionFileType/
+    // prescriptionUploadedAt, never the verification verdict).
+    if (isMedicine && prescriptionDecisionChanged) {
+      const sourceRef = db.collection(after.sourceCollection).doc(after.sourceId || orderId);
+      await sourceRef.update({
+        prescriptionVerified: after.prescriptionVerified ?? null,
+        prescriptionRejectedReason: after.prescriptionRejectedReason ?? null,
+        updatedAt: FieldValue.serverTimestamp(),
+      }).then(
+        () => _logPharmacy("INFO", "prescription_decision_mirrored", { orderId, verified: after.prescriptionVerified }),
+        (err) => {
+          _logPharmacy("ERROR", "prescription_decision_mirror_failed", { orderId, error: err.message });
+          mirrorError = err;
+        },
+      );
+    }
+
+    // ── Notifications — at most one per update, prescription decisions take
+    // priority over the generic status message when both changed in the
+    // same write (e.g. "reject" sets prescriptionVerified:false AND
+    // status:'cancelled' together). `orders` has no pre-existing
+    // notification pipeline (unlike service_requests, which already gets
+    // one for free via onServiceRequestStatusChange's generic fallback) —
+    // sent directly here, reusing the existing _sendPatientNotification
+    // helper rather than inventing a second notification path.
+    if (isMedicine && after.patientId) {
+      let notif = null;
+
+      if (prescriptionDecisionChanged && after.prescriptionVerified === true) {
+        notif = ["Prescription Verified", "Your prescription has been verified. Your order is being prepared.", "prescription_verified"];
+      } else if (prescriptionDecisionChanged && after.prescriptionVerified === false) {
+        const reason = after.prescriptionRejectedReason || "Please review and re-upload your prescription.";
+        notif = after.status === "cancelled"
+          ? ["Prescription Rejected", reason, "prescription_rejected"]
+          : ["Prescription Needs Attention", reason, "prescription_reupload_requested"];
+      } else if (statusChanged) {
+        const messages = _pharmacyStatusMessage(after.orderType, after.status);
+        if (messages) notif = [...messages, `pharmacy_${after.status}`];
+      }
+
+      if (notif) {
+        await _sendPatientNotification(db, getMessaging(), after.patientId, {
+          title: notif[0],
+          body: notif[1],
+          type: notif[2],
+          serviceType: "medicine",
+          bookingId: orderId,
+          actionType: "open_service",
+          extraData: { status: after.status, prescriptionVerified: after.prescriptionVerified ?? null },
+        });
+      }
+    }
+
+    if (statusChanged && after.status === "delivered" && before.status !== "delivered" && after.pharmacyId) {
+      const ledgerRef = db.collection("pharmacy_transactions").doc(orderId);
+      const credited = await db.runTransaction(async (tx) => {
+        const existingTx = await tx.get(ledgerRef);
+        if (existingTx.exists) return false;
+        tx.set(ledgerRef, {
+          pharmacyId: after.pharmacyId,
+          orderId,
+          type: "earning",
+          amount: after.totalAmount ?? 0,
+          status: "credited",
+          orderType: after.orderType || "medicine",
+          patientName: after.patientName || "Patient",
+          createdAt: FieldValue.serverTimestamp(),
+        });
+        return true;
+      });
+      _logPharmacy("INFO", credited ? "pharmacy_ledger_credited" : "pharmacy_ledger_credit_skipped_duplicate", {
+        orderId, pharmacyId: after.pharmacyId, amount: after.totalAmount ?? 0,
+      });
+    }
+
+    if (mirrorError) throw mirrorError;
+  }
+);
+
+// ── 4) Stale pending-order cleanup ───────────────────────────────────────────
+exports.cleanupStalePharmacyOrders = onSchedule({ schedule: "every 60 minutes", timeZone: "UTC" }, async () => {
+  const db = getFirestore();
+  const cutoff = Timestamp.fromDate(new Date(Date.now() - _PHARMACY_STALE_PENDING_HOURS * 60 * 60 * 1000));
+
+  const staleSnap = await db.collection("pharmacy_orders")
+    .where("status", "==", "pending")
+    .where("createdAt", "<", cutoff)
+    .limit(200)
+    .get();
+
+  if (staleSnap.empty) {
+    _logPharmacy("INFO", "stale_cleanup_none_found");
+    return;
+  }
+
+  const { updated, skipped } = await _expireStaleDocs(staleSnap.docs, { status: "cancelled", updatedAt: FieldValue.serverTimestamp() });
+  _logPharmacy("INFO", "stale_cleanup_cancelled", { count: updated, skippedConcurrentlyModified: skipped });
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+// ── Ambulance partner module ────────────────────────────────────────────────
+//
+// Same "Cloud Function mirror" shape as Lab and Pharmacy above: the partner
+// client never writes `service_requests` itself, it only ever writes the
+// additive `ambulance_requests` collection, and these triggers are the sole
+// writer that carries status in both directions.
+//
+//   service_requests[type='ambulance'] create -> ambulance_requests (create)
+//   ambulance_requests (partner updates)      -> service_requests (status)
+//                                             -> ambulance_trips (once, on completed)
+//                                             -> ambulance_transactions (once, on completed)
+//
+// The doc ID of an ambulance_requests doc is always the source
+// service_requests doc ID (deterministic mirror, exactly like
+// diagnostic_bookings), which is what makes every write here retry-safe.
+// ══════════════════════════════════════════════════════════════════════════
+
+// An unclaimed ambulance request is an *emergency* — leaving one sitting in
+// the "available" queue for a full day (Lab/Pharmacy's 24h) would be absurd,
+// so this module gets its own, much shorter constant.
+const _AMBULANCE_STALE_PENDING_HOURS = 2;
+
+// Ambulance-side status -> the `ambulance` block of
+// onServiceRequestStatusChange's statusMap, which is already fully wired
+// with real patient notification copy (accepted/assigned/in_progress/
+// arrived/completed/rejected/cancelled). No new keys are needed there.
+// 'cancelled' is deliberately absent from this map: whether it means
+// "rejected while unclaimed" or "cancelled after acceptance" depends on the
+// status it came *from*, so it is resolved per-event below rather than by a
+// flat lookup.
+const _AMBULANCE_TO_SERVICE_REQUEST_STATUS = {
+  accepted:  "accepted",
+  enRoute:   "in_progress",
+  arrived:   "arrived",
+  completed: "completed",
+};
+
+// Free-text ambulance type from the patient app's serviceDetails ->
+// the exact EmergencyType enum vocabulary the partner app's Dart model
+// parses (cardiac/accident/maternity/general). Anything unrecognised falls
+// back to 'general' rather than producing a value the client can't parse.
+function _ambulanceEmergencyType(raw) {
+  const s = String(raw || "").toLowerCase();
+  if (s.includes("cardiac") || s.includes("heart") || s.includes("icu")) return "cardiac";
+  if (s.includes("accident") || s.includes("trauma") || s.includes("injury")) return "accident";
+  if (s.includes("maternity") || s.includes("pregnan") || s.includes("delivery")) return "maternity";
+  return "general";
+}
+
+function _logAmbulance(severity, event, data = {}) {
+  const payload = { severity, module: "ambulance", event, ...data };
+  if (severity === "ERROR" || severity === "WARNING") {
+    console.error(JSON.stringify(payload));
+  } else {
+    console.log(JSON.stringify(payload));
+  }
+}
+
+// ── 1) Mirror new ambulance service_requests into ambulance_requests ────────
+exports.onAmbulanceServiceRequestCreated = onDocumentCreated(
+  "service_requests/{requestId}",
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+    const data = snap.data();
+    if (data.type !== "ambulance") return;
+
+    const db = getFirestore();
+    const requestId = event.params.requestId;
+    const details = data.serviceDetails || {};
+    const requestRef = db.collection("ambulance_requests").doc(requestId);
+
+    // Idempotency guard (same reasoning as onDiagnosticServiceRequestCreated):
+    // at-least-once delivery can redeliver this event, and skipping outright
+    // once the mirror exists avoids bumping `updatedAt` and re-triggering the
+    // partner app's realtime listeners on a pure retry.
+    const existing = await requestRef.get();
+    if (existing.exists) {
+      _logAmbulance("INFO", "service_request_create_skipped_existing", { requestId });
+      return;
+    }
+
+    await requestRef.set({
+      sourceRequestId: requestId,
+      type: "ambulance",
+      status: "pending",
+      patientId: data.patientId,
+      patientName: data.patientName || "Patient",
+      patientPhone: data.patientPhone || "",
+      pickupAddress: data.address || "",
+      dropAddress: details.dropAddress || "",
+      distanceKm: details.distanceKm ?? 0,
+      etaMinutes: details.etaMinutes ?? 0,
+      fare: data.amount ?? details.fare ?? 0,
+      emergencyType: _ambulanceEmergencyType(details.ambulanceType),
+      ambulanceId: null,
+      requestedAt: data.createdAt || FieldValue.serverTimestamp(),
+      createdAt: data.createdAt || FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    _logAmbulance("INFO", "ambulance_request_created", { requestId });
+  }
+);
+
+// ── 2) Mirror a patient-initiated cancellation onto ambulance_requests ──────
+exports.onAmbulanceServiceRequestCancelled = onDocumentUpdated(
+  "service_requests/{requestId}",
+  async (event) => {
+    const before = event.data.before.data();
+    const after  = event.data.after.data();
+    if (after.type !== "ambulance") return;
+    if (before.status === after.status) return;
+    if (after.status !== "cancelled") return;
+
+    const db = getFirestore();
+    const requestId = event.params.requestId;
+    const requestRef = db.collection("ambulance_requests").doc(requestId);
+
+    // Re-reading the *current* stored status inside a transaction (rather
+    // than trusting this event's before/after) is what makes repeated
+    // invocations converge safely — same pattern as the Lab mirror.
+    await db.runTransaction(async (tx) => {
+      const reqSnap = await tx.get(requestRef);
+      if (!reqSnap.exists) return;
+      const currentStatus = reqSnap.data().status;
+      if (["completed", "cancelled"].includes(currentStatus)) {
+        _logAmbulance("INFO", "cancel_mirror_skipped_terminal", { requestId, currentStatus });
+        return;
+      }
+      tx.update(requestRef, { status: "cancelled", updatedAt: FieldValue.serverTimestamp() });
+    });
+    _logAmbulance("INFO", "ambulance_request_cancelled_by_patient", { requestId });
+  }
+);
+
+// ── 3) Mirror ambulance-side updates back onto service_requests ─────────────
+// Also writes the immutable ambulance_trips record and the
+// ambulance_transactions ledger entry exactly once, on the ->completed edge.
+// Both use a deterministic doc ID (== requestId) inside a transaction, so a
+// redelivered event can never double-write a trip or double-credit earnings.
+exports.onAmbulanceRequestStatusChange = onDocumentUpdated(
+  "ambulance_requests/{requestId}",
+  async (event) => {
+    const before = event.data.before.data();
+    const after  = event.data.after.data();
+    const requestId = event.params.requestId;
+    const db = getFirestore();
+
+    const statusChanged = before.status !== after.status;
+    const claimChanged = before.ambulanceId !== after.ambulanceId;
+
+    // Remembered and rethrown at the end (see the Lab mirror) so a mirror
+    // failure never skips the trip/ledger write below, while still failing
+    // the invocation instead of silently reporting success.
+    let mirrorError = null;
+
+    if (statusChanged || claimChanged) {
+      const update = { updatedAt: FieldValue.serverTimestamp() };
+
+      let mappedStatus = _AMBULANCE_TO_SERVICE_REQUEST_STATUS[after.status];
+      // A 'cancelled' ambulance_request means two different things to the
+      // patient depending on where it came from: declining a request nobody
+      // had claimed yet is a *rejection* (we could not fulfil this),
+      // whereas cancelling one already accepted is a *cancellation*. The
+      // existing `ambulance` statusMap already has distinct copy for both.
+      if (statusChanged && after.status === "cancelled") {
+        mappedStatus = before.status === "pending" ? "rejected" : "cancelled";
+      }
+      if (statusChanged && mappedStatus) update.status = mappedStatus;
+      if (claimChanged && after.ambulanceId) update.assignedTo = after.ambulanceId;
+
+      if (Object.keys(update).length > 1) {
+        const serviceRequestRef = db.collection("service_requests").doc(after.sourceRequestId || requestId);
+        // Skip the write entirely if everything we'd set already matches —
+        // a redelivered event becomes a no-op read instead of a redundant
+        // write (and a redundant duplicate patient notification).
+        const current = await serviceRequestRef.get();
+        const currentData = current.exists ? current.data() : null;
+        const alreadyApplied = !!currentData &&
+          (!update.status || currentData.status === update.status) &&
+          (!update.assignedTo || currentData.assignedTo === update.assignedTo);
+
+        if (!currentData) {
+          _logAmbulance("WARNING", "mirror_target_missing", { requestId });
+        } else if (alreadyApplied) {
+          _logAmbulance("INFO", "mirror_skipped_already_applied", { requestId });
+        } else {
+          await serviceRequestRef.update(update).then(
+            () => _logAmbulance("INFO", "mirrored_to_service_request", { requestId, fields: Object.keys(update) }),
+            (err) => {
+              _logAmbulance("ERROR", "mirror_to_service_request_failed", { requestId, error: err.message });
+              mirrorError = err;
+            },
+          );
+        }
+      }
+    }
+
+    // ── Completion: trip record + ledger credit, both exactly once ─────────
+    if (statusChanged && after.status === "completed" && before.status !== "completed" && after.ambulanceId) {
+      const tripRef   = db.collection("ambulance_trips").doc(requestId);
+      const ledgerRef = db.collection("ambulance_transactions").doc(requestId);
+
+      // Trip duration is measured from when the patient actually requested
+      // the ambulance to the moment it was marked complete — the number the
+      // partner (and any later audit) cares about is real elapsed service
+      // time, not time-since-acceptance.
+      const requestedAt = after.requestedAt?.toDate?.() || after.createdAt?.toDate?.() || new Date();
+      const durationMinutes = Math.max(0, Math.round((Date.now() - requestedAt.getTime()) / 60000));
+      const fare = after.fare ?? 0;
+
+      const written = await db.runTransaction(async (tx) => {
+        const existingTrip = await tx.get(tripRef);
+        const existingTx   = await tx.get(ledgerRef);
+        if (existingTrip.exists && existingTx.exists) return false;
+
+        if (!existingTrip.exists) {
+          tx.set(tripRef, {
+            id: requestId,
+            ambulanceId: after.ambulanceId,
+            type: after.emergencyType || "general",
+            patientName: after.patientName || "Patient",
+            pickupAddress: after.pickupAddress || "",
+            dropAddress: after.dropAddress || "",
+            distanceKm: after.distanceKm ?? 0,
+            durationMinutes,
+            fare,
+            rating: null,
+            completedAt: FieldValue.serverTimestamp(),
+          });
+        }
+        if (!existingTx.exists) {
+          tx.set(ledgerRef, {
+            ambulanceId: after.ambulanceId,
+            requestId,
+            type: "earning",
+            amount: fare,
+            status: "credited",
+            patientName: after.patientName || "Patient",
+            createdAt: FieldValue.serverTimestamp(),
+          });
+        }
+        return true;
+      });
+
+      _logAmbulance("INFO", written ? "ambulance_trip_and_ledger_written" : "ambulance_completion_skipped_duplicate", {
+        requestId, ambulanceId: after.ambulanceId, amount: fare, durationMinutes,
+      });
+    }
+
+    if (mirrorError) throw mirrorError;
+  }
+);
+
+// ── 4) Stale pending-request cleanup ────────────────────────────────────────
+// Runs hourly. Anything still unclaimed after _AMBULANCE_STALE_PENDING_HOURS
+// is cancelled here; trigger #3 above then mirrors that onto
+// service_requests as 'rejected' (it came from 'pending'), so no mirroring
+// logic is duplicated in this function.
+exports.cleanupStaleAmbulanceRequests = onSchedule({ schedule: "every 60 minutes", timeZone: "UTC" }, async () => {
+  const db = getFirestore();
+  const cutoff = Timestamp.fromDate(new Date(Date.now() - _AMBULANCE_STALE_PENDING_HOURS * 60 * 60 * 1000));
+
+  const staleSnap = await db.collection("ambulance_requests")
+    .where("status", "==", "pending")
+    .where("createdAt", "<", cutoff)
+    .limit(200) // bounded per run; the next hourly run picks up any remainder.
+    .get();
+
+  if (staleSnap.empty) {
+    _logAmbulance("INFO", "stale_cleanup_none_found");
+    return;
+  }
+
+  const { updated, skipped } = await _expireStaleDocs(staleSnap.docs, { status: "cancelled", updatedAt: FieldValue.serverTimestamp() });
+  _logAmbulance("INFO", "stale_cleanup_cancelled", { count: updated, skippedConcurrentlyModified: skipped });
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+// ── Caregiver partner module ────────────────────────────────────────────────
+//
+// Same mirror shape again, with one wrinkle: the patient app has no single
+// "caregiver" service type. Caregiver-shaped bookings reach
+// `service_requests` through the CART checkout path
+// (mednu/lib/features/cart/screens/cart_screen.dart), which forwards each
+// non-medicine cart item's own type straight into
+// BookingService.createRequest — producing TWO live values:
+// 'care_assistant' and 'caregivers' (plural). The dormant 'home_care' type
+// in onServiceRequestStatusChange's statusMap is scaffolding only; nothing
+// in the patient app ever writes it, so mirroring from it would receive
+// zero real bookings (same trap as Lab's unused `lab_bookings`).
+//
+//   service_requests[care_assistant|caregivers] create
+//                                     -> caregiver_visits (create)
+//                                     -> caregiver_visits/{id}/tasks (4 defaults)
+//   caregiver_visits (partner updates) -> service_requests (status/assignedTo)
+//                                     -> caregiver_transactions (once, completed)
+//
+// Tasks and notes live as subcollections of the visit rather than as
+// top-level collections: they are naturally visit-scoped, which keeps their
+// ownership rules a single parent lookup and avoids a fan-out collection
+// that would need its own visitId index.
+// ══════════════════════════════════════════════════════════════════════════
+
+const _CAREGIVER_TYPES = ["care_assistant", "caregivers"];
+
+const _CAREGIVER_STALE_PENDING_HOURS = 24;
+
+// Caregiver-side status -> the existing `caregiver`/`care_assistant`/
+// `caregivers` statusMap blocks in onServiceRequestStatusChange. A visit the
+// caregiver never showed up for ('missed') reads to the patient exactly like
+// a cancellation — there is no separate patient-facing copy for it, and
+// inventing one would mean touching the shared statusMap's existing entries.
+const _CAREGIVER_TO_SERVICE_REQUEST_STATUS = {
+  checkedIn: "in_progress",
+  completed: "completed",
+  cancelled: "cancelled",
+  missed:    "cancelled",
+};
+
+// The 4 generic checklist items every mirrored visit starts with. Kept
+// deliberately generic (the patient booking carries no per-visit task list),
+// matching the shape MockCaregiverRepository seeded.
+const _CAREGIVER_DEFAULT_TASKS = [
+  { title: "Check vitals",           subtitle: "Blood pressure, pulse and temperature" },
+  { title: "Assist with medication", subtitle: "Confirm dosage and timing" },
+  { title: "Mobility support",       subtitle: "Assisted movement or light exercises" },
+  { title: "Update care log",        subtitle: "Record observations for the family" },
+];
+
+// Free-text specialty/shift text from the patient app's serviceDetails ->
+// the exact CareType enum vocabulary the partner app's Dart model parses.
+function _caregiverCareType(raw) {
+  const s = String(raw || "").toLowerCase();
+  if (s.includes("elder") || s.includes("senior") || s.includes("geriatric")) return "elderlyCare";
+  if (s.includes("surgery") || s.includes("post-op") || s.includes("postop")) return "postSurgery";
+  if (s.includes("physio") || s.includes("rehab")) return "physiotherapy";
+  if (s.includes("medicat") || s.includes("pharma")) return "medicationManagement";
+  return "generalNursing";
+}
+
+// preferredDate ('yyyy-MM-dd') + preferredTime ('HH:mm' or '10:00 AM') as
+// written by BookingService.createRequest. Anything unparseable falls back
+// to the booking's own createdAt rather than throwing — a visit with a
+// slightly wrong scheduled time is far better than a visit that never
+// mirrors at all.
+function _caregiverScheduledAt(data) {
+  const date = String(data.preferredDate || "").trim();
+  const time = String(data.preferredTime || "").trim();
+  if (date) {
+    const parsed = new Date(time ? `${date} ${time}` : date);
+    if (!isNaN(parsed.getTime())) return Timestamp.fromDate(parsed);
+  }
+  return data.createdAt || FieldValue.serverTimestamp();
+}
+
+function _logCaregiver(severity, event, data = {}) {
+  const payload = { severity, module: "caregiver", event, ...data };
+  if (severity === "ERROR" || severity === "WARNING") {
+    console.error(JSON.stringify(payload));
+  } else {
+    console.log(JSON.stringify(payload));
+  }
+}
+
+// ── 1) Mirror new caregiver service_requests into caregiver_visits ─────────
+exports.onCaregiverServiceRequestCreated = onDocumentCreated(
+  "service_requests/{requestId}",
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+    const data = snap.data();
+    if (!_CAREGIVER_TYPES.includes(data.type)) return;
+
+    const db = getFirestore();
+    const requestId = event.params.requestId;
+    const details = data.serviceDetails || {};
+    const visitRef = db.collection("caregiver_visits").doc(requestId);
+
+    const existing = await visitRef.get();
+    if (existing.exists) {
+      _logCaregiver("INFO", "service_request_create_skipped_existing", { requestId });
+      return;
+    }
+
+    const shiftHours = Number(details.shiftHours);
+    const durationMinutes = Number.isFinite(shiftHours) && shiftHours > 0
+      ? Math.round(shiftHours * 60)
+      : 60;
+
+    const batch = db.batch();
+    batch.set(visitRef, {
+      sourceRequestId: requestId,
+      sourceType: data.type,
+      type: _caregiverCareType(details.specialty || details.shiftType || data.serviceName),
+      status: "scheduled",
+      patientId: data.patientId,
+      patientName: data.patientName || "Patient",
+      patientAge: 0,
+      address: data.address || "",
+      scheduledAt: _caregiverScheduledAt(data),
+      durationMinutes,
+      fare: data.amount ?? 0,
+      photoUrls: [],
+      caregiverId: null,
+      createdAt: data.createdAt || FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    // Seeded in the same batch as the visit itself, so a visit never exists
+    // with a half-written checklist.
+    _CAREGIVER_DEFAULT_TASKS.forEach((task, i) => {
+      batch.set(visitRef.collection("tasks").doc(`t${i + 1}`), {
+        title: task.title,
+        subtitle: task.subtitle,
+        isDone: false,
+        order: i,
+      });
+    });
+
+    await batch.commit();
+    _logCaregiver("INFO", "caregiver_visit_created", { requestId, sourceType: data.type });
+  }
+);
+
+// ── 2) Mirror a patient-initiated cancellation onto caregiver_visits ───────
+exports.onCaregiverServiceRequestCancelled = onDocumentUpdated(
+  "service_requests/{requestId}",
+  async (event) => {
+    const before = event.data.before.data();
+    const after  = event.data.after.data();
+    if (!_CAREGIVER_TYPES.includes(after.type)) return;
+    if (before.status === after.status) return;
+    if (after.status !== "cancelled") return;
+
+    const db = getFirestore();
+    const requestId = event.params.requestId;
+    const visitRef = db.collection("caregiver_visits").doc(requestId);
+
+    await db.runTransaction(async (tx) => {
+      const visitSnap = await tx.get(visitRef);
+      if (!visitSnap.exists) return;
+      const currentStatus = visitSnap.data().status;
+      if (["completed", "cancelled", "missed"].includes(currentStatus)) {
+        _logCaregiver("INFO", "cancel_mirror_skipped_terminal", { requestId, currentStatus });
+        return;
+      }
+      tx.update(visitRef, { status: "cancelled", updatedAt: FieldValue.serverTimestamp() });
+    });
+    _logCaregiver("INFO", "caregiver_visit_cancelled_by_patient", { requestId });
+  }
+);
+
+// ── 3) Mirror caregiver-side visit updates back onto service_requests ──────
+// Also credits the immutable caregiver_transactions ledger exactly once, on
+// the ->completed edge (deterministic ID + transactional existence check,
+// same double-credit proofing as lab_transactions/pharmacy_transactions).
+exports.onCaregiverVisitStatusChange = onDocumentUpdated(
+  "caregiver_visits/{visitId}",
+  async (event) => {
+    const before = event.data.before.data();
+    const after  = event.data.after.data();
+    const visitId = event.params.visitId;
+    const db = getFirestore();
+
+    const statusChanged = before.status !== after.status;
+    const claimChanged = before.caregiverId !== after.caregiverId;
+
+    // Remembered and rethrown at the end (see the Lab mirror) so a mirror
+    // failure never skips the ledger credit below.
+    let mirrorError = null;
+
+    if (statusChanged || claimChanged) {
+      const update = { updatedAt: FieldValue.serverTimestamp() };
+
+      const mappedStatus = _CAREGIVER_TO_SERVICE_REQUEST_STATUS[after.status];
+      if (statusChanged && mappedStatus) update.status = mappedStatus;
+      if (claimChanged && after.caregiverId) update.assignedTo = after.caregiverId;
+
+      if (Object.keys(update).length > 1) {
+        const serviceRequestRef = db.collection("service_requests").doc(after.sourceRequestId || visitId);
+        const current = await serviceRequestRef.get();
+        const currentData = current.exists ? current.data() : null;
+
+        // Claiming a visit doesn't change its own status (a claimed visit is
+        // still 'scheduled' until check-in), but the patient should still see
+        // it move from 'pending' to 'accepted' with a caregiver attached.
+        // Gated on the *current* patient-side status: a re-assignment after
+        // check-in must never drag 'in_progress' backwards to 'accepted'.
+        if (update.assignedTo && !update.status && currentData?.status === "pending") {
+          update.status = "accepted";
+        }
+
+        const alreadyApplied = !!currentData &&
+          (!update.status || currentData.status === update.status) &&
+          (!update.assignedTo || currentData.assignedTo === update.assignedTo);
+
+        if (!currentData) {
+          _logCaregiver("WARNING", "mirror_target_missing", { visitId });
+        } else if (alreadyApplied) {
+          _logCaregiver("INFO", "mirror_skipped_already_applied", { visitId });
+        } else {
+          await serviceRequestRef.update(update).then(
+            () => _logCaregiver("INFO", "mirrored_to_service_request", { visitId, fields: Object.keys(update) }),
+            (err) => {
+              _logCaregiver("ERROR", "mirror_to_service_request_failed", { visitId, error: err.message });
+              mirrorError = err;
+            },
+          );
+        }
+      }
+    }
+
+    if (statusChanged && after.status === "completed" && before.status !== "completed" && after.caregiverId) {
+      const ledgerRef = db.collection("caregiver_transactions").doc(visitId);
+      const credited = await db.runTransaction(async (tx) => {
+        const existingTx = await tx.get(ledgerRef);
+        if (existingTx.exists) return false;
+        tx.set(ledgerRef, {
+          caregiverId: after.caregiverId,
+          visitId,
+          type: "earning",
+          amount: after.fare ?? 0,
+          status: "credited",
+          patientName: after.patientName || "Patient",
+          createdAt: FieldValue.serverTimestamp(),
+        });
+        return true;
+      });
+      _logCaregiver("INFO", credited ? "caregiver_ledger_credited" : "caregiver_ledger_credit_skipped_duplicate", {
+        visitId, caregiverId: after.caregiverId, amount: after.fare ?? 0,
+      });
+    }
+
+    if (mirrorError) throw mirrorError;
+  }
+);
+
+// ── 4) Stale scheduled-visit cleanup ───────────────────────────────────────
+// A visit nobody ever checked into is a *missed* visit, not a cancelled one
+// — the distinction matters for the caregiver-side history view. Trigger #3
+// mirrors 'missed' onto service_requests as 'cancelled' (the patient has no
+// separate "missed" concept), so no mirroring logic is duplicated here.
+exports.cleanupStaleCaregiverVisits = onSchedule({ schedule: "every 60 minutes", timeZone: "UTC" }, async () => {
+  const db = getFirestore();
+  const cutoff = Timestamp.fromDate(new Date(Date.now() - _CAREGIVER_STALE_PENDING_HOURS * 60 * 60 * 1000));
+
+  const staleSnap = await db.collection("caregiver_visits")
+    .where("status", "==", "scheduled")
+    .where("createdAt", "<", cutoff)
+    .limit(200)
+    .get();
+
+  if (staleSnap.empty) {
+    _logCaregiver("INFO", "stale_cleanup_none_found");
+    return;
+  }
+
+  const { updated, skipped } = await _expireStaleDocs(staleSnap.docs, { status: "missed", updatedAt: FieldValue.serverTimestamp() });
+  _logCaregiver("INFO", "stale_cleanup_missed", { count: updated, skippedConcurrentlyModified: skipped });
 });

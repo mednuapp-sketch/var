@@ -102,7 +102,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     color: selected ? AppColors.primary : null,
                   )),
               trailing: selected
-                  ? Icon(Icons.check_circle_rounded,
+                  ? const Icon(Icons.check_circle_rounded,
                       color: AppColors.primary, size: 20)
                   : null,
               onTap: () => Navigator.pop(ctx, m),
@@ -192,7 +192,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           : CustomScrollView(
               slivers: [
                 // ── Gradient App Bar ─────────────────────────
-                GradientSliverAppBar(
+                const GradientSliverAppBar(
                   headerIcon: Icons.settings_rounded,
                   title: 'Settings',
                   subtitle: 'Preferences & account',
@@ -209,19 +209,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
 
                 // ── Settings List ────────────────────────────
+                // A plain Column, not a shrink-wrapped ListView: a nested
+                // scrollable inside this CustomScrollView installs a
+                // competing drag recognizer and stalls upward swipes.
                 SliverToBoxAdapter(
-                  child: ListView(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
+                  child: Padding(
                     padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
-                    children: [
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
                       // ── Security ──────────────────────────────────────
-                      FadeInSlide(
-                        delay: const Duration(milliseconds: 60),
+                      const FadeInSlide(
+                        delay: Duration(milliseconds: 60),
                         child: _SectionHeader(
                           icon: Icons.security_rounded,
                           title: 'Security',
-                          color: const Color(0xFF1565C0),
+                          color: Color(0xFF1565C0),
                         ),
                       ),
                       FadeInSlide(
@@ -253,8 +256,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       const SizedBox(height: 20),
 
                       // ── Notifications ─────────────────────────────────
-                      FadeInSlide(
-                        delay: const Duration(milliseconds: 100),
+                      const FadeInSlide(
+                        delay: Duration(milliseconds: 100),
                         child: _SectionHeader(
                           icon: Icons.notifications_rounded,
                           title: 'Notifications',
@@ -318,12 +321,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       const SizedBox(height: 20),
 
                       // ── Help & Support ────────────────────────────────
-                      FadeInSlide(
-                        delay: const Duration(milliseconds: 140),
+                      const FadeInSlide(
+                        delay: Duration(milliseconds: 140),
                         child: _SectionHeader(
                           icon: Icons.support_rounded,
                           title: 'Support',
-                          color: const Color(0xFF00695C),
+                          color: Color(0xFF00695C),
                         ),
                       ),
                       FadeInSlide(
@@ -347,12 +350,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       const SizedBox(height: 20),
 
                       // ── About ─────────────────────────────────────────
-                      FadeInSlide(
-                        delay: const Duration(milliseconds: 180),
+                      const FadeInSlide(
+                        delay: Duration(milliseconds: 180),
                         child: _SectionHeader(
                           icon: Icons.info_rounded,
                           title: 'About',
-                          color: const Color(0xFFE65100),
+                          color: Color(0xFFE65100),
                         ),
                       ),
                       FadeInSlide(
@@ -407,7 +410,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                       ),
                       const SizedBox(height: 8),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -528,11 +532,11 @@ class _DoctorProfileCard extends StatelessWidget {
                   color: Colors.white.withValues(alpha: 0.18),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  const Icon(Icons.verified_rounded,
+                child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(Icons.verified_rounded,
                       size: 10, color: Colors.white),
-                  const SizedBox(width: 4),
-                  const Text(
+                  SizedBox(width: 4),
+                  Text(
                     'Verified Doctor',
                     style: TextStyle(
                       fontFamily: 'Poppins',
@@ -652,7 +656,7 @@ class _BiometricTile extends StatelessWidget {
             child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-              Text('Biometric Lock', style: AppTextStyles.labelLarge),
+              const Text('Biometric Lock', style: AppTextStyles.labelLarge),
               Text(
                 'Lock app when sent to background',
                 style: AppTextStyles.caption

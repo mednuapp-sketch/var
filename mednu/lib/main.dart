@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -12,7 +13,6 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:go_router/go_router.dart';
 import 'package:easy_localization/easy_localization.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:google_maps_flutter_android/google_maps_flutter_android.dart';
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 import 'firebase_options.dart';
@@ -96,6 +96,19 @@ void _handleFcmNavigation(Map<String, dynamic> data) {
   final ctx = appNavigatorKey.currentContext;
   if (ctx == null) return;
 
+  // Every deep-link target below is an authenticated-only route, and several
+  // (incomingCall in particular) replace the whole navigation stack. If the
+  // session isn't confirmed yet, navigating there would drop the user onto a
+  // screen whose providers have no uid to read — bail out and leave the
+  // normal splash/login flow in charge.
+  if (FirebaseAuth.instance.currentUser == null) {
+    CrashReportingService.log(
+      'FCM deep link ignored — no authenticated user (type=${data['type']})',
+      tag: 'FCM',
+    );
+    return;
+  }
+
   final type        = data['type']        as String? ?? '';
   final serviceType = data['serviceType'] as String? ?? '';
   final actionType  = data['actionType']  as String? ?? '';
@@ -175,6 +188,73 @@ void _handleFcmNavigation(Map<String, dynamic> data) {
   }
 }
 
+/// Routes that mean "the app hasn't handed the user to their real landing
+/// screen yet" — splash is still deciding, or the user is mid-auth. A launch
+/// deep link fired while one of these is on screen would either be
+/// immediately overwritten by splash's own `context.go(...)` or would bypass
+/// the MPIN/OTP gate, so we wait for the app to leave them instead.
+const _preLandingRoutes = <String>{
+  AppRoutes.splash,
+  AppRoutes.onboarding,
+  AppRoutes.login,
+  AppRoutes.otp,
+  AppRoutes.register,
+  AppRoutes.mpin,
+  AppRoutes.createMpin,
+};
+
+/// Handles a deep link from a notification tap that launched the app from a
+/// terminated state.
+///
+/// Previously this was a single fixed `Future.delayed(800ms)` followed by a
+/// one-shot `appNavigatorKey.currentContext` null check, which silently
+/// dropped the deep link on a slow cold start — and, because the splash
+/// screen performs its own `context.go(...)` ~1.5 s after launch, an 800 ms
+/// deep link was also liable to be overwritten by splash a moment later.
+///
+/// This polls on a short interval within a bounded window for the navigator
+/// to be mounted *and* the app to have left the pre-landing routes, then
+/// navigates once. It reduces — it does not eliminate — the drop rate: if
+/// the window elapses (very slow device, or the user is sitting on the
+/// medical-disclaimer / MPIN screen) the link is dropped, but now with an
+/// explicit warning so the failure mode is observable in Crashlytics rather
+/// than silent.
+Future<void> _navigateOnLaunchNotification(Map<String, dynamic> data) async {
+  const pollInterval = Duration(milliseconds: 150);
+  // Generous relative to splash's own ~1.5 s hand-off, but still bounded.
+  const window = Duration(seconds: 6);
+  final deadline = DateTime.now().add(window);
+
+  while (DateTime.now().isBefore(deadline)) {
+    final ctx = appNavigatorKey.currentContext;
+    if (ctx != null) {
+      String location;
+      try {
+        // ctx is re-read from the global navigator key on every iteration,
+        // so it is always current — not a stale across-async-gap context.
+        // ignore: use_build_context_synchronously
+        final router = GoRouter.of(ctx);
+        location = router.routerDelegate.currentConfiguration.uri.path;
+      } catch (_) {
+        location = AppRoutes.splash; // Router not ready yet — keep waiting.
+      }
+      if (!_preLandingRoutes.contains(location)) {
+        // App has landed. _handleFcmNavigation applies its own auth guard.
+        _handleFcmNavigation(data);
+        return;
+      }
+    }
+    await Future.delayed(pollInterval);
+  }
+
+  CrashReportingService.log(
+    'Launch deep link dropped — navigator/route not ready after '
+    '${window.inSeconds}s (type=${data['type']}, '
+    'actionType=${data['actionType']})',
+    tag: 'FCM',
+  );
+}
+
 String _serviceRouteFromType(String serviceType) {
   switch (serviceType.toLowerCase()) {
     case 'appointment':   return AppRoutes.appointment;
@@ -206,23 +286,13 @@ const _androidChannel = AndroidNotificationChannel(
 Future<void> _initFCM() async {
   final messaging = FirebaseMessaging.instance;
 
-  // Request permission (iOS + Android 13+)
-  await messaging.requestPermission(
-    alert: true,
-    badge: true,
-    sound: true,
-    provisional: false,
-  );
-
-  // On Android, request battery optimization exemption so that OEM power
-  // managers (MIUI, ColorOS, FuntouchOS, OneUI, etc.) do not block FCM
-  // wake-ups when the app is swiped away or killed by the system.
-  // The system dialog only appears if the user hasn't granted it yet.
-  if (defaultTargetPlatform == TargetPlatform.android) {
-    if (!await Permission.ignoreBatteryOptimizations.isGranted) {
-      await Permission.ignoreBatteryOptimizations.request();
-    }
-  }
+  // NOTE: the notification permission prompt is deliberately NOT requested
+  // here. Awaiting a system permission dialog before runApp() blocks the
+  // first frame, so a cold start shows a blank window until the user answers.
+  // It is requested from _requestNotificationPermission() after the first
+  // frame instead. Battery-optimization exemption is likewise handled by
+  // BatteryOptimizationService.promptIfNeeded() (post-login, once ever) —
+  // requesting it here as well double-prompted on every cold start.
 
   // Register background handler
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
@@ -316,10 +386,7 @@ Future<void> _initFCM() async {
   // Terminated tap — user tapped a notification that launched the app from killed.
   final initial = await messaging.getInitialMessage();
   if (initial != null) {
-    // Delay to let the navigator finish mounting.
-    Future.delayed(const Duration(milliseconds: 800), () {
-      _handleFcmNavigation(initial.data);
-    });
+    unawaited(_navigateOnLaunchNotification(initial.data));
   }
 
   // iOS foreground presentation options
@@ -328,6 +395,21 @@ Future<void> _initFCM() async {
     badge: true,
     sound: true,
   );
+}
+
+/// Notification permission prompt (iOS + Android 13+). Called after the first
+/// frame so the system dialog never appears over a blank window.
+Future<void> _requestNotificationPermission() async {
+  try {
+    await FirebaseMessaging.instance.requestPermission(
+      alert: true,
+      badge: true,
+      sound: true,
+      provisional: false,
+    );
+  } catch (_) {
+    // Non-critical — never block app usage over this.
+  }
 }
 
 void main() {
@@ -422,6 +504,11 @@ void main() {
           ),
         ),
       );
+
+      // Deferred to after the first frame — see _initFCM().
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        unawaited(_requestNotificationPermission());
+      });
     },
     (error, stack) {
       CrashReportingService.recordError(error, stack, fatal: true);

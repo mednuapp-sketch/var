@@ -51,8 +51,6 @@ class ReviewService {
     final patientName =
         user.displayName ?? user.phoneNumber ?? 'Patient';
 
-    final summaryRef = _db.collection('doctor_rating_summary').doc(doctorId);
-
     await _db.runTransaction((tx) async {
       // Double-check eligibility inside transaction.
       final lockRef =
@@ -63,25 +61,12 @@ class ReviewService {
         throw Exception('already_reviewed');
       }
 
-      // Read current rating summary to compute updated aggregate.
-      final summarySnap = await tx.get(summaryRef);
-      final sData = summarySnap.data() ?? {};
-      final prevTotal = (sData['totalReviews'] as num?)?.toInt() ?? 0;
-      final prevAvg   = (sData['averageRating'] as num?)?.toDouble() ?? 0.0;
-      final newTotal  = prevTotal + 1;
-      final newAvg    = ((prevAvg * prevTotal) + rating) / newTotal;
-
-      // Build updated rating distribution (1–5 star counts).
-      final rawDist = sData['ratingDistribution'] as Map<dynamic, dynamic>? ?? {};
-      final dist = <String, int>{
-        '1': (rawDist['1'] as num?)?.toInt() ?? 0,
-        '2': (rawDist['2'] as num?)?.toInt() ?? 0,
-        '3': (rawDist['3'] as num?)?.toInt() ?? 0,
-        '4': (rawDist['4'] as num?)?.toInt() ?? 0,
-        '5': (rawDist['5'] as num?)?.toInt() ?? 0,
-      };
-      final starKey = rating.round().clamp(1, 5).toString();
-      dist[starKey] = (dist[starKey] ?? 0) + 1;
+      // NOTE: the aggregate rating (doctor_rating_summary/{doctorId} and the
+      // mirrored `rating`/`totalReviews` fields on doctors/{doctorId}) is NOT
+      // written here. Those fields are admin/Cloud-Function-only in
+      // firestore.rules — the `onReviewCreated` trigger recomputes them
+      // server-side from the review document created below. Writing them from
+      // the client would fail the whole transaction with PERMISSION_DENIED.
 
       // Create the review document.
       final reviewRef = _db.collection('doctor_reviews').doc();
@@ -108,21 +93,6 @@ class ReviewService {
         'createdAt': FieldValue.serverTimestamp(),
       });
 
-      // Atomically update the aggregate rating summary.
-      tx.set(summaryRef, {
-        'doctorId': doctorId,
-        'totalReviews': newTotal,
-        'averageRating': double.parse(newAvg.toStringAsFixed(2)),
-        'ratingDistribution': dist,
-        'lastUpdated': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-
-      // Mirror rating onto the doctor profile for quick reads (patient list).
-      final doctorRef = _db.collection('doctors').doc(doctorId);
-      tx.update(doctorRef, {
-        'rating':       double.parse(newAvg.toStringAsFixed(2)),
-        'totalReviews': newTotal,
-      });
     });
   }
 

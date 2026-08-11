@@ -78,6 +78,8 @@ import '../../features/support/screens/about_screen.dart';
 import '../../features/my_services/screens/my_services_screen.dart';
 import '../../features/my_services/screens/service_detail_screen.dart';
 import '../../features/my_services/models/unified_booking.dart';
+import '../../features/orders/screens/order_detail_screen.dart';
+import '../../features/orders/screens/medicine_orders_screen.dart';
 import '../../features/cart/screens/cart_screen.dart';
 
 class AppRoutes {
@@ -168,6 +170,10 @@ class AppRoutes {
   // My Services Tracker
   static const myServices   = '/my-services';
   static const serviceDetail = '/my-services/detail';
+
+  // Medicine orders — Patient Prescription Upload
+  static const orderDetail = '/orders/detail';
+  static const medicineOrders = '/orders';
 
   // Realtime calling
   static const outgoingCall = '/call/outgoing';
@@ -350,6 +356,14 @@ GoRoute(path: AppRoutes.referral,           builder: (c, s) => const ReferralScr
           return ServiceDetailScreen(booking: booking);
         },
       ),
+      GoRoute(
+        path: AppRoutes.orderDetail,
+        builder: (c, s) {
+          final extra = s.extra as Map<String, dynamic>?;
+          return OrderDetailScreen(orderId: extra?['orderId'] as String? ?? '');
+        },
+      ),
+      GoRoute(path: AppRoutes.medicineOrders, builder: (c, s) => const MedicineOrdersScreen()),
 
       // ── Realtime calling ──────────────────────────────────────────────────
       GoRoute(

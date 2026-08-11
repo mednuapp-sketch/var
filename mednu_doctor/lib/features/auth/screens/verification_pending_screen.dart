@@ -7,6 +7,8 @@ import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
 import '../services/doctor_auth_service.dart';
 import '../../../core/widgets/ux_widgets.dart';
+import '../../../shared_core/models/app_role.dart';
+import '../../../shared_core/navigation/role_menu.dart';
 
 class VerificationPendingScreen extends StatefulWidget {
   const VerificationPendingScreen({super.key});
@@ -45,21 +47,46 @@ class _VerificationPendingScreenState extends State<VerificationPendingScreen>
     super.dispose();
   }
 
-  void _startListening() {
+  Future<void> _startListening() async {
     final uid = DoctorAuthService.currentUid;
     if (uid == null) {
       if (mounted) setState(() => _loading = false);
       return;
     }
-    _statusSub = FirebaseFirestore.instance
-        .collection('doctors')
-        .doc(uid)
-        .snapshots()
-        .listen((snap) {
+
+    // A non-doctor role's approval is recorded on its own `{role}_profiles`
+    // doc (that's what Admin's partner-approval flow actually writes) — the
+    // sparse `doctors/{uid}` doc created at registration time for those
+    // roles stays `status: 'pending'` forever, since nothing ever needs to
+    // flip it. Doctor accounts are unaffected: they have no non-doctor
+    // `roles` entry, so this resolves to the exact same `doctors/{uid}`
+    // watch this screen always used.
+    AppRole role = AppRole.doctor;
+    try {
+      final doctorSnap =
+          await FirebaseFirestore.instance.collection('doctors').doc(uid).get();
+      final rawRoles = doctorSnap.data()?['roles'];
+      final roles = AppRoleX.listFrom(rawRoles);
+      role = roles.first;
+    } catch (_) {
+      // Fall back to watching `doctors/{uid}` (existing behavior) below.
+    }
+
+    final statusDocRef = role == AppRole.doctor
+        ? FirebaseFirestore.instance.collection('doctors').doc(uid)
+        : FirebaseFirestore.instance
+            .collection('${role.firestoreValue}_profiles')
+            .doc(uid);
+
+    _statusSub = statusDocRef.snapshots().listen((snap) {
       if (!mounted) return;
       final status = (snap.data()?['status'] as String?) ?? 'pending';
       if (status == 'active') {
-        context.go(AppRoutes.dashboard);
+        // Land on the approved role's own home destination rather than
+        // hardcoding the Doctor dashboard — for a Doctor account this
+        // resolves to the exact same `AppRoutes.dashboard` as before.
+        final destination = buildMenuForRole(role);
+        context.go(destination.isNotEmpty ? destination.first.route : AppRoutes.dashboard);
         return;
       }
       setState(() {
@@ -254,12 +281,12 @@ class _VerificationPendingScreenState extends State<VerificationPendingScreen>
                           ),
                         ],
                       ),
-                      child: Column(
+                      child: const Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text('Application Progress',
                               style: AppTextStyles.labelLarge),
-                          const SizedBox(height: 16),
+                          SizedBox(height: 16),
                           ...[
                             _ProgressStep(
                               icon: Icons.check_circle_rounded,

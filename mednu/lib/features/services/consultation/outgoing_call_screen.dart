@@ -245,7 +245,14 @@ class _OutgoingCallScreenState extends State<OutgoingCallScreen>
   void _safeClose() {
     if (!mounted) return;
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-    if (context.canPop()) context.pop();
+    // `PopScope(canPop: false)` above means system back can never close this
+    // screen, so if there is also nothing to pop back to (entered via a
+    // stack-replacing `go`) the user would be stranded. Fall back to home.
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go(AppRoutes.home);
+    }
   }
 
   @override

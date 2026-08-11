@@ -6,7 +6,7 @@ import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/responsive.dart';
 
-final String _uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+String get _uid => FirebaseAuth.instance.currentUser?.uid ?? '';
 
 class WalletPage extends StatelessWidget {
   const WalletPage({super.key});
@@ -133,7 +133,7 @@ class _WalletActions extends StatelessWidget {
             border: Border.all(color: AppColors.info.withValues(alpha: 0.2)),
           ),
           child: Row(children: [
-            Icon(Icons.info_outline_rounded, size: 16, color: AppColors.info),
+            const Icon(Icons.info_outline_rounded, size: 16, color: AppColors.info),
             const SizedBox(width: 8),
             Expanded(
               child: Text('Wallet top-up and withdrawals coming soon.',
@@ -497,7 +497,7 @@ class _SendRefundPanelState extends State<_SendRefundPanel> {
           runSpacing: 16,
           children: [
             SizedBox(
-              width: 200,
+              width: _refundFieldWidth(context, 200),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text('Refund Amount (₹)', style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
                 const SizedBox(height: 8),
@@ -523,7 +523,7 @@ class _SendRefundPanelState extends State<_SendRefundPanel> {
               ]),
             ),
             SizedBox(
-              width: 340,
+              width: _refundFieldWidth(context, 340),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text('Reason', style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
                 const SizedBox(height: 8),
@@ -617,3 +617,11 @@ String _formatTs(Timestamp ts) {
 
 String _capitalize(String s) =>
     s.isEmpty ? s : '${s[0].toUpperCase()}${s.substring(1)}';
+
+/// Refund-form fields sit inside a [Wrap], which does not shrink its children.
+/// Clamp each field to the viewport so a narrow mobile-web window (<~380px)
+/// does not overflow horizontally.
+double _refundFieldWidth(BuildContext context, double preferred) {
+  final available = MediaQuery.sizeOf(context).width - 88;
+  return available < preferred ? (available < 160 ? 160 : available) : preferred;
+}

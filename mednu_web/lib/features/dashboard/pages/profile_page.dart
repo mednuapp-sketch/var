@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -6,7 +8,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/responsive.dart';
 import '../../../core/widgets/gradient_button.dart';
 
-final String _uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+String get _uid => FirebaseAuth.instance.currentUser?.uid ?? '';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -25,6 +27,8 @@ class _ProfilePageState extends State<ProfilePage> {
   final _emergencyRelationCtrl = TextEditingController();
   final _emergencyPhoneCtrl = TextEditingController();
 
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _userSub;
+
   Map<String, dynamic> _user = {};
   String _phone = '';
   bool _loading = true;
@@ -38,7 +42,7 @@ class _ProfilePageState extends State<ProfilePage> {
       setState(() => _loading = false);
       return;
     }
-    FirebaseFirestore.instance.collection('users').doc(_uid).snapshots().listen((snap) {
+    _userSub = FirebaseFirestore.instance.collection('users').doc(_uid).snapshots().listen((snap) {
       if (!mounted) return;
       final d = snap.data() ?? {};
       setState(() {
@@ -65,6 +69,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
   @override
   void dispose() {
+    _userSub?.cancel();
     _nameCtrl.dispose();
     _emailCtrl.dispose();
     _dobCtrl.dispose();
@@ -187,7 +192,7 @@ class _ProfileCard extends StatelessWidget {
           Container(
             width: 88,
             height: 88,
-            decoration: BoxDecoration(gradient: AppColors.primaryGradient, shape: BoxShape.circle),
+            decoration: const BoxDecoration(gradient: AppColors.primaryGradient, shape: BoxShape.circle),
             child: Center(child: Text(initial, style: GoogleFonts.poppins(fontSize: 32, fontWeight: FontWeight.w800, color: Colors.white))),
           ),
           Container(
@@ -223,7 +228,7 @@ class _ProfileCard extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
             decoration: BoxDecoration(color: AppColors.success.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20)),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
-              Container(width: 8, height: 8, decoration: BoxDecoration(color: AppColors.success, shape: BoxShape.circle)),
+              Container(width: 8, height: 8, decoration: const BoxDecoration(color: AppColors.success, shape: BoxShape.circle)),
               const SizedBox(width: 6),
               Text('Verified Patient', style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.success)),
             ]),

@@ -3,11 +3,13 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/services/call_notification_service.dart';
+import '../../../shared_core/providers/role_providers.dart';
 import '../../auth/services/doctor_auth_service.dart';
 
 class IncomingRequestScreen extends StatefulWidget {
@@ -176,7 +178,7 @@ class _IncomingRequestScreenState extends State<IncomingRequestScreen>
       if (_countdown <= 0) {
         _countdownActive = false;
         await _markMissed();
-        if (mounted) context.pop();
+        _safeClose();
         return false;
       }
       return true;
@@ -188,6 +190,12 @@ class _IncomingRequestScreenState extends State<IncomingRequestScreen>
   Future<void> _acceptCall() async {
     if (_consultationId == null) return;
     setState(() => _accepted = true);
+    // Block role switching from the moment the doctor accepts through the
+    // handoff into DoctorVideoCallScreen (which owns this flag for the rest
+    // of the call — see its initState/dispose).
+    ProviderScope.containerOf(context, listen: false)
+        .read(criticalOperationInProgressProvider.notifier)
+        .state = true;
     HapticFeedback.heavyImpact();
     await CallNotificationService.cancelAll();
     // Set status to 'ongoing' so the patient's OutgoingCallScreen knows
@@ -221,7 +229,7 @@ class _IncomingRequestScreenState extends State<IncomingRequestScreen>
         'declinedAt': FieldValue.serverTimestamp(),
       });
     }
-    if (mounted) context.pop();
+    _safeClose();
   }
 
   Future<void> _markMissed() async {
@@ -235,6 +243,23 @@ class _IncomingRequestScreenState extends State<IncomingRequestScreen>
     });
   }
 
+  /// Leaves this screen safely.
+  ///
+  /// This screen is routed to with `context.go(AppRoutes.incomingRequest)`
+  /// from the FCM tap handler and the global call listener in `main.dart`,
+  /// both of which replace the whole navigation stack. A bare `context.pop()`
+  /// then has nothing to pop and throws, leaving the doctor stranded on the
+  /// request screen after declining/missing a call. Fall back to the
+  /// dashboard in that case.
+  void _safeClose() {
+    if (!mounted) return;
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go(AppRoutes.dashboard);
+    }
+  }
+
   @override
   void dispose() {
     _ripple1.dispose();
@@ -244,6 +269,14 @@ class _IncomingRequestScreenState extends State<IncomingRequestScreen>
     _sub?.cancel();
     CallNotificationService.stopRinging();
     WakelockPlus.disable();
+    // Safety net for the decline/missed/error paths, which pop this screen
+    // without ever reaching DoctorVideoCallScreen. When accept *does*
+    // succeed, DoctorVideoCallScreen's own dispose is what actually clears
+    // this by the time the call ends — re-clearing it here afterwards is
+    // harmless.
+    ProviderScope.containerOf(context, listen: false)
+        .read(criticalOperationInProgressProvider.notifier)
+        .state = false;
     super.dispose();
   }
 
@@ -285,7 +318,7 @@ class _IncomingRequestScreenState extends State<IncomingRequestScreen>
           ),
           const SizedBox(height: 40),
           TextButton.icon(
-            onPressed: () => context.pop(),
+            onPressed: _safeClose,
             icon: const Icon(Icons.arrow_back_rounded,
                 color: Colors.white38, size: 18),
             label: const Text('Go Back',

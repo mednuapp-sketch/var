@@ -8,7 +8,7 @@ import '../../../core/utils/responsive.dart';
 
 // ─── Providers ────────────────────────────────────────────────────────────────
 
-final _uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+String get _uid => FirebaseAuth.instance.currentUser?.uid ?? '';
 
 final userProfileProvider = StreamProvider<Map<String, dynamic>>((ref) {
   if (_uid.isEmpty) return const Stream.empty();

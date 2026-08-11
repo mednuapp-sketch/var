@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 
 // ── Referral Config ───────────────────────────────────────
 class ReferralConfig {
@@ -267,26 +269,24 @@ class ReferralService {
     final isOnSignup = config.rewardTriggerCondition == 'on_signup';
     final referralRef = _db.collection('referrals').doc();
 
+    // Always created as 'pending'. Only the server may move it to 'rewarded',
+    // and it does so in the same transaction that credits both wallets — so
+    // the status field doubles as the payout idempotency guard.
     await referralRef.set({
       'referrerId': referrerId,
       'referrerName': query.docs.first.data()['name'] ?? '',
       'referredUserId': newUserId,
       'referralCode': code,
-      'status': isOnSignup ? 'rewarded' : 'pending',
+      'status': 'pending',
       'referrerRewardAmount': config.referrerReward,
       'referredRewardAmount': config.referredReward,
       'triggerCondition': config.rewardTriggerCondition,
       'createdAt': FieldValue.serverTimestamp(),
-      'rewardedAt': isOnSignup ? FieldValue.serverTimestamp() : null,
+      'rewardedAt': null,
     });
 
     if (isOnSignup && config.rewardsEnabled) {
-      await _creditRewards(
-        referrerId: referrerId,
-        newUserId: newUserId,
-        referrerReward: config.referrerReward,
-        referredReward: config.referredReward,
-      );
+      await _grantReward(referralRef.id);
     }
 
     return true;
@@ -304,98 +304,31 @@ class ReferralService {
     if (pending.docs.isEmpty) return;
 
     for (final doc in pending.docs) {
-      final d = doc.data();
-      await _creditRewards(
-        referrerId: d['referrerId'] as String? ?? '',
-        newUserId: _uid,
-        referrerReward: (d['referrerRewardAmount'] as num?)?.toDouble() ?? 0.0,
-        referredReward: (d['referredRewardAmount'] as num?)?.toDouble() ?? 0.0,
-      );
-      await doc.reference.update({
-        'status': 'rewarded',
-        'rewardedAt': FieldValue.serverTimestamp(),
-      });
+      // The server re-reads the referral doc, credits both parties and flips
+      // the status to 'rewarded' — all in one transaction.
+      await _grantReward(doc.id);
     }
   }
 
-  // ── Internal: credit wallet for both parties ──────────
-  Future<void> _creditRewards({
-    required String referrerId,
-    required String newUserId,
-    required double referrerReward,
-    required double referredReward,
-  }) async {
-    if (referrerId.isEmpty || newUserId.isEmpty) return;
-    final batch = _db.batch();
-
-    if (referrerReward > 0) {
-      final ref = _db.collection('users').doc(referrerId);
-      batch.update(ref, {
-        'mednuMoneyBalance': FieldValue.increment(referrerReward),
-        'referralPoints': FieldValue.increment(1),
-      });
-      batch.set(ref.collection('transactions').doc(), {
-        'title': 'Referral Bonus',
-        'amount': referrerReward,
-        'type': 'credit',
-        'category': 'referral',
-        'walletType': 'mednu_money',
-        'description': 'Your friend joined using your referral code',
-        'timestamp': FieldValue.serverTimestamp(),
-      });
-    }
-
-    if (referredReward > 0) {
-      final ref = _db.collection('users').doc(newUserId);
-      batch.update(ref, {
-        'mednuMoneyBalance': FieldValue.increment(referredReward),
-      });
-      batch.set(ref.collection('transactions').doc(), {
-        'title': 'Welcome Bonus',
-        'amount': referredReward,
-        'type': 'credit',
-        'category': 'referral',
-        'walletType': 'mednu_money',
-        'description': 'Joined via referral code — use as MedNU Money for bookings',
-        'timestamp': FieldValue.serverTimestamp(),
-      });
-    }
-
-    await batch.commit();
-
-    // ── In-app notifications ──────────────────────────
-    final now = FieldValue.serverTimestamp();
-    if (referrerReward > 0 && referrerId.isNotEmpty) {
-      await _db
-          .collection('patient_notifications')
-          .doc(referrerId)
-          .collection('items')
-          .add({
-        'type': 'referral_reward',
-        'title': 'Referral Reward Earned! 🎉',
-        'body':
-            'You earned ₹${referrerReward.toStringAsFixed(0)} MedNU Money because a friend joined MedNU using your referral code. Use it for your next booking!',
-        'createdAt': now,
-        'deliverAt': now,
-        'isRead': false,
-        'data': {'ctaRoute': '/referral', 'screen': 'referral'},
-      });
-    }
-    if (referredReward > 0 && newUserId.isNotEmpty) {
-      await _db
-          .collection('patient_notifications')
-          .doc(newUserId)
-          .collection('items')
-          .add({
-        'type': 'welcome_bonus',
-        'title': 'Welcome Bonus Added! 🎁',
-        'body':
-            '₹${referredReward.toStringAsFixed(0)} MedNU Money has been added as a welcome gift! Use it for any MedNU booking.',
-        'createdAt': now,
-        'deliverAt': now,
-        'isRead': false,
-        'data': {'ctaRoute': '/wallet', 'screen': 'wallet'},
-      });
+  // ── Internal: server-authoritative payout ─────────────────
+  //
+  // Wallet balances and referralPoints are write-protected from clients by
+  // firestore.rules; the `grantReferralReward` callable is the only path that
+  // can credit them. It reads the reward amounts off the referral doc itself
+  // (capped by live admin config) — nothing about the payout amount is
+  // supplied from here. Calling it twice for the same referral is a no-op.
+  Future<void> _grantReward(String referralId) async {
+    try {
+      await FirebaseFunctions.instance
+          .httpsCallable('grantReferralReward')
+          .call({'referralId': referralId});
+    } on FirebaseFunctionsException catch (e) {
+      // Non-fatal: the referral record stands and stays 'pending', so the
+      // reward can still be granted on a later trigger.
+      debugPrint('grantReferralReward failed: ${e.code} ${e.message}');
+    } catch (e) {
+      debugPrint('grantReferralReward failed: $e');
     }
   }
+
 }

@@ -128,7 +128,7 @@ class SkeletonListTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  SkeletonBox(width: double.infinity, height: 14, radius: 7),
+                  const SkeletonBox(width: double.infinity, height: 14, radius: 7),
                   const SizedBox(height: 8),
                   SkeletonBox(
                       width: MediaQuery.of(context).size.width * 0.5,
@@ -257,7 +257,7 @@ class AppErrorState extends StatelessWidget {
                     size: 40, color: AppColors.error.withValues(alpha: 0.8)),
               ),
               const SizedBox(height: 20),
-              Text('Something went wrong',
+              const Text('Something went wrong',
                   style: AppTextStyles.h4, textAlign: TextAlign.center),
               const SizedBox(height: 8),
               Text(
@@ -439,11 +439,18 @@ class StatusBadge extends StatelessWidget {
               Icon(icon, size: 12, color: color),
               const SizedBox(width: 4),
             ],
-            Text(label,
-                style: AppTextStyles.labelSmall.copyWith(
-                  color: color,
-                  letterSpacing: 0.2,
-                )),
+            // Flexible: a non-flexible Text in a Row is measured with an
+            // unbounded main-axis constraint, so a longer-than-expected
+            // status label spills past the badge instead of ellipsising.
+            Flexible(
+              child: Text(label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: color,
+                    letterSpacing: 0.2,
+                  )),
+            ),
           ],
         ),
       );
@@ -917,19 +924,29 @@ class GradientStatCard extends StatelessWidget {
             child: Icon(icon, color: Colors.white, size: 20),
           ),
           const SizedBox(height: 14),
-          Text(
-            value,
-            style: const TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-              color: Colors.white,
-              height: 1,
+          // Currency/count values can grow long (e.g. "₹1,25,000") and the
+          // card is often laid out in a fixed-width grid cell — scale the
+          // value down rather than overflowing horizontally.
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              maxLines: 1,
+              style: const TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+                height: 1,
+              ),
             ),
           ),
           const SizedBox(height: 4),
           Text(
             label,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
             style: const TextStyle(
               fontFamily: 'Poppins',
               fontSize: 12,
@@ -941,6 +958,8 @@ class GradientStatCard extends StatelessWidget {
             const SizedBox(height: 2),
             Text(
               sublabel!,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 fontFamily: 'Poppins',
                 fontSize: 10,
@@ -986,13 +1005,20 @@ class InfoChip extends StatelessWidget {
         children: [
           Icon(icon, size: 12, color: c),
           const SizedBox(width: 5),
-          Text(
-            label,
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: c,
+          // Flexible: chip labels are often partner-entered free text (e.g.
+          // the ambulance module's onboard-equipment list), which would
+          // otherwise overflow the chip horizontally.
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: c,
+              ),
             ),
           ),
         ],
@@ -1040,4 +1066,62 @@ class DateSectionLabel extends StatelessWidget {
           ),
         ]),
       );
+}
+
+// ──────────────────────────────────────────────────────────────
+// STATIC GRID
+//   A grid laid out as a plain Column of Rows — NO nested
+//   Scrollable. Use instead of `GridView.count/builder` with
+//   `shrinkWrap: true` whenever the grid sits inside an outer
+//   scrollable (ListView / CustomScrollView / SingleChildScrollView).
+//
+//   A shrink-wrapped GridView still installs a vertical drag
+//   GestureRecognizer even with NeverScrollableScrollPhysics; that
+//   recognizer competes with the outer scrollable in the gesture
+//   arena and makes upward swipes stall.
+//
+//   [aspectRatio] mirrors `childAspectRatio`. Leave it null to size
+//   rows to their tallest child's intrinsic height instead — safer
+//   for cards whose content height depends on text scale.
+// ──────────────────────────────────────────────────────────────
+
+Widget staticGrid({
+  required List<Widget> children,
+  int crossAxisCount = 2,
+  double? aspectRatio,
+  double mainAxisSpacing = 12,
+  double crossAxisSpacing = 12,
+}) {
+  if (children.isEmpty) return const SizedBox.shrink();
+
+  final rows = <Widget>[];
+  for (var i = 0; i < children.length; i += crossAxisCount) {
+    final cells = <Widget>[];
+    for (var c = 0; c < crossAxisCount; c++) {
+      if (c > 0) cells.add(SizedBox(width: crossAxisSpacing));
+      final index = i + c;
+      final child = index < children.length
+          ? children[index]
+          : const SizedBox.shrink();
+      cells.add(
+        Expanded(
+          child: aspectRatio == null
+              ? child
+              : AspectRatio(aspectRatio: aspectRatio, child: child),
+        ),
+      );
+    }
+
+    final row = Row(
+      crossAxisAlignment: aspectRatio == null
+          ? CrossAxisAlignment.stretch
+          : CrossAxisAlignment.center,
+      children: cells,
+    );
+
+    if (i > 0) rows.add(SizedBox(height: mainAxisSpacing));
+    rows.add(aspectRatio == null ? IntrinsicHeight(child: row) : row);
+  }
+
+  return Column(mainAxisSize: MainAxisSize.min, children: rows);
 }

@@ -1,3 +1,11 @@
+// ⚠️ STALE — NOT DEPLOYED. mednu_doctor/firebase.json now points its
+// "firestore.rules"/"firestore.indexes.json" at the root copies
+// (../firestore.rules, ../firestore.indexes.json), which is what actually
+// governs the shared `mednu-healthcare-app` project. This file predates
+// the Doctor/Lab/Pharmacy partner modules and does not contain their
+// rules. Edit ../firestore.rules instead; this file is kept only so
+// nothing that referenced it by path breaks, and should be deleted once
+// confirmed nothing does.
 rules_version = '2';
 
 service cloud.firestore {

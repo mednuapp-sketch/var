@@ -875,7 +875,7 @@ function showDoctorModal(d) {
     return url
       ? `<div style="margin-bottom:10px;">
            <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">${label}</div>
-           <a href="${url}" target="_blank" style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:var(--primary-light,#f3e5f5);color:var(--primary,#880E4F);border-radius:8px;font-size:13px;font-weight:600;text-decoration:none;">
+           <a href="${escHtml(url)}" target="_blank" style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:var(--primary-light,#f3e5f5);color:var(--primary,#880E4F);border-radius:8px;font-size:13px;font-weight:600;text-decoration:none;">
              <span> View Document
            </a>
          </div>`
@@ -899,19 +899,19 @@ function showDoctorModal(d) {
       </div>
 
       <div style="display:flex;align-items:center;gap:14px;padding:16px;background:#f9f9f9;border-radius:14px;margin-bottom:20px;">
-        <div style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#522546,#8B3A6B);display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:#fff;">${getInitials(d.name||'DR')}</div>
+        <div style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#522546,#8B3A6B);display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:#fff;">${escHtml(getInitials(d.name||'DR'))}</div>
         <div>
-          <div style="font-size:16px;font-weight:700;">${d.name||'—'}</div>
-          <div style="font-size:13px;color:#888;">${d.specialty||d.specialisation||'—'} &middot; ${d.experience||'—'} yrs</div>
-          <div style="font-size:12px;color:#aaa;margin-top:2px;">${d.phone||''} ${d.email ? '&middot; '+d.email : ''}</div>
+          <div style="font-size:16px;font-weight:700;">${escHtml(d.name||'—')}</div>
+          <div style="font-size:13px;color:#888;">${escHtml(d.specialty||d.specialisation||'—')} &middot; ${escHtml(d.experience||'—')} yrs</div>
+          <div style="font-size:12px;color:#aaa;margin-top:2px;">${escHtml(d.phone||'')} ${d.email ? '&middot; '+escHtml(d.email) : ''}</div>
         </div>
       </div>
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px;">
         ${[['Reg. Number', d.registrationNumber||'—'],['Qualifications', d.qualifications||'—'],['Fee', d.fee ? '₹'+d.fee : '—'],['Gender', d.gender||'—']].map(([l,v])=>`
           <div style="padding:12px;background:#f9f9f9;border-radius:10px;">
-            <div style="font-size:11px;color:#aaa;font-weight:600;text-transform:uppercase;">${l}</div>
-            <div style="font-size:14px;font-weight:600;margin-top:2px;">${v}</div>
+            <div style="font-size:11px;color:#aaa;font-weight:600;text-transform:uppercase;">${escHtml(l)}</div>
+            <div style="font-size:14px;font-weight:600;margin-top:2px;">${escHtml(v)}</div>
           </div>`).join('')}
       </div>
 
@@ -935,33 +935,40 @@ function showDoctorModal(d) {
   modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
 }
 
+// Shares the `approve-${id}` / `reject-${id}` cooldown keys with
+// approveDoctor()/rejectDoctor() so the modal button and the table-row button
+// cannot both fire a write for the same doctor on a fast double-click.
 async function approveFromModal(id) {
-  try {
-    await db.collection('doctors').doc(id).update({
-      status: 'active',
-      approvedAt: firebase.firestore.FieldValue.serverTimestamp(),
-    });
-    showToast('Doctor approved successfully!');
-    document.getElementById('doctor-modal')?.remove();
-  } catch (err) {
-    console.error('approveFromModal error:', err);
-    showToast('Failed to approve doctor. Please try again.');
-  }
+  withCooldown(`approve-${id}`, async () => {
+    try {
+      await db.collection('doctors').doc(id).update({
+        status: 'active',
+        approvedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+      showToast('Doctor approved successfully!');
+      document.getElementById('doctor-modal')?.remove();
+    } catch (err) {
+      console.error('approveFromModal error:', err);
+      showToast('Failed to approve doctor. Please try again.');
+    }
+  });
 }
 
 async function rejectFromModal(id) {
   if (!confirm('Are you sure you want to reject this doctor application?')) return;
-  try {
-    await db.collection('doctors').doc(id).update({
-      status: 'suspended',
-      rejectedAt: firebase.firestore.FieldValue.serverTimestamp(),
-    });
-    showToast('Doctor application rejected.');
-    document.getElementById('doctor-modal')?.remove();
-  } catch (err) {
-    console.error('rejectFromModal error:', err);
-    showToast('Failed to reject doctor. Please try again.');
-  }
+  withCooldown(`reject-${id}`, async () => {
+    try {
+      await db.collection('doctors').doc(id).update({
+        status: 'suspended',
+        rejectedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+      showToast('Doctor application rejected.');
+      document.getElementById('doctor-modal')?.remove();
+    } catch (err) {
+      console.error('rejectFromModal error:', err);
+      showToast('Failed to reject doctor. Please try again.');
+    }
+  });
 }
 
 // ============================================
@@ -1045,10 +1052,10 @@ function renderSpecRequestsTable(list) {
     return `<tr>
       <td><div class="user-cell">
         <div class="doc-avatar" style="background:${color.bg};color:${color.fg};">${initials}</div>
-        <div><div class="user-name">${r.doctorName || '—'}</div></div>
+        <div><div class="user-name">${escHtml(r.doctorName || '—')}</div></div>
       </div></td>
-      <td><span style="font-size:13px;color:var(--text-secondary);">${r.oldSpecialization || '—'}</span></td>
-      <td><strong style="color:var(--primary);">${r.requestedSpecialization || '—'}</strong></td>
+      <td><span style="font-size:13px;color:var(--text-secondary);">${escHtml(r.oldSpecialization || '—')}</span></td>
+      <td><strong style="color:var(--primary);">${escHtml(r.requestedSpecialization || '—')}</strong></td>
       <td>
         <span style="display:inline-flex;align-items:center;gap:4px;font-size:13px;">
           <span> ${docCount} doc${docCount !== 1 ? 's' : ''}
@@ -1077,9 +1084,9 @@ function viewSpecRequest(id) {
     <div style="display:flex;align-items:center;gap:10px;padding:10px;background:#f9f9f9;border-radius:10px;margin-bottom:8px;">
       <span style="font-size:18px;">${(d.name||'').endsWith('.pdf') ? '' : ''}</span>
       <div style="flex:1;min-width:0;">
-        <div style="font-size:12px;font-weight:600;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${d.name || 'Document'}</div>
+        <div style="font-size:12px;font-weight:600;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(d.name || 'Document')}</div>
       </div>
-      <a href="${d.url}" target="_blank" style="padding:5px 10px;background:var(--primary-light,#f3e5f5);color:var(--primary,#880E4F);border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;white-space:nowrap;">View â†—</a>
+      <a href="${escHtml(d.url)}" target="_blank" style="padding:5px 10px;background:var(--primary-light,#f3e5f5);color:var(--primary,#880E4F);border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;white-space:nowrap;">View â†—</a>
     </div>
   `).join('') || '<p style="color:#aaa;font-size:13px;font-style:italic;">No documents uploaded</p>';
 
@@ -1100,7 +1107,7 @@ function viewSpecRequest(id) {
   const remarksHtml = r.adminRemarks
     ? `<div style="margin-top:14px;padding:12px;background:#fff8e1;border-radius:10px;border:1px solid #ffe082;">
          <div style="font-size:11px;font-weight:700;color:#f57f17;text-transform:uppercase;margin-bottom:4px;">Admin Remarks</div>
-         <div style="font-size:13px;color:var(--text-primary);">${r.adminRemarks}</div>
+         <div style="font-size:13px;color:var(--text-primary);">${escHtml(r.adminRemarks)}</div>
        </div>`
     : '';
 
@@ -1122,9 +1129,9 @@ function viewSpecRequest(id) {
 
       <!-- Doctor info -->
       <div style="display:flex;align-items:center;gap:14px;padding:16px;background:#f9f9f9;border-radius:14px;margin-bottom:20px;">
-        <div style="width:50px;height:50px;border-radius:50%;background:linear-gradient(135deg,#522546,#8B3A6B);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:#fff;">${getInitials(r.doctorName||'DR')}</div>
+        <div style="width:50px;height:50px;border-radius:50%;background:linear-gradient(135deg,#522546,#8B3A6B);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:#fff;">${escHtml(getInitials(r.doctorName||'DR'))}</div>
         <div>
-          <div style="font-size:15px;font-weight:700;">${r.doctorName || '—'}</div>
+          <div style="font-size:15px;font-weight:700;">${escHtml(r.doctorName || '—')}</div>
           <div style="font-size:12px;color:#888;margin-top:2px;">Submitted: ${date}</div>
         </div>
       </div>
@@ -1133,12 +1140,12 @@ function viewSpecRequest(id) {
       <div style="display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px;margin-bottom:20px;">
         <div style="padding:14px;background:#f9f9f9;border-radius:12px;text-align:center;">
           <div style="font-size:10px;font-weight:700;color:#aaa;text-transform:uppercase;margin-bottom:6px;">Current</div>
-          <div style="font-size:14px;font-weight:700;color:var(--text-primary);">${r.oldSpecialization || '—'}</div>
+          <div style="font-size:14px;font-weight:700;color:var(--text-primary);">${escHtml(r.oldSpecialization || '—')}</div>
         </div>
         <div style="font-size:22px;color:#888;">â†’</div>
         <div style="padding:14px;background:#f3e5f5;border-radius:12px;text-align:center;border:2px solid var(--primary,#880E4F)20;">
           <div style="font-size:10px;font-weight:700;color:var(--primary,#880E4F);text-transform:uppercase;margin-bottom:6px;">Requested</div>
-          <div style="font-size:14px;font-weight:700;color:var(--primary,#880E4F);">${r.requestedSpecialization || '—'}</div>
+          <div style="font-size:14px;font-weight:700;color:var(--primary,#880E4F);">${escHtml(r.requestedSpecialization || '—')}</div>
         </div>
       </div>
 
@@ -1322,13 +1329,13 @@ function renderPatientsTable(patients) {
     return `<tr>
       <td><div class="user-cell">
         <div class="doc-avatar" style="background:${color.bg};color:${color.fg};">${initials}</div>
-        <div><div class="user-name">${p.name || '—'}</div><div class="user-sub">${p.email || ''}</div></div>
+        <div><div class="user-name">${escHtml(p.name || '—')}</div><div class="user-sub">${escHtml(p.email || '')}</div></div>
       </div></td>
-      <td>${p.phone || '—'}</td>
+      <td>${escHtml(p.phone || '—')}</td>
       <td>${calcAge(p.dob)}</td>
-      <td>${p.gender || '—'}</td>
+      <td>${escHtml(p.gender || '—')}</td>
       <td>${p.isPremium ? 'â­ Premium' : 'Free'}</td>
-      <td>${formatDate(p.createdAt)}</td>
+      <td>${escHtml(formatDate(p.createdAt))}</td>
     </tr>`;
   }).join('');
 }
@@ -1354,11 +1361,11 @@ function renderPaymentsTable(payments) {
   }
   tbody.innerHTML = payments.slice(0, 50).map(p => `<tr>
     <td>${p.paymentId || p.id}</td>
-    <td>${p.patientName || '—'}</td>
-    <td>${p.doctorName || '—'}</td>
+    <td>${escHtml(p.patientName || '—')}</td>
+    <td>${escHtml(p.doctorName || '—')}</td>
     <td>${formatCurrency(p.amount || 0)}</td>
-    <td><span class="pill ${p.status === 'success' ? 'pill-active' : 'pill-pending'}">${capitalize(p.status||'pending')}</span></td>
-    <td>${formatDate(p.createdAt)}</td>
+    <td><span class="pill ${p.status === 'success' ? 'pill-active' : 'pill-pending'}">${escHtml(capitalize(p.status||'pending'))}</span></td>
+    <td>${escHtml(formatDate(p.createdAt))}</td>
   </tr>`).join('');
 }
 
@@ -1582,7 +1589,7 @@ async function loadRecentTickets() {
       </div>
       <div class="ticket-body">
         <div class="ticket-title">${escHtml(t.title || t.message || 'Support request')}</div>
-        <div class="ticket-meta">${escHtml(t.userName || 'User')} &middot; ${t.priority||'medium'} priority &middot; ${formatDate(t.createdAt)}</div>
+        <div class="ticket-meta">${escHtml(t.userName || 'User')} &middot; ${escHtml(t.priority||'medium')} priority &middot; ${escHtml(formatDate(t.createdAt))}</div>
       </div>
       <span class="pill pill-pending" style="flex-shrink:0;font-size:10px;">Open</span>
     </div>`;
@@ -1596,11 +1603,11 @@ function renderTicketsTable(tickets) {
     const statusClass = t.status === 'open' ? 'pending' : 'active';
     return `<tr>
       <td>${t.id.slice(0,8)}...</td>
-      <td>${t.title || t.message || '—'}</td>
-      <td>${t.userName || '—'}</td>
-      <td><span class="pill pill-${prioClass}">${capitalize(t.priority||'low')}</span></td>
-      <td><span class="pill pill-${statusClass}">${capitalize(t.status||'open')}</span></td>
-      <td>${formatDate(t.createdAt)}</td>
+      <td>${escHtml(t.title || t.message || '—')}</td>
+      <td>${escHtml(t.userName || '—')}</td>
+      <td><span class="pill pill-${prioClass}">${escHtml(capitalize(t.priority||'low'))}</span></td>
+      <td><span class="pill pill-${statusClass}">${escHtml(capitalize(t.status||'open'))}</span></td>
+      <td>${escHtml(formatDate(t.createdAt))}</td>
       <td>${t.status === 'open' ? `<button class="btn btn-approve" onclick="resolveTicket('${t.id}', this)">Resolve</button>` : '—'}</td>
     </tr>`;
   }).join('');
@@ -1641,10 +1648,10 @@ function loadReportsList() {
       return `<div class="user-cell" style="padding:12px 0;border-bottom:1px solid var(--border);">
         <div style="font-size:24px;">
         <div style="flex:1;">
-          <div class="user-name">${r.title || 'Report'}</div>
-          <div class="user-sub">${r.type || ''} · ${formatDate(r.createdAt)}</div>
+          <div class="user-name">${escHtml(r.title || 'Report')}</div>
+          <div class="user-sub">${r.type || ''} · ${escHtml(formatDate(r.createdAt))}</div>
         </div>
-        ${r.downloadUrl ? `<a href="${r.downloadUrl}" target="_blank" class="btn btn-outline">Download</a>` : ''}
+        ${r.downloadUrl ? `<a href="${escHtml(r.downloadUrl)}" target="_blank" class="btn btn-outline">Download</a>` : ''}
       </div>`;
     }).join('');
   }).catch(() => {});
@@ -2334,12 +2341,12 @@ function renderRequestsTable(requests) {
         <div class="user-cell">
           <div class="doc-avatar" style="background:${color.bg};color:${color.fg};">${initials}</div>
           <div>
-            <div class="user-name">${r.patientName || '—'}</div>
-            <div class="user-sub">${r.patientPhone || ''}</div>
+            <div class="user-name">${escHtml(r.patientName || '—')}</div>
+            <div class="user-sub">${escHtml(r.patientPhone || '')}</div>
           </div>
         </div>
       </td>
-      <td style="max-width:160px;word-break:break-word;">${r.serviceName || '—'}</td>
+      <td style="max-width:160px;word-break:break-word;">${escHtml(r.serviceName || '—')}</td>
       <td><span class="req-type-badge" style="background:${typeColor.bg};color:${typeColor.fg};">${typeLabel}</span></td>
       <td>${dateTime}</td>
       <td style="max-width:140px;font-size:12px;color:var(--text-secondary);">${address}</td>
@@ -2385,7 +2392,7 @@ function viewRequestDetail(id) {
   const details = r.serviceDetails || {};
   const detailRows = Object.entries(details)
     .filter(([k]) => k !== 'locationData') // shown in dedicated location block
-    .map(([k, v]) => `<tr><td style="font-weight:600;font-size:12px;color:var(--text-secondary);padding:5px 0;">${formatDetailKey(k)}</td><td style="font-size:12px;padding:5px 0 5px 12px;">${typeof v === 'object' ? JSON.stringify(v) : v}</td></tr>`)
+    .map(([k, v]) => `<tr><td style="font-weight:600;font-size:12px;color:var(--text-secondary);padding:5px 0;">${escHtml(formatDetailKey(k))}</td><td style="font-size:12px;padding:5px 0 5px 12px;">${escHtml(typeof v === 'object' ? JSON.stringify(v) : v)}</td></tr>`)
     .join('');
 
   const status = r.status || 'pending';
@@ -2405,7 +2412,7 @@ function viewRequestDetail(id) {
           ${reqTypeIcon(r.type)}
         </div>
         <div>
-          <div style="font-weight:700;font-size:15px;">${r.serviceName || '—'}</div>
+          <div style="font-weight:700;font-size:15px;">${escHtml(r.serviceName || '—')}</div>
           <div style="font-size:12px;color:#888;">${reqTypeLabel(r.type)} &middot; <span class="pill pill-${statusPillClass(status)}" style="font-size:11px;">${capitalize(status.replace('_',' '))}</span></div>
         </div>
       </div>
@@ -2413,13 +2420,13 @@ function viewRequestDetail(id) {
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px;">
         <div style="padding:12px;background:#f9f9f9;border-radius:12px;">
           <div style="font-size:11px;font-weight:600;color:#888;margin-bottom:4px;">PATIENT</div>
-          <div style="font-weight:600;font-size:14px;">${r.patientName || '—'}</div>
-          <div style="font-size:12px;color:#666;">${r.patientPhone || ''}</div>
+          <div style="font-weight:600;font-size:14px;">${escHtml(r.patientName || '—')}</div>
+          <div style="font-size:12px;color:#666;">${escHtml(r.patientPhone || '')}</div>
         </div>
         <div style="padding:12px;background:#f9f9f9;border-radius:12px;">
           <div style="font-size:11px;font-weight:600;color:#888;margin-bottom:4px;">PREFERRED SLOT</div>
-          <div style="font-weight:600;font-size:14px;">${r.preferredDate || '—'}</div>
-          <div style="font-size:12px;color:#666;">${r.preferredTime || ''}</div>
+          <div style="font-weight:600;font-size:14px;">${escHtml(r.preferredDate || '—')}</div>
+          <div style="font-size:12px;color:#666;">${escHtml(r.preferredTime || '')}</div>
         </div>
       </div>
 
@@ -2428,7 +2435,7 @@ function viewRequestDetail(id) {
       ${r.notes ? `
       <div style="padding:12px;background:#fffde7;border-radius:12px;margin-bottom:14px;border:1px solid #fff9c4;">
         <div style="font-size:11px;font-weight:600;color:#f9a825;margin-bottom:4px;">NOTES</div>
-        <div style="font-size:13px;">${r.notes}</div>
+        <div style="font-size:13px;">${escHtml(r.notes)}</div>
       </div>` : ''}
 
       ${detailRows ? `
@@ -2503,8 +2510,8 @@ function buildLocationBlock(r) {
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px;">
       ${fields.map(([k, v]) => `
         <div style="padding:8px 10px;background:#fff;border-radius:8px;border:1px solid #d0e4ff;">
-          <div style="font-size:10px;font-weight:700;color:#1a73e8;margin-bottom:2px;">${k.toUpperCase()}</div>
-          <div style="font-size:12px;font-weight:600;color:#222;">${v}</div>
+          <div style="font-size:10px;font-weight:700;color:#1a73e8;margin-bottom:2px;">${escHtml(k.toUpperCase())}</div>
+          <div style="font-size:12px;font-weight:600;color:#222;">${escHtml(v)}</div>
         </div>`).join('')}
     </div>` : ''}
   </div>`;
@@ -2987,7 +2994,7 @@ async function saveReferralSettings() {
   const btn    = document.getElementById('save-referral-btn');
   const status = document.getElementById('ref-save-status');
   btn.disabled = true;
-  btn.innerHTML = '<i class=”ti ti-loader”></i> Saving…';
+  btn.innerHTML = '<i class="ti ti-loader"></i> Saving…';
   if (status) status.textContent = '';
 
   const referrerReward = parseFloat(document.getElementById('ref-referrer-reward').value) || 0;
@@ -2996,7 +3003,7 @@ async function saveReferralSettings() {
   if (referrerReward < 0 || referredReward < 0) {
     showToast('Reward amounts must be non-negative.');
     btn.disabled = false;
-    btn.innerHTML = '<i class=”ti ti-device-floppy”></i> Save Settings';
+    btn.innerHTML = '<i class="ti ti-device-floppy"></i> Save Settings';
     return;
   }
 
@@ -3026,7 +3033,7 @@ async function saveReferralSettings() {
     showToast('Save failed: ' + escHtml(err.message));
   } finally {
     btn.disabled = false;
-    btn.innerHTML = '<i class=”ti ti-device-floppy”></i> Save Settings';
+    btn.innerHTML = '<i class="ti ti-device-floppy"></i> Save Settings';
   }
 }
 
@@ -3034,7 +3041,7 @@ async function saveReferralSettings() {
 function initReferralsListener() {
   if (_referralUnsub) _referralUnsub();
   document.getElementById('referrals-tbody').innerHTML =
-    '<tr><td colspan=”8” class=”loading”>Loading referrals…</td></tr>';
+    '<tr><td colspan="8" class="loading">Loading referrals…</td></tr>';
 
   _referralUnsub = db.collection('referrals')
     .orderBy('createdAt', 'desc')
@@ -3046,7 +3053,7 @@ function initReferralsListener() {
       filterReferrals();
     }, err => {
       document.getElementById('referrals-tbody').innerHTML =
-        `<tr><td colspan=”8” style=”text-align:center;color:var(--danger);”>Failed: ${escHtml(err.message)}</td></tr>`;
+        `<tr><td colspan="8" style="text-align:center;color:var(--danger);">Failed: ${escHtml(err.message)}</td></tr>`;
     });
 }
 
@@ -3090,16 +3097,16 @@ function _renderTopReferrers(list) {
 
   const sorted = Object.values(map).sort((a, b) => b.earned - a.earned).slice(0, 10);
   if (!sorted.length) {
-    tbody.innerHTML = '<tr><td colspan=”5” style=”text-align:center;color:var(--text-muted);”>No data yet.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);">No data yet.</td></tr>';
     return;
   }
   tbody.innerHTML = sorted.map((u, i) => `
     <tr>
-      <td><span style=”font-weight:700;color:var(--primary)”>#${i+1}</span></td>
+      <td><span style="font-weight:700;color:var(--primary)">#${i+1}</span></td>
       <td>${escHtml(u.name)}</td>
       <td><code>${escHtml(u.code)}</code></td>
       <td>${u.rewarded} / ${u.total}</td>
-      <td style=”font-weight:700;color:var(--success)”>₹${u.earned.toLocaleString('en-IN')}</td>
+      <td style="font-weight:700;color:var(--success)">₹${u.earned.toLocaleString('en-IN')}</td>
     </tr>`).join('');
 }
 
@@ -3123,7 +3130,7 @@ function filterReferrals() {
 function renderReferrals(list) {
   const tbody = document.getElementById('referrals-tbody');
   if (!list.length) {
-    tbody.innerHTML = '<tr><td colspan=”8” style=”text-align:center;color:var(--text-muted);”>No referrals found.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-muted);">No referrals found.</td></tr>';
     return;
   }
   tbody.innerHTML = list.map(r => {
@@ -3131,15 +3138,15 @@ function renderReferrals(list) {
       ? r.createdAt.toDate().toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' })
       : '—';
     const statusBadge = r.status === 'rewarded'
-      ? '<span class=”badge badge-green”>Rewarded</span>'
+      ? '<span class="badge badge-green">Rewarded</span>'
       : r.status === 'fraud'
-      ? '<span class=”badge badge-red”>Fraud</span>'
-      : '<span class=”badge badge-yellow”>Pending</span>';
+      ? '<span class="badge badge-red">Fraud</span>'
+      : '<span class="badge badge-yellow">Pending</span>';
     const fraudBtn = r.status !== 'fraud'
-      ? `<button class=”btn-sm btn-danger” onclick=”markReferralFraud('${r.id}')” title=”Mark as fraud”></button>`
-      : `<button class=”btn-sm btn-secondary” onclick=”unmarkReferralFraud('${r.id}')” title=”Restore”>↩</button>`;
+      ? `<button class="btn-sm btn-danger" onclick="markReferralFraud('${r.id}')" title="Mark as fraud"></button>`
+      : `<button class="btn-sm btn-secondary" onclick="unmarkReferralFraud('${r.id}')" title="Restore">↩</button>`;
     const rewardBtn = r.status === 'pending'
-      ? `<button class=”btn-sm btn-primary” onclick=”manuallyRewardReferral('${r.id}')” title=”Manually reward”></button>`
+      ? `<button class="btn-sm btn-primary" onclick="manuallyRewardReferral('${r.id}')" title="Manually reward"></button>`
       : '';
     return `<tr>
       <td>${escHtml(r.referrerName || r.referrerId?.slice(0,8) || '—')}</td>
@@ -3149,7 +3156,7 @@ function renderReferrals(list) {
       <td>₹${(r.referredRewardAmount || 0).toLocaleString('en-IN')}</td>
       <td>${statusBadge}</td>
       <td>${date}</td>
-      <td style=”white-space:nowrap”>${fraudBtn} ${rewardBtn}</td>
+      <td style="white-space:nowrap">${fraudBtn} ${rewardBtn}</td>
     </tr>`;
   }).join('');
 }
@@ -3303,7 +3310,7 @@ function renderFeedbackTable(list) {
       'Same': '#e65100',        'Worse':  '#b71c1c',
     }[f.feeling] || '#888';
     const feelingHtml = f.feeling
-      ? `<span style="background:${feelingColor}20;color:${feelingColor};padding:3px 8px;border-radius:8px;font-size:11px;font-weight:700;">${f.feeling}</span>`
+      ? `<span style="background:${feelingColor}20;color:${feelingColor};padding:3px 8px;border-radius:8px;font-size:11px;font-weight:700;">${escHtml(f.feeling)}</span>`
       : '—';
 
     // Type badge
@@ -3316,12 +3323,12 @@ function renderFeedbackTable(list) {
       : '—';
 
     const comment = f.comment
-      ? `<span title="${f.comment.replace(/"/g, '&quot;')}" style="cursor:help;">${f.comment.length > 35 ? f.comment.slice(0, 35) + '…' : f.comment}</span>`
+      ? `<span title="${escHtml(f.comment)}" style="cursor:help;">${escHtml(f.comment.length > 35 ? f.comment.slice(0, 35) + '…' : f.comment)}</span>`
       : '<span style="color:#aaa;">—</span>';
 
     return `<tr>
-      <td><div class="user-name">${f.patientName || '—'}</div></td>
-      <td><div class="user-sub">${f.doctorName || '—'}</div></td>
+      <td><div class="user-name">${escHtml(f.patientName || '—')}</div></td>
+      <td><div class="user-sub">${escHtml(f.doctorName || '—')}</div></td>
       <td>${typeHtml}</td>
       <td>${f.rating > 0 ? stars : '<span style="color:#aaa;">No rating</span>'}</td>
       <td>${feelingHtml}</td>
@@ -4379,18 +4386,18 @@ function renderAppointmentsTable(list) {
     return `<tr>
       <td>
         <div class="user-cell">
-          <div class="doc-avatar" style="background:${patColor.bg};color:${patColor.fg};">${getInitials(a.patientName||'PT')}</div>
-          <div><div class="user-name">${a.patientName||'—'}</div><div class="user-sub">${a.patientPhone||''}</div></div>
+          <div class="doc-avatar" style="background:${patColor.bg};color:${patColor.fg};">${escHtml(getInitials(a.patientName||'PT'))}</div>
+          <div><div class="user-name">${escHtml(a.patientName||'—')}</div><div class="user-sub">${escHtml(a.patientPhone||'')}</div></div>
         </div>
       </td>
       <td>
-        <div class="user-name">${a.doctorName||'—'}</div>
-        <div class="user-sub">${a.doctorSpeciality||''}</div>
+        <div class="user-name">${escHtml(a.doctorName||'—')}</div>
+        <div class="user-sub">${escHtml(a.doctorSpeciality||'')}</div>
       </td>
       <td><span class="appt-time-badge">${slot}</span></td>
       <td>${typeBadge}</td>
       <td><span class="pill pill-${pillCls}">${capitalize(status.replace('_',' '))}</span></td>
-      <td style="font-size:12px;color:var(--text-secondary);">${formatDate(a.createdAt)}</td>
+      <td style="font-size:12px;color:var(--text-secondary);">${escHtml(formatDate(a.createdAt))}</td>
       <td>
         <div style="display:flex;gap:4px;flex-wrap:wrap;">
           ${status === 'pending' ? `
@@ -4458,17 +4465,17 @@ function viewApptDetail(id) {
         <button onclick="document.getElementById('appt-detail-modal').remove()" style="border:none;background:none;font-size:22px;cursor:pointer;color:#666;">&times;</button>
       </div>
       <div style="background:#f9f9f9;border-radius:14px;padding:16px;margin-bottom:18px;">
-        <div style="font-size:16px;font-weight:700;">${a.patientName||'—'}</div>
-        <div style="font-size:13px;color:#888;margin-top:2px;">${a.patientPhone||''}</div>
+        <div style="font-size:16px;font-weight:700;">${escHtml(a.patientName||'—')}</div>
+        <div style="font-size:13px;color:#888;margin-top:2px;">${escHtml(a.patientPhone||'')}</div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
         ${[['Doctor', a.doctorName||'—'], ['Speciality', a.doctorSpeciality||'—'], ['Date', a.date||'—'], ['Time', a.time||'—'], ['Type', capitalize(a.type||'in_person')], ['Status', capitalize(status)]].map(([l,v])=>`
           <div style="padding:10px;background:#f9f9f9;border-radius:10px;">
-            <div style="font-size:11px;color:#aaa;font-weight:600;">${l.toUpperCase()}</div>
-            <div style="font-size:14px;font-weight:600;margin-top:2px;">${v}</div>
+            <div style="font-size:11px;color:#aaa;font-weight:600;">${escHtml(l.toUpperCase())}</div>
+            <div style="font-size:14px;font-weight:600;margin-top:2px;">${escHtml(v)}</div>
           </div>`).join('')}
       </div>
-      ${a.notes ? `<div style="padding:12px;background:#fffde7;border-radius:10px;margin-bottom:16px;"><div style="font-size:11px;font-weight:600;color:#f9a825;margin-bottom:4px;">NOTES</div><div style="font-size:13px;">${a.notes}</div></div>` : ''}
+      ${a.notes ? `<div style="padding:12px;background:#fffde7;border-radius:10px;margin-bottom:16px;"><div style="font-size:11px;font-weight:600;color:#f9a825;margin-bottom:4px;">NOTES</div><div style="font-size:13px;">${escHtml(a.notes)}</div></div>` : ''}
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
         ${status==='pending' ? `
           <button class="btn btn-approve" style="flex:1;" onclick="updateApptStatus('${a.id}','confirmed',this);document.getElementById('appt-detail-modal').remove();">Confirm</button>
@@ -4550,14 +4557,14 @@ function renderWalletTable(list) {
     const sign = typeSign[t.type] || '+';
     return `<tr>
       <td>
-        <div class="user-name">${t.userName || '—'}</div>
+        <div class="user-name">${escHtml(t.userName || '—')}</div>
         <div class="user-sub">${t.userPhone || t.userId?.slice(0,8) || ''}</div>
       </td>
       <td class="tx-amount-${t.type || 'credit'}" style="font-size:15px;">${sign}₹${Number(t.amount||0).toLocaleString('en-IN')}</td>
       <td><span class="pill pill-${tc}">${tl}</span></td>
-      <td style="font-size:12px;color:var(--text-secondary);">${t.reason || '—'}</td>
+      <td style="font-size:12px;color:var(--text-secondary);">${escHtml(t.reason || '—')}</td>
       <td style="font-weight:600;">₹${Number(t.balanceAfter||0).toLocaleString('en-IN')}</td>
-      <td style="font-size:12px;">${formatDate(t.createdAt)}</td>
+      <td style="font-size:12px;">${escHtml(formatDate(t.createdAt))}</td>
     </tr>`;
   }).join('');
 }
@@ -4577,7 +4584,7 @@ function searchWalletUser() {
       sugBox.innerHTML = snap.docs.map(doc => {
         const u = doc.data();
         return `<div class="wallet-suggestion-item" onclick="selectWalletUser('${doc.id}','${escHtml(u.name||'')}','${escHtml(u.phone||'')}')">
-          <div class="doc-avatar" style="background:#F5E6F0;color:#522546;width:28px;height:28px;font-size:11px;">${getInitials(u.name||'U')}</div>
+          <div class="doc-avatar" style="background:#F5E6F0;color:#522546;width:28px;height:28px;font-size:11px;">${escHtml(getInitials(u.name||'U'))}</div>
           <div><div style="font-weight:600;">${escHtml(u.name||'—')}</div><div style="font-size:11px;color:var(--text-muted);">${escHtml(u.phone||u.email||doc.id)}</div></div>
         </div>`;
       }).join('');
@@ -4744,7 +4751,7 @@ function renderNotifList() {
       return `<div class="notif-item ${!n._read ? 'notif-unread' : ''}" onclick="handleSysNotifClick('${n._id}','${n._type}','${n.id||''}')">
         <div class="notif-icon" style="background:${cfg.bg};color:${cfg.fg};">${cfg.icon}</div>
         <div class="notif-content">
-          <div class="notif-title">${cfg.title}</div>
+          <div class="notif-title">${escHtml(cfg.title)}</div>
           <div class="notif-sub">${cfg.sub}</div>
           <div class="notif-time">${timeAgo({ toDate: () => new Date(n._ts) })}</div>
         </div>
@@ -4895,7 +4902,7 @@ async function loadBroadcasts() {
         <div class="broadcast-content">
           <div class="broadcast-title">${escHtml(b.title||'—')}</div>
           <div class="broadcast-sub">${escHtml(b.body||'')}</div>
-          <div class="broadcast-meta">â†’ ${tgLabel[b.target]||b.target} · ${formatDate(b.sentAt)} · by ${escHtml(b.sentBy||'admin')}</div>
+          <div class="broadcast-meta">â†’ ${tgLabel[b.target]||b.target} · ${escHtml(formatDate(b.sentAt))} · by ${escHtml(b.sentBy||'admin')}</div>
         </div>
       </div>`;
     }).join('');
@@ -4970,7 +4977,7 @@ async function loadMaternityAlerts() {
         <td>${escHtml((a.type||'').replace(/_/g,' ').toUpperCase())}</td>
         <td style="${sevClass}">${(a.severity||'').toUpperCase()}</td>
         <td style="max-width:220px;white-space:normal;">${escHtml(a.message||'')}</td>
-        <td>${formatDate(a.reportedAt)}</td>
+        <td>${escHtml(formatDate(a.reportedAt))}</td>
         <td>
           <button class="btn-outline" style="padding:4px 10px;font-size:11px;color:#2e7d32;border-color:#2e7d32;"
             onclick="resolveAlert('${doc.id}')">Resolve</button>
@@ -5175,17 +5182,17 @@ function renderReviewsTable(reviews) {
     const stars = 'â­'.repeat(Math.round(r.rating || 0));
     const ratingNum = (r.rating || 0).toFixed(1);
     const date = r.createdAt?.toDate ? r.createdAt.toDate().toLocaleDateString('en-IN') : '—';
-    const text = (r.reviewText || '').slice(0, 80) + ((r.reviewText || '').length > 80 ? '...' : '');
+    const text = escHtml((r.reviewText || '').slice(0, 80) + ((r.reviewText || '').length > 80 ? '...' : ''));
     const flagPill = r.isFlagged
       ? '<span class="pill" style="background:#FFEBEE;color:#C62828;">Flagged</span>'
       : '<span class="pill" style="background:#E8F5E9;color:#2E7D32;">Clean</span>';
 
     return `<tr>
-      <td><div class="user-name">${r.patientName || '—'}</div></td>
-      <td><div class="user-sub" style="font-size:12px;">${r.doctorId || '—'}</div></td>
+      <td><div class="user-name">${escHtml(r.patientName || '—')}</div></td>
+      <td><div class="user-sub" style="font-size:12px;">${escHtml(r.doctorId || '—')}</div></td>
       <td><span title="${ratingNum}">${stars} ${ratingNum}</span></td>
-      <td><span title="${r.reviewText || ''}">${text || '<em style="color:#9E9E9E;">No text</em>'}</span></td>
-      <td>${r.consultationType || '—'}</td>
+      <td><span title="${escHtml(r.reviewText || '')}">${text || '<em style="color:#9E9E9E;">No text</em>'}</span></td>
+      <td>${escHtml(r.consultationType || '—')}</td>
       <td>${date}</td>
       <td>${flagPill}</td>
       <td>
@@ -5671,7 +5678,7 @@ function switchNutrTab(tab, btn) {
 async function loadNutritionistsList() {
   const container = document.getElementById('nutr-nutritionists-list');
   if (!container) return;
-  container.innerHTML = '<div class=”loading”>Loading nutritionists…</div>';
+  container.innerHTML = '<div class="loading">Loading nutritionists…</div>';
   try {
     const snap = await db.collection('nutritionists').orderBy('createdAt', 'desc').get();
     _nutrNutritionists = snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -5683,7 +5690,7 @@ async function loadNutritionistsList() {
       _nutrNutritionists = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       renderNutritionistsList();
     } catch (e2) {
-      container.innerHTML = '<div class=”empty-state”>Error loading nutritionists: ' + escHtml(e2.message) + '</div>';
+      container.innerHTML = '<div class="empty-state">Error loading nutritionists: ' + escHtml(e2.message) + '</div>';
     }
   }
 }
@@ -5705,7 +5712,7 @@ function renderNutritionistsList() {
   });
 
   if (list.length === 0) {
-    container.innerHTML = '<div class=”empty-state” style=”padding:40px;text-align:center;color:var(--text-muted);”>No nutritionists found. <a href=”#” onclick=”openAddNutritionistModal();return false;” style=”color:#2e7d32;”>Add the first one</a></div>';
+    container.innerHTML = '<div class="empty-state" style="padding:40px;text-align:center;color:var(--text-muted);">No nutritionists found. <a href="#" onclick="openAddNutritionistModal();return false;" style="color:#2e7d32;">Add the first one</a></div>';
     return;
   }
 
@@ -5713,30 +5720,30 @@ function renderNutritionistsList() {
   list.forEach(n => {
     const initials = (n.name || 'N').charAt(0).toUpperCase();
     const avatarHtml = n.photoUrl
-      ? `<img src=”${escHtml(n.photoUrl)}” alt=”${escHtml(n.name)}” onerror=”this.style.display='none'” />`
+      ? `<img src="${escHtml(n.photoUrl)}" alt="${escHtml(n.name)}" onerror="this.style.display='none'" />`
       : initials;
     const modeIcons = [
-      n.isOnlineAvailable   ? '<span title=”Online” style=”font-size:11px;background:#e8f5e9;color:#2e7d32;padding:2px 7px;border-radius:4px;”>Online</span>' : '',
-      n.isInPersonAvailable ? '<span title=”In-Person” style=”font-size:11px;background:#e3f2fd;color:#1565c0;padding:2px 7px;border-radius:4px;”>In-Person</span>' : '',
+      n.isOnlineAvailable   ? '<span title="Online" style="font-size:11px;background:#e8f5e9;color:#2e7d32;padding:2px 7px;border-radius:4px;">Online</span>' : '',
+      n.isInPersonAvailable ? '<span title="In-Person" style="font-size:11px;background:#e3f2fd;color:#1565c0;padding:2px 7px;border-radius:4px;">In-Person</span>' : '',
     ].filter(Boolean).join(' ');
 
     html += `
-      <div class=”nutr-table-row”>
-        <div class=”nutr-avatar”>${avatarHtml}</div>
-        <div class=”nutr-info”>
-          <div class=”name”>${escHtml(n.name || '—')}</div>
-          <div class=”spec”>${escHtml(n.specialization || '—')}</div>
-          <div class=”meta”>${escHtml(n.qualification || '')}${n.city ? ' · ' + escHtml(n.city) : ''}${n.experienceYears ? ' · ' + escHtml(String(n.experienceYears)) + ' yrs exp' : ''}</div>
+      <div class="nutr-table-row">
+        <div class="nutr-avatar">${avatarHtml}</div>
+        <div class="nutr-info">
+          <div class="name">${escHtml(n.name || '—')}</div>
+          <div class="spec">${escHtml(n.specialization || '—')}</div>
+          <div class="meta">${escHtml(n.qualification || '')}${n.city ? ' · ' + escHtml(n.city) : ''}${n.experienceYears ? ' · ' + escHtml(String(n.experienceYears)) + ' yrs exp' : ''}</div>
         </div>
-        <div style=”flex-shrink:0;”>${modeIcons}</div>
-        <div class=”nutr-rating”><i class=”ti ti-star-filled” style=”font-size:12px;”></i> ${escHtml(String(n.rating || 0))} <span style=”color:var(--text-muted);”>(${escHtml(String(n.reviewCount || 0))})</span></div>
-        <div class=”nutr-fee”>₹${escHtml(String(n.consultationFee || 0))}</div>
-        <div style=”flex-shrink:0;”>
-          <span class=”${n.isAvailable ? 'nutr-badge-available' : 'nutr-badge-unavailable'}”>${n.isAvailable ? 'Available' : 'Unavailable'}</span>
+        <div style="flex-shrink:0;">${modeIcons}</div>
+        <div class="nutr-rating"><i class="ti ti-star-filled" style="font-size:12px;"></i> ${escHtml(String(n.rating || 0))} <span style="color:var(--text-muted);">(${escHtml(String(n.reviewCount || 0))})</span></div>
+        <div class="nutr-fee">₹${escHtml(String(n.consultationFee || 0))}</div>
+        <div style="flex-shrink:0;">
+          <span class="${n.isAvailable ? 'nutr-badge-available' : 'nutr-badge-unavailable'}">${n.isAvailable ? 'Available' : 'Unavailable'}</span>
         </div>
-        <div style=”display:flex;gap:6px;flex-shrink:0;”>
-          <button class=”btn-icon” title=”Edit” onclick=”openEditNutritionistModal('${escHtml(n.id)}')”><i class=”ti ti-pencil”></i></button>
-          <button class=”btn-icon btn-icon-danger” title=”Delete” onclick=”deleteNutritionist('${escHtml(n.id)}','${escHtml(n.name || '')}')”><i class=”ti ti-trash”></i></button>
+        <div style="display:flex;gap:6px;flex-shrink:0;">
+          <button class="btn-icon" title="Edit" onclick="openEditNutritionistModal('${escHtml(n.id)}')"><i class="ti ti-pencil"></i></button>
+          <button class="btn-icon btn-icon-danger" title="Delete" onclick="deleteNutritionist('${escHtml(n.id)}','${escHtml(n.name || '')}')"><i class="ti ti-trash"></i></button>
         </div>
       </div>`;
   });
@@ -5830,7 +5837,7 @@ async function saveNutritionist() {
 
   const editId = document.getElementById('nutr-edit-id').value;
   const orig = btn.innerHTML;
-  btn.innerHTML = '<i class=”ti ti-loader-2”></i> Saving…'; btn.disabled = true;
+  btn.innerHTML = '<i class="ti ti-loader-2"></i> Saving…'; btn.disabled = true;
 
   try {
     if (editId) {
@@ -5868,7 +5875,7 @@ async function deleteNutritionist(id, name) {
 async function loadNutritionAppointments() {
   const container = document.getElementById('nutr-appointments-list');
   if (!container) return;
-  container.innerHTML = '<div class=”loading”>Loading appointments…</div>';
+  container.innerHTML = '<div class="loading">Loading appointments…</div>';
 
   const statusFilter = (document.getElementById('nutr-appt-filter')?.value || '').trim();
   console.log('[Nutrition] loadNutritionAppointments start, filter:', statusFilter || 'none');
@@ -5879,7 +5886,7 @@ async function loadNutritionAppointments() {
     console.log('[Nutrition] appointments snap size:', snap.size);
 
     if (snap.empty) {
-      container.innerHTML = '<div class=”empty-state” style=”padding:40px;text-align:center;color:var(--text-muted);”>No appointments found.</div>';
+      container.innerHTML = '<div class="empty-state" style="padding:40px;text-align:center;color:var(--text-muted);">No appointments found.</div>';
       return;
     }
 
@@ -5891,7 +5898,7 @@ async function loadNutritionAppointments() {
     });
 
     let html = `
-      <div class=”appt-row-header”>
+      <div class="appt-row-header">
         <span>Patient</span><span>Nutritionist</span><span>Date</span><span>Time</span><span>Type</span><span>Status</span><span>Actions</span>
       </div>`;
     docs.forEach(doc => {
@@ -5902,35 +5909,35 @@ async function loadNutritionAppointments() {
       let actionBtns = '';
       if (a.status === 'pending') {
         actionBtns = `
-          <button class=”btn-icon” title=”Confirm” style=”background:#e8f5e9;color:#2e7d32;border:none;” onclick=”updateNutrApptStatus('${escHtml(id)}','confirmed')”><i class=”ti ti-check”></i></button>
-          <button class=”btn-icon btn-icon-danger” title=”Cancel” onclick=”updateNutrApptStatus('${escHtml(id)}','cancelled')”><i class=”ti ti-x”></i></button>`;
+          <button class="btn-icon" title="Confirm" style="background:#e8f5e9;color:#2e7d32;border:none;" onclick="updateNutrApptStatus('${escHtml(id)}','confirmed')"><i class="ti ti-check"></i></button>
+          <button class="btn-icon btn-icon-danger" title="Cancel" onclick="updateNutrApptStatus('${escHtml(id)}','cancelled')"><i class="ti ti-x"></i></button>`;
       } else if (a.status === 'confirmed') {
         actionBtns = `
-          <button class=”btn-icon” title=”Mark Completed” style=”background:#e3f2fd;color:#1565c0;border:none;” onclick=”updateNutrApptStatus('${escHtml(id)}','completed')”><i class=”ti ti-circle-check”></i></button>
-          <button class=”btn-icon btn-icon-danger” title=”Cancel” onclick=”updateNutrApptStatus('${escHtml(id)}','cancelled')”><i class=”ti ti-x”></i></button>`;
+          <button class="btn-icon" title="Mark Completed" style="background:#e3f2fd;color:#1565c0;border:none;" onclick="updateNutrApptStatus('${escHtml(id)}','completed')"><i class="ti ti-circle-check"></i></button>
+          <button class="btn-icon btn-icon-danger" title="Cancel" onclick="updateNutrApptStatus('${escHtml(id)}','cancelled')"><i class="ti ti-x"></i></button>`;
       } else {
         actionBtns = `
-          <button class=”btn-icon btn-icon-danger” title=”Delete” onclick=”deleteNutrAppt('${escHtml(id)}')”><i class=”ti ti-trash”></i></button>`;
+          <button class="btn-icon btn-icon-danger" title="Delete" onclick="deleteNutrAppt('${escHtml(id)}')"><i class="ti ti-trash"></i></button>`;
       }
 
       html += `
-        <div class=”appt-row”>
-          <span style=”font-weight:600;”>${escHtml(a.userName || 'Patient')}</span>
+        <div class="appt-row">
+          <span style="font-weight:600;">${escHtml(a.userName || 'Patient')}</span>
           <span>${escHtml(a.nutritionistName || '—')}</span>
           <span>${escHtml(a.date || '—')}</span>
           <span>${escHtml(a.timeSlot || '—')}</span>
-          <span style=”font-size:11px;”>${escHtml(a.consultationType || '—')}</span>
-          <span><span class=”pill ${statusClass}”>${escHtml(a.status || '—')}</span></span>
-          <span style=”display:flex;gap:5px;”>${actionBtns}</span>
+          <span style="font-size:11px;">${escHtml(a.consultationType || '—')}</span>
+          <span><span class="pill ${statusClass}">${escHtml(a.status || '—')}</span></span>
+          <span style="display:flex;gap:5px;">${actionBtns}</span>
         </div>`;
     });
     container.innerHTML = html;
   } catch (e) {
     console.error('[Nutrition] loadNutritionAppointments error:', e);
-    container.innerHTML = `<div class=”empty-state” style=”padding:24px;text-align:center;”>
-      <p style=”color:var(--danger);font-weight:600;”>Failed to load appointments</p>
-      <p style=”color:var(--text-muted);font-size:12px;”>${escHtml(e.message)}</p>
-      <p style=”color:var(--text-muted);font-size:11px;”>Make sure Firestore rules are deployed: <code>firebase deploy --only firestore:rules</code></p>
+    container.innerHTML = `<div class="empty-state" style="padding:24px;text-align:center;">
+      <p style="color:var(--danger);font-weight:600;">Failed to load appointments</p>
+      <p style="color:var(--text-muted);font-size:12px;">${escHtml(e.message)}</p>
+      <p style="color:var(--text-muted);font-size:11px;">Make sure Firestore rules are deployed: <code>firebase deploy --only firestore:rules</code></p>
     </div>`;
   }
 }
@@ -5968,7 +5975,7 @@ async function deleteNutrAppt(id) {
 async function loadMealLogs() {
   const container = document.getElementById('nutr-meal-logs-list');
   if (!container) return;
-  container.innerHTML = '<div class=”loading”>Loading meal logs…</div>';
+  container.innerHTML = '<div class="loading">Loading meal logs…</div>';
 
   const dp = document.getElementById('nutr-meal-date');
   const dateKey = dp?.value || new Date().toISOString().slice(0, 10);
@@ -5982,7 +5989,7 @@ async function loadMealLogs() {
     console.log('[Nutrition] meal logs snap size:', snap.size);
 
     if (snap.empty) {
-      container.innerHTML = '<div class=”empty-state” style=”padding:40px;text-align:center;color:var(--text-muted);”>No meal logs for ' + escHtml(dateKey) + '.</div>';
+      container.innerHTML = '<div class="empty-state" style="padding:40px;text-align:center;color:var(--text-muted);">No meal logs for ' + escHtml(dateKey) + '.</div>';
       return;
     }
 
@@ -5994,7 +6001,7 @@ async function loadMealLogs() {
     });
 
     let html = `
-      <div class=”meal-row-header”>
+      <div class="meal-row-header">
         <span>Food Item</span><span>Meal Type</span><span>Calories</span><span>Protein</span><span>Carbs</span><span>Fat</span><span></span>
       </div>`;
     docs.forEach(doc => {
@@ -6003,30 +6010,30 @@ async function loadMealLogs() {
       const typeClass = {breakfast:'meal-type-breakfast',lunch:'meal-type-lunch',dinner:'meal-type-dinner',snack:'meal-type-snack'}[m.mealType] || 'meal-type-snack';
       const userLabel = m.userName
         ? escHtml(m.userName)
-        : (m.userId ? '<span style=”font-family:monospace;font-size:10px;color:var(--text-muted);”>' + escHtml(m.userId.slice(0, 8)) + '…</span>' : '');
+        : (m.userId ? '<span style="font-family:monospace;font-size:10px;color:var(--text-muted);">' + escHtml(m.userId.slice(0, 8)) + '…</span>' : '');
       html += `
-        <div class=”meal-row”>
+        <div class="meal-row">
           <span>
-            <div style=”font-weight:600;”>${escHtml(m.foodName || '—')}</div>
-            <div style=”font-size:11px;color:var(--text-muted);margin-top:1px;”>${userLabel}</div>
+            <div style="font-weight:600;">${escHtml(m.foodName || '—')}</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:1px;">${userLabel}</div>
           </span>
-          <span><span class=”pill ${typeClass}” style=”font-size:10px;”>${escHtml(m.mealType || '—')}</span></span>
-          <span style=”font-weight:700;color:#e65100;”>${escHtml(String(Math.round(m.calories || 0)))} kcal</span>
-          <span style=”color:#1565c0;”>${escHtml(String(Math.round(m.protein || 0)))}g</span>
-          <span style=”color:#2e7d32;”>${escHtml(String(Math.round(m.carbs || 0)))}g</span>
-          <span style=”color:#7b1fa2;”>${escHtml(String(Math.round(m.fat || 0)))}g</span>
+          <span><span class="pill ${typeClass}" style="font-size:10px;">${escHtml(m.mealType || '—')}</span></span>
+          <span style="font-weight:700;color:#e65100;">${escHtml(String(Math.round(m.calories || 0)))} kcal</span>
+          <span style="color:#1565c0;">${escHtml(String(Math.round(m.protein || 0)))}g</span>
+          <span style="color:#2e7d32;">${escHtml(String(Math.round(m.carbs || 0)))}g</span>
+          <span style="color:#7b1fa2;">${escHtml(String(Math.round(m.fat || 0)))}g</span>
           <span>
-            <button class=”btn-icon btn-icon-danger” title=”Delete” onclick=”deleteAdminMealLog('${escHtml(id)}')”><i class=”ti ti-trash”></i></button>
+            <button class="btn-icon btn-icon-danger" title="Delete" onclick="deleteAdminMealLog('${escHtml(id)}')"><i class="ti ti-trash"></i></button>
           </span>
         </div>`;
     });
     container.innerHTML = html;
   } catch (e) {
     console.error('[Nutrition] loadMealLogs error:', e);
-    container.innerHTML = `<div class=”empty-state” style=”padding:24px;text-align:center;”>
-      <p style=”color:var(--danger);font-weight:600;”>Failed to load meal logs</p>
-      <p style=”color:var(--text-muted);font-size:12px;”>${escHtml(e.message)}</p>
-      <p style=”color:var(--text-muted);font-size:11px;”>Deploy updated rules: <code>firebase deploy --only firestore:rules</code></p>
+    container.innerHTML = `<div class="empty-state" style="padding:24px;text-align:center;">
+      <p style="color:var(--danger);font-weight:600;">Failed to load meal logs</p>
+      <p style="color:var(--text-muted);font-size:12px;">${escHtml(e.message)}</p>
+      <p style="color:var(--text-muted);font-size:11px;">Deploy updated rules: <code>firebase deploy --only firestore:rules</code></p>
     </div>`;
   }
 }
@@ -6059,7 +6066,7 @@ function toggleNutrGoalsFilter() {
 async function loadNutritionGoals() {
   const container = document.getElementById('nutr-goals-list');
   if (!container) return;
-  container.innerHTML = '<div class=”loading”>Loading goals…</div>';
+  container.innerHTML = '<div class="loading">Loading goals…</div>';
 
   try {
     let ref = db.collection('nutrition_goals').limit(150);
@@ -6067,17 +6074,17 @@ async function loadNutritionGoals() {
     const snap = await ref.get();
 
     const toggleLabel = _nutrGoalsShowAll ? 'Show Active Only' : 'Show All Goals';
-    const headerExtra = `<div style=”padding:10px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:flex-end;”>
-      <button class=”btn-secondary” style=”font-size:12px;padding:5px 12px;” onclick=”toggleNutrGoalsFilter()”>${escHtml(toggleLabel)}</button>
+    const headerExtra = `<div style="padding:10px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:flex-end;">
+      <button class="btn-secondary" style="font-size:12px;padding:5px 12px;" onclick="toggleNutrGoalsFilter()">${escHtml(toggleLabel)}</button>
     </div>`;
 
     if (snap.empty) {
-      container.innerHTML = headerExtra + '<div class=”empty-state” style=”padding:40px;text-align:center;color:var(--text-muted);”>No nutrition goals found.</div>';
+      container.innerHTML = headerExtra + '<div class="empty-state" style="padding:40px;text-align:center;color:var(--text-muted);">No nutrition goals found.</div>';
       return;
     }
 
     let html = headerExtra + `
-      <div class=”goal-row-header”>
+      <div class="goal-row-header">
         <span>Patient</span><span>Goal Type</span><span>Target Cal</span><span>Target Wt</span><span>Current Wt</span><span>Status</span><span>Actions</span>
       </div>`;
     snap.forEach(doc => {
@@ -6085,29 +6092,29 @@ async function loadNutritionGoals() {
       const id = doc.id;
       const isActive = g.isActive !== false;
       const statusBadge = isActive
-        ? '<span class=”pill pill-active”>Active</span>'
-        : '<span class=”pill pill-cancelled” style=”background:#f5f5f5;color:#9e9e9e;”>Inactive</span>';
+        ? '<span class="pill pill-active">Active</span>'
+        : '<span class="pill pill-cancelled" style="background:#f5f5f5;color:#9e9e9e;">Inactive</span>';
       const userLabel = g.userName
         ? escHtml(g.userName)
-        : '<span style=”font-family:monospace;font-size:10px;”>' + escHtml((g.userId || '').slice(0, 10)) + '…</span>';
+        : '<span style="font-family:monospace;font-size:10px;">' + escHtml((g.userId || '').slice(0, 10)) + '…</span>';
 
       html += `
-        <div class=”goal-row”>
+        <div class="goal-row">
           <span>${userLabel}</span>
-          <span style=”font-weight:600;color:#2e7d32;”>${escHtml(_goalLabels[g.goalType] || g.goalType || '—')}</span>
-          <span style=”font-weight:700;color:#e65100;”>${escHtml(String(Math.round(g.targetCalories || 0)))} kcal</span>
+          <span style="font-weight:600;color:#2e7d32;">${escHtml(_goalLabels[g.goalType] || g.goalType || '—')}</span>
+          <span style="font-weight:700;color:#e65100;">${escHtml(String(Math.round(g.targetCalories || 0)))} kcal</span>
           <span>${g.targetWeight ? escHtml(String(g.targetWeight)) + ' kg' : '—'}</span>
           <span>${g.currentWeight ? escHtml(String(g.currentWeight)) + ' kg' : '—'}</span>
           <span>${statusBadge}</span>
-          <span style=”display:flex;gap:5px;”>
-            ${isActive ? `<button class=”btn-icon” title=”Deactivate” style=”background:#fff8e1;color:#f57f17;border:none;” onclick=”deactivateNutrGoal('${escHtml(id)}')”><i class=”ti ti-player-pause”></i></button>` : ''}
-            <button class=”btn-icon btn-icon-danger” title=”Delete” onclick=”deleteNutrGoal('${escHtml(id)}')”><i class=”ti ti-trash”></i></button>
+          <span style="display:flex;gap:5px;">
+            ${isActive ? `<button class="btn-icon" title="Deactivate" style="background:#fff8e1;color:#f57f17;border:none;" onclick="deactivateNutrGoal('${escHtml(id)}')"><i class="ti ti-player-pause"></i></button>` : ''}
+            <button class="btn-icon btn-icon-danger" title="Delete" onclick="deleteNutrGoal('${escHtml(id)}')"><i class="ti ti-trash"></i></button>
           </span>
         </div>`;
     });
     container.innerHTML = html;
   } catch (e) {
-    container.innerHTML = '<div class=”empty-state” style=”padding:24px;color:var(--text-muted);”>Error: ' + escHtml(e.message) + '</div>';
+    container.innerHTML = '<div class="empty-state" style="padding:24px;color:var(--text-muted);">Error: ' + escHtml(e.message) + '</div>';
     console.error('[Nutrition] loadNutritionGoals error:', e);
   }
 }
@@ -7174,3 +7181,879 @@ async function deleteCareAssistant(id, btn) {
   }
 }
 
+
+// ============================================================================
+//   PARTNER ACCOUNTS — Ambulance / Caregiver / Pharmacy
+//   Firebase-Auth-linked partner-app accounts living in
+//   `ambulance_profiles`, `caregiver_profiles`, `pharmacy_profiles`.
+//   NOTE: this is NOT the patient-facing catalog managed by the
+//   Ambulances / Caregivers Management / Care Assistants tabs
+//   (`ambulances`, `caregivers`, `care_assistants`) — those are untouched.
+//   Additive only: no existing function or collection is modified here.
+// ============================================================================
+
+const PARTNER_ROLES = {
+  ambulance: {
+    label:        'Ambulance Partner',
+    collection:   'ambulance_profiles',
+    txCollection: 'ambulance_transactions',
+    txField:      'ambulanceId',
+    tab:          'ambulance-partners',
+    prefix:       'ap',
+    cols:         8,
+    navBadge:     'nav-ambulance-partners-count',
+    extraFilterId:'ap-vehicle-filter',
+    // Canonical docType keys — these must match
+    // `PartnerDocumentType.ambulance` in the partner app
+    // (mednu_doctor/lib/shared_core/documents/partner_document_models.dart)
+    // and the `ambulance_documents/{uid}/{docType}.{ext}` Storage path.
+    docSlots: {
+      vehicle_registration: 'Vehicle Registration',
+      driver_license:       'Driver License',
+      address_proof:        'Address Proof',
+    },
+    nameOf: p => p.driverName || p.plateNumber || 'Unnamed partner',
+    subOf:  p => p.vehicleType || '—',
+    extraValues: list => [...new Set(list.map(p => p.vehicleType).filter(Boolean))].sort(),
+    extraMatch:  (p, v) => (p.vehicleType || '') === v,
+    searchMatch: (p, q) =>
+      (p.driverName || '').toLowerCase().includes(q) ||
+      (p.plateNumber || '').toLowerCase().includes(q) ||
+      (p.driverPhone || '').toLowerCase().includes(q) ||
+      (p.vehicleType || '').toLowerCase().includes(q),
+  },
+  caregiver: {
+    label:        'Caregiver Partner',
+    collection:   'caregiver_profiles',
+    txCollection: 'caregiver_transactions',
+    txField:      'caregiverId',
+    tab:          'caregiver-partners',
+    prefix:       'cp',
+    cols:         7,
+    navBadge:     'nav-caregiver-partners-count',
+    extraFilterId:'cp-specialty-filter',
+    docSlots: {
+      caregiver_id:  'Caregiver ID',
+      certificates:  'Certificates',
+      address_proof: 'Address Proof',
+    },
+    nameOf: p => p.name || 'Unnamed partner',
+    subOf:  p => (p.specialties || []).join(', ') || '—',
+    extraValues: list => [...new Set([].concat(...list.map(p => p.specialties || [])).filter(Boolean))].sort(),
+    extraMatch:  (p, v) => (p.specialties || []).includes(v),
+    searchMatch: (p, q) =>
+      (p.name || '').toLowerCase().includes(q) ||
+      (p.specialties || []).join(' ').toLowerCase().includes(q) ||
+      (p.certifications || []).join(' ').toLowerCase().includes(q),
+  },
+  pharmacy: {
+    label:        'Pharmacy Partner',
+    collection:   'pharmacy_profiles',
+    txCollection: 'pharmacy_transactions',
+    txField:      'pharmacyId',
+    tab:          'pharmacy-partners',
+    prefix:       'pp',
+    cols:         7,
+    navBadge:     'nav-pharmacy-partners-count',
+    extraFilterId:'pp-delivery-filter',
+    docSlots: {
+      pharmacy_license: 'Pharmacy License',
+      address_proof:    'Address Proof',
+    },
+    nameOf: p => p.name || 'Unnamed pharmacy',
+    subOf:  p => p.address || p.email || '—',
+    extraValues: null, // delivery filter is a fixed yes/no list in the markup
+    extraMatch:  (p, v) => v === 'yes' ? p.deliveryAvailable === true : p.deliveryAvailable !== true,
+    searchMatch: (p, q) =>
+      (p.name || '').toLowerCase().includes(q) ||
+      (p.licenseNumber || '').toLowerCase().includes(q) ||
+      (p.phone || '').toLowerCase().includes(q) ||
+      (p.email || '').toLowerCase().includes(q),
+  },
+  // Lab partners were missing from this panel entirely (the earlier partner
+  // onboarding task covered ambulance/caregiver/pharmacy only). Document
+  // verification is admin-only, so without this tab a lab could upload
+  // documents that nobody could ever verify. Same generic shape as the
+  // pharmacy entry — the two profile schemas are near-identical.
+  lab: {
+    label:        'Lab Partner',
+    collection:   'lab_profiles',
+    txCollection: 'lab_transactions',
+    txField:      'labId',
+    tab:          'lab-partners',
+    prefix:       'lp',
+    cols:         7,
+    navBadge:     'nav-lab-partners-count',
+    extraFilterId:'lp-service-filter',
+    docSlots: {
+      lab_license:   'Lab License',
+      address_proof: 'Address Proof',
+    },
+    nameOf: p => p.name || 'Unnamed lab',
+    subOf:  p => p.address || p.email || '—',
+    extraValues: list => [...new Set([].concat(...list.map(p => p.servicesOffered || [])).filter(Boolean))].sort(),
+    extraMatch:  (p, v) => (p.servicesOffered || []).includes(v),
+    searchMatch: (p, q) =>
+      (p.name || '').toLowerCase().includes(q) ||
+      (p.licenseNumber || '').toLowerCase().includes(q) ||
+      (p.phone || '').toLowerCase().includes(q) ||
+      (p.email || '').toLowerCase().includes(q) ||
+      (p.servicesOffered || []).join(' ').toLowerCase().includes(q),
+  },
+};
+
+const _partnerData      = { ambulance: [], caregiver: [], pharmacy: [], lab: [] };
+const _partnerListeners = { ambulance: null, caregiver: null, pharmacy: null, lab: null };
+
+function partnerStatusOf(p) {
+  const s = (p.status || 'pending').toLowerCase();
+  return ['active', 'pending', 'suspended'].includes(s) ? s : 'pending';
+}
+
+function partnerRatingCell(p) {
+  return (p.totalReviews > 0 && p.rating > 0)
+    ? `★ ${escHtml(Number(p.rating).toFixed(1))} <span style="font-size:11px;color:#9E9E9E;">(${escHtml(String(p.totalReviews))})</span>`
+    : '<span style="color:#BDBDBD;font-size:12px;">No reviews</span>';
+}
+
+// ── Realtime listeners ───────────────────────────────────────────────────────
+function initPartnerListeners() {
+  Object.keys(PARTNER_ROLES).forEach(role => {
+    const cfg = PARTNER_ROLES[role];
+    if (_partnerListeners[role]) _partnerListeners[role]();
+    // No orderBy: a doc written before `createdAt` existed would be dropped by
+    // an orderBy clause, so sorting happens client-side instead.
+    _partnerListeners[role] = db.collection(cfg.collection).onSnapshot(snap => {
+      _partnerData[role] = snap.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .sort((a, b) => {
+          const av = a.createdAt && a.createdAt.toDate ? a.createdAt.toDate().getTime() : 0;
+          const bv = b.createdAt && b.createdAt.toDate ? b.createdAt.toDate().getTime() : 0;
+          return bv - av;
+        });
+      _syncPartnerExtraFilter(role);
+      _updatePartnerStats(role);
+      filterPartnerTable(role);
+      renderCombinedPendingList();
+    }, err => console.error('[' + cfg.collection + '] listener:', err));
+  });
+}
+
+function _syncPartnerExtraFilter(role) {
+  const cfg = PARTNER_ROLES[role];
+  if (!cfg.extraValues) return;
+  const sel = document.getElementById(cfg.extraFilterId);
+  if (!sel) return;
+  const values   = cfg.extraValues(_partnerData[role]);
+  const current  = sel.value;
+  const allLabel = sel.options[0] ? sel.options[0].textContent : 'All';
+  sel.innerHTML = `<option value="all">${escHtml(allLabel)}</option>` +
+    values.map(v => `<option value="${escHtml(v)}">${escHtml(v)}</option>`).join('');
+  if (values.includes(current)) sel.value = current;
+}
+
+function _updatePartnerStats(role) {
+  const cfg  = PARTNER_ROLES[role];
+  const list = _partnerData[role];
+  const set  = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  const pending = list.filter(p => partnerStatusOf(p) === 'pending').length;
+  set(cfg.prefix + '-count-total',   list.length);
+  set(cfg.prefix + '-count-pending', pending);
+  set(cfg.prefix + '-count-active',  list.filter(p => partnerStatusOf(p) === 'active').length);
+  const badge = document.getElementById(cfg.navBadge);
+  if (badge) {
+    badge.textContent = pending;
+    badge.style.display = pending > 0 ? 'inline-flex' : 'none';
+  }
+}
+
+// ── Filtering ────────────────────────────────────────────────────────────────
+function filterPartnerTable(role) {
+  const cfg    = PARTNER_ROLES[role];
+  const q      = (document.getElementById(cfg.prefix + '-search')?.value || '').trim().toLowerCase();
+  const status = document.getElementById(cfg.prefix + '-status-filter')?.value || 'all';
+  const extra  = document.getElementById(cfg.extraFilterId)?.value || 'all';
+
+  let list = _partnerData[role];
+  if (status !== 'all') list = list.filter(p => partnerStatusOf(p) === status);
+  if (extra  !== 'all') list = list.filter(p => cfg.extraMatch(p, extra));
+  if (q)                list = list.filter(p => cfg.searchMatch(p, q));
+  renderPartnerTable(role, list);
+}
+
+function filterAmbulancePartners() { filterPartnerTable('ambulance'); }
+function filterCaregiverPartners() { filterPartnerTable('caregiver'); }
+function filterPharmacyPartners()  { filterPartnerTable('pharmacy');  }
+function filterLabPartners()       { filterPartnerTable('lab');       }
+
+// ── Table rendering ──────────────────────────────────────────────────────────
+function partnerActionsCell(role, p) {
+  const st = partnerStatusOf(p);
+  const id = escHtml(p.id);
+  let actions;
+  if (st === 'pending') {
+    actions =
+      `<button class="btn btn-approve" onclick="approvePartner('${role}','${id}', this)">Approve</button>` +
+      `<button class="btn btn-reject" style="margin-left:4px;" onclick="rejectPartner('${role}','${id}', this)">Reject</button>`;
+  } else if (st === 'active') {
+    actions = `<button class="btn btn-reject" onclick="deactivatePartner('${role}','${id}', this)">Deactivate</button>`;
+  } else {
+    actions = `<button class="btn btn-approve" onclick="activatePartner('${role}','${id}', this)">Activate</button>`;
+  }
+  return actions +
+    `<button class="btn btn-outline" style="margin-left:4px;" onclick="showPartnerModal('${role}','${id}')">View</button>`;
+}
+
+function renderPartnerTable(role, list) {
+  const cfg   = PARTNER_ROLES[role];
+  const tbody = document.getElementById(cfg.prefix + '-tbody');
+  if (!tbody) return;
+  if (!list.length) {
+    tbody.innerHTML = `<tr><td colspan="${cfg.cols}" class="loading">No ${escHtml(cfg.label.toLowerCase())}s found</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = list.map(p => {
+    const st     = partnerStatusOf(p);
+    const name   = cfg.nameOf(p);
+    const color  = randomAvatarColor(name);
+    const avatar = `<div class="doc-avatar" style="background:${escHtml(color.bg)};color:${escHtml(color.fg)};">${escHtml(getInitials(name))}</div>`;
+    const statusCell = `<td><span class="pill pill-${escHtml(st)}">${escHtml(capitalize(st))}</span></td>`;
+    const actions    = `<td>${partnerActionsCell(role, p)}</td>`;
+
+    if (role === 'ambulance') {
+      return `<tr>
+        <td><div class="user-cell">${avatar}
+          <div><div class="user-name">${escHtml(p.driverName || '—')}</div>
+          <div class="user-sub">${escHtml(p.driverLicense || '')}</div></div></div></td>
+        <td>${escHtml(p.plateNumber || '—')}</td>
+        <td><span class="svc-type-badge" style="background:#e3f2fd;color:#1565c0;">${escHtml(p.vehicleType || '—')}</span></td>
+        <td>${escHtml(p.driverPhone || '—')}</td>
+        <td>${escHtml(String(p.totalTrips || 0))}</td>
+        <td>${partnerRatingCell(p)}</td>
+        ${statusCell}${actions}
+      </tr>`;
+    }
+    if (role === 'caregiver') {
+      const specs = (p.specialties || []).slice(0, 3)
+        .map(s => `<span class="svc-type-badge" style="background:#f3e5f5;color:#6a1b9a;">${escHtml(s)}</span>`).join(' ');
+      return `<tr>
+        <td><div class="user-cell">${avatar}
+          <div><div class="user-name">${escHtml(p.name || '—')}</div>
+          <div class="user-sub">${escHtml(p.experienceYears ? p.experienceYears + ' yrs experience' : '')}</div></div></div></td>
+        <td>${specs || '—'}</td>
+        <td>${p.hourlyRate ? escHtml(formatCurrency(p.hourlyRate)) + '/hr' : '—'}</td>
+        <td>${escHtml(String(p.totalVisits || 0))}</td>
+        <td>${partnerRatingCell(p)}</td>
+        ${statusCell}${actions}
+      </tr>`;
+    }
+    if (role === 'lab') {
+      const svcs = (p.servicesOffered || []).slice(0, 3)
+        .map(s => `<span class="svc-type-badge" style="background:#e0f2f1;color:#00695c;">${escHtml(s)}</span>`).join(' ');
+      return `<tr>
+        <td><div class="user-cell">${avatar}
+          <div><div class="user-name">${escHtml(p.name || '—')}</div>
+          <div class="user-sub">${escHtml(p.email || p.address || '')}</div></div></div></td>
+        <td>${escHtml(p.licenseNumber || '—')}</td>
+        <td>${escHtml(p.phone || '—')}</td>
+        <td>${svcs || '—'}</td>
+        <td>${partnerRatingCell(p)}</td>
+        ${statusCell}${actions}
+      </tr>`;
+    }
+    // pharmacy
+    return `<tr>
+      <td><div class="user-cell">${avatar}
+        <div><div class="user-name">${escHtml(p.name || '—')}</div>
+        <div class="user-sub">${escHtml(p.email || p.address || '')}</div></div></div></td>
+      <td>${escHtml(p.licenseNumber || '—')}</td>
+      <td>${escHtml(p.phone || '—')}</td>
+      <td>${p.deliveryAvailable
+            ? '<span class="pill pill-active">Yes</span>'
+            : '<span class="pill pill-inactive">No</span>'}</td>
+      <td>${partnerRatingCell(p)}</td>
+      ${statusCell}${actions}
+    </tr>`;
+  }).join('');
+}
+
+// ── Status actions (approve / reject / activate / deactivate) ───────────────
+function _setPartnerStatus(role, id, status, btn, successMsg) {
+  const cfg = PARTNER_ROLES[role];
+  const original = btn ? btn.textContent : '';
+  withCooldown('partner-' + role + '-' + id + '-' + status, async () => {
+    if (btn) { btn.disabled = true; btn.textContent = '...'; }
+    try {
+      const payload = {
+        status: status,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedBy: auth.currentUser?.email || 'admin',
+      };
+      if (status === 'active')    payload.approvedAt = firebase.firestore.FieldValue.serverTimestamp();
+      if (status === 'suspended') payload.rejectedAt = firebase.firestore.FieldValue.serverTimestamp();
+      await db.collection(cfg.collection).doc(id).update(payload);
+      showToast(successMsg);
+      document.getElementById('partner-modal')?.remove();
+    } catch (err) {
+      console.error('_setPartnerStatus ' + cfg.collection + ':', err);
+      if (btn) { btn.disabled = false; btn.textContent = original; }
+      showToast('Failed to update ' + cfg.label.toLowerCase() + '. Please try again.');
+    }
+  });
+}
+
+function approvePartner(role, id, btn)  { _setPartnerStatus(role, id, 'active', btn, PARTNER_ROLES[role].label + ' approved'); }
+function activatePartner(role, id, btn) { _setPartnerStatus(role, id, 'active', btn, PARTNER_ROLES[role].label + ' activated'); }
+
+function deactivatePartner(role, id, btn) {
+  if (!confirm('Deactivate this partner? They will lose access to new jobs until reactivated.')) return;
+  _setPartnerStatus(role, id, 'suspended', btn, PARTNER_ROLES[role].label + ' deactivated');
+}
+
+function rejectPartner(role, id, btn) {
+  if (!confirm('Reject this partner application?')) return;
+  _setPartnerStatus(role, id, 'suspended', btn, PARTNER_ROLES[role].label + ' rejected');
+}
+
+// ── Per-document verification ───────────────────────────────────────────────
+// Replaces the old blanket `togglePartnerDocsVerified` checkbox: admin is the
+// sole writer of `documentVerification.{docType}` (the partner app can only
+// ever write `documents.{docType}` — `firestore.rules` blocks the owner from
+// modifying `documentVerification`). The flat legacy `documentsVerified`
+// boolean is recomputed in the same write so it stays meaningful.
+
+/// Reads the live doc, sets one docType's verification, and recomputes the
+/// roll-up boolean (true iff every canonical docType is verified).
+async function _writePartnerDocVerification(role, id, docType, status, reason, btn) {
+  const cfg      = PARTNER_ROLES[role];
+  const original = btn ? btn.textContent : '';
+  const key      = 'partner-doc-' + role + '-' + id + '-' + docType + '-' + status;
+
+  withCooldown(key, async () => {
+    if (btn) { btn.disabled = true; btn.textContent = '...'; }
+    try {
+      const ref  = db.collection(cfg.collection).doc(id);
+      const snap = await ref.get();
+      const data = snap.exists ? (snap.data() || {}) : {};
+
+      const verification = Object.assign({}, data.documentVerification || {});
+      verification[docType] = { status: status };
+
+      // Roll-up: every canonical slot must be verified. The slot being written
+      // right now is evaluated from `status`, the rest from stored data.
+      const allVerified = Object.keys(cfg.docSlots).every(k =>
+        k === docType ? status === 'verified'
+                      : ((data.documentVerification || {})[k] || {}).status === 'verified');
+
+      await ref.update({
+        ['documentVerification.' + docType]: {
+          status:     status,
+          reason:     reason || null,
+          verifiedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          verifiedBy: auth.currentUser?.email || 'admin',
+        },
+        documentsVerified: allVerified,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedBy: auth.currentUser?.email || 'admin',
+      });
+
+      showToast(status === 'verified'
+        ? (cfg.docSlots[docType] || docType) + ' verified'
+        : (cfg.docSlots[docType] || docType) + ' rejected');
+      // Re-render the modal so the chips/roll-up reflect the write. The
+      // realtime listener refreshes `_partnerData` first.
+      setTimeout(() => {
+        if (document.getElementById('partner-modal')) showPartnerModal(role, id);
+      }, 600);
+    } catch (err) {
+      console.error('_writePartnerDocVerification:', err);
+      if (btn) { btn.disabled = false; btn.textContent = original; }
+      showToast('Could not update this document. Please try again.');
+    }
+  });
+}
+
+function verifyPartnerDocument(role, id, docType, btn) {
+  _writePartnerDocVerification(role, id, docType, 'verified', null, btn);
+}
+
+function rejectPartnerDocument(role, id, docType, btn) {
+  _showPartnerDocRejectDialog(role, id, docType);
+}
+
+/// Same shape as `_showRejectDialog` (specialization requests) — a reason box
+/// rather than a bare `prompt()`, so the copy matches the rest of the panel.
+function _showPartnerDocRejectDialog(role, id, docType) {
+  const cfg = PARTNER_ROLES[role];
+  document.getElementById('pdoc-reject-dialog')?.remove();
+  const dialog = document.createElement('div');
+  dialog.id = 'pdoc-reject-dialog';
+  dialog.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:10001;display:flex;align-items:center;justify-content:center;padding:16px;';
+  dialog.innerHTML = `
+    <div style="background:#fff;border-radius:16px;width:100%;max-width:420px;padding:24px;">
+      <h3 style="font-size:16px;font-weight:700;margin:0 0 6px;">Reject ${escHtml(cfg.docSlots[docType] || docType)}</h3>
+      <p style="font-size:13px;color:#666;margin:0 0 16px;">Reason is optional but shown to the partner in their app.</p>
+      <textarea id="pdoc-reject-reason" placeholder="e.g. Document is blurred, please re-upload..." rows="4"
+        style="width:100%;padding:10px 12px;border:1px solid #e0e0e0;border-radius:10px;font-family:inherit;font-size:13px;resize:none;box-sizing:border-box;"></textarea>
+      <div style="display:flex;gap:10px;margin-top:14px;">
+        <button onclick="document.getElementById('pdoc-reject-dialog').remove()"
+          style="flex:1;padding:11px;border:1px solid #e0e0e0;background:#fff;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;">Cancel</button>
+        <button onclick="_submitPartnerDocReject('${role}','${escHtml(id)}','${escHtml(docType)}')"
+          style="flex:1;padding:11px;background:#c62828;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">Reject Document</button>
+      </div>
+    </div>`;
+  document.body.appendChild(dialog);
+}
+
+function _submitPartnerDocReject(role, id, docType) {
+  const reason = (document.getElementById('pdoc-reject-reason')?.value || '').trim();
+  document.getElementById('pdoc-reject-dialog')?.remove();
+  _writePartnerDocVerification(role, id, docType, 'rejected', reason || null, null);
+}
+
+// ── Earnings (reads the immutable Cloud-Function-written ledgers) ───────────
+function _isCreditedEarning(t) {
+  return (!t.type || t.type === 'earning') && (!t.status || t.status === 'credited');
+}
+
+// The all-partner aggregate has to read the whole ledger (an all-time total
+// cannot be computed from a .limit()ed slice), so switching in and out of a
+// partner tab would otherwise re-read the entire *_transactions collection on
+// every single tab click. Cache the rendered result briefly and de-dupe
+// concurrent loads; the tab's Refresh button passes force=true to bypass it.
+const _partnerEarnCache    = {};
+const _partnerEarnInflight = {};
+const _PARTNER_EARN_TTL_MS = 120000; // 2 minutes
+
+function _applyPartnerEarnCache(role, cached) {
+  const cfg = PARTNER_ROLES[role];
+  const el      = document.getElementById(cfg.prefix + '-earnings-summary');
+  const totalEl = document.getElementById(cfg.prefix + '-earnings-total');
+  if (el)      el.innerHTML   = cached.html;
+  if (totalEl) totalEl.textContent = cached.total;
+}
+
+async function loadPartnerEarnings(role, force) {
+  const cached = _partnerEarnCache[role];
+  if (!force && cached && (Date.now() - cached.at) < _PARTNER_EARN_TTL_MS) {
+    _applyPartnerEarnCache(role, cached);
+    return;
+  }
+  // A second call while the first is still in flight would double the reads.
+  if (_partnerEarnInflight[role]) return _partnerEarnInflight[role];
+
+  const p = _loadPartnerEarningsUncached(role);
+  _partnerEarnInflight[role] = p;
+  try { await p; } finally { delete _partnerEarnInflight[role]; }
+}
+
+async function _loadPartnerEarningsUncached(role) {
+  const cfg = PARTNER_ROLES[role];
+  const el  = document.getElementById(cfg.prefix + '-earnings-summary');
+  if (el) el.innerHTML = '<div class="empty-state"><p>Loading earnings…</p></div>';
+  try {
+    const snap = await db.collection(cfg.txCollection).get();
+    const txs  = snap.docs.map(d => d.data()).filter(_isCreditedEarning);
+
+    const now          = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    let total = 0, thisMonth = 0;
+    const byPartner = {};
+    txs.forEach(t => {
+      const amt = Number(t.amount) || 0;
+      total += amt;
+      const when = t.createdAt && t.createdAt.toDate ? t.createdAt.toDate() : null;
+      if (when && when >= startOfMonth) thisMonth += amt;
+      const pid = t[cfg.txField];
+      if (pid) byPartner[pid] = (byPartner[pid] || 0) + amt;
+    });
+
+    const top = Object.entries(byPartner).sort((a, b) => b[1] - a[1])[0];
+    let topLabel = '—';
+    if (top) {
+      const p = _partnerData[role].find(x => x.id === top[0]);
+      topLabel = (p ? cfg.nameOf(p) : top[0]) + ' · ' + formatCurrency(top[1]);
+    }
+    const earners = Object.keys(byPartner).length;
+
+    const html = [
+      ['Total earnings (all time)', formatCurrency(total)],
+      ['This month',                formatCurrency(thisMonth)],
+      ['Top earner',                topLabel],
+      ['Credited transactions',     txs.length.toLocaleString()],
+      ['Earning partners',          earners.toLocaleString()],
+      ['Average per partner',       formatCurrency(earners ? total / earners : 0)],
+    ].map(([l, v]) => `
+        <div class="partner-earn-item">
+          <div class="pe-label">${escHtml(l)}</div>
+          <div class="pe-value">${escHtml(String(v))}</div>
+        </div>`).join('');
+
+    _partnerEarnCache[role] = { at: Date.now(), html: html, total: formatCurrency(total) };
+    // Re-resolve the nodes rather than reusing `el`: the admin may have
+    // switched tabs while this read was in flight.
+    _applyPartnerEarnCache(role, _partnerEarnCache[role]);
+  } catch (err) {
+    console.error('loadPartnerEarnings ' + cfg.txCollection + ':', err);
+    if (el) el.innerHTML = `<div class="empty-state"><p style="color:var(--danger);">Could not load ${escHtml(cfg.txCollection)}.</p></div>`;
+  }
+}
+
+// Wired to the per-tab "Refresh" buttons — always bypass the cache.
+function loadAmbulancePartnerEarnings() { loadPartnerEarnings('ambulance', true); }
+function loadCaregiverPartnerEarnings() { loadPartnerEarnings('caregiver', true); }
+function loadPharmacyPartnerEarnings()  { loadPartnerEarnings('pharmacy',  true); }
+function loadLabPartnerEarnings()       { loadPartnerEarnings('lab',       true); }
+
+async function _renderPartnerModalEarnings(role, id) {
+  const cfg = PARTNER_ROLES[role];
+  if (!document.getElementById('partner-modal-earnings')) return;
+  try {
+    const snap = await db.collection(cfg.txCollection).where(cfg.txField, '==', id).get();
+    const txs = snap.docs.map(d => d.data()).filter(_isCreditedEarning)
+      .sort((a, b) => {
+        const av = a.createdAt && a.createdAt.toDate ? a.createdAt.toDate().getTime() : 0;
+        const bv = b.createdAt && b.createdAt.toDate ? b.createdAt.toDate().getTime() : 0;
+        return bv - av;
+      });
+    const box = document.getElementById('partner-modal-earnings');
+    if (!box) return; // modal closed while loading
+
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    let total = 0, month = 0;
+    txs.forEach(t => {
+      const amt = Number(t.amount) || 0;
+      total += amt;
+      const when = t.createdAt && t.createdAt.toDate ? t.createdAt.toDate() : null;
+      if (when && when >= startOfMonth) month += amt;
+    });
+
+    const rows = txs.slice(0, 5).map(t => `
+      <tr>
+        <td style="font-size:12px;">${escHtml(formatDate(t.createdAt))}</td>
+        <td style="font-size:12px;">${escHtml(t.patientName || '—')}</td>
+        <td style="font-size:12px;font-weight:700;">${escHtml(formatCurrency(Number(t.amount) || 0))}</td>
+      </tr>`).join('');
+
+    box.innerHTML = `
+      <div class="partner-earn-grid" style="margin-bottom:10px;">
+        <div class="partner-earn-item"><div class="pe-label">Total earned</div><div class="pe-value">${escHtml(formatCurrency(total))}</div></div>
+        <div class="partner-earn-item"><div class="pe-label">This month</div><div class="pe-value">${escHtml(formatCurrency(month))}</div></div>
+        <div class="partner-earn-item"><div class="pe-label">Transactions</div><div class="pe-value">${txs.length}</div></div>
+      </div>
+      ${txs.length ? `<div class="table-wrap"><table>
+        <thead><tr><th>Date</th><th>Patient</th><th>Amount</th></tr></thead>
+        <tbody>${rows}</tbody></table></div>`
+      : '<div style="font-size:12px;color:#aaa;font-style:italic;">No credited earnings yet.</div>'}`;
+  } catch (err) {
+    console.error('_renderPartnerModalEarnings:', err);
+    const box = document.getElementById('partner-modal-earnings');
+    if (box) box.innerHTML = '<div style="font-size:12px;color:var(--danger);">Could not load earnings ledger.</div>';
+  }
+}
+
+// ── Auth uid ↔ role cross-reference (read-only; never writes users/{uid}.role)
+async function _renderPartnerModalRole(uid) {
+  if (!document.getElementById('partner-modal-role')) return;
+  try {
+    const doc = await db.collection('users').doc(uid).get();
+    const box = document.getElementById('partner-modal-role');
+    if (!box) return;
+    if (!doc.exists) {
+      box.innerHTML = '<span style="font-size:12px;color:#aaa;font-style:italic;">No users/{uid} document — partner-app-only account.</span>';
+      return;
+    }
+    const u = doc.data();
+    box.innerHTML =
+      `<span style="font-size:13px;">Linked user role: <strong>${escHtml(u.role || 'not set')}</strong>` +
+      `${u.email ? ' · ' + escHtml(u.email) : ''}</span>` +
+      '<div style="font-size:11px;color:#aaa;margin-top:2px;">Read-only — role is managed outside the admin panel.</div>';
+  } catch (err) {
+    const box = document.getElementById('partner-modal-role');
+    if (box) box.innerHTML = '<span style="font-size:12px;color:#aaa;font-style:italic;">Role lookup unavailable.</span>';
+  }
+}
+
+// ── Detail modal ─────────────────────────────────────────────────────────────
+function showAmbulancePartnerModal(id) { showPartnerModal('ambulance', id); }
+function showCaregiverPartnerModal(id) { showPartnerModal('caregiver', id); }
+function showPharmacyPartnerModal(id)  { showPartnerModal('pharmacy',  id); }
+function showLabPartnerModal(id)       { showPartnerModal('lab',       id); }
+
+const _DOC_STATUS_CHIPS = {
+  verified:     { cls: 'pill pill-active',    label: 'Verified'       },
+  rejected:     { cls: 'pill pill-suspended', label: 'Rejected'       },
+  pending:      { cls: 'pill pill-pending',   label: 'Pending Review' },
+  not_uploaded: { cls: 'pill pill-inactive',  label: 'Not Uploaded'   },
+};
+
+/// Effective status for one docType. A file with no verification entry — or
+/// one stamped *before* the current file was uploaded (i.e. the partner
+/// replaced the document) — reads as pending, with no write needed: admin
+/// creates the `documentVerification` row when they hit Verify/Reject.
+function _partnerDocStatus(doc, ver) {
+  if (!doc || !doc.url) return 'not_uploaded';
+  if (!ver || !ver.status) return 'pending';
+  const upAt  = doc.uploadedAt && doc.uploadedAt.toDate ? doc.uploadedAt.toDate().getTime() : 0;
+  const verAt = ver.verifiedAt && ver.verifiedAt.toDate ? ver.verifiedAt.toDate().getTime() : 0;
+  if (upAt && verAt && upAt > verAt) return 'pending';
+  return ['verified', 'rejected', 'pending'].includes(ver.status) ? ver.status : 'pending';
+}
+
+function showPartnerModal(role, id) {
+  const cfg = PARTNER_ROLES[role];
+  const p   = _partnerData[role].find(x => x.id === id);
+  if (!p) return;
+  document.getElementById('partner-modal')?.remove();
+
+  const st   = partnerStatusOf(p);
+  const name = cfg.nameOf(p);
+  const pid  = escHtml(p.id);
+  // `documents.{docType}` is written by the partner app on upload;
+  // `documentVerification.{docType}` is written here (admin) only.
+  const docs = p.documents || {};
+  const vers = p.documentVerification || {};
+  const docHtml = Object.entries(cfg.docSlots).map(([key, label]) => {
+    const doc  = docs[key] || null;
+    const ver  = vers[key] || null;
+    const stat = _partnerDocStatus(doc, ver);
+    const chip = _DOC_STATUS_CHIPS[stat];
+    const isPdf = doc && doc.contentType === 'application/pdf';
+    const reason = stat === 'rejected' && ver && ver.reason ? ver.reason : '';
+
+    return `<div class="partner-doc-item">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;">
+        <span style="font-size:12px;font-weight:700;color:var(--text-secondary);">${escHtml(label)}</span>
+        <span class="${chip.cls}">${escHtml(chip.label)}</span>
+      </div>
+      ${doc && doc.url ? `
+        <div class="partner-doc-file">
+          <span class="partner-doc-icon"><i class="ti ti-${isPdf ? 'file-type-pdf' : 'photo'}"></i></span>
+          <div style="min-width:0;">
+            <a href="${escHtml(doc.url)}" target="_blank" rel="noopener"
+               style="font-size:13px;font-weight:600;color:var(--primary,#880E4F);text-decoration:none;overflow-wrap:anywhere;">
+              View / Download</a>
+            <div style="font-size:11px;color:#888;">Uploaded ${escHtml(doc.uploadedAt ? formatDate(doc.uploadedAt) : '—')}</div>
+          </div>
+        </div>
+        ${reason ? `<div style="font-size:11px;color:#c62828;margin-top:4px;overflow-wrap:anywhere;">Reason: ${escHtml(reason)}</div>` : ''}
+        <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
+          <button class="btn btn-approve" onclick="verifyPartnerDocument('${role}','${pid}','${escHtml(key)}', this)">Verify</button>
+          <button class="btn btn-reject" onclick="rejectPartnerDocument('${role}','${pid}','${escHtml(key)}', this)">Reject</button>
+        </div>`
+      : '<span style="font-size:12px;color:#aaa;font-style:italic;">Not uploaded yet</span>'}
+    </div>`;
+  }).join('');
+
+  let fields;
+  if (role === 'ambulance') {
+    fields = [
+      ['Plate Number',   p.plateNumber || '—'],
+      ['Vehicle Type',   p.vehicleType || '—'],
+      ['Driver Phone',   p.driverPhone || '—'],
+      ['Driver Licence', p.driverLicense || '—'],
+      ['Total Trips',    String(p.totalTrips || 0)],
+      ['Equipment',      (p.equipment || []).join(', ') || '—'],
+    ];
+  } else if (role === 'caregiver') {
+    fields = [
+      ['Hourly Rate',    p.hourlyRate ? formatCurrency(p.hourlyRate) + '/hr' : '—'],
+      ['Experience',     p.experienceYears ? p.experienceYears + ' yrs' : '—'],
+      ['Specialties',    (p.specialties || []).join(', ') || '—'],
+      ['Certifications', (p.certifications || []).join(', ') || '—'],
+      ['Total Visits',   String(p.totalVisits || 0)],
+      ['Verified',       p.isVerified ? 'Yes' : 'No'],
+    ];
+  } else if (role === 'lab') {
+    fields = [
+      ['Licence Number', p.licenseNumber || '—'],
+      ['Phone',          p.phone || '—'],
+      ['Email',          p.email || '—'],
+      ['Address',        p.address || '—'],
+      ['Services',       (p.servicesOffered || []).join(', ') || '—'],
+      ['Verified',       p.isVerified ? 'Yes' : 'No'],
+    ];
+  } else {
+    fields = [
+      ['Licence Number', p.licenseNumber || '—'],
+      ['Phone',          p.phone || '—'],
+      ['Email',          p.email || '—'],
+      ['Address',        p.address || '—'],
+      ['Delivery',       p.deliveryAvailable ? 'Available' : 'Not available'],
+      ['Verified',       p.isVerified ? 'Yes' : 'No'],
+    ];
+  }
+  fields.push(['Rating', (p.totalReviews > 0 && p.rating > 0)
+    ? Number(p.rating).toFixed(1) + ' ★ (' + p.totalReviews + ')'
+    : 'No reviews']);
+  fields.push(['Registered', p.createdAt ? formatDate(p.createdAt) : '—']);
+
+  const actionRow = st === 'pending'
+    ? `<button onclick="approvePartner('${role}','${pid}', this)" style="flex:1;min-width:140px;padding:12px;background:#2e7d32;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;">Approve</button>
+       <button onclick="rejectPartner('${role}','${pid}', this)" style="flex:1;min-width:140px;padding:12px;background:#c62828;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;">Reject</button>`
+    : st === 'active'
+      ? `<button onclick="deactivatePartner('${role}','${pid}', this)" style="flex:1;min-width:140px;padding:12px;background:#c62828;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;">Deactivate Partner</button>`
+      : `<button onclick="activatePartner('${role}','${pid}', this)" style="flex:1;min-width:140px;padding:12px;background:#2e7d32;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;">Activate Partner</button>`;
+
+  const color = randomAvatarColor(name);
+  const modal = document.createElement('div');
+  modal.id = 'partner-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
+  modal.innerHTML = `
+    <div style="background:#fff;border-radius:20px;width:100%;max-width:620px;max-height:90vh;overflow-y:auto;padding:28px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+        <h2 style="font-size:18px;font-weight:700;margin:0;">${escHtml(cfg.label)}</h2>
+        <button onclick="document.getElementById('partner-modal').remove()"
+          style="border:none;background:none;font-size:22px;cursor:pointer;color:#666;">&times;</button>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:14px;padding:16px;background:#f9f9f9;border-radius:14px;margin-bottom:20px;flex-wrap:wrap;">
+        ${p.photoUrl
+          ? `<img src="${escHtml(p.photoUrl)}" alt="" style="width:56px;height:56px;border-radius:50%;object-fit:cover;max-width:100%;" />`
+          : `<div style="width:56px;height:56px;border-radius:50%;background:${escHtml(color.bg)};color:${escHtml(color.fg)};display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;">${escHtml(getInitials(name))}</div>`}
+        <div style="min-width:0;">
+          <div style="font-size:16px;font-weight:700;">${escHtml(name)}</div>
+          <div style="font-size:13px;color:#888;">${escHtml(cfg.subOf(p))}</div>
+          <div style="margin-top:4px;"><span class="pill pill-${escHtml(st)}">${escHtml(capitalize(st))}</span></div>
+        </div>
+      </div>
+
+      <div class="partner-doc-grid" style="margin-bottom:20px;">
+        ${fields.map(([l, v]) => `
+          <div class="partner-doc-item">
+            <div style="font-size:11px;color:#aaa;font-weight:600;text-transform:uppercase;">${escHtml(l)}</div>
+            <div style="font-size:14px;font-weight:600;margin-top:2px;overflow-wrap:anywhere;">${escHtml(String(v))}</div>
+          </div>`).join('')}
+      </div>
+
+      <div style="margin-bottom:20px;">
+        <div style="font-size:14px;font-weight:700;margin-bottom:8px;">Account &amp; Role</div>
+        <div class="partner-doc-item" style="margin-bottom:8px;">
+          <div style="font-size:11px;color:#aaa;font-weight:600;text-transform:uppercase;">Firebase Auth UID</div>
+          <div style="font-size:13px;font-weight:600;margin-top:2px;overflow-wrap:anywhere;">${escHtml(p.uid || p.id)}</div>
+        </div>
+        <div id="partner-modal-role" class="partner-doc-item">
+          <span style="font-size:12px;color:#aaa;">Checking linked user account…</span>
+        </div>
+      </div>
+
+      <div style="margin-bottom:20px;">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+          <span style="font-size:14px;font-weight:700;">Uploaded Documents</span>
+          <span class="${p.documentsVerified ? 'pill pill-active' : 'pill pill-pending'}">
+            ${p.documentsVerified ? 'All documents verified' : 'Verification incomplete'}</span>
+        </div>
+        <div style="font-size:12px;color:#666;margin-bottom:10px;">
+          Uploaded by the partner from their app. Verifying or rejecting a document here is the
+          only way its status changes — partners cannot verify their own documents.
+        </div>
+        <div class="partner-doc-grid">${docHtml}</div>
+      </div>
+
+      <div style="margin-bottom:20px;">
+        <div style="font-size:14px;font-weight:700;margin-bottom:8px;">Earnings</div>
+        <div id="partner-modal-earnings"><span style="font-size:12px;color:#aaa;">Loading earnings…</span></div>
+      </div>
+
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">${actionRow}</div>
+    </div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  _renderPartnerModalRole(p.uid || p.id);
+  _renderPartnerModalEarnings(role, p.id);
+}
+
+// ── Overview: unified pending-approvals widget (doctors + 3 partner roles) ──
+// Wraps the existing doctor-only renderer instead of editing it: the doctors
+// listener keeps calling renderPendingList(), we just cache its rows and
+// re-render them merged with the pending partner accounts.
+let _pendingDoctorRows = [];
+
+window.renderPendingList = function (docs) {
+  _pendingDoctorRows = (docs || []).map(doc => {
+    const d = doc.data ? doc.data() : doc;
+    return {
+      role: 'doctor',
+      name: d.name || 'Unknown',
+      sub:  d.specialty || d.specialisation || 'General',
+      onclick: `approveDoctor('${escHtml(doc.id)}', this)`,
+    };
+  });
+  renderCombinedPendingList();
+};
+
+const _PENDING_ROLE_BADGES = {
+  doctor:    { label: 'Doctor',    bg: '#e3f2fd', fg: '#1565c0' },
+  ambulance: { label: 'Ambulance', bg: '#ffebee', fg: '#c62828' },
+  caregiver: { label: 'Caregiver', bg: '#f3e5f5', fg: '#6a1b9a' },
+  pharmacy:  { label: 'Pharmacy',  bg: '#e8f5e9', fg: '#2e7d32' },
+  lab:       { label: 'Lab',       bg: '#e0f2f1', fg: '#00695c' },
+};
+
+function renderCombinedPendingList() {
+  const el = document.getElementById('pending-doctors-list');
+  if (!el) return;
+
+  const rows = _pendingDoctorRows.slice();
+  Object.keys(PARTNER_ROLES).forEach(role => {
+    const cfg = PARTNER_ROLES[role];
+    _partnerData[role].filter(p => partnerStatusOf(p) === 'pending').slice(0, 5).forEach(p => {
+      rows.push({
+        role: role,
+        name: cfg.nameOf(p),
+        sub:  cfg.subOf(p),
+        onclick: `approvePartner('${role}','${escHtml(p.id)}', this)`,
+      });
+    });
+  });
+
+  if (!rows.length) {
+    el.innerHTML = `<div class="empty-state" style="padding:24px 0;">
+      <div class="empty-icon"><i class="ti ti-circle-check" style="color:#1e8e3e;"></i></div>
+      <p style="color:#1e8e3e;font-weight:600;">All clear! No pending approvals</p>
+    </div>`;
+    return;
+  }
+
+  el.innerHTML =
+    `<div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;">
+       <strong>${rows.length}</strong> pending approval${rows.length === 1 ? '' : 's'} across doctors and partner accounts
+     </div>` +
+    rows.slice(0, 12).map(r => {
+      const color = randomAvatarColor(r.name);
+      const b = _PENDING_ROLE_BADGES[r.role];
+      return `
+      <div class="pending-item">
+        <div class="doc-avatar" style="background:${escHtml(color.bg)};color:${escHtml(color.fg)};width:36px;height:36px;font-size:12px;">${escHtml(getInitials(r.name || '?'))}</div>
+        <div style="flex:1;min-width:0;">
+          <div class="user-name" style="font-size:13px;">${escHtml(r.name)}</div>
+          <div class="user-sub">
+            <span class="svc-type-badge" style="background:${b.bg};color:${b.fg};">${b.label}</span>
+            ${escHtml(r.sub || '')}
+          </div>
+        </div>
+        <button class="btn btn-approve" style="font-size:11px;padding:5px 10px;" onclick="${r.onclick}">
+          <i class="ti ti-check"></i> Approve
+        </button>
+      </div>`;
+    }).join('');
+}
+
+// ── Wire-up: start listeners on dashboard init, load earnings on tab open ───
+const _prevInitDashboard_partners = window.initDashboard;
+window.initDashboard = function () {
+  if (_prevInitDashboard_partners) _prevInitDashboard_partners();
+  initPartnerListeners();
+};
+
+const _prevSwitchTab_partners = window.switchTab;
+window.switchTab = function (tab, title) {
+  if (_prevSwitchTab_partners) _prevSwitchTab_partners(tab, title);
+  // Cache-aware (no `force`): repeatedly switching between partner tabs must
+  // not re-read the whole ledger every time. The Refresh button forces.
+  if (tab === 'ambulance-partners') loadPartnerEarnings('ambulance');
+  if (tab === 'caregiver-partners') loadPartnerEarnings('caregiver');
+  if (tab === 'pharmacy-partners')  loadPartnerEarnings('pharmacy');
+  if (tab === 'lab-partners')       loadPartnerEarnings('lab');
+};

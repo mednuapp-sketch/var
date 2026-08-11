@@ -66,7 +66,7 @@ class _PatientsListScreenState extends State<PatientsListScreen> {
       backgroundColor: AppColors.background,
       body: NestedScrollView(
         headerSliverBuilder: (_, __) => [
-          GradientSliverAppBar(
+          const GradientSliverAppBar(
             headerIcon: Icons.people_rounded,
             title: 'My Patients',
             subtitle: 'All consultation history',

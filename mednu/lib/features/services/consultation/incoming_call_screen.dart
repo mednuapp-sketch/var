@@ -166,7 +166,16 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
   void _safeClose() {
     if (!mounted) return;
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-    if (context.canPop()) context.pop();
+    // This screen is often reached from a notification deep link via
+    // `context.go(...)`, which replaces the whole stack — there is nothing to
+    // pop back to. Combined with `PopScope(canPop: false)` above, a bare
+    // `canPop()` check left the user trapped here after declining or after
+    // the doctor cancelled. Fall back to home so there is always a way out.
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go(AppRoutes.home);
+    }
   }
 
   @override

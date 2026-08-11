@@ -148,6 +148,23 @@
         <i class="ti ti-support nav-icon" aria-hidden="true"></i> Care Assistants
         <span class="nav-badge nav-badge-green" id="nav-care-assistants-count" style="display:none;">0</span>
       </div>
+      <div class="nav-section-label">Partner Accounts</div>
+      <div class="nav-item" data-tab="ambulance-partners" data-title="Ambulance Partners">
+        <i class="ti ti-steering-wheel nav-icon" aria-hidden="true"></i> Ambulance Partners
+        <span class="nav-badge nav-badge-red" id="nav-ambulance-partners-count" style="display:none;">0</span>
+      </div>
+      <div class="nav-item" data-tab="caregiver-partners" data-title="Caregiver Partners">
+        <i class="ti ti-user-heart nav-icon" aria-hidden="true"></i> Caregiver Partners
+        <span class="nav-badge nav-badge-red" id="nav-caregiver-partners-count" style="display:none;">0</span>
+      </div>
+      <div class="nav-item" data-tab="pharmacy-partners" data-title="Pharmacy Partners">
+        <i class="ti ti-building-store nav-icon" aria-hidden="true"></i> Pharmacy Partners
+        <span class="nav-badge nav-badge-red" id="nav-pharmacy-partners-count" style="display:none;">0</span>
+      </div>
+      <div class="nav-item" data-tab="lab-partners" data-title="Lab Partners">
+        <i class="ti ti-microscope nav-icon" aria-hidden="true"></i> Lab Partners
+        <span class="nav-badge nav-badge-red" id="nav-lab-partners-count" style="display:none;">0</span>
+      </div>
       <div class="nav-section-label">Logs &amp; Audit</div>
       <div class="nav-item" data-tab="prescriptions" data-title="Prescription Lookup">
         <i class="ti ti-file-description nav-icon" aria-hidden="true"></i> Prescriptions
@@ -3127,6 +3144,263 @@
             </div>
           </div>
           <div id="care-assistants-list"><div class="loading">Loading care assistants…</div></div>
+        </div>
+      </div>
+
+      <!-- ===== AMBULANCE PARTNERS TAB (partner accounts — ambulance_profiles) ===== -->
+      <div id="tab-ambulance-partners" class="tab-section">
+        <div class="grid-4" style="margin-bottom:16px;">
+          <div class="card" style="text-align:center;padding:18px 12px;">
+            <div style="font-size:26px;font-weight:800;color:var(--primary);" id="ap-count-total">0</div>
+            <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">Total Partners</div>
+          </div>
+          <div class="card" style="text-align:center;padding:18px 12px;">
+            <div style="font-size:26px;font-weight:800;color:#f57f17;" id="ap-count-pending">0</div>
+            <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">Pending Approval</div>
+          </div>
+          <div class="card" style="text-align:center;padding:18px 12px;">
+            <div style="font-size:26px;font-weight:800;color:#1e8e3e;" id="ap-count-active">0</div>
+            <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">Active</div>
+          </div>
+          <div class="card" style="text-align:center;padding:18px 12px;">
+            <div style="font-size:26px;font-weight:800;color:#1565c0;" id="ap-earnings-total">₹0</div>
+            <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">Total Earnings</div>
+          </div>
+        </div>
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-header">
+            <div>
+              <span class="card-title">Earnings Overview</span>
+              <div class="data-fresh-label"><i class="ti ti-cash"></i> From ambulance_transactions ledger</div>
+            </div>
+            <button class="btn btn-outline" onclick="loadAmbulancePartnerEarnings()"><i class="ti ti-refresh"></i> Refresh</button>
+          </div>
+          <div id="ap-earnings-summary" class="partner-earn-grid">
+            <div class="empty-state"><p>Loading earnings…</p></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">All Ambulance Partners</span>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <input id="ap-search" type="text" class="search-input" placeholder="Search driver / plate / phone..." oninput="filterAmbulancePartners()" />
+              <select id="ap-vehicle-filter" class="filter-select" onchange="filterAmbulancePartners()">
+                <option value="all">All vehicle types</option>
+              </select>
+              <select id="ap-status-filter" class="filter-select" onchange="filterAmbulancePartners()">
+                <option value="all">All status</option>
+                <option value="pending">Pending</option>
+                <option value="active">Active</option>
+                <option value="suspended">Suspended</option>
+              </select>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Driver / Vehicle</th><th>Plate</th><th>Vehicle Type</th><th>Phone</th>
+                  <th>Trips</th><th>Rating</th><th>Status</th><th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="ap-tbody">
+                <tr><td colspan="8" class="loading">Loading ambulance partners...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== CAREGIVER PARTNERS TAB (partner accounts — caregiver_profiles) ===== -->
+      <div id="tab-caregiver-partners" class="tab-section">
+        <div class="grid-4" style="margin-bottom:16px;">
+          <div class="card" style="text-align:center;padding:18px 12px;">
+            <div style="font-size:26px;font-weight:800;color:var(--primary);" id="cp-count-total">0</div>
+            <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">Total Partners</div>
+          </div>
+          <div class="card" style="text-align:center;padding:18px 12px;">
+            <div style="font-size:26px;font-weight:800;color:#f57f17;" id="cp-count-pending">0</div>
+            <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">Pending Approval</div>
+          </div>
+          <div class="card" style="text-align:center;padding:18px 12px;">
+            <div style="font-size:26px;font-weight:800;color:#1e8e3e;" id="cp-count-active">0</div>
+            <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">Active</div>
+          </div>
+          <div class="card" style="text-align:center;padding:18px 12px;">
+            <div style="font-size:26px;font-weight:800;color:#1565c0;" id="cp-earnings-total">₹0</div>
+            <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">Total Earnings</div>
+          </div>
+        </div>
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-header">
+            <div>
+              <span class="card-title">Earnings Overview</span>
+              <div class="data-fresh-label"><i class="ti ti-cash"></i> From caregiver_transactions ledger</div>
+            </div>
+            <button class="btn btn-outline" onclick="loadCaregiverPartnerEarnings()"><i class="ti ti-refresh"></i> Refresh</button>
+          </div>
+          <div id="cp-earnings-summary" class="partner-earn-grid">
+            <div class="empty-state"><p>Loading earnings…</p></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">All Caregiver Partners</span>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <input id="cp-search" type="text" class="search-input" placeholder="Search name / specialty..." oninput="filterCaregiverPartners()" />
+              <select id="cp-specialty-filter" class="filter-select" onchange="filterCaregiverPartners()">
+                <option value="all">All specialties</option>
+              </select>
+              <select id="cp-status-filter" class="filter-select" onchange="filterCaregiverPartners()">
+                <option value="all">All status</option>
+                <option value="pending">Pending</option>
+                <option value="active">Active</option>
+                <option value="suspended">Suspended</option>
+              </select>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th><th>Specialties</th><th>Hourly Rate</th>
+                  <th>Visits</th><th>Rating</th><th>Status</th><th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="cp-tbody">
+                <tr><td colspan="7" class="loading">Loading caregiver partners...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== PHARMACY PARTNERS TAB (partner accounts — pharmacy_profiles) ===== -->
+      <div id="tab-pharmacy-partners" class="tab-section">
+        <div class="grid-4" style="margin-bottom:16px;">
+          <div class="card" style="text-align:center;padding:18px 12px;">
+            <div style="font-size:26px;font-weight:800;color:var(--primary);" id="pp-count-total">0</div>
+            <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">Total Partners</div>
+          </div>
+          <div class="card" style="text-align:center;padding:18px 12px;">
+            <div style="font-size:26px;font-weight:800;color:#f57f17;" id="pp-count-pending">0</div>
+            <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">Pending Approval</div>
+          </div>
+          <div class="card" style="text-align:center;padding:18px 12px;">
+            <div style="font-size:26px;font-weight:800;color:#1e8e3e;" id="pp-count-active">0</div>
+            <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">Active</div>
+          </div>
+          <div class="card" style="text-align:center;padding:18px 12px;">
+            <div style="font-size:26px;font-weight:800;color:#1565c0;" id="pp-earnings-total">₹0</div>
+            <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">Total Earnings</div>
+          </div>
+        </div>
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-header">
+            <div>
+              <span class="card-title">Earnings Overview</span>
+              <div class="data-fresh-label"><i class="ti ti-cash"></i> From pharmacy_transactions ledger</div>
+            </div>
+            <button class="btn btn-outline" onclick="loadPharmacyPartnerEarnings()"><i class="ti ti-refresh"></i> Refresh</button>
+          </div>
+          <div id="pp-earnings-summary" class="partner-earn-grid">
+            <div class="empty-state"><p>Loading earnings…</p></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">All Pharmacy Partners</span>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <input id="pp-search" type="text" class="search-input" placeholder="Search name / license / phone / email..." oninput="filterPharmacyPartners()" />
+              <select id="pp-delivery-filter" class="filter-select" onchange="filterPharmacyPartners()">
+                <option value="all">All (delivery)</option>
+                <option value="yes">Delivery available</option>
+                <option value="no">No delivery</option>
+              </select>
+              <select id="pp-status-filter" class="filter-select" onchange="filterPharmacyPartners()">
+                <option value="all">All status</option>
+                <option value="pending">Pending</option>
+                <option value="active">Active</option>
+                <option value="suspended">Suspended</option>
+              </select>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Pharmacy</th><th>License</th><th>Phone</th><th>Delivery</th>
+                  <th>Rating</th><th>Status</th><th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="pp-tbody">
+                <tr><td colspan="7" class="loading">Loading pharmacy partners...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div id="tab-lab-partners" class="tab-section">
+        <div class="grid-4" style="margin-bottom:16px;">
+          <div class="card" style="text-align:center;padding:18px 12px;">
+            <div style="font-size:26px;font-weight:800;color:var(--primary);" id="lp-count-total">0</div>
+            <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">Total Partners</div>
+          </div>
+          <div class="card" style="text-align:center;padding:18px 12px;">
+            <div style="font-size:26px;font-weight:800;color:#f57f17;" id="lp-count-pending">0</div>
+            <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">Pending Approval</div>
+          </div>
+          <div class="card" style="text-align:center;padding:18px 12px;">
+            <div style="font-size:26px;font-weight:800;color:#1e8e3e;" id="lp-count-active">0</div>
+            <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">Active</div>
+          </div>
+          <div class="card" style="text-align:center;padding:18px 12px;">
+            <div style="font-size:26px;font-weight:800;color:#1565c0;" id="lp-earnings-total">₹0</div>
+            <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">Total Earnings</div>
+          </div>
+        </div>
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-header">
+            <div>
+              <span class="card-title">Earnings Overview</span>
+              <div class="data-fresh-label"><i class="ti ti-cash"></i> From lab_transactions ledger</div>
+            </div>
+            <button class="btn btn-outline" onclick="loadLabPartnerEarnings()"><i class="ti ti-refresh"></i> Refresh</button>
+          </div>
+          <div id="lp-earnings-summary" class="partner-earn-grid">
+            <div class="empty-state"><p>Loading earnings…</p></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">All Lab Partners</span>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <input id="lp-search" type="text" class="search-input" placeholder="Search name / license / phone / service..." oninput="filterLabPartners()" />
+              <select id="lp-service-filter" class="filter-select" onchange="filterLabPartners()">
+                <option value="all">All services</option>
+              </select>
+              <select id="lp-status-filter" class="filter-select" onchange="filterLabPartners()">
+                <option value="all">All status</option>
+                <option value="pending">Pending</option>
+                <option value="active">Active</option>
+                <option value="suspended">Suspended</option>
+              </select>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Lab</th><th>License</th><th>Phone</th><th>Services</th>
+                  <th>Rating</th><th>Status</th><th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="lp-tbody">
+                <tr><td colspan="7" class="loading">Loading lab partners...</td></tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 

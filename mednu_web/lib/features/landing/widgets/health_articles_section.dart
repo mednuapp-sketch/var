@@ -12,7 +12,7 @@ class HealthArticlesSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final isMobile = Responsive.isMobile(context);
     final crossCount = isMobile ? 1 : Responsive.isTablet(context) ? 2 : 3;
-    final articles = AppConstants.healthArticles;
+    const articles = AppConstants.healthArticles;
 
     return Container(
       color: AppColors.background,
@@ -78,10 +78,10 @@ class _ArticleCardState extends State<_ArticleCard> {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: _hovered ? AppColors.primary.withOpacity(0.3) : AppColors.border),
+            border: Border.all(color: _hovered ? AppColors.primary.withValues(alpha: 0.3) : AppColors.border),
             boxShadow: _hovered
-                ? [BoxShadow(color: AppColors.primary.withOpacity(0.12), blurRadius: 24, offset: const Offset(0, 8))]
-                : [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8)],
+                ? [BoxShadow(color: AppColors.primary.withValues(alpha: 0.12), blurRadius: 24, offset: const Offset(0, 8))]
+                : [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8)],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -90,7 +90,7 @@ class _ArticleCardState extends State<_ArticleCard> {
                 height: 120,
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [AppColors.primary.withOpacity(0.08), AppColors.secondary.withOpacity(0.08)],
+                    colors: [AppColors.primary.withValues(alpha: 0.08), AppColors.secondary.withValues(alpha: 0.08)],
                   ),
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
                 ),
@@ -105,7 +105,7 @@ class _ArticleCardState extends State<_ArticleCard> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
-                          color: AppColors.primary.withOpacity(0.08),
+                          color: AppColors.primary.withValues(alpha: 0.08),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
@@ -166,7 +166,7 @@ class _ArticleCardHorizontal extends StatelessWidget {
         Container(
           width: 80,
           decoration: BoxDecoration(
-            gradient: LinearGradient(colors: [AppColors.primary.withOpacity(0.1), AppColors.secondary.withOpacity(0.1)]),
+            gradient: LinearGradient(colors: [AppColors.primary.withValues(alpha: 0.1), AppColors.secondary.withValues(alpha: 0.1)]),
             borderRadius: const BorderRadius.horizontal(left: Radius.circular(16)),
           ),
           child: Center(child: Text(a['emoji']!, style: const TextStyle(fontSize: 32))),

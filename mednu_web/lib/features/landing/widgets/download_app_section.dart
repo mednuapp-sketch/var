@@ -74,12 +74,12 @@ class _DesktopLayout extends StatelessWidget {
 class _MobileLayout extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return const Column(
       children: [
         _BrandVisual(compact: true, mobile: true),
-        const SizedBox(height: 32),
+        SizedBox(height: 32),
         _TextContent(compact: true, center: true),
-        const SizedBox(height: 32),
+        SizedBox(height: 32),
         _StorePanel(compact: true, mobile: true),
       ],
     );
@@ -109,7 +109,7 @@ class _BrandVisual extends StatelessWidget {
             borderRadius: BorderRadius.circular(size * 0.28),
             boxShadow: [
               BoxShadow(
-                color: AppColors.primary.withOpacity(0.4),
+                color: AppColors.primary.withValues(alpha: 0.4),
                 blurRadius: 40,
                 offset: const Offset(0, 16),
               ),
@@ -215,7 +215,7 @@ class _TextContent extends StatelessWidget {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.1),
+            color: Colors.white.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(50),
             border: Border.all(color: Colors.white24, width: 1),
           ),
@@ -269,7 +269,7 @@ class _StatChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.07),
+        color: Colors.white.withValues(alpha: 0.07),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: Colors.white12, width: 1),
       ),
@@ -342,7 +342,7 @@ class _QRCodeWidget extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.25),
+            color: Colors.black.withValues(alpha: 0.25),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -435,7 +435,7 @@ class _PlayStoreBtnState extends State<_PlayStoreBtn> {
             boxShadow: _hovered
                 ? [
                     BoxShadow(
-                        color: Colors.black.withOpacity(0.4),
+                        color: Colors.black.withValues(alpha: 0.4),
                         blurRadius: 16,
                         offset: const Offset(0, 6))
                   ]
@@ -562,7 +562,7 @@ class _AppStoreBtnState extends State<_AppStoreBtn> {
             boxShadow: _hovered
                 ? [
                     BoxShadow(
-                        color: Colors.black.withOpacity(0.4),
+                        color: Colors.black.withValues(alpha: 0.4),
                         blurRadius: 16,
                         offset: const Offset(0, 6))
                   ]

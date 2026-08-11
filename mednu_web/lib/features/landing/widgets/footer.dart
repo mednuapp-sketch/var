@@ -170,11 +170,11 @@ class _BrandSection extends StatelessWidget {
               height: 1.7),
         ),
         const SizedBox(height: 20),
-        _ContactRow(
+        const _ContactRow(
             icon: Icons.email_outlined,
             text: AppConstants.contactEmail),
         const SizedBox(height: 6),
-        _ContactRow(
+        const _ContactRow(
             icon: Icons.phone_outlined,
             text: AppConstants.contactPhone),
         const SizedBox(height: 6),
@@ -193,42 +193,6 @@ class _BrandSection extends StatelessWidget {
       ],
     );
   }
-}
-
-class _MiniCross extends StatelessWidget {
-  final double size;
-  final Color color;
-  const _MiniCross({required this.size, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-        width: size,
-        height: size,
-        child: CustomPaint(painter: _CrossPainter(color: color)));
-  }
-}
-
-class _CrossPainter extends CustomPainter {
-  final Color color;
-  const _CrossPainter({required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = color..style = PaintingStyle.fill;
-    final t = size.width / 3;
-    canvas.drawRRect(
-        RRect.fromRectAndRadius(
-            Rect.fromLTWH(t, 0, t, size.height), Radius.circular(t * 0.3)),
-        paint);
-    canvas.drawRRect(
-        RRect.fromRectAndRadius(
-            Rect.fromLTWH(0, t, size.width, t), Radius.circular(t * 0.3)),
-        paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter old) => false;
 }
 
 class _ContactRow extends StatelessWidget {
@@ -388,7 +352,7 @@ class _SuccessMessage extends StatelessWidget {
       Container(
         width: 32,
         height: 32,
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
             gradient: AppColors.primaryGradient,
             shape: BoxShape.circle),
         child: const Icon(Icons.check_rounded,
@@ -453,7 +417,7 @@ class _NewsletterInput extends StatelessWidget {
             borderRadius: BorderRadius.circular(12),
             boxShadow: [
               BoxShadow(
-                  color: AppColors.primary.withOpacity(0.3),
+                  color: AppColors.primary.withValues(alpha: 0.3),
                   blurRadius: 12,
                   offset: const Offset(0, 4))
             ],
@@ -512,19 +476,19 @@ class _SocialBtnState extends State<_SocialBtn> {
           height: 36,
           decoration: BoxDecoration(
             color: _hovered
-                ? AppColors.primary.withOpacity(0.1)
+                ? AppColors.primary.withValues(alpha: 0.1)
                 : Colors.white,
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
               color: _hovered
-                  ? AppColors.primary.withOpacity(0.3)
+                  ? AppColors.primary.withValues(alpha: 0.3)
                   : const Color(0xFFE0E0E0),
               width: 1,
             ),
             boxShadow: _hovered
                 ? [
                     BoxShadow(
-                        color: AppColors.primary.withOpacity(0.1),
+                        color: AppColors.primary.withValues(alpha: 0.1),
                         blurRadius: 8)
                   ]
                 : [],

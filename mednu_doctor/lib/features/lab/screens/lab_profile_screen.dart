@@ -1,0 +1,184 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/constants/app_colors.dart';
+import '../../../core/constants/app_text_styles.dart';
+import '../../../core/router/app_router.dart';
+import '../../../core/services/feedback_service.dart';
+import '../../../core/widgets/ux_widgets.dart';
+import '../../../shared_core/shared_core.dart';
+import '../providers/lab_providers.dart';
+import '../services/lab_profile_service.dart';
+
+class LabProfileScreen extends ConsumerStatefulWidget {
+  const LabProfileScreen({super.key});
+
+  @override
+  ConsumerState<LabProfileScreen> createState() => _LabProfileScreenState();
+}
+
+class _LabProfileScreenState extends ConsumerState<LabProfileScreen> {
+  bool _editing = false;
+  bool _saving = false;
+  final _nameCtrl = TextEditingController();
+  final _addressCtrl = TextEditingController();
+  final _phoneCtrl = TextEditingController();
+
+  Future<void> _save() async {
+    final uid = LabProfileService.currentUid;
+    if (uid == null) return;
+    setState(() => _saving = true);
+    try {
+      await LabProfileService.updateProfile(uid, {
+        'name': _nameCtrl.text.trim(),
+        'address': _addressCtrl.text.trim(),
+        'phone': _phoneCtrl.text.trim(),
+      });
+      if (!mounted) return;
+      FeedbackService.showSuccess(context, 'Profile updated');
+      setState(() => _editing = false);
+    } catch (e) {
+      if (mounted) FeedbackService.showError(context, 'Could not save changes.');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _addressCtrl.dispose();
+    _phoneCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final profileAsync = ref.watch(labProfileProvider);
+
+    return SharedAppShell(
+      currentRoute: AppRoutes.labProfile,
+      title: 'Lab Profile',
+      body: profileAsync.when(
+        loading: () => const PageLoadingState(),
+        error: (_, __) => const NetworkErrorState(),
+        data: (profile) {
+          if (profile == null) {
+            return const AppEmptyState(
+              icon: Icons.storefront_outlined,
+              title: 'Profile not found',
+              message: 'Complete onboarding to set up your lab profile.',
+            );
+          }
+          if (!_editing) {
+            _nameCtrl.text = profile.name;
+            _addressCtrl.text = profile.address;
+            _phoneCtrl.text = profile.phone;
+          }
+
+          return ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              Center(
+                child: SharedProfileAvatar(
+                  name: profile.name,
+                  photoUrl: profile.photoUrl,
+                  size: 84,
+                  isVerified: profile.isVerified,
+                ),
+              ),
+              const SizedBox(height: 16),
+              PremiumCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _editableField('Lab Name', _nameCtrl, Icons.storefront_rounded),
+                    const Divider(height: 24, color: AppColors.divider),
+                    _readOnlyField('License Number', profile.licenseNumber, Icons.badge_outlined),
+                    const Divider(height: 24, color: AppColors.divider),
+                    _editableField('Phone', _phoneCtrl, Icons.call_outlined),
+                    const Divider(height: 24, color: AppColors.divider),
+                    _editableField('Address', _addressCtrl, Icons.location_on_outlined),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              PremiumCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Services Offered', style: AppTextStyles.labelMedium),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: profile.servicesOffered
+                          .map((s) => InfoChip(icon: Icons.check_circle_outline_rounded, label: s))
+                          .toList(),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              PartnerDocumentsSection(
+                role: 'lab',
+                uid: profile.uid,
+                documents: profile.documents,
+                documentVerification: profile.documentVerification,
+              ),
+              const SizedBox(height: 24),
+              if (_editing)
+                GradientButton(label: 'Save Changes', isLoading: _saving, onTap: _save)
+              else
+                OutlinedButton.icon(
+                  onPressed: () => setState(() => _editing = true),
+                  icon: const Icon(Icons.edit_outlined, size: 18),
+                  label: const Text('Edit Profile'),
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _editableField(String label, TextEditingController ctrl, IconData icon) {
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: AppColors.textSecondary),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _editing
+              ? TextField(
+                  controller: ctrl,
+                  decoration: InputDecoration(labelText: label, isDense: true),
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(label, style: AppTextStyles.caption),
+                    Text(ctrl.text.isEmpty ? '—' : ctrl.text, style: AppTextStyles.bodyLarge),
+                  ],
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _readOnlyField(String label, String value, IconData icon) {
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: AppColors.textSecondary),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: AppTextStyles.caption),
+              Text(value.isEmpty ? '—' : value, style: AppTextStyles.bodyLarge),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}

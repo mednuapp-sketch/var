@@ -151,7 +151,7 @@ class _ServiceCardState extends State<_ServiceCard> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         transform: _hovered
-            ? (Matrix4.identity()..translate(0.0, -4.0))
+            ? (Matrix4.identity()..translateByDouble(0.0, -4.0, 0.0, 1.0))
             : Matrix4.identity(),
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
@@ -159,15 +159,15 @@ class _ServiceCardState extends State<_ServiceCard> {
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: _hovered
-                ? AppColors.primary.withOpacity(0.25)
+                ? AppColors.primary.withValues(alpha: 0.25)
                 : const Color(0xFFF0F0F0),
             width: 1.5,
           ),
           boxShadow: [
             BoxShadow(
               color: _hovered
-                  ? AppColors.primary.withOpacity(0.1)
-                  : Colors.grey.withOpacity(0.08),
+                  ? AppColors.primary.withValues(alpha: 0.1)
+                  : Colors.grey.withValues(alpha: 0.08),
               blurRadius: _hovered ? 24 : 12,
               offset: const Offset(0, 4),
               spreadRadius: _hovered ? 2 : 0,
@@ -185,7 +185,7 @@ class _ServiceCardState extends State<_ServiceCard> {
               decoration: BoxDecoration(
                 color: _hovered
                     ? AppColors.primary
-                    : AppColors.primary.withOpacity(0.1),
+                    : AppColors.primary.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(14),
               ),
               child: Icon(
@@ -231,7 +231,7 @@ class _ServiceCardState extends State<_ServiceCard> {
                   ),
                 ),
                 const SizedBox(width: 4),
-                Icon(Icons.arrow_forward_rounded,
+                const Icon(Icons.arrow_forward_rounded,
                     size: 14, color: AppColors.primary),
               ],
             ),

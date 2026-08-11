@@ -243,14 +243,17 @@ class HelpSupportScreen extends StatelessWidget {
               ),
             ),
           ),
+          // A plain Column, not a shrink-wrapped ListView: a nested
+          // scrollable inside this CustomScrollView installs a competing
+          // drag recognizer and stalls upward swipes.
           SliverToBoxAdapter(
-            child: ListView(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
+            child: Padding(
               padding: const EdgeInsets.all(16),
-              children: [
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
                 // Quick contact
-                Text('Contact Us', style: AppTextStyles.h4),
+                const Text('Contact Us', style: AppTextStyles.h4),
                 const SizedBox(height: 12),
                 _ContactCard(
                   icon: Icons.phone_rounded,
@@ -278,7 +281,7 @@ class HelpSupportScreen extends StatelessWidget {
                 const SizedBox(height: 24),
 
                 // FAQs
-                Text('Frequently Asked Questions', style: AppTextStyles.h4),
+                const Text('Frequently Asked Questions', style: AppTextStyles.h4),
                 const SizedBox(height: 12),
                 ...List.generate(
                   _faqs.length,
@@ -323,13 +326,14 @@ class HelpSupportScreen extends StatelessWidget {
                           icon: Icons.send_rounded,
                           width: double.infinity,
                           height: 48,
-                          colors: [AppColors.error, const Color(0xFFB71C1C)],
+                          colors: const [AppColors.error, Color(0xFFB71C1C)],
                           onTap: () => context.push(AppRoutes.reportProblem),
                         ),
                       ]),
                 ),
                 const SizedBox(height: 40),
-              ],
+                ],
+              ),
             ),
           ),
         ],

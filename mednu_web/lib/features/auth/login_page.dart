@@ -50,7 +50,11 @@ class _LoginPageState extends ConsumerState<LoginPage> with TickerProviderStateM
     return Scaffold(
       body: Row(
         children: [
-          if (!Responsive.isMobile(context)) Expanded(flex: 5, child: _LoginHeroPanel()),
+          // Desktop only. At tablet widths (768-1024) the 5:4 split left the
+          // form panel ~340px wide, squeezing the +91 prefix field and the
+          // 42px hero headline; tablets now get the full-width form, matching
+          // the OTP and Register pages.
+          if (Responsive.isDesktop(context)) Expanded(flex: 5, child: _LoginHeroPanel()),
           Expanded(
             flex: 4,
             child: FadeTransition(
@@ -87,10 +91,14 @@ class _LoginHeroPanel extends StatelessWidget {
       ),
       child: Stack(
         children: [
-          Positioned(top: -80, left: -80, child: _Orb(size: 320, opacity: 0.12)),
-          Positioned(bottom: -60, right: -60, child: _Orb(size: 280, opacity: 0.1)),
-          Center(
-            child: Padding(
+          const Positioned(top: -80, left: -80, child: _Orb(size: 320, opacity: 0.12)),
+          const Positioned(bottom: -60, right: -60, child: _Orb(size: 280, opacity: 0.1)),
+          // Scrollable so the ~520px feature list cannot overflow vertically
+          // on short desktop viewports (e.g. a 1280x600 window).
+          SingleChildScrollView(
+            child: Container(
+              constraints: BoxConstraints(minHeight: MediaQuery.sizeOf(context).height),
+              alignment: Alignment.center,
               padding: const EdgeInsets.all(48),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -126,7 +134,7 @@ class _LoginHeroPanel extends StatelessWidget {
                       Container(
                         width: 36,
                         height: 36,
-                        decoration: BoxDecoration(color: Colors.white.withOpacity(0.15), borderRadius: BorderRadius.circular(10)),
+                        decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(10)),
                         child: Center(child: Text(item.$1, style: const TextStyle(fontSize: 18))),
                       ),
                       const SizedBox(width: 14),
@@ -160,7 +168,7 @@ class _Orb extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: Colors.white.withOpacity(opacity),
+        color: Colors.white.withValues(alpha: opacity),
       ),
     );
   }
@@ -284,9 +292,9 @@ class _PhoneForm extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: AppColors.error.withOpacity(0.08),
+                color: AppColors.error.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppColors.error.withOpacity(0.3)),
+                border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
               ),
               child: Row(children: [
                 const Icon(Icons.error_outline, color: AppColors.error, size: 16),
@@ -360,7 +368,7 @@ class _GoogleSignInButtonState extends State<_GoogleSignInButton> {
             color: _hovered ? AppColors.background : Colors.white,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(color: _hovered ? AppColors.border : AppColors.divider, width: 1.5),
-            boxShadow: _hovered ? [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 8, offset: const Offset(0, 2))] : [],
+            boxShadow: _hovered ? [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 8, offset: const Offset(0, 2))] : [],
           ),
           child: Center(
             child: Row(mainAxisSize: MainAxisSize.min, children: [

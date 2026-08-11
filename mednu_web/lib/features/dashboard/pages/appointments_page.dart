@@ -5,7 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/responsive.dart';
 
-final String _uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+String get _uid => FirebaseAuth.instance.currentUser?.uid ?? '';
 
 class AppointmentsPage extends StatefulWidget {
   const AppointmentsPage({super.key});
@@ -77,7 +77,7 @@ class _AppointmentsPageState extends State<AppointmentsPage>
           const SizedBox(height: 20),
           Expanded(
             child: _uid.isEmpty
-                ? _EmptyState(type: 'upcoming')
+                ? const _EmptyState(type: 'upcoming')
                 : StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                     stream: _stream,
                     builder: (context, snap) {

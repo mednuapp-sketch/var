@@ -262,7 +262,7 @@ class _AiDoctorFabState extends State<_AiDoctorFab>
               borderRadius: BorderRadius.circular(50),
               boxShadow: [
                 BoxShadow(
-                  color: AppColors.primary.withOpacity(_hovered ? 0.55 : 0.35),
+                  color: AppColors.primary.withValues(alpha: _hovered ? 0.55 : 0.35),
                   blurRadius: _hovered ? 28 : 18,
                   offset: const Offset(0, 8),
                 ),
@@ -275,7 +275,7 @@ class _AiDoctorFabState extends State<_AiDoctorFab>
                   width: 32,
                   height: 32,
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
+                    color: Colors.white.withValues(alpha: 0.2),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(Icons.smart_toy_rounded,

@@ -53,15 +53,26 @@ class ImageUploadService {
       SettableMetadata(contentType: 'image/jpeg'),
     );
 
-    if (onProgress != null) {
-      task.snapshotEvents.listen((snap) {
-        if (snap.totalBytes > 0) {
-          onProgress(snap.bytesTransferred / snap.totalBytes);
-        }
-      });
-    }
+    // Cancelled in the `finally` below — an uncancelled progress listener
+    // outlives a failed/abandoned upload, and re-reports the task's error as
+    // an unhandled async error on top of the one `await task` already throws.
+    final progressSub = onProgress == null
+        ? null
+        : task.snapshotEvents.listen(
+            (snap) {
+              if (snap.totalBytes > 0) {
+                onProgress(snap.bytesTransferred / snap.totalBytes);
+              }
+            },
+            onError: (_) {},
+          );
 
-    final snapshot = await task;
+    final TaskSnapshot snapshot;
+    try {
+      snapshot = await task;
+    } finally {
+      await progressSub?.cancel();
+    }
 
     // Surface a clear error if the task didn't actually succeed
     // (e.g. Storage rules denied the write without throwing immediately).

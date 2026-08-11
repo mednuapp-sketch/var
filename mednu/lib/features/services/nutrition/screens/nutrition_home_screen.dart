@@ -772,6 +772,8 @@ class _NutritionistCard extends StatelessWidget {
                       width: 56,
                       height: 56,
                       fit: BoxFit.cover,
+                      cacheWidth: 168,
+                      cacheHeight: 168,
                       errorBuilder: (_, __, ___) => _AvatarFallback(name: nutritionist.name),
                     )
                   : _AvatarFallback(name: nutritionist.name),

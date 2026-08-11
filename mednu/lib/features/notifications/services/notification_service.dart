@@ -22,26 +22,44 @@ class PatientNotificationService {
       _items(uid).doc(notifId).update({'isRead': true});
 
   static Future<void> markAllRead(String uid) async {
-    final snap = await _items(uid).where('isRead', isEqualTo: false).get();
-    if (snap.docs.isEmpty) return;
-    final batch = _db.batch();
-    for (final doc in snap.docs) {
-      batch.update(doc.reference, {'isRead': true});
-    }
-    await batch.commit();
+    // Paged in 500s like [deleteAll] — a single batch is capped at 500 writes,
+    // so an account with more unread items than that used to throw and mark
+    // nothing at all.
+    const pageSize = 500;
+    QuerySnapshot<Map<String, dynamic>> page;
+    do {
+      page = await _items(uid)
+          .where('isRead', isEqualTo: false)
+          .limit(pageSize)
+          .get();
+      if (page.docs.isEmpty) break;
+      final batch = _db.batch();
+      for (final doc in page.docs) {
+        batch.update(doc.reference, {'isRead': true});
+      }
+      await batch.commit();
+    } while (page.docs.length == pageSize);
   }
 
   static Future<void> deleteNotification(String uid, String notifId) =>
       _items(uid).doc(notifId).delete();
 
   static Future<void> deleteAllRead(String uid) async {
-    final snap = await _items(uid).where('isRead', isEqualTo: true).get();
-    if (snap.docs.isEmpty) return;
-    final batch = _db.batch();
-    for (final doc in snap.docs) {
-      batch.delete(doc.reference);
-    }
-    await batch.commit();
+    // Same 500-write batch cap as [markAllRead]/[deleteAll].
+    const pageSize = 500;
+    QuerySnapshot<Map<String, dynamic>> page;
+    do {
+      page = await _items(uid)
+          .where('isRead', isEqualTo: true)
+          .limit(pageSize)
+          .get();
+      if (page.docs.isEmpty) break;
+      final batch = _db.batch();
+      for (final doc in page.docs) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
+    } while (page.docs.length == pageSize);
   }
 
   static Future<void> deleteAll(String uid) async {

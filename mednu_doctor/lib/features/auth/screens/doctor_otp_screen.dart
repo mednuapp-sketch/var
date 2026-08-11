@@ -113,10 +113,13 @@ class _DoctorOtpScreenState extends State<DoctorOtpScreen> {
             context.go(AppRoutes.verificationPending);
           }
         } else {
-          context.go(AppRoutes.register);
+          // No base identity document yet — this is a brand-new account, so
+          // it first picks which partner service it is registering as.
+          // Choosing Doctor there routes on to AppRoutes.register unchanged.
+          context.go(AppRoutes.partnerRoleSelect);
         }
       } else {
-        context.go(AppRoutes.register);
+        context.go(AppRoutes.partnerRoleSelect);
       }
     } catch (e) {
       if (!mounted) return;
@@ -164,7 +167,11 @@ class _DoctorOtpScreenState extends State<DoctorOtpScreen> {
         ),
       ),
       body: SafeArea(
-        child: Padding(
+        // Scrollable: the Pinput autofocuses, so the keyboard is always up on
+        // this screen. The full column (icon, headings, pin boxes, optional
+        // error banner, button, resend row) is taller than the remaining
+        // viewport on short devices and overflowed without this.
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
@@ -187,7 +194,7 @@ class _DoctorOtpScreenState extends State<DoctorOtpScreen> {
                 child: const Icon(Icons.sms_rounded, color: Colors.white, size: 40),
               ),
               const SizedBox(height: 24),
-              Text('OTP Verification', style: AppTextStyles.h3),
+              const Text('OTP Verification', style: AppTextStyles.h3),
               const SizedBox(height: 8),
               Text(
                 'Enter the 4-digit OTP sent to\n${widget.phone}',

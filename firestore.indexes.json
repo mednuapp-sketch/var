@@ -794,6 +794,90 @@
         { "fieldPath": "date",      "order": "ASCENDING" },
         { "fieldPath": "patientId", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "diagnostic_bookings",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "labId",     "order": "ASCENDING" },
+        { "fieldPath": "status",    "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "diagnostic_reports",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "labId",      "order": "ASCENDING" },
+        { "fieldPath": "uploadedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "diagnostic_bookings",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status",    "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "pharmacy_orders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "pharmacyId", "order": "ASCENDING" },
+        { "fieldPath": "status",     "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "pharmacy_orders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status",    "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "ambulance_requests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "ambulanceId", "order": "ASCENDING" },
+        { "fieldPath": "status",      "order": "ASCENDING" },
+        { "fieldPath": "createdAt",   "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "ambulance_requests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status",    "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "ambulance_trips",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "ambulanceId", "order": "ASCENDING" },
+        { "fieldPath": "completedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "caregiver_visits",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "caregiverId", "order": "ASCENDING" },
+        { "fieldPath": "status",      "order": "ASCENDING" },
+        { "fieldPath": "createdAt",   "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "caregiver_visits",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status",    "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

@@ -27,6 +27,30 @@ service cloud.firestore {
         exists(/databases/$(database)/documents/doctors/$(request.auth.uid));
     }
 
+    // Check if user has a Lab & Diagnostics partner profile
+    function isLabPartner() {
+      return isAuth() &&
+        exists(/databases/$(database)/documents/lab_profiles/$(request.auth.uid));
+    }
+
+    // Check if user has a Pharmacy & Medical Equipment partner profile
+    function isPharmacyPartner() {
+      return isAuth() &&
+        exists(/databases/$(database)/documents/pharmacy_profiles/$(request.auth.uid));
+    }
+
+    // Check if user has an Ambulance partner profile
+    function isAmbulancePartner() {
+      return isAuth() &&
+        exists(/databases/$(database)/documents/ambulance_profiles/$(request.auth.uid));
+    }
+
+    // Check if user has a Caregiver partner profile
+    function isCaregiverPartner() {
+      return isAuth() &&
+        exists(/databases/$(database)/documents/caregiver_profiles/$(request.auth.uid));
+    }
+
     // Validate that a write doesn't modify protected fields
     function doesNotModify(fields) {
       return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
@@ -43,16 +67,28 @@ service cloud.firestore {
       // Users can read/update their own profile; admins can read all
       allow read:   if isOwner(userId) || isAdmin();
       allow create: if isOwner(userId);
-      // walletBalance and referralPoints are updated client-side via WalletService atomic transactions.
-      // role and createdAt remain protected — only Cloud Functions / admin may change them.
-      allow update: if isOwner(userId) && doesNotModify(['role', 'createdAt']);
+      // walletBalance, mednuMoneyBalance and referralPoints are MONEY — they are
+      // written exclusively by Cloud Functions via the Admin SDK (which bypasses
+      // these rules). No client write, legitimate or otherwise, may touch them.
+      // role and createdAt remain protected for the same reason.
+      allow update: if isOwner(userId) &&
+                       doesNotModify(['role', 'createdAt',
+                                      'walletBalance', 'mednuMoneyBalance', 'referralPoints']);
       allow delete: if false; // Account deletion handled by Cloud Functions only
 
-      // Wallet transactions — user reads own and writes via client-side Firestore transactions
+      // Wallet transactions — user reads own; entries are written server-side only,
+      // in the same transaction as the balance update that produced them.
       match /transactions/{txId} {
         allow read:   if isOwner(userId) || isAdmin();
-        allow create: if isOwner(userId); // WalletService uses runTransaction to ensure atomic balance updates
+        allow create: if isAdmin();       // Cloud Functions (Admin SDK) / admin console only
         allow update, delete: if false;   // Transactions are immutable once created
+      }
+
+      // Refund records — read-only to the user (My Refunds screen); the
+      // refund ledger itself is written server-side only, never by a client.
+      match /refunds/{refundId} {
+        allow read:  if isOwner(userId) || isAdmin();
+        allow write: if isAdmin();
       }
 
       // Family members — user manages their own
@@ -79,13 +115,14 @@ service cloud.firestore {
       allow read: if isAuth() && (
         resource.data.status == 'active' || isOwner(doctorId) || isAdmin()
       );
-      // Doctors update their own profile (limited fields); admins can update all;
-      // authenticated patients can update rating/totalReviews via review transactions.
+      // Doctors update their own profile (limited fields); admins can update all.
+      // rating/totalReviews/totalConsultations are aggregates: Cloud-Function-only
+      // (Admin SDK bypasses rules), exactly like the *_transactions ledgers. No
+      // client — owner or otherwise — may write them, which closes the review
+      // forgery path where any signed-in user could set an arbitrary rating.
       allow create: if isOwner(doctorId) || isAdmin();
       allow update: if (isOwner(doctorId) &&
-                         doesNotModify(['status', 'rating', 'totalReviews', 'reviewCount', 'earnings', 'verificationStatus'])) ||
-                       (isAuth() && doctorId != request.auth.uid &&
-                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rating', 'totalReviews'])) ||
+                         doesNotModify(['status', 'rating', 'totalReviews', 'totalConsultations', 'reviewCount', 'earnings', 'verificationStatus'])) ||
                        isAdmin();
       allow delete: if isAdmin();
 
@@ -336,9 +373,389 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // ── Lab & Diagnostics partner module ────────────────────────────────────
+    // Additive collections only — service_requests (above) is untouched by
+    // clients here; a Cloud Function (Admin SDK, bypasses these rules)
+    // mirrors between the two. See functions/index.js.
+
+    // Core booking facts a lab must never be able to rewrite after the
+    // Cloud Function created the booking from the patient's original
+    // service_request — only workflow fields (status, technician,
+    // report, labId-claim) are lab-writable.
+    function _diagnosticBookingImmutableFields() {
+      return [
+        'patientId', 'patientName', 'patientPhone', 'address',
+        'preferredDate', 'preferredTime', 'notes', 'testName',
+        'price', 'amount', 'type', 'sourceRequestId', 'createdAt'
+      ];
+    }
+
+    // Whitelist of valid status transitions a lab client may perform
+    // directly. Terminal/system-only transitions ('completed' is reachable
+    // only from 'report_uploaded'; 'cancelled'/'expired' are Cloud-Function
+    // -only via the Admin SDK, which bypasses these rules entirely) keep a
+    // compromised or buggy client from jumping straight to 'completed' and
+    // triggering the earnings credit without going through the pipeline.
+    function _validLabTransition(before, after) {
+      let allowed = {
+        'pending':              ['accepted', 'rejected'],
+        'accepted':             ['technician_assigned', 'rejected'],
+        'technician_assigned':  ['sample_collected'],
+        'sample_collected':     ['processing'],
+        'processing':           ['report_uploaded'],
+        'report_uploaded':      ['completed', 'report_uploaded'],
+      };
+      return before == after || (before in allowed && after in allowed[before]);
+    }
+
+    match /lab_profiles/{labId} {
+      // Any authenticated user can browse active (approved) labs; the owner
+      // and admin can always read their own/any profile regardless of status.
+      allow read: if isAuth() && (
+        isOwner(labId) || isAdmin() || resource.data.status == 'active'
+      );
+      allow create: if isOwner(labId);
+      // A lab can update its own profile but not self-approve/self-verify
+      // or inflate its own rating.
+      allow update: if (isOwner(labId) &&
+                         doesNotModify(['status', 'isVerified', 'rating', 'totalReviews', 'documentVerification'])) ||
+                       isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /diagnostic_bookings/{bookingId} {
+      allow read: if isAuth() && (
+        resource.data.patientId == request.auth.uid ||
+        resource.data.labId == request.auth.uid ||
+        (resource.data.labId == null && isLabPartner()) ||
+        isAdmin()
+      );
+      allow update: if isAuth() && (
+        isAdmin() ||
+        // Already-owning lab: any workflow-field update, but only along a
+        // valid status transition and never touching the immutable core.
+        (resource.data.labId == request.auth.uid &&
+          doesNotModify(_diagnosticBookingImmutableFields()) &&
+          _validLabTransition(resource.data.status, request.resource.data.status)) ||
+        // Claiming an unclaimed booking: labId must move from null to the
+        // caller, and the resulting status can only be 'accepted' or
+        // 'rejected' — claim-and-complete in one write is never allowed.
+        (resource.data.labId == null && isLabPartner() &&
+          request.resource.data.labId == request.auth.uid &&
+          doesNotModify(_diagnosticBookingImmutableFields()) &&
+          request.resource.data.status in ['accepted', 'rejected'])
+      );
+      // Created only by the Cloud Function mirror (Admin SDK bypasses rules).
+      allow create, delete: if isAdmin();
+    }
+
+    match /diagnostic_reports/{reportId} {
+      allow read: if isAuth() && (
+        resource.data.patientId == request.auth.uid ||
+        resource.data.labId == request.auth.uid ||
+        isAdmin()
+      );
+      // The uploader must both assert labId == self AND actually own the
+      // referenced booking — ties report creation to real booking
+      // ownership instead of trusting a self-asserted field.
+      allow create: if isAuth() &&
+                       request.resource.data.labId == request.auth.uid &&
+                       get(/databases/$(database)/documents/diagnostic_bookings/$(request.resource.data.bookingId)).data.labId == request.auth.uid;
+      // Reports are append-only (each re-upload is a new version, see
+      // lab_booking_service.dart) — never mutated or removed by clients.
+      allow update, delete: if isAdmin();
+    }
+
+    match /lab_transactions/{txId} {
+      allow read: if isAuth() && (resource.data.labId == request.auth.uid || isAdmin());
+      // Immutable ledger — written only by the Cloud Function mirror on the
+      // completed edge, mirroring the wallet architecture's rule that a
+      // balance/ledger is never written directly by a client.
+      allow write: if false;
+    }
+
+    // ── Pharmacy & Medical Equipment partner module ─────────────────────────
+    // Additive collections only — `orders` (medicine) and `service_requests`
+    // (equipment) are untouched by clients here; a Cloud Function
+    // (Admin SDK, bypasses these rules) mirrors between them and
+    // `pharmacy_orders`. See functions/index.js.
+
+    function _pharmacyOrderImmutableFields() {
+      return [
+        'sourceCollection', 'sourceId', 'orderType', 'patientId', 'patientName',
+        'patientPhone', 'deliveryAddress', 'itemCount', 'totalAmount', 'createdAt'
+      ];
+    }
+
+    // Same shape as Lab's _validLabTransition — a compromised/buggy pharmacy
+    // client can't jump straight to 'delivered' (and trigger the earnings
+    // credit) without going through the pipeline.
+    function _validPharmacyTransition(before, after) {
+      let allowed = {
+        'pending':               ['prescription_required', 'verified', 'cancelled'],
+        'prescription_required': ['verified', 'cancelled'],
+        'verified':              ['packed', 'cancelled'],
+        'packed':                ['out_for_delivery', 'cancelled'],
+        'out_for_delivery':      ['delivered', 'cancelled'],
+      };
+      return before == after || (before in allowed && after in allowed[before]);
+    }
+
+    match /pharmacy_profiles/{pharmacyId} {
+      allow read: if isAuth() && (
+        isOwner(pharmacyId) || isAdmin() || resource.data.status == 'active'
+      );
+      allow create: if isOwner(pharmacyId);
+      allow update: if (isOwner(pharmacyId) &&
+                         doesNotModify(['status', 'isVerified', 'rating', 'totalReviews', 'documentVerification'])) ||
+                       isAdmin();
+      allow delete: if isAdmin();
+
+      // A pharmacy manages its own stock; nobody else needs to read it
+      // (the Orders/Inventory screens never query across pharmacies).
+      match /inventory/{itemId} {
+        allow read, write: if isOwner(pharmacyId) || isAdmin();
+      }
+    }
+
+    match /pharmacy_orders/{orderId} {
+      allow read: if isAuth() && (
+        resource.data.patientId == request.auth.uid ||
+        resource.data.pharmacyId == request.auth.uid ||
+        (resource.data.pharmacyId == null && isPharmacyPartner()) ||
+        isAdmin()
+      );
+      allow update: if isAuth() && (
+        isAdmin() ||
+        (resource.data.pharmacyId == request.auth.uid &&
+          doesNotModify(_pharmacyOrderImmutableFields()) &&
+          _validPharmacyTransition(resource.data.status, request.resource.data.status)) ||
+        // Claiming an unclaimed order: pharmacyId moves from null to the
+        // caller, and the resulting status can only be one of the three
+        // "just accepted this" outcomes — never straight to packed/delivered.
+        (resource.data.pharmacyId == null && isPharmacyPartner() &&
+          request.resource.data.pharmacyId == request.auth.uid &&
+          doesNotModify(_pharmacyOrderImmutableFields()) &&
+          request.resource.data.status in ['prescription_required', 'verified', 'cancelled'])
+      );
+      // Created only by the Cloud Function mirror (Admin SDK bypasses rules).
+      allow create, delete: if isAdmin();
+    }
+
+    match /pharmacy_order_items/{itemId} {
+      // Item docs don't carry patientId/pharmacyId themselves (see
+      // functions/index.js) — ownership is resolved via the parent order.
+      allow read: if isAuth() && (
+        isAdmin() ||
+        get(/databases/$(database)/documents/pharmacy_orders/$(resource.data.orderId)).data.patientId == request.auth.uid ||
+        get(/databases/$(database)/documents/pharmacy_orders/$(resource.data.orderId)).data.pharmacyId == request.auth.uid
+      );
+      // Created only by the Cloud Function mirror (Admin SDK bypasses rules).
+      allow write: if isAdmin();
+    }
+
+    match /pharmacy_transactions/{txId} {
+      allow read: if isAuth() && (resource.data.pharmacyId == request.auth.uid || isAdmin());
+      // Immutable ledger — written only by the Cloud Function mirror on the
+      // delivered edge.
+      allow write: if false;
+    }
+
+    // ── Ambulance partner module ────────────────────────────────────────────
+    // Additive collections only — `service_requests` is never written by the
+    // ambulance client; a Cloud Function (Admin SDK, bypasses these rules)
+    // mirrors between it and `ambulance_requests`. See functions/index.js.
+
+    function _ambulanceRequestImmutableFields() {
+      return [
+        'sourceRequestId', 'type', 'patientId', 'patientName', 'patientPhone',
+        'pickupAddress', 'dropAddress', 'distanceKm', 'etaMinutes', 'fare',
+        'emergencyType', 'requestedAt', 'createdAt'
+      ];
+    }
+
+    // Same shape as Lab's _validLabTransition. 'completed' is reachable only
+    // from 'arrived', so a compromised or buggy client can't jump straight to
+    // it and trigger the trip record + earnings credit without actually
+    // having driven the run.
+    function _validAmbulanceTransition(before, after) {
+      let allowed = {
+        'pending':  ['accepted', 'cancelled'],
+        'accepted': ['enRoute', 'cancelled'],
+        'enRoute':  ['arrived'],
+        'arrived':  ['completed'],
+      };
+      return before == after || (before in allowed && after in allowed[before]);
+    }
+
+    match /ambulance_profiles/{ambulanceId} {
+      allow read: if isAuth() && (
+        isOwner(ambulanceId) || isAdmin() || resource.data.status == 'active'
+      );
+      allow create: if isOwner(ambulanceId);
+      // A partner can update its own profile but not self-approve/self-verify
+      // or inflate its own rating/trip count.
+      allow update: if (isOwner(ambulanceId) &&
+                         doesNotModify(['status', 'isVerified', 'rating', 'totalReviews', 'totalTrips', 'documentVerification'])) ||
+                       isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /ambulance_requests/{requestId} {
+      allow read: if isAuth() && (
+        resource.data.patientId == request.auth.uid ||
+        resource.data.ambulanceId == request.auth.uid ||
+        (resource.data.ambulanceId == null && isAmbulancePartner()) ||
+        isAdmin()
+      );
+      allow update: if isAuth() && (
+        isAdmin() ||
+        // Already-owning partner: workflow updates along a valid transition
+        // only, never touching the immutable core.
+        (resource.data.ambulanceId == request.auth.uid &&
+          doesNotModify(_ambulanceRequestImmutableFields()) &&
+          _validAmbulanceTransition(resource.data.status, request.resource.data.status)) ||
+        // Claiming an unclaimed request: ambulanceId moves from null to the
+        // caller, and the resulting status can only be 'accepted' (claim) or
+        // 'cancelled' (declining a request nobody had taken yet) — never
+        // claim-and-complete in a single write.
+        (resource.data.ambulanceId == null && isAmbulancePartner() &&
+          request.resource.data.ambulanceId == request.auth.uid &&
+          doesNotModify(_ambulanceRequestImmutableFields()) &&
+          request.resource.data.status in ['accepted', 'cancelled'])
+      );
+      // Created only by the Cloud Function mirror (Admin SDK bypasses rules).
+      allow create, delete: if isAdmin();
+    }
+
+    match /ambulance_trips/{tripId} {
+      allow read: if isAuth() && (resource.data.ambulanceId == request.auth.uid || isAdmin());
+      // Immutable trip record — written only by the Cloud Function on the
+      // completed edge, alongside the ledger credit.
+      allow write: if false;
+    }
+
+    match /ambulance_transactions/{txId} {
+      allow read: if isAuth() && (resource.data.ambulanceId == request.auth.uid || isAdmin());
+      // Immutable ledger — never written directly by a client.
+      allow write: if false;
+    }
+
+    // ── Caregiver partner module ────────────────────────────────────────────
+    // Additive collections only — `service_requests` is never written by the
+    // caregiver client; a Cloud Function mirrors between it and
+    // `caregiver_visits`. See functions/index.js.
+
+    function _caregiverVisitImmutableFields() {
+      return [
+        'sourceRequestId', 'sourceType', 'type', 'patientId', 'patientName',
+        'patientAge', 'address', 'scheduledAt', 'durationMinutes', 'fare',
+        'createdAt'
+      ];
+    }
+
+    function _validCaregiverTransition(before, after) {
+      let allowed = {
+        'scheduled': ['checkedIn', 'cancelled', 'missed'],
+        'checkedIn': ['completed'],
+      };
+      return before == after || (before in allowed && after in allowed[before]);
+    }
+
+    // Reads the parent visit so the tasks/notes subcollection rules can be
+    // scoped to whoever actually owns that visit, rather than trusting a
+    // self-asserted field on the child doc.
+    function _caregiverVisit(visitId) {
+      return get(/databases/$(database)/documents/caregiver_visits/$(visitId)).data;
+    }
+
+    match /caregiver_profiles/{caregiverId} {
+      allow read: if isAuth() && (
+        isOwner(caregiverId) || isAdmin() || resource.data.status == 'active'
+      );
+      allow create: if isOwner(caregiverId);
+      allow update: if (isOwner(caregiverId) &&
+                         doesNotModify(['status', 'isVerified', 'rating', 'totalReviews', 'totalVisits', 'documentVerification'])) ||
+                       isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /caregiver_visits/{visitId} {
+      allow read: if isAuth() && (
+        resource.data.patientId == request.auth.uid ||
+        resource.data.caregiverId == request.auth.uid ||
+        (resource.data.caregiverId == null && isCaregiverPartner()) ||
+        isAdmin()
+      );
+      allow update: if isAuth() && (
+        isAdmin() ||
+        (resource.data.caregiverId == request.auth.uid &&
+          doesNotModify(_caregiverVisitImmutableFields()) &&
+          _validCaregiverTransition(resource.data.status, request.resource.data.status)) ||
+        // Claiming an unclaimed visit: caregiverId moves from null to the
+        // caller. Unlike Ambulance, the status itself does NOT change on a
+        // claim — a claimed visit stays 'scheduled' until check-in — so the
+        // claim rule pins the status rather than listing allowed new ones.
+        (resource.data.caregiverId == null && isCaregiverPartner() &&
+          request.resource.data.caregiverId == request.auth.uid &&
+          doesNotModify(_caregiverVisitImmutableFields()) &&
+          resource.data.status == 'scheduled' &&
+          request.resource.data.status == 'scheduled')
+      );
+      // Created only by the Cloud Function mirror (Admin SDK bypasses rules).
+      allow create, delete: if isAdmin();
+
+      match /tasks/{taskId} {
+        allow read: if isAuth() && (
+          _caregiverVisit(visitId).patientId == request.auth.uid ||
+          _caregiverVisit(visitId).caregiverId == request.auth.uid ||
+          isAdmin()
+        );
+        // The assigned caregiver ticks items off — and may ONLY touch
+        // `isDone`; the checklist's wording is seeded by the Cloud Function
+        // and can't be rewritten after the fact.
+        allow update: if isAuth() &&
+                         _caregiverVisit(visitId).caregiverId == request.auth.uid &&
+                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isDone']);
+        // Seeded only by the Cloud Function mirror (Admin SDK).
+        allow create, delete: if isAdmin();
+      }
+
+      match /notes/{noteId} {
+        allow read: if isAuth() && (
+          _caregiverVisit(visitId).patientId == request.auth.uid ||
+          _caregiverVisit(visitId).caregiverId == request.auth.uid ||
+          isAdmin()
+        );
+        // Caregiver-authored, append-only: a care note is a clinical record,
+        // so once written it is never edited or erased by a client.
+        allow create: if isAuth() &&
+                         _caregiverVisit(visitId).caregiverId == request.auth.uid;
+        allow update, delete: if isAdmin();
+      }
+    }
+
+    match /caregiver_transactions/{txId} {
+      allow read: if isAuth() && (resource.data.caregiverId == request.auth.uid || isAdmin());
+      // Immutable ledger — written only by the Cloud Function mirror on the
+      // completed edge.
+      allow write: if false;
+    }
+
     // ── Booking support chat ───────────────────────────────────────────────────
+    // `bookingId` spans several booking collections (diagnostic_bookings,
+    // pharmacy_orders, ambulance_requests, caregiver_visits), so participation
+    // cannot be resolved with a get() here — it is carried on the message.
+    // Reads were `isAuth()` alone, which exposed every booking's support thread
+    // to any signed-in account; scoped to the sender, anyone the message lists
+    // in `participants`, and admins. `senderId` is already mandatory on create.
     match /booking_support/{bookingId}/messages/{msgId} {
-      allow read: if isAuth();
+      allow read: if isAuth() && (
+        resource.data.senderId == request.auth.uid ||
+        (resource.data.keys().hasAny(['participants']) &&
+          resource.data.participants.hasAny([request.auth.uid])) ||
+        isAdmin()
+      );
       allow create: if isAuth() && request.resource.data.senderId == request.auth.uid;
       allow update, delete: if false;
     }
@@ -361,18 +778,13 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
-    // ── Doctor rating summary (aggregate, updated via transaction) ────────────
+    // ── Doctor rating summary (aggregate, Cloud-Function-only) ────────────────
     match /doctor_rating_summary/{doctorId} {
       allow read: if isAuth();
-      // Any authenticated user can create/update their own review of a doctor,
-      // as long as they are not reviewing themselves.
-      // Avoids !isDoctor() which breaks dual-account dev setups.
-      allow create: if isAuth() && doctorId != request.auth.uid;
-      allow update: if (isAuth() && doctorId != request.auth.uid &&
-                         request.resource.data.diff(resource.data).affectedKeys()
-                           .hasOnly(['totalReviews', 'averageRating', 'ratingDistribution', 'lastUpdated'])) ||
-                       isAdmin();
-      allow delete: if isAdmin();
+      // Written solely by the onReviewCreated / onFeedbackCreated triggers via
+      // the Admin SDK (which bypasses these rules). Client writes are denied so
+      // the aggregate cannot be forged from an app.
+      allow create, update, delete: if isAdmin();
     }
 
     // ── Appointment review lock (prevents duplicate reviews) ──────────────────
@@ -644,10 +1056,20 @@ service cloud.firestore {
         resource.data.patientId == request.auth.uid || isAdmin()
       );
       allow create: if isAuth() && request.resource.data.patientId == request.auth.uid;
+      // Patients may self-update their cancel fields and — additively —
+      // the prescription-upload fields (url/fileType/uploadedAt). They may
+      // NEVER set prescriptionVerified/prescriptionRejectedReason
+      // themselves — that verdict is written only by the Cloud Function
+      // mirror from the assigned pharmacy's decision (see
+      // functions/index.js, onPharmacyOrderStatusChange), which uses the
+      // Admin SDK and bypasses this rule entirely.
       allow update: if isAuth() && (
         (resource.data.patientId == request.auth.uid &&
           request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['status', 'cancelReason', 'updatedAt'])) ||
+            .hasOnly([
+              'status', 'cancelReason', 'updatedAt',
+              'prescriptionUrl', 'prescriptionFileType', 'prescriptionUploadedAt'
+            ])) ||
         isAdmin()
       );
       allow delete: if isAdmin();
@@ -710,6 +1132,34 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // ── Patient wallet ledger (canonical, immutable) ──────────────────────────
+    // Every patient wallet mutation writes exactly one entry here, in the same
+    // Cloud Function transaction as the users/{uid} balance update. Written by
+    // the Admin SDK only — same convention as lab_transactions et al.
+    match /wallet_ledger/{entryId} {
+      allow read: if isAuth() && (
+        resource.data.uid == request.auth.uid || isAdmin()
+      );
+      allow write: if false;
+    }
+
+    // ── Razorpay order records (server-side amount authority) ─────────────────
+    // createRazorpayOrder writes these; verifyRazorpayPayment reads the ordered
+    // amount from here to decide what to credit. A client must never be able to
+    // create or alter one, or the wallet top-up amount stops being trustworthy.
+    match /razorpay_orders/{orderId} {
+      allow read: if isAuth() && (
+        resource.data.uid == request.auth.uid || isAdmin()
+      );
+      allow write: if false;
+    }
+
+    // ── Razorpay verified-payment audit trail (server-written) ────────────────
+    match /razorpay_payments/{paymentId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
     // ── Emergency contacts (patient-managed) ──────────────────────────────────
     match /emergency_contacts/{userId} {
       allow read, write: if isOwner(userId) || isAdmin();
@@ -730,8 +1180,18 @@ service cloud.firestore {
       );
       allow delete: if isAdmin();
 
+      // Scoped to the same participant set as the parent chat doc — an
+      // unqualified `if isAuth()` here let any signed-in account read every
+      // support conversation in the system. The chat doc id is the owning
+      // uid (live_chat_screen.dart uses .doc(uid)), so the cheap ownership
+      // check short-circuits before the parent get() in the common case.
       match /messages/{msgId} {
-        allow read: if isAuth();
+        allow read: if isAuth() && (
+          isOwner(chatId) ||
+          isAdmin() ||
+          get(/databases/$(database)/documents/support_chats/$(chatId)).data.patientId == request.auth.uid ||
+          get(/databases/$(database)/documents/support_chats/$(chatId)).data.doctorId  == request.auth.uid
+        );
         allow create: if isAuth() && request.resource.data.senderId == request.auth.uid;
         allow update, delete: if false;
       }
@@ -769,7 +1229,13 @@ service cloud.firestore {
 
     // ── Order support chat (patient ↔ support during medicine delivery) ─────────
     match /order_chats/{orderId}/messages/{msgId} {
-      allow read:   if isAuth();
+      // Ownership resolved via the parent `orders` doc — an unqualified
+      // `if isAuth()` let any signed-in account read every order's delivery
+      // conversation (addresses, medicine names, phone numbers).
+      allow read:   if isAuth() && (
+        isAdmin() ||
+        get(/databases/$(database)/documents/orders/$(orderId)).data.patientId == request.auth.uid
+      );
       allow create: if isAuth() && request.resource.data.senderId == request.auth.uid;
       allow update, delete: if false;
     }
@@ -801,10 +1267,13 @@ service cloud.firestore {
     }
 
     // ── Patient wallet ────────────────────────────────────────────────────────
+    // Seeded once at signup with balance 0 (auth_provider.dart); no client
+    // ever updates it afterwards, so `balance` here is admin-only — a client
+    // must not have a write path to a stored balance field.
     match /wallet/{uid} {
       allow read:   if isOwner(uid) || isAdmin();
-      allow create: if isOwner(uid);
-      allow update: if isOwner(uid) || isAdmin();
+      allow create: if isOwner(uid) && request.resource.data.balance == 0;
+      allow update: if isAdmin();
       allow delete: if false;
     }
 
@@ -825,10 +1294,12 @@ service cloud.firestore {
     }
 
     // ── Reward history ────────────────────────────────────────────────────────
+    // Same shape as /wallet above: seeded once at signup with totalPoints 0
+    // and never updated by a client, so the points total is admin-only.
     match /reward_history/{uid} {
       allow read:   if isOwner(uid) || isAdmin();
-      allow create: if isOwner(uid);
-      allow update: if isOwner(uid) || isAdmin();
+      allow create: if isOwner(uid) && request.resource.data.totalPoints == 0;
+      allow update: if isAdmin();
       allow delete: if false;
     }
 
@@ -845,7 +1316,15 @@ service cloud.firestore {
     // before sending OTP. Only stores {hasMpin: bool, uid: string} — no PII.
     match /phone_index/{phone} {
       allow read:   if true;           // pre-auth check on login screen
-      allow create, update: if isAuth();
+      // A caller may only ever point a phone entry at their OWN uid.
+      // verifyMpinAndIssueToken (functions/index.js) resolves phone -> uid
+      // from this index and mints a custom token for whatever uid it finds,
+      // so an unconstrained write here is an auth-surface tampering vector
+      // (targeting another account's uid, or locking it out via the
+      // 5-attempt MPIN lockout). Both client writers already set uid to the
+      // signed-in user (auth_provider.dart), so this is non-breaking.
+      allow create, update: if isAuth() &&
+                               request.resource.data.uid == request.auth.uid;
       allow delete: if false;
     }
 

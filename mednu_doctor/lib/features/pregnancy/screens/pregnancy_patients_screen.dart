@@ -166,8 +166,8 @@ class _PregnancyPatientsScreenState extends State<PregnancyPatientsScreen>
             Container(
               width: 50,
               height: 50,
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
                   colors: [Color(0xFFC2185B), Color(0xFF7B1FA2)],
                 ),
                 shape: BoxShape.circle,

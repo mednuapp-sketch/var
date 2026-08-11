@@ -71,8 +71,8 @@ class DoctorNotificationsScreen extends ConsumerWidget {
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
               sliver: SliverList(
                 delegate: SliverChildBuilderDelegate(
-                  (_, i) => Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
+                  (_, i) => const Padding(
+                    padding: EdgeInsets.only(bottom: 10),
                     child: SkeletonCard(height: 72),
                   ),
                   childCount: 7,
@@ -402,7 +402,7 @@ class _NotifTile extends StatelessWidget {
               ),
               const SizedBox(height: 6),
               Row(children: [
-                Icon(Icons.access_time_rounded,
+                const Icon(Icons.access_time_rounded,
                     size: 11, color: AppColors.textHint),
                 const SizedBox(width: 4),
                 Text(
@@ -485,26 +485,26 @@ class _NotifTile extends StatelessWidget {
     switch (type) {
       case NotifType.consultationRequest:
       case NotifType.emergencyRequest:
-        return _NotifMeta(Icons.video_call_rounded, AppColors.primary);
+        return const _NotifMeta(Icons.video_call_rounded, AppColors.primary);
       case NotifType.review:
         return _NotifMeta(Icons.star_rounded, Colors.amber.shade600);
       case NotifType.payment:
-        return _NotifMeta(
+        return const _NotifMeta(
             Icons.account_balance_wallet_rounded, AppColors.success);
       case NotifType.appointment:
-        return _NotifMeta(
+        return const _NotifMeta(
             Icons.calendar_month_rounded, AppColors.secondary);
       case NotifType.summary:
-        return _NotifMeta(Icons.verified_rounded, AppColors.info);
+        return const _NotifMeta(Icons.verified_rounded, AppColors.info);
       case NotifType.patientFollowup:
-        return _NotifMeta(
-            Icons.favorite_rounded, const Color(0xFFE91E63));
+        return const _NotifMeta(
+            Icons.favorite_rounded, Color(0xFFE91E63));
       case NotifType.accountApproved:
-        return _NotifMeta(Icons.verified_rounded, AppColors.success);
+        return const _NotifMeta(Icons.verified_rounded, AppColors.success);
       case NotifType.accountRejected:
-        return _NotifMeta(Icons.cancel_rounded, AppColors.error);
+        return const _NotifMeta(Icons.cancel_rounded, AppColors.error);
       case NotifType.unknown:
-        return _NotifMeta(
+        return const _NotifMeta(
             Icons.notifications_rounded, AppColors.textSecondary);
     }
   }

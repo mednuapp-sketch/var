@@ -533,6 +533,10 @@ class _RecordsScreenState extends State<RecordsScreen>
                     borderRadius: BorderRadius.circular(12),
                     child: imageUrl.isNotEmpty
                         ? Image.network(imageUrl, width: 46, height: 46, fit: BoxFit.cover,
+                            // Reports are user-uploaded camera photos; without a
+                            // decode hint a 46px thumbnail decodes at full
+                            // resolution (tens of MB each) down the whole list.
+                            cacheWidth: 138, cacheHeight: 138,
                             errorBuilder: (_, __, ___) => _reportIcon())
                         : _reportIcon(),
                   ),

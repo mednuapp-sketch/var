@@ -38,7 +38,7 @@ class StatsBarSection extends StatelessWidget {
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
+            color: Colors.grey.withValues(alpha: 0.1),
             blurRadius: 16,
             offset: const Offset(0, 4),
           ),
@@ -62,7 +62,7 @@ class StatsBarSection extends StatelessWidget {
 class _DesktopStats extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    final stats = StatsBarSection._stats;
+    const stats = StatsBarSection._stats;
     return IntrinsicHeight(
       child: Row(
         children: [
@@ -116,7 +116,7 @@ class _StatPillar extends StatelessWidget {
             width: isMobile ? 40 : 52,
             height: isMobile ? 40 : 52,
             decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.1),
+              color: AppColors.primary.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(14),
             ),
             child: Icon(

@@ -112,7 +112,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                   ),
                   const SizedBox(height: 32),
 
-                  _Label('Full Name *'),
+                  const _Label('Full Name *'),
                   const SizedBox(height: 6),
                   _TextField(
                     controller: _nameCtrl,
@@ -123,7 +123,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                   ),
                   const SizedBox(height: 16),
 
-                  _Label('Email Address (optional)'),
+                  const _Label('Email Address (optional)'),
                   const SizedBox(height: 6),
                   _TextField(
                     controller: _emailCtrl,
@@ -141,7 +141,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                   Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Expanded(
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        _Label('Date of Birth'),
+                        const _Label('Date of Birth'),
                         const SizedBox(height: 6),
                         GestureDetector(
                           onTap: _pickDob,
@@ -154,7 +154,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                     const SizedBox(width: 14),
                     Expanded(
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        _Label('City'),
+                        const _Label('City'),
                         const SizedBox(height: 6),
                         _TextField(controller: _cityCtrl, hint: 'Your city', icon: Icons.location_city_outlined),
                       ]),
@@ -162,7 +162,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                   ]),
                   const SizedBox(height: 16),
 
-                  _Label('Gender'),
+                  const _Label('Gender'),
                   const SizedBox(height: 8),
                   Row(
                     children: _kGenders.map((g) => Expanded(
@@ -279,7 +279,7 @@ class _Chip extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
   final double? width;
-  const _Chip({required this.label, required this.selected, required this.onTap, this.width});
+  const _Chip({required this.label, required this.selected, required this.onTap}) : width = null;
 
   @override
   Widget build(BuildContext context) {

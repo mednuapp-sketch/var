@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 class WalletTransaction {
@@ -54,6 +55,7 @@ class WalletTransaction {
 class WalletService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFunctions _fns = FirebaseFunctions.instance;
 
   String get _uid => _auth.currentUser?.uid ?? '';
 
@@ -110,241 +112,168 @@ class WalletService {
         .map((snap) => snap.docs.map(WalletTransaction.fromDoc).toList());
   }
 
-  Future<void> addMoney(double amount) async {
+  // ── Wallet top-up (Razorpay) ────────────────────────────────────────────
+  //
+  // Balances are server-authoritative: firestore.rules blocks every client
+  // write to walletBalance / mednuMoneyBalance / referralPoints, so money can
+  // only enter the wallet through a real, signature-verified gateway payment.
+  //
+  // Step 1 — create an order. The server records the ordered amount in
+  // `razorpay_orders/{order_id}`; that record, not anything this client sends
+  // later, decides how much gets credited.
+  Future<({String orderId, int amountPaise})> createTopUpOrder(
+      double amount) async {
     if (_uid.isEmpty) throw Exception('Not authenticated');
     if (amount <= 0) throw Exception('Amount must be positive');
-    await _db.runTransaction((tx) async {
-      final snap = await tx.get(_userRef);
-      final current = _parseBalance(snap);
-      tx.set(
-        _userRef,
-        {'walletBalance': current + amount},
-        SetOptions(merge: true),
+    final paise = (amount * 100).round();
+    if (paise < 100) throw Exception('Minimum top-up is ₹1');
+    try {
+      final result = await _fns.httpsCallable('createRazorpayOrder').call({
+        'amount': paise,
+        'currency': 'INR',
+        'purpose': 'wallet_topup',
+        'receipt': 'topup_${DateTime.now().millisecondsSinceEpoch}',
+      });
+      final data = Map<String, dynamic>.from(result.data as Map);
+      return (
+        orderId: data['order_id'] as String,
+        amountPaise: (data['amount'] as num).toInt(),
       );
-      final txDoc = _txRef.doc();
-      tx.set(
-        txDoc,
-        WalletTransaction(
-          id: txDoc.id,
-          title: 'Money Added',
-          amount: amount,
-          type: 'credit',
-          category: 'add_money',
-          timestamp: DateTime.now(),
-        ).toMap(),
-      );
-    });
+    } on FirebaseFunctionsException catch (e) {
+      throw Exception(e.message ?? 'Could not start the top-up. Try again.');
+    }
   }
 
+  // Step 2 — hand the Razorpay result back to the server. Verification AND the
+  // wallet credit both happen inside `verifyRazorpayPayment`; this client never
+  // writes a balance. Safe to retry: the credit is keyed on the payment id.
+  Future<bool> confirmTopUp({
+    required String orderId,
+    required String paymentId,
+    required String signature,
+  }) async {
+    try {
+      final result = await _fns.httpsCallable('verifyRazorpayPayment').call({
+        'razorpay_order_id': orderId,
+        'razorpay_payment_id': paymentId,
+        'razorpay_signature': signature,
+      });
+      final data = Map<String, dynamic>.from(result.data as Map);
+      return data['verified'] == true;
+    } on FirebaseFunctionsException catch (e) {
+      throw Exception(e.message ?? 'Payment could not be verified.');
+    }
+  }
+
+  /// Direct crediting no longer exists on the client — it was the exploit.
+  /// Top-ups go through [createTopUpOrder] / [confirmTopUp].
+  Future<void> addMoney(double amount) async {
+    throw UnimplementedError(
+      'Wallet credits are server-side only. Use createTopUpOrder/confirmTopUp.',
+    );
+  }
+
+  // ── Spending ────────────────────────────────────────────────────────────
+  //
+  // Both debit paths go through the `spendWalletBalance` callable, which
+  // re-reads the balance server-side, checks sufficiency, debits and writes
+  // both ledgers in one Firestore transaction.
   Future<void> deductPayment({
     required double amount,
     required String title,
     String category = 'payment',
     String? description,
-  }) async {
-    if (_uid.isEmpty) throw Exception('Not authenticated');
-    if (amount <= 0) throw Exception('Amount must be positive');
-    await _db.runTransaction((tx) async {
-      final snap = await tx.get(_userRef);
-      final current = _parseBalance(snap);
-      if (current < amount) throw Exception('Insufficient wallet balance');
-      tx.set(
-        _userRef,
-        {'walletBalance': current - amount},
-        SetOptions(merge: true),
+  }) =>
+      _spend(
+        walletType: 'main',
+        amount: amount,
+        title: title,
+        category: category,
+        description: description,
       );
-      final txDoc = _txRef.doc();
-      tx.set(
-        txDoc,
-        WalletTransaction(
-          id: txDoc.id,
-          title: title,
-          amount: amount,
-          type: 'debit',
-          category: category,
-          description: description,
-          timestamp: DateTime.now(),
-        ).toMap(),
-      );
-    });
-  }
-
-  Future<void> addCredit({
-    required double amount,
-    required String title,
-    required String category,
-    String? description,
-  }) async {
-    if (_uid.isEmpty) throw Exception('Not authenticated');
-    if (amount <= 0) throw Exception('Amount must be positive');
-    await _db.runTransaction((tx) async {
-      final snap = await tx.get(_userRef);
-      final current = _parseBalance(snap);
-      tx.set(
-        _userRef,
-        {'walletBalance': current + amount},
-        SetOptions(merge: true),
-      );
-      final txDoc = _txRef.doc();
-      tx.set(
-        txDoc,
-        WalletTransaction(
-          id: txDoc.id,
-          title: title,
-          amount: amount,
-          type: 'credit',
-          category: category,
-          description: description,
-          timestamp: DateTime.now(),
-        ).toMap(),
-      );
-    });
-  }
-
-  Future<void> addMednuMoney({
-    required double amount,
-    required String title,
-    required String category,
-    String? description,
-  }) async {
-    if (_uid.isEmpty) throw Exception('Not authenticated');
-    if (amount <= 0) throw Exception('Amount must be positive');
-    await _db.runTransaction((tx) async {
-      final snap = await tx.get(_userRef);
-      final current = _parseMednuMoneyBalance(snap);
-      tx.set(
-        _userRef,
-        {'mednuMoneyBalance': current + amount},
-        SetOptions(merge: true),
-      );
-      final txDoc = _txRef.doc();
-      tx.set(
-        txDoc,
-        WalletTransaction(
-          id: txDoc.id,
-          title: title,
-          amount: amount,
-          type: 'credit',
-          category: category,
-          description: description,
-          timestamp: DateTime.now(),
-          walletType: 'mednu_money',
-        ).toMap(),
-      );
-    });
-  }
 
   Future<void> deductMednuMoney({
     required double amount,
     required String title,
     String category = 'payment',
     String? description,
+  }) =>
+      _spend(
+        walletType: 'mednu_money',
+        amount: amount,
+        title: title,
+        category: category,
+        description: description,
+      );
+
+  Future<void> _spend({
+    required String walletType,
+    required double amount,
+    required String title,
+    required String category,
+    String? description,
   }) async {
     if (_uid.isEmpty) throw Exception('Not authenticated');
     if (amount <= 0) throw Exception('Amount must be positive');
-    await _db.runTransaction((tx) async {
-      final snap = await tx.get(_userRef);
-      final current = _parseMednuMoneyBalance(snap);
-      if (current < amount) throw Exception('Insufficient MedNU Money balance');
-      tx.set(
-        _userRef,
-        {'mednuMoneyBalance': current - amount},
-        SetOptions(merge: true),
-      );
-      final txDoc = _txRef.doc();
-      tx.set(
-        txDoc,
-        WalletTransaction(
-          id: txDoc.id,
-          title: title,
-          amount: amount,
-          type: 'debit',
-          category: category,
-          description: description,
-          timestamp: DateTime.now(),
-          walletType: 'mednu_money',
-        ).toMap(),
-      );
-    });
+    try {
+      await _fns.httpsCallable('spendWalletBalance').call({
+        'walletType': walletType,
+        'amount': amount,
+        'title': title,
+        'category': category,
+        if (description != null) 'description': description,
+      });
+    } on FirebaseFunctionsException catch (e) {
+      // Preserves the message shape the UI already surfaces, e.g.
+      // 'Insufficient wallet balance'.
+      throw Exception(e.message ?? 'Could not complete the payment.');
+    }
   }
 
+  /// Superseded by the server: wallet credits now originate only from
+  /// `verifyRazorpayPayment` (top-ups) and `grantReferralReward` (rewards).
+  /// A generic client-callable credit would itself be a self-credit vector.
+  Future<void> addCredit({
+    required double amount,
+    required String title,
+    required String category,
+    String? description,
+  }) async {
+    throw UnimplementedError(
+      'Use grantReferralReward or verifyRazorpayPayment.',
+    );
+  }
+
+  /// See [addCredit] — MedNU Money is credited server-side only.
+  Future<void> addMednuMoney({
+    required double amount,
+    required String title,
+    required String category,
+    String? description,
+  }) async {
+    throw UnimplementedError(
+      'Use grantReferralReward or verifyRazorpayPayment.',
+    );
+  }
+
+  // ── Peer transfer ───────────────────────────────────────────────────────
+  //
+  // Recipient lookup, sufficiency check, both balance writes and both ledger
+  // entries all happen inside the `transferWalletBalance` callable. The sender
+  // label is taken from the verified auth token server-side.
   Future<void> transferToUser({
     required String recipientPhone,
     required double amount,
   }) async {
     if (_uid.isEmpty) throw Exception('Not authenticated');
     if (amount <= 0) throw Exception('Amount must be positive');
-
-    final query = await _db
-        .collection('users')
-        .where('phone', isEqualTo: recipientPhone)
-        .limit(1)
-        .get();
-    if (query.docs.isEmpty) {
-      throw Exception('No MedNU account found with this phone number');
+    try {
+      await _fns.httpsCallable('transferWalletBalance').call({
+        'recipientPhone': recipientPhone,
+        'amount': amount,
+      });
+    } on FirebaseFunctionsException catch (e) {
+      throw Exception(e.message ?? 'Transfer failed. Please try again.');
     }
-    final recipientRef = query.docs.first.reference;
-    if (recipientRef.id == _uid) {
-      throw Exception('Cannot transfer to your own wallet');
-    }
-
-    await _db.runTransaction((tx) async {
-      final senderSnap = await tx.get(_userRef);
-      final current = _parseBalance(senderSnap);
-      if (current < amount) throw Exception('Insufficient wallet balance');
-
-      tx.set(_userRef, {'walletBalance': current - amount},
-          SetOptions(merge: true));
-      final senderTxDoc = _txRef.doc();
-      tx.set(
-        senderTxDoc,
-        WalletTransaction(
-          id: senderTxDoc.id,
-          title: 'Transfer Sent',
-          amount: amount,
-          type: 'debit',
-          category: 'transfer',
-          description: 'To: $recipientPhone',
-          timestamp: DateTime.now(),
-        ).toMap(),
-      );
-
-      final recipientSnap = await tx.get(recipientRef);
-      final recipientBalance = _parseBalance(recipientSnap);
-      tx.set(recipientRef, {'walletBalance': recipientBalance + amount},
-          SetOptions(merge: true));
-      final recipientTxDoc = recipientRef.collection('transactions').doc();
-      final senderLabel = _auth.currentUser?.phoneNumber ??
-          _auth.currentUser?.email ??
-          'a MedNU user';
-      tx.set(
-        recipientTxDoc,
-        WalletTransaction(
-          id: recipientTxDoc.id,
-          title: 'Transfer Received',
-          amount: amount,
-          type: 'credit',
-          category: 'transfer',
-          description: 'From: $senderLabel',
-          timestamp: DateTime.now(),
-        ).toMap(),
-      );
-    });
-  }
-
-  double _parseBalance(DocumentSnapshot snap) {
-    if (!snap.exists) return 0.0;
-    final data = snap.data() as Map<String, dynamic>?;
-    final raw = data?['walletBalance'];
-    if (raw is num) return raw.toDouble();
-    return 0.0;
-  }
-
-  double _parseMednuMoneyBalance(DocumentSnapshot snap) {
-    if (!snap.exists) return 0.0;
-    final data = snap.data() as Map<String, dynamic>?;
-    final raw = data?['mednuMoneyBalance'];
-    if (raw is num) return raw.toDouble();
-    return 0.0;
   }
 }

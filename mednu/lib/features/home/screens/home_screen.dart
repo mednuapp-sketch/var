@@ -1295,6 +1295,7 @@ class _RecordsBodyState extends State<_RecordsBody> with SingleTickerProviderSta
                     borderRadius: BorderRadius.circular(12),
                     child: imageUrl.isNotEmpty
                         ? Image.network(imageUrl, width: 46, height: 46, fit: BoxFit.cover,
+                            cacheWidth: 138, cacheHeight: 138,
                             errorBuilder: (_, __, ___) => Container(width: 46, height: 46, decoration: BoxDecoration(color: const Color(0xFF0097A7).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)), child: const Icon(Icons.science_rounded, color: Color(0xFF0097A7), size: 24)))
                         : Container(width: 46, height: 46, decoration: BoxDecoration(color: const Color(0xFF0097A7).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)), child: const Icon(Icons.science_rounded, color: Color(0xFF0097A7), size: 24)),
                   ),

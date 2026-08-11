@@ -426,12 +426,12 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         Container(
           width: 80, height: 80,
-          decoration: BoxDecoration(
+          decoration: const BoxDecoration(
               gradient: AppColors.primaryGradient, shape: BoxShape.circle),
           child: const Icon(Icons.cloud_upload_rounded, color: Colors.white, size: 40),
         ),
         const SizedBox(height: 24),
-        Text('Submitting Your Application',
+        const Text('Submitting Your Application',
             style: AppTextStyles.h4, textAlign: TextAlign.center),
         const SizedBox(height: 8),
         Text(_uploadStatus,
@@ -451,12 +451,12 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
   Widget _buildPage1() => SingleChildScrollView(
     padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      _SectionHeader(icon: Icons.person_rounded, title: 'Personal Information', subtitle: 'Tell us about yourself'),
+      const _SectionHeader(icon: Icons.person_rounded, title: 'Personal Information', subtitle: 'Tell us about yourself'),
       const SizedBox(height: 20),
       Center(child: Stack(children: [
         Container(
           width: 96, height: 96,
-          decoration: BoxDecoration(gradient: AppColors.primaryGradient, shape: BoxShape.circle),
+          decoration: const BoxDecoration(gradient: AppColors.primaryGradient, shape: BoxShape.circle),
           child: const Icon(Icons.person_rounded, color: Colors.white, size: 52),
         ),
         Positioned(bottom: 0, right: 0, child: Container(
@@ -474,7 +474,7 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
       const SizedBox(height: 14),
       _Field('Mobile Number', _phoneCtrl, '10-digit number (auto-filled)', type: TextInputType.phone),
       const SizedBox(height: 14),
-      Text('Gender', style: AppTextStyles.labelLarge),
+      const Text('Gender', style: AppTextStyles.labelLarge),
       const SizedBox(height: 8),
       Row(children: ['Male', 'Female', 'Other'].map((g) => Expanded(
         child: GestureDetector(
@@ -507,9 +507,9 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
   Widget _buildPage2() => SingleChildScrollView(
     padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      _SectionHeader(icon: Icons.work_rounded, title: 'Professional Details', subtitle: 'Your medical qualifications'),
+      const _SectionHeader(icon: Icons.work_rounded, title: 'Professional Details', subtitle: 'Your medical qualifications'),
       const SizedBox(height: 20),
-      Text('I am registering as a *', style: AppTextStyles.labelLarge),
+      const Text('I am registering as a *', style: AppTextStyles.labelLarge),
       const SizedBox(height: 8),
       Row(children: [
         Expanded(
@@ -539,10 +539,10 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
         ),
       ]),
       const SizedBox(height: 20),
-      Text('Specialization *', style: AppTextStyles.labelLarge),
+      const Text('Specialization *', style: AppTextStyles.labelLarge),
       const SizedBox(height: 8),
       DropdownButtonFormField<String>(
-        value: _selectedSpec,
+        initialValue: _selectedSpec,
         isExpanded: true,
         decoration: InputDecoration(
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppColors.border)),
@@ -603,7 +603,7 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
   Widget _buildPage3() => SingleChildScrollView(
     padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      _SectionHeader(icon: Icons.folder_rounded, title: 'Upload Documents', subtitle: 'All 5 documents are mandatory'),
+      const _SectionHeader(icon: Icons.folder_rounded, title: 'Upload Documents', subtitle: 'All 5 documents are mandatory'),
       const SizedBox(height: 8),
       Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -683,7 +683,7 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
             ),
             const SizedBox(width: 12),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Doctor Signature *', style: AppTextStyles.labelLarge),
+              const Text('Doctor Signature *', style: AppTextStyles.labelLarge),
               Text('Sign in the box below using your finger',
                   style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
             ])),
@@ -764,7 +764,7 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
   Widget _buildPage4() => SingleChildScrollView(
     padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      _SectionHeader(icon: Icons.gavel_rounded, title: 'Declaration', subtitle: 'Review and accept before submitting'),
+      const _SectionHeader(icon: Icons.gavel_rounded, title: 'Declaration', subtitle: 'Review and accept before submitting'),
       const SizedBox(height: 20),
 
       // Declaration card
@@ -784,7 +784,7 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
               child: const Icon(Icons.medical_services_rounded, color: AppColors.primary, size: 20),
             ),
             const SizedBox(width: 10),
-            Text('Professional Declaration', style: AppTextStyles.h4),
+            const Text('Professional Declaration', style: AppTextStyles.h4),
           ]),
           const SizedBox(height: 16),
           const _DeclText(
@@ -842,7 +842,7 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
               child: const Icon(Icons.description_rounded, color: Color(0xFF7B1FA2), size: 20),
             ),
             const SizedBox(width: 10),
-            Text('Terms & Conditions', style: AppTextStyles.h4),
+            const Text('Terms & Conditions', style: AppTextStyles.h4),
           ]),
           const SizedBox(height: 14),
           Container(
@@ -938,7 +938,7 @@ class _TypeChoiceCard extends StatelessWidget {
       duration: const Duration(milliseconds: 180),
       padding: const EdgeInsets.symmetric(vertical: 14),
       decoration: BoxDecoration(
-        color: selected ? AppColors.primary.withOpacity(0.08) : Colors.white,
+        color: selected ? AppColors.primary.withValues(alpha: 0.08) : Colors.white,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: selected ? AppColors.primary : AppColors.border,

@@ -65,7 +65,7 @@ class _LoadingBody extends StatelessWidget {
   Widget build(BuildContext context) {
     return CustomScrollView(
       slivers: [
-        _GradientAppBar(),
+        const _GradientAppBar(),
         SliverPadding(
           padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
           sliver: SliverList(
@@ -94,7 +94,7 @@ class _ErrorBody extends StatelessWidget {
   Widget build(BuildContext context) {
     return CustomScrollView(
       slivers: [
-        _GradientAppBar(),
+        const _GradientAppBar(),
         SliverFillRemaining(
           child: AppErrorState(onRetry: onRetry),
         ),
@@ -444,7 +444,7 @@ class _EarningsBody extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _SectionHeader(title: 'Consultation Analytics'),
+                      const _SectionHeader(title: 'Consultation Analytics'),
                       const SizedBox(height: 12),
                       _ConsultGrid(
                         total: allDocs.length,
@@ -465,7 +465,7 @@ class _EarningsBody extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _SectionHeader(
+                      const _SectionHeader(
                         title: 'Weekly Earnings',
                         subtitle: 'Last 7 days',
                       ),
@@ -482,7 +482,7 @@ class _EarningsBody extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _SectionHeader(
+                      const _SectionHeader(
                         title: '30-Day Trend',
                         subtitle: 'Daily earnings over last 30 days',
                       ),
@@ -499,7 +499,7 @@ class _EarningsBody extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _SectionHeader(title: 'Appointment Insights'),
+                      const _SectionHeader(title: 'Appointment Insights'),
                       const SizedBox(height: 12),
                       Row(children: [
                         _InsightCard(
@@ -887,7 +887,7 @@ class _MonthlyTrendChart extends StatelessWidget {
               drawVerticalLine: false,
               horizontalInterval: chartMax / 4,
               getDrawingHorizontalLine: (v) =>
-                  FlLine(color: AppColors.divider, strokeWidth: 1),
+                  const FlLine(color: AppColors.divider, strokeWidth: 1),
             ),
             borderData: FlBorderData(show: false),
             titlesData: FlTitlesData(
@@ -989,18 +989,15 @@ class _ConsultGrid extends StatelessWidget {
           AppColors.accent),
     ];
 
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: items.length,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        mainAxisSpacing: 10,
-        crossAxisSpacing: 10,
-        childAspectRatio: 1.1,
-      ),
-      itemBuilder: (context, i) {
-        final item = items[i];
+    // A plain Column-of-Rows, not a shrink-wrapped GridView: this grid sits
+    // inside the screen's outer CustomScrollView and a nested scrollable
+    // installs a competing drag recognizer that stalls upward swipes.
+    return staticGrid(
+      crossAxisCount: 3,
+      aspectRatio: 1.1,
+      mainAxisSpacing: 10,
+      crossAxisSpacing: 10,
+      children: items.map((item) {
         return Container(
           decoration: BoxDecoration(
             color: Colors.white,
@@ -1054,7 +1051,7 @@ class _ConsultGrid extends StatelessWidget {
             ],
           ),
         );
-      },
+      }).toList(),
     );
   }
 }

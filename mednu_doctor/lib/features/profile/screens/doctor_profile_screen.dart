@@ -545,7 +545,7 @@ class _DoctorProfileEditScreenState extends State<DoctorProfileEditScreen> {
                 _SectionCard('Personal Info', [
                   _field('Full Name', _nameCtrl),
                   const SizedBox(height: 12),
-                  Text('Specialization', style: AppTextStyles.labelLarge),
+                  const Text('Specialization', style: AppTextStyles.labelLarge),
                   const SizedBox(height: 6),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
@@ -567,7 +567,7 @@ class _DoctorProfileEditScreenState extends State<DoctorProfileEditScreen> {
                             color: AppColors.warning.withValues(alpha:0.12),
                             borderRadius: BorderRadius.circular(6),
                           ),
-                          child: Text('Pending',
+                          child: const Text('Pending',
                               style: TextStyle(fontFamily: 'Poppins', fontSize: 10,
                                   fontWeight: FontWeight.w700, color: AppColors.warning)),
                         ),

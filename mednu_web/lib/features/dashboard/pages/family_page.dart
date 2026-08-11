@@ -6,7 +6,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/responsive.dart';
 import '../../../core/widgets/gradient_button.dart';
 
-final String _uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+String get _uid => FirebaseAuth.instance.currentUser?.uid ?? '';
 
 class FamilyPage extends StatelessWidget {
   const FamilyPage({super.key});

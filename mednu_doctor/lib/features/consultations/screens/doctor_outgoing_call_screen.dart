@@ -4,10 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/router/app_router.dart';
+import '../../../shared_core/providers/role_providers.dart';
 
 /// Shown to the doctor after they tap "Call Patient".
 /// Creates the consultation document, then watches its status:
@@ -55,6 +57,12 @@ class _DoctorOutgoingCallScreenState extends State<DoctorOutgoingCallScreen>
     _initAnimations();
     WakelockPlus.enable();
     HapticFeedback.mediumImpact();
+    // Block role switching for the entire outgoing-call flow. If the call
+    // connects, DoctorVideoCallScreen's own initState/dispose take over
+    // ownership of this flag for the rest of the session.
+    ProviderScope.containerOf(context, listen: false)
+        .read(criticalOperationInProgressProvider.notifier)
+        .state = true;
     _createAndWatch();
     _startElapsedTimer();
   }
@@ -229,7 +237,15 @@ class _DoctorOutgoingCallScreenState extends State<DoctorOutgoingCallScreen>
   void _safeClose() {
     if (!mounted) return;
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-    if (context.canPop()) context.pop();
+    // `PopScope(canPop: false)` above means system back can never close this
+    // screen, so if there is also nothing to pop back to (entered via a
+    // stack-replacing `go`, e.g. from the incoming-request deep link) the
+    // doctor would be stranded here. Fall back to the dashboard.
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go(AppRoutes.dashboard);
+    }
   }
 
   @override
@@ -241,6 +257,13 @@ class _DoctorOutgoingCallScreenState extends State<DoctorOutgoingCallScreen>
     _dotsCtrl.dispose();
     _elapsedTimer?.cancel();
     _sub?.cancel();
+    // Safety net for the declined/cancelled paths, which pop this screen
+    // without ever reaching DoctorVideoCallScreen; harmless to re-clear if
+    // the call did connect, since that screen already cleared it on its own
+    // dispose by the time this one runs.
+    ProviderScope.containerOf(context, listen: false)
+        .read(criticalOperationInProgressProvider.notifier)
+        .state = false;
     WakelockPlus.disable();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();

@@ -155,14 +155,14 @@ class _DoctorLoginScreenState extends State<DoctorLoginScreen>
                               ),
                               const SizedBox(height: 28),
                               // Trust badges
-                              Row(children: [
+                              const Row(children: [
                                 _TrustBadge(
                                     icon: Icons.verified_user_rounded,
                                     label: 'Verified'),
-                                const SizedBox(width: 10),
+                                SizedBox(width: 10),
                                 _TrustBadge(
                                     icon: Icons.lock_rounded, label: 'Secure'),
-                                const SizedBox(width: 10),
+                                SizedBox(width: 10),
                                 _TrustBadge(
                                     icon: Icons.health_and_safety_rounded,
                                     label: 'HIPAA Safe'),
@@ -206,7 +206,7 @@ class _DoctorLoginScreenState extends State<DoctorLoginScreen>
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Welcome Back, Doctor!',
+                            const Text('Welcome Back, Doctor!',
                                 style: AppTextStyles.h3),
                             const SizedBox(height: 4),
                             Text('Sign in to manage your consultations',
@@ -215,7 +215,7 @@ class _DoctorLoginScreenState extends State<DoctorLoginScreen>
                             const SizedBox(height: 28),
 
                             // ── Phone field ──────────────────────────────
-                            Text('Mobile Number', style: AppTextStyles.labelLarge),
+                            const Text('Mobile Number', style: AppTextStyles.labelLarge),
                             const SizedBox(height: 8),
                             Container(
                               decoration: BoxDecoration(
@@ -282,12 +282,12 @@ class _DoctorLoginScreenState extends State<DoctorLoginScreen>
                             Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Text('New to MedNU Doctor? ',
+                                  const Text('New to MedNU Doctor? ',
                                       style: AppTextStyles.bodyMedium),
                                   GestureDetector(
                                     onTap: () =>
                                         context.push(AppRoutes.register),
-                                    child: Text(
+                                    child: const Text(
                                       'Register',
                                       style: TextStyle(
                                         fontFamily: 'Poppins',

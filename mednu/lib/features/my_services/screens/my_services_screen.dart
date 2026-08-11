@@ -62,6 +62,11 @@ class _MyServicesScreenState extends ConsumerState<MyServicesScreen>
         ),
         actions: [
           IconButton(
+            onPressed: () => context.push(AppRoutes.medicineOrders),
+            icon: const Icon(Icons.medication_outlined, color: Colors.white),
+            tooltip: 'Medicine Orders',
+          ),
+          IconButton(
             onPressed: () => ref.invalidate(allBookingsProvider),
             icon: const Icon(Icons.refresh_rounded, color: Colors.white),
             tooltip: 'Refresh',

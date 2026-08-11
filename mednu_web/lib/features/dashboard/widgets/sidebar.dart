@@ -16,7 +16,7 @@ class DashboardSidebar extends StatelessWidget {
     this.collapsed = false,
   });
 
-  static const List<_SidebarItem> items = [
+  static const List<_SidebarItem> _items = [
     _SidebarItem(icon: Icons.dashboard_rounded, label: 'Dashboard'),
     _SidebarItem(icon: Icons.calendar_today_rounded, label: 'Appointments'),
     _SidebarItem(icon: Icons.medication_rounded, label: 'Prescriptions'),
@@ -44,9 +44,9 @@ class DashboardSidebar extends StatelessWidget {
           Expanded(
             child: ListView.builder(
               padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-              itemCount: items.length,
+              itemCount: _items.length,
               itemBuilder: (context, i) => _SidebarNavItem(
-                item: items[i],
+                item: _items[i],
                 selected: selectedIndex == i,
                 collapsed: collapsed,
                 onTap: () => onItemSelected(i),
@@ -126,10 +126,10 @@ class _SidebarNavItemState extends State<_SidebarNavItem> {
           ),
           decoration: BoxDecoration(
             gradient: widget.selected ? AppColors.primaryGradient : null,
-            color: widget.selected ? null : (_hovered ? Colors.white.withOpacity(0.07) : Colors.transparent),
+            color: widget.selected ? null : (_hovered ? Colors.white.withValues(alpha: 0.07) : Colors.transparent),
             borderRadius: BorderRadius.circular(12),
             boxShadow: widget.selected
-                ? [BoxShadow(color: AppColors.primary.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 4))]
+                ? [BoxShadow(color: AppColors.primary.withValues(alpha: 0.3), blurRadius: 12, offset: const Offset(0, 4))]
                 : [],
           ),
           child: Row(children: [
@@ -187,7 +187,7 @@ class _LogoutButtonState extends State<_LogoutButton> {
           margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
           padding: EdgeInsets.symmetric(horizontal: widget.collapsed ? 16 : 14, vertical: 11),
           decoration: BoxDecoration(
-            color: _hovered ? Colors.red.withOpacity(0.12) : Colors.transparent,
+            color: _hovered ? Colors.red.withValues(alpha: 0.12) : Colors.transparent,
             borderRadius: BorderRadius.circular(12),
           ),
           child: Row(children: [

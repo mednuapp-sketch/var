@@ -1,3 +1,12 @@
+// ⚠️ STALE — NOT DEPLOYED. mednu/firebase.json now points its
+// "firestore.rules"/"firestore.indexes.json" at the root copies
+// (../firestore.rules, ../firestore.indexes.json), which is what actually
+// governs the shared `mednu-healthcare-app` project. This local copy's
+// `orders` rule block also has a pre-existing bug (checks `userId`, but
+// the app writes `patientId`) that the root copy doesn't have. Edit
+// ../firestore.rules instead; this file is kept only so nothing that
+// referenced it by path breaks, and should be deleted once confirmed
+// nothing does.
 rules_version = '2';
 
 service cloud.firestore {

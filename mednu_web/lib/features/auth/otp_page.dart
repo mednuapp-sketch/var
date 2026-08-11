@@ -26,8 +26,12 @@ class _OtpPageState extends ConsumerState<OtpPage> {
 
   @override
   void dispose() {
-    for (final c in _ctrls) c.dispose();
-    for (final n in _nodes) n.dispose();
+    for (final c in _ctrls) {
+      c.dispose();
+    }
+    for (final n in _nodes) {
+      n.dispose();
+    }
     super.dispose();
   }
 
@@ -76,7 +80,7 @@ class _OtpPageState extends ConsumerState<OtpPage> {
                 Container(
                   width: 72,
                   height: 72,
-                  decoration: BoxDecoration(gradient: AppColors.primaryGradient, shape: BoxShape.circle),
+                  decoration: const BoxDecoration(gradient: AppColors.primaryGradient, shape: BoxShape.circle),
                   child: const Center(child: Text('🔐', style: TextStyle(fontSize: 32))),
                 ),
                 const SizedBox(height: 24),
@@ -106,9 +110,9 @@ class _OtpPageState extends ConsumerState<OtpPage> {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: AppColors.error.withOpacity(0.08),
+                      color: AppColors.error.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: AppColors.error.withOpacity(0.3)),
+                      border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
                     ),
                     child: Row(children: [
                       const Icon(Icons.error_outline, color: AppColors.error, size: 16),
@@ -155,7 +159,9 @@ class _OtpPageState extends ConsumerState<OtpPage> {
                         return GestureDetector(
                           onTap: () {
                             setState(() => _timerKey++);
-                            for (final c in _ctrls) c.clear();
+                            for (final c in _ctrls) {
+                              c.clear();
+                            }
                             // Defer focus until after the frame rebuild so the
                             // first box's FocusNode is fully re-attached.
                             WidgetsBinding.instance.addPostFrameCallback((_) {

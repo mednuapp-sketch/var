@@ -25,7 +25,7 @@ class _TestimonialsSectionState extends State<TestimonialsSection> {
   @override
   Widget build(BuildContext context) {
     final isMobile = Responsive.isMobile(context);
-    final items = AppConstants.testimonials;
+    const items = AppConstants.testimonials;
 
     return Container(
       color: Colors.white,
@@ -46,7 +46,7 @@ class _TestimonialsSectionState extends State<TestimonialsSection> {
               SizedBox(height: isMobile ? 32 : 48),
               isMobile
                   ? _MobileCarousel(ctrl: _ctrl, current: _current, items: items, onPageChanged: (i) => setState(() => _current = i))
-                  : _DesktopGrid(items: items),
+                  : const _DesktopGrid(items: items),
               if (isMobile) ...[
                 const SizedBox(height: 20),
                 _Dots(count: items.length, current: _current),
@@ -132,10 +132,10 @@ class _TestimonialCardState extends State<_TestimonialCard> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: _hovered ? AppColors.primary.withOpacity(0.3) : AppColors.border),
+          border: Border.all(color: _hovered ? AppColors.primary.withValues(alpha: 0.3) : AppColors.border),
           boxShadow: _hovered
-              ? [BoxShadow(color: AppColors.primary.withOpacity(0.12), blurRadius: 24, offset: const Offset(0, 8))]
-              : [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
+              ? [BoxShadow(color: AppColors.primary.withValues(alpha: 0.12), blurRadius: 24, offset: const Offset(0, 8))]
+              : [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -149,10 +149,10 @@ class _TestimonialCardState extends State<_TestimonialCard> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.08),
+                  color: AppColors.primary.withValues(alpha: 0.08),
                   shape: BoxShape.circle,
                 ),
-                child: Text('💬', style: const TextStyle(fontSize: 14)),
+                child: const Text('💬', style: TextStyle(fontSize: 14)),
               ),
             ]),
             const SizedBox(height: 12),
@@ -174,7 +174,7 @@ class _TestimonialCardState extends State<_TestimonialCard> {
               Container(
                 width: 38,
                 height: 38,
-                decoration: BoxDecoration(
+                decoration: const BoxDecoration(
                   gradient: AppColors.primaryGradient,
                   shape: BoxShape.circle,
                 ),

@@ -48,7 +48,7 @@ class DoctorsSection extends StatelessWidget {
                     'Over 1,200 verified doctors across 40+ specialties — available for in-person and video consultations.',
               ),
               SizedBox(height: isMobile ? 28 : 44),
-              _SpecialtyFilter(specialties: _specialties),
+              const _SpecialtyFilter(specialties: _specialties),
               SizedBox(height: isMobile ? 24 : 36),
               GridView.builder(
                 shrinkWrap: true,
@@ -65,7 +65,7 @@ class DoctorsSection extends StatelessWidget {
                     : _DoctorCard(doctor: _doctors[i]),
               ),
               const SizedBox(height: 44),
-              GradientButton(
+              const GradientButton(
                 label: 'View All 1,200+ Doctors',
                 width: 250,
                 height: 52,
@@ -285,7 +285,7 @@ class _DoctorCardState extends State<_DoctorCard> {
               const SizedBox(height: 12),
               // Rating + experience
               Row(children: [
-                Icon(Icons.star_rounded, color: const Color(0xFFF59E0B), size: 15),
+                const Icon(Icons.star_rounded, color: Color(0xFFF59E0B), size: 15),
                 const SizedBox(width: 4),
                 Text(d['rating'] as String,
                     style: GoogleFonts.poppins(
@@ -297,7 +297,7 @@ class _DoctorCardState extends State<_DoctorCard> {
                     style: GoogleFonts.poppins(
                         fontSize: 11, color: AppColors.textSecondary)),
                 const Spacer(),
-                Icon(Icons.work_history_rounded,
+                const Icon(Icons.work_history_rounded,
                     size: 13, color: AppColors.textSecondary),
                 const SizedBox(width: 4),
                 Text(d['exp'] as String,
@@ -394,8 +394,8 @@ class _DoctorCardRow extends StatelessWidget {
                         fontWeight: FontWeight.w500)),
                 const SizedBox(height: 4),
                 Row(children: [
-                  Icon(Icons.star_rounded,
-                      color: const Color(0xFFF59E0B), size: 13),
+                  const Icon(Icons.star_rounded,
+                      color: Color(0xFFF59E0B), size: 13),
                   const SizedBox(width: 3),
                   Text(d['rating'] as String,
                       style: GoogleFonts.poppins(
@@ -532,7 +532,7 @@ class _BookBtnState extends State<_BookBtn> {
                 ),
                 if (!widget.compact) ...[
                   const SizedBox(width: 6),
-                  Icon(Icons.arrow_forward_rounded,
+                  const Icon(Icons.arrow_forward_rounded,
                       size: 14, color: Colors.white),
                 ],
               ],

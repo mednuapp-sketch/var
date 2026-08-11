@@ -290,7 +290,7 @@ class _AvailabilityScreenState extends State<AvailabilityScreen> {
                   FadeInSlide(
                     delay: const Duration(milliseconds: 80),
                     child: Row(children: [
-                      Text('Weekly Schedule', style: AppTextStyles.h4),
+                      const Text('Weekly Schedule', style: AppTextStyles.h4),
                       const Spacer(),
                       InfoChip(
                         icon: Icons.calendar_view_week_rounded,
@@ -421,11 +421,11 @@ class _AvailabilityHeader extends StatelessWidget {
                               color: Colors.white, size: 22),
                         ),
                         const SizedBox(width: 14),
-                        Expanded(
+                        const Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             mainAxisSize: MainAxisSize.min,
-                            children: const [
+                            children: [
                               Text(
                                 'My Availability',
                                 maxLines: 1,
@@ -493,7 +493,7 @@ class _SlotDurationCard extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Appointment Slot Duration',
+            const Text('Appointment Slot Duration',
                 style: AppTextStyles.labelLarge),
             Text('Time per consultation',
                 style: AppTextStyles.caption

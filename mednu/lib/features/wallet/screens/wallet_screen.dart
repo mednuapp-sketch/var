@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:razorpay_flutter/razorpay_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:mednu/core/constants/app_colors.dart';
@@ -14,6 +15,10 @@ import 'package:mednu/features/referral/referral_provider.dart';
 import 'package:mednu/features/referral/referral_service.dart';
 import 'package:mednu/features/wallet/wallet_provider.dart';
 import 'package:mednu/features/wallet/wallet_service.dart';
+
+// Razorpay publishable key (safe to ship — the secret lives only in Cloud
+// Functions config, which is what actually verifies every payment).
+const _kRazorpayKeyId = 'rzp_test_T1Z9EVjv8paYQ2';
 
 // ── Category display helpers ──────────────────────────────
 extension _TxCategory on WalletTransaction {
@@ -1082,12 +1087,30 @@ class _AddMoneySheetState extends ConsumerState<_AddMoneySheet> {
   String? _error;
   final _quickAmounts = [100, 200, 500, 1000, 2000, 5000];
 
+  late final Razorpay _razorpay;
+  String? _pendingOrderId;
+  double _pendingAmount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _razorpay = Razorpay();
+    _razorpay.on(Razorpay.EVENT_PAYMENT_SUCCESS, _onPaymentSuccess);
+    _razorpay.on(Razorpay.EVENT_PAYMENT_ERROR, _onPaymentError);
+    _razorpay.on(Razorpay.EVENT_EXTERNAL_WALLET, _onExternalWallet);
+  }
+
   @override
   void dispose() {
+    _razorpay.clear();
     _controller.dispose();
     super.dispose();
   }
 
+  // Top-ups now go through the payment gateway. The wallet is credited
+  // server-side inside verifyRazorpayPayment, using the amount recorded on the
+  // Razorpay order — the client never writes a balance, so it can never mint
+  // money by claiming a larger top-up than it paid for.
   Future<void> _submit() async {
     final text = _controller.text.trim();
     final amount = double.tryParse(text);
@@ -1101,20 +1124,76 @@ class _AddMoneySheetState extends ConsumerState<_AddMoneySheet> {
     }
     setState(() { _loading = true; _error = null; });
     try {
-      await ref.read(walletServiceProvider).addMoney(amount);
+      final order =
+          await ref.read(walletServiceProvider).createTopUpOrder(amount);
       if (!mounted) return;
-      // Capture ScaffoldMessenger and Navigator synchronously before pop
-      // so we never reference context across an async gap.
-      final messenger = ScaffoldMessenger.of(context);
-      final nav = Navigator.of(context);
-      nav.pop();
-      _showSuccess(amount, messenger);
+      _pendingOrderId = order.orderId;
+      _pendingAmount = amount;
+      _razorpay.open({
+        'key': _kRazorpayKeyId,
+        'order_id': order.orderId,
+        'amount': order.amountPaise,
+        'name': 'MedNU Healthcare',
+        'description': 'Wallet top-up',
+        'prefill': const {'contact': '', 'email': ''},
+        'theme': {'color': '#C2185B'},
+      });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _loading = false;
         _error = e.toString().replaceFirst('Exception: ', '');
       });
     }
+  }
+
+  Future<void> _onPaymentSuccess(PaymentSuccessResponse response) async {
+    final orderId = response.orderId ?? _pendingOrderId ?? '';
+    final paymentId = response.paymentId ?? '';
+    final signature = response.signature ?? '';
+    final amount = _pendingAmount;
+    if (orderId.isEmpty || paymentId.isEmpty || signature.isEmpty) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = 'Payment could not be confirmed. Contact support.';
+      });
+      return;
+    }
+    try {
+      await ref.read(walletServiceProvider).confirmTopUp(
+            orderId: orderId,
+            paymentId: paymentId,
+            signature: signature,
+          );
+      if (!mounted) return;
+      // The balance itself arrives via balanceStream()'s realtime listener —
+      // nothing to write here.
+      final messenger = ScaffoldMessenger.of(context);
+      final nav = Navigator.of(context);
+      nav.pop();
+      _showSuccess(amount, messenger);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = e.toString().replaceFirst('Exception: ', '');
+      });
+    }
+  }
+
+  void _onPaymentError(PaymentFailureResponse response) {
+    if (!mounted) return;
+    _pendingOrderId = null;
+    setState(() {
+      _loading = false;
+      _error = response.message ?? 'Payment failed. Please try again.';
+    });
+  }
+
+  void _onExternalWallet(ExternalWalletResponse response) {
+    if (!mounted) return;
+    setState(() => _loading = false);
   }
 
   void _showSuccess(double amount, ScaffoldMessengerState messenger) {

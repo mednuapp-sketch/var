@@ -129,16 +129,10 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen>
     final orderId = response.orderId ?? _pendingOrderId ?? '';
     final signature = response.signature ?? '';
 
-    if (_mednuMoneyDeduction > 0) {
-      try {
-        await ref.read(walletServiceProvider).deductMednuMoney(
-              amount: _mednuMoneyDeduction.toDouble(),
-              title: 'MedNU Money Used',
-              category: 'consultation',
-              description: widget.description,
-            );
-      } catch (_) {}
-    }
+    // The card/UPI leg has already been charged, so a failed in-app debit
+    // can't undo anything — record it best-effort and carry on.
+    await _applyBalanceDeductions();
+    if (!mounted) return;
 
     if (orderId.isEmpty || signature.isEmpty) {
       setState(() => _isProcessing = false);
@@ -185,13 +179,75 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen>
     _showSnackBar('Opening ${response.walletName}…', AppColors.info);
   }
 
+  // ── In-app balance debits ──────────────────────────────
+  /// Debits whichever in-app balances the patient chose to apply to this
+  /// payment. Both balances were only ever *subtracted from the amount
+  /// charged* before — they were never actually taken off the user's
+  /// balance for the wallet, and not at all on the wallet-only path, so the
+  /// same balance could be spent over and over. Returns an error message on
+  /// failure, or null on success.
+  Future<String?> _applyBalanceDeductions() async {
+    // Read (not watch) the balances here — this runs outside build, from the
+    // Razorpay callback.
+    final mednuMoneyBalance = ref
+        .read(mednuMoneyBalanceProvider)
+        .maybeWhen(data: (v) => v.toInt(), orElse: () => 0);
+    final walletBalance = ref
+        .read(walletBalanceProvider)
+        .maybeWhen(data: (v) => v.toInt(), orElse: () => 0);
+
+    final mednuMoney = _useMednuMoney ? _afterPromo.clamp(0, mednuMoneyBalance) : 0;
+    final afterMednuMoney = (_afterPromo - mednuMoney).clamp(0, _afterPromo);
+    final wallet = _useWallet ? afterMednuMoney.clamp(0, walletBalance) : 0;
+    final service = ref.read(walletServiceProvider);
+
+    if (mednuMoney > 0) {
+      try {
+        await service.deductMednuMoney(
+          amount: mednuMoney.toDouble(),
+          title: 'MedNU Money Used',
+          category: 'consultation',
+          description: widget.description,
+        );
+      } catch (_) {
+        return 'Could not apply your MedNU Money balance. Please try again.';
+      }
+    }
+
+    if (wallet > 0) {
+      try {
+        await service.deductPayment(
+          amount: wallet.toDouble(),
+          title: 'Wallet Payment',
+          category: 'payment',
+          description: widget.description,
+        );
+      } catch (_) {
+        return 'Could not debit your wallet. Please try again.';
+      }
+    }
+    return null;
+  }
+
   // ── Open Razorpay ──────────────────────────────────────
   Future<void> _openRazorpay() async {
+    if (_isProcessing) return;
+    setState(() => _isProcessing = true);
+
+    // Fully covered by wallet / MedNU Money — no gateway leg at all, so the
+    // in-app debit is the *only* thing that moves money here. It must
+    // succeed before we report success, or the patient gets a free order.
     if (_amountAfterWallet <= 0) {
+      final error = await _applyBalanceDeductions();
+      if (!mounted) return;
+      setState(() => _isProcessing = false);
+      if (error != null) {
+        _showError(error);
+        return;
+      }
       _showSuccessSheet('WALLET-${DateTime.now().millisecondsSinceEpoch}');
       return;
     }
-    setState(() => _isProcessing = true);
 
     String orderId;
     try {
@@ -200,6 +256,9 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen>
           .call({
         'amount': _amountAfterWallet * 100,
         'currency': 'INR',
+        // Checkout leg, not a wallet top-up — the server records the purpose on
+        // the order so verifyRazorpayPayment knows not to credit the wallet.
+        'purpose': 'checkout',
         'receipt': 'mednu_${DateTime.now().millisecondsSinceEpoch}',
       });
       orderId = (result.data as Map)['order_id'] as String;

@@ -168,10 +168,11 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
       // Update doctor rating atomically via transaction (separate — batch can't do reads)
       await batch.commit();
 
-      // Update doctor rating if applicable
-      if (_rating > 0 && doctorId.isNotEmpty) {
-        _updateDoctorRating(doctorId);
-      }
+      // The doctor's aggregate rating is recomputed server-side by the
+      // `onFeedbackCreated` Cloud Function trigger — `doctors/{id}.rating`,
+      // `.totalReviews` and `doctor_rating_summary/{id}` are
+      // admin/Cloud-Function-only writes in firestore.rules, so the old
+      // client-side transaction here has been removed.
 
       if (!mounted) return;
       setState(() {
@@ -207,66 +208,6 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
     }
   }
 
-  Future<void> _updateDoctorRating(String doctorId) async {
-    try {
-      final db = FirebaseFirestore.instance;
-      final doctorRef = db.collection('doctors').doc(doctorId);
-      final summaryRef = db.collection('doctor_rating_summary').doc(doctorId);
-
-      await db.runTransaction((txn) async {
-        final doctorSnap = await txn.get(doctorRef);
-        final summarySnap = await txn.get(summaryRef);
-
-        if (!doctorSnap.exists) return;
-        final d = doctorSnap.data()!;
-        final currentTotal = ((d['rating'] as num?)?.toDouble() ?? 0) *
-            ((d['totalReviews'] as int?) ?? 0);
-        final newCount = ((d['totalReviews'] as int?) ?? 0) + 1;
-        final newAvg = double.parse(
-            ((currentTotal + _rating) / newCount).toStringAsFixed(1));
-
-        // Update doctors collection (patient-side reads)
-        txn.update(doctorRef, {
-          'rating': newAvg,
-          'totalReviews': newCount,
-        });
-
-        // Update doctor_rating_summary (what the doctor dashboard + reviews screen reads)
-        final starKey = _rating.toString();
-        if (summarySnap.exists) {
-          final sd = summarySnap.data()!;
-          final dist = Map<String, dynamic>.from(
-            (sd['ratingDistribution'] as Map<String, dynamic>?) ?? {},
-          );
-          dist[starKey] = ((dist[starKey] as num?)?.toInt() ?? 0) + 1;
-          txn.update(summaryRef, {
-            'averageRating': newAvg,
-            'totalReviews': newCount,
-            'ratingDistribution': dist,
-            'lastUpdated': FieldValue.serverTimestamp(),
-          });
-        } else {
-          // First review ever — create the summary document
-          txn.set(summaryRef, {
-            'averageRating': newAvg,
-            'totalReviews': 1,
-            'ratingDistribution': {
-              '1': _rating == 1 ? 1 : 0,
-              '2': _rating == 2 ? 1 : 0,
-              '3': _rating == 3 ? 1 : 0,
-              '4': _rating == 4 ? 1 : 0,
-              '5': _rating == 5 ? 1 : 0,
-            },
-            'lastUpdated': FieldValue.serverTimestamp(),
-          });
-        }
-      });
-    } catch (e) {
-      debugPrint('[PostConsultation] Rating update failed: $e');
-    }
-  }
-
-  // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {

@@ -51,8 +51,8 @@ class _GradientButtonState extends State<GradientButton> {
             ),
             borderRadius: widget.borderRadius ?? BorderRadius.circular(14),
             boxShadow: _hovered
-                ? [BoxShadow(color: AppColors.primary.withOpacity(0.4), blurRadius: 20, offset: const Offset(0, 8))]
-                : [BoxShadow(color: AppColors.primary.withOpacity(0.2), blurRadius: 8, offset: const Offset(0, 4))],
+                ? [BoxShadow(color: AppColors.primary.withValues(alpha: 0.4), blurRadius: 20, offset: const Offset(0, 8))]
+                : [BoxShadow(color: AppColors.primary.withValues(alpha: 0.2), blurRadius: 8, offset: const Offset(0, 4))],
           ),
           child: Transform.scale(
             scale: _hovered ? 1.02 : 1.0,
@@ -118,7 +118,7 @@ class _OutlineGradientButtonState extends State<OutlineGradientButton> {
           width: widget.width,
           height: widget.height,
           decoration: BoxDecoration(
-            color: _hovered ? AppColors.primary.withOpacity(0.06) : Colors.transparent,
+            color: _hovered ? AppColors.primary.withValues(alpha: 0.06) : Colors.transparent,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(color: AppColors.primary, width: 1.5),
           ),

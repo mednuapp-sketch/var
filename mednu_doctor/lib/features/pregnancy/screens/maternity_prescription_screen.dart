@@ -299,7 +299,7 @@ class _MaternityPrescriptionScreenState
           Row(children: [
             Expanded(
               child: DropdownButtonFormField<String>(
-                value: item['type'],
+                initialValue: item['type'],
                 decoration: const InputDecoration(
                   labelText: 'Type',
                   border: OutlineInputBorder(),

@@ -272,7 +272,7 @@ class _SosScreenState extends State<SosScreen> {
                               children: [
                                 Text('Emergency Contacts', style: AppTextStyles.labelLarge.copyWith(color: AppColors.error)),
                                 const SizedBox(height: 2),
-                                Text(
+                                const Text(
                                   'These contacts will be notified when you trigger an SOS alert.',
                                   style: AppTextStyles.bodySmall,
                                 ),
@@ -299,9 +299,9 @@ class _SosScreenState extends State<SosScreen> {
                               child: const Icon(Icons.contacts_outlined, size: 40, color: AppColors.error),
                             ),
                             const SizedBox(height: 16),
-                            Text('No Emergency Contacts', style: AppTextStyles.h4),
+                            const Text('No Emergency Contacts', style: AppTextStyles.h4),
                             const SizedBox(height: 6),
-                            Text(
+                            const Text(
                               'Tap "Add from Contacts" to select\npeople to notify in an emergency.',
                               textAlign: TextAlign.center,
                               style: AppTextStyles.bodySmall,
@@ -483,7 +483,7 @@ class _ContactPickerSheetState extends State<_ContactPickerSheet> {
               children: [
                 const Icon(Icons.contacts_rounded, color: AppColors.error, size: 22),
                 const SizedBox(width: 8),
-                Text('Select Contact', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 17, color: AppColors.textPrimary)),
+                const Text('Select Contact', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 17, color: AppColors.textPrimary)),
                 const Spacer(),
                 IconButton(
                   icon: const Icon(Icons.close_rounded),

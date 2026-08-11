@@ -170,7 +170,7 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
               child: const Icon(Icons.check_rounded, color: Colors.white, size: 44),
             ),
             const SizedBox(height: 24),
-            Text('Report Submitted!', style: AppTextStyles.h3),
+            const Text('Report Submitted!', style: AppTextStyles.h3),
             const SizedBox(height: 10),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -237,7 +237,7 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
           const SizedBox(height: 20),
 
           // Category
-          Text('Issue Category', style: AppTextStyles.h4),
+          const Text('Issue Category', style: AppTextStyles.h4),
           const SizedBox(height: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
@@ -266,7 +266,7 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
           const SizedBox(height: 16),
 
           // Description
-          Text('Describe the Issue *', style: AppTextStyles.h4),
+          const Text('Describe the Issue *', style: AppTextStyles.h4),
           const SizedBox(height: 8),
           TextField(
             controller: _descCtrl,
@@ -279,7 +279,7 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
           const SizedBox(height: 16),
 
           // Screenshot
-          Text('Attach Screenshot (optional)', style: AppTextStyles.h4),
+          const Text('Attach Screenshot (optional)', style: AppTextStyles.h4),
           const SizedBox(height: 8),
           GestureDetector(
             onTap: _pickScreenshot,

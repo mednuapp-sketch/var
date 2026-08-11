@@ -64,7 +64,7 @@ class _DoctorReviewsScreenState extends State<DoctorReviewsScreen> {
       backgroundColor: AppColors.background,
       body: CustomScrollView(
         slivers: [
-          GradientSliverAppBar(
+          const GradientSliverAppBar(
             headerIcon: Icons.star_rounded,
             title: 'My Reviews',
             subtitle: 'Patient feedback & ratings',
@@ -527,10 +527,10 @@ class _ReviewCard extends StatelessWidget {
                         color: AppColors.success.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(4),
                       ),
-                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      child: const Row(mainAxisSize: MainAxisSize.min, children: [
                         Icon(Icons.verified_rounded,
                             size: 9, color: AppColors.success),
-                        const SizedBox(width: 3),
+                        SizedBox(width: 3),
                         Text(
                           'Verified',
                           style: TextStyle(

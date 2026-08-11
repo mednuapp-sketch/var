@@ -187,7 +187,7 @@ class _PermissionsSheetState extends State<_PermissionsSheet> {
           // ── Header ──────────────────────────────────────
           Container(
             width: 56, height: 56,
-            decoration: BoxDecoration(gradient: AppColors.primaryGradient, shape: BoxShape.circle),
+            decoration: const BoxDecoration(gradient: AppColors.primaryGradient, shape: BoxShape.circle),
             child: const Icon(Icons.shield_rounded, color: Colors.white, size: 28),
           ),
           const SizedBox(height: 12),
@@ -197,8 +197,8 @@ class _PermissionsSheetState extends State<_PermissionsSheet> {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 4),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 24),
             child: Text(
               'MedNU Doctor needs the following permissions to work properly.',
               textAlign: TextAlign.center,

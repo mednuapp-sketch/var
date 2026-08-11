@@ -49,7 +49,7 @@ class HowItWorksSection extends StatelessWidget {
           constraints:
               BoxConstraints(maxWidth: Responsive.maxContentWidth(context)),
           child: isMobile
-              ? _MobileLayout(steps: _steps)
+              ? const _MobileLayout(steps: _steps)
               : _DesktopLayout(steps: _steps, compact: isTablet),
         ),
       ),
@@ -69,7 +69,7 @@ class _DesktopLayout extends StatelessWidget {
     return Column(
       children: [
         // Header
-        _SectionHeader(),
+        const _SectionHeader(),
         SizedBox(height: compact ? 48 : 64),
         // 4-step horizontal flow
         Row(
@@ -100,7 +100,7 @@ class _MobileLayout extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        _SectionHeader(center: true),
+        const _SectionHeader(center: true),
         const SizedBox(height: 40),
         ...steps.map((s) => Padding(
               padding: const EdgeInsets.only(bottom: 20),
@@ -131,10 +131,10 @@ class _SectionHeader extends StatelessWidget {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
           decoration: BoxDecoration(
-            color: AppColors.primary.withOpacity(0.07),
+            color: AppColors.primary.withValues(alpha: 0.07),
             borderRadius: BorderRadius.circular(50),
             border: Border.all(
-                color: AppColors.primary.withOpacity(0.2), width: 1),
+                color: AppColors.primary.withValues(alpha: 0.2), width: 1),
           ),
           child: Text('Simple Steps',
               style: GoogleFonts.poppins(
@@ -207,7 +207,7 @@ class _LearnMoreBtnState extends State<_LearnMoreBtn> {
           AnimatedContainer(
             duration: const Duration(milliseconds: 200),
             transform: _hovered
-                ? (Matrix4.identity()..translate(4.0, 0.0))
+                ? (Matrix4.identity()..translateByDouble(4.0, 0.0, 0.0, 1.0))
                 : Matrix4.identity(),
             child: ShaderMask(
               shaderCallback: (b) => AppColors.primaryGradient.createShader(b),
@@ -249,14 +249,14 @@ class _StepCardState extends State<_StepCard> {
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: _hovered
-                ? AppColors.primary.withOpacity(0.25)
+                ? AppColors.primary.withValues(alpha: 0.25)
                 : const Color(0xFFEEEEEE),
             width: 1.5,
           ),
           boxShadow: _hovered
               ? [
                   BoxShadow(
-                      color: AppColors.primary.withOpacity(0.12),
+                      color: AppColors.primary.withValues(alpha: 0.12),
                       blurRadius: 24,
                       offset: const Offset(0, 8))
                 ]
@@ -298,7 +298,7 @@ class _StepCardState extends State<_StepCard> {
                   padding: const EdgeInsets.symmetric(
                       horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.07),
+                    color: AppColors.primary.withValues(alpha: 0.07),
                     borderRadius: BorderRadius.circular(50),
                   ),
                   child: ShaderMask(
@@ -390,7 +390,7 @@ class _StepCardMobile extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(
                         horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                      color: AppColors.primary.withOpacity(0.07),
+                      color: AppColors.primary.withValues(alpha: 0.07),
                       borderRadius: BorderRadius.circular(50),
                     ),
                     child: ShaderMask(
@@ -439,7 +439,7 @@ class _DashedArrowPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = AppColors.primary.withOpacity(0.35)
+      ..color = AppColors.primary.withValues(alpha: 0.35)
       ..strokeWidth = 1.8
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:screen_protector/screen_protector.dart';
 import '../services/agora_call_service.dart';
@@ -11,6 +12,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/services/active_call_service.dart';
 import '../../../features/notifications/services/notification_service.dart';
+import '../../../shared_core/providers/role_providers.dart';
 
 class DoctorVideoCallScreen extends StatefulWidget {
   final String consultationId;
@@ -61,6 +63,14 @@ class _DoctorVideoCallScreenState extends State<DoctorVideoCallScreen>
   void initState() {
     super.initState();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    // Owns criticalOperationInProgressProvider for the full duration of the
+    // call — covers both video and audio-only (the latter is a
+    // network-degradation mode of this same screen, see _isAudioOnly).
+    // IncomingRequestScreen/DoctorOutgoingCallScreen already set this true
+    // before the doctor lands here; re-asserting it is idempotent.
+    ProviderScope.containerOf(context, listen: false)
+        .read(criticalOperationInProgressProvider.notifier)
+        .state = true;
     _enableScreenProtection();
     _agora = AgoraCallService(
       onRemoteJoined: (uid) {
@@ -217,6 +227,11 @@ class _DoctorVideoCallScreenState extends State<DoctorVideoCallScreen>
     // the Activity is destroyed by swipe-from-recents. The cached engine +
     // service keep Agora alive. The service is stopped only in _doEndCall().
     ActiveCallService.clearEndCallFromNotificationHandler();
+    // The call is over (or this screen is being torn down some other way) —
+    // role switching is safe again.
+    ProviderScope.containerOf(context, listen: false)
+        .read(criticalOperationInProgressProvider.notifier)
+        .state = false;
     _consultSub?.cancel();
     _notesCtrl.dispose();
     // Only dispose Agora if _doEndCall hasn't already done it

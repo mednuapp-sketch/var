@@ -274,7 +274,7 @@ class _FollowupsList extends StatelessWidget {
                   const Icon(Icons.error_outline_rounded,
                       size: 48, color: AppColors.error),
                   const SizedBox(height: 12),
-                  Text('Could not load follow-ups.',
+                  const Text('Could not load follow-ups.',
                       style: AppTextStyles.bodyMedium),
                   const SizedBox(height: 8),
                   Text('Ensure Firestore index is set up.',

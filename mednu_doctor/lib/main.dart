@@ -22,6 +22,12 @@ import 'core/services/battery_optimization_service.dart';
 import 'core/theme/app_theme.dart';
 import 'features/security/services/biometric_service.dart';
 import 'features/security/screens/lock_screen.dart';
+import 'shared_core/models/app_role.dart';
+import 'shared_core/providers/role_providers.dart';
+import 'features/lab/providers/lab_providers.dart';
+import 'features/pharmacy/providers/pharmacy_providers.dart';
+import 'features/ambulance/providers/ambulance_providers.dart';
+import 'features/caregiver/providers/caregiver_providers.dart';
 
 // ── Background FCM handler ────────────────────────────────────────────────────
 // Runs in a separate Dart isolate when the app is terminated/backgrounded.
@@ -394,6 +400,57 @@ class _MedNUDoctorAppState extends ConsumerState<MedNUDoctorApp>
       if (await BiometricService.isBiometricEnabled()) {
         if (mounted) setState(() => _isLocked = true);
       }
+      _refreshActiveRoleQueues();
+    }
+  }
+
+  /// Safety net for the role dispatch queues after a resume.
+  ///
+  /// The role-scoped incoming-work streams (Lab bookings, Pharmacy orders,
+  /// Ambulance requests, Caregiver visits) rely on the Firestore SDK's own
+  /// reconnect after a long background/suspend. That is usually reliable,
+  /// but for a live incoming-request queue "usually" is not enough: a stream
+  /// that quietly stops delivering means the partner misses paid work with
+  /// no visible sign anything is wrong.
+  ///
+  /// This is deliberately *not* a connectivity-monitoring system and not a
+  /// replacement for the SDK's reconnect — it is a one-shot re-fetch of only
+  /// the active role's incoming-request providers, alongside it. Riverpod
+  /// retains the previous value across the invalidation, so watchers refresh
+  /// in place rather than flashing a loading state.
+  void _refreshActiveRoleQueues() {
+    if (!mounted) return;
+    if (FirebaseAuth.instance.currentUser == null) return;
+    try {
+      switch (ref.read(roleEngineProvider).activeRole) {
+        case AppRole.lab:
+          ref.invalidate(availableBookingsProvider);
+          ref.invalidate(sampleCollectionQueueProvider);
+          break;
+        case AppRole.pharmacy:
+          ref.invalidate(availableOrdersProvider);
+          ref.invalidate(prescriptionVerificationQueueProvider);
+          break;
+        case AppRole.ambulance:
+          ref.invalidate(availableAmbulanceRequestsProvider);
+          ref.invalidate(myAmbulanceRequestsProvider);
+          break;
+        case AppRole.caregiver:
+          ref.invalidate(availableCaregiverVisitsProvider);
+          ref.invalidate(myCaregiverVisitsProvider);
+          break;
+        case AppRole.doctor:
+        case AppRole.admin:
+          // The Doctor role's incoming-call queue is not a Riverpod stream —
+          // it is the raw `_setupCallListener` subscription above, whose
+          // alert de-duplication has side effects (it marks an already
+          // alerted pending consultation as missed). Re-subscribing here
+          // could cancel a live incoming call, so it is left to the SDK's
+          // own reconnect.
+          break;
+      }
+    } catch (_) {
+      // Never let a best-effort refresh surface as a crash on resume.
     }
   }
 

@@ -17,8 +17,8 @@ import '../../../core/services/presence_service.dart';
 import '../../../core/utils/r.dart';
 import '../../auth/services/doctor_auth_service.dart';
 import '../../location/services/doctor_location_service.dart';
-import '../../notifications/providers/notification_provider.dart';
 import '../../../core/widgets/ux_widgets.dart';
+import '../../../shared_core/shared_core.dart';
 
 int _slotToMins(String t) {
   try {
@@ -123,6 +123,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       FeedbackService.showLoading(context, 'Going online...');
 
       final serviceEnabled = await DoctorLocationService.isServiceEnabled();
+      if (!mounted) return;
       if (!serviceEnabled) {
         FeedbackService.dismiss(context);
         setState(() => _locationTogglingInProgress = false);
@@ -130,7 +131,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
         return;
       }
 
+      // The OS permission prompt can keep the user away from this screen long
+      // enough for it to be disposed — never touch context/setState blind.
       final hasPermission = await DoctorLocationService.checkAndRequestPermission();
+      if (!mounted) return;
       if (!hasPermission) {
         FeedbackService.dismiss(context);
         setState(() => _locationTogglingInProgress = false);
@@ -247,24 +251,35 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  static const _tabTitles = ['Home', 'Appointments', 'Earnings', 'Profile'];
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: IndexedStack(
-        index: _currentIndex,
-        children: [
-          _HomeTab(
-            isOnline: _isOnline,
-            onToggle: _toggleOnline,
-            toggling: _locationTogglingInProgress,
-          ),
-          _AppointmentsTab(),
-          _EarningsTab(),
-          const _ProfileTab(),
-        ],
+    // The dashboard keeps its own IndexedStack + custom bottom nav exactly
+    // as before (showBottomNav: false) — SharedAppShell contributes only
+    // the top app bar (role badge, realtime notification badge, verified
+    // profile avatar) so there is never a second, conflicting nav surface.
+    return SharedAppShell(
+      currentRoute: AppRoutes.dashboard,
+      title: _tabTitles[_currentIndex],
+      showBottomNav: false,
+      body: Scaffold(
+        backgroundColor: AppColors.background,
+        body: IndexedStack(
+          index: _currentIndex,
+          children: [
+            _HomeTab(
+              isOnline: _isOnline,
+              onToggle: _toggleOnline,
+              toggling: _locationTogglingInProgress,
+            ),
+            _AppointmentsTab(),
+            _EarningsTab(),
+            const _ProfileTab(),
+          ],
+        ),
+        bottomNavigationBar: _buildBottomNav(),
       ),
-      bottomNavigationBar: _buildBottomNav(),
     );
   }
 
@@ -365,16 +380,16 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
   @override
   Widget build(BuildContext context) {
     final uid = DoctorAuthService.currentUid;
-    final unreadCount = ref.watch(unreadCountProvider);
 
     return CustomScrollView(
       slivers: [
-        SliverAppBar(
-          floating: true,
-          backgroundColor: Colors.white,
-          elevation: 0,
-          automaticallyImplyLeading: false,
-          title: uid == null
+        // The doctor's name/photo/verification badge and the notification
+        // bell now live in SharedAppShell's top app bar (see DashboardScreen
+        // .build()) — this sliver only carries the specialty/verification
+        // line that's specific to the Home tab's content, not app-level
+        // chrome, so nothing here duplicates the shell.
+        SliverToBoxAdapter(
+          child: uid == null
               ? const SizedBox()
               : StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
                   stream: DoctorAuthService.profileStream(uid),
@@ -384,42 +399,30 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                     final specialty = data?['specialty'] as String? ?? 'General Physician';
                     final photoUrl = data?['photoUrl'] as String?;
                     final isVerified = data?['isVerified'] as bool? ?? false;
-                    return Row(children: [
-                      _DoctorAvatar(photoUrl: photoUrl, size: 40, iconSize: 22),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          Text(name, style: AppTextStyles.labelLarge),
-                          Text(
-                            isVerified ? '$specialty • MCI Verified ✓' : specialty,
-                            style: AppTextStyles.caption.copyWith(
-                              color: isVerified ? AppColors.success : AppColors.textSecondary,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ]),
-                      ),
-                      Stack(children: [
-                        IconButton(
-                          icon: const Icon(Icons.notifications_outlined, color: AppColors.textPrimary),
-                          onPressed: () => context.push(AppRoutes.notifications),
+                    return Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                      child: Row(children: [
+                        SharedProfileAvatar(
+                          name: name,
+                          photoUrl: photoUrl,
+                          size: 40,
+                          isVerified: isVerified,
                         ),
-                        if (unreadCount > 0)
-                          Positioned(
-                            right: 8, top: 8,
-                            child: Container(
-                              width: 16, height: 16,
-                              decoration: const BoxDecoration(color: AppColors.error, shape: BoxShape.circle),
-                              child: Center(
-                                child: Text(
-                                  unreadCount > 9 ? '9+' : '$unreadCount',
-                                  style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w800),
-                                ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Text(name, style: AppTextStyles.labelLarge),
+                            Text(
+                              isVerified ? '$specialty • MCI Verified ✓' : specialty,
+                              style: AppTextStyles.caption.copyWith(
+                                color: isVerified ? AppColors.success : AppColors.textSecondary,
                               ),
+                              overflow: TextOverflow.ellipsis,
                             ),
-                          ),
+                          ]),
+                        ),
                       ]),
-                    ]);
+                    );
                   },
                 ),
         ),
@@ -510,6 +513,13 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                 ),
               ),
 
+              // Wallet summary (reads the same appointments.fee aggregation
+              // as the Earnings tab — see shared_core/wallet/wallet_repository.dart)
+              SharedWalletSummaryCard(
+                onTap: () => context.push(AppRoutes.earnings),
+              ),
+              const SizedBox(height: 20),
+
               // Real-time stats
               _RealStatsRow(uid: uid),
               const SizedBox(height: 20),
@@ -546,7 +556,7 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                             Text('$count Consultation Request${count > 1 ? 's' : ''}!',
                                 style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, color: AppColors.primary)),
-                            Text('Tap to view and accept', style: AppTextStyles.bodySmall),
+                            const Text('Tap to view and accept', style: AppTextStyles.bodySmall),
                           ])),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -561,8 +571,8 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
               const SizedBox(height: 20),
 
               // Upcoming appointments
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16),
                 child: Text('Upcoming Appointments', style: AppTextStyles.h4),
               ),
               const SizedBox(height: 10),
@@ -781,7 +791,7 @@ class _FeedbackSummaryCard extends StatelessWidget {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text('Patient Feedback', style: AppTextStyles.labelLarge),
+                    const Text('Patient Feedback', style: AppTextStyles.labelLarge),
                     if (avg != null)
                       Text(
                         'Avg rating: ${avg.toStringAsFixed(1)} ⭐  •  ${docs.length} recent',
@@ -894,7 +904,7 @@ class _ReviewsSummaryCard extends StatelessWidget {
                       child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                        Text('Patient Reviews',
+                        const Text('Patient Reviews',
                             style: AppTextStyles.labelLarge),
                         avg != null && total > 0
                             ? Text(
@@ -996,11 +1006,11 @@ class _RealStatsRow extends StatelessWidget {
       return Padding(
         padding: EdgeInsets.symmetric(horizontal: R.p(context, 16)),
         child: Row(children: [
-          _StatCard('Today\'s Earnings', '₹0', Icons.currency_rupee_rounded, const Color(0xFF1565C0)),
+          const _StatCard('Today\'s Earnings', '₹0', Icons.currency_rupee_rounded, Color(0xFF1565C0)),
           SizedBox(width: R.p(context, 10)),
-          _StatCard('Consultations', '0', Icons.video_call_rounded, AppColors.secondary),
+          const _StatCard('Consultations', '0', Icons.video_call_rounded, AppColors.secondary),
           SizedBox(width: R.p(context, 10)),
-          _StatCard('Rating', '–', Icons.star_rounded, const Color(0xFFF57F17)),
+          const _StatCard('Rating', '–', Icons.star_rounded, Color(0xFFF57F17)),
         ]),
       );
     }
@@ -1140,8 +1150,8 @@ class _DashboardSkeleton extends StatelessWidget {
           ),
           const SizedBox(height: 20),
           // Tab bar skeleton
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16),
             child: SkeletonBox(width: double.infinity, height: 44, radius: 14),
           ),
           const SizedBox(height: 16),
@@ -1237,7 +1247,7 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
               );
             }
             if (snap.hasError) {
-              return Scaffold(
+              return const Scaffold(
                 backgroundColor: AppColors.background,
                 body: AppErrorState(message: 'Failed to load appointments'),
               );
@@ -1470,7 +1480,7 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
 
             // ── Divider ──────────────────────────────────
             if (isUpcoming || isCompleted)
-              Divider(height: 1, thickness: 1, color: AppColors.divider),
+              const Divider(height: 1, thickness: 1, color: AppColors.divider),
 
             // ── Action buttons for upcoming ───────────────
             if (isUpcoming)
@@ -2111,7 +2121,7 @@ class _EarningsTab extends StatelessWidget {
               ]),
               const SizedBox(height: 20),
 
-              Text('Recent Transactions', style: AppTextStyles.h4),
+              const Text('Recent Transactions', style: AppTextStyles.h4),
               const SizedBox(height: 12),
 
               if (recentSlice.isEmpty)
@@ -2326,37 +2336,6 @@ class _ProfStat extends StatelessWidget {
 
 
 // ── Reusable doctor avatar widgets ────────────────────────
-
-/// Circular avatar for use on white/light backgrounds (home tab app bar).
-class _DoctorAvatar extends StatelessWidget {
-  final String? photoUrl;
-  final double size;
-  final double iconSize;
-  const _DoctorAvatar({this.photoUrl, required this.size, required this.iconSize});
-
-  @override
-  Widget build(BuildContext context) {
-    final hasPhoto = photoUrl != null && photoUrl!.isNotEmpty;
-    if (hasPhoto) {
-      return ClipOval(
-        child: CachedNetworkImage(
-          imageUrl: photoUrl!,
-          width: size, height: size,
-          fit: BoxFit.cover,
-          placeholder: (_, __) => _fallback(),
-          errorWidget: (_, __, ___) => _fallback(),
-        ),
-      );
-    }
-    return _fallback();
-  }
-
-  Widget _fallback() => Container(
-        width: size, height: size,
-        decoration: const BoxDecoration(gradient: AppColors.primaryGradient, shape: BoxShape.circle),
-        child: Icon(Icons.person_rounded, color: Colors.white, size: iconSize),
-      );
-}
 
 /// Avatar for use on a gradient card — uses semi-transparent white background.
 class _DoctorAvatarOnGradient extends StatelessWidget {

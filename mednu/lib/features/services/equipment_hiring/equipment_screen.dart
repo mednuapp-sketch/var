@@ -334,6 +334,7 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen> with SingleTi
           child: imageUrl.isNotEmpty
               ? Image.network(
                   imageUrl, width: 46, height: 46, fit: BoxFit.cover,
+                  cacheWidth: 138, cacheHeight: 138,
                   errorBuilder: (_, __, ___) => Container(
                     width: 46, height: 46,
                     decoration: BoxDecoration(color: color.withValues(alpha:0.1), borderRadius: BorderRadius.circular(12)),

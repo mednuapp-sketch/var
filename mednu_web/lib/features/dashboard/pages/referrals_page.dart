@@ -6,7 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/responsive.dart';
 
-final String _uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+String get _uid => FirebaseAuth.instance.currentUser?.uid ?? '';
 
 class ReferralsPage extends StatelessWidget {
   const ReferralsPage({super.key});
@@ -248,7 +248,7 @@ class _ReferralCard extends StatelessWidget {
                 ),
                 child: Center(
                   child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(Icons.share_rounded, color: AppColors.primary, size: 16),
+                    const Icon(Icons.share_rounded, color: AppColors.primary, size: 16),
                     const SizedBox(width: 8),
                     Text('Share Link',
                         style: GoogleFonts.poppins(
@@ -369,7 +369,7 @@ class _HistoryRow extends StatelessWidget {
         Container(
           width: 44,
           height: 44,
-          decoration: BoxDecoration(gradient: AppColors.primaryGradient, shape: BoxShape.circle),
+          decoration: const BoxDecoration(gradient: AppColors.primaryGradient, shape: BoxShape.circle),
           child: Center(
             child: Text(avatar,
                 style: GoogleFonts.poppins(

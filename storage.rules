@@ -24,6 +24,37 @@ service firebase.storage {
              request.resource.contentType.matches('application/pdf');
     }
 
+    // Reads the diagnostic_bookings doc so lab-report access can be scoped
+    // to the exact patient/lab pair for that booking (the uploader and the
+    // reader are different accounts here, unlike the uid-keyed paths below).
+    function diagnosticBooking(bookingId) {
+      return firestore.get(/databases/(default)/documents/diagnostic_bookings/$(bookingId)).data;
+    }
+
+    // Same pattern for pharmacy orders: the pharmacy's own manual-attach
+    // fallback (a photo of the prescription it verified against, e.g. for
+    // a phone-in order) — access is scoped via the pharmacy_orders doc
+    // rather than a uid-keyed path. Separate from the patient-facing
+    // `order_prescriptions` path below, which is the primary flow.
+    function pharmacyOrder(orderId) {
+      return firestore.get(/databases/(default)/documents/pharmacy_orders/$(orderId)).data;
+    }
+
+    // Same pattern again for caregiver visit-progress photos: the writer
+    // (the assigned caregiver) and the readers (that caregiver plus the
+    // patient) are different accounts, so access is scoped via the
+    // caregiver_visits doc rather than a uid-keyed path.
+    function visit(visitId) {
+      return firestore.get(/databases/(default)/documents/caregiver_visits/$(visitId)).data;
+    }
+
+    // Reads the `orders` doc directly so the patient's own prescription
+    // upload can be scoped without needing a pharmacy_orders doc to exist
+    // yet (it may not, if the order hasn't been claimed).
+    function order(orderId) {
+      return firestore.get(/databases/(default)/documents/orders/$(orderId)).data;
+    }
+
     // ── Patient profile photos: users/{uid}/profile.jpg ─────────────────────
     // Public read so the permanent token-free URL never expires.
     match /users/{uid}/{allPaths=**} {
@@ -43,11 +74,24 @@ service firebase.storage {
     }
 
     // ── Doctor verification docs + signature: doctors/{uid}/docs/... etc. ────
+    // Storage grants are a UNION across matching rules, so the base rule here
+    // must be the restrictive one: licence/registration scans under
+    // doctors/{uid}/docs/ are private to the doctor and admin. Previously this
+    // was `if isAuth()`, letting any patient or partner account read any
+    // doctor's uploaded identity documents.
     match /doctors/{uid}/{allPaths=**} {
-      allow read: if isAuth();
+      allow read: if isAuth() && (isOwner(uid) || isAdmin());
       allow write: if isOwner(uid)
                    && request.resource.size < 10 * 1024 * 1024
                    && isDocument();
+    }
+
+    // The handwritten signature is re-broadened deliberately: patients render
+    // it on issued prescriptions (`doctorSignatureUrl`, see
+    // prescription_viewer_screen.dart), so it stays readable to any signed-in
+    // account — unlike the verification documents above.
+    match /doctors/{uid}/signature.png {
+      allow read: if isAuth();
     }
 
     // ── Lab reports uploaded by patients: reports/{uid}/... ─────────────────
@@ -74,13 +118,111 @@ service firebase.storage {
                    && isDocument();
     }
 
+    // ── Lab-uploaded diagnostic reports: lab_reports/{bookingId}/... ─────────
+    // Keyed by bookingId (not uid) since the writer (lab) and the reader
+    // (patient) are different accounts for the same file.
+    match /lab_reports/{bookingId}/{allPaths=**} {
+      allow read: if isAuth() && (
+        diagnosticBooking(bookingId).patientId == request.auth.uid ||
+        diagnosticBooking(bookingId).labId == request.auth.uid ||
+        isAdmin()
+      );
+      allow write: if isAuth()
+                   && diagnosticBooking(bookingId).labId == request.auth.uid
+                   && request.resource.size < 15 * 1024 * 1024
+                   && isDocument();
+    }
+
+    // ── Pharmacy-uploaded prescription photos: pharmacy_prescriptions/{orderId}/... ──
+    match /pharmacy_prescriptions/{orderId}/{allPaths=**} {
+      allow read: if isAuth() && (
+        pharmacyOrder(orderId).patientId == request.auth.uid ||
+        pharmacyOrder(orderId).pharmacyId == request.auth.uid ||
+        isAdmin()
+      );
+      allow write: if isAuth()
+                   && pharmacyOrder(orderId).pharmacyId == request.auth.uid
+                   && request.resource.size < 10 * 1024 * 1024
+                   && isDocument();
+    }
+
+    // ── Patient-uploaded order prescriptions: order_prescriptions/{orderId}/... ──
+    // The primary prescription-upload path (Patient Prescription Upload
+    // feature). Keyed by orderId, not uid, since the reader set includes
+    // the assigned pharmacy — a different account from the uploader.
+    match /order_prescriptions/{orderId}/{allPaths=**} {
+      allow read: if isAuth() && (
+        order(orderId).patientId == request.auth.uid ||
+        pharmacyOrder(orderId).pharmacyId == request.auth.uid ||
+        isAdmin()
+      );
+      allow write: if isAuth()
+                   && order(orderId).patientId == request.auth.uid
+                   && request.resource.size < 20 * 1024 * 1024
+                   && isDocument();
+      allow delete: if isAuth() && order(orderId).patientId == request.auth.uid;
+    }
+
+    // ── Caregiver visit photos: visit_photos/{visitId}/... ───────────────────
+    // Uploaded by the assigned caregiver; the resulting download URL is
+    // appended to the visit's `photoUrls` array (see
+    // caregiver_visit_service.dart). Keyed by visitId, not uid, since the
+    // patient reads the same files.
+    match /visit_photos/{visitId}/{allPaths=**} {
+      allow read: if isAuth() && (
+        visit(visitId).patientId == request.auth.uid ||
+        visit(visitId).caregiverId == request.auth.uid ||
+        isAdmin()
+      );
+      allow write: if isAuth()
+                   && visit(visitId).caregiverId == request.auth.uid
+                   && request.resource.size < 10 * 1024 * 1024
+                   && isImage();
+    }
+
+    // ── Partner verification documents: {role}_documents/{uid}/{docType}.{jpg|pdf} ──
+    // Uploaded by Lab / Pharmacy / Ambulance / Caregiver partners from the
+    // partner app and reviewed by admin. Deliberately stricter than the
+    // `doctors/{uid}` block above: these are private, so read is limited to
+    // the owner and admin rather than any signed-in account. 20 MB matches
+    // the client-side check in `PartnerDocumentService`.
+    match /lab_documents/{uid}/{allPaths=**} {
+      allow read:  if isAuth() && (isOwner(uid) || isAdmin());
+      allow write: if isOwner(uid)
+                   && request.resource.size < 20 * 1024 * 1024
+                   && isDocument();
+    }
+
+    match /pharmacy_documents/{uid}/{allPaths=**} {
+      allow read:  if isAuth() && (isOwner(uid) || isAdmin());
+      allow write: if isOwner(uid)
+                   && request.resource.size < 20 * 1024 * 1024
+                   && isDocument();
+    }
+
+    match /ambulance_documents/{uid}/{allPaths=**} {
+      allow read:  if isAuth() && (isOwner(uid) || isAdmin());
+      allow write: if isOwner(uid)
+                   && request.resource.size < 20 * 1024 * 1024
+                   && isDocument();
+    }
+
+    match /caregiver_documents/{uid}/{allPaths=**} {
+      allow read:  if isAuth() && (isOwner(uid) || isAdmin());
+      allow write: if isOwner(uid)
+                   && request.resource.size < 20 * 1024 * 1024
+                   && isDocument();
+    }
+
     // ── Promotional banners ───────────────────────────────────────────────────
-    // Any authenticated user can upload the image file. The Firestore `banners`
-    // collection (allow write: if isAdmin()) is the real security gate — an
-    // uploaded image with no Firestore document is harmless orphaned storage.
+    // Publicly readable (shown on the patient home screen) and admin-write-only:
+    // the admin panel is the sole uploader. `isAuth()` was not sufficient here —
+    // banner object paths are discoverable from the public download URLs, so any
+    // signed-in user could overwrite a live banner image in place and deface the
+    // home screen while the admin-gated Firestore `banners` doc stayed valid.
     match /banners/{allPaths=**} {
       allow read:  if true;
-      allow write: if isAuth() && request.resource.size < 5 * 1024 * 1024;
+      allow write: if isAdmin() && request.resource.size < 5 * 1024 * 1024;
     }
   }
 }

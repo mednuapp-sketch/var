@@ -187,7 +187,7 @@ class _SpecializationChangeRequestScreenState
               const Text('Add Document',
                   style: TextStyle(fontFamily: 'Poppins', fontSize: 16, fontWeight: FontWeight.w700)),
               const SizedBox(height: 6),
-              Text('Upload certificates, degrees or license documents',
+              const Text('Upload certificates, degrees or license documents',
                   style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: AppColors.textSecondary),
                   textAlign: TextAlign.center),
               const SizedBox(height: 20),
@@ -397,7 +397,7 @@ class _SpecializationChangeRequestScreenState
                       style: const TextStyle(fontFamily: 'Poppins', fontSize: 13),
                       maxLines: 1, overflow: TextOverflow.ellipsis)),
                   if (docUrl.isNotEmpty)
-                    Text('Uploaded', style: TextStyle(
+                    const Text('Uploaded', style: TextStyle(
                         fontFamily: 'Poppins', fontSize: 11,
                         color: AppColors.success, fontWeight: FontWeight.w600)),
                 ]),
@@ -521,14 +521,14 @@ class _SpecializationChangeRequestScreenState
                   color: AppColors.success.withValues(alpha:0.12),
                   borderRadius: BorderRadius.circular(6),
                 ),
-                child: Text('Active',
+                child: const Text('Active',
                     style: TextStyle(fontFamily: 'Poppins', fontSize: 10,
                         fontWeight: FontWeight.w700, color: AppColors.success)),
               ),
             ]),
           ),
           const SizedBox(height: 4),
-          Text('This will remain active until your request is approved.',
+          const Text('This will remain active until your request is approved.',
               style: TextStyle(fontFamily: 'Poppins', fontSize: 11, color: AppColors.textHint)),
         ]),
         const SizedBox(height: 12),
@@ -536,7 +536,7 @@ class _SpecializationChangeRequestScreenState
         // Requested specialization
         _FormCard('Requested Specialization', [
           DropdownButtonFormField<String>(
-            value: _requestedSpec,
+            initialValue: _requestedSpec,
             isExpanded: true,
             decoration: const InputDecoration(),
             items: _specializations
@@ -553,7 +553,7 @@ class _SpecializationChangeRequestScreenState
 
         // Documents section
         _FormCard('Supporting Documents', [
-          Text('Upload your medical certificates, degree proof, or specialization license.',
+          const Text('Upload your medical certificates, degree proof, or specialization license.',
               style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: AppColors.textSecondary)),
           const SizedBox(height: 14),
 
@@ -584,11 +584,11 @@ class _SpecializationChangeRequestScreenState
                 borderRadius: BorderRadius.circular(12),
                 color: AppColors.primary.withValues(alpha:0.04),
               ),
-              child: Row(
+              child: const Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(Icons.add_circle_outline_rounded, color: AppColors.primary, size: 20),
-                  const SizedBox(width: 8),
+                  SizedBox(width: 8),
                   Text('Add Document',
                       style: TextStyle(fontFamily: 'Poppins', fontSize: 13,
                           fontWeight: FontWeight.w600, color: AppColors.primary)),
@@ -599,7 +599,7 @@ class _SpecializationChangeRequestScreenState
           const SizedBox(height: 10),
 
           // Accepted formats hint
-          Wrap(spacing: 6, children: [
+          const Wrap(spacing: 6, children: [
             _FormatChip('PDF'),
             _FormatChip('JPG'),
             _FormatChip('PNG'),
@@ -618,9 +618,9 @@ class _SpecializationChangeRequestScreenState
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(children: [
+              const Row(children: [
                 Icon(Icons.checklist_rounded, size: 16, color: AppColors.warning),
-                const SizedBox(width: 8),
+                SizedBox(width: 8),
                 Text('Recommended Documents',
                     style: TextStyle(fontFamily: 'Poppins', fontSize: 12,
                         fontWeight: FontWeight.w700, color: AppColors.warning)),
@@ -635,7 +635,7 @@ class _SpecializationChangeRequestScreenState
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('• ', style: TextStyle(color: AppColors.warning,
+                        const Text('• ', style: TextStyle(color: AppColors.warning,
                             fontFamily: 'Poppins', fontSize: 12)),
                         Expanded(child: Text(item,
                             style: const TextStyle(fontFamily: 'Poppins', fontSize: 12,
@@ -813,7 +813,7 @@ class _DocumentTile extends StatelessWidget {
                 value: progress,
                 minHeight: 3,
                 backgroundColor: AppColors.divider,
-                valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+                valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
               ),
             ),
             const SizedBox(height: 2),

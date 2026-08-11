@@ -96,10 +96,18 @@ class MyServicesService {
 
   // ── Individual streams ──────────────────────────────────────────────────────
 
+  /// Cap per-collection history. Without this each of these streams pulls a
+  /// patient's ENTIRE lifetime history and keeps it live for the whole app
+  /// session (allBookingsStream is subscribed from the root widget), which
+  /// grows without bound over years of use.
+  static const int _historyLimit = 50;
+
   static Stream<List<UnifiedBooking>> _appointmentsStream(String uid) {
     return _db
         .collection('appointments')
         .where('patientId', isEqualTo: uid)
+        .orderBy('createdAt', descending: true)
+        .limit(_historyLimit)
         .snapshots()
         .handleError((_) {})
         .map((s) => s.docs
@@ -111,6 +119,8 @@ class MyServicesService {
     return _db
         .collection('consultations')
         .where('patientId', isEqualTo: uid)
+        .orderBy('createdAt', descending: true)
+        .limit(_historyLimit)
         .snapshots()
         .handleError((_) {})
         .map((s) => s.docs
@@ -122,6 +132,8 @@ class MyServicesService {
     return _db
         .collection('service_requests')
         .where('patientId', isEqualTo: uid)
+        .orderBy('createdAt', descending: true)
+        .limit(_historyLimit)
         .snapshots()
         .handleError((_) {})
         .map((s) => s.docs
@@ -133,6 +145,8 @@ class MyServicesService {
     return _db
         .collection('nutrition_appointments')
         .where('userId', isEqualTo: uid)
+        .orderBy('createdAt', descending: true)
+        .limit(_historyLimit)
         .snapshots()
         .handleError((_) {})
         .map((s) => s.docs

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
@@ -10,6 +11,7 @@ import '../../../core/router/app_router.dart';
 import '../../../core/services/feedback_service.dart';
 import '../../../core/services/operation_logger.dart';
 import '../../../core/widgets/ux_widgets.dart';
+import '../../../shared_core/providers/role_providers.dart';
 import '../../auth/services/doctor_auth_service.dart';
 import '../../notifications/services/notification_service.dart';
 import '../../notifications/models/notification_model.dart';
@@ -184,7 +186,9 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
     _additionalNotesCtrl.dispose();
     _customInvestCtrl.dispose();
     _customFollowUpCtrl.dispose();
-    for (final m in _medicines) m.dispose();
+    for (final m in _medicines) {
+      m.dispose();
+    }
     super.dispose();
   }
 
@@ -344,6 +348,12 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
     if (!_validate()) return;
 
     setState(() => _saving = true);
+    // Block role switching while the prescription is being written/sent —
+    // mirrors the call-screen guards in incoming_request_screen.dart /
+    // doctor_video_call_screen.dart.
+    ProviderScope.containerOf(context, listen: false)
+        .read(criticalOperationInProgressProvider.notifier)
+        .state = true;
     FeedbackService.showLoading(context, 'Sending prescription...');
 
     try {
@@ -531,7 +541,12 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
         onRetry: _submitPrescription,
       );
     } finally {
-      if (mounted) setState(() => _saving = false);
+      if (mounted) {
+        setState(() => _saving = false);
+        ProviderScope.containerOf(context, listen: false)
+            .read(criticalOperationInProgressProvider.notifier)
+            .state = false;
+      }
     }
   }
 
@@ -665,7 +680,7 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
                     color: AppColors.warning, size: 40),
               ),
               const SizedBox(height: 20),
-              Text('Offline Prescription', style: AppTextStyles.h3),
+              const Text('Offline Prescription', style: AppTextStyles.h3),
               const SizedBox(height: 10),
               Text(
                 'You are writing a prescription outside of a live session. This will be saved as an offline prescription.',
@@ -697,7 +712,7 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
               GradientButton(
                 label: 'Confirm & Write Prescription',
                 icon: Icons.check_rounded,
-                colors: [AppColors.warning, const Color(0xFFE65100)],
+                colors: const [AppColors.warning, Color(0xFFE65100)],
                 onTap: () => setState(() => _offlineConfirmed = true),
               ),
               const SizedBox(height: 12),
@@ -733,7 +748,7 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
                   color: AppColors.error, size: 40),
             ),
             const SizedBox(height: 20),
-            Text('Prescription Locked', style: AppTextStyles.h3),
+            const Text('Prescription Locked', style: AppTextStyles.h3),
             const SizedBox(height: 10),
             Text(
               'A prescription can only be written after a completed consultation.',
@@ -775,13 +790,13 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
           const SizedBox(height: 20),
 
           // ── Section 1: Chief Complaints ───────────────────────
-          _SectionHeader(
+          const _SectionHeader(
             sectionNumber: '01',
             icon: Icons.sick_rounded,
             title: 'Chief Complaints',
             subtitle: 'Primary reason for visit',
             required: true,
-            color: const Color(0xFFE53935),
+            color: Color(0xFFE53935),
           ),
           const SizedBox(height: 10),
           _PremiumTextField(
@@ -792,12 +807,12 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
           const SizedBox(height: 20),
 
           // ── Section 2: Relevant History ───────────────────────
-          _SectionHeader(
+          const _SectionHeader(
             sectionNumber: '02',
             icon: Icons.history_edu_rounded,
             title: 'Relevant History',
             subtitle: 'Past illnesses, allergies, family history',
-            color: const Color(0xFF7B1FA2),
+            color: Color(0xFF7B1FA2),
           ),
           const SizedBox(height: 10),
           _PremiumTextField(
@@ -821,12 +836,12 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
           const SizedBox(height: 20),
 
           // ── Section 3: Examination / Vitals ───────────────────
-          _SectionHeader(
+          const _SectionHeader(
             sectionNumber: '03',
             icon: Icons.monitor_heart_rounded,
             title: 'Examination / Lab Findings',
             subtitle: 'Vitals, physical examination, lab results',
-            color: const Color(0xFF1565C0),
+            color: Color(0xFF1565C0),
           ),
           const SizedBox(height: 10),
           _PremiumTextField(
@@ -838,12 +853,12 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
           const SizedBox(height: 20),
 
           // ── Section 4: Investigations ─────────────────────────
-          _SectionHeader(
+          const _SectionHeader(
             sectionNumber: '04',
             icon: Icons.biotech_rounded,
             title: 'Suggested Investigations',
             subtitle: 'Lab tests and diagnostic procedures',
-            color: const Color(0xFF00838F),
+            color: Color(0xFF00838F),
           ),
           const SizedBox(height: 10),
           _InvestigationsPanel(
@@ -857,13 +872,13 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
           const SizedBox(height: 20),
 
           // ── Section 5: Diagnosis ──────────────────────────────
-          _SectionHeader(
+          const _SectionHeader(
             sectionNumber: '05',
             icon: Icons.medical_information_rounded,
             title: 'Diagnosis / Provisional Diagnosis',
             subtitle: 'Clinical findings and final diagnosis',
             required: true,
-            color: const Color(0xFF2E7D32),
+            color: Color(0xFF2E7D32),
           ),
           const SizedBox(height: 10),
           _PremiumTextField(
@@ -877,7 +892,7 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
           // ── Section 6: Rx (Medicines) ─────────────────────────
           Row(
             children: [
-              _SectionHeader(
+              const _SectionHeader(
                 sectionNumber: '06',
                 icon: Icons.medication_rounded,
                 title: 'Rx — Medicines',
@@ -959,12 +974,12 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
           const SizedBox(height: 20),
 
           // ── Section 7: Special Instructions ──────────────────
-          _SectionHeader(
+          const _SectionHeader(
             sectionNumber: '07',
             icon: Icons.lightbulb_rounded,
             title: 'Special Instructions',
             subtitle: 'Diet, rest, lifestyle recommendations',
-            color: const Color(0xFFF57F17),
+            color: Color(0xFFF57F17),
           ),
           const SizedBox(height: 10),
           _PremiumTextField(
@@ -2099,7 +2114,7 @@ class _FollowUpSection extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Follow-up Required',
+                const Text('Follow-up Required',
                     style: AppTextStyles.labelLarge),
                 Text('Schedule patient return visit',
                     style: AppTextStyles.caption
@@ -2275,7 +2290,7 @@ class _SuccessDialogState extends State<_SuccessDialog>
           ),
         ),
         const SizedBox(height: 20),
-        Text('Prescription Sent!', style: AppTextStyles.h3),
+        const Text('Prescription Sent!', style: AppTextStyles.h3),
         const SizedBox(height: 8),
         Text(
           '${widget.patientName} has been notified via the MedNU app.\nRx ID: ${widget.rxId}',

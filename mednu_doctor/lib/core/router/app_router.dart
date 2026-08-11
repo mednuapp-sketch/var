@@ -8,6 +8,9 @@ import '../../features/auth/screens/doctor_login_screen.dart';
 import '../../features/auth/screens/doctor_register_screen.dart';
 import '../../features/auth/screens/doctor_otp_screen.dart';
 import '../../features/auth/screens/verification_pending_screen.dart';
+import '../../features/auth/screens/partner_role_select_screen.dart';
+import '../../features/auth/screens/partner_role_register_screen.dart';
+import '../../shared_core/models/app_role.dart';
 import '../../features/dashboard/screens/dashboard_screen.dart';
 import '../../features/consultations/screens/incoming_request_screen.dart';
 import '../../features/consultations/screens/doctor_video_call_screen.dart';
@@ -30,6 +33,43 @@ import '../../features/reviews/screens/doctor_reviews_screen.dart';
 import '../../features/help/screens/live_chat_screen.dart';
 import '../../features/help/screens/report_problem_screen.dart';
 import '../../features/consultations/screens/doctor_outgoing_call_screen.dart';
+import '../../features/lab/screens/lab_onboarding_screen.dart';
+import '../../features/lab/screens/lab_dashboard_screen.dart';
+import '../../features/lab/screens/lab_bookings_screen.dart';
+import '../../features/lab/screens/lab_booking_detail_screen.dart';
+import '../../features/lab/screens/lab_sample_collection_screen.dart';
+import '../../features/lab/screens/lab_reports_screen.dart';
+import '../../features/lab/screens/lab_earnings_screen.dart';
+import '../../features/lab/screens/lab_profile_screen.dart';
+import '../../features/pharmacy/screens/pharmacy_onboarding_screen.dart';
+import '../../features/pharmacy/screens/pharmacy_dashboard_screen.dart';
+import '../../features/pharmacy/screens/pharmacy_orders_screen.dart';
+import '../../features/pharmacy/screens/pharmacy_order_detail_screen.dart';
+import '../../features/pharmacy/screens/pharmacy_prescription_verification_screen.dart';
+import '../../features/pharmacy/screens/pharmacy_inventory_screen.dart';
+import '../../features/pharmacy/screens/pharmacy_delivery_tracking_screen.dart';
+import '../../features/pharmacy/screens/pharmacy_earnings_screen.dart';
+import '../../features/pharmacy/screens/pharmacy_profile_screen.dart';
+import '../../features/pharmacy/screens/pharmacy_settings_screen.dart';
+import '../../features/ambulance/screens/ambulance_dashboard_screen.dart';
+import '../../features/ambulance/screens/ambulance_incoming_requests_screen.dart';
+import '../../features/ambulance/screens/ambulance_request_detail_screen.dart';
+import '../../features/ambulance/screens/ambulance_live_tracking_screen.dart';
+import '../../features/ambulance/screens/ambulance_navigation_screen.dart';
+import '../../features/ambulance/screens/ambulance_trip_history_screen.dart';
+import '../../features/ambulance/screens/ambulance_earnings_screen.dart';
+import '../../features/ambulance/screens/ambulance_vehicle_profile_screen.dart';
+import '../../features/ambulance/screens/ambulance_settings_screen.dart';
+import '../../features/caregiver/screens/caregiver_dashboard_screen.dart';
+import '../../features/caregiver/screens/caregiver_assigned_visits_screen.dart';
+import '../../features/caregiver/screens/caregiver_visit_detail_screen.dart';
+import '../../features/caregiver/screens/caregiver_task_checklist_screen.dart';
+import '../../features/caregiver/screens/caregiver_notes_screen.dart';
+import '../../features/caregiver/screens/caregiver_upload_photos_screen.dart';
+import '../../features/caregiver/screens/caregiver_completion_summary_screen.dart';
+import '../../features/caregiver/screens/caregiver_earnings_screen.dart';
+import '../../features/caregiver/screens/caregiver_profile_screen.dart';
+import '../../features/caregiver/screens/caregiver_settings_screen.dart';
 
 /// Bridges Firebase's auth stream into a [Listenable] so GoRouter's
 /// [refreshListenable] re-evaluates the redirect on every auth state change.
@@ -52,6 +92,12 @@ class AppRoutes {
   static const login               = '/';
   static const register            = '/register';
   static const otp                 = '/otp';
+  /// First registration step for a brand-new account: pick which partner
+  /// service this account is signing up as. Doctor continues to [register].
+  static const partnerRoleSelect   = '/partner-role-select';
+  /// Generic Lab/Pharmacy/Ambulance/Caregiver registration form, given the
+  /// selected `AppRole` via `extra`.
+  static const partnerRoleRegister = '/partner-role-register';
   static const verificationPending = '/verification-pending';
   static const dashboard           = '/dashboard';
   static const incomingRequest     = '/incoming-request';
@@ -75,6 +121,51 @@ class AppRoutes {
   static const specChangeRequest        = '/spec-change-request';
   static const reviews                  = '/reviews';
   static const outgoingCall             = '/outgoing-call';
+
+  // ── Lab & Diagnostics partner module ─────────────────────────────────────
+  static const labOnboarding       = '/lab/onboarding';
+  static const labDashboard        = '/lab/dashboard';
+  static const labBookings         = '/lab/bookings';
+  static const labBookingDetail    = '/lab/booking-detail';
+  static const labSampleCollection = '/lab/sample-collection';
+  static const labReports          = '/lab/reports';
+  static const labEarnings         = '/lab/earnings';
+  static const labProfile          = '/lab/profile';
+
+  // ── Pharmacy & Medical Equipment partner module ──────────────────────────
+  static const pharmacyOnboarding               = '/pharmacy/onboarding';
+  static const pharmacyDashboard                = '/pharmacy/dashboard';
+  static const pharmacyOrders                   = '/pharmacy/orders';
+  static const pharmacyOrderDetail               = '/pharmacy/order-detail';
+  static const pharmacyPrescriptionVerification = '/pharmacy/prescription-verification';
+  static const pharmacyInventory                = '/pharmacy/inventory';
+  static const pharmacyDeliveryTracking         = '/pharmacy/delivery-tracking';
+  static const pharmacyEarnings                 = '/pharmacy/earnings';
+  static const pharmacyProfile                  = '/pharmacy/profile';
+  static const pharmacySettings                 = '/pharmacy/settings';
+
+  // ── Ambulance partner module (UI-only, mock data) ────────────────────────
+  static const ambulanceDashboard         = '/ambulance/dashboard';
+  static const ambulanceIncomingRequests  = '/ambulance/incoming-requests';
+  static const ambulanceRequestDetail     = '/ambulance/request-detail';
+  static const ambulanceLiveTracking      = '/ambulance/live-tracking';
+  static const ambulanceNavigation        = '/ambulance/navigation';
+  static const ambulanceTripHistory       = '/ambulance/trip-history';
+  static const ambulanceEarnings          = '/ambulance/earnings';
+  static const ambulanceVehicleProfile    = '/ambulance/vehicle-profile';
+  static const ambulanceSettings          = '/ambulance/settings';
+
+  // ── Caregiver / Care Assistant partner module (UI-only, mock data) ───────
+  static const caregiverDashboard         = '/caregiver/dashboard';
+  static const caregiverAssignedVisits    = '/caregiver/assigned-visits';
+  static const caregiverVisitDetail       = '/caregiver/visit-detail';
+  static const caregiverTaskChecklist     = '/caregiver/task-checklist';
+  static const caregiverNotes             = '/caregiver/notes';
+  static const caregiverUploadPhotos      = '/caregiver/upload-photos';
+  static const caregiverCompletionSummary = '/caregiver/completion-summary';
+  static const caregiverEarnings          = '/caregiver/earnings';
+  static const caregiverProfile           = '/caregiver/profile';
+  static const caregiverSettings          = '/caregiver/settings';
 }
 
 // Routes that unauthenticated users may visit.
@@ -112,6 +203,19 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             phone: extra?['phone'] as String? ?? '',
             isLogin: extra?['isLogin'] as bool? ?? true,
           );
+        },
+      ),
+      GoRoute(path: AppRoutes.partnerRoleSelect,   builder: (c, s) => const PartnerRoleSelectScreen()),
+      GoRoute(
+        path: AppRoutes.partnerRoleRegister,
+        builder: (c, s) {
+          // Falls back to Doctor registration if the role is missing —
+          // this route is only ever reached with a non-Doctor role.
+          final role = s.extra as AppRole?;
+          if (role == null || role == AppRole.doctor || role == AppRole.admin) {
+            return const DoctorRegisterScreen();
+          }
+          return PartnerRoleRegisterScreen(role: role);
         },
       ),
       GoRoute(path: AppRoutes.verificationPending, builder: (c, s) => const VerificationPendingScreen()),
@@ -198,6 +302,108 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           );
         },
       ),
+
+      // ── Lab & Diagnostics partner module ─────────────────────────────────
+      GoRoute(path: AppRoutes.labOnboarding,       builder: (c, s) => const LabOnboardingScreen()),
+      GoRoute(path: AppRoutes.labDashboard,        builder: (c, s) => const LabDashboardScreen()),
+      GoRoute(path: AppRoutes.labBookings,         builder: (c, s) => const LabBookingsScreen()),
+      GoRoute(
+        path: AppRoutes.labBookingDetail,
+        builder: (c, s) {
+          final extra = s.extra as Map<String, dynamic>?;
+          return LabBookingDetailScreen(bookingId: extra?['bookingId'] as String? ?? '');
+        },
+      ),
+      GoRoute(path: AppRoutes.labSampleCollection, builder: (c, s) => const LabSampleCollectionScreen()),
+      GoRoute(path: AppRoutes.labReports,          builder: (c, s) => const LabReportsScreen()),
+      GoRoute(path: AppRoutes.labEarnings,         builder: (c, s) => const LabEarningsScreen()),
+      GoRoute(path: AppRoutes.labProfile,          builder: (c, s) => const LabProfileScreen()),
+
+      // ── Pharmacy & Medical Equipment partner module ──────────────────────
+      GoRoute(path: AppRoutes.pharmacyOnboarding, builder: (c, s) => const PharmacyOnboardingScreen()),
+      GoRoute(path: AppRoutes.pharmacyDashboard,  builder: (c, s) => const PharmacyDashboardScreen()),
+      GoRoute(path: AppRoutes.pharmacyOrders,     builder: (c, s) => const PharmacyOrdersScreen()),
+      GoRoute(
+        path: AppRoutes.pharmacyOrderDetail,
+        builder: (c, s) {
+          final extra = s.extra as Map<String, dynamic>?;
+          return PharmacyOrderDetailScreen(orderId: extra?['orderId'] as String? ?? '');
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.pharmacyPrescriptionVerification,
+        builder: (c, s) => const PharmacyPrescriptionVerificationScreen(),
+      ),
+      GoRoute(path: AppRoutes.pharmacyInventory,        builder: (c, s) => const PharmacyInventoryScreen()),
+      GoRoute(path: AppRoutes.pharmacyDeliveryTracking, builder: (c, s) => const PharmacyDeliveryTrackingScreen()),
+      GoRoute(path: AppRoutes.pharmacyEarnings,         builder: (c, s) => const PharmacyEarningsScreen()),
+      GoRoute(path: AppRoutes.pharmacyProfile,          builder: (c, s) => const PharmacyProfileScreen()),
+      GoRoute(path: AppRoutes.pharmacySettings,         builder: (c, s) => const PharmacySettingsScreen()),
+
+      // ── Ambulance partner module (UI-only, mock data) ────────────────────
+      GoRoute(path: AppRoutes.ambulanceDashboard,        builder: (c, s) => const AmbulanceDashboardScreen()),
+      GoRoute(path: AppRoutes.ambulanceIncomingRequests, builder: (c, s) => const AmbulanceIncomingRequestsScreen()),
+      GoRoute(
+        path: AppRoutes.ambulanceRequestDetail,
+        builder: (c, s) {
+          final extra = s.extra as Map<String, dynamic>?;
+          return AmbulanceRequestDetailScreen(requestId: extra?['requestId'] as String? ?? '');
+        },
+      ),
+      GoRoute(path: AppRoutes.ambulanceLiveTracking, builder: (c, s) => const AmbulanceLiveTrackingScreen()),
+      GoRoute(
+        path: AppRoutes.ambulanceNavigation,
+        builder: (c, s) {
+          final extra = s.extra as Map<String, dynamic>?;
+          return AmbulanceNavigationScreen(requestId: extra?['requestId'] as String? ?? '');
+        },
+      ),
+      GoRoute(path: AppRoutes.ambulanceTripHistory,    builder: (c, s) => const AmbulanceTripHistoryScreen()),
+      GoRoute(path: AppRoutes.ambulanceEarnings,       builder: (c, s) => const AmbulanceEarningsScreen()),
+      GoRoute(path: AppRoutes.ambulanceVehicleProfile, builder: (c, s) => const AmbulanceVehicleProfileScreen()),
+      GoRoute(path: AppRoutes.ambulanceSettings,       builder: (c, s) => const AmbulanceSettingsScreen()),
+
+      // ── Caregiver / Care Assistant partner module (UI-only, mock data) ───
+      GoRoute(path: AppRoutes.caregiverDashboard,      builder: (c, s) => const CaregiverDashboardScreen()),
+      GoRoute(path: AppRoutes.caregiverAssignedVisits, builder: (c, s) => const CaregiverAssignedVisitsScreen()),
+      GoRoute(
+        path: AppRoutes.caregiverVisitDetail,
+        builder: (c, s) {
+          final extra = s.extra as Map<String, dynamic>?;
+          return CaregiverVisitDetailScreen(visitId: extra?['visitId'] as String? ?? '');
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.caregiverTaskChecklist,
+        builder: (c, s) {
+          final extra = s.extra as Map<String, dynamic>?;
+          return CaregiverTaskChecklistScreen(visitId: extra?['visitId'] as String? ?? '');
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.caregiverNotes,
+        builder: (c, s) {
+          final extra = s.extra as Map<String, dynamic>?;
+          return CaregiverNotesScreen(visitId: extra?['visitId'] as String? ?? '');
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.caregiverUploadPhotos,
+        builder: (c, s) {
+          final extra = s.extra as Map<String, dynamic>?;
+          return CaregiverUploadPhotosScreen(visitId: extra?['visitId'] as String? ?? '');
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.caregiverCompletionSummary,
+        builder: (c, s) {
+          final extra = s.extra as Map<String, dynamic>?;
+          return CaregiverCompletionSummaryScreen(visitId: extra?['visitId'] as String? ?? '');
+        },
+      ),
+      GoRoute(path: AppRoutes.caregiverEarnings, builder: (c, s) => const CaregiverEarningsScreen()),
+      GoRoute(path: AppRoutes.caregiverProfile,  builder: (c, s) => const CaregiverProfileScreen()),
+      GoRoute(path: AppRoutes.caregiverSettings, builder: (c, s) => const CaregiverSettingsScreen()),
     ],
   );
 });

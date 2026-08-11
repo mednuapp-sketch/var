@@ -38,7 +38,7 @@ class WhyMednuSection extends StatelessWidget {
           constraints: BoxConstraints(maxWidth: Responsive.maxContentWidth(context)),
           child: Column(
             children: [
-              SectionHeader(
+              const SectionHeader(
                 tag: 'Why MedNU',
                 title: 'Healthcare Reimagined\nFor You',
                 subtitle: 'We\'re not just an app. We\'re your complete healthcare partner.',
@@ -91,10 +91,10 @@ class _FeatureCardState extends State<_FeatureCard> {
         transform: Matrix4.translationValues(0, _hovered ? -4 : 0, 0),
         padding: EdgeInsets.all(isMobile ? 16 : 24),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(_hovered ? 0.1 : 0.06),
+          color: Colors.white.withValues(alpha: _hovered ? 0.1 : 0.06),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: _hovered ? AppColors.primary.withOpacity(0.4) : Colors.white.withOpacity(0.1),
+            color: _hovered ? AppColors.primary.withValues(alpha: 0.4) : Colors.white.withValues(alpha: 0.1),
           ),
         ),
         child: isMobile
@@ -129,7 +129,7 @@ class _EmojiBox extends StatelessWidget {
       height: 52,
       decoration: BoxDecoration(
         gradient: hovered ? AppColors.primaryGradient : null,
-        color: hovered ? null : Colors.white.withOpacity(0.1),
+        color: hovered ? null : Colors.white.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(14),
       ),
       child: Center(child: Text(emoji, style: const TextStyle(fontSize: 24))),

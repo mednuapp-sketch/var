@@ -285,7 +285,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
       padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
       children: [
         // Patient summary card
-        _SectionTitle('Patient Summary'),
+        const _SectionTitle('Patient Summary'),
         const SizedBox(height: 10),
         Container(
           padding: const EdgeInsets.all(16),
@@ -312,7 +312,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
 
         // Family members section
         if (familyList.isNotEmpty) ...[
-          _SectionTitle('Family Members'),
+          const _SectionTitle('Family Members'),
           const SizedBox(height: 10),
           ...familyList.map<Widget>((m) {
             final member = m as Map<String, dynamic>;
@@ -365,7 +365,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
         ],
 
         // Vitals section
-        _SectionTitle('Vitals'),
+        const _SectionTitle('Vitals'),
         const SizedBox(height: 10),
         Container(
           padding: const EdgeInsets.all(16),
@@ -453,7 +453,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
         return ListView(
           padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
           children: [
-            _SectionTitle('Consultation History'),
+            const _SectionTitle('Consultation History'),
             const SizedBox(height: 10),
             ...docs.map((doc) {
               final d = doc.data();
@@ -566,7 +566,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
         return ListView(
           padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
           children: [
-            _SectionTitle('Prescriptions Written'),
+            const _SectionTitle('Prescriptions Written'),
             const SizedBox(height: 10),
             ...docs.map((doc) {
               final d = doc.data();
