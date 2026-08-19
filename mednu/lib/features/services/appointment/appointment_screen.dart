@@ -164,7 +164,7 @@ class _AppointmentScreenState extends State<AppointmentScreen>
               final today = DateTime.now();
               final todayDate = DateTime(today.year, today.month, today.day);
 
-              bool _isDatePast(Map<String, dynamic> d) {
+              bool isDatePast(Map<String, dynamic> d) {
                 final dateStr = d['date'] as String? ?? '';
                 final apptDate = _parseApptDate(dateStr);
                 if (apptDate == null) return false;
@@ -174,14 +174,14 @@ class _AppointmentScreenState extends State<AppointmentScreen>
               // Upcoming: booked & date is today or future — sorted closest first
               final upcoming = docs
                   .where((d) =>
-                      d['status'] == 'booked' && !_isDatePast(d.data()))
+                      d['status'] == 'booked' && !isDatePast(d.data()))
                   .toList()
                 ..sort((a, b) => _apptSortKey(a.data()).compareTo(_apptSortKey(b.data())));
               // Past: completed OR booked but date already passed — newest first
               final past = docs
                   .where((d) =>
                       d['status'] == 'completed' ||
-                      (d['status'] == 'booked' && _isDatePast(d.data())))
+                      (d['status'] == 'booked' && isDatePast(d.data())))
                   .toList()
                 ..sort((a, b) => _apptSortKey(b.data()).compareTo(_apptSortKey(a.data())));
               final cancelled = docs
@@ -354,6 +354,9 @@ class _AppointmentScreenState extends State<AppointmentScreen>
         final specialty = data['doctorSpecialty'] as String? ?? '';
         final time = data['time'] as String? ?? '';
         final type = data['consultationType'] as String? ?? 'Video';
+        final isInPerson = type == 'In-Person';
+        final opPrescriptionId = data['prescriptionId'] as String?;
+        final hasOpSlip = opPrescriptionId != null && opPrescriptionId.isNotEmpty;
 
         final accentColor = isUpcoming
             ? AppColors.accent
@@ -468,6 +471,10 @@ class _AppointmentScreenState extends State<AppointmentScreen>
                   ],
                 ),
               ),
+              if (isInPerson && (isUpcoming || isCompleted)) ...[
+                const SizedBox(height: 10),
+                _OpStatusChip(ready: hasOpSlip),
+              ],
               if (isUpcoming) ...[
                 const SizedBox(height: 12),
                 _ScheduledJoinSection(
@@ -525,7 +532,7 @@ class _AppointmentScreenState extends State<AppointmentScreen>
                     child: OutlinedButton.icon(
                         icon: const Icon(Icons.receipt_long_rounded,
                             size: 16),
-                        label: const Text('Prescription'),
+                        label: Text(isInPerson ? 'Download OP Slip' : 'Prescription'),
                         onPressed: () => _viewPrescription(
                           appointments[i].id,
                           data,
@@ -607,6 +614,7 @@ class _AppointmentScreenState extends State<AppointmentScreen>
       'doctorName': data['doctorName'],
       'doctorSpecialty': data['doctorSpecialty'],
       'date': data['date'],
+      'consultationType': data['consultationType'],
     });
   }
 
@@ -728,6 +736,49 @@ class _AptDetail extends StatelessWidget {
           ),
         ],
       );
+}
+
+// OP (out-patient) status chip for in-person appointments. `ready` flips to
+// true the moment the doctor's WritePrescriptionScreen submit writes
+// `prescriptionId` onto the appointment doc — the outer appointments query
+// already streams via `.snapshots()`, so this updates live with no extra
+// listener needed.
+class _OpStatusChip extends StatelessWidget {
+  final bool ready;
+  const _OpStatusChip({required this.ready});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = ready ? const Color(0xFF2E7D32) : AppColors.warning;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            ready ? Icons.picture_as_pdf_rounded : Icons.hourglass_top_rounded,
+            size: 14,
+            color: color,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            ready ? 'OP Slip Ready' : 'OP Pending — filled after your visit',
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 // Realtime button: streams appointment_reviews/{id} to show Rate/Rated state.

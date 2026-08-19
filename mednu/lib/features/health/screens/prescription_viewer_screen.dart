@@ -88,6 +88,13 @@ class _PrescriptionViewerScreenState
       _d['rxId'] as String? ?? _d['id'] as String? ?? 'RX-0000';
   String get _signatureUrl  => _d['doctorSignatureUrl'] as String? ?? '';
 
+  // In-person visits are framed as an "OP" (out-patient) slip rather than a
+  // generic prescription — same document, different title/watermark.
+  bool   get _isOP        => (_d['consultationType'] as String?) == 'In-Person';
+  String get _docTitle    => _isOP ? 'OP Slip' : 'Prescription';
+  String get _docWatermark => _isOP ? 'Digital OP Slip' : 'Digital Prescription';
+  String get _rxWatermark  => _isOP ? 'OP' : 'Rx';
+
   // New fields with legacy fallbacks
   String get _chiefComplaints    => _d['chiefComplaints']    as String? ?? '';
   String get _history            =>
@@ -246,7 +253,7 @@ class _PrescriptionViewerScreenState
   pw.Widget _pdfHeader() => pw.Container(
         padding: const pw.EdgeInsets.all(14),
         decoration: const pw.BoxDecoration(
-            color: PdfColor.fromInt(0xFFC2185B)),
+            color: PdfColor.fromInt(0xFF522546)),
         child: pw.Row(
           mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
           children: [
@@ -262,7 +269,7 @@ class _PrescriptionViewerScreenState
                 pw.Text(_hospital,
                     style: const pw.TextStyle(
                         color: PdfColors.grey200, fontSize: 10)),
-              pw.Text('Digital Prescription',
+              pw.Text(_docWatermark,
                   style: const pw.TextStyle(
                       color: PdfColors.grey200, fontSize: 11)),
             ]),
@@ -476,7 +483,7 @@ class _PrescriptionViewerScreenState
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
       pw.Row(children: [
-        pw.Text('Rx',
+        pw.Text(_rxWatermark,
             style: pw.TextStyle(
                 fontSize: 28,
                 fontWeight: pw.FontWeight.bold,
@@ -501,7 +508,7 @@ class _PrescriptionViewerScreenState
         children: [
           pw.TableRow(
             decoration: const pw.BoxDecoration(
-                color: PdfColor.fromInt(0xFFC2185B)),
+                color: PdfColor.fromInt(0xFF522546)),
             children: [
               '#', 'MEDICINE', 'STRENGTH', 'DOSE', 'DURATION', 'FOOD'
             ]
@@ -750,8 +757,8 @@ class _PrescriptionViewerScreenState
     return Scaffold(
       backgroundColor: context.appBackground,
       appBar: AppBar(
-        title: const Text('Prescription',
-            style: TextStyle(
+        title: Text(_docTitle,
+            style: const TextStyle(
               fontFamily: 'Poppins',
               fontWeight: FontWeight.w700,
               color: Colors.white,
@@ -763,7 +770,7 @@ class _PrescriptionViewerScreenState
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded,
               color: Colors.white),
-          onPressed: () => context.pop(),
+          onPressed: () => context.canPop() ? context.pop() : context.go(AppRoutes.home),
         ),
         actions: [
           if (_pdfBusy)
@@ -818,10 +825,10 @@ class _PrescriptionViewerScreenState
             if (_history.isNotEmpty) ...[
               _buildSectionCard(
                 icon: Icons.history_edu_rounded,
-                iconColor: const Color(0xFF7B1FA2),
+                iconColor: const Color(0xFF633058),
                 title: 'History & Comorbidities',
                 child: _buildContentBox(
-                    _history, const Color(0xFF7B1FA2)),
+                    _history, const Color(0xFF633058)),
               ),
               const SizedBox(height: 16),
             ],
@@ -906,7 +913,7 @@ class _PrescriptionViewerScreenState
       width: double.infinity,
       child: ElevatedButton.icon(
         style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF7B1FA2),
+          backgroundColor: const Color(0xFF633058),
           foregroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(vertical: 14),
           shape: RoundedRectangleBorder(
@@ -931,7 +938,7 @@ class _PrescriptionViewerScreenState
             builder: (ctx, child) => Theme(
               data: Theme.of(ctx).copyWith(
                 colorScheme: const ColorScheme.light(
-                  primary: Color(0xFF7B1FA2),
+                  primary: Color(0xFF633058),
                 ),
               ),
               child: child!,
@@ -943,7 +950,7 @@ class _PrescriptionViewerScreenState
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text('Reminder set for $formatted'),
-                backgroundColor: const Color(0xFF7B1FA2),
+                backgroundColor: const Color(0xFF633058),
                 behavior: SnackBarBehavior.floating,
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12)),
@@ -993,8 +1000,8 @@ class _PrescriptionViewerScreenState
                         fontSize: 11,
                         color: Colors.white70,
                       )),
-                const Text('Digital Prescription',
-                    style: TextStyle(
+                Text(_docWatermark,
+                    style: const TextStyle(
                       fontFamily: 'Poppins',
                       fontSize: 12,
                       color: Colors.white70,
@@ -1049,7 +1056,7 @@ class _PrescriptionViewerScreenState
                   color: AppColors.primary, size: 20),
             ),
             const SizedBox(width: 12),
-            Text('Patient Details', style: AppTextStyles.h4),
+            const Text('Patient Details', style: AppTextStyles.h4),
           ]),
           const SizedBox(height: 14),
           Row(children: [
@@ -1208,10 +1215,10 @@ class _PrescriptionViewerScreenState
 
   Widget _buildMedicinesCard() {
     final medColors = [
-      const Color(0xFFC2185B),
+      const Color(0xFF522546),
       const Color(0xFF1565C0),
       const Color(0xFF2E7D32),
-      const Color(0xFF7B1FA2),
+      const Color(0xFF633058),
       const Color(0xFF00838F),
     ];
 
@@ -1220,9 +1227,9 @@ class _PrescriptionViewerScreenState
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
         Row(children: [
-          // Rx mark
-          const Text('Rx',
-              style: TextStyle(
+          // Rx / OP mark
+          Text(_rxWatermark,
+              style: const TextStyle(
                 fontFamily: 'Poppins',
                 fontSize: 28,
                 fontWeight: FontWeight.w900,
@@ -1230,7 +1237,7 @@ class _PrescriptionViewerScreenState
                 color: AppColors.primary,
               )),
           const SizedBox(width: 10),
-          Text('Prescribed Medicines', style: AppTextStyles.h4),
+          const Text('Prescribed Medicines', style: AppTextStyles.h4),
           const Spacer(),
           if (_medicines.isNotEmpty)
             GestureDetector(
@@ -1365,14 +1372,14 @@ class _PrescriptionViewerScreenState
                   if (hasDose || foodTiming.isNotEmpty || duration.isNotEmpty)
                     Wrap(spacing: 6, runSpacing: 6, children: [
                       if (morning)
-                        _DoseChip(Icons.wb_sunny_outlined,
-                            'Morning', const Color(0xFFFF9800)),
+                        const _DoseChip(Icons.wb_sunny_outlined,
+                            'Morning', Color(0xFFFF9800)),
                       if (afternoon)
-                        _DoseChip(Icons.wb_twilight_rounded,
-                            'Afternoon', const Color(0xFFF44336)),
+                        const _DoseChip(Icons.wb_twilight_rounded,
+                            'Afternoon', Color(0xFFF44336)),
                       if (night)
-                        _DoseChip(Icons.nights_stay_outlined,
-                            'Night', const Color(0xFF5C6BC0)),
+                        const _DoseChip(Icons.nights_stay_outlined,
+                            'Night', Color(0xFF5C6BC0)),
                       if (!hasDose) ...[
                         // Legacy format chips
                         if ((m['frequency'] as String? ?? '').isNotEmpty)
@@ -1383,7 +1390,7 @@ class _PrescriptionViewerScreenState
                       if (foodTiming.isNotEmpty)
                         _MedChip(foodTiming, AppColors.accent),
                       if (duration.isNotEmpty)
-                        _MedChip(duration, const Color(0xFF7B1FA2)),
+                        _MedChip(duration, const Color(0xFF633058)),
                     ]),
                   if (instruction.isNotEmpty) ...[
                     const SizedBox(height: 8),

@@ -16,7 +16,7 @@ import '../../auth/services/doctor_auth_service.dart';
 import '../../notifications/services/notification_service.dart';
 import '../../notifications/models/notification_model.dart';
 
-// ── Constants ────────────────────────────────────────────────────────────────
+// â”€â”€ Constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const _kInvestigations = [
   'CBC', 'LFT', 'KFT', 'ECG', '2D Echo', 'Chest X-Ray',
@@ -34,7 +34,7 @@ const _kFoodTimings = [
 
 const _kFollowUpOptions = ['1', '3', '5', '7', '14', '30'];
 
-// ── Medicine Entry ───────────────────────────────────────────────────────────
+// â”€â”€ Medicine Entry â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _MedicineEntry {
   final TextEditingController nameCtrl        = TextEditingController();
@@ -84,7 +84,7 @@ class _MedicineEntry {
   };
 }
 
-// ── Screen ───────────────────────────────────────────────────────────────────
+// â”€â”€ Screen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class WritePrescriptionScreen extends StatefulWidget {
   final String  patientId;
@@ -111,7 +111,7 @@ class WritePrescriptionScreen extends StatefulWidget {
 
 class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
     with TickerProviderStateMixin {
-  // ── Form controllers ───────────────────────────────────────────────────────
+  // â”€â”€ Form controllers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   final _chiefComplaintsCtrl     = TextEditingController();
   final _historyCtrl             = TextEditingController();
   final _allergiesCtrl           = TextEditingController();
@@ -122,26 +122,26 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
   final _customInvestCtrl        = TextEditingController();
   final _customFollowUpCtrl      = TextEditingController();
 
-  // ── Medicines ──────────────────────────────────────────────────────────────
+  // â”€â”€ Medicines â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   final List<_MedicineEntry> _medicines = [];
 
-  // ── Investigations ─────────────────────────────────────────────────────────
+  // â”€â”€ Investigations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   final Set<String> _selectedInvestigations = {};
 
-  // ── Allergies ──────────────────────────────────────────────────────────────
+  // â”€â”€ Allergies â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   bool _showAllergies = false;
 
-  // ── Follow-up ──────────────────────────────────────────────────────────────
+  // â”€â”€ Follow-up â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   bool   _followUpRequired = false;
   String _followUpDays     = '7';
   bool   _customFollowUp   = false;
 
-  // ── State ──────────────────────────────────────────────────────────────────
+  // â”€â”€ State â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   bool _saving          = false;
   bool _offlineConfirmed = false;
   bool _draftSaved      = false;
 
-  // ── Doctor / Patient info ──────────────────────────────────────────────────
+  // â”€â”€ Doctor / Patient info â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   String? _doctorName;
   String? _doctorSpecialty;
   String? _doctorRegNo;
@@ -151,11 +151,11 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
   String? _patientGender;
   String? _patientPhone;
 
-  // ── Auto-save ──────────────────────────────────────────────────────────────
+  // â”€â”€ Auto-save â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Timer? _autoSaveTimer;
   bool   _hasDraftChanges = false;
 
-  // ── Session guard ──────────────────────────────────────────────────────────
+  // â”€â”€ Session guard â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   bool get _isSessionValid =>
       widget.patientId.isNotEmpty &&
       (widget.sessionValidated || _offlineConfirmed);
@@ -192,7 +192,7 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
     super.dispose();
   }
 
-  // ── Loaders ────────────────────────────────────────────────────────────────
+  // â”€â”€ Loaders â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   Future<void> _loadDoctorInfo() async {
     final uid = DoctorAuthService.currentUid;
@@ -236,7 +236,7 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
     } catch (_) {}
   }
 
-  // ── Auto-save ──────────────────────────────────────────────────────────────
+  // â”€â”€ Auto-save â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   void _startAutoSave() {
     _autoSaveTimer =
@@ -284,7 +284,7 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
     } catch (_) {}
   }
 
-  // ── Rx ID ──────────────────────────────────────────────────────────────────
+  // â”€â”€ Rx ID â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   String _generateRxId() {
     final now = DateTime.now();
@@ -298,7 +298,7 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
     return 'MN-$date-$suffix';
   }
 
-  // ── Medicine management ────────────────────────────────────────────────────
+  // â”€â”€ Medicine management â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   void _addMedicine() {
     setState(() => _medicines.add(_MedicineEntry()));
@@ -311,7 +311,7 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
     _hasDraftChanges = true;
   }
 
-  // ── Validation ─────────────────────────────────────────────────────────────
+  // â”€â”€ Validation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   bool _validate() {
     if (_chiefComplaintsCtrl.text.trim().isEmpty) {
@@ -337,7 +337,7 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
     return true;
   }
 
-  // ── Submit ─────────────────────────────────────────────────────────────────
+  // â”€â”€ Submit â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   Future<void> _submitPrescription() async {
     if (!_isSessionValid) {
@@ -348,7 +348,7 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
     if (!_validate()) return;
 
     setState(() => _saving = true);
-    // Block role switching while the prescription is being written/sent —
+    // Block role switching while the prescription is being written/sent â€”
     // mirrors the call-screen guards in incoming_request_screen.dart /
     // doctor_video_call_screen.dart.
     ProviderScope.containerOf(context, listen: false)
@@ -425,12 +425,18 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
           .collection('prescriptions')
           .add(prescriptionData);
 
-      // Update appointment
+      // Update appointment — prescriptionId lets the patient app's live
+      // appointments stream flip the OP/prescription status without a
+      // separate query (see mednu appointment_screen.dart card rendering).
       if (widget.appointmentId?.isNotEmpty == true) {
         await FirebaseFirestore.instance
             .collection('appointments')
             .doc(widget.appointmentId!)
-            .update({'status': 'completed'})
+            .update({
+          'status':        'completed',
+          'prescriptionId': prescRef.id,
+          'updatedAt':      FieldValue.serverTimestamp(),
+        })
             .catchError((_) {});
       }
 
@@ -550,7 +556,7 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
     }
   }
 
-  // ── Success dialog ─────────────────────────────────────────────────────────
+  // â”€â”€ Success dialog â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   void _showSuccessDialog(String rxId) {
     showDialog(
@@ -567,7 +573,7 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
     );
   }
 
-  // ── Build ──────────────────────────────────────────────────────────────────
+  // â”€â”€ Build â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   @override
   Widget build(BuildContext context) {
@@ -600,7 +606,6 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
         children: [
           const Text('Write Prescription',
               style: TextStyle(
-                fontFamily: 'Poppins',
                 fontWeight: FontWeight.w700,
                 color: Colors.white,
                 fontSize: 16,
@@ -608,7 +613,6 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
           if (widget.patientName.isNotEmpty)
             Text('for ${widget.patientName}',
                 style: const TextStyle(
-                  fontFamily: 'Poppins',
                   fontSize: 11,
                   color: Colors.white70,
                 )),
@@ -626,7 +630,6 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
               ),
               child: const Text('Draft saved',
                   style: TextStyle(
-                    fontFamily: 'Poppins',
                     fontSize: 10,
                     color: Colors.white,
                   )),
@@ -646,7 +649,6 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
             child: Text(
               'Send Rx',
               style: TextStyle(
-                fontFamily: 'Poppins',
                 fontWeight: FontWeight.w700,
                 fontSize: 14,
                 color: _isSessionValid ? Colors.white : Colors.white38,
@@ -657,10 +659,10 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
     );
   }
 
-  // ── Invalid session state ──────────────────────────────────────────────────
+  // â”€â”€ Invalid session state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   Widget _buildInvalidSessionState() {
-    // Show offline confirmation whenever there is a patient to prescribe for —
+    // Show offline confirmation whenever there is a patient to prescribe for â€”
     // this covers the case where go_router's refreshListenable rebuilt the route
     // without extra params (losing sessionValidated) but patientId is still set.
     if (widget.patientId.isNotEmpty) {
@@ -767,7 +769,7 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
     );
   }
 
-  // ── Main form ─────────────────────────────────────────────────────────────
+  // â”€â”€ Main form â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   Widget _buildForm() {
     return SingleChildScrollView(
@@ -775,7 +777,7 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Rx Header Banner ──────────────────────────────────
+          // â”€â”€ Rx Header Banner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
           _RxHeaderBanner(
             patientName:     widget.patientName,
             patientId:       widget.patientId,
@@ -789,7 +791,7 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
           ),
           const SizedBox(height: 20),
 
-          // ── Section 1: Chief Complaints ───────────────────────
+          // â”€â”€ Section 1: Chief Complaints â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
           const _SectionHeader(
             sectionNumber: '01',
             icon: Icons.sick_rounded,
@@ -806,13 +808,13 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
           ),
           const SizedBox(height: 20),
 
-          // ── Section 2: Relevant History ───────────────────────
+          // â”€â”€ Section 2: Relevant History â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
           const _SectionHeader(
             sectionNumber: '02',
             icon: Icons.history_edu_rounded,
             title: 'Relevant History',
             subtitle: 'Past illnesses, allergies, family history',
-            color: Color(0xFF7B1FA2),
+            color: AppColors.secondary,
           ),
           const SizedBox(height: 10),
           _PremiumTextField(
@@ -823,7 +825,7 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
           ),
           const SizedBox(height: 20),
 
-          // ── Allergies (Optional, collapsible) ────────────────
+          // â”€â”€ Allergies (Optional, collapsible) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
           _AllergiesSection(
             show: _showAllergies,
             controller: _allergiesCtrl,
@@ -835,7 +837,7 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
           ),
           const SizedBox(height: 20),
 
-          // ── Section 3: Examination / Vitals ───────────────────
+          // â”€â”€ Section 3: Examination / Vitals â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
           const _SectionHeader(
             sectionNumber: '03',
             icon: Icons.monitor_heart_rounded,
@@ -847,12 +849,12 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
           _PremiumTextField(
             controller: _examinationCtrl,
             hintText:
-                'BP: 120/80  Pulse: 80/min  Temp: 98.6°F  Weight: 65 kg\nSpO₂: 98%  Sugar: 110 mg/dL\nPhysical Exam / Lab Findings...',
+                'BP: 120/80  Pulse: 80/min  Temp: 98.6Â°F  Weight: 65 kg\nSpOâ‚‚: 98%  Sugar: 110 mg/dL\nPhysical Exam / Lab Findings...',
             maxLines: 5,
           ),
           const SizedBox(height: 20),
 
-          // ── Section 4: Investigations ─────────────────────────
+          // â”€â”€ Section 4: Investigations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
           const _SectionHeader(
             sectionNumber: '04',
             icon: Icons.biotech_rounded,
@@ -871,7 +873,7 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
           ),
           const SizedBox(height: 20),
 
-          // ── Section 5: Diagnosis ──────────────────────────────
+          // â”€â”€ Section 5: Diagnosis â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
           const _SectionHeader(
             sectionNumber: '05',
             icon: Icons.medical_information_rounded,
@@ -889,13 +891,13 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
           ),
           const SizedBox(height: 20),
 
-          // ── Section 6: Rx (Medicines) ─────────────────────────
+          // â”€â”€ Section 6: Rx (Medicines) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
           Row(
             children: [
               const _SectionHeader(
                 sectionNumber: '06',
                 icon: Icons.medication_rounded,
-                title: 'Rx — Medicines',
+                title: 'Rx â€” Medicines',
                 subtitle: 'Prescribed medications',
                 required: true,
                 color: AppColors.primary,
@@ -919,7 +921,6 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
                       SizedBox(width: 6),
                       Text('Add',
                           style: TextStyle(
-                            fontFamily: 'Poppins',
                             fontSize: 13,
                             fontWeight: FontWeight.w700,
                             color: Colors.white,
@@ -949,14 +950,12 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
                 const SizedBox(height: 8),
                 const Text('No medicines added yet.',
                     style: TextStyle(
-                      fontFamily: 'Poppins',
                       fontSize: 13,
                       color: AppColors.textHint,
                     )),
                 const SizedBox(height: 4),
                 const Text('Tap "Add" to add a medicine.',
                     style: TextStyle(
-                      fontFamily: 'Poppins',
                       fontSize: 11,
                       color: AppColors.textHint,
                     )),
@@ -973,7 +972,7 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
           )),
           const SizedBox(height: 20),
 
-          // ── Section 7: Special Instructions ──────────────────
+          // â”€â”€ Section 7: Special Instructions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
           const _SectionHeader(
             sectionNumber: '07',
             icon: Icons.lightbulb_rounded,
@@ -991,7 +990,7 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
           ),
           const SizedBox(height: 20),
 
-          // ── Additional Notes (no heading) ─────────────────────
+          // â”€â”€ Additional Notes (no heading) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
           _PremiumTextField(
             controller: _additionalNotesCtrl,
             hintText: 'Additional notes (optional)...',
@@ -1000,7 +999,7 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
           ),
           const SizedBox(height: 20),
 
-          // ── Follow-up ─────────────────────────────────────────
+          // â”€â”€ Follow-up â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
           _FollowUpSection(
             required:    _followUpRequired,
             days:        _followUpDays,
@@ -1018,7 +1017,7 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
           ),
           const SizedBox(height: 28),
 
-          // ── Send Button ───────────────────────────────────────
+          // â”€â”€ Send Button â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
           GradientButton(
             label: _saving ? 'Sending...' : 'Send Prescription to Patient',
             icon:  Icons.send_rounded,
@@ -1033,7 +1032,7 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
   }
 }
 
-// ── Rx Header Banner ─────────────────────────────────────────────────────────
+// â”€â”€ Rx Header Banner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _RxHeaderBanner extends StatelessWidget {
   final String  patientName;
@@ -1104,7 +1103,6 @@ class _RxHeaderBanner extends StatelessWidget {
                     children: [
                       const Text('MedNU Healthcare',
                           style: TextStyle(
-                            fontFamily: 'Poppins',
                             fontWeight: FontWeight.w800,
                             color: Colors.white,
                             fontSize: 15,
@@ -1112,13 +1110,11 @@ class _RxHeaderBanner extends StatelessWidget {
                       if (doctorHospital?.isNotEmpty == true)
                         Text(doctorHospital!,
                             style: const TextStyle(
-                              fontFamily: 'Poppins',
                               fontSize: 11,
                               color: Colors.white70,
                             )),
                       Text(dateStr,
                           style: const TextStyle(
-                            fontFamily: 'Poppins',
                             fontSize: 10,
                             color: Colors.white60,
                           )),
@@ -1128,7 +1124,6 @@ class _RxHeaderBanner extends StatelessWidget {
                 // Large Rx watermark
                 const Text('Rx',
                     style: TextStyle(
-                      fontFamily: 'Poppins',
                       fontSize: 42,
                       fontWeight: FontWeight.w900,
                       color: Colors.white,
@@ -1153,7 +1148,6 @@ class _RxHeaderBanner extends StatelessWidget {
               children: [
                 const Text('DOCTOR',
                     style: TextStyle(
-                      fontFamily: 'Poppins',
                       fontSize: 9,
                       fontWeight: FontWeight.w700,
                       color: Colors.white54,
@@ -1162,7 +1156,6 @@ class _RxHeaderBanner extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text('Dr. ${doctorName ?? 'Doctor'}',
                     style: const TextStyle(
-                      fontFamily: 'Poppins',
                       fontWeight: FontWeight.w700,
                       color: Colors.white,
                       fontSize: 14,
@@ -1170,14 +1163,12 @@ class _RxHeaderBanner extends StatelessWidget {
                 if (doctorSpecialty?.isNotEmpty == true)
                   Text(doctorSpecialty!,
                       style: const TextStyle(
-                        fontFamily: 'Poppins',
                         fontSize: 12,
                         color: Colors.white70,
                       )),
                 if (doctorRegNo?.isNotEmpty == true)
                   Text('Reg. No: $doctorRegNo',
                       style: const TextStyle(
-                        fontFamily: 'Poppins',
                         fontSize: 10,
                         color: Colors.white60,
                       )),
@@ -1201,7 +1192,6 @@ class _RxHeaderBanner extends StatelessWidget {
               children: [
                 const Text('PATIENT',
                     style: TextStyle(
-                      fontFamily: 'Poppins',
                       fontSize: 9,
                       fontWeight: FontWeight.w700,
                       color: Colors.white54,
@@ -1210,7 +1200,6 @@ class _RxHeaderBanner extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(patientName.isNotEmpty ? patientName : 'Patient',
                     style: const TextStyle(
-                      fontFamily: 'Poppins',
                       fontWeight: FontWeight.w700,
                       color: Colors.white,
                       fontSize: 14,
@@ -1255,7 +1244,6 @@ class _InfoChip extends StatelessWidget {
           const SizedBox(width: 4),
           Text(label,
               style: const TextStyle(
-                fontFamily: 'Poppins',
                 fontSize: 11,
                 color: Colors.white,
                 fontWeight: FontWeight.w500,
@@ -1264,7 +1252,7 @@ class _InfoChip extends StatelessWidget {
       );
 }
 
-// ── Section Header ────────────────────────────────────────────────────────────
+// â”€â”€ Section Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _SectionHeader extends StatelessWidget {
   final String   sectionNumber;
@@ -1307,7 +1295,6 @@ class _SectionHeader extends StatelessWidget {
                     const SizedBox(width: 4),
                     Text('*',
                         style: TextStyle(
-                          fontFamily: 'Poppins',
                           fontWeight: FontWeight.w800,
                           color: Colors.red.shade600,
                           fontSize: 14,
@@ -1324,7 +1311,7 @@ class _SectionHeader extends StatelessWidget {
       );
 }
 
-// ── Premium Text Field ────────────────────────────────────────────────────────
+// â”€â”€ Premium Text Field â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _PremiumTextField extends StatelessWidget {
   final TextEditingController controller;
@@ -1374,7 +1361,7 @@ class _PremiumTextField extends StatelessWidget {
       );
 }
 
-// ── Investigations Panel ──────────────────────────────────────────────────────
+// â”€â”€ Investigations Panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _InvestigationsPanel extends StatefulWidget {
   final Set<String>          selected;
@@ -1451,7 +1438,6 @@ class _InvestigationsPanelState extends State<_InvestigationsPanel> {
                     ],
                     Text(inv,
                         style: TextStyle(
-                          fontFamily: 'Poppins',
                           fontSize: 12,
                           fontWeight: isSelected
                               ? FontWeight.w600
@@ -1487,7 +1473,7 @@ class _InvestigationsPanelState extends State<_InvestigationsPanel> {
   }
 }
 
-// ── Medicine Card ─────────────────────────────────────────────────────────────
+// â”€â”€ Medicine Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _MedicineCard extends StatefulWidget {
   final int            index;
@@ -1530,7 +1516,7 @@ class _MedicineCardState extends State<_MedicineCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Card header ──────────────────────────────────────
+          // â”€â”€ Card header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
           Container(
             padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
             decoration: BoxDecoration(
@@ -1553,7 +1539,6 @@ class _MedicineCardState extends State<_MedicineCard> {
                 child: Center(
                   child: Text('${widget.index + 1}',
                       style: const TextStyle(
-                        fontFamily: 'Poppins',
                         fontSize: 12,
                         fontWeight: FontWeight.w800,
                         color: Colors.white,
@@ -1582,7 +1567,7 @@ class _MedicineCardState extends State<_MedicineCard> {
             ]),
           ),
 
-          // ── Medicine name + strength ─────────────────────────
+          // â”€â”€ Medicine name + strength â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
             child: Row(children: [
@@ -1609,7 +1594,6 @@ class _MedicineCardState extends State<_MedicineCard> {
                       contentPadding:
                           EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                       hintStyle: TextStyle(
-                          fontFamily: 'Poppins',
                           fontSize: 11,
                           color: AppColors.textHint),
                     ),
@@ -1631,7 +1615,6 @@ class _MedicineCardState extends State<_MedicineCard> {
                       contentPadding:
                           EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                       hintStyle: TextStyle(
-                          fontFamily: 'Poppins',
                           fontSize: 11,
                           color: AppColors.textHint),
                     ),
@@ -1641,7 +1624,7 @@ class _MedicineCardState extends State<_MedicineCard> {
             ]),
           ),
 
-          // ── Dosage row ───────────────────────────────────────
+          // â”€â”€ Dosage row â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
             child: Column(
@@ -1649,7 +1632,6 @@ class _MedicineCardState extends State<_MedicineCard> {
               children: [
                 const Text('Dosage',
                     style: TextStyle(
-                      fontFamily: 'Poppins',
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
                       color: AppColors.textSecondary,
@@ -1693,7 +1675,7 @@ class _MedicineCardState extends State<_MedicineCard> {
             ),
           ),
 
-          // ── Food timing + Duration ────────────────────────────
+          // â”€â”€ Food timing + Duration â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
             child: Row(children: [
@@ -1703,7 +1685,6 @@ class _MedicineCardState extends State<_MedicineCard> {
                   children: [
                     const Text('Food',
                         style: TextStyle(
-                          fontFamily: 'Poppins',
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
                           color: AppColors.textSecondary,
@@ -1728,7 +1709,6 @@ class _MedicineCardState extends State<_MedicineCard> {
                                     value: t,
                                     child: Text(t,
                                         style: const TextStyle(
-                                          fontFamily: 'Poppins',
                                           fontSize: 12,
                                         )),
                                   ))
@@ -1746,7 +1726,6 @@ class _MedicineCardState extends State<_MedicineCard> {
                   children: [
                     const Text('Duration',
                         style: TextStyle(
-                          fontFamily: 'Poppins',
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
                           color: AppColors.textSecondary,
@@ -1811,7 +1790,6 @@ class _MedicineCardState extends State<_MedicineCard> {
                                       value: d,
                                       child: Text(d,
                                           style: const TextStyle(
-                                            fontFamily: 'Poppins',
                                             fontSize: 12,
                                           )),
                                     ))
@@ -1825,7 +1803,7 @@ class _MedicineCardState extends State<_MedicineCard> {
             ]),
           ),
 
-          // ── Instructions ──────────────────────────────────────
+          // â”€â”€ Instructions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
             child: _FieldBox(
@@ -1840,7 +1818,6 @@ class _MedicineCardState extends State<_MedicineCard> {
                   contentPadding:
                       EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                   hintStyle: TextStyle(
-                      fontFamily: 'Poppins',
                       fontSize: 11,
                       color: AppColors.textHint),
                 ),
@@ -1907,7 +1884,6 @@ class _DoseCheckbox extends StatelessWidget {
               const SizedBox(height: 3),
               Text(label,
                   style: TextStyle(
-                    fontFamily: 'Poppins',
                     fontSize: 10,
                     fontWeight:
                         value ? FontWeight.w600 : FontWeight.w400,
@@ -1919,7 +1895,7 @@ class _DoseCheckbox extends StatelessWidget {
       );
 }
 
-// ── Allergies Section ─────────────────────────────────────────────────────────
+// â”€â”€ Allergies Section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _AllergiesSection extends StatelessWidget {
   final bool                  show;
@@ -1988,7 +1964,6 @@ class _AllergiesSection extends StatelessWidget {
                         ),
                         child: const Text('Optional',
                             style: TextStyle(
-                              fontFamily: 'Poppins',
                               fontSize: 9,
                               fontWeight: FontWeight.w600,
                               color: AppColors.textHint,
@@ -2028,7 +2003,7 @@ class _AllergiesSection extends StatelessWidget {
                     .copyWith(color: AppColors.textPrimary, height: 1.5),
                 decoration: InputDecoration(
                   hintText:
-                      'e.g. Penicillin — rash\nAspirin — GI bleeding\nSulfa drugs — anaphylaxis\nPeanuts — swelling...',
+                      'e.g. Penicillin â€” rash\nAspirin â€” GI bleeding\nSulfa drugs â€” anaphylaxis\nPeanuts â€” swelling...',
                   hintStyle: AppTextStyles.caption
                       .copyWith(color: AppColors.textHint, height: 1.5),
                   contentPadding: const EdgeInsets.all(12),
@@ -2063,7 +2038,7 @@ class _AllergiesSection extends StatelessWidget {
   }
 }
 
-// ── Follow-up Section ────────────────────────────────────────────────────────
+// â”€â”€ Follow-up Section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _FollowUpSection extends StatelessWidget {
   final bool                 required;
@@ -2132,7 +2107,6 @@ class _FollowUpSection extends StatelessWidget {
           const Divider(height: 20),
           const Text('Follow-up after',
               style: TextStyle(
-                fontFamily: 'Poppins',
                 fontSize: 12,
                 color: AppColors.textSecondary,
               )),
@@ -2163,7 +2137,6 @@ class _FollowUpSection extends StatelessWidget {
                     ),
                     child: Text('$d days',
                         style: TextStyle(
-                          fontFamily: 'Poppins',
                           fontSize: 12,
                           fontWeight: isSelected
                               ? FontWeight.w600
@@ -2195,7 +2168,6 @@ class _FollowUpSection extends StatelessWidget {
                   ),
                   child: Text('Custom',
                       style: TextStyle(
-                        fontFamily: 'Poppins',
                         fontSize: 12,
                         fontWeight: customMode
                             ? FontWeight.w600
@@ -2234,7 +2206,7 @@ class _FollowUpSection extends StatelessWidget {
   }
 }
 
-// ── Success Dialog ────────────────────────────────────────────────────────────
+// â”€â”€ Success Dialog â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class _SuccessDialog extends StatefulWidget {
   final String      patientName;
