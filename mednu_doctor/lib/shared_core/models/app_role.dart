@@ -47,6 +47,26 @@ extension AppRoleX on AppRole {
     }
   }
 
+  /// One-line description of the role, shown under [label] on the
+  /// registration role-picker so each option carries enough information
+  /// density to feel considered rather than a bare icon + word.
+  String get subtitle {
+    switch (this) {
+      case AppRole.doctor:
+        return 'Consult & treat patients';
+      case AppRole.ambulance:
+        return 'Emergency transport & dispatch';
+      case AppRole.pharmacy:
+        return 'Fulfil prescriptions';
+      case AppRole.lab:
+        return 'Run tests & share reports';
+      case AppRole.caregiver:
+        return 'Home care & assistance';
+      case AppRole.admin:
+        return 'Manage platform operations';
+    }
+  }
+
   IconData get icon {
     switch (this) {
       case AppRole.doctor:

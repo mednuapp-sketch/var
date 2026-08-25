@@ -332,7 +332,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen>
           const SizedBox(height: 12),
           _staticGridN(
             crossAxisCount: 3,
-            aspectRatio: 1.6,
+            aspectRatio: 1.1,
             children: _quickItems
                 .map((item) => _QuickAccessTile(
                       item: item,
@@ -1378,7 +1378,7 @@ class _QuickAccessTile extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 12),
         decoration: BoxDecoration(
           color: context.appSurface,
           borderRadius: BorderRadius.circular(14),
@@ -1395,28 +1395,35 @@ class _QuickAccessTile extends StatelessWidget {
                   ),
                 ],
         ),
-        child: Row(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              width: 34,
-              height: 34,
+              width: 38,
+              height: 38,
               decoration: BoxDecoration(
                 color: item.color.withValues(alpha:isDark ? 0.2 : 0.1),
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(11),
               ),
-              child: Icon(item.icon, size: 17, color: item.color),
+              child: Icon(item.icon, size: 18, color: item.color),
             ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                item.title,
-                style: AppTextStyles.labelSmall.copyWith(
-                  color: context.appTextPrimary,
-                  letterSpacing: 0,
-                  fontSize: 11.5,
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  item.title,
+                  textAlign: TextAlign.center,
+                  softWrap: false,
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: context.appTextPrimary,
+                    letterSpacing: 0,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                    height: 1.15,
+                  ),
                 ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
               ),
             ),
           ],

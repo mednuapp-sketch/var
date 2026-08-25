@@ -121,9 +121,6 @@ class _PatientsListScreenState extends State<PatientsListScreen> {
                 child: _StatsBanner(
                   totalPatients: seen.values.length,
                   totalVisits: docs.length,
-                  repeatPatients: seen.values
-                      .where((p) => p.visitCount > 1)
-                      .length,
                 ),
               ),
 
@@ -258,12 +255,10 @@ class _PatientsListScreenState extends State<PatientsListScreen> {
 class _StatsBanner extends StatelessWidget {
   final int totalPatients;
   final int totalVisits;
-  final int repeatPatients;
 
   const _StatsBanner({
     required this.totalPatients,
     required this.totalVisits,
-    required this.repeatPatients,
   });
 
   @override
@@ -297,12 +292,6 @@ class _StatsBanner extends StatelessWidget {
           value: '$totalVisits',
           label: 'Consultations',
           icon: Icons.video_call_rounded,
-        ),
-        _Divider(),
-        _StatItem(
-          value: repeatPatients > 0 ? '$repeatPatients' : '—',
-          label: 'Returning',
-          icon: Icons.repeat_rounded,
         ),
       ]),
     );

@@ -29,7 +29,6 @@ List<_PermissionInfo> get _kPermissions => [
   const _PermissionInfo(Permission.camera,     Icons.camera_alt_rounded,  'Camera',          'Take profile photos and participate in video consultations.'),
   const _PermissionInfo(Permission.microphone, Icons.mic_rounded,         'Microphone',      'Talk with patients during live video consultations.'),
   const _PermissionInfo(Permission.location,   Icons.location_on_rounded, 'Location',        'Show your GPS position to nearby patients when you go online.'),
-  const _PermissionInfo(Permission.contacts,   Icons.contacts_rounded,    'Contacts',        'Pick emergency contacts for your SOS alert feature.'),
   _PermissionInfo(_mediaPermission, Icons.photo_library_rounded, 'Photos & Media', 'Save prescriptions, access reports and upload profile photos.'),
 ];
 

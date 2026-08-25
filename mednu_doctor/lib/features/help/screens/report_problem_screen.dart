@@ -91,6 +91,7 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
         'attachmentUrl': attachmentUrl,
         'status':       'open',
         'priority':     _priorityFor(_category),
+        'role':         'doctor',
         'createdAt':    FieldValue.serverTimestamp(),
         'updatedAt':    FieldValue.serverTimestamp(),
         'adminNotes':   '',
@@ -271,9 +272,23 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
           TextField(
             controller: _descCtrl,
             maxLines: 5,
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               hintText:
                   'Explain what happened, steps to reproduce, and what you expected...',
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: AppColors.border),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: AppColors.border),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: AppColors.primary, width: 1.8),
+              ),
             ),
           ),
           const SizedBox(height: 16),

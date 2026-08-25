@@ -45,9 +45,6 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
-	<!-- Contacts permission for SOS emergency contacts -->
-	<key>NSContactsUsageDescription</key>
-	<string>MedNu Service needs access to your contacts so you can select emergency contacts for SOS alerts.</string>
 	<!-- Camera & Microphone for video consultations -->
 	<key>NSCameraUsageDescription</key>
 	<string>MedNu Service uses the camera for video consultations and profile photos.</string>

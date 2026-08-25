@@ -35,7 +35,7 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
   final _expCtrl        = TextEditingController();
   final _feeCtrl        = TextEditingController();
   final _otherSpecCtrl  = TextEditingController();
-  String _selectedSpec  = 'General';
+  String? _selectedSpec;
 
   // Names match patient app specialty filters exactly so search/filter works
   static const _specialties = [
@@ -119,6 +119,9 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
   }
 
   bool _validatePage2() {
+    if (_selectedSpec == null) {
+      _snack('Please select your specialization'); return false;
+    }
     if (_selectedSpec == 'Other' && _otherSpecCtrl.text.trim().isEmpty) {
       _snack('Please specify your specialization'); return false;
     }
@@ -138,7 +141,7 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
   }
 
   String get _effectiveSpecialty =>
-      _selectedSpec == 'Other' ? _otherSpecCtrl.text.trim() : _selectedSpec;
+      _selectedSpec == 'Other' ? _otherSpecCtrl.text.trim() : (_selectedSpec ?? '');
 
   void _snack(String msg) => ScaffoldMessenger.of(context)
       .showSnackBar(SnackBar(content: Text(msg), behavior: SnackBarBehavior.floating));
@@ -447,6 +450,8 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
       DropdownButtonFormField<String>(
         initialValue: _selectedSpec,
         isExpanded: true,
+        hint: Text('Select your specialization',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textHint)),
         decoration: InputDecoration(
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppColors.border)),
           enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppColors.border)),
@@ -463,7 +468,7 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
           )),
         )).toList(),
         onChanged: (v) => setState(() {
-          _selectedSpec = v!;
+          _selectedSpec = v;
           if (v != 'Other') _otherSpecCtrl.clear();
         }),
       ),

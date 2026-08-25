@@ -685,9 +685,6 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                   );
                 },
               ),
-              // Maternity care quick-access card
-              _MaternityCareCard(uid: DoctorAuthService.currentUid ?? ''),
-              const SizedBox(height: 12),
               // Feedback quick-access card
               _FeedbackSummaryCard(uid: DoctorAuthService.currentUid),
               const SizedBox(height: 12),
@@ -698,73 +695,6 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
           ),
         ),
       ],
-    );
-  }
-}
-
-// ── MATERNITY CARE CARD ──────────────────────────────────────────────────────
-class _MaternityCareCard extends StatelessWidget {
-  final String uid;
-  const _MaternityCareCard({required this.uid});
-
-  @override
-  Widget build(BuildContext context) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: uid.isEmpty
-          ? const Stream.empty()
-          : FirebaseFirestore.instance
-              .collection('pregnancy_profiles')
-              .where('assignedDoctorId', isEqualTo: uid)
-              .where('isActive', isEqualTo: true)
-              .snapshots(),
-      builder: (context, snap) {
-        final count = snap.data?.docs.length ?? 0;
-        final highRisk = snap.data?.docs
-                .where((d) => (d.data() as Map<String, dynamic>)['isHighRisk'] == true)
-                .length ??
-            0;
-
-        return GestureDetector(
-          onTap: () => context.push(AppRoutes.pregnancyPatients),
-          child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 16),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFFAD1457), Color(0xFF6A1B9A)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(18),
-              boxShadow: [
-                BoxShadow(color: AppColors.primary.withValues(alpha:0.3), blurRadius: 12, offset: const Offset(0, 4)),
-              ],
-            ),
-            child: Row(children: [
-              Container(
-                width: 50,
-                height: 50,
-                decoration: BoxDecoration(color: Colors.white.withValues(alpha:0.2), shape: BoxShape.circle),
-                child: const Icon(Icons.pregnant_woman_rounded, color: Colors.white, size: 28),
-              ),
-              const SizedBox(width: 12),
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Text('Maternity Patients',
-                    style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w700, color: Colors.white, fontSize: 14)),
-                Text(
-                  '$count patients${highRisk > 0 ? ' • $highRisk high-risk' : ''}',
-                  style: const TextStyle(fontFamily: 'Inter', fontSize: 12, color: Colors.white70),
-                ),
-              ])),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(color: Colors.white.withValues(alpha:0.2), borderRadius: BorderRadius.circular(10)),
-                child: const Text('View', style: TextStyle(fontFamily: 'Inter', fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
-              ),
-            ]),
-          ),
-        );
-      },
     );
   }
 }
@@ -2305,49 +2235,29 @@ class _ProfileTab extends StatelessWidget {
                     final data = snap.data?.data();
                     final name      = data?['name']     as String? ?? 'Doctor';
                     final specialty = data?['specialty'] as String? ?? '';
-                    final exp       = data?['experience'] ?? '–';
                     final fee       = data?['fee']        ?? '–';
                     final total     = data?['totalConsultations']?.toString() ?? '0';
                     final photoUrl  = data?['photoUrl'] as String?;
-                    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-                      stream: FirebaseFirestore.instance
-                          .collection('doctor_rating_summary')
-                          .doc(uid)
-                          .snapshots(),
-                      builder: (context, rSnap) {
-                        final rData = rSnap.data?.data();
-                        final avg = (rData?['averageRating'] as num?)?.toDouble() ?? 0.0;
-                        final reviewCount = (rData?['totalReviews'] as num?)?.toInt() ?? 0;
-                        final ratingLabel = (avg > 0 && reviewCount > 0)
-                            ? avg.toStringAsFixed(1)
-                            : '—';
-                        return Container(
-                          padding: const EdgeInsets.all(20),
-                          decoration: const BoxDecoration(gradient: AppColors.primaryGradient, borderRadius: BorderRadius.all(Radius.circular(20))),
-                          child: Column(children: [
-                            _DoctorAvatarOnGradient(photoUrl: photoUrl, size: 80),
-                            const SizedBox(height: 12),
-                            Text(name, style: const TextStyle(fontFamily: 'Inter', fontSize: 20, fontWeight: FontWeight.w700, color: Colors.white)),
-                            Text(specialty, style: const TextStyle(fontFamily: 'Inter', fontSize: 13, color: Colors.white70)),
-                            const SizedBox(height: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                              decoration: BoxDecoration(color: Colors.white.withValues(alpha:0.2), borderRadius: BorderRadius.circular(10)),
-                              child: const Text('✓ MCI Verified', style: TextStyle(fontFamily: 'Inter', fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white)),
-                            ),
-                            const SizedBox(height: 16),
-                            Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
-                              GestureDetector(
-                                onTap: () => context.push(AppRoutes.reviews),
-                                child: _ProfStat(ratingLabel, reviewCount > 0 ? '$reviewCount Reviews' : 'Rating'),
-                              ),
-                              _ProfStat('${exp}yr', 'Experience'),
-                              _ProfStat(total, 'Patients'),
-                              _ProfStat('₹$fee', 'Per Consult'),
-                            ]),
-                          ]),
-                        );
-                      },
+                    return Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: const BoxDecoration(gradient: AppColors.primaryGradient, borderRadius: BorderRadius.all(Radius.circular(20))),
+                      child: Column(children: [
+                        _DoctorAvatarOnGradient(photoUrl: photoUrl, size: 80),
+                        const SizedBox(height: 12),
+                        Text(name, style: const TextStyle(fontFamily: 'Inter', fontSize: 20, fontWeight: FontWeight.w700, color: Colors.white)),
+                        Text(specialty, style: const TextStyle(fontFamily: 'Inter', fontSize: 13, color: Colors.white70)),
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                          decoration: BoxDecoration(color: Colors.white.withValues(alpha:0.2), borderRadius: BorderRadius.circular(10)),
+                          child: const Text('✓ MCI Verified', style: TextStyle(fontFamily: 'Inter', fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white)),
+                        ),
+                        const SizedBox(height: 16),
+                        Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
+                          _ProfStat(total, 'Patients'),
+                          _ProfStat('₹$fee', 'Per Consult'),
+                        ]),
+                      ]),
                     );
                   },
                 ),
@@ -2359,7 +2269,6 @@ class _ProfileTab extends StatelessWidget {
             {'icon': Icons.calendar_month_rounded,         'label': 'Availability Schedule',     'route': AppRoutes.schedule,     'color': const Color(0xFF1565C0)},
             {'icon': Icons.people_rounded,                 'label': 'My Patients',               'route': AppRoutes.patients,     'color': const Color(0xFF2E7D32)},
             {'icon': Icons.account_balance_wallet_rounded, 'label': 'Earnings & Analytics',      'route': AppRoutes.earnings,     'color': const Color(0xFFE65100)},
-            {'icon': Icons.emergency_rounded,              'label': 'SOS Emergency Contacts',    'route': AppRoutes.sos,          'color': AppColors.error},
             {'icon': Icons.settings_rounded,               'label': 'Settings',                  'route': AppRoutes.settings,     'color': AppColors.textSecondary},
             {'icon': Icons.help_outline_rounded,           'label': 'Help & Support',            'route': AppRoutes.helpSupport,  'color': const Color(0xFF00695C)},
           ].map((item) => GestureDetector(

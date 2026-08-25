@@ -35,235 +35,279 @@ void showAddFamilyMemberSheet(
     return;
   }
 
-  final nameCtrl       = TextEditingController(text: existing?['name']       ?? prefillName);
-  final relationCtrl   = TextEditingController(text: existing?['relation']   ?? '');
-  final ageCtrl        = TextEditingController(text: existing?['age']?.toString() ?? '');
-  final phoneCtrl      = TextEditingController(text: existing?['phone']      ?? prefillPhone);
-  final checkupCtrl    = TextEditingController(text: existing?['lastCheckup'] ?? '');
-  final allergiesCtrl  = TextEditingController(text: existing?['allergies']  ?? '');
-  final conditionsCtrl = TextEditingController(text: existing?['chronicConditions'] ?? '');
-  String gender     = existing?['gender'] ?? 'Female';
-
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (sheetCtx) => StatefulBuilder(
-      builder: (ctx, setSheet) {
-        Future<void> importFromContacts() async {
-          final status = await Permission.contacts.request();
-          if (!status.isGranted) {
-            if (ctx.mounted) {
-              ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
-                content: Text('Contacts permission required'),
-                action: SnackBarAction(label: 'Settings', onPressed: openAppSettings),
-              ));
-            }
-            return;
-          }
-          if (!ctx.mounted) return;
-          final selected = await showModalBottomSheet<Contact>(
-            context: ctx,
-            isScrollControlled: true,
-            backgroundColor: Colors.transparent,
-            builder: (_) => const _ContactPickerSheet(),
-          );
-          if (selected != null && ctx.mounted) {
-            nameCtrl.text  = selected.displayName;
-            phoneCtrl.text = selected.phones.isNotEmpty ? selected.phones.first.number : '';
-            setSheet(() {});
-          }
-        }
-
-        return Container(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.of(sheetCtx).size.height * 0.9,
-          ),
-          padding: EdgeInsets.only(bottom: MediaQuery.of(sheetCtx).viewInsets.bottom),
-          decoration: BoxDecoration(
-            color: ctx.appSurface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-          ),
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Center(child: Container(width: 40, height: 4,
-                decoration: BoxDecoration(color: ctx.appBorder, borderRadius: BorderRadius.circular(2)))),
-            const SizedBox(height: 16),
-            Row(children: [
-              Expanded(child: Text(existing != null ? 'Edit Family Member' : 'Add Family Member', style: AppTextStyles.h3)),
-              if (existing == null)
-                TextButton.icon(
-                  onPressed: importFromContacts,
-                  icon: const Icon(Icons.contacts_rounded, size: 16),
-                  label: const Text('Contacts', style: TextStyle(fontSize: 12)),
-                ),
-            ]),
-            const SizedBox(height: 16),
-            _field(nameCtrl, 'Full Name', capitalWords: true),
-            const SizedBox(height: 12),
-            _field(relationCtrl, 'Relation (e.g. Mother, Father)', capitalWords: true),
-            const SizedBox(height: 12),
-            _field(
-              ageCtrl,
-              existing == null && currentAdultCount >= maxAdults
-                  ? 'Age * (must be under 18)'
-                  : 'Age *',
-              numeric: true,
-              maxAge: existing == null && currentAdultCount >= maxAdults ? 17 : 120,
-            ),
-            const SizedBox(height: 12),
-            _field(phoneCtrl, 'Phone Number', phone: true),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              initialValue: gender,
-              decoration: InputDecoration(
-                labelText: 'Gender',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-              ),
-              items: ['Female', 'Male', 'Other']
-                  .map((g) => DropdownMenuItem(value: g, child: Text(g)))
-                  .toList(),
-              onChanged: (v) { if (v != null) setSheet(() => gender = v); },
-            ),
-            const SizedBox(height: 12),
-            GestureDetector(
-              onTap: () async {
-                final picked = await showDatePicker(
-                  context: ctx,
-                  initialDate: DateTime.now(),
-                  firstDate: DateTime(1940),
-                  lastDate: DateTime.now(),
-                );
-                if (picked != null) {
-                  checkupCtrl.text =
-                      '${picked.day.toString().padLeft(2, '0')}/${picked.month.toString().padLeft(2, '0')}/${picked.year}';
-                  setSheet(() {});
-                }
-              },
-              child: AbsorbPointer(
-                child: _field(checkupCtrl, 'Last Checkup (DD/MM/YYYY)'),
-              ),
-            ),
-            const SizedBox(height: 12),
-            _field(allergiesCtrl, 'Allergies (if any)', capitalWords: true),
-            const SizedBox(height: 12),
-            _field(conditionsCtrl, 'Chronic Conditions (if any)', capitalWords: true),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () async {
-                  if (nameCtrl.text.trim().isEmpty || relationCtrl.text.trim().isEmpty) {
-                    FeedbackService.showWarning(ctx, 'Name and relation are required');
-                    return;
-                  }
-                  final parsedAge = int.tryParse(ageCtrl.text.trim());
-                  if (parsedAge == null || parsedAge <= 0 || parsedAge > 120) {
-                    FeedbackService.showWarning(ctx, 'Please enter a valid age');
-                    return;
-                  }
-                  final isEditing = existing != null;
-                  // Minor (age < 18, max 2) / adult (age >= 18, max 1) limit checks — skip when editing the same member
-                  if (!isEditing) {
-                    final enteredAge = parsedAge;
-                    if (enteredAge < 18 && currentMinorCount >= maxMinors) {
-                      FeedbackService.showWarning(
-                        ctx,
-                        'You can only add up to $maxMinors members under 18.',
-                      );
-                      return;
-                    }
-                    if (enteredAge >= 18 && currentAdultCount >= maxAdults) {
-                      FeedbackService.showWarning(
-                        ctx,
-                        'You can only add up to $maxAdults adult member. Additional members must be under 18.',
-                      );
-                      return;
-                    }
-                  }
-                  // Capture these before the async gap so they work even if ctx unmounts
-                  final nav = Navigator.of(ctx);
-                  final messenger = ScaffoldMessenger.of(ctx);
-                  messenger.clearSnackBars();
-                  messenger.showSnackBar(SnackBar(
-                    content: Row(children: [
-                      const SizedBox(width: 18, height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
-                      const SizedBox(width: 10),
-                      Text(isEditing ? 'Updating family member...' : 'Adding family member...',
-                          style: const TextStyle(fontFamily: 'Poppins', fontSize: 13,
-                              fontWeight: FontWeight.w500, color: Colors.white, height: 1.4)),
-                    ]),
-                    backgroundColor: const Color(0xFF1A1A2E),
-                    behavior: SnackBarBehavior.floating,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                    duration: const Duration(seconds: 30),
-                    dismissDirection: DismissDirection.none,
-                  ));
-                  final member = {
-                    'name':              nameCtrl.text.trim(),
-                    'relation':          relationCtrl.text.trim(),
-                    'age':               parsedAge,
-                    'gender':            gender,
-                    'phone':             phoneCtrl.text.trim(),
-                    'lastCheckup':       checkupCtrl.text.trim(),
-                    'allergies':         allergiesCtrl.text.trim(),
-                    'chronicConditions': conditionsCtrl.text.trim(),
-                  };
-                  try {
-                    if (isEditing) {
-                      await ref.read(authProvider.notifier).updateFamilyMember(existing, member);
-                    } else {
-                      await ref.read(authProvider.notifier).addFamilyMember(member);
-                    }
-                    messenger.clearSnackBars();
-                    if (ctx.mounted) nav.pop();
-                    // fire-and-forget — logging must not block the UI
-                    OperationLogger.logSuccess(
-                      action: isEditing ? OpAction.familyMemberUpdated : OpAction.familyMemberAdded,
-                      message: '${isEditing ? 'Updated' : 'Added'} family member: ${member['name']}',
-                    );
-                  } catch (e) {
-                    OperationLogger.logError(
-                      action: isEditing ? OpAction.familyMemberUpdated : OpAction.familyMemberAdded,
-                      errorDetails: e.toString(),
-                    );
-                    messenger.clearSnackBars();
-                    if (ctx.mounted) {
-                      FeedbackService.showError(ctx, 'Failed to save family member. Try again.');
-                    }
-                  }
-                },
-                child: Text(existing != null ? 'Save Changes' : 'Add Member'),
-              ),
-            ),
-            const SizedBox(height: 8),
-          ]),
-          ),
-        );
-      },
+    builder: (_) => _AddFamilyMemberSheet(
+      ref: ref,
+      uid: uid,
+      existing: existing,
+      prefillName: prefillName,
+      prefillPhone: prefillPhone,
+      currentMinorCount: currentMinorCount,
+      maxMinors: maxMinors,
+      currentAdultCount: currentAdultCount,
+      maxAdults: maxAdults,
     ),
-  ).whenComplete(() {
+  );
+}
+
+class _AddFamilyMemberSheet extends StatefulWidget {
+  final WidgetRef ref;
+  final String uid;
+  final Map<String, dynamic>? existing;
+  final String prefillName;
+  final String prefillPhone;
+  final int currentMinorCount;
+  final int maxMinors;
+  final int currentAdultCount;
+  final int maxAdults;
+
+  const _AddFamilyMemberSheet({
+    required this.ref,
+    required this.uid,
+    this.existing,
+    this.prefillName = '',
+    this.prefillPhone = '',
+    this.currentMinorCount = 0,
+    this.maxMinors = 2,
+    this.currentAdultCount = 0,
+    this.maxAdults = 1,
+  });
+
+  @override
+  State<_AddFamilyMemberSheet> createState() => _AddFamilyMemberSheetState();
+}
+
+class _AddFamilyMemberSheetState extends State<_AddFamilyMemberSheet> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController nameCtrl;
+  late final TextEditingController relationCtrl;
+  late final TextEditingController ageCtrl;
+  late final TextEditingController phoneCtrl;
+  late final TextEditingController allergiesCtrl;
+  late final TextEditingController conditionsCtrl;
+  late String gender;
+
+  @override
+  void initState() {
+    super.initState();
+    final existing = widget.existing;
+    nameCtrl       = TextEditingController(text: existing?['name']       ?? widget.prefillName);
+    relationCtrl   = TextEditingController(text: existing?['relation']   ?? '');
+    ageCtrl        = TextEditingController(text: existing?['age']?.toString() ?? '');
+    phoneCtrl      = TextEditingController(text: existing?['phone']      ?? widget.prefillPhone);
+    allergiesCtrl  = TextEditingController(text: existing?['allergies']  ?? '');
+    conditionsCtrl = TextEditingController(text: existing?['chronicConditions'] ?? '');
+    gender = existing?['gender'] ?? 'Female';
+  }
+
+  @override
+  void dispose() {
     nameCtrl.dispose();
     relationCtrl.dispose();
     ageCtrl.dispose();
     phoneCtrl.dispose();
-    checkupCtrl.dispose();
     allergiesCtrl.dispose();
     conditionsCtrl.dispose();
-  });
+    super.dispose();
+  }
+
+  Future<void> _importFromContacts() async {
+    final status = await Permission.contacts.request();
+    if (!status.isGranted) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Contacts permission required'),
+          action: SnackBarAction(label: 'Settings', onPressed: openAppSettings),
+        ));
+      }
+      return;
+    }
+    if (!mounted) return;
+    final selected = await showModalBottomSheet<Contact>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const _ContactPickerSheet(),
+    );
+    if (selected != null && mounted) {
+      nameCtrl.text  = selected.displayName;
+      phoneCtrl.text = selected.phones.isNotEmpty ? selected.phones.first.number : '';
+      setState(() {});
+    }
+  }
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) return;
+    final existing = widget.existing;
+    final parsedAge = int.parse(ageCtrl.text.trim());
+    final isEditing = existing != null;
+    // Minor (age < 18, max 2) / adult (age >= 18, max 1) limit checks — skip when editing the same member
+    if (!isEditing) {
+      final enteredAge = parsedAge;
+      if (enteredAge < 18 && widget.currentMinorCount >= widget.maxMinors) {
+        FeedbackService.showWarning(
+          context,
+          'You can only add up to ${widget.maxMinors} members under 18.',
+        );
+        return;
+      }
+      if (enteredAge >= 18 && widget.currentAdultCount >= widget.maxAdults) {
+        FeedbackService.showWarning(
+          context,
+          'You can only add up to ${widget.maxAdults} adult member. Additional members must be under 18.',
+        );
+        return;
+      }
+    }
+    // Capture these before the async gap so they work even if context unmounts
+    final nav = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.clearSnackBars();
+    messenger.showSnackBar(SnackBar(
+      content: Row(children: [
+        const SizedBox(width: 18, height: 18,
+            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+        const SizedBox(width: 10),
+        Text(isEditing ? 'Updating family member...' : 'Adding family member...',
+            style: const TextStyle(fontFamily: 'Poppins', fontSize: 13,
+                fontWeight: FontWeight.w500, color: Colors.white, height: 1.4)),
+      ]),
+      backgroundColor: const Color(0xFF1A1A2E),
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      duration: const Duration(seconds: 30),
+      dismissDirection: DismissDirection.none,
+    ));
+    final member = {
+      'name':              nameCtrl.text.trim(),
+      'relation':          relationCtrl.text.trim(),
+      'age':               parsedAge,
+      'gender':            gender,
+      'phone':             phoneCtrl.text.trim(),
+      'allergies':         allergiesCtrl.text.trim(),
+      'chronicConditions': conditionsCtrl.text.trim(),
+    };
+    try {
+      if (isEditing) {
+        await widget.ref.read(authProvider.notifier).updateFamilyMember(existing, member);
+      } else {
+        await widget.ref.read(authProvider.notifier).addFamilyMember(member);
+      }
+      messenger.clearSnackBars();
+      if (mounted) nav.pop();
+      // fire-and-forget — logging must not block the UI
+      OperationLogger.logSuccess(
+        action: isEditing ? OpAction.familyMemberUpdated : OpAction.familyMemberAdded,
+        message: '${isEditing ? 'Updated' : 'Added'} family member: ${member['name']}',
+      );
+    } catch (e) {
+      OperationLogger.logError(
+        action: isEditing ? OpAction.familyMemberUpdated : OpAction.familyMemberAdded,
+        errorDetails: e.toString(),
+      );
+      messenger.clearSnackBars();
+      if (mounted) {
+        FeedbackService.showError(context, 'Failed to save family member. Try again.');
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final existing = widget.existing;
+    return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.9,
+      ),
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      decoration: BoxDecoration(
+        color: context.appSurface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Form(
+        key: _formKey,
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Center(child: Container(width: 40, height: 4,
+            decoration: BoxDecoration(color: context.appBorder, borderRadius: BorderRadius.circular(2)))),
+        const SizedBox(height: 16),
+        Row(children: [
+          Expanded(child: Text(existing != null ? 'Edit Family Member' : 'Add Family Member', style: AppTextStyles.h3)),
+          if (existing == null)
+            TextButton.icon(
+              onPressed: _importFromContacts,
+              icon: const Icon(Icons.contacts_rounded, size: 16),
+              label: const Text('Contacts', style: TextStyle(fontSize: 12)),
+            ),
+        ]),
+        const SizedBox(height: 16),
+        _field(nameCtrl, 'Full Name', capitalWords: true,
+            validator: (v) => (v == null || v.trim().isEmpty) ? 'Full name is required' : null),
+        const SizedBox(height: 12),
+        _field(relationCtrl, 'Relation (e.g. Mother, Father)', capitalWords: true,
+            validator: (v) => (v == null || v.trim().isEmpty) ? 'Relation is required' : null),
+        const SizedBox(height: 12),
+        _field(
+          ageCtrl,
+          existing == null && widget.currentAdultCount >= widget.maxAdults
+              ? 'Age * (must be under 18)'
+              : 'Age *',
+          numeric: true,
+          maxAge: existing == null && widget.currentAdultCount >= widget.maxAdults ? 17 : 120,
+          validator: (v) {
+            final age = int.tryParse((v ?? '').trim());
+            if (age == null || age <= 0 || age > 120) return 'Please enter a valid age';
+            return null;
+          },
+        ),
+        const SizedBox(height: 12),
+        _field(phoneCtrl, 'Phone Number', phone: true),
+        const SizedBox(height: 12),
+        DropdownButtonFormField<String>(
+          initialValue: gender,
+          decoration: InputDecoration(
+            labelText: 'Gender',
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+          ),
+          items: ['Female', 'Male', 'Other']
+              .map((g) => DropdownMenuItem(value: g, child: Text(g)))
+              .toList(),
+          onChanged: (v) { if (v != null) setState(() => gender = v); },
+        ),
+        const SizedBox(height: 12),
+        _field(allergiesCtrl, 'Allergies (if any)', capitalWords: true),
+        const SizedBox(height: 12),
+        _field(conditionsCtrl, 'Chronic Conditions (if any)', capitalWords: true),
+        const SizedBox(height: 20),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: _save,
+            child: Text(existing != null ? 'Save Changes' : 'Add Member'),
+          ),
+        ),
+        const SizedBox(height: 8),
+      ]),
+      ),
+      ),
+    );
+  }
 }
 
-TextField _field(TextEditingController ctrl, String label, {
+TextFormField _field(TextEditingController ctrl, String label, {
   bool capitalWords = false,
   bool allCaps = false,
   bool numeric = false,
   bool phone = false,
   int? maxAge,
+  String? Function(String?)? validator,
 }) =>
-    TextField(
+    TextFormField(
       controller: ctrl,
       textCapitalization: capitalWords
           ? TextCapitalization.words
@@ -282,6 +326,8 @@ TextField _field(TextEditingController ctrl, String label, {
               if (maxAge != null) _MaxValueFormatter(maxAge),
             ]
           : null,
+      validator: validator,
+      autovalidateMode: AutovalidateMode.onUserInteraction,
       decoration: InputDecoration(
         labelText: label,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),

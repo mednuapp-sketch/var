@@ -222,7 +222,7 @@ class HelpSupportScreen extends StatelessWidget {
                                             ),
                                           ),
                                           Text(
-                                            '24/7 doctor support available',
+                                            '24/7 support available',
                                             maxLines: 2,
                                             overflow: TextOverflow.ellipsis,
                                             style: TextStyle(

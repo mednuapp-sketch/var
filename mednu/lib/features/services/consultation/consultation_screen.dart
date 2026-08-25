@@ -13,7 +13,9 @@ import '../../../core/utils/r.dart';
 import '../../../core/widgets/ux_widgets.dart';
 
 class ConsultationScreen extends ConsumerStatefulWidget {
-  const ConsultationScreen({super.key});
+  final bool therapistsOnly;
+
+  const ConsultationScreen({super.key, this.therapistsOnly = false});
 
   @override
   ConsumerState<ConsultationScreen> createState() =>
@@ -82,9 +84,13 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
     // Capped at 150 so we never pull the whole collection in one snapshot.
     // Firestore serves docs in insertion order here; re-order client-side as
     // needed or add an .orderBy('name') index if alphabetical sort matters.
-    _doctorSub = FirebaseFirestore.instance
+    Query<Map<String, dynamic>> doctorsQuery = FirebaseFirestore.instance
         .collection('doctors')
-        .where('status', isEqualTo: 'active')
+        .where('status', isEqualTo: 'active');
+    if (widget.therapistsOnly) {
+      doctorsQuery = doctorsQuery.where('type', isEqualTo: 'therapist');
+    }
+    _doctorSub = doctorsQuery
         .limit(150)
         .snapshots()
         .listen((snap) {
@@ -111,10 +117,14 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
     // includeMetadataChanges: true so we can detect cache vs server.
     // We skip the first cache emission entirely — only trust server results
     // so a doctor who toggled offline is never shown as available.
-    _onlineDoctorSub = FirebaseFirestore.instance
+    Query<Map<String, dynamic>> onlineQuery = FirebaseFirestore.instance
         .collection('doctors')
         .where('status', isEqualTo: 'active')
-        .where('isOnline', isEqualTo: true)
+        .where('isOnline', isEqualTo: true);
+    if (widget.therapistsOnly) {
+      onlineQuery = onlineQuery.where('type', isEqualTo: 'therapist');
+    }
+    _onlineDoctorSub = onlineQuery
         .limit(50)
         .snapshots(includeMetadataChanges: true)
         .listen((snap) {
@@ -161,7 +171,6 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
       'specialty': specialty,
       'photoUrl': d['photoUrl'] as String? ?? '',
       'rating': (d['rating'] as num?)?.toDouble() ?? 0.0,
-      'experience': '${d['experience'] ?? '–'} yrs',
       'fee': '₹${d['fee'] ?? '0'}',
       'available': isOnline,
       'wait': waitLabel,
@@ -363,11 +372,13 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
                               mainAxisAlignment: MainAxisAlignment.center,
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Text('Consultation',
+                                Text(widget.therapistsOnly ? 'Therapy Consultation' : 'Consultation',
                                     maxLines: 1, overflow: TextOverflow.ellipsis,
                                     style: AppTextStyles.onPrimaryH2),
                                 SizedBox(height: R.h(context, 4)),
-                                const Text('Connect instantly or book in advance',
+                                Text(widget.therapistsOnly
+                                        ? 'Connect with a therapist instantly or book in advance'
+                                        : 'Connect instantly or book in advance',
                                     maxLines: 1, overflow: TextOverflow.ellipsis,
                                     style: AppTextStyles.onPrimaryBody),
                               ],
@@ -513,8 +524,8 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
                             )
                           : Text(
                               hasOnline
-                                  ? '${_onlineDoctors.length} Doctor${_onlineDoctors.length == 1 ? '' : 's'} Available Now'
-                                  : 'No Doctors Online',
+                                  ? '${_onlineDoctors.length} ${widget.therapistsOnly ? 'Therapist${_onlineDoctors.length == 1 ? '' : 's'}' : 'Doctor${_onlineDoctors.length == 1 ? '' : 's'}'} Available Now'
+                                  : widget.therapistsOnly ? 'No Therapists Online' : 'No Doctors Online',
                               style: AppTextStyles.labelLarge.copyWith(
                                 color: hasOnline ? Colors.white : AppColors.primary,
                               ),
@@ -574,8 +585,10 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
             const SizedBox(height: 8),
             AppEmptyState(
               icon: Icons.hourglass_empty_rounded,
-              title: 'No doctors online right now',
-              message: 'Ask a doctor to go online, or schedule an appointment instead.',
+              title: widget.therapistsOnly ? 'No therapists online right now' : 'No doctors online right now',
+              message: widget.therapistsOnly
+                  ? 'Ask a therapist to go online, or schedule a session instead.'
+                  : 'Ask a doctor to go online, or schedule an appointment instead.',
               iconColor: context.appTextSecondary,
               actionLabel: 'Schedule Appointment',
               onAction: () => _tabController.animateTo(1),
@@ -1226,29 +1239,35 @@ class _QuickConnectCard extends StatelessWidget {
                     Text('${doctor['rating']}', style: AppTextStyles.labelSmall),
                     const SizedBox(width: 10),
                     // Estimated wait time badge
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF4CAF50).withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: const Color(0xFF4CAF50).withValues(alpha: 0.3),
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.access_time_rounded,
-                              size: 10, color: Color(0xFF2E7D32)),
-                          const SizedBox(width: 3),
-                          Text(
-                            doctor['wait'] as String? ?? 'Ready',
-                            style: const TextStyle(
-                              fontFamily: 'Poppins', fontSize: 10,
-                              fontWeight: FontWeight.w600, color: Color(0xFF2E7D32),
-                            ),
+                    Flexible(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF4CAF50).withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: const Color(0xFF4CAF50).withValues(alpha: 0.3),
                           ),
-                        ],
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.access_time_rounded,
+                                size: 10, color: Color(0xFF2E7D32)),
+                            const SizedBox(width: 3),
+                            Flexible(
+                              child: Text(
+                                doctor['wait'] as String? ?? 'Ready',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontFamily: 'Poppins', fontSize: 10,
+                                  fontWeight: FontWeight.w600, color: Color(0xFF2E7D32),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ],
@@ -1463,7 +1482,14 @@ class _DoctorCard extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      Text(doctor['name'], style: AppTextStyles.labelLarge),
+                      Flexible(
+                        child: Text(
+                          doctor['name'],
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.labelLarge,
+                        ),
+                      ),
                       const Spacer(),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -1491,10 +1517,6 @@ class _DoctorCard extends StatelessWidget {
                       const Icon(Icons.star_rounded, size: 14, color: Colors.amber),
                       const SizedBox(width: 3),
                       Text('${doctor['rating']}', style: AppTextStyles.labelSmall),
-                      const SizedBox(width: 12),
-                      Icon(Icons.work_outline_rounded, size: 14, color: context.appTextHint),
-                      const SizedBox(width: 3),
-                      Text(doctor['experience'], style: AppTextStyles.labelSmall),
                       const Spacer(),
                       Text(doctor['fee'],
                           style: AppTextStyles.labelLarge.copyWith(color: AppColors.primary)),

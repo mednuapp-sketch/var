@@ -24,7 +24,6 @@ import '../../features/schedule/screens/availability_screen.dart';
 import '../../features/profile/screens/doctor_profile_screen.dart';
 import '../../features/notifications/screens/doctor_notifications_screen.dart';
 import '../../features/earnings/screens/doctor_earnings_screen.dart';
-import '../../features/sos/screens/sos_screen.dart';
 import '../../features/settings/screens/settings_screen.dart';
 import '../../features/help/screens/help_support_screen.dart';
 import '../../features/feedback/screens/patient_feedback_screen.dart';
@@ -217,7 +216,6 @@ class AppRoutes {
   static const earnings            = '/earnings';
   static const notifications       = '/notifications';
   static const settings            = '/settings';
-  static const sos                 = '/sos';
   static const helpSupport              = '/help-support';
   static const liveChat                 = '/live-chat';
   static const reportProblem            = '/report-problem';
@@ -319,6 +317,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       // them there to finish the one missing step, same as their
       // dashboard screens' own `_checkOnboarded` already does.
       if (!_authChangeNotifier.roleProfileExists) {
+        // `PartnerRoleRegisterScreen` writes `doctors/{uid}` and then
+        // `{role}_profiles/{uid}` as two sequential awaited steps — the
+        // live listeners above can observe the account between those two
+        // writes and re-run this redirect while that screen is still mid
+        // -submit. Treating it as reachable here (same as the pending-
+        // review screen already is below) stops that in-flight submission
+        // from being yanked over to the onboarding recovery screen.
+        if (loc == AppRoutes.partnerRoleRegister) return null;
         if (role == AppRole.lab) {
           return loc == AppRoutes.labOnboarding ? null : AppRoutes.labOnboarding;
         }
@@ -428,7 +434,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: AppRoutes.notifications,   builder: (c, s) => const DoctorNotificationsScreen()),
       GoRoute(path: AppRoutes.earnings,        builder: (c, s) => const DoctorEarningsScreen()),
       GoRoute(path: AppRoutes.settings,        builder: (c, s) => const SettingsScreen()),
-      GoRoute(path: AppRoutes.sos,             builder: (c, s) => const SosScreen()),
       GoRoute(path: AppRoutes.helpSupport,       builder: (c, s) => const HelpSupportScreen()),
       GoRoute(path: AppRoutes.liveChat,          builder: (c, s) => const LiveChatScreen()),
       GoRoute(path: AppRoutes.reportProblem,     builder: (c, s) => const ReportProblemScreen()),

@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
@@ -30,6 +31,15 @@ class _LabOnboardingScreenState extends State<LabOnboardingScreen> {
   final _phoneCtrl = TextEditingController();
   final _selectedServices = <String>{};
   bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Phone is already verified by OTP at this point — pre-fill and lock
+    // it so this recovery screen can't be used to attach a different,
+    // unverified number to the account (mirrors PartnerRoleRegisterScreen).
+    _phoneCtrl.text = FirebaseAuth.instance.currentUser?.phoneNumber ?? '';
+  }
 
   @override
   void dispose() {
@@ -101,6 +111,7 @@ class _LabOnboardingScreenState extends State<LabOnboardingScreen> {
                     Icons.call_outlined,
                     keyboardType: TextInputType.phone,
                     validator: Validators.phone,
+                    locked: true,
                   ),
                   const SizedBox(height: 14),
                   _field(_addressCtrl, 'Lab Address', Icons.location_on_outlined, maxLines: 2),
@@ -155,16 +166,23 @@ class _LabOnboardingScreenState extends State<LabOnboardingScreen> {
     int maxLines = 1,
     TextInputType? keyboardType,
     String? Function(String?)? validator,
+    bool locked = false,
   }) {
     return TextFormField(
       controller: ctrl,
       maxLines: maxLines,
       keyboardType: keyboardType,
+      readOnly: locked,
+      enabled: !locked,
       validator: validator ??
           (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
       decoration: InputDecoration(
         labelText: label,
         prefixIcon: Icon(icon, color: AppColors.textSecondary),
+        suffixIcon: locked
+            ? const Icon(Icons.verified_rounded, color: AppColors.success, size: 18)
+            : null,
+        helperText: locked ? 'Verified via OTP — cannot be changed' : null,
       ),
     );
   }

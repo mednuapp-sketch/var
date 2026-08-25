@@ -76,18 +76,19 @@ Replace with your actual admin email.
 
 ## 🗃️ Expected Firestore Collections
 
-The admin panel reads from these collections in your Firestore:
+The admin panel reads from these collections in your Firestore (matches the actual
+Flutter app schema — verified against `mednu/lib` and `mednu_doctor/lib` 2026-08-25):
 
-| Collection      | Fields expected |
-|-----------------|-----------------|
-| `doctors`       | name, email, phone, specialisation, status, rating, consultations, createdAt |
-| `patients`      | name, email, phone, age, condition, totalConsultations, createdAt |
-| `payments`      | amount, patientName, doctorName, type, status, paymentId, createdAt |
-| `prescriptions` | medicines (array of {name}), doctorId, patientId, createdAt |
-| `tickets`       | title, message, userName, priority, status, createdAt |
-| `reports`       | title, type, range, status, downloadUrl, createdAt |
+| Collection         | Fields actually used |
+|--------------------|-----------------|
+| `doctors`          | name, email, phone, specialty (canonical; `specialisation`/`specialization` kept as legacy fallbacks), status, rating, totalConsultations, createdAt |
+| `users`            | patient profiles — name, email, phone, dob (age is computed client-side), gender, role, createdAt. There is **no** separate `patients` collection with profile data — a `patients` collection exists but only ever holds `{fcmToken}`. |
+| `payments`         | amount, type, status, userId, doctorId, createdAt. **No** `patientName`/`doctorName`/`paymentId` fields exist — the admin panel resolves display names client-side from the loaded `doctors`/`users` lists. |
+| `prescriptions`    | medicines (array; canonical key is `medicineName`, `name` kept as legacy alias), doctorId, doctorName, patientId, patientName, createdAt |
+| `support_tickets`  | (not `tickets`) — category, description, doctorName, phone, priority, status, createdAt |
+| `reports`          | Patient-uploaded scans only — patientId, name, imageUrl, storagePath, createdAt. Admin-generated report requests are stored separately in `admin_generated_reports` (title, type, range, status, downloadUrl, createdAt) to avoid colliding with patient data. |
 
-> If your Flutter app uses different field names, update `js/app.js` to match.
+> If your Flutter app's field names change, update `js/app.js` to match.
 
 ---
 

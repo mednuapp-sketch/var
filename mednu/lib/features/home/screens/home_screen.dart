@@ -24,6 +24,7 @@ import 'location_picker_screen.dart';
 import '../../my_services/screens/my_services_screen.dart';
 import '../../doctors/screens/doctors_list_screen.dart';
 import '../../notifications/providers/notification_provider.dart';
+import '../../../core/widgets/add_to_cart_button.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -247,11 +248,8 @@ class _HomeBodyState extends ConsumerState<_HomeBody>
                           ),
                         ),
                       ),
-                      IconButton(
-                        icon: Icon(Icons.account_balance_wallet_outlined,
-                            color:
-                                Theme.of(context).colorScheme.onSurface),
-                        onPressed: () => context.push(AppRoutes.wallet),
+                      CartBadgeAction(
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
                       Stack(
                         alignment: Alignment.center,
@@ -1491,6 +1489,7 @@ class _ProfileBody extends ConsumerWidget {
                   _MenuItem(icon: Icons.calendar_month_rounded, iconColor: const Color(0xFF1565C0), label: 'My Appointments', onTap: () => context.push(AppRoutes.appointment)),
                   _MenuItem(icon: Icons.medical_services_rounded, iconColor: AppColors.primary, label: 'My Services', badge: 'Tracker', onTap: () => context.push(AppRoutes.myServices)),
                   _MenuItem(icon: Icons.favorite_rounded, iconColor: const Color(0xFFE53935), label: 'Favourite Doctors', onTap: () => context.push(AppRoutes.favouriteDoctors)),
+                  _MenuItem(icon: Icons.local_hospital_rounded, iconColor: const Color(0xFF1565C0), label: 'Find Hospitals', onTap: () => context.push(AppRoutes.hospitals)),
                   _MenuItem(icon: Icons.folder_rounded, iconColor: const Color(0xFF2E7D32), label: 'My Health Records', onTap: () => context.push(AppRoutes.records)),
                   _MenuItem(icon: Icons.people_rounded, iconColor: const Color(0xFF522546), label: 'Family Members', onTap: () => context.push(AppRoutes.family)),
                   _MenuItem(icon: Icons.medication_rounded, iconColor: const Color(0xFF00695C), label: 'My Medicines', onTap: () => context.push(AppRoutes.medicine)),

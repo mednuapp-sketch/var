@@ -193,16 +193,28 @@ class _DoctorLoginScreenState extends State<DoctorLoginScreen>
           ),
 
           // ── Form ──────────────────────────────────────────────────────────
-          Positioned.fill(
+          // Bounded to the area below the hero (top: size.height * 0.4, same
+          // as the curved white card above) so this scrollview's own
+          // viewport clips its content there. The hero and card are separate
+          // fixed Positioned layers that never move; previously this used
+          // Positioned.fill from y:0 with a spacer to fake the offset, which
+          // let the form's content scroll up over the hero — the white card
+          // backing it sits on doesn't move with it — whenever the form is
+          // taller than the space below the hero (long text, larger text
+          // scale, short screens, keyboard open).
+          Positioned(
+            top: size.height * 0.4,
+            left: 0,
+            right: 0,
+            bottom: 0,
             child: SafeArea(
+              top: false,
               child: SingleChildScrollView(
                 padding: EdgeInsets.only(
+                  top: size.height * 0.04,
                   bottom: MediaQuery.of(context).viewInsets.bottom,
                 ),
-                child: Column(
-                  children: [
-                    SizedBox(height: size.height * 0.44),
-                    FadeTransition(
+                child: FadeTransition(
                       opacity: _fadeIn,
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
@@ -388,11 +400,9 @@ class _DoctorLoginScreenState extends State<DoctorLoginScreen>
                         ),
                       ),
                     ),
-                  ],
+                  ),
                 ),
               ),
-            ),
-          ),
         ],
           ),
         ),

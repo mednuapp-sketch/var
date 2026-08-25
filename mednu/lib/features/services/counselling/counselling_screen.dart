@@ -17,6 +17,7 @@ class CounsellingScreen extends StatefulWidget {
 
 class _CounsellingScreenState extends State<CounsellingScreen> {
   String? _selectedType;
+  String? _selectedTitle;
   String? _selectedMood;
   int _selectedDuration = 30;
 
@@ -57,12 +58,15 @@ class _CounsellingScreenState extends State<CounsellingScreen> {
   }
 
   void _selectType(Map<String, dynamic> t) {
-    setState(() => _selectedType = t['specialty'] as String);
+    setState(() {
+      _selectedType = t['specialty'] as String;
+      _selectedTitle = t['title'] as String;
+    });
     _showBookingSheet(t);
   }
 
   void _talkNow() {
-    context.push('${AppRoutes.consultation}?specialty=${Uri.encodeComponent('Psychiatry')}');
+    context.push('${AppRoutes.consultation}?type=therapist');
   }
 
   String? get _recommendedTitle {
@@ -201,7 +205,7 @@ class _CounsellingScreenState extends State<CounsellingScreen> {
               child: ElevatedButton.icon(
                 onPressed: () {
                   Navigator.pop(context);
-                  context.push(AppRoutes.consultation);
+                  context.push('${AppRoutes.consultation}?type=therapist');
                 },
                 icon: const Icon(Icons.video_call_rounded, size: 16),
                 label: const Text('Video Session'),
@@ -425,7 +429,7 @@ class _CounsellingScreenState extends State<CounsellingScreen> {
                   crossAxisSpacing: R.p(context, 12),
                   mainAxisSpacing: R.p(context, 12),
                   children: _types.map((t) {
-                    final isSelected = _selectedType == t['specialty'];
+                    final isSelected = _selectedTitle == t['title'];
                     final isRecommended = _recommendedTitle == t['title'];
                     return GestureDetector(
                       onTap: () => _selectType(t),

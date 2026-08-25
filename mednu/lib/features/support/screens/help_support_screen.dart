@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/router/app_router.dart';
 import '../../../core/utils/r.dart';
 
 class HelpSupportScreen extends StatefulWidget {
@@ -524,6 +525,23 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
             textAlign: TextAlign.center,
           ),
           SizedBox(height: R.h(context, 16)),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () => context.push(AppRoutes.submitTicket),
+              icon: Icon(Icons.confirmation_number_outlined, size: R.w(context, 16)),
+              label: const Text('Submit a Ticket'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: AppColors.primary,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.r(context, 10))),
+                padding: EdgeInsets.symmetric(vertical: R.p(context, 12)),
+                textStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w700),
+                elevation: 0,
+              ),
+            ),
+          ),
+          SizedBox(height: R.h(context, 10)),
           Row(
             children: [
               Expanded(
@@ -542,17 +560,16 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
               ),
               SizedBox(width: R.w(context, 10)),
               Expanded(
-                child: ElevatedButton.icon(
+                child: OutlinedButton.icon(
                   onPressed: _launchEmail,
                   icon: Icon(Icons.email_rounded, size: R.w(context, 16)),
                   label: const Text('Email Us'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: AppColors.primary,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    side: const BorderSide(color: Colors.white54),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.r(context, 10))),
                     padding: EdgeInsets.symmetric(vertical: R.p(context, 12)),
                     textStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w600),
-                    elevation: 0,
                   ),
                 ),
               ),

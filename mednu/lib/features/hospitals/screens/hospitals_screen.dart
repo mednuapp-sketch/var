@@ -335,14 +335,11 @@ class _HospitalsScreenState extends State<HospitalsScreen> {
                     tooltip: 'Refresh',
                   ),
               ],
-              flexibleSpace: FlexibleSpaceBar(
-                collapseMode: CollapseMode.pin,
-                background: _HospitalHeader(
-                  totalCount: hospitals.length,
-                  mednuCount: mednuCount,
-                  isLoading: isLoading,
-                  locStatus: _locStatus,
-                ),
+              flexibleSpace: _HospitalHeader(
+                totalCount: hospitals.length,
+                mednuCount: mednuCount,
+                isLoading: isLoading,
+                locStatus: _locStatus,
               ),
             ),
 

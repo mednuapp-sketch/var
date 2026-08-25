@@ -985,11 +985,11 @@ class _AmbulanceScreenState extends ConsumerState<AmbulanceScreen> {
                     color: _kRed, size: 52),
               ),
               const SizedBox(height: 20),
-              const Text('Ambulance Booked!', style: AppTextStyles.h2),
-              const SizedBox(height: 8),
-              const Text(
+              const Text('Ambulance Booked!', style: AppTextStyles.h1),
+              const SizedBox(height: 10),
+              Text(
                 'Emergency request received.\nAn ambulance has been dispatched to your location.',
-                style: AppTextStyles.bodyMedium,
+                style: AppTextStyles.bodyLarge.copyWith(height: 1.4),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 20),
@@ -1055,24 +1055,25 @@ class _AmbulanceScreenState extends ConsumerState<AmbulanceScreen> {
 
   Widget _detailRow(IconData icon, String label, String value) =>
       Padding(
-        padding: const EdgeInsets.symmetric(vertical: 5),
+        padding: const EdgeInsets.symmetric(vertical: 6),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, size: 16, color: _kRed),
+            Icon(icon, size: 18, color: _kRed),
             const SizedBox(width: 10),
             Text(
               '$label: ',
               style: const TextStyle(
                 fontFamily: 'Poppins',
                 fontWeight: FontWeight.w600,
-                fontSize: 12,
+                fontSize: 14,
               ),
             ),
             Expanded(
               child: Text(
                 value,
                 style: const TextStyle(
-                    fontFamily: 'Poppins', fontSize: 12),
+                    fontFamily: 'Poppins', fontSize: 14),
                 overflow: TextOverflow.ellipsis,
                 maxLines: 2,
               ),

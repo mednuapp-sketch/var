@@ -522,8 +522,12 @@ service cloud.firestore {
                        isAdmin();
       allow delete: if isAdmin();
 
-      // A pharmacy manages its own stock; nobody else needs to read it
-      // (the Orders/Inventory screens never query across pharmacies).
+      // A pharmacy manages its own stock; nobody else reads this
+      // subcollection directly (the Orders/Inventory screens never query
+      // across pharmacies). Patients see it via a separate, published copy:
+      // the `onPharmacyInventoryWrite` Cloud Function mirrors each item into
+      // `medicines_catalogue` (Admin SDK, bypasses these rules) while this
+      // pharmacy's status is 'active'.
       match /inventory/{itemId} {
         allow read, write: if isOwner(pharmacyId) || isAdmin();
       }

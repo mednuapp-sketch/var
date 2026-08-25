@@ -355,7 +355,7 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
           _field(_driverNameCtrl, 'Driver Full Name', Icons.person_outline),
           const SizedBox(height: 14),
           _field(_driverPhoneCtrl, 'Driver Phone', Icons.call_outlined,
-              keyboardType: TextInputType.phone),
+              keyboardType: TextInputType.phone, locked: true),
           const SizedBox(height: 14),
           _field(_driverLicenseCtrl, 'Driving License Number',
               Icons.badge_outlined),

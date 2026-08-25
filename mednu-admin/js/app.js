@@ -277,28 +277,41 @@ function updateLastRefreshTime() {
 //   REALTIME PRO — LIVE OVERVIEW STRIP
 // ============================================
 
-async function loadLiveStrip() {
-  try {
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
+let _stripUnsubscribes = [];
 
-    const [onlineDocs, todayAppts, openTickets, ratingSnap, activeCalls] = await Promise.all([
-      db.collection('doctors').where('isOnline', '==', true).get(),
-      db.collection('appointments').where('createdAt', '>=', todayStart).get(),
-      db.collection('support_tickets').where('status', '==', 'open').get(),
-      db.collection('doctor_rating_summary').get(),
-      db.collection('consultations').where('status', 'in', ['pending', 'ongoing', 'active']).get(),
-    ]);
+function loadLiveStrip() {
+  _stripUnsubscribes.forEach(u => u && u());
+  _stripUnsubscribes = [];
+  const el = (id) => document.getElementById(id);
 
-    const el = (id) => document.getElementById(id);
-    if (el('strip-online-doctors')) el('strip-online-doctors').textContent = onlineDocs.size;
-    if (el('strip-today-appts'))    el('strip-today-appts').textContent = todayAppts.size;
-    if (el('strip-open-tickets'))   el('strip-open-tickets').textContent = openTickets.size;
-    if (el('strip-active-calls'))   el('strip-active-calls').textContent = activeCalls.size;
+  // strip-open-tickets is kept live by initOverviewRealtime's support_tickets
+  // listener (same query) rather than a second listener here.
 
-    if (el('strip-platform-rating') && !ratingSnap.empty) {
+  _stripUnsubscribes.push(
+    db.collection('doctors').where('isOnline', '==', true).onSnapshot(snap => {
+      if (el('strip-online-doctors')) el('strip-online-doctors').textContent = snap.size;
+    }, err => console.warn('strip online-doctors listener:', err))
+  );
+
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  _stripUnsubscribes.push(
+    db.collection('appointments').where('createdAt', '>=', todayStart).onSnapshot(snap => {
+      if (el('strip-today-appts')) el('strip-today-appts').textContent = snap.size;
+    }, err => console.warn('strip today-appts listener:', err))
+  );
+
+  _stripUnsubscribes.push(
+    db.collection('consultations').where('status', 'in', ['pending', 'ongoing', 'active']).onSnapshot(snap => {
+      if (el('strip-active-calls')) el('strip-active-calls').textContent = snap.size;
+    }, err => console.warn('strip active-calls listener:', err))
+  );
+
+  _stripUnsubscribes.push(
+    db.collection('doctor_rating_summary').onSnapshot(snap => {
+      if (!el('strip-platform-rating') || snap.empty) return;
       let totalRating = 0, totalReviews = 0;
-      ratingSnap.forEach(d => {
+      snap.forEach(d => {
         const dat = d.data();
         if (dat.totalReviews && dat.averageRating) {
           totalRating  += dat.averageRating * dat.totalReviews;
@@ -307,10 +320,8 @@ async function loadLiveStrip() {
       });
       const avg = totalReviews > 0 ? (totalRating / totalReviews).toFixed(1) : '--';
       el('strip-platform-rating').textContent = avg + ' ★';
-    }
-  } catch (e) {
-    console.warn('loadLiveStrip error:', e);
-  }
+    }, err => console.warn('strip rating listener:', err))
+  );
 }
 
 // ============================================
@@ -387,10 +398,7 @@ async function loadOverview() {
     await loadTopMedicinesOverview();
 
     // Recent tickets
-    await loadRecentTickets();
-
-    // Secondary metrics (new)
-    loadSecondaryMetrics();
+    renderRecentTickets(allTickets.filter(t => t.status === 'open'));
 
     // Live activity feed (new)
     loadLiveActivityFeed();
@@ -426,91 +434,42 @@ function startRealtimeRevenue() {
 
 
 // ── SECONDARY METRICS ─────────────────────────────────────────────────────────
-async function loadSecondaryMetrics() {
-  const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-
-  // Fetch each independently so one failure doesn't block others
-  const safe = async (fn) => { try { return await fn(); } catch(e) { return null; } };
-
-  const [hospSnap, ambSnap, refSnap, bannerSnap, matSnap, reqPendingSnap, reqAllSnap] = await Promise.all([
-    safe(() => db.collection('hospitals').get()),
-    safe(() => db.collection('ambulances').get()),
-    safe(() => db.collection('referrals').get()),
-    safe(() => db.collection('banners').get()),
-    safe(() => db.collection('maternity_profiles').get()),
-    safe(() => db.collection('service_requests').where('status', 'in', ['pending','accepted']).get()),
-    safe(() => db.collection('service_requests').get()),
-  ]);
-
-  // Hospitals: count only enabled ones client-side (avoids composite index requirement)
-  if (hospSnap) {
-    const count = hospSnap.docs.filter(d => d.data().enabled !== false).length;
-    setVal('sec-hospitals', count);
-  }
-
-  // Ambulances: count only enabled ones client-side
-  if (ambSnap) {
-    const count = ambSnap.docs.filter(d => d.data().enabled !== false).length;
-    setVal('sec-ambulances', count);
-  }
-
-  // Referrals: total count
-  if (refSnap) setVal('sec-referrals', refSnap.size);
-
-  // Banners: count only active ones client-side
-  if (bannerSnap) {
-    const count = bannerSnap.docs.filter(d => d.data().enabled !== false).length;
-    setVal('sec-banners', count);
-  }
-
-  // Maternity: try multiple collection names
-  if (matSnap && matSnap.size > 0) {
-    setVal('sec-maternity', matSnap.size);
-  } else {
-    // Try alternate collection name
-    const alt = await safe(() => db.collection('maternity').get());
-    setVal('sec-maternity', alt ? alt.size : 0);
-  }
-
-  // Service requests: pending + accepted
-  if (reqPendingSnap) {
-    setVal('sec-service-requests', reqPendingSnap.size);
-    setVal('strip-emergency-count', reqPendingSnap.size);
-  } else if (reqAllSnap) {
-    const active = reqAllSnap.docs.filter(d => ['pending','accepted','in_progress'].includes(d.data().status)).length;
-    setVal('sec-service-requests', active);
-    setVal('strip-emergency-count', active);
-  }
-}
+// The Overview "secondary metrics" mini-cards (sec-hospitals, sec-ambulances,
+// sec-referrals, sec-banners, sec-service-requests) no longer run
+// their own one-time fetch — each is now kept live by the same onSnapshot
+// listener that already powers its own tab: loadHospitals(), loadAmbulances(),
+// initReferralsListener(), loadBannersRealtime(), initMaternityListeners(),
+// and initRequestsListener()/updateRequestStats(), all wired in initDashboard().
 
 
-async function updateRevenueSummaryRow() {
-  try {
-    const now = new Date();
-    const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
-    const snap = await db.collection('payments').where('createdAt', '>=', sixMonthsAgo).get();
-    const monthly = {};
-    snap.forEach(doc => {
-      const d = doc.data();
-      const dt = d.createdAt && d.createdAt.toDate ? d.createdAt.toDate() : new Date(d.createdAt);
-      const key = dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0');
-      monthly[key] = (monthly[key] || 0) + (d.amount || 0);
-    });
-    const vals = Object.values(monthly);
-    if (!vals.length) return;
-    const total = vals.reduce((a, b) => a + b, 0);
-    const avg   = total / vals.length;
-    const best  = Math.max(...vals);
-    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    const bestKey = Object.keys(monthly).find(k => monthly[k] === best) || '';
-    const bestLabel = bestKey ? months[parseInt(bestKey.split('-')[1]) - 1] : '--';
-    const setEl = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-    setEl('rev-total-val',   formatCurrency(total));
-    setEl('rev-avg-val',     formatCurrency(Math.round(avg)));
-    setEl('rev-best-month',  bestLabel);
-  } catch (e) {
-    console.warn('updateRevenueSummaryRow error:', e);
-  }
+let _revenueSummaryListener = null;
+
+function updateRevenueSummaryRow() {
+  if (_revenueSummaryListener) _revenueSummaryListener();
+  const now = new Date();
+  const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+  _revenueSummaryListener = db.collection('payments').where('createdAt', '>=', sixMonthsAgo)
+    .onSnapshot(snap => {
+      const monthly = {};
+      snap.forEach(doc => {
+        const d = doc.data();
+        const dt = d.createdAt && d.createdAt.toDate ? d.createdAt.toDate() : new Date(d.createdAt);
+        const key = dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0');
+        monthly[key] = (monthly[key] || 0) + (d.amount || 0);
+      });
+      const vals = Object.values(monthly);
+      if (!vals.length) return;
+      const total = vals.reduce((a, b) => a + b, 0);
+      const avg   = total / vals.length;
+      const best  = Math.max(...vals);
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      const bestKey = Object.keys(monthly).find(k => monthly[k] === best) || '';
+      const bestLabel = bestKey ? months[parseInt(bestKey.split('-')[1]) - 1] : '--';
+      const setEl = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+      setEl('rev-total-val',   formatCurrency(total));
+      setEl('rev-avg-val',     formatCurrency(Math.round(avg)));
+      setEl('rev-best-month',  bestLabel);
+    }, err => console.warn('updateRevenueSummaryRow listener:', err));
 }
 
 // ── LIVE ACTIVITY FEED ────────────────────────────────────────────────────────
@@ -587,7 +546,7 @@ function loadLiveActivityFeed() {
         if (ch.type === 'added') {
           const d = ch.doc.data();
           pushActivity('ti-headset', '#fff3e0', '#e65100',
-            `Support ticket: ${escHtml(d.title||d.message||'New issue')}`,
+            `Support ticket: ${escHtml(d.category ? capitalize(d.category) : (d.description || 'New issue'))}`,
             d.createdAt ? timeAgo(d.createdAt) : 'just now');
         }
       });
@@ -674,10 +633,7 @@ function renderDoctorsTable(doctors) {
       <td>${(d.totalReviews > 0 && d.rating > 0) ? `â­ ${escHtml(d.rating.toFixed(1))} <span style="font-size:11px;color:#9E9E9E;">(${d.totalReviews})</span>` : '<span style="color:#BDBDBD;font-size:12px;">No reviews</span>'}</td>
       <td><span class="pill pill-${escHtml(safeStatus)}">${escHtml(capitalize(d.status || 'Pending'))}</span></td>
       <td>
-        ${(!d.status || d.status === 'pending') ? `
-          <button class="btn btn-approve" onclick="approveDoctor('${escHtml(d.id)}', this)">Approve</button>
-          <button class="btn btn-reject" style="margin-left:4px;" onclick="rejectDoctor('${escHtml(d.id)}', this)">Reject</button>
-        ` : `<button class="btn btn-outline" onclick="viewDoctor('${escHtml(d.id)}')">View</button>`}
+        <button class="btn btn-outline" onclick="viewDoctor('${escHtml(d.id)}')">${(!d.status || d.status === 'pending') ? 'Review' : 'View'}</button>
         <button class="btn btn-outline" style="margin-left:4px;" onclick="editDoctorAdmin('${escHtml(d.id)}')" title="Edit">
           <i class="ti ti-edit"></i>
         </button>
@@ -728,6 +684,89 @@ function onDoctorTypeChange() {
   if (list.includes(current)) specialtyEl.value = current;
 }
 
+// ── Qualification documents (Add/Edit Doctor form) ──────────────────────────
+// Mirrors the doctor app's self-registration document set (see doctor_register_screen.dart)
+// so admin-added and self-registered doctors share the same `documents` map shape,
+// which showDoctorModal() already knows how to render.
+const DOCTOR_DOC_TYPES = {
+  mbbs_degree:   'MBBS Degree Certificate',
+  spec_cert:     'Specialization Certificate',
+  mbbs_reg_cert: 'MBBS Registration Certificate',
+  renewal_cert:  'Renewal Certificate',
+  profile_photo: 'Profile Photo',
+};
+
+let _doctorDocFiles = {};     // docType -> pending File selected in this form session
+let _existingDoctorDocs = {}; // docType -> already-uploaded URL (populated when editing)
+
+function onDoctorDocSelected(event, docType) {
+  const file = event.target.files[0];
+  if (!file) return;
+  if (file.size > 5 * 1024 * 1024) {
+    showToast('File too large — max 5 MB');
+    event.target.value = '';
+    return;
+  }
+  _doctorDocFiles[docType] = file;
+  const statusEl = document.getElementById(`doc-status-${docType}`);
+  const btnEl    = document.getElementById(`doc-btn-${docType}`);
+  const tileEl   = document.getElementById(`doc-tile-${docType}`);
+  if (statusEl) statusEl.textContent = file.name;
+  if (btnEl) btnEl.innerHTML = '<i class="ti ti-replace"></i> Replace';
+  if (tileEl) { tileEl.classList.add('doc-selected'); tileEl.classList.remove('doc-uploaded'); }
+}
+
+function resetDoctorDocsUI() {
+  _doctorDocFiles = {};
+  _existingDoctorDocs = {};
+  Object.keys(DOCTOR_DOC_TYPES).forEach(docType => {
+    const fileInput = document.getElementById(`doc-file-${docType}`);
+    const statusEl  = document.getElementById(`doc-status-${docType}`);
+    const btnEl     = document.getElementById(`doc-btn-${docType}`);
+    const tileEl    = document.getElementById(`doc-tile-${docType}`);
+    if (fileInput) fileInput.value = '';
+    if (statusEl) statusEl.textContent = 'Not uploaded';
+    if (btnEl) btnEl.innerHTML = '<i class="ti ti-upload"></i> Upload';
+    if (tileEl) tileEl.classList.remove('doc-selected', 'doc-uploaded');
+  });
+}
+
+function populateDoctorDocsUI(existingDocs) {
+  _existingDoctorDocs = existingDocs || {};
+  Object.keys(DOCTOR_DOC_TYPES).forEach(docType => {
+    const url      = _existingDoctorDocs[docType];
+    const statusEl = document.getElementById(`doc-status-${docType}`);
+    const btnEl    = document.getElementById(`doc-btn-${docType}`);
+    const tileEl   = document.getElementById(`doc-tile-${docType}`);
+    if (!statusEl) return;
+    if (url) {
+      statusEl.innerHTML = `<a href="${escHtml(url)}" target="_blank" rel="noopener">View uploaded file</a>`;
+      if (btnEl) btnEl.innerHTML = '<i class="ti ti-replace"></i> Replace';
+      if (tileEl) tileEl.classList.add('doc-uploaded');
+    } else {
+      statusEl.textContent = 'Not uploaded';
+      if (btnEl) btnEl.innerHTML = '<i class="ti ti-upload"></i> Upload';
+      if (tileEl) tileEl.classList.remove('doc-uploaded');
+    }
+  });
+}
+
+async function uploadDoctorDocuments(docId) {
+  const result  = { ..._existingDoctorDocs };
+  const entries = Object.entries(_doctorDocFiles);
+  if (!entries.length) return result;
+
+  await Promise.all(entries.map(async ([docType, file]) => {
+    const safeName    = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const storagePath = `doctor_documents/${docId}/${docType}_${Date.now()}_${safeName}`;
+    const ref  = storage.ref(storagePath);
+    const task = ref.put(file, { contentType: file.type });
+    await new Promise((res, rej) => task.on('state_changed', null, rej, res));
+    result[docType] = await ref.getDownloadURL();
+  }));
+  return result;
+}
+
 async function saveDoctorAdmin() {
   const name           = document.getElementById('dr-name')?.value.trim();
   const type           = document.getElementById('dr-type')?.value || 'doctor';
@@ -744,8 +783,25 @@ async function saveDoctorAdmin() {
   if (!specialty) { showToast('Specialty is required'); return; }
   if (!feeRaw)    { showToast('Consultation fee is required'); return; }
 
-  const btn = document.getElementById('save-doctor-btn');
+  const btn         = document.getElementById('save-doctor-btn');
+  const progressEl  = document.getElementById('doctor-docs-upload-progress');
   btn.disabled = true;
+
+  const docId = _editingDoctorId || db.collection('doctors').doc().id;
+
+  let documents = _existingDoctorDocs;
+  if (Object.keys(_doctorDocFiles).length) {
+    progressEl.style.display = 'inline-flex';
+    try {
+      documents = await uploadDoctorDocuments(docId);
+    } catch (err) {
+      showToast('Document upload failed: ' + err.message);
+      progressEl.style.display = 'none';
+      btn.disabled = false;
+      return;
+    }
+    progressEl.style.display = 'none';
+  }
 
   const data = {
     name, type, specialty, gender,
@@ -755,6 +811,7 @@ async function saveDoctorAdmin() {
     experience:     experienceRaw  ? parseInt(experienceRaw, 10) : null,
     fee:            parseInt(feeRaw, 10),
     status:         isActive ? 'active' : 'suspended',
+    documents,
     updatedAt:      firebase.firestore.FieldValue.serverTimestamp(),
     updatedBy:      auth.currentUser?.email || 'admin',
   };
@@ -771,7 +828,7 @@ async function saveDoctorAdmin() {
       data.totalReviews       = 0;
       data.totalConsultations = 0;
       data.addedByAdmin       = true;
-      await db.collection('doctors').add(data);
+      await db.collection('doctors').doc(docId).set(data);
       showToast(type === 'therapist' ? 'Therapist added' : 'Doctor added');
     }
     cancelDoctorEdit();
@@ -787,6 +844,7 @@ function editDoctorAdmin(id) {
   const d = allDoctors.find(x => x.id === id);
   if (!d) return;
   _editingDoctorId = id;
+  _doctorDocFiles = {};
   document.getElementById('dr-name').value           = d.name           || '';
   document.getElementById('dr-type').value           = d.type           || 'doctor';
   onDoctorTypeChange();
@@ -798,6 +856,7 @@ function editDoctorAdmin(id) {
   document.getElementById('dr-experience').value     = d.experience != null ? d.experience : '';
   document.getElementById('dr-fee').value            = d.fee != null ? d.fee : '';
   document.getElementById('dr-active').checked       = d.status === 'active';
+  populateDoctorDocsUI(d.documents);
   document.getElementById('doctor-form-title').textContent = 'Edit Doctor / Therapist';
   document.getElementById('cancel-doctor-btn').style.display = 'inline-flex';
   document.getElementById('dr-name').scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -811,6 +870,7 @@ function cancelDoctorEdit() {
   onDoctorTypeChange();
   document.getElementById('dr-gender').value = 'Male';
   document.getElementById('dr-active').checked = true;
+  resetDoctorDocsUI();
   document.getElementById('doctor-form-title').textContent = 'Add Doctor / Therapist';
   document.getElementById('cancel-doctor-btn').style.display = 'none';
 }
@@ -1064,11 +1124,7 @@ function renderSpecRequestsTable(list) {
       <td style="font-size:12px;color:var(--text-secondary);">${date}</td>
       <td><span class="pill pill-${sc.cls}">${sc.label}</span></td>
       <td>
-        <button class="btn btn-outline" onclick="viewSpecRequest('${r.id}')" style="margin-right:4px;">View</button>
-        ${isPending ? `
-          <button class="btn btn-approve" onclick="approveSpecRequest('${r.id}', this)">Approve</button>
-          <button class="btn btn-reject" onclick="promptRejectSpecRequest('${r.id}')" style="margin-left:4px;">Reject</button>
-        ` : ''}
+        <button class="btn btn-outline" onclick="viewSpecRequest('${r.id}')">${isPending ? 'Review' : 'View'}</button>
       </td>
     </tr>`;
   }).join('');
@@ -1359,47 +1415,63 @@ function renderPaymentsTable(payments) {
     tbody.innerHTML = '<tr><td colspan="6" class="loading">No payments found</td></tr>';
     return;
   }
-  tbody.innerHTML = payments.slice(0, 50).map(p => `<tr>
+  // Payment docs written by the app only carry userId/doctorId (no patientName/doctorName),
+  // so resolve display names from the already-loaded doctors/patients lists.
+  const doctorById  = {}; allDoctors.forEach(d => { doctorById[d.id] = d; });
+  const patientById = {}; allPatients.forEach(p => { patientById[p.id] = p; });
+  const isPaid = s => !s || s === 'completed' || s === 'success' || s === 'paid';
+  tbody.innerHTML = payments.slice(0, 50).map(p => {
+    const patientName = p.patientName || patientById[p.userId]?.name || '—';
+    const doctorName  = p.doctorName  || doctorById[p.doctorId]?.name  || '—';
+    return `<tr>
     <td>${p.paymentId || p.id}</td>
-    <td>${escHtml(p.patientName || '—')}</td>
-    <td>${escHtml(p.doctorName || '—')}</td>
+    <td>${escHtml(patientName)}</td>
+    <td>${escHtml(doctorName)}</td>
     <td>${formatCurrency(p.amount || 0)}</td>
-    <td><span class="pill ${p.status === 'success' ? 'pill-active' : 'pill-pending'}">${escHtml(capitalize(p.status||'pending'))}</span></td>
+    <td><span class="pill ${isPaid(p.status) ? 'pill-active' : 'pill-pending'}">${escHtml(capitalize(p.status||'pending'))}</span></td>
     <td>${escHtml(formatDate(p.createdAt))}</td>
-  </tr>`).join('');
+  </tr>`;
+  }).join('');
 }
 
 // ============================================
-//   MEDICINES
+//   MEDICINES — REALTIME (drives both the Medicines tab and the
+//   Overview "top medicines" widget from one live prescriptions listener)
 // ============================================
-async function loadMedicines() {
-  const snap = await db.collection('prescriptions').get();
-  const medicineCount = {};
-  snap.forEach(doc => {
-    const meds = doc.data().medicines || [];
-    meds.forEach(m => {
-      const name = m.name || m;
-      medicineCount[name] = (medicineCount[name] || 0) + 1;
+let _prescriptionsListener = null;
+
+function loadMedicines() { initPrescriptionsListener(); }
+function loadTopMedicinesOverview() { initPrescriptionsListener(); }
+
+function initPrescriptionsListener() {
+  if (_prescriptionsListener) return; // already live — both callers share the one listener
+  _prescriptionsListener = db.collection('prescriptions').onSnapshot(snap => {
+    const medicineCount = {};
+    snap.forEach(doc => {
+      const meds = doc.data().medicines || [];
+      meds.forEach(m => {
+        const name = m.medicineName || m.name || m;
+        medicineCount[name] = (medicineCount[name] || 0) + 1;
+      });
     });
+    const sorted = Object.entries(medicineCount).sort((a,b) => b[1]-a[1]);
+
+    renderMedicinesTable(sorted.slice(0, 15));
+    buildMedicinesChart(sorted.slice(0, 8));
+    renderTopMedicinesOverview(sorted.slice(0, 5));
+  }, err => {
+    console.error('prescriptions listener error:', err);
+    const tbody = document.getElementById('medicines-tbody');
+    if (tbody) tbody.innerHTML = '<tr><td colspan="3" class="loading">Couldn\'t load medicines — try refreshing.</td></tr>';
+    const el = document.getElementById('top-medicines-list');
+    if (el) el.innerHTML = '<div class="empty-state"><p>Couldn\'t load medicines data</p></div>';
   });
-  const sorted = Object.entries(medicineCount).sort((a,b) => b[1]-a[1]).slice(0, 15);
-  renderMedicinesTable(sorted);
-  buildMedicinesChart(sorted.slice(0,8));
 }
 
-async function loadTopMedicinesOverview() {
-  const snap = await db.collection('prescriptions').get();
-  const medicineCount = {};
-  snap.forEach(doc => {
-    const meds = doc.data().medicines || [];
-    meds.forEach(m => {
-      const name = m.name || m;
-      medicineCount[name] = (medicineCount[name] || 0) + 1;
-    });
-  });
-  const sorted = Object.entries(medicineCount).sort((a,b) => b[1]-a[1]).slice(0, 5);
-  const colors = ['#522546','#2E7D32','#F57F17','#C62828','#8B3A6B'];
+function renderTopMedicinesOverview(sorted) {
   const el = document.getElementById('top-medicines-list');
+  if (!el) return;
+  const colors = ['#522546','#2E7D32','#F57F17','#C62828','#8B3A6B'];
   if (!sorted.length) { el.innerHTML = '<div class="empty-state"><p>No prescription data</p></div>'; return; }
   const max = sorted[0][1];
   el.innerHTML = sorted.map(([name, count], i) => `
@@ -1557,6 +1629,20 @@ function setText(id, value) {
 // ============================================
 let allTickets = [];
 
+// Tickets can be raised by a doctor (doctorId/doctorName) or a patient
+// (userId/patientName) — both write into the same `support_tickets`
+// collection, distinguished by the `role` field (or inferred from which
+// id field is present, for tickets written before `role` existed).
+function ticketRaisedBy(t) {
+  const role = t.role || (t.doctorId ? 'doctor' : (t.userId ? 'patient' : null));
+  return { role, name: t.doctorName || t.patientName || 'User', phone: t.phone || '' };
+}
+function ticketRoleBadge(role) {
+  if (role === 'doctor')  return '<span style="display:inline-block;background:#E3F2FD;color:#1565C0;font-size:9px;font-weight:700;padding:2px 6px;border-radius:8px;margin-left:6px;vertical-align:middle;">DOCTOR</span>';
+  if (role === 'patient') return '<span style="display:inline-block;background:#E8F5E9;color:#2E7D32;font-size:9px;font-weight:700;padding:2px 6px;border-radius:8px;margin-left:6px;vertical-align:middle;">PATIENT</span>';
+  return '';
+}
+
 async function loadTickets() {
   const snap = await db.collection('support_tickets').orderBy('createdAt', 'desc').get();
   allTickets = [];
@@ -1565,11 +1651,13 @@ async function loadTickets() {
   document.getElementById('stat-tickets').textContent = allTickets.filter(t => t.status === 'open').length;
 }
 
-async function loadRecentTickets() {
-  const snap = await db.collection('support_tickets').where('status','==','open').orderBy('createdAt','desc').limit(4).get();
+// Renders the Overview "recent tickets" widget from an already-loaded ticket
+// list — kept live by being called from loadTicketsRealtime's onSnapshot below,
+// rather than running its own one-time fetch.
+function renderRecentTickets(openTickets) {
   const el = document.getElementById('recent-tickets');
   if (!el) return;
-  if (snap.empty) {
+  if (!openTickets.length) {
     el.innerHTML = '<div class="empty-state" style="padding:24px 0;"><div class="empty-icon"><i class="ti ti-circle-check" style="color:#1e8e3e;"></i></div><p style="color:#1e8e3e;font-weight:600;">No open tickets right now</p></div>';
     return;
   }
@@ -1578,37 +1666,48 @@ async function loadRecentTickets() {
     medium: { bg: 'var(--warning-light)', fg: 'var(--warning)', icon: 'ti-alert-triangle' },
     low:    { bg: 'var(--info-light)',    fg: 'var(--info)',    icon: 'ti-info-circle' },
   };
-  el.innerHTML = '';
-  snap.forEach(doc => {
-    const t = doc.data();
+  el.innerHTML = openTickets.slice(0, 4).map(t => {
     const cfg = prioConfig[t.priority] || prioConfig.medium;
-    el.innerHTML += `
+    const src = ticketRaisedBy(t);
+    return `
     <div class="ticket-item">
       <div class="ticket-ico" style="background:${cfg.bg};color:${cfg.fg};">
         <i class="ti ${cfg.icon}"></i>
       </div>
       <div class="ticket-body">
-        <div class="ticket-title">${escHtml(t.title || t.message || 'Support request')}</div>
-        <div class="ticket-meta">${escHtml(t.userName || 'User')} &middot; ${escHtml(t.priority||'medium')} priority &middot; ${escHtml(formatDate(t.createdAt))}</div>
+        <div class="ticket-title">${escHtml(t.category ? capitalize(t.category) : (t.description || 'Support request'))}</div>
+        <div class="ticket-meta">${escHtml(src.name)}${ticketRoleBadge(src.role)} &middot; ${escHtml(t.priority||'medium')} priority &middot; ${escHtml(formatDate(t.createdAt))}</div>
       </div>
       <span class="pill pill-pending" style="flex-shrink:0;font-size:10px;">Open</span>
     </div>`;
-  });
+  }).join('');
 }
 function renderTicketsTable(tickets) {
   const tbody = document.getElementById('tickets-tbody');
-  if (!tickets.length) { tbody.innerHTML = '<tr><td colspan="6" class="loading">No tickets found</td></tr>'; return; }
+  if (!tickets.length) { tbody.innerHTML = '<tr><td colspan="7" class="loading">No tickets found</td></tr>'; return; }
   tbody.innerHTML = tickets.map(t => {
     const prioClass = t.priority === 'high' ? 'suspended' : t.priority === 'medium' ? 'pending' : 'review';
     const statusClass = t.status === 'open' ? 'pending' : 'active';
+    const src = ticketRaisedBy(t);
     return `<tr>
       <td>${t.id.slice(0,8)}...</td>
-      <td>${escHtml(t.title || t.message || '—')}</td>
-      <td>${escHtml(t.userName || '—')}</td>
+      <td style="max-width:200px;">
+        <div style="font-weight:600;">${escHtml(t.category || '—')}</div>
+        ${t.description ? `<div style="font-size:11px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;" title="${escHtml(t.description)}">${escHtml(t.description)}</div>` : ''}
+      </td>
+      <td>
+        <div class="user-name">${escHtml(src.name)}${ticketRoleBadge(src.role)}</div>
+        <div class="user-sub">${escHtml(src.phone || '')}</div>
+      </td>
       <td><span class="pill pill-${prioClass}">${escHtml(capitalize(t.priority||'low'))}</span></td>
       <td><span class="pill pill-${statusClass}">${escHtml(capitalize(t.status||'open'))}</span></td>
       <td>${escHtml(formatDate(t.createdAt))}</td>
-      <td>${t.status === 'open' ? `<button class="btn btn-approve" onclick="resolveTicket('${t.id}', this)">Resolve</button>` : '—'}</td>
+      <td>
+        <div style="display:flex;gap:4px;flex-wrap:wrap;">
+          ${t.status === 'open' ? `<button class="btn btn-approve" onclick="resolveTicket('${t.id}', this)">Resolve</button>` : ''}
+          <button class="btn btn-outline" onclick="viewTicketDetail('${t.id}')">View</button>
+        </div>
+      </td>
     </tr>`;
   }).join('');
 }
@@ -1628,33 +1727,129 @@ async function resolveTicket(id, btn) {
   }
 }
 
+function viewTicketDetail(id) {
+  const t = allTickets.find(x => x.id === id);
+  if (!t) return;
+
+  document.getElementById('ticket-detail-modal')?.remove();
+
+  const src = ticketRaisedBy(t);
+  const status = t.status || 'open';
+  const prioClass = t.priority === 'high' ? 'suspended' : t.priority === 'medium' ? 'pending' : 'review';
+
+  const modal = document.createElement('div');
+  modal.id = 'ticket-detail-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
+  modal.innerHTML = `
+    <div style="background:#fff;border-radius:20px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto;padding:28px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+        <h2 style="font-size:18px;font-weight:700;margin:0;">Ticket Detail</h2>
+        <button onclick="document.getElementById('ticket-detail-modal').remove()" style="border:none;background:none;font-size:22px;cursor:pointer;color:#666;">&times;</button>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
+        <span class="pill pill-${prioClass}">${escHtml(capitalize(t.priority||'low'))} priority</span>
+        <span class="pill pill-${status === 'open' ? 'pending' : 'active'}">${escHtml(capitalize(status))}</span>
+        ${ticketRoleBadge(src.role)}
+      </div>
+
+      <div style="padding:12px;background:#f9f9f9;border-radius:12px;margin-bottom:14px;">
+        <div style="font-size:11px;font-weight:600;color:#888;margin-bottom:4px;">RAISED BY</div>
+        <div style="font-weight:600;font-size:14px;">${escHtml(src.name)}</div>
+        <div style="font-size:12px;color:#666;">${escHtml(src.phone || '—')}</div>
+      </div>
+
+      <div style="margin-bottom:14px;">
+        <div style="font-size:11px;font-weight:600;color:#888;margin-bottom:4px;">CATEGORY</div>
+        <div style="font-weight:600;font-size:14px;margin-bottom:10px;">${escHtml(t.category || '—')}</div>
+        <div style="font-size:11px;font-weight:600;color:#888;margin-bottom:4px;">DESCRIPTION</div>
+        <div style="font-size:13px;line-height:1.6;white-space:pre-wrap;">${escHtml(t.description || '—')}</div>
+      </div>
+
+      ${t.attachmentUrl ? `
+      <div style="margin-bottom:14px;">
+        <div style="font-size:11px;font-weight:600;color:#888;margin-bottom:6px;">ATTACHMENT</div>
+        <a href="${escHtml(t.attachmentUrl)}" target="_blank" rel="noopener">
+          <img src="${escHtml(t.attachmentUrl)}" style="max-width:100%;border-radius:12px;border:1px solid var(--border);" />
+        </a>
+      </div>` : ''}
+
+      <div style="font-size:12px;color:var(--text-secondary);margin-bottom:14px;">
+        Submitted ${escHtml(formatDate(t.createdAt))}${t.resolvedAt ? ` &middot; Resolved ${escHtml(formatDate(t.resolvedAt))}` : ''}
+      </div>
+
+      <div style="margin-bottom:16px;">
+        <div style="font-size:11px;font-weight:600;color:#888;margin-bottom:6px;">ADMIN NOTES</div>
+        <textarea id="ticket-notes-input" rows="3" style="width:100%;border:1px solid var(--border);border-radius:10px;padding:10px;font-size:13px;font-family:inherit;resize:vertical;" placeholder="Internal notes (not visible to the user)...">${escHtml(t.adminNotes || '')}</textarea>
+      </div>
+
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-outline" style="flex:1;" onclick="saveTicketAdminNotes('${t.id}', this)">Save Notes</button>
+        ${status === 'open' ? `<button class="btn btn-approve" style="flex:1;" onclick="resolveTicket('${t.id}', this);document.getElementById('ticket-detail-modal').remove();">Resolve Ticket</button>` : ''}
+        <button class="btn btn-outline" onclick="document.getElementById('ticket-detail-modal').remove()">Close</button>
+      </div>
+    </div>`;
+
+  document.body.appendChild(modal);
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+}
+
+async function saveTicketAdminNotes(id, btn) {
+  const input = document.getElementById('ticket-notes-input');
+  if (!input) return;
+  btn.disabled = true; btn.textContent = 'Saving...';
+  try {
+    await db.collection('support_tickets').doc(id).update({
+      adminNotes: input.value,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    showToast('Notes saved!');
+  } catch (err) {
+    showToast('Failed to save notes: ' + err.message);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Save Notes';
+  }
+}
+
 document.getElementById('ticket-filter')?.addEventListener('change', e => {
   const val = e.target.value;
-  const filtered = val === 'all' ? allTickets : allTickets.filter(t => t.status === val || t.priority === val);
+  const filtered = val === 'all' ? allTickets : allTickets.filter(t =>
+    t.status === val || t.priority === val || ticketRaisedBy(t).role === val
+  );
   renderTicketsTable(filtered);
 });
 
 // ============================================
-//   REPORTS
+//   REPORTS — REALTIME
 // ============================================
+let _reportsListener = null;
+
 function loadReportsList() {
-  // Reports are stored in Firebase storage or as metadata in Firestore
-  // This shows generated report metadata
-  db.collection('reports').orderBy('createdAt', 'desc').limit(10).get().then(snap => {
-    const el = document.getElementById('reports-list');
-    if (snap.empty) { el.innerHTML = '<div class="empty-state"><div class="empty-icon"><i class="ti ti-file-analytics"></i></div><p>No reports generated yet</p></div>'; return; }
-    el.innerHTML = snap.docs.map(doc => {
-      const r = doc.data();
-      return `<div class="user-cell" style="padding:12px 0;border-bottom:1px solid var(--border);">
-        <div style="font-size:24px;">
-        <div style="flex:1;">
-          <div class="user-name">${escHtml(r.title || 'Report')}</div>
-          <div class="user-sub">${r.type || ''} · ${escHtml(formatDate(r.createdAt))}</div>
-        </div>
-        ${r.downloadUrl ? `<a href="${escHtml(r.downloadUrl)}" target="_blank" class="btn btn-outline">Download</a>` : ''}
-      </div>`;
-    }).join('');
-  }).catch(() => {});
+  // Uses its own collection (not 'reports') because the patient app already writes
+  // unrelated uploaded-scan documents to 'reports' with an incompatible shape
+  // (name/imageUrl/storagePath) — sharing that collection made this list show blanks.
+  if (_reportsListener) return; // already live
+  _reportsListener = db.collection('admin_generated_reports').orderBy('createdAt', 'desc').limit(10)
+    .onSnapshot(snap => {
+      const el = document.getElementById('reports-list');
+      if (!el) return;
+      if (snap.empty) { el.innerHTML = '<div class="empty-state"><div class="empty-icon"><i class="ti ti-file-analytics"></i></div><p>No reports generated yet</p></div>'; return; }
+      el.innerHTML = snap.docs.map(doc => {
+        const r = doc.data();
+        return `<div class="user-cell" style="padding:12px 0;border-bottom:1px solid var(--border);">
+          <div style="font-size:24px;">
+          <div style="flex:1;">
+            <div class="user-name">${escHtml(r.title || 'Report')}</div>
+            <div class="user-sub">${r.type || ''} · ${escHtml(formatDate(r.createdAt))}</div>
+          </div>
+          ${r.downloadUrl ? `<a href="${escHtml(r.downloadUrl)}" target="_blank" class="btn btn-outline">Download</a>` : ''}
+        </div>`;
+      }).join('');
+    }, err => {
+      console.error('reports list error:', err);
+      const el = document.getElementById('reports-list');
+      if (el) el.innerHTML = '<div class="empty-state"><div class="empty-icon"><i class="ti ti-alert-circle"></i></div><p>Couldn\'t load reports — try refreshing.</p></div>';
+    });
 }
 
 document.getElementById('generate-report-btn')?.addEventListener('click', async () => {
@@ -1662,7 +1857,7 @@ document.getElementById('generate-report-btn')?.addEventListener('click', async 
   const range = document.getElementById('report-range').value;
   showToast(`Generating ${type} report for ${range}...`);
   // Save report request to Firestore — your backend/Cloud Function can process it
-  await db.collection('reports').add({
+  await db.collection('admin_generated_reports').add({
     title: `${type} — ${range}`,
     type, range,
     status: 'generating',
@@ -2258,6 +2453,9 @@ function updateRequestStats() {
   document.getElementById('req-stat-inprogress').textContent = counts.in_progress;
   document.getElementById('req-stat-completed').textContent  = counts.completed;
   document.getElementById('req-stat-rejected').textContent   = counts.rejected;
+  const activeRequests = counts.pending + counts.accepted;
+  setText('sec-service-requests', activeRequests);
+  setText('strip-emergency-count', activeRequests);
 }
 
 function updateRequestsBadge() {
@@ -2618,6 +2816,7 @@ function loadHospitals() {
         if (enabledCount > 0) { badge.textContent = enabledCount; badge.style.display = 'inline'; }
         else badge.style.display = 'none';
       }
+      setText('sec-hospitals', enabledCount);
     }, err => console.error('Hospitals load error:', err));
 }
 
@@ -2790,6 +2989,7 @@ function loadAmbulances() {
         if (enabledCount > 0) { badge.textContent = enabledCount; badge.style.display = 'inline'; }
         else badge.style.display = 'none';
       }
+      setText('sec-ambulances', enabledCount);
     }, err => console.error('Ambulances load error:', err));
 }
 
@@ -3051,6 +3251,7 @@ function initReferralsListener() {
       _updateReferralStats(_allReferrals);
       _renderTopReferrers(_allReferrals);
       filterReferrals();
+      setText('sec-referrals', _allReferrals.length);
     }, err => {
       document.getElementById('referrals-tbody').innerHTML =
         `<tr><td colspan="8" style="text-align:center;color:var(--danger);">Failed: ${escHtml(err.message)}</td></tr>`;
@@ -3430,6 +3631,8 @@ function initOverviewRealtime() {
       if (el) { el.textContent = snap.size; el.classList.add('stat-updated'); setTimeout(() => el.classList.remove('stat-updated'), 500); }
       const badge = document.getElementById('nav-ticket-count');
       if (badge) badge.textContent = snap.size;
+      const stripEl = document.getElementById('strip-open-tickets');
+      if (stripEl) stripEl.textContent = snap.size;
     }, err => console.error('tickets listener', err))
   );
 }
@@ -3463,11 +3666,12 @@ function loadTicketsRealtime() {
     const badge = document.getElementById('nav-ticket-count');
     if (badge) badge.textContent = openCount;
     renderTicketsTable(allTickets);
+    renderRecentTickets(allTickets.filter(t => t.status === 'open'));
     // Notify new open tickets
     snap.docChanges().forEach(change => {
       if (change.type === 'added' && change.doc.data().status === 'open') {
         const t = change.doc.data();
-        addSystemNotif('ticket', { id: change.doc.id, title: t.title || t.message || 'Support ticket', priority: t.priority || 'medium', user: t.userName || 'User' });
+        addSystemNotif('ticket', { id: change.doc.id, title: t.category ? capitalize(t.category) : (t.description || 'Support ticket'), priority: t.priority || 'medium', user: ticketRaisedBy(t).name });
       }
     });
   }, err => console.error('tickets listener', err));
@@ -3527,6 +3731,7 @@ function loadBannersRealtime() {
     const activeCount = allBanners.filter(b => isBannerActive(b)).length;
     const badge = document.getElementById('nav-banner-count');
     if (badge) { badge.textContent = activeCount; badge.style.display = activeCount > 0 ? 'inline' : 'none'; }
+    setText('sec-banners', activeCount);
   }, err => console.error('banners listener', err));
 }
 
@@ -3778,6 +3983,9 @@ function initDashboard() {
   _liveCallsInited = true;
   initCaregiversListener();
   initCareAssistantsListener();
+  buildRevenueChart();
+  loadLiveActivityFeed();
+  updateRevenueSummaryRow();
 }
 
 function updateAdminDisplayName() {
@@ -3966,14 +4174,6 @@ function _syncEquipmentFields() {
   if (priceLabel)     priceLabel.textContent       = isEquipment ? 'Rent Price / Day (₹)' : 'Price (₹)';
 }
 
-// Patch openServiceCategory to toggle equipment-only fields
-const _origOpenServiceCategory = openServiceCategory;
-function openServiceCategory(key) {
-  _origOpenServiceCategory(key);
-  _syncEquipmentFields();
-}
-
-
 // ============================================
 //   SERVICES MANAGEMENT — FULL CRUD
 // ============================================
@@ -4069,6 +4269,7 @@ function openServiceCategory(key) {
   document.getElementById('page-sub').textContent = 'Services › ' + label;
 
   filterServices();
+  _syncEquipmentFields();
 }
 
 function backToServicesHub() {
@@ -4887,11 +5088,12 @@ async function sendBroadcast() {
   }
 }
 
-async function loadBroadcasts() {
+let _broadcastsListener = null;
+
+function loadBroadcasts() {
   const el = document.getElementById('broadcasts-list');
-  if (!el) return;
-  try {
-    const snap = await db.collection('broadcasts').orderBy('sentAt', 'desc').limit(20).get();
+  if (!el || _broadcastsListener) return; // already live
+  _broadcastsListener = db.collection('broadcasts').orderBy('sentAt', 'desc').limit(20).onSnapshot(snap => {
     if (snap.empty) { el.innerHTML = '<div class="empty-state"><div class="empty-icon"><i class="ti ti-speakerphone"></i></div><p>No broadcasts sent yet</p></div>'; return; }
     const iconMap = { general:'', offer:'', alert:'âš ï¸', update:'', emergency:'' };
     const tgLabel = { all_patients:'All Patients', all_doctors:'All Doctors', all_users:'Everyone', specific_user:'Specific User' };
@@ -4906,7 +5108,7 @@ async function loadBroadcasts() {
         </div>
       </div>`;
     }).join('');
-  } catch(err) { el.innerHTML = '<div class="empty-state"><p>Could not load broadcasts</p></div>'; }
+  }, err => { console.error('broadcasts listener error:', err); el.innerHTML = '<div class="empty-state"><p>Could not load broadcasts</p></div>'; });
 }
 
 // ============================================
@@ -4917,9 +5119,12 @@ let _matProfiles = [];
 let _currentAssignProfileId = '';
 
 function initMaternityListeners() {
-  // Real-time listener for unresolved alerts
+  // Real-time listener for unresolved alerts — drives the nav badge, the
+  // "mat-alerts" count, and the alerts table on the Maternity tab.
   db.collection('pregnancy_alerts')
     .where('isResolved', '==', false)
+    .orderBy('reportedAt', 'desc')
+    .limit(20)
     .onSnapshot(snap => {
       const count = snap.size;
       const badge = document.getElementById('nav-maternity-alerts');
@@ -4929,65 +5134,59 @@ function initMaternityListeners() {
       }
       const alertCount = document.getElementById('mat-alerts');
       if (alertCount) alertCount.textContent = count;
-    });
+      renderMaternityAlerts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, err => console.error('pregnancy_alerts listener error:', err));
+
+  // Real-time listener for active pregnancy profiles — drives the Maternity
+  // tab's total/high-risk counts + list.
+  // (Collection is 'pregnancy_profiles' per firestore.rules — not 'maternity_profiles'.)
+  db.collection('pregnancy_profiles')
+    .where('isActive', '==', true)
+    .onSnapshot(snap => {
+      setText('mat-total', snap.size);
+      setText('mat-highrisk', snap.docs.filter(d => d.data().isHighRisk).length);
+      _matProfiles = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      renderMaternityPatients(_matProfiles);
+    }, err => console.error('pregnancy_profiles listener error:', err));
+
+  // Real-time listener for upcoming checkups
+  db.collection('pregnancy_checkups')
+    .where('status', '==', 'upcoming')
+    .where('scheduledDate', '>=', new Date())
+    .onSnapshot(snap => {
+      setText('mat-checkups', snap.size);
+    }, err => console.error('pregnancy_checkups listener error:', err));
 }
 
-async function loadMaternityOverview() {
-  try {
-    const [profilesSnap, alertsSnap, checkupsSnap] = await Promise.all([
-      db.collection('pregnancy_profiles').where('isActive', '==', true).get(),
-      db.collection('pregnancy_alerts').where('isResolved', '==', false).get(),
-      db.collection('pregnancy_checkups')
-        .where('status', '==', 'upcoming')
-        .where('scheduledDate', '>=', new Date())
-        .get()
-    ]);
-    document.getElementById('mat-total').textContent = profilesSnap.size;
-    const highRisk = profilesSnap.docs.filter(d => d.data().isHighRisk).length;
-    document.getElementById('mat-highrisk').textContent = highRisk;
-    document.getElementById('mat-alerts').textContent = alertsSnap.size;
-    document.getElementById('mat-checkups').textContent = checkupsSnap.size;
-
-    _matProfiles = profilesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-    renderMaternityPatients(_matProfiles);
-    loadMaternityAlerts();
-  } catch(e) { console.error('loadMaternityOverview', e); }
-}
-
-async function loadMaternityAlerts() {
+function renderMaternityAlerts(alerts) {
   const tbody = document.getElementById('mat-alerts-body');
   if (!tbody) return;
-  try {
-    const snap = await db.collection('pregnancy_alerts')
-      .where('isResolved', '==', false)
-      .orderBy('reportedAt', 'desc')
-      .limit(20)
-      .get();
-    if (snap.empty) {
-      tbody.innerHTML = '<tr><td colspan="6" class="empty-row">No active alerts ';
-      return;
-    }
-    tbody.innerHTML = snap.docs.map(doc => {
-      const a = doc.data();
-      const reportedAt = a.reportedAt?.toDate ? a.reportedAt.toDate() : new Date();
-      const sevClass = a.severity === 'critical' ? 'color:#b71c1c;font-weight:700;'
-        : a.severity === 'high' ? 'color:#e65100;font-weight:700;' : 'color:#f57f17;';
-      return `<tr>
-        <td><strong>${escHtml(a.patientName||'—')}</strong></td>
-        <td>${escHtml((a.type||'').replace(/_/g,' ').toUpperCase())}</td>
-        <td style="${sevClass}">${(a.severity||'').toUpperCase()}</td>
-        <td style="max-width:220px;white-space:normal;">${escHtml(a.message||'')}</td>
-        <td>${escHtml(formatDate(a.reportedAt))}</td>
-        <td>
-          <button class="btn-outline" style="padding:4px 10px;font-size:11px;color:#2e7d32;border-color:#2e7d32;"
-            onclick="resolveAlert('${doc.id}')">Resolve</button>
-        </td>
-      </tr>`;
-    }).join('');
-  } catch(e) {
-    tbody.innerHTML = '<tr><td colspan="6" class="empty-row">Error loading alerts</td></tr>';
+  if (!alerts.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="empty-row">No active alerts </td></tr>';
+    return;
   }
+  tbody.innerHTML = alerts.map(a => {
+    const sevClass = a.severity === 'critical' ? 'color:#b71c1c;font-weight:700;'
+      : a.severity === 'high' ? 'color:#e65100;font-weight:700;' : 'color:#f57f17;';
+    return `<tr>
+      <td><strong>${escHtml(a.patientName||'—')}</strong></td>
+      <td>${escHtml((a.type||'').replace(/_/g,' ').toUpperCase())}</td>
+      <td style="${sevClass}">${(a.severity||'').toUpperCase()}</td>
+      <td style="max-width:220px;white-space:normal;">${escHtml(a.message||'')}</td>
+      <td>${escHtml(formatDate(a.reportedAt))}</td>
+      <td>
+        <button class="btn-outline" style="padding:4px 10px;font-size:11px;color:#2e7d32;border-color:#2e7d32;"
+          onclick="resolveAlert('${a.id}')">Resolve</button>
+      </td>
+    </tr>`;
+  }).join('');
 }
+
+// Profiles, alerts and checkups are all kept live by initMaternityListeners()
+// (called once from initDashboard) — these are now just no-op-safe hooks for
+// the existing "on tab open" / "after action" / manual Refresh call sites.
+function loadMaternityOverview() {}
+function loadMaternityAlerts() {}
 
 async function resolveAlert(alertId) {
   if (!confirm('Mark this alert as resolved?')) return;
@@ -5112,13 +5311,14 @@ window.switchTab = function(tab, title) {
 
 let _allReviews = [];
 
-async function loadReviews() {
-  try {
-    // Load all reviews ordered by newest first
-    const snap = await db.collection('doctor_reviews')
-      .orderBy('createdAt', 'desc')
-      .limit(200)
-      .get();
+let _reviewsListener = null;
+
+function loadReviews() {
+  if (_reviewsListener) { applyReviewsFilter(); return; } // already live
+  _reviewsListener = db.collection('doctor_reviews')
+    .orderBy('createdAt', 'desc')
+    .limit(200)
+    .onSnapshot(snap => {
 
     _allReviews = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
@@ -5145,9 +5345,7 @@ async function loadReviews() {
     }
 
     applyReviewsFilter();
-  } catch (err) {
-    console.error('Reviews load error:', err);
-  }
+  }, err => console.error('Reviews listener error:', err));
 }
 
 function applyReviewsFilter() {
@@ -5308,34 +5506,42 @@ let _qaRatingChart = null;
 let _qaTrendChart = null;
 let _qaAllDoctors = [];
 
-async function loadQualityAnalytics() {
-  try {
-    const snap = await db.collection('weekly_quality_reports')
-      .orderBy('generatedAt', 'desc')
-      .limit(12)
-      .get();
+let _qualityReportsListener = null;
 
-    _qualityReports = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+function loadQualityAnalytics() {
+  if (_qualityReportsListener) return; // already live
+  _qualityReportsListener = db.collection('weekly_quality_reports')
+    .orderBy('generatedAt', 'desc')
+    .limit(12)
+    .onSnapshot(snap => {
+      const picker = document.getElementById('quality-week-picker');
+      // Keep whatever week the admin currently has open instead of jumping to
+      // the newest one whenever a new report streams in.
+      const prevSelectedId = picker && picker.value !== '' && _qualityReports[parseInt(picker.value, 10)]
+        ? _qualityReports[parseInt(picker.value, 10)].id
+        : null;
 
-    const picker = document.getElementById('quality-week-picker');
-    if (!picker) return;
+      _qualityReports = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-    if (_qualityReports.length === 0) {
-      picker.innerHTML = '<option value="">No reports yet — click Generate Now</option>';
-      renderEmptyQualityState();
-      return;
-    }
+      if (!picker) return;
 
-    picker.innerHTML = _qualityReports.map((r, i) => {
-      const label = formatQualityReportLabel(r);
-      return '<option value="' + i + '"' + (i === 0 ? ' selected' : '') + '>' + label + '</option>';
-    }).join('');
+      if (_qualityReports.length === 0) {
+        picker.innerHTML = '<option value="">No reports yet — click Generate Now</option>';
+        renderEmptyQualityState();
+        return;
+      }
 
-    renderQualityReport(_qualityReports[0]);
-    buildQualityTrendChart(_qualityReports);
-  } catch (e) {
-    console.error('loadQualityAnalytics error:', e);
-  }
+      const reselectIdx = prevSelectedId ? _qualityReports.findIndex(r => r.id === prevSelectedId) : -1;
+      const selectedIdx = reselectIdx >= 0 ? reselectIdx : 0;
+
+      picker.innerHTML = _qualityReports.map((r, i) => {
+        const label = formatQualityReportLabel(r);
+        return '<option value="' + i + '"' + (i === selectedIdx ? ' selected' : '') + '>' + label + '</option>';
+      }).join('');
+
+      renderQualityReport(_qualityReports[selectedIdx]);
+      buildQualityTrendChart(_qualityReports);
+    }, err => console.error('quality analytics listener error:', err));
 }
 
 function formatQualityReportLabel(report) {
@@ -6471,15 +6677,15 @@ let _gsResults = [];
 const GS_COLLECTIONS = {
   doctors:      { col: 'doctors',        icon: 'ti-stethoscope', bg: '#F5E6F0', fg: '#522546', label: 'Doctors',      fields: ['name','specialty','specialisation','email','phone'], tab: 'doctors',      badge: d => d.status || 'active' },
   patients:     { col: 'users',          icon: 'ti-users',       bg: '#E8F5E9', fg: '#2E7D32', label: 'Patients',     fields: ['name','email','phone'],               tab: 'patients',     badge: () => 'patient' },
-  hospitals:    { col: 'hospitals',      icon: 'ti-building-hospital', bg: '#E3F2FD', fg: '#1565C0', label: 'Hospitals',    fields: ['name','type','address','city'],    tab: 'hospitals',    badge: d => d.type || 'hospital' },
-  ambulances:   { col: 'ambulances',     icon: 'ti-ambulance',   bg: '#FFF3E0', fg: '#E65100', label: 'Ambulances',   fields: ['name','provider','phone','area'],      tab: 'ambulances',   badge: d => d.status || 'active' },
-  tickets:      { col: 'support_tickets',icon: 'ti-ticket',      bg: '#FCE4EC', fg: '#B71C1C', label: 'Tickets',      fields: ['title','user','description'],          tab: 'tickets',      badge: d => d.priority || 'medium' },
-  appointments: { col: 'appointments',   icon: 'ti-calendar',    bg: '#E8EAF6', fg: '#283593', label: 'Appointments', fields: ['patient','doctor','service'],           tab: 'appointments', badge: d => d.status || 'pending' },
-  referrals:    { col: 'referrals',      icon: 'ti-share',       bg: '#F3E5F5', fg: '#6A1B9A', label: 'Referrals',    fields: ['referrerName','referredName','code'],   tab: 'referrals',    badge: () => 'referral' },
-  banners:      { col: 'banners',        icon: 'ti-photo',       bg: '#E0F7FA', fg: '#006064', label: 'Banners',      fields: ['title','subtitle'],                    tab: 'banners',      badge: d => d.enabled ? 'active' : 'inactive' },
-  service_requests: { col: 'service_requests', icon: 'ti-alert-triangle', bg: '#FFF8E1', fg: '#F57F17', label: 'Service Requests', fields: ['type','userName','description'], tab: 'ambulances', badge: d => d.status || 'pending' },
-  medicines:    { col: 'medicines',      icon: 'ti-pill',        bg: '#E8F5E9', fg: '#1B5E20', label: 'Medicines',    fields: ['name','generic','category'],           tab: 'medicines',    badge: d => d.category || 'medicine' },
-  maternity:    { col: 'maternity_profiles', icon: 'ti-heart', bg: '#FCE4EC', fg: '#880E4F', label: 'Maternity', fields: ['name','phone'],                          tab: 'maternity',    badge: () => 'maternity' },
+  hospitals:    { col: 'hospitals',      icon: 'ti-building-hospital', bg: '#E3F2FD', fg: '#1565C0', label: 'Hospitals',    fields: ['name','address','phone'],    tab: 'hospitals',    badge: d => d.isEmergency ? 'emergency' : 'hospital' },
+  ambulances:   { col: 'ambulances',     icon: 'ti-ambulance',   bg: '#FFF3E0', fg: '#E65100', label: 'Ambulances',   fields: ['name','phone','serviceArea'],      tab: 'ambulances',   badge: d => d.isAvailable ? 'available' : 'unavailable' },
+  tickets:      { col: 'support_tickets',icon: 'ti-ticket',      bg: '#FCE4EC', fg: '#B71C1C', label: 'Tickets',      fields: ['category','doctorName','patientName','description'], tab: 'tickets',      badge: d => d.priority || 'medium' },
+  appointments: { col: 'appointments',   icon: 'ti-calendar',    bg: '#E8EAF6', fg: '#283593', label: 'Appointments', fields: ['patientName','doctorName','type'],           tab: 'appointments', badge: d => d.status || 'pending' },
+  referrals:    { col: 'referrals',      icon: 'ti-share',       bg: '#F3E5F5', fg: '#6A1B9A', label: 'Referrals',    fields: ['referrerName','referralCode'],   tab: 'referrals',    badge: () => 'referral' },
+  banners:      { col: 'banners',        icon: 'ti-photo',       bg: '#E0F7FA', fg: '#006064', label: 'Banners',      fields: ['title','description'],                    tab: 'banners',      badge: d => d.isEnabled ? 'active' : 'inactive' },
+  service_requests: { col: 'service_requests', icon: 'ti-alert-triangle', bg: '#FFF8E1', fg: '#F57F17', label: 'Service Requests', fields: ['type','patientName','patientPhone'], tab: 'requests', badge: d => d.status || 'pending' },
+  medicines:    { col: 'medicines_catalogue', icon: 'ti-pill', bg: '#E8F5E9', fg: '#1B5E20', label: 'Medicines',    fields: ['name','brand'],                        tab: 'medicines',    badge: d => d.requiresPrescription ? 'Rx' : 'medicine' },
+  maternity:    { col: 'pregnancy_profiles', icon: 'ti-heart', bg: '#FCE4EC', fg: '#880E4F', label: 'Maternity', fields: ['patientName','assignedDoctorName'],    tab: 'maternity',    badge: () => 'maternity' },
 };
 
 function openGlobalSearch() {
@@ -6621,7 +6827,7 @@ function selectGsResult(idx) {
   closeGlobalSearch();
   const cfg = GS_COLLECTIONS[item._type];
   if (cfg && typeof switchTab === 'function') {
-    const tabTitles = { doctors:'Doctors', patients:'Patients', hospitals:'Hospitals', ambulances:'Ambulances', tickets:'Support Tickets', appointments:'Appointments', referrals:'Referrals', banners:'Banners', analytics:'Analytics', wallet:'Wallet', medicines:'Medicines', maternity:'Maternity', requests:'Service Requests' };
+    const tabTitles = { doctors:'Doctors', patients:'Patients', hospitals:'Hospitals', ambulances:'Ambulances', tickets:'Support Tickets', appointments:'Appointments', referrals:'Referrals', banners:'Banners', analytics:'Analytics', wallet:'Wallet', medicines:'MedNU Pharmacy', maternity:'Maternity', requests:'Service Requests' };
     switchTab(cfg.tab, tabTitles[cfg.tab] || cfg.tab);
   }
 }
@@ -6636,7 +6842,7 @@ function setSearchFilter(type, btn) {
 
 function navigateFromSearch(tab) {
   closeGlobalSearch();
-  const tabTitles = { doctors:'Doctors', patients:'Patients', hospitals:'Hospitals', ambulances:'Ambulances', tickets:'Support Tickets', appointments:'Appointments', referrals:'Referrals', banners:'Banners', analytics:'Analytics', wallet:'Wallet', medicines:'Medicines', maternity:'Maternity', requests:'Service Requests' };
+  const tabTitles = { doctors:'Doctors', patients:'Patients', hospitals:'Hospitals', ambulances:'Ambulances', tickets:'Support Tickets', appointments:'Appointments', referrals:'Referrals', banners:'Banners', analytics:'Analytics', wallet:'Wallet', medicines:'MedNU Pharmacy', maternity:'Maternity', requests:'Service Requests' };
   if (typeof switchTab === 'function') switchTab(tab, tabTitles[tab] || tab);
 }
 
@@ -6805,6 +7011,7 @@ function initCaregiversListener() {
         badge.textContent = activeCount;
         badge.style.display = activeCount > 0 ? 'inline' : 'none';
       }
+      setText('sec-caregivers', activeCount);
     }, err => console.error('[Caregivers]', err));
 }
 
@@ -7005,6 +7212,7 @@ function initCareAssistantsListener() {
         badge.textContent = activeCount;
         badge.style.display = activeCount > 0 ? 'inline' : 'none';
       }
+      setText('sec-care-assistants', activeCount);
     }, err => console.error('[CareAssistants]', err));
 }
 
@@ -7223,7 +7431,7 @@ const PARTNER_ROLES = {
       (p.vehicleType || '').toLowerCase().includes(q),
   },
   caregiver: {
-    label:        'Caregiver Partner',
+    label:        'Care Partner',
     collection:   'caregiver_profiles',
     txCollection: 'caregiver_transactions',
     txField:      'caregiverId',
@@ -7352,19 +7560,27 @@ function _syncPartnerExtraFilter(role) {
   if (values.includes(current)) sel.value = current;
 }
 
+// Overview "sec-metrics-strip" tiles fed by partner collections — only
+// lab/pharmacy partners have a tile there (ambulance/caregiver partners are
+// counted from their patient-facing catalogs instead, see loadAmbulances()
+// and initCaregiversListener()).
+const PARTNER_OVERVIEW_SEC_ID = { lab: 'sec-labs', pharmacy: 'sec-pharmacies' };
+
 function _updatePartnerStats(role) {
   const cfg  = PARTNER_ROLES[role];
   const list = _partnerData[role];
   const set  = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-  const pending = list.filter(p => partnerStatusOf(p) === 'pending').length;
+  const pending    = list.filter(p => partnerStatusOf(p) === 'pending').length;
+  const activeCount = list.filter(p => partnerStatusOf(p) === 'active').length;
   set(cfg.prefix + '-count-total',   list.length);
   set(cfg.prefix + '-count-pending', pending);
-  set(cfg.prefix + '-count-active',  list.filter(p => partnerStatusOf(p) === 'active').length);
+  set(cfg.prefix + '-count-active',  activeCount);
   const badge = document.getElementById(cfg.navBadge);
   if (badge) {
     badge.textContent = pending;
     badge.style.display = pending > 0 ? 'inline-flex' : 'none';
   }
+  if (PARTNER_OVERVIEW_SEC_ID[role]) setText(PARTNER_OVERVIEW_SEC_ID[role], activeCount);
 }
 
 // ── Filtering ────────────────────────────────────────────────────────────────
@@ -7392,16 +7608,16 @@ function partnerActionsCell(role, p) {
   const id = escHtml(p.id);
   let actions;
   if (st === 'pending') {
-    actions =
-      `<button class="btn btn-approve" onclick="approvePartner('${role}','${id}', this)">Approve</button>` +
-      `<button class="btn btn-reject" style="margin-left:4px;" onclick="rejectPartner('${role}','${id}', this)">Reject</button>`;
+    // No direct Approve/Reject here — admin must open the modal (below) to
+    // review the uploaded verification documents first; Approve/Reject live there.
+    actions = '';
   } else if (st === 'active') {
     actions = `<button class="btn btn-reject" onclick="deactivatePartner('${role}','${id}', this)">Deactivate</button>`;
   } else {
     actions = `<button class="btn btn-approve" onclick="activatePartner('${role}','${id}', this)">Activate</button>`;
   }
   return actions +
-    `<button class="btn btn-outline" style="margin-left:4px;" onclick="showPartnerModal('${role}','${id}')">View</button>`;
+    `<button class="btn btn-outline" style="margin-left:4px;" onclick="showPartnerModal('${role}','${id}')">${st === 'pending' ? 'Review' : 'View'}</button>`;
 }
 
 function renderPartnerTable(role, list) {
@@ -7969,46 +8185,77 @@ function showPartnerModal(role, id) {
 // listener keeps calling renderPendingList(), we just cache its rows and
 // re-render them merged with the pending partner accounts.
 let _pendingDoctorRows = [];
+// Keyed cache of full doctor records so the Overview widget can open the
+// document-review modal directly, without waiting on the Doctors tab's own
+// `allDoctors` listener to have populated first.
+let _pendingDoctorById = {};
 
 window.renderPendingList = function (docs) {
+  _pendingDoctorById = {};
   _pendingDoctorRows = (docs || []).map(doc => {
     const d = doc.data ? doc.data() : doc;
+    _pendingDoctorById[doc.id] = { id: doc.id, ...d };
     return {
       role: 'doctor',
       name: d.name || 'Unknown',
       sub:  d.specialty || d.specialisation || 'General',
-      onclick: `approveDoctor('${escHtml(doc.id)}', this)`,
+      onclick: `reviewPendingDoctor('${escHtml(doc.id)}')`,
     };
   });
   renderCombinedPendingList();
 };
 
+// Opens the doctor document-review modal from the Overview widget — this is
+// the only approval entry point there, so documents are always visible
+// before Approve/Reject (inside the modal) can be clicked.
+function reviewPendingDoctor(id) {
+  const d = _pendingDoctorById[id] || allDoctors.find(x => x.id === id);
+  if (!d) return;
+  showDoctorModal(d);
+}
+
 const _PENDING_ROLE_BADGES = {
   doctor:    { label: 'Doctor',    bg: '#e3f2fd', fg: '#1565c0' },
   ambulance: { label: 'Ambulance', bg: '#ffebee', fg: '#c62828' },
-  caregiver: { label: 'Caregiver', bg: '#f3e5f5', fg: '#6a1b9a' },
+  caregiver: { label: 'Care', bg: '#f3e5f5', fg: '#6a1b9a' },
   pharmacy:  { label: 'Pharmacy',  bg: '#e8f5e9', fg: '#2e7d32' },
   lab:       { label: 'Lab',       bg: '#e0f2f1', fg: '#00695c' },
 };
+
+// Where each role's own full verification tab lives — used so a group's
+// "View all" (and its "+N more") lands the admin on the correct tab instead
+// of always Doctors, which is what made partner requests look like they
+// belonged to the doctor queue.
+const _PENDING_ROLE_NAV = {
+  doctor:    { tab: 'doctors',            title: 'Doctors' },
+  ambulance: { tab: 'ambulance-partners',  title: 'Ambulance Partners' },
+  caregiver: { tab: 'caregiver-partners',  title: 'Care Partners' },
+  pharmacy:  { tab: 'pharmacy-partners',   title: 'Pharmacy Partners' },
+  lab:       { tab: 'lab-partners',        title: 'Lab Partners' },
+};
+
+const PENDING_ROWS_PER_GROUP = 4;
 
 function renderCombinedPendingList() {
   const el = document.getElementById('pending-doctors-list');
   if (!el) return;
 
-  const rows = _pendingDoctorRows.slice();
+  const groups = [{ role: 'doctor', rows: _pendingDoctorRows.slice() }];
   Object.keys(PARTNER_ROLES).forEach(role => {
     const cfg = PARTNER_ROLES[role];
-    _partnerData[role].filter(p => partnerStatusOf(p) === 'pending').slice(0, 5).forEach(p => {
-      rows.push({
-        role: role,
+    const rows = _partnerData[role]
+      .filter(p => partnerStatusOf(p) === 'pending')
+      .map(p => ({
         name: cfg.nameOf(p),
         sub:  cfg.subOf(p),
-        onclick: `approvePartner('${role}','${escHtml(p.id)}', this)`,
-      });
-    });
+        onclick: `showPartnerModal('${role}','${escHtml(p.id)}')`,
+      }));
+    groups.push({ role, rows });
   });
 
-  if (!rows.length) {
+  const totalCount = groups.reduce((n, g) => n + g.rows.length, 0);
+
+  if (!totalCount) {
     el.innerHTML = `<div class="empty-state" style="padding:24px 0;">
       <div class="empty-icon"><i class="ti ti-circle-check" style="color:#1e8e3e;"></i></div>
       <p style="color:#1e8e3e;font-weight:600;">All clear! No pending approvals</p>
@@ -8016,28 +8263,38 @@ function renderCombinedPendingList() {
     return;
   }
 
-  el.innerHTML =
-    `<div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;">
-       <strong>${rows.length}</strong> pending approval${rows.length === 1 ? '' : 's'} across doctors and partner accounts
-     </div>` +
-    rows.slice(0, 12).map(r => {
-      const color = randomAvatarColor(r.name);
-      const b = _PENDING_ROLE_BADGES[r.role];
-      return `
-      <div class="pending-item">
-        <div class="doc-avatar" style="background:${escHtml(color.bg)};color:${escHtml(color.fg)};width:36px;height:36px;font-size:12px;">${escHtml(getInitials(r.name || '?'))}</div>
-        <div style="flex:1;min-width:0;">
-          <div class="user-name" style="font-size:13px;">${escHtml(r.name)}</div>
-          <div class="user-sub">
-            <span class="svc-type-badge" style="background:${b.bg};color:${b.fg};">${b.label}</span>
-            ${escHtml(r.sub || '')}
+  el.innerHTML = groups.filter(g => g.rows.length).map(g => {
+    const nav    = _PENDING_ROLE_NAV[g.role];
+    const badge  = _PENDING_ROLE_BADGES[g.role];
+    const shown  = g.rows.slice(0, PENDING_ROWS_PER_GROUP);
+    const rest   = g.rows.length - shown.length;
+    const goToTab = `switchTab('${nav.tab}','${escHtml(nav.title)}')`;
+    return `
+    <div class="pending-group">
+      <div class="pending-group-header">
+        <span class="svc-type-badge" style="background:${badge.bg};color:${badge.fg};">${badge.label}</span>
+        <span class="pending-group-count">${g.rows.length} pending</span>
+        <span class="card-link pending-group-viewall" onclick="${goToTab}">
+          View all <i class="ti ti-arrow-right" style="font-size:11px;"></i>
+        </span>
+      </div>
+      ${shown.map(r => {
+        const color = randomAvatarColor(r.name);
+        return `
+        <div class="pending-item">
+          <div class="doc-avatar" style="background:${escHtml(color.bg)};color:${escHtml(color.fg)};width:36px;height:36px;font-size:12px;">${escHtml(getInitials(r.name || '?'))}</div>
+          <div style="flex:1;min-width:0;">
+            <div class="user-name" style="font-size:13px;">${escHtml(r.name)}</div>
+            <div class="user-sub">${escHtml(r.sub || '')}</div>
           </div>
-        </div>
-        <button class="btn btn-approve" style="font-size:11px;padding:5px 10px;" onclick="${r.onclick}">
-          <i class="ti ti-check"></i> Approve
-        </button>
-      </div>`;
-    }).join('');
+          <button class="btn btn-outline" style="font-size:11px;padding:5px 10px;" onclick="${r.onclick}">
+            <i class="ti ti-eye"></i> Review
+          </button>
+        </div>`;
+      }).join('')}
+      ${rest > 0 ? `<div class="pending-more-link" onclick="${goToTab}">+${rest} more in ${escHtml(nav.title)} <i class="ti ti-arrow-right" style="font-size:10px;"></i></div>` : ''}
+    </div>`;
+  }).join('');
 }
 
 // ── Wire-up: start listeners on dashboard init, load earnings on tab open ───

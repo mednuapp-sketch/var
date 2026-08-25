@@ -21,6 +21,12 @@ class _PregnancyCheckupsScreenState
     extends ConsumerState<PregnancyCheckupsScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tab;
+  // Controllers for one-off "Add Checkup" sheets: disposing them the instant
+  // showModalBottomSheet's future resolves (right on Navigator.pop) races the
+  // sheet's still-animating-out, still-mounted TextFields — defer disposal to
+  // this screen's own dispose() instead, which only runs after the sheet is
+  // long gone.
+  final List<TextEditingController> _transientCtrls = [];
 
   @override
   void initState() {
@@ -31,6 +37,9 @@ class _PregnancyCheckupsScreenState
   @override
   void dispose() {
     _tab.dispose();
+    for (final c in _transientCtrls) {
+      c.dispose();
+    }
     super.dispose();
   }
 
@@ -257,6 +266,7 @@ class _PregnancyCheckupsScreenState
     String type = 'routine';
     final titleCtrl = TextEditingController();
     final notesCtrl = TextEditingController();
+    _transientCtrls.addAll([titleCtrl, notesCtrl]);
     final outerMessenger = ScaffoldMessenger.of(context);
 
     await showModalBottomSheet(
@@ -472,9 +482,6 @@ class _PregnancyCheckupsScreenState
         },
       ),
     );
-
-    titleCtrl.dispose();
-    notesCtrl.dispose();
   }
 
   // ── Color / icon helpers ──────────────────────────────────────────────────
@@ -928,50 +935,50 @@ class _CheckupCard extends ConsumerWidget {
 
   Future<void> _confirmComplete(
       BuildContext context, WidgetRef ref, PregnancyCheckup c) async {
-    final ctrl = TextEditingController();
-    String? notes;
-    try {
-      notes = await showDialog<String>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16)),
-          title: const Text('Mark as Completed',
-              style: TextStyle(fontWeight: FontWeight.w700)),
-          content: TextField(
-            controller: ctrl,
-            decoration: InputDecoration(
-              hintText: 'Add notes (optional)',
-              filled: true,
-              fillColor: const Color(0xFFF7F4F8),
-              border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide(color: context.appBorder)),
-              enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide(color: context.appBorder)),
-            ),
-            maxLines: 3,
+    // No TextEditingController here on purpose: showDialog's returned future
+    // resolves the instant Navigator.pop fires, before the dialog's own
+    // close animation (and its still-mounted TextField) finishes — disposing
+    // a controller in that window is a real teardown-ordering race. A plain
+    // closure variable captured via onChanged has no lifecycle to race.
+    String draftNotes = '';
+    final notes = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16)),
+        title: const Text('Mark as Completed',
+            style: TextStyle(fontWeight: FontWeight.w700)),
+        content: TextField(
+          onChanged: (v) => draftNotes = v,
+          decoration: InputDecoration(
+            hintText: 'Add notes (optional)',
+            filled: true,
+            fillColor: const Color(0xFFF7F4F8),
+            border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(color: context.appBorder)),
+            enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(color: context.appBorder)),
           ),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('Cancel')),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
-              style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2E7D32),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10))),
-              child: const Text('Confirm'),
-            ),
-          ],
+          maxLines: 3,
         ),
-      );
-    } finally {
-      ctrl.dispose();
-    }
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, draftNotes.trim()),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2E7D32),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10))),
+            child: const Text('Confirm'),
+          ),
+        ],
+      ),
+    );
     if (notes == null) return;
     final ok = await ref
         .read(pregnancyProvider.notifier)

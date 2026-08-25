@@ -3,8 +3,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 /// Lives at `pharmacy_profiles/{uid}/inventory/{itemId}` — a pharmacy's own
 /// stock, private to that pharmacy (see firestore.rules). Deliberately a
 /// subcollection rather than a new top-level collection: it's owned data
-/// with no cross-pharmacy or patient-facing read pattern, unlike
-/// `pharmacy_orders`/`pharmacy_transactions`.
+/// with no cross-pharmacy or direct patient-facing read pattern, unlike
+/// `pharmacy_orders`/`pharmacy_transactions`. A Cloud Function mirrors each
+/// item's public fields into `medicines_catalogue` (see
+/// `onPharmacyInventoryWrite`), so patients still see it — just never by
+/// reading this subcollection itself.
 class InventoryItem {
   final String id;
   final String name;

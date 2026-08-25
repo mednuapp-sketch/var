@@ -386,15 +386,11 @@ class _MednuMoneyCard extends StatelessWidget {
     return Container(
       padding: EdgeInsets.all(R.p(context, 16)),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF6A1B9A), Color(0xFFAB47BC)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        gradient: AppColors.primaryGradient,
         borderRadius: BorderRadius.circular(R.r(context, 18)),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF6A1B9A).withValues(alpha: 0.25),
+            color: AppColors.primary.withValues(alpha: 0.25),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),

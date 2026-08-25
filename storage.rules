@@ -110,6 +110,17 @@ service firebase.storage {
                    && isDocument();
     }
 
+    // ── Support ticket screenshots: support_attachments/{uid}/... ───────────
+    // Uploaded by the ticket creator (patient or doctor) via the Report a
+    // Problem / Submit a Ticket screens; read is limited to the uploader and
+    // admin, matching the reports/prescriptions pattern above.
+    match /support_attachments/{uid}/{allPaths=**} {
+      allow read:  if isAuth() && (request.auth.uid == uid || isAdmin());
+      allow write: if isOwner(uid)
+                   && request.resource.size < 10 * 1024 * 1024
+                   && isDocument();
+    }
+
     // ── Specialization change request documents ───────────────────────────────
     match /spec_requests/{uid}/{allPaths=**} {
       allow read:  if isAuth() && (request.auth.uid == uid || isAdmin());

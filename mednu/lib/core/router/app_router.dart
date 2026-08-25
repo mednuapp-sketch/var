@@ -73,6 +73,7 @@ import '../../features/legal/screens/privacy_policy_screen.dart';
 import '../../features/legal/screens/terms_of_service_screen.dart';
 import '../../features/legal/screens/medical_disclaimer_screen.dart';
 import '../../features/support/screens/help_support_screen.dart';
+import '../../features/support/screens/submit_ticket_screen.dart';
 import '../../features/support/screens/about_screen.dart';
 import '../../features/my_services/screens/my_services_screen.dart';
 import '../../features/my_services/screens/service_detail_screen.dart';
@@ -163,6 +164,7 @@ class AppRoutes {
 
   // Support
   static const helpSupport = '/support/help';
+  static const submitTicket = '/support/ticket';
   static const about = '/support/about';
 
   // My Services Tracker
@@ -227,7 +229,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         },
       ),
       GoRoute(path: AppRoutes.home,               builder: (c, s) => const HomeScreen()),
-      GoRoute(path: AppRoutes.consultation,       builder: (c, s) => const ConsultationScreen()),
+      GoRoute(path: AppRoutes.consultation,       builder: (c, s) => ConsultationScreen(therapistsOnly: s.uri.queryParameters['type'] == 'therapist')),
       GoRoute(
         path: AppRoutes.videoCall,
         builder: (c, s) {
@@ -341,6 +343,7 @@ GoRoute(path: AppRoutes.referral,           builder: (c, s) => const ReferralScr
       GoRoute(path: AppRoutes.termsOfService,    builder: (c, s) => const TermsOfServiceScreen()),
       GoRoute(path: AppRoutes.medicalDisclaimer, builder: (c, s) => const MedicalDisclaimerScreen()),
       GoRoute(path: AppRoutes.helpSupport,     builder: (c, s) => const HelpSupportScreen()),
+      GoRoute(path: AppRoutes.submitTicket,    builder: (c, s) => const SubmitTicketScreen()),
       GoRoute(path: AppRoutes.about,           builder: (c, s) => const AboutScreen()),
 
       // ── My Services Tracker ───────────────────────────────────────────────

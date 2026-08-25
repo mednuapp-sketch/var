@@ -11,8 +11,6 @@
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-    <!-- Contacts permission for SOS emergency contacts -->
-    <uses-permission android:name="android.permission.READ_CONTACTS" />
     <!-- Location permissions for doctor GPS tracking (foreground only — background requires policy form) -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />

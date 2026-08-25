@@ -111,6 +111,27 @@ class SharedAppShell extends ConsumerWidget {
   }
 }
 
+/// The profile screen each role's avatar tap should open. Doctor is the only
+/// role with a dedicated *edit* screen ([AppRoutes.editProfile]) — every
+/// other role edits in place on its own profile screen, so the avatar must
+/// route there instead of falling through to the Doctor screen.
+String _profileRouteForRole(AppRole role) {
+  switch (role) {
+    case AppRole.doctor:
+      return AppRoutes.editProfile;
+    case AppRole.lab:
+      return AppRoutes.labProfile;
+    case AppRole.pharmacy:
+      return AppRoutes.pharmacyProfile;
+    case AppRole.ambulance:
+      return AppRoutes.ambulanceVehicleProfile;
+    case AppRole.caregiver:
+      return AppRoutes.caregiverProfile;
+    case AppRole.admin:
+      return AppRoutes.editProfile;
+  }
+}
+
 class _ShellAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String title;
   final AppRole role;
@@ -196,7 +217,7 @@ class _ShellAppBar extends StatelessWidget implements PreferredSizeWidget {
           ],
         ),
         GestureDetector(
-          onTap: () => context.go(AppRoutes.editProfile),
+          onTap: () => context.go(_profileRouteForRole(role)),
           child: Padding(
             padding: const EdgeInsets.only(right: 16, left: 4),
             child: SharedProfileAvatar(

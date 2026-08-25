@@ -200,7 +200,8 @@ class _FamilyMemberDetailScreenState extends ConsumerState<FamilyMemberDetailScr
                     Positioned(left: -20, bottom: -20,
                         child: Container(width: R.w(context, 100), height: R.h(context, 100),
                             decoration: BoxDecoration(color: Colors.white.withValues(alpha:0.05), shape: BoxShape.circle))),
-                    SafeArea(
+                    Positioned.fill(
+                      child: SafeArea(
                       child: LayoutBuilder(
                         builder: (context, constraints) {
                           return SingleChildScrollView(
@@ -209,29 +210,33 @@ class _FamilyMemberDetailScreenState extends ConsumerState<FamilyMemberDetailScr
                               constraints: BoxConstraints(minHeight: constraints.maxHeight),
                               child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          const SizedBox(height: 40),
+                          SizedBox(height: R.h(context, 40)),
                           Container(
-                            width: 80, height: 80,
+                            width: R.w(context, 80), height: R.h(context, 80),
                             decoration: BoxDecoration(
                               color: Colors.white.withValues(alpha:0.22),
                               shape: BoxShape.circle,
                               border: Border.all(color: Colors.white, width: 3),
                             ),
                             child: Center(child: Text(initial,
-                                style: const TextStyle(fontFamily: 'Poppins', fontSize: 32,
+                                style: TextStyle(fontFamily: 'Poppins', fontSize: R.sp(context, 32),
                                     fontWeight: FontWeight.w700, color: Colors.white))),
                           ),
-                          const SizedBox(height: 10),
-                          Text(name, style: const TextStyle(fontFamily: 'Poppins', fontSize: 20,
+                          SizedBox(height: R.h(context, 10)),
+                          Text(name, textAlign: TextAlign.center,
+                              style: TextStyle(fontFamily: 'Poppins', fontSize: R.sp(context, 20),
                               fontWeight: FontWeight.w700, color: Colors.white)),
-                          Text(relation, style: const TextStyle(fontFamily: 'Poppins', fontSize: 13, color: Colors.white70)),
+                          Text(relation, textAlign: TextAlign.center,
+                              style: TextStyle(fontFamily: 'Poppins', fontSize: R.sp(context, 13), color: Colors.white70)),
                         ],
                       ),
                             ),
                           );
                         },
                       ),
+                    ),
                     ),
                   ],
                 ),

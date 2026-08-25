@@ -13,9 +13,13 @@ import '../services/pharmacy_inventory_service.dart';
 import '../services/pharmacy_profile_service.dart';
 
 /// A pharmacy's own stock — private data at
-/// `pharmacy_profiles/{uid}/inventory`, never read by another pharmacy or
-/// by patients. Low/out-of-stock items are surfaced with a status color so
-/// restocking is a glance, not a search.
+/// `pharmacy_profiles/{uid}/inventory`, never read directly by another
+/// pharmacy or by patients (a Cloud Function mirror publishes a copy of
+/// each item into the patient-facing `medicines_catalogue` while this
+/// pharmacy is `active` — see `onPharmacyInventoryWrite` in
+/// functions/index.js — but this subcollection itself stays owner-only).
+/// Low/out-of-stock items are surfaced with a status color so restocking is
+/// a glance, not a search.
 class PharmacyInventoryScreen extends ConsumerWidget {
   const PharmacyInventoryScreen({super.key});
 

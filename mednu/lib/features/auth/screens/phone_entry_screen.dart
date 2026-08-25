@@ -1,10 +1,10 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
 import '../../legal/screens/privacy_policy_screen.dart';
 import '../../legal/screens/terms_of_service_screen.dart';
@@ -18,44 +18,24 @@ class PhoneEntryScreen extends ConsumerStatefulWidget {
 }
 
 class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen>
-    with TickerProviderStateMixin {
+    with SingleTickerProviderStateMixin {
   final _phoneController = TextEditingController();
-  final _phoneFocus = FocusNode();
   bool _isLoading = false;
-  bool _focused = false;
-  double _btnScale = 1;
-
-  late AnimationController _entryCtrl;
-  late AnimationController _pulseCtrl;
-  late AnimationController _floatCtrl;
-  late AnimationController _shimmerCtrl;
+  bool _isRegisterMode = false;
+  String? _phoneError;
+  late AnimationController _animCtrl;
   late Animation<double> _fadeIn;
   late Animation<Offset> _slideUp;
 
   @override
   void initState() {
     super.initState();
-    _entryCtrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 900))
-      ..forward();
-    _pulseCtrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 2000))
-      ..repeat(reverse: true);
-    _floatCtrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 3000))
-      ..repeat(reverse: true);
-    _shimmerCtrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 2200))
-      ..repeat();
-
-    _fadeIn = CurvedAnimation(parent: _entryCtrl, curve: Curves.easeOut);
-    _slideUp = Tween(begin: const Offset(0, 0.14), end: Offset.zero)
-        .animate(CurvedAnimation(parent: _entryCtrl, curve: Curves.easeOutCubic));
-
-    _phoneFocus.addListener(() {
-      if (mounted) setState(() => _focused = _phoneFocus.hasFocus);
-    });
-
+    _animCtrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 700));
+    _fadeIn = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut);
+    _slideUp = Tween(begin: const Offset(0, 0.15), end: Offset.zero)
+        .animate(CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut));
+    _animCtrl.forward();
     _prefillPhone();
   }
 
@@ -69,731 +49,515 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen>
 
   @override
   void dispose() {
-    _entryCtrl.dispose();
-    _pulseCtrl.dispose();
-    _floatCtrl.dispose();
-    _shimmerCtrl.dispose();
     _phoneController.dispose();
-    _phoneFocus.dispose();
+    _animCtrl.dispose();
     super.dispose();
-  }
-
-  String get _fullPhone => '+91${_phoneController.text.trim()}';
-  bool get _isValid => _phoneController.text.trim().length == 10;
-
-  Future<void> _continue() async {
-    if (!_isValid) {
-      HapticFeedback.heavyImpact();
-      _showError('Please enter a valid 10-digit mobile number.');
-      return;
-    }
-    HapticFeedback.mediumImpact();
-    setState(() => _isLoading = true);
-    try {
-      await ref.read(authProvider.notifier).sendOtp(_fullPhone);
-      if (!mounted) return;
-      context.push(AppRoutes.otp, extra: {
-        'phone': _fullPhone,
-        'isExistingUser': false,
-      });
-    } catch (e) {
-      if (!mounted) return;
-      _showError(e.toString().replaceFirst('Exception: ', ''));
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  void _showError(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg, style: const TextStyle(color: Colors.white, fontFamily: 'Poppins')),
-      backgroundColor: const Color(0xFFB00020),
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-    ));
   }
 
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
-    final bottom = MediaQuery.of(context).viewInsets.bottom;
-    final isSmall = size.height < 700;
 
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.light,
-      child: Scaffold(
-        resizeToAvoidBottomInset: false,
-        backgroundColor: const Color(0xFF0D0520),
-        body: Stack(
-          children: [
-            // ── Deep gradient background ─────────────────────────────────────
-            const Positioned.fill(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [Color(0xFF0D0520), Color(0xFF3B0F50), Color(0xFF633058)],
-                    stops: [0.0, 0.5, 1.0],
-                  ),
-                ),
+    return Scaffold(
+      backgroundColor: Colors.white,
+      // See doctor_login_screen.dart for the rationale: freezing the layout
+      // against the keyboard here (instead of letting Scaffold/MediaQuery
+      // react to it) keeps the fractional-height hero/card from jumping the
+      // moment the Mobile Number field is focused.
+      resizeToAvoidBottomInset: false,
+      body: Builder(
+        builder: (context) => MediaQuery.removeViewInsets(
+          context: context,
+          removeBottom: true,
+          child: Stack(
+        children: [
+          // ── Gradient background top section ──────────────────────────────
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: size.height * 0.46,
+            child: Container(
+              decoration: const BoxDecoration(
+                gradient: AppColors.heroBannerGradient,
               ),
-            ),
-
-            // ── Ambient glow orbs ────────────────────────────────────────────
-            AnimatedBuilder(
-              animation: _pulseCtrl,
-              builder: (_, __) {
-                final p = _pulseCtrl.value;
-                return Stack(
-                  children: [
-                    Positioned(
-                      top: -size.width * 0.2,
-                      right: -size.width * 0.15,
-                      child: Container(
-                        width: size.width * 0.75,
-                        height: size.width * 0.75,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: RadialGradient(colors: [
-                            AppColors.primaryBright.withValues(alpha: 0.14 + p * 0.08),
-                            Colors.transparent,
-                          ]),
-                        ),
+              child: Stack(
+                children: [
+                  // Decorative circles
+                  Positioned(
+                    top: -40,
+                    right: -40,
+                    child: Container(
+                      width: 160,
+                      height: 160,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white.withValues(alpha: 0.06),
                       ),
                     ),
-                    Positioned(
-                      bottom: size.height * 0.25,
-                      left: -size.width * 0.2,
-                      child: Container(
-                        width: size.width * 0.6,
-                        height: size.width * 0.6,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: RadialGradient(colors: [
-                            AppColors.secondaryLight.withValues(alpha: 0.12 + p * 0.05),
-                            Colors.transparent,
-                          ]),
-                        ),
+                  ),
+                  Positioned(
+                    top: 60,
+                    right: 20,
+                    child: Container(
+                      width: 80,
+                      height: 80,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white.withValues(alpha: 0.06),
                       ),
                     ),
-                  ],
-                );
-              },
-            ),
-
-            // ── Floating medical icons ────────────────────────────────────────
-            AnimatedBuilder(
-              animation: _floatCtrl,
-              builder: (_, __) {
-                final f = _floatCtrl.value;
-                return Stack(
-                  children: [
-                    Positioned(
-                      top: size.height * 0.10 + f * 12,
-                      right: size.width * 0.08,
-                      child: const _FloatingIcon(
-                        icon: Icons.favorite_rounded,
-                        color: Color(0xFFF2A8D8),
-                        size: 22, opacity: 0.22,
+                  ),
+                  Positioned(
+                    bottom: 40,
+                    left: -30,
+                    child: Container(
+                      width: 120,
+                      height: 120,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white.withValues(alpha: 0.05),
                       ),
                     ),
-                    Positioned(
-                      top: size.height * 0.20 - f * 10,
-                      left: size.width * 0.06,
-                      child: const _FloatingIcon(
-                        icon: Icons.medical_services_outlined,
-                        color: Color(0xFFF2A8D8),
-                        size: 18, opacity: 0.18,
-                      ),
-                    ),
-                    Positioned(
-                      top: size.height * 0.30 + f * 8,
-                      right: size.width * 0.14,
-                      child: const _FloatingIcon(
-                        icon: Icons.shield_outlined,
-                        color: Colors.white,
-                        size: 16, opacity: 0.14,
-                      ),
-                    ),
-                    Positioned(
-                      top: size.height * 0.08 - f * 6,
-                      left: size.width * 0.22,
-                      child: const _FloatingIcon(
-                        icon: Icons.local_hospital_outlined,
-                        color: Color(0xFFF2A8D8),
-                        size: 14, opacity: 0.15,
-                      ),
-                    ),
-                  ],
-                );
-              },
-            ),
-
-            // ── Main content ─────────────────────────────────────────────────
-            SafeArea(
-              child: FadeTransition(
-                opacity: _fadeIn,
-                child: SlideTransition(
-                  position: _slideUp,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // ── Hero section ────────────────────────────────────────
-                      Expanded(
-                        child: SingleChildScrollView(
-                          physics: const ClampingScrollPhysics(),
-                          padding: EdgeInsets.fromLTRB(28, isSmall ? 20 : 32, 28, 0),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // Logo badge
-                              AnimatedBuilder(
-                                animation: _pulseCtrl,
-                                builder: (_, __) {
-                                  final p = _pulseCtrl.value;
-                                  return Stack(
-                                    alignment: Alignment.center,
-                                    children: [
-                                      Container(
-                                        width: 88, height: 88,
-                                        decoration: BoxDecoration(
-                                          shape: BoxShape.circle,
-                                          gradient: RadialGradient(colors: [
-                                            const Color(0xFFF2A8D8)
-                                                .withValues(alpha: 0.18 + p * 0.10),
-                                            Colors.transparent,
-                                          ]),
+                  ),
+                  // Hero content — scrollable/centered so it can never
+                  // pixel-overflow the fractional hero height on short
+                  // screens or larger text scales.
+                  SafeArea(
+                    child: LayoutBuilder(
+                      builder: (context, constraints) => SingleChildScrollView(
+                        physics: const ClampingScrollPhysics(),
+                        child: ConstrainedBox(
+                          constraints:
+                              BoxConstraints(minHeight: constraints.maxHeight),
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(28, 36, 28, 16),
+                            child: FadeTransition(
+                              opacity: _fadeIn,
+                              child: SlideTransition(
+                                position: _slideUp,
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    // Logo
+                                    Container(
+                                      width: 64,
+                                      height: 64,
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withValues(alpha: 0.2),
+                                        borderRadius: BorderRadius.circular(18),
+                                        border: Border.all(
+                                            color: Colors.white.withValues(alpha: 0.3)),
+                                      ),
+                                      padding: const EdgeInsets.all(16),
+                                      child: SvgPicture.asset(
+                                        'assets/icons/med-nu-icon-stethoscope.svg',
+                                        fit: BoxFit.contain,
+                                        colorFilter: const ColorFilter.mode(
+                                          Colors.white,
+                                          BlendMode.srcIn,
                                         ),
                                       ),
-                                      Container(
-                                        width: 64, height: 64,
-                                        decoration: BoxDecoration(
-                                          borderRadius: BorderRadius.circular(18),
-                                          gradient: AppColors.heroBannerGradient,
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: AppColors.primary
-                                                  .withValues(alpha: 0.30 + p * 0.18),
-                                              blurRadius: 22,
-                                              offset: const Offset(0, 8),
-                                            ),
-                                          ],
-                                        ),
-                                        child: Stack(
-                                          alignment: Alignment.center,
-                                          children: [
-                                            Padding(
-                                              padding: const EdgeInsets.all(14),
-                                              child: SvgPicture.asset(
-                                                'assets/icons/med-nu-icon-stethoscope.svg',
-                                                fit: BoxFit.contain,
-                                                colorFilter: const ColorFilter.mode(
-                                                  Colors.white,
-                                                  BlendMode.srcIn,
-                                                ),
-                                              ),
-                                            ),
-                                            Positioned(
-                                              bottom: 6, right: 6,
-                                              child: Container(
-                                                width: 14, height: 14,
-                                                decoration: BoxDecoration(
-                                                  color: const Color(0xFF4CAF50),
-                                                  shape: BoxShape.circle,
-                                                  border: Border.all(
-                                                      color: Colors.white, width: 1.5),
-                                                ),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  );
-                                },
-                              ),
-
-                              SizedBox(height: isSmall ? 20 : 28),
-
-                              const Text(
-                                'Your health,\nalways protected.',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 30,
-                                  fontWeight: FontWeight.w800,
-                                  fontFamily: 'Poppins',
-                                  height: 1.2,
-                                  letterSpacing: -0.5,
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                              Text(
-                                'Sign in or create your account with\nyour mobile number.',
-                                style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.55),
-                                  fontSize: 15,
-                                  fontFamily: 'Poppins',
-                                  height: 1.5,
-                                ),
-                              ),
-
-                              SizedBox(height: isSmall ? 14 : 20),
-
-                              // ── Social proof strip ───────────────────────
-                              Row(
-                                children: [
-                                  const Icon(Icons.star_rounded, color: Color(0xFFFFC857), size: 16),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    '4.9',
-                                    style: TextStyle(
-                                      color: Colors.white.withValues(alpha: 0.85),
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w700,
-                                      fontFamily: 'Poppins',
                                     ),
-                                  ),
-                                  Container(
-                                    margin: const EdgeInsets.symmetric(horizontal: 8),
-                                    width: 3, height: 3,
-                                    decoration: BoxDecoration(
-                                      color: Colors.white.withValues(alpha: 0.35),
-                                      shape: BoxShape.circle,
+                                    const SizedBox(height: 20),
+                                    Text(
+                                      'MedNU',
+                                      style: AppTextStyles.display
+                                          .copyWith(color: Colors.white, height: 1.1),
                                     ),
-                                  ),
-                                  Text(
-                                    'Trusted by 50,000+ patients',
-                                    style: TextStyle(
-                                      color: Colors.white.withValues(alpha: 0.55),
-                                      fontSize: 12.5,
-                                      fontFamily: 'Poppins',
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      'Your Personal Health Companion',
+                                      style: AppTextStyles.onPrimaryBody
+                                          .copyWith(fontWeight: FontWeight.w500),
                                     ),
-                                  ),
-                                ],
-                              ),
-
-                              SizedBox(height: isSmall ? 16 : 24),
-
-                              // ── Feature pills ────────────────────────────
-                              const Wrap(
-                                spacing: 8, runSpacing: 8,
-                                children: [
-                                  _FeaturePill(icon: Icons.verified_rounded, label: '100% Secure'),
-                                  _FeaturePill(icon: Icons.lock_rounded, label: 'Private'),
-                                  _FeaturePill(icon: Icons.health_and_safety_rounded, label: 'HIPAA'),
-                                  _FeaturePill(icon: Icons.phone_android_rounded, label: 'OTP Verified'),
-                                ],
-                              ),
-
-                              SizedBox(height: size.height * 0.025),
-                            ],
-                          ),
-                        ),
-                      ),
-
-                      // ── Input card ───────────────────────────────────────────
-                      AnimatedPadding(
-                        duration: const Duration(milliseconds: 200),
-                        curve: Curves.easeOut,
-                        padding: EdgeInsets.only(bottom: bottom),
-                        child: Container(
-                          width: double.infinity,
-                          padding: EdgeInsets.fromLTRB(
-                              24, 16, 24, 24 + MediaQuery.of(context).padding.bottom),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(0xFF3B0F50).withValues(alpha: 0.30),
-                                blurRadius: 48,
-                                offset: const Offset(0, -10),
-                              ),
-                            ],
-                          ),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // Drag handle
-                              Center(
-                                child: Container(
-                                  width: 40, height: 4,
-                                  margin: const EdgeInsets.only(bottom: 20),
-                                  decoration: BoxDecoration(
-                                    gradient: AppColors.heroBannerGradient,
-                                    borderRadius: BorderRadius.circular(2),
-                                  ),
-                                ),
-                              ),
-
-                              Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                    const SizedBox(height: 28),
+                                    // Trust badges — Wrap (not Row) so 3 pills
+                                    // never horizontally overflow on narrow screens.
+                                    const Wrap(
+                                      spacing: 10,
+                                      runSpacing: 10,
                                       children: [
-                                        const Text('Enter mobile number',
-                                            style: TextStyle(
-                                              fontSize: 18,
-                                              fontWeight: FontWeight.w700,
-                                              color: Color(0xFF1A0A2E),
-                                              fontFamily: 'Poppins',
-                                            )),
-                                        const SizedBox(height: 4),
-                                        Text("We'll send a one-time password to verify",
-                                            style: TextStyle(
-                                              fontSize: 13,
-                                              color: Colors.grey.shade500,
-                                              fontFamily: 'Poppins',
-                                            )),
+                                        _TrustBadge(
+                                            icon: Icons.verified_user_rounded,
+                                            label: 'Verified'),
+                                        _TrustBadge(
+                                            icon: Icons.lock_rounded, label: 'Secure'),
+                                        _TrustBadge(
+                                            icon: Icons.health_and_safety_rounded,
+                                            label: 'HIPAA Safe'),
                                       ],
                                     ),
-                                  ),
-                                  Container(
-                                    width: 38, height: 38,
-                                    decoration: BoxDecoration(
-                                      color: AppColors.primary.withValues(alpha: 0.08),
-                                      borderRadius: BorderRadius.circular(11),
-                                    ),
-                                    child: const Icon(Icons.phone_iphone_rounded,
-                                        color: AppColors.primary, size: 18),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 20),
-
-                              // ── Phone field ──────────────────────────────
-                              AnimatedContainer(
-                                duration: const Duration(milliseconds: 180),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFF8F4FF),
-                                  borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(
-                                    color: _focused || _isValid
-                                        ? AppColors.secondary
-                                        : AppColors.secondary.withValues(alpha: 0.2),
-                                    width: _focused || _isValid ? 1.5 : 1,
-                                  ),
-                                  boxShadow: _focused
-                                      ? [
-                                          BoxShadow(
-                                            color: AppColors.secondary.withValues(alpha: 0.18),
-                                            blurRadius: 16,
-                                            offset: const Offset(0, 4),
-                                          ),
-                                        ]
-                                      : null,
-                                ),
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 12, vertical: 17),
-                                      decoration: const BoxDecoration(
-                                        color: Color(0xFFEDE0F0),
-                                        borderRadius: BorderRadius.horizontal(
-                                            left: Radius.circular(16)),
-                                      ),
-                                      child: const Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Text('🇮🇳', style: TextStyle(fontSize: 18)),
-                                          SizedBox(width: 6),
-                                          Text('+91',
-                                              style: TextStyle(
-                                                fontSize: 15,
-                                                fontWeight: FontWeight.w700,
-                                                color: AppColors.secondary,
-                                                fontFamily: 'Poppins',
-                                              )),
-                                        ],
-                                      ),
-                                    ),
-                                    Container(
-                                      width: 1, height: 26,
-                                      color: AppColors.secondary.withValues(alpha: 0.15),
-                                    ),
-                                    Expanded(
-                                      child: TextField(
-                                        controller: _phoneController,
-                                        focusNode: _phoneFocus,
-                                        keyboardType: TextInputType.phone,
-                                        maxLength: 10,
-                                        autofocus: false,
-                                        inputFormatters: [
-                                          FilteringTextInputFormatter.digitsOnly,
-                                          LengthLimitingTextInputFormatter(10),
-                                        ],
-                                        onChanged: (v) {
-                                          setState(() {});
-                                          if (v.length == 10) HapticFeedback.selectionClick();
-                                        },
-                                        onSubmitted: (_) => _continue(),
-                                        decoration: const InputDecoration(
-                                          hintText: '98765 43210',
-                                          hintStyle: TextStyle(
-                                              color: Color(0xFFBBBBBB),
-                                              fontFamily: 'Poppins',
-                                              fontSize: 16),
-                                          border: InputBorder.none,
-                                          counterText: '',
-                                          contentPadding: EdgeInsets.symmetric(
-                                              horizontal: 16, vertical: 17),
-                                        ),
-                                        style: const TextStyle(
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.w600,
-                                          fontFamily: 'Poppins',
-                                          color: Color(0xFF1A0A2E),
-                                          letterSpacing: 2,
-                                        ),
-                                      ),
-                                    ),
-                                    AnimatedSwitcher(
-                                      duration: const Duration(milliseconds: 200),
-                                      transitionBuilder: (child, anim) => ScaleTransition(
-                                          scale: anim, child: child),
-                                      child: _isValid
-                                          ? const Padding(
-                                              key: ValueKey('valid'),
-                                              padding: EdgeInsets.only(right: 14),
-                                              child: Icon(Icons.check_circle_rounded,
-                                                  color: AppColors.secondary, size: 22),
-                                            )
-                                          : const SizedBox(key: ValueKey('empty')),
-                                    ),
                                   ],
                                 ),
                               ),
-
-                              const SizedBox(height: 20),
-
-                              // ── Continue button ──────────────────────────
-                              GestureDetector(
-                                onTapDown: (_) {
-                                  if (_isValid && !_isLoading) setState(() => _btnScale = 0.97);
-                                },
-                                onTapUp: (_) => setState(() => _btnScale = 1),
-                                onTapCancel: () => setState(() => _btnScale = 1),
-                                onTap: _isLoading || !_isValid ? null : _continue,
-                                child: AnimatedScale(
-                                  scale: _btnScale,
-                                  duration: const Duration(milliseconds: 120),
-                                  child: AnimatedContainer(
-                                    duration: const Duration(milliseconds: 200),
-                                    width: double.infinity,
-                                    height: 56,
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(16),
-                                      gradient: _isValid && !_isLoading
-                                          ? AppColors.heroBannerGradient
-                                          : const LinearGradient(
-                                              colors: [Color(0xFFCCCCCC), Color(0xFFCCCCCC)],
-                                            ),
-                                      boxShadow: _isValid && !_isLoading
-                                          ? [
-                                              BoxShadow(
-                                                color: AppColors.primary.withValues(alpha: 0.4),
-                                                blurRadius: 16,
-                                                offset: const Offset(0, 6),
-                                              ),
-                                            ]
-                                          : null,
-                                    ),
-                                    child: ClipRRect(
-                                      borderRadius: BorderRadius.circular(16),
-                                      child: Stack(
-                                        children: [
-                                          if (_isValid && !_isLoading)
-                                            AnimatedBuilder(
-                                              animation: _shimmerCtrl,
-                                              builder: (_, __) {
-                                                final w = MediaQuery.of(context).size.width - 48;
-                                                final x = (_shimmerCtrl.value * (w + 120)) - 60;
-                                                return Positioned(
-                                                  top: 0,
-                                                  bottom: 0,
-                                                  left: x,
-                                                  child: Transform.rotate(
-                                                    angle: -0.4,
-                                                    child: Container(
-                                                      width: 36,
-                                                      decoration: BoxDecoration(
-                                                        gradient: LinearGradient(
-                                                          colors: [
-                                                            Colors.white.withValues(alpha: 0.0),
-                                                            Colors.white.withValues(alpha: 0.22),
-                                                            Colors.white.withValues(alpha: 0.0),
-                                                          ],
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ),
-                                                );
-                                              },
-                                            ),
-                                          Center(
-                                            child: _isLoading
-                                                ? const SizedBox(
-                                                    width: 24, height: 24,
-                                                    child: CircularProgressIndicator(
-                                                        color: Colors.white, strokeWidth: 2.5),
-                                                  )
-                                                : const Row(
-                                                    mainAxisAlignment: MainAxisAlignment.center,
-                                                    children: [
-                                                      Text('Get OTP',
-                                                          style: TextStyle(
-                                                            fontSize: 16,
-                                                            fontWeight: FontWeight.w700,
-                                                            fontFamily: 'Poppins',
-                                                            color: Colors.white,
-                                                          )),
-                                                      SizedBox(width: 8),
-                                                      Icon(Icons.arrow_forward_rounded,
-                                                          color: Colors.white, size: 18),
-                                                    ],
-                                                  ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-
-                              const SizedBox(height: 16),
-
-                              Center(
-                                child: Wrap(
-                                  alignment: WrapAlignment.center,
-                                  children: [
-                                    Icon(Icons.lock_outline_rounded,
-                                        size: 12, color: Colors.grey.shade400),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      'By continuing, you agree to our ',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: Colors.grey.shade400,
-                                        fontFamily: 'Poppins',
-                                      ),
-                                    ),
-                                    GestureDetector(
-                                      onTap: () => Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                            builder: (_) => const TermsOfServiceScreen()),
-                                      ),
-                                      child: Text(
-                                        'Terms',
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w600,
-                                          color: AppColors.secondary,
-                                          decoration: TextDecoration.underline,
-                                          decorationColor: AppColors.secondary.withValues(alpha: 0.4),
-                                          fontFamily: 'Poppins',
-                                        ),
-                                      ),
-                                    ),
-                                    Text(
-                                      ' & ',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: Colors.grey.shade400,
-                                        fontFamily: 'Poppins',
-                                      ),
-                                    ),
-                                    GestureDetector(
-                                      onTap: () => Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                            builder: (_) => const PrivacyPolicyScreen()),
-                                      ),
-                                      child: Text(
-                                        'Privacy Policy',
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w600,
-                                          color: AppColors.secondary,
-                                          decoration: TextDecoration.underline,
-                                          decorationColor: AppColors.secondary.withValues(alpha: 0.4),
-                                          fontFamily: 'Poppins',
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
+                            ),
                           ),
                         ),
                       ),
-                    ],
+                    ),
                   ),
+                ],
+              ),
+            ),
+          ),
+
+          // ── Curved white card ─────────────────────────────────────────────
+          Positioned(
+            top: size.height * 0.4,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: Container(
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+              ),
+            ),
+          ),
+
+          // ── Form ──────────────────────────────────────────────────────────
+          Positioned.fill(
+            child: SafeArea(
+              child: SingleChildScrollView(
+                padding: EdgeInsets.only(
+                  bottom: MediaQuery.of(context).viewInsets.bottom,
+                ),
+                child: Column(
+                  children: [
+                    SizedBox(height: size.height * 0.44),
+                    FadeTransition(
+                      opacity: _fadeIn,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // ── Login / Register toggle ──────────────────
+                            Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: AppColors.background,
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(color: AppColors.border),
+                              ),
+                              child: Row(children: [
+                                Expanded(
+                                  child: _AuthModeTab(
+                                    label: 'Login',
+                                    selected: !_isRegisterMode,
+                                    onTap: _isLoading
+                                        ? null
+                                        : () => setState(() => _isRegisterMode = false),
+                                  ),
+                                ),
+                                Expanded(
+                                  child: _AuthModeTab(
+                                    label: 'Register',
+                                    selected: _isRegisterMode,
+                                    onTap: _isLoading
+                                        ? null
+                                        : () => setState(() => _isRegisterMode = true),
+                                  ),
+                                ),
+                              ]),
+                            ),
+                            const SizedBox(height: 24),
+                            Text(
+                              _isRegisterMode ? 'Join MedNU' : 'Welcome Back!',
+                              style: AppTextStyles.h3,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              _isRegisterMode
+                                  ? 'Verify your mobile number to create your account'
+                                  : 'Sign in to manage your health',
+                              style: AppTextStyles.bodyMedium
+                                  .copyWith(color: AppColors.textSecondary),
+                            ),
+                            const SizedBox(height: 28),
+
+                            // ── Phone field ──────────────────────────────
+                            const Text('Mobile Number', style: AppTextStyles.labelLarge),
+                            const SizedBox(height: 8),
+                            Container(
+                              decoration: BoxDecoration(
+                                color: AppColors.background,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                    color: _phoneError != null
+                                        ? AppColors.error
+                                        : AppColors.border),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.04),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: Row(children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 14, vertical: 16),
+                                  decoration: const BoxDecoration(
+                                      border: Border(
+                                          right: BorderSide(
+                                              color: AppColors.border))),
+                                  child: const Row(children: [
+                                    Text('🇮🇳', style: TextStyle(fontSize: 20)),
+                                    SizedBox(width: 6),
+                                    Text('+91', style: AppTextStyles.labelLarge),
+                                  ]),
+                                ),
+                                Expanded(
+                                  child: TextField(
+                                    controller: _phoneController,
+                                    keyboardType: TextInputType.phone,
+                                    maxLength: 10,
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.digitsOnly,
+                                    ],
+                                    style: AppTextStyles.bodyLarge,
+                                    onChanged: (_) {
+                                      if (_phoneError != null) setState(() => _phoneError = null);
+                                    },
+                                    onSubmitted: (_) => _sendOTP(context),
+                                    decoration: const InputDecoration(
+                                      hintText: 'Enter your mobile number',
+                                      border: InputBorder.none,
+                                      counterText: '',
+                                      contentPadding: EdgeInsets.symmetric(
+                                          horizontal: 14, vertical: 16),
+                                    ),
+                                  ),
+                                ),
+                              ]),
+                            ),
+                            if (_phoneError != null) ...[
+                              const SizedBox(height: 6),
+                              Text(_phoneError!,
+                                  style: AppTextStyles.bodySmall.copyWith(color: AppColors.error)),
+                            ],
+                            const SizedBox(height: 28),
+
+                            // ── Send OTP button ──────────────────────────
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton(
+                                onPressed: _isLoading ? null : () => _sendOTP(context),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.primary,
+                                  foregroundColor: Colors.white,
+                                  elevation: 0,
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 16),
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16)),
+                                  textStyle: AppTextStyles.button.copyWith(fontWeight: FontWeight.w600),
+                                ),
+                                child: _isLoading
+                                    ? const SizedBox(
+                                        width: 22,
+                                        height: 22,
+                                        child: CircularProgressIndicator(
+                                            color: Colors.white,
+                                            strokeWidth: 2.5))
+                                    : const Text('Send OTP'),
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+
+                            // ── Privacy banner ────────────────────────────
+                            Container(
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [
+                                    AppColors.primary.withValues(alpha: 0.06),
+                                    AppColors.secondary.withValues(alpha: 0.04),
+                                  ],
+                                ),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                    color:
+                                        AppColors.primary.withValues(alpha: 0.15)),
+                              ),
+                              child: Row(children: [
+                                Container(
+                                  width: 36,
+                                  height: 36,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primary.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: const Icon(Icons.verified_rounded,
+                                      color: AppColors.primary, size: 20),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    'Your health data stays private & secure. Every sign-in is verified with a one-time password.',
+                                    style: AppTextStyles.bodySmall
+                                        .copyWith(color: AppColors.primary),
+                                  ),
+                                ),
+                              ]),
+                            ),
+                            const SizedBox(height: 20),
+
+                            // ── Terms ──────────────────────────────────────
+                            Center(
+                              child: Wrap(
+                                alignment: WrapAlignment.center,
+                                children: [
+                                  Text(
+                                    'By continuing, you agree to our ',
+                                    style: AppTextStyles.bodySmall
+                                        .copyWith(color: AppColors.textSecondary),
+                                  ),
+                                  GestureDetector(
+                                    onTap: () => Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                          builder: (_) => const TermsOfServiceScreen()),
+                                    ),
+                                    child: Text(
+                                      'Terms',
+                                      style: AppTextStyles.bodySmall.copyWith(
+                                        color: AppColors.primary,
+                                        fontWeight: FontWeight.w600,
+                                        decoration: TextDecoration.underline,
+                                      ),
+                                    ),
+                                  ),
+                                  Text(
+                                    ' & ',
+                                    style: AppTextStyles.bodySmall
+                                        .copyWith(color: AppColors.textSecondary),
+                                  ),
+                                  GestureDetector(
+                                    onTap: () => Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                          builder: (_) => const PrivacyPolicyScreen()),
+                                    ),
+                                    child: Text(
+                                      'Privacy Policy',
+                                      style: AppTextStyles.bodySmall.copyWith(
+                                        color: AppColors.primary,
+                                        fontWeight: FontWeight.w600,
+                                        decoration: TextDecoration.underline,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
-          ],
+          ),
+        ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _sendOTP(BuildContext context) async {
+    final phone = _phoneController.text.trim();
+    if (phone.length != 10) {
+      setState(() => _phoneError = 'Please enter a valid 10-digit mobile number.');
+      return;
+    }
+    setState(() {
+      _phoneError = null;
+      _isLoading = true;
+    });
+
+    final fullPhone = '+91$phone';
+    try {
+      await ref.read(authProvider.notifier).sendOtp(fullPhone);
+      if (!mounted) return;
+      context.push(AppRoutes.otp, extra: {
+        'phone': fullPhone,
+        'isExistingUser': !_isRegisterMode,
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(e.toString().replaceFirst('Exception: ', '')),
+      ));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+}
+
+// ── Login / Register tab ────────────────────────────────────────────────────
+class _AuthModeTab extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback? onTap;
+  const _AuthModeTab({required this.label, required this.selected, this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(vertical: 11),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.primary : Colors.transparent,
+          borderRadius: BorderRadius.circular(11),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          label,
+          style: AppTextStyles.labelLarge.copyWith(
+            fontWeight: FontWeight.w700,
+            color: selected ? Colors.white : AppColors.textSecondary,
+          ),
         ),
       ),
     );
   }
 }
 
-class _FloatingIcon extends StatelessWidget {
-  final IconData icon;
-  final Color color;
-  final double size;
-  final double opacity;
-  const _FloatingIcon({required this.icon, required this.color,
-      required this.size, required this.opacity});
-
-  @override
-  Widget build(BuildContext context) => Opacity(
-    opacity: opacity,
-    child: Icon(icon, color: color, size: size),
-  );
-}
-
-class _FeaturePill extends StatelessWidget {
+// ── Trust Badge ───────────────────────────────────────────────────────────────
+class _TrustBadge extends StatelessWidget {
   final IconData icon;
   final String label;
-  const _FeaturePill({required this.icon, required this.label});
+  const _TrustBadge({required this.icon, required this.label});
 
   @override
-  Widget build(BuildContext context) => ClipRRect(
-    borderRadius: BorderRadius.circular(20),
-    child: BackdropFilter(
-      filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.10),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 13, color: const Color(0xFFF2A8D8)),
-            const SizedBox(width: 5),
-            Text(label,
-                style: const TextStyle(
-                  fontSize: 11,
-                  color: Colors.white,
-                  fontWeight: FontWeight.w500,
-                  fontFamily: 'Poppins',
-                )),
-          ],
-        ),
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.18),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.35)),
       ),
-    ),
-  );
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: Colors.white, size: 13),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: AppTextStyles.caption.copyWith(color: Colors.white, fontWeight: FontWeight.w500),
+          ),
+        ],
+      ),
+    );
+  }
 }

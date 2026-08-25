@@ -1,6 +1,7 @@
 /* eslint-disable max-len */
 const { onDocumentCreated } = require("firebase-functions/v2/firestore");
 const { onDocumentUpdated } = require("firebase-functions/v2/firestore");
+const { onDocumentWritten } = require("firebase-functions/v2/firestore");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { initializeApp } = require("firebase-admin/app");
@@ -3526,6 +3527,119 @@ exports.cleanupStalePharmacyOrders = onSchedule({ schedule: "every 60 minutes", 
   const { updated, skipped } = await _expireStaleDocs(staleSnap.docs, { status: "cancelled", updatedAt: FieldValue.serverTimestamp() });
   _logPharmacy("INFO", "stale_cleanup_cancelled", { count: updated, skippedConcurrentlyModified: skipped });
 });
+
+// ── 5) Mirror a pharmacy's own inventory into the patient-facing catalogue ──
+//
+// `pharmacy_profiles/{pharmacyId}/inventory` is a pharmacy's private stock
+// list (firestore.rules: owner-only read/write — patients were never meant
+// to query it directly). `medicines_catalogue` is the one collection MedNu
+// Patient's Medicine Delivery screen actually reads (admin-managed, public
+// read). Nothing ever wrote from one into the other, so an item a pharmacy
+// added to its own inventory never appeared to patients. This mirrors every
+// inventory write onto a deterministic `medicines_catalogue` doc
+// (`phinv_{pharmacyId}_{itemId}`), the same "same-shape deterministic
+// mirror" pattern used for pharmacy_orders above, so patients see it via
+// their existing live `.snapshots()` listener within moments of it being
+// saved — no patient-app changes needed.
+//
+// Only mirrors while the owning pharmacy is `status == 'active'` (the same
+// bar patients already need to read that pharmacy's own profile), and hides
+// the item (`isActive: false`) once stock hits zero — both re-evaluated on
+// every write, so restocking or a pharmacy going inactive is reflected just
+// as promptly.
+function _pharmacyInventoryCatalogueRef(db, pharmacyId, itemId) {
+  return db.collection("medicines_catalogue").doc(`phinv_${pharmacyId}_${itemId}`);
+}
+
+function _pharmacyInventoryCatalogueDoc(item, pharmacyId, itemId, pharmacyName) {
+  return {
+    name: item.name || "",
+    brand: item.brand || "",
+    price: item.price ?? 0,
+    mrp: item.price ?? 0,
+    qty: 1,
+    unit: "Tablets",
+    requiresPrescription: item.requiresPrescription === true,
+    isActive: (item.stock ?? 0) > 0,
+    sourcePharmacyId: pharmacyId,
+    sourceItemId: itemId,
+    pharmacyName: pharmacyName || "",
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+}
+
+exports.onPharmacyInventoryWrite = onDocumentWritten(
+  "pharmacy_profiles/{pharmacyId}/inventory/{itemId}",
+  async (event) => {
+    const { pharmacyId, itemId } = event.params;
+    const db = getFirestore();
+    const catalogueRef = _pharmacyInventoryCatalogueRef(db, pharmacyId, itemId);
+
+    const after = event.data.after;
+    if (!after.exists) {
+      await catalogueRef.delete().catch(() => {});
+      _logPharmacy("INFO", "inventory_mirror_deleted", { pharmacyId, itemId });
+      return;
+    }
+
+    const pharmacySnap = await db.collection("pharmacy_profiles").doc(pharmacyId).get();
+    const pharmacyData = pharmacySnap.exists ? pharmacySnap.data() : null;
+
+    if (!pharmacyData || pharmacyData.status !== "active") {
+      // Pending/suspended pharmacies keep their private inventory but stay
+      // out of the patient catalogue until (re)approved — the status-change
+      // sweep below catches every existing item on that transition.
+      await catalogueRef.delete().catch(() => {});
+      return;
+    }
+
+    const item = after.data();
+    await catalogueRef.set(
+      _pharmacyInventoryCatalogueDoc(item, pharmacyId, itemId, pharmacyData.name),
+      { merge: true },
+    );
+    _logPharmacy("INFO", "inventory_mirror_synced", { pharmacyId, itemId, isActive: (item.stock ?? 0) > 0 });
+  }
+);
+
+// When a pharmacy's verification status flips, sweep every inventory item it
+// already has in/out of the patient catalogue — otherwise an item added
+// while `pending` (or hidden after being `suspended`) would only reappear
+// the next time the pharmacist happened to edit that specific item again.
+exports.onPharmacyProfileStatusChangeForInventory = onDocumentUpdated(
+  "pharmacy_profiles/{pharmacyId}",
+  async (event) => {
+    const before = event.data.before.data();
+    const after = event.data.after.data();
+    if (before.status === after.status) return;
+
+    const pharmacyId = event.params.pharmacyId;
+    const db = getFirestore();
+    const becameActive = after.status === "active";
+
+    const inventorySnap = await db
+      .collection("pharmacy_profiles").doc(pharmacyId).collection("inventory")
+      .get();
+    if (inventorySnap.empty) return;
+
+    const batchSize = 400; // Firestore batch write limit is 500.
+    for (let i = 0; i < inventorySnap.docs.length; i += batchSize) {
+      const batch = db.batch();
+      for (const doc of inventorySnap.docs.slice(i, i + batchSize)) {
+        const ref = _pharmacyInventoryCatalogueRef(db, pharmacyId, doc.id);
+        if (becameActive) {
+          batch.set(ref, _pharmacyInventoryCatalogueDoc(doc.data(), pharmacyId, doc.id, after.name), { merge: true });
+        } else {
+          batch.delete(ref);
+        }
+      }
+      await batch.commit();
+    }
+    _logPharmacy("INFO", becameActive ? "inventory_bulk_synced" : "inventory_bulk_hidden", {
+      pharmacyId, count: inventorySnap.size,
+    });
+  }
+);
 
 // ══════════════════════════════════════════════════════════════════════════
 // ── Ambulance partner module ────────────────────────────────────────────────

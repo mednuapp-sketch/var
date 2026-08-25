@@ -580,14 +580,14 @@ class _WalletSection extends StatelessWidget {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF1565C0), Color(0xFF0D47A1)],
+          colors: [AppColors.primary, AppColors.secondary],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF1565C0).withValues(alpha: 0.25),
+            color: AppColors.primary.withValues(alpha: 0.25),
             blurRadius: 14,
             offset: const Offset(0, 5),
           ),
@@ -640,7 +640,7 @@ class _WalletSection extends StatelessWidget {
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.white,
-                foregroundColor: const Color(0xFF1565C0),
+                foregroundColor: AppColors.primary,
                 disabledBackgroundColor: Colors.white30,
                 disabledForegroundColor: Colors.white60,
                 padding: const EdgeInsets.symmetric(vertical: 12),

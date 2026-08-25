@@ -176,8 +176,8 @@ class _CartScreenState extends ConsumerState<CartScreen> {
         icon: Icons.shopping_cart_outlined,
         title: 'Your cart is empty',
         message: 'Add medicines or services to get started',
-        actionLabel: 'Browse Pharmacy',
-        onAction: () => context.push(AppRoutes.pharmacy),
+        actionLabel: 'Browse Services',
+        onAction: () => context.push(AppRoutes.home),
       );
 
   Widget _buildList(List<CartItem> items) => ListView.separated(

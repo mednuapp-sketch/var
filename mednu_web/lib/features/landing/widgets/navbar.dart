@@ -62,7 +62,7 @@ class _WebNavbarState extends State<WebNavbar> {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 250),
       decoration: BoxDecoration(
-        color: _scrolled ? Colors.white.withValues(alpha: 0.97) : Colors.white,
+        color: Colors.white,
         boxShadow: _scrolled
             ? [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 20, offset: const Offset(0, 4))]
             : [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8)],
