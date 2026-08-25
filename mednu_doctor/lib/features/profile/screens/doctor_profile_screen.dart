@@ -10,6 +10,7 @@ import '../../../core/services/image_upload_service.dart';
 import '../../../core/router/app_router.dart';
 import '../../auth/services/doctor_auth_service.dart';
 import '../../../core/widgets/ux_widgets.dart';
+import '../../../core/utils/validators.dart';
 
 class DoctorProfileEditScreen extends StatefulWidget {
   const DoctorProfileEditScreen({super.key});
@@ -42,6 +43,8 @@ class _DoctorProfileEditScreenState extends State<DoctorProfileEditScreen> {
   bool         _loading           = true;
   bool         _saving            = false;
   bool         _hasPendingSpecRequest = false;
+  String?      _nameError;
+  String?      _clinicAddrError;
 
   // Photo upload state
   File?   _localImage;
@@ -113,14 +116,27 @@ class _DoctorProfileEditScreenState extends State<DoctorProfileEditScreen> {
     if (uid == null) return;
 
     final name = _nameCtrl.text.trim();
-    if (name.isEmpty) {
+    final nameError = Validators.name(name, label: 'Name');
+    if (nameError != null) {
+      setState(() => _nameError = nameError);
+      return;
+    }
+    setState(() => _nameError = null);
+
+    // Clinic address is mandatory — it drives the "Directions" link patients
+    // use to navigate to an in-person appointment (see appointment_screen.dart
+    // in the patient app), so a doctor profile without it breaks that flow.
+    final clinicAddress = _clinicAddrCtrl.text.trim();
+    if (clinicAddress.isEmpty) {
+      setState(() => _clinicAddrError = 'Enter your clinic/hospital address');
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Name cannot be empty'),
+        content: Text('Clinic address is required so patients can get directions to you.'),
         backgroundColor: AppColors.error,
         behavior: SnackBarBehavior.floating,
       ));
       return;
     }
+    setState(() => _clinicAddrError = null);
 
     setState(() => _saving = true);
     try {
@@ -133,7 +149,7 @@ class _DoctorProfileEditScreenState extends State<DoctorProfileEditScreen> {
         'experience':     _expCtrl.text.trim(),
         'qualifications': _qualCtrl.text.trim(),
         'clinicName':     _clinicNameCtrl.text.trim(),
-        'clinicAddress':  _clinicAddrCtrl.text.trim(),
+        'clinicAddress':  clinicAddress,
         'languages':      _selectedLanguages,
         'updatedAt':      FieldValue.serverTimestamp(),
       });
@@ -143,7 +159,7 @@ class _DoctorProfileEditScreenState extends State<DoctorProfileEditScreen> {
         backgroundColor: AppColors.success,
         behavior: SnackBarBehavior.floating,
       ));
-      context.pop();
+      context.safeBack();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -196,7 +212,7 @@ class _DoctorProfileEditScreenState extends State<DoctorProfileEditScreen> {
                 ),
               ),
               const Text('Profile Photo',
-                  style: TextStyle(fontFamily: 'Poppins', fontSize: 16, fontWeight: FontWeight.w700)),
+                  style: TextStyle(fontFamily: 'Inter', fontSize: 16, fontWeight: FontWeight.w700)),
               const SizedBox(height: 20),
               _SheetOption(
                 icon: Icons.photo_library_rounded,
@@ -444,7 +460,7 @@ class _DoctorProfileEditScreenState extends State<DoctorProfileEditScreen> {
             ? Text(
                 initials,
                 style: const TextStyle(
-                  fontFamily: 'Poppins',
+                  fontFamily: 'Inter',
                   fontSize: 32,
                   fontWeight: FontWeight.w800,
                   color: Colors.white,
@@ -466,7 +482,7 @@ class _DoctorProfileEditScreenState extends State<DoctorProfileEditScreen> {
         title: const Text(
           'Edit Profile',
           style: TextStyle(
-            fontFamily: 'Poppins',
+            fontFamily: 'Inter',
             fontSize: 17,
             fontWeight: FontWeight.w600,
             color: Colors.white,
@@ -477,7 +493,7 @@ class _DoctorProfileEditScreenState extends State<DoctorProfileEditScreen> {
         flexibleSpace: Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
-              colors: [Color(0xFF880E4F), Color(0xFFC2185B), Color(0xFF7B1FA2)],
+              colors: [AppColors.primaryDark, AppColors.primary, AppColors.secondary],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
@@ -485,7 +501,7 @@ class _DoctorProfileEditScreenState extends State<DoctorProfileEditScreen> {
         ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-          onPressed: () => context.pop(),
+          onPressed: () => context.safeBack(),
         ),
         actions: [
           if (_saving)
@@ -513,7 +529,7 @@ class _DoctorProfileEditScreenState extends State<DoctorProfileEditScreen> {
                 child: const Text(
                   'Save',
                   style: TextStyle(
-                    fontFamily: 'Poppins',
+                    fontFamily: 'Inter',
                     fontWeight: FontWeight.w700,
                     fontSize: 14,
                   ),
@@ -542,8 +558,8 @@ class _DoctorProfileEditScreenState extends State<DoctorProfileEditScreen> {
                 FadeInSlide(child: Center(child: _buildAvatar())),
                 const SizedBox(height: 20),
 
-                _SectionCard('Personal Info', [
-                  _field('Full Name', _nameCtrl),
+                _sectionCard('Personal Info', [
+                  _field('Full Name', _nameCtrl, errorText: _nameError),
                   const SizedBox(height: 12),
                   const Text('Specialization', style: AppTextStyles.labelLarge),
                   const SizedBox(height: 6),
@@ -558,7 +574,7 @@ class _DoctorProfileEditScreenState extends State<DoctorProfileEditScreen> {
                       const Icon(Icons.lock_rounded, size: 15, color: AppColors.textHint),
                       const SizedBox(width: 10),
                       Expanded(child: Text(_selectedSpec,
-                          style: const TextStyle(fontFamily: 'Poppins', fontSize: 14,
+                          style: const TextStyle(fontFamily: 'Inter', fontSize: 14,
                               fontWeight: FontWeight.w600, color: AppColors.textPrimary))),
                       if (_hasPendingSpecRequest)
                         Container(
@@ -568,7 +584,7 @@ class _DoctorProfileEditScreenState extends State<DoctorProfileEditScreen> {
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: const Text('Pending',
-                              style: TextStyle(fontFamily: 'Poppins', fontSize: 10,
+                              style: TextStyle(fontFamily: 'Inter', fontSize: 10,
                                   fontWeight: FontWeight.w700, color: AppColors.warning)),
                         ),
                     ]),
@@ -603,7 +619,7 @@ class _DoctorProfileEditScreenState extends State<DoctorProfileEditScreen> {
                               ? 'View pending specialization request'
                               : 'Request specialization change',
                           style: TextStyle(
-                            fontFamily: 'Poppins', fontSize: 12, fontWeight: FontWeight.w600,
+                            fontFamily: 'Inter', fontSize: 12, fontWeight: FontWeight.w600,
                             color: _hasPendingSpecRequest ? AppColors.warning : AppColors.primary,
                           ),
                         )),
@@ -615,7 +631,7 @@ class _DoctorProfileEditScreenState extends State<DoctorProfileEditScreen> {
                 ]),
                 const SizedBox(height: 16),
 
-                _SectionCard('Professional Details', [
+                _sectionCard('Professional Details', [
                   _field('Bio / About', _bioCtrl, maxLines: 4),
                   const SizedBox(height: 12),
                   _field('Qualifications (e.g. MBBS, MD)', _qualCtrl),
@@ -628,12 +644,12 @@ class _DoctorProfileEditScreenState extends State<DoctorProfileEditScreen> {
                 ]),
                 const SizedBox(height: 16),
 
-                _SectionCard('Languages Spoken', [
+                _sectionCard('Languages Spoken', [
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
                     children: _allLanguages.map((lang) => FilterChip(
-                      label: Text(lang, style: const TextStyle(fontFamily: 'Poppins', fontSize: 12)),
+                      label: Text(lang, style: const TextStyle(fontFamily: 'Inter', fontSize: 12)),
                       selected: _selectedLanguages.contains(lang),
                       selectedColor: AppColors.primary.withValues(alpha:0.12),
                       checkmarkColor: AppColors.primary,
@@ -651,10 +667,19 @@ class _DoctorProfileEditScreenState extends State<DoctorProfileEditScreen> {
                 ]),
                 const SizedBox(height: 16),
 
-                _SectionCard('Clinic / Hospital Details', [
+                _sectionCard('Clinic / Hospital Details', [
                   _field('Clinic / Hospital Name', _clinicNameCtrl),
                   const SizedBox(height: 12),
-                  _field('Address', _clinicAddrCtrl, maxLines: 2),
+                  _field('Address *', _clinicAddrCtrl,
+                      maxLines: 2, errorText: _clinicAddrError),
+                  const Padding(
+                    padding: EdgeInsets.only(top: 6),
+                    child: Text(
+                      'Required for in-person patients — used for map directions.',
+                      style: TextStyle(
+                          fontFamily: 'Inter', fontSize: 11, color: AppColors.textSecondary),
+                    ),
+                  ),
                 ]),
                 const SizedBox(height: 40),
               ],
@@ -663,15 +688,20 @@ class _DoctorProfileEditScreenState extends State<DoctorProfileEditScreen> {
   }
 
   Widget _field(String label, TextEditingController ctrl,
-          {TextInputType type = TextInputType.text, int maxLines = 1}) =>
+          {TextInputType type = TextInputType.text, int maxLines = 1, String? errorText}) =>
       Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(label, style: AppTextStyles.labelLarge),
         const SizedBox(height: 6),
-        TextField(controller: ctrl, keyboardType: type, maxLines: maxLines, decoration: const InputDecoration()),
+        TextField(
+          controller: ctrl,
+          keyboardType: type,
+          maxLines: maxLines,
+          decoration: InputDecoration(errorText: errorText),
+        ),
       ]);
 }
 
-Widget _SectionCard(String title, List<Widget> children) => Container(
+Widget _sectionCard(String title, List<Widget> children) => Container(
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
@@ -754,7 +784,7 @@ class _SheetOption extends StatelessWidget {
             const SizedBox(width: 14),
             Text(label,
                 style: TextStyle(
-                  fontFamily: 'Poppins',
+                  fontFamily: 'Inter',
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                   color: color,

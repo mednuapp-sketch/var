@@ -9,6 +9,7 @@ import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../profile/screens/family_management_screen.dart';
+import '../../health/providers/water_tracker_provider.dart';
 
 // ═══════════════════════════════════════════════════════════
 // DoctorConsultBanner
@@ -21,11 +22,7 @@ class DoctorConsultBanner extends StatelessWidget {
     bottomLeft: Radius.circular(28),
     bottomRight: Radius.circular(28),
   );
-  static const _brandGradient = LinearGradient(
-    colors: [Color(0xFFD81B60), Color(0xFF7B1FA2)],
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-  );
+  static const _brandGradient = AppColors.heroBannerGradient;
 
   @override
   Widget build(BuildContext context) {
@@ -134,7 +131,7 @@ class DoctorConsultBanner extends StatelessWidget {
                           ),
                         ],
                       ),
-                      child: Row(
+                      child: const Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
@@ -146,7 +143,7 @@ class DoctorConsultBanner extends StatelessWidget {
                               color: AppColors.primary,
                             ),
                           ),
-                          const SizedBox(width: 5),
+                          SizedBox(width: 5),
                           Icon(Icons.arrow_forward_rounded, size: 12, color: AppColors.primary),
                         ],
                       ),
@@ -235,7 +232,7 @@ class AiDoctorCard extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
         decoration: BoxDecoration(
           gradient: const LinearGradient(
-            colors: [Color(0xFF3F1B7C), Color(0xFF7B1FA2)],
+            colors: [Color(0xFF3F1B7C), Color(0xFF633058)],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
@@ -433,18 +430,18 @@ class SpecialtiesSection extends StatelessWidget {
   static const _specs = [
     _Spec('General',          Icons.medical_services_rounded,   Color(0xFF1565C0)),
     _Spec('Cardiology',       Icons.favorite_rounded,           Color(0xFFC62828)),
-    _Spec('Dermatology',      Icons.face_retouching_natural,    Color(0xFFE65100)),
-    _Spec('Gynaecology',      Icons.pregnant_woman,             Color(0xFFC2185B)),
+    _Spec('Dermatology',      Icons.face_rounded,                Color(0xFFE65100)),
+    _Spec('Gynaecology',      Icons.pregnant_woman_rounded,      Color(0xFF522546)),
     _Spec('Paediatrics',      Icons.child_care_rounded,         Color(0xFF6A1B9A)),
     _Spec('ENT',              Icons.hearing_rounded,            Color(0xFF00695C)),
     _Spec('Orthopaedics',     Icons.accessibility_new_rounded,  Color(0xFF283593)),
-    _Spec('Neurology',        Icons.psychology_rounded,         Color(0xFF4A148C)),
+    _Spec('Neurology',        Icons.psychology_rounded,         Color(0xFF3D1D36)),
     _Spec('Ophthalmology',    Icons.visibility_rounded,         Color(0xFF2E7D32)),
     _Spec('Psychiatry',       Icons.self_improvement_rounded,   Color(0xFF00838F)),
     _Spec('Endocrinology',    Icons.science_rounded,            Color(0xFF558B2F)),
     _Spec('Gastroenterology', Icons.monitor_heart_rounded,      Color(0xFFE65100)),
     _Spec('Nephrology',       Icons.water_drop_rounded,         Color(0xFF283593)),
-    _Spec('Urology',          Icons.health_and_safety_rounded,  Color(0xFF7B1FA2)),
+    _Spec('Urology',          Icons.health_and_safety_rounded,  Color(0xFF633058)),
     _Spec('Pulmonology',      Icons.air_rounded,                Color(0xFF006064)),
     _Spec('General Surgery',  Icons.cut_rounded,                Color(0xFF4E342E)),
     _Spec('Dental',           Icons.mood_rounded,               Color(0xFF00838F)),
@@ -462,7 +459,7 @@ class SpecialtiesSection extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Specialties', style: AppTextStyles.h4),
+              const Text('Specialties', style: AppTextStyles.h4),
               TextButton(
                 onPressed: () => context.push(AppRoutes.doctors),
                 child: const Text('See All'),
@@ -506,7 +503,7 @@ class _SpecChip extends StatelessWidget {
     return GestureDetector(
       onTap: () => context.push('${AppRoutes.doctors}?specialty=${spec.label}'),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisAlignment: MainAxisAlignment.start,
         children: [
           Container(
             width: 50, height: 50,
@@ -781,7 +778,7 @@ class _NotificationStripState extends ConsumerState<NotificationStrip> {
 
   static const _periodStrip = _Strip(
     icon: Icons.favorite_rounded,
-    color: Color(0xFFC2185B),
+    color: Color(0xFF522546),
     bg: Color(0xFFFCE4EC),
     title: 'Period Tracker 🌸',
     sub: 'Next cycle expected in 5 days',
@@ -796,15 +793,18 @@ class _NotificationStripState extends ConsumerState<NotificationStrip> {
         ? ref.watch(userDocProvider(uid))
         : const AsyncValue<Map<String, dynamic>?>.data(null);
     final isMale = (userDoc.valueOrNull?['gender'] as String? ?? '').toLowerCase() == 'male';
+    final waterState = ref.watch(waterTrackerProvider);
+    final waterCopy = _waterStripCopy(waterState);
 
     final strips = [
-      const _Strip(
+      _Strip(
         icon: Icons.water_drop_rounded,
-        color: Color(0xFF1565C0),
-        bg: Color(0xFFE3F2FD),
-        title: 'Drink Water! 💧',
-        sub: 'You haven\'t had water in 2 hours',
-        ctaLabel: 'Mark Done',
+        color: const Color(0xFF1565C0),
+        bg: const Color(0xFFE3F2FD),
+        title: waterCopy.title,
+        sub: waterCopy.sub,
+        ctaLabel: waterCopy.ctaLabel,
+        useOnDone: waterCopy.useOnDone,
         route: '/health/water',
       ),
       if (!isMale) _periodStrip,
@@ -833,7 +833,22 @@ class _NotificationStripState extends ConsumerState<NotificationStrip> {
         duration: const Duration(milliseconds: 300),
         child: _StripTile(
           strip: strips[safeIndex],
-          onDone: () {},
+          onDone: () async {
+            final notifier = ref.read(waterTrackerProvider.notifier);
+            await notifier.logWater();
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('💧 ${waterState.glassSizeMl} ml logged!'),
+                  backgroundColor: const Color(0xFF1565C0),
+                  behavior: SnackBarBehavior.floating,
+                  duration: const Duration(seconds: 1),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+              );
+            }
+          },
           key: ValueKey(safeIndex),
         ),
       ),
@@ -849,6 +864,7 @@ class _Strip {
   final String sub;
   final String ctaLabel;
   final String route;
+  final bool useOnDone;
   const _Strip({
     required this.icon,
     required this.color,
@@ -857,7 +873,43 @@ class _Strip {
     required this.sub,
     required this.ctaLabel,
     required this.route,
+    this.useOnDone = false,
   });
+}
+
+class _WaterStripCopy {
+  final String title;
+  final String sub;
+  final String ctaLabel;
+  final bool useOnDone;
+  const _WaterStripCopy(this.title, this.sub, this.ctaLabel, this.useOnDone);
+}
+
+// Reflects the water tracker's real state instead of a static nag —
+// once a glass is logged the banner should stop claiming water hasn't
+// been had, and once the goal is met it should say so.
+_WaterStripCopy _waterStripCopy(WaterTrackerState state) {
+  if (state.goalReached) {
+    return _WaterStripCopy(
+        'Goal Reached! 💧', '${state.totalMl} ml logged today', 'View', false);
+  }
+  final lastLog = state.todayLogs.isEmpty ? null : state.todayLogs.last.loggedAt;
+  final intervalHours = state.reminderIntervalHours > 0 ? state.reminderIntervalHours : 2;
+  final sinceLast = lastLog == null ? null : DateTime.now().difference(lastLog);
+  if (sinceLast != null && sinceLast < Duration(hours: intervalHours)) {
+    return _WaterStripCopy(
+        'Staying hydrated! 💧', 'Last logged ${_timeAgo(sinceLast)}', 'Log More', true);
+  }
+  return _WaterStripCopy('Drink Water! 💧',
+      'You haven\'t had water in $intervalHours hours', 'Mark Done', true);
+}
+
+String _timeAgo(Duration d) {
+  if (d.inMinutes < 1) return 'just now';
+  if (d.inMinutes < 60) return '${d.inMinutes} min ago';
+  final h = d.inHours;
+  final m = d.inMinutes % 60;
+  return m == 0 ? '${h}h ago' : '${h}h ${m}m ago';
 }
 
 class _StripTile extends StatelessWidget {
@@ -917,7 +969,7 @@ class _StripTile extends StatelessWidget {
             const SizedBox(width: 8),
             GestureDetector(
               onTap: () {
-                if (strip.ctaLabel == 'Mark Done') {
+                if (strip.useOnDone) {
                   onDone();
                 } else {
                   context.push(strip.route);
@@ -966,19 +1018,19 @@ class _ServiceGridState extends State<ServiceGrid> {
   static const int _virtualCount = 12000;
 
   static final _services = [
-    _Service('Emergency',   Icons.emergency_rounded,         AppColors.emergencyGrad,   AppRoutes.emergency,     null,      'Immediate 24/7 help for medical emergencies',  'Call Now'),
-    _Service('Consultation', Icons.video_call_rounded,       AppColors.consultGrad,     AppRoutes.consultation,  null,      'Book with top specialists',  'Book Now'),
-    _Service('Pharmacy',    Icons.medication_liquid_rounded, AppColors.medicineGrad,    AppRoutes.medicine,      null,      'Order medicines to be delivered to your doorstep',    'Order Now'),
-    _Service('Pregnancy',   Icons.pregnant_woman_rounded,    AppColors.pregnancyGrad,   AppRoutes.pregnancy,     'NEW',     'Track your pregnancy journey week by week',      'Track Now'),
-    _Service('Diagnostics', Icons.science_rounded,           AppColors.diagnosticGrad,  AppRoutes.diagnostics,   null,      'X-Ray, MRI, CT, ECG & imaging scans',        'Book Test'),
-    _Service('Lab Tests',   Icons.bloodtype_rounded,         AppColors.labTestGrad,    AppRoutes.labTests,     null,      'Book blood & lab tests with certified labs', 'Book Test'),
-    _Service('Care Assist', Icons.support_agent_rounded,     AppColors.careAssistGrad,  AppRoutes.careAssistant, null,      'Health assistant at your service',    'Try Now'),
-    _Service('Ambulance',   Icons.local_shipping_rounded,    AppColors.ambulanceGrad,   AppRoutes.ambulance,     null,      'Emergency ambulance at your location',           'Call Now'),
-    _Service('Physiotherapy', Icons.fitness_center_rounded,  AppColors.physioGrad,      AppRoutes.physio,        null,      'Physiotherapy & rehabilitation',          'Book Now'),
-    _Service('Nutrition and Diet',   Icons.restaurant_rounded,        AppColors.nutritionGrad,   AppRoutes.nutrition,     null,      'Personalised diet plans from nutritionists',      'Get Plan'),
-    _Service('Therapy and Counselling', Icons.psychology_rounded, AppColors.counselGrad,     AppRoutes.counselling,   null,      'Mental health support & therapy sessions',        'Book Now'),
-    _Service('Equipment',   Icons.medical_services_rounded,  AppColors.equipmentGrad,   AppRoutes.equipment,     null,      'Rent or buy medical equipment online',            'Browse'),
-    _Service('Caregivers',  Icons.elderly_rounded,           AppColors.caregiverGrad,   AppRoutes.caregivers,    null,      'Trained attendants & caregiver support',          'Hire Now'),
+    const _Service('Emergency',   Icons.emergency_rounded,         AppColors.emergencyGrad,   AppRoutes.emergency,     null,      'Immediate 24/7 help for medical emergencies',  'Call Now'),
+    const _Service('Consultation', Icons.video_call_rounded,       AppColors.consultGrad,     AppRoutes.consultation,  null,      'Book with top specialists',  'Book Now'),
+    const _Service('Pharmacy',    Icons.medication_liquid_rounded, AppColors.medicineGrad,    AppRoutes.medicine,      null,      'Order medicines to be delivered to your doorstep',    'Order Now'),
+    const _Service('Pregnancy',   Icons.pregnant_woman_rounded,    AppColors.pregnancyGrad,   AppRoutes.pregnancy,     'NEW',     'Track your pregnancy journey week by week',      'Track Now'),
+    const _Service('Diagnostics', Icons.science_rounded,           AppColors.diagnosticGrad,  AppRoutes.diagnostics,   null,      'X-Ray, MRI, CT, ECG & imaging scans',        'Book Test'),
+    const _Service('Lab Tests',   Icons.bloodtype_rounded,         AppColors.labTestGrad,    AppRoutes.labTests,     null,      'Book blood & lab tests with certified labs', 'Book Test'),
+    const _Service('Care Assist', Icons.support_agent_rounded,     AppColors.careAssistGrad,  AppRoutes.careAssistant, null,      'Health assistant at your service',    'Try Now'),
+    const _Service('Ambulance',   Icons.local_shipping_rounded,    AppColors.ambulanceGrad,   AppRoutes.ambulance,     null,      'Emergency ambulance at your location',           'Call Now'),
+    const _Service('Physiotherapy', Icons.fitness_center_rounded,  AppColors.physioGrad,      AppRoutes.physio,        null,      'Physiotherapy & rehabilitation',          'Book Now'),
+    const _Service('Nutrition and Diet',   Icons.restaurant_rounded,        AppColors.nutritionGrad,   AppRoutes.nutrition,     null,      'Personalised diet plans from nutritionists',      'Get Plan'),
+    const _Service('Therapy and Counselling', Icons.psychology_rounded, AppColors.counselGrad,     AppRoutes.counselling,   null,      'Mental health support & therapy sessions',        'Book Now'),
+    const _Service('Equipment',   Icons.medical_services_rounded,  AppColors.equipmentGrad,   AppRoutes.equipment,     null,      'Rent or buy medical equipment online',            'Browse'),
+    const _Service('Caregivers',  Icons.elderly_rounded,           AppColors.caregiverGrad,   AppRoutes.caregivers,    null,      'Trained attendants & caregiver support',          'Hire Now'),
   ];
 
   int get _count => _services.length;
@@ -1006,7 +1058,7 @@ class _ServiceGridState extends State<ServiceGrid> {
     return Column(
       children: [
         SizedBox(
-          height: 180,
+          height: 192,
           child: PageView.builder(
             controller: _controller,
             itemCount: _virtualCount,
@@ -1552,13 +1604,13 @@ class UpcomingAppointmentCard extends StatelessWidget {
                   color: AppColors.primary, size: 26),
             ),
             const SizedBox(width: 14),
-            Expanded(
+            const Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('No Upcoming Appointments',
                       style: AppTextStyles.labelLarge),
-                  const SizedBox(height: 4),
+                  SizedBox(height: 4),
                   Text('Book a consultation with a doctor',
                       style: AppTextStyles.bodySmall),
                 ],
@@ -1713,7 +1765,7 @@ const _kHealthTips = [
     title: 'Sleep Well',
     sub: '7–8 hours of quality sleep restores and repairs your body.',
     icon: Icons.bedtime_rounded,
-    gradient: [Color(0xFF4A148C), Color(0xFF7B1FA2), Color(0xFFAB47BC)],
+    gradient: [Color(0xFF3D1D36), Color(0xFF633058), Color(0xFFAB47BC)],
   ),
   _HealthTip(
     category: 'Nutrition',
@@ -1727,7 +1779,7 @@ const _kHealthTips = [
     title: 'Manage Stress',
     sub: '10 minutes of meditation a day reduces cortisol significantly.',
     icon: Icons.self_improvement_rounded,
-    gradient: [Color(0xFF00695C), Color(0xFF00897B), Color(0xFF4DB6AC)],
+    gradient: [Color(0xFF00695C), Color(0xFFF9943B), Color(0xFFFBB878)],
   ),
   _HealthTip(
     category: 'Prevention',

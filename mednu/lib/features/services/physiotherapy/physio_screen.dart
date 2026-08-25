@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
 import '../../../core/constants/app_text_styles.dart';
+import '../../../core/router/app_router.dart';
 import '../../../core/services/feedback_service.dart';
 import '../../../core/utils/r.dart';
 import '../../../core/widgets/add_to_cart_button.dart';
@@ -63,7 +64,7 @@ class PhysioScreen extends ConsumerWidget {
             expandedHeight: AppSpacing.headerHeight(context),
             leading: IconButton(
               icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-              onPressed: () => context.pop(),
+              onPressed: () => context.canPop() ? context.pop() : context.go(AppRoutes.home),
             ),
             actions: const [CartBadgeAction()],
             flexibleSpace: FlexibleSpaceBar(
@@ -91,8 +92,8 @@ class PhysioScreen extends ConsumerWidget {
                               children: [
                                 Icon(Icons.fitness_center_rounded, color: Colors.white, size: AppSpacing.headerIconSize(context)),
                                 SizedBox(height: AppSpacing.headerIconGap(context)),
-                                Text('Physiotherapy', style: AppTextStyles.onPrimaryH2),
-                                Text('Certified physiotherapists • Online & Home', style: AppTextStyles.onPrimaryBody),
+                                const Text('Physiotherapy', style: AppTextStyles.onPrimaryH2),
+                                const Text('Certified physiotherapists • Online & Home', style: AppTextStyles.onPrimaryBody),
                               ],
                             ),
                           ),
@@ -132,7 +133,7 @@ class PhysioScreen extends ConsumerWidget {
                     ],
                   ),
                 ),
-                Text('Choose Service', style: AppTextStyles.h4),
+                const Text('Choose Service', style: AppTextStyles.h4),
                 SizedBox(height: R.h(context, 12)),
                 StreamBuilder<QuerySnapshot>(
                   stream: FirebaseFirestore.instance
@@ -228,9 +229,9 @@ class PhysioScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildError() => AppErrorState(message: 'Could not load services. Please try again.');
+  Widget _buildError() => const AppErrorState(message: 'Could not load services. Please try again.');
 
-  Widget _buildEmpty() => AppEmptyState(
+  Widget _buildEmpty() => const AppEmptyState(
     icon: Icons.fitness_center_outlined,
     title: 'No Services Available',
     message: 'Physiotherapy services will appear here once added.',

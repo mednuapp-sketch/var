@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 
@@ -65,23 +65,23 @@ class MedicalDisclaimerScreen extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 14),
-                      Expanded(
+                      const Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
                               'Important Medical Disclaimer',
                               style: TextStyle(fontFamily: 'Poppins', 
-                                color: const Color(0xFFBF360C),
+                                color: Color(0xFFBF360C),
                                 fontSize: 15,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
-                            const SizedBox(height: 2),
+                            SizedBox(height: 2),
                             Text(
                               'Please read carefully before using MedNU',
                               style: TextStyle(fontFamily: 'Poppins', 
-                                color: const Color(0xFFE65100),
+                                color: Color(0xFFE65100),
                                 fontSize: 12,
                                 fontWeight: FontWeight.w400,
                               ),
@@ -98,7 +98,7 @@ class MedicalDisclaimerScreen extends StatelessWidget {
             const SizedBox(height: 16),
 
             // ── 1. Not a Substitute — red accent card ─────────────
-            _DisclaimerCard(
+            const _DisclaimerCard(
               accentColor: AppColors.error,
               icon: Icons.medical_services_outlined,
               title: 'Not a Substitute for Professional Medical Advice',
@@ -112,7 +112,7 @@ class MedicalDisclaimerScreen extends StatelessWidget {
             const SizedBox(height: 12),
 
             // ── 2. Information Accuracy ───────────────────────────
-            _DisclaimerCard(
+            const _DisclaimerCard(
               accentColor: AppColors.info,
               icon: Icons.info_outline_rounded,
               title: 'Information Accuracy',
@@ -159,7 +159,7 @@ class MedicalDisclaimerScreen extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(width: 10),
-                        Expanded(
+                        const Expanded(
                           child: Text(
                             'Emergency Situations',
                             style: TextStyle(fontFamily: 'Poppins',
@@ -192,7 +192,7 @@ class MedicalDisclaimerScreen extends StatelessWidget {
             const SizedBox(height: 12),
 
             // ── 4. Consult Your Doctor ────────────────────────────
-            _DisclaimerCard(
+            const _DisclaimerCard(
               accentColor: AppColors.accent,
               icon: Icons.person_outlined,
               title: 'Consult Your Doctor',
@@ -206,7 +206,7 @@ class MedicalDisclaimerScreen extends StatelessWidget {
             const SizedBox(height: 12),
 
             // ── 5. Limitation of Liability ────────────────────────
-            _DisclaimerCard(
+            const _DisclaimerCard(
               accentColor: AppColors.warning,
               icon: Icons.gavel_rounded,
               title: 'Limitation of Liability',
@@ -270,7 +270,7 @@ class MedicalDisclaimerScreen extends StatelessWidget {
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                child: Text(
+                child: const Text(
                   'I Have Read and Understand',
                   style: TextStyle(fontFamily: 'Poppins', 
                     fontSize: 15,

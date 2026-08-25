@@ -52,8 +52,11 @@ class SavedAddress {
 
   String get shortAddress {
     final parts = <String>[];
-    if (building.isNotEmpty) parts.add(building);
-    else if (area.isNotEmpty) parts.add(area);
+    if (building.isNotEmpty) {
+      parts.add(building);
+    } else if (area.isNotEmpty) {
+      parts.add(area);
+    }
     if (city.isNotEmpty) parts.add(city);
     return parts.isEmpty ? city : parts.join(', ');
   }

@@ -41,7 +41,7 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen> with SingleTi
 
   static const _palette = [
     Color(0xFF1565C0), Color(0xFF2E7D32), Color(0xFF0097A7),
-    Color(0xFF7B1FA2), Color(0xFFE65100), Color(0xFFC2185B),
+    Color(0xFF633058), Color(0xFFE65100), Color(0xFF522546),
     Color(0xFF37474F), Color(0xFF4527A0), Color(0xFF00838F),
   ];
 
@@ -53,6 +53,12 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen> with SingleTi
 
   static Color _colorAt(int i) => _palette[i % _palette.length];
   static IconData _iconAt(int i) => _icons[i % _icons.length];
+
+  // The pinned TabBar is additional height on top of the hero content, not
+  // space carved out of it — otherwise the header shrinks below what the
+  // icon/title/subtitle need and they sink into the tab bar (see equipment
+  // header collision fix).
+  static const _tabBarHeight = 46.0;
 
   void _addRentToCart(Map<String, dynamic> eq, int days) {
     final pricePerDay = eq['price'] as int;
@@ -111,7 +117,7 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen> with SingleTi
                 const SizedBox(height: 4),
                 Text('₹$pricePerDay/day', style: AppTextStyles.labelMedium.copyWith(color: color)),
                 const SizedBox(height: 20),
-                Text('Number of days', style: AppTextStyles.labelLarge),
+                const Text('Number of days', style: AppTextStyles.labelLarge),
                 const SizedBox(height: 10),
                 Row(children: [
                   IconButton.filledTonal(
@@ -129,7 +135,7 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen> with SingleTi
                 ]),
                 const SizedBox(height: 20),
                 Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                  Text('Total', style: AppTextStyles.labelLarge),
+                  const Text('Total', style: AppTextStyles.labelLarge),
                   Text('₹${pricePerDay * days}', style: AppTextStyles.h4.copyWith(color: color)),
                 ]),
                 const SizedBox(height: 16),
@@ -164,16 +170,17 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen> with SingleTi
         slivers: [
           SliverAppBar(
             pinned: true,
-            expandedHeight: AppSpacing.headerHeight(context),
+            expandedHeight: AppSpacing.headerHeight(context) + _tabBarHeight,
+            backgroundColor: AppColors.primaryDark,
             leading: IconButton(
               icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
               onPressed: () => context.pop(),
             ),
             actions: const [CartBadgeAction()],
             bottom: PreferredSize(
-              preferredSize: const Size.fromHeight(46),
+              preferredSize: const Size.fromHeight(_tabBarHeight),
               child: Container(
-                color: AppColors.primary,
+                decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
                 child: TabBar(
                   controller: _tabController,
                   indicatorColor: Colors.white,
@@ -225,12 +232,17 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen> with SingleTi
                 child: SafeArea(
                   child: LayoutBuilder(
                     builder: (context, constraints) {
+                      // expandedHeight already reserves _tabBarHeight on top of
+                      // the hero content's own height, so the centered
+                      // title/subtitle only need to stay clear of that trailing
+                      // strip — they're never squeezed by it.
                       return SingleChildScrollView(
                         physics: const ClampingScrollPhysics(),
                         child: ConstrainedBox(
-                          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                          constraints: BoxConstraints(
+                              minHeight: constraints.maxHeight - _tabBarHeight),
                           child: Padding(
-                            padding: AppSpacing.headerPadding(context),
+                            padding: AppSpacing.headerPaddingWithBottomWidget(context),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               mainAxisAlignment: MainAxisAlignment.center,
@@ -238,8 +250,12 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen> with SingleTi
                               children: [
                                 Icon(Icons.medical_services_rounded, color: Colors.white, size: AppSpacing.headerIconSize(context)),
                                 SizedBox(height: AppSpacing.headerIconGap(context)),
-                                Text('Medical Equipment', style: AppTextStyles.onPrimaryH2),
-                                Text('Rent or Buy Quality Medical Equipment', style: AppTextStyles.onPrimaryBody),
+                                const Text('Medical Equipment',
+                                    maxLines: 1, overflow: TextOverflow.ellipsis,
+                                    style: AppTextStyles.onPrimaryH2),
+                                const Text('Rent or Buy Quality Medical Equipment',
+                                    maxLines: 1, overflow: TextOverflow.ellipsis,
+                                    style: AppTextStyles.onPrimaryBody),
                               ],
                             ),
                           ),
@@ -291,7 +307,7 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen> with SingleTi
                 return Padding(
                   padding: AppSpacing.page(context),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text('Available Equipment', style: AppTextStyles.h4),
+                    const Text('Available Equipment', style: AppTextStyles.h4),
                     SizedBox(height: AppSpacing.cardGap(context)),
                     if (visible.isEmpty)
                       _buildModeEmpty()

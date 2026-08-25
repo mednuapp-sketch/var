@@ -245,8 +245,8 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen>
         ),
       ),
       bottom: _query.isNotEmpty && _isLoadingFirestore
-          ? PreferredSize(
-              preferredSize: const Size.fromHeight(2),
+          ? const PreferredSize(
+              preferredSize: Size.fromHeight(2),
               child: LinearProgressIndicator(
                 minHeight: 2,
                 backgroundColor: Colors.transparent,
@@ -369,11 +369,11 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen>
   static const _quickItems = [
     SearchResult(
       id: '_q_video',
-      title: 'Video Consult',
+      title: 'Consultation',
       subtitle: '',
       route: AppRoutes.consultation,
       icon: Icons.video_call_rounded,
-      color: Color(0xFF7B1FA2),
+      color: Color(0xFF633058),
       category: SearchCategory.service,
       keywords: [],
     ),
@@ -383,7 +383,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen>
       subtitle: '',
       route: AppRoutes.doctors,
       icon: Icons.medical_services_rounded,
-      color: Color(0xFFC2185B),
+      color: Color(0xFF522546),
       category: SearchCategory.service,
       keywords: [],
     ),
@@ -496,7 +496,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen>
       subtitle: '',
       route: AppRoutes.pregnancy,
       icon: Icons.pregnant_woman_rounded,
-      color: Color(0xFFC2185B),
+      color: Color(0xFF522546),
       category: SearchCategory.service,
       keywords: [],
     ),
@@ -512,11 +512,21 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen>
     ),
     SearchResult(
       id: '_b_nutrition',
-      title: 'Nutrition',
+      title: 'Nutrition and Diet',
       subtitle: '',
       route: AppRoutes.nutrition,
       icon: Icons.restaurant_menu_rounded,
       color: Color(0xFF558B2F),
+      category: SearchCategory.service,
+      keywords: [],
+    ),
+    SearchResult(
+      id: '_b_counselling',
+      title: 'Therapy and Counselling',
+      subtitle: '',
+      route: AppRoutes.counselling,
+      icon: Icons.psychology_rounded,
+      color: Color(0xFF6A1B9A),
       category: SearchCategory.service,
       keywords: [],
     ),
@@ -556,7 +566,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen>
       subtitle: '',
       route: AppRoutes.family,
       icon: Icons.family_restroom_rounded,
-      color: Color(0xFF7B1FA2),
+      color: Color(0xFF633058),
       category: SearchCategory.service,
       keywords: [],
     ),
@@ -612,7 +622,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen>
                 _SectionHeader(
                   label: 'SPECIALITIES',
                   icon: Icons.category_rounded,
-                  color: const Color(0xFF7B1FA2),
+                  color: const Color(0xFF633058),
                   isDark: isDark,
                 ),
                 ..._staticResults
@@ -1214,13 +1224,13 @@ class _LabTestTile extends StatelessWidget {
                 color: const Color(0xFF0097A7).withValues(alpha:0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Text(
+              child: const Text(
                 'Book',
                 style: TextStyle(
                   fontFamily: 'Poppins',
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
-                  color: const Color(0xFF0097A7),
+                  color: Color(0xFF0097A7),
                 ),
               ),
             ),
@@ -1575,7 +1585,7 @@ Widget _staticGridN({
             : const SizedBox(),
       ));
     }
-    rows.add(Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: rowChildren));
+    rows.add(Row(children: rowChildren));
     if (i + crossAxisCount < children.length) rows.add(SizedBox(height: spacing));
   }
   return Column(children: rows);

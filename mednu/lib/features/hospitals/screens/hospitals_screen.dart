@@ -6,6 +6,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:mednu/core/constants/app_colors.dart';
 import 'package:mednu/core/constants/app_text_styles.dart';
+import 'package:mednu/core/router/app_router.dart';
 import 'package:mednu/core/widgets/ux_widgets.dart';
 import 'package:mednu/core/utils/r.dart';
 import '../services/hospital_service.dart';
@@ -285,7 +286,7 @@ class _HospitalsScreenState extends State<HospitalsScreen> {
               leading: IconButton(
                 icon: const Icon(Icons.arrow_back_ios_new_rounded,
                     color: Colors.white, size: 20),
-                onPressed: () => context.pop(),
+                onPressed: () => context.canPop() ? context.pop() : context.go(AppRoutes.home),
               ),
               actions: [
                 // Sort toggle
@@ -348,7 +349,7 @@ class _HospitalsScreenState extends State<HospitalsScreen> {
             // ── Search + filters ─────────────────────────────────────────────
             SliverToBoxAdapter(
               child: Container(
-                color: AppColors.primary,
+                decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
                 padding: EdgeInsets.fromLTRB(R.p(context, 16), 0, R.p(context, 16), R.p(context, 16)),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1102,7 +1103,7 @@ class _NearbyHospitalCard extends StatelessWidget {
                                     ],
                                     if (hospital.isEmergency) ...[
                                       SizedBox(height: R.h(context, 4)),
-                                      _BadgePill(
+                                      const _BadgePill(
                                         label: '24/7',
                                         color: AppColors.error,
                                       ),

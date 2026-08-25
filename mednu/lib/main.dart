@@ -13,8 +13,6 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:go_router/go_router.dart';
 import 'package:easy_localization/easy_localization.dart';
-import 'package:google_maps_flutter_android/google_maps_flutter_android.dart';
-import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 import 'firebase_options.dart';
 import 'app.dart';
 import 'core/router/app_router.dart';
@@ -417,16 +415,6 @@ void main() {
   runZonedGuarded(
     () async {
       WidgetsFlutterBinding.ensureInitialized();
-
-      // TEMP DIAGNOSTIC: force Hybrid Composition (real embedded SurfaceView)
-      // for Google Maps instead of the default Texture/Virtual-Display mode,
-      // whose backing SurfaceTexture was observed disconnecting the instant
-      // a drag gesture starts (onCameraMoveStarted -> Surface::disconnect),
-      // freezing the map on interaction.
-      final mapsImplementation = GoogleMapsFlutterPlatform.instance;
-      if (mapsImplementation is GoogleMapsFlutterAndroid) {
-        mapsImplementation.useAndroidViewSurface = true;
-      }
 
       // ── Global Flutter framework error handler ──────────────
       FlutterError.onError = (FlutterErrorDetails details) {

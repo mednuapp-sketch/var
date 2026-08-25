@@ -40,7 +40,7 @@ class AmbulanceEarningsScreen extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('This Week', style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: Colors.white70)),
+                const Text('This Week', style: TextStyle(fontFamily: 'Inter', fontSize: 13, color: Colors.white70)),
                 const SizedBox(height: 6),
                 Text('₹${total.toInt()}', style: AppTextStyles.onPrimaryH2.copyWith(fontSize: 30)),
                 const SizedBox(height: 4),

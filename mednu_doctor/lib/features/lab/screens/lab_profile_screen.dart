@@ -4,6 +4,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/services/feedback_service.dart';
+import '../../../core/utils/validators.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../../../shared_core/shared_core.dart';
 import '../providers/lab_providers.dart';
@@ -24,6 +25,16 @@ class _LabProfileScreenState extends ConsumerState<LabProfileScreen> {
   final _phoneCtrl = TextEditingController();
 
   Future<void> _save() async {
+    final nameError = Validators.name(_nameCtrl.text, label: 'Lab name');
+    if (nameError != null) {
+      FeedbackService.showError(context, nameError);
+      return;
+    }
+    final phoneError = Validators.phone(_phoneCtrl.text);
+    if (phoneError != null) {
+      FeedbackService.showError(context, phoneError);
+      return;
+    }
     final uid = LabProfileService.currentUid;
     if (uid == null) return;
     setState(() => _saving = true);
@@ -124,6 +135,7 @@ class _LabProfileScreenState extends ConsumerState<LabProfileScreen> {
                 uid: profile.uid,
                 documents: profile.documents,
                 documentVerification: profile.documentVerification,
+                locked: profile.status == 'active',
               ),
               const SizedBox(height: 24),
               if (_editing)

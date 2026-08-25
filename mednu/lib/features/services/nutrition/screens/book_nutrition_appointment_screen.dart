@@ -262,7 +262,7 @@ class _BookNutritionAppointmentScreenState
 
             // ── Consultation type ─────────────────────
             if (_isOnline || _isInPerson) ...[
-              _SectionHeader(label: 'Consultation Type'),
+              const _SectionHeader(label: 'Consultation Type'),
               const SizedBox(height: 10),
               _ConsultationTypeSelector(
                 isOnline: _isOnline,
@@ -274,7 +274,7 @@ class _BookNutritionAppointmentScreenState
             ],
 
             // ── Date picker (calendar-style strip) ────
-            _SectionHeader(label: 'Select Date'),
+            const _SectionHeader(label: 'Select Date'),
             const SizedBox(height: 10),
             _DateStrip(
               dates: _dateRange,
@@ -288,7 +288,7 @@ class _BookNutritionAppointmentScreenState
             const SizedBox(height: 20),
 
             // ── Time slots ────────────────────────────
-            _SectionHeader(label: 'Select Time Slot'),
+            const _SectionHeader(label: 'Select Time Slot'),
             const SizedBox(height: 10),
             bookedSlots.when(
               loading: () => const AppShimmer(
@@ -322,7 +322,7 @@ class _BookNutritionAppointmentScreenState
             const SizedBox(height: 20),
 
             // ── Health goal ───────────────────────────
-            _SectionHeader(label: 'Health Goal'),
+            const _SectionHeader(label: 'Health Goal'),
             const SizedBox(height: 10),
             _GoalDropdown(
               value: _healthGoal,
@@ -333,7 +333,7 @@ class _BookNutritionAppointmentScreenState
             const SizedBox(height: 20),
 
             // ── Notes ─────────────────────────────────
-            _SectionHeader(label: 'Additional Notes (Optional)'),
+            const _SectionHeader(label: 'Additional Notes (Optional)'),
             const SizedBox(height: 10),
             TextField(
               controller: _notesCtrl,
@@ -900,12 +900,12 @@ class _SummaryCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          const Row(
             children: [
-              const Icon(Icons.receipt_long_rounded,
+              Icon(Icons.receipt_long_rounded,
                   color: _kGreen, size: 18),
-              const SizedBox(width: 8),
-              const Text('Booking Summary',
+              SizedBox(width: 8),
+              Text('Booking Summary',
                   style: TextStyle(
                     fontFamily: 'Poppins',
                     fontSize: 14,

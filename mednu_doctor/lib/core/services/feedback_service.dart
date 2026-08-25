@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../constants/app_colors.dart';
 
 enum FeedbackType { success, error, warning, info, loading, syncing }
 
@@ -27,7 +28,7 @@ class FeedbackService {
                 child: Text(
                   message,
                   style: const TextStyle(
-                    fontFamily: 'Poppins',
+                    fontFamily: 'Inter',
                     fontSize: 13,
                     fontWeight: FontWeight.w500,
                     color: Colors.white,
@@ -115,7 +116,7 @@ class FeedbackService {
         title: Text(
           title,
           style: const TextStyle(
-            fontFamily: 'Poppins',
+            fontFamily: 'Inter',
             fontWeight: FontWeight.w700,
             fontSize: 16,
           ),
@@ -123,7 +124,7 @@ class FeedbackService {
         content: Text(
           message,
           style: const TextStyle(
-            fontFamily: 'Poppins',
+            fontFamily: 'Inter',
             fontSize: 13,
             height: 1.55,
             color: Color(0xFF616161),
@@ -134,13 +135,13 @@ class FeedbackService {
             onPressed: () => Navigator.pop(context, false),
             child: Text(cancelLabel,
                 style: const TextStyle(
-                    fontFamily: 'Poppins', color: Color(0xFF616161))),
+                    fontFamily: 'Inter', color: Color(0xFF616161))),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(
               backgroundColor:
-                  destructive ? const Color(0xFFC62828) : const Color(0xFFC2185B),
+                  destructive ? const Color(0xFFC62828) : AppColors.primary,
               foregroundColor: Colors.white,
               elevation: 0,
               shape: RoundedRectangleBorder(
@@ -148,7 +149,7 @@ class FeedbackService {
             ),
             child: Text(confirmLabel,
                 style: const TextStyle(
-                    fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
+                    fontFamily: 'Inter', fontWeight: FontWeight.w600)),
           ),
         ],
       ),

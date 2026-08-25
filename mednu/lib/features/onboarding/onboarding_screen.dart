@@ -21,8 +21,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     const _OnboardData(
       title: 'MedNU\nAlways With You',
       subtitle: 'Connect with doctors, hospitals, and health services for your entire family — anytime, anywhere.',
-      gradient: const LinearGradient(
-        colors: [Color(0xFFC2185B), Color(0xFF7B1FA2)],
+      gradient: LinearGradient(
+        colors: [Color(0xFF522546), Color(0xFF633058)],
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
       ),
@@ -33,8 +33,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     const _OnboardData(
       title: 'Find Specialist\nDoctors Near You',
       subtitle: 'Book appointments, consult online or in-person, track your family health — all in one app.',
-      gradient: const LinearGradient(
-        colors: [Color(0xFF7B1FA2), Color(0xFF4A148C)],
+      gradient: LinearGradient(
+        colors: [Color(0xFF633058), Color(0xFF3D1D36)],
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
       ),
@@ -44,8 +44,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     const _OnboardData(
       title: 'Get Online\nConsultation',
       subtitle: 'Connect with verified doctors via video call. Get prescriptions, follow-ups, and health tips instantly.',
-      gradient: const LinearGradient(
-        colors: [Color(0xFF880E4F), Color(0xFFC2185B)],
+      gradient: LinearGradient(
+        colors: [Color(0xFF33172C), Color(0xFF522546)],
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
       ),
@@ -112,7 +112,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   child: DecoratedBox(
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
-                        colors: [Color(0xFFC2185B), Color(0xFF7B1FA2)],
+                        colors: [Color(0xFF522546), Color(0xFF633058)],
                         begin: Alignment.centerLeft,
                         end: Alignment.centerRight,
                       ),
@@ -231,9 +231,9 @@ class _OnboardPage extends StatelessWidget {
                     children: [
                       // Brand header — only on first card
                       if (data.showBrand) ...[
-                        Text(
+                        const Text(
                           'MedNU',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontFamily: 'Poppins',
                             fontSize: 42,
                             fontWeight: FontWeight.w800,
@@ -252,9 +252,9 @@ class _OnboardPage extends StatelessWidget {
                               color: Colors.white.withValues(alpha: 0.55),
                             ),
                             const SizedBox(width: 8),
-                            Text(
+                            const Text(
                               'Always With You',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontFamily: 'Poppins',
                                 fontSize: 14,
                                 fontWeight: FontWeight.w500,

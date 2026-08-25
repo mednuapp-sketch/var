@@ -52,8 +52,7 @@ class ServiceBookingSheet extends ConsumerStatefulWidget {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => ProviderScope(
-        parent: ProviderScope.containerOf(ctx),
+      builder: (_) => ProviderScope(
         child: ServiceBookingSheet(
           type: type,
           serviceName: serviceName,
@@ -737,7 +736,7 @@ class _ServiceBookingSheetState extends ConsumerState<ServiceBookingSheet> {
                   color: widget.themeColor, size: 48),
             ),
             const SizedBox(height: 20),
-            Text('Booking Confirmed!', style: AppTextStyles.h3),
+            const Text('Booking Confirmed!', style: AppTextStyles.h3),
             const SizedBox(height: 8),
             Text(
               'Your request for ${widget.serviceName} has been received.\nOur team will contact you shortly.',
@@ -1085,7 +1084,7 @@ class _ServiceBookingSheetState extends ConsumerState<ServiceBookingSheet> {
                     ),
                   ),
                   const SizedBox(height: 10),
-                  Center(
+                  const Center(
                     child: Text(
                       'You will receive a confirmation call/SMS shortly',
                       style: AppTextStyles.caption,
@@ -1559,7 +1558,7 @@ class _AddrSuggestionTile extends StatelessWidget {
         child: Row(
           children: [
             const Icon(Icons.location_on_rounded,
-                size: 16, color: Color(0xFF00897B)),
+                size: 16, color: Color(0xFFF9943B)),
             const SizedBox(width: 10),
             Expanded(
               child: Column(

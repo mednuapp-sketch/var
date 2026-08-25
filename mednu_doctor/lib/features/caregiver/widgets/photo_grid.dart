@@ -1,13 +1,36 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/constants/app_text_styles.dart';
 import '../../../core/widgets/ux_widgets.dart';
+
+/// A local pick that is mid-upload, failed, or about to be retried — kept
+/// separate from `photoPaths` (which only ever holds confirmed Storage
+/// download URLs) so a flaky upload never has to fake a URL to show a tile.
+class PendingPhoto {
+  final String localPath;
+  final bool isFailed;
+  final String? errorMessage;
+  final VoidCallback onRetry;
+  final VoidCallback onCancel;
+
+  const PendingPhoto({
+    required this.localPath,
+    required this.isFailed,
+    this.errorMessage,
+    required this.onRetry,
+    required this.onCancel,
+  });
+}
 
 /// A responsive photo grid with an "Add Photo" tile — used by the Upload
 /// Photos screen. `photoPaths` are Firebase Storage download URLs (the
-/// visit doc's `photoUrls` array), so tiles render network images with a
-/// remove action per tile.
+/// visit doc's `photoUrls` array), so confirmed tiles render network images
+/// with a remove action per tile. `pendingPhotos` renders local files still
+/// uploading (spinner overlay) or failed (retry/cancel overlay).
 class PhotoGrid extends StatelessWidget {
   final List<String> photoPaths;
+  final List<PendingPhoto> pendingPhotos;
   final VoidCallback onAdd;
   final ValueChanged<String> onRemove;
   final int crossAxisCount;
@@ -15,6 +38,7 @@ class PhotoGrid extends StatelessWidget {
   const PhotoGrid({
     super.key,
     required this.photoPaths,
+    this.pendingPhotos = const [],
     required this.onAdd,
     required this.onRemove,
     this.crossAxisCount = 3,
@@ -34,6 +58,8 @@ class PhotoGrid extends StatelessWidget {
       children: [
         for (final path in photoPaths)
           _PhotoTile(path: path, onRemove: () => onRemove(path)),
+        for (final pending in pendingPhotos)
+          _PendingTile(pending: pending),
         _AddTile(onTap: onAdd),
       ],
     );
@@ -56,7 +82,7 @@ class _AddTile extends StatelessWidget {
             children: [
               Icon(Icons.add_a_photo_rounded, color: AppColors.primary, size: 26),
               SizedBox(height: 4),
-              Text('Add Photo', style: TextStyle(fontFamily: 'Poppins', fontSize: 10, color: AppColors.primary, fontWeight: FontWeight.w600)),
+              Text('Add Photo', style: TextStyle(fontFamily: 'Inter', fontSize: 10, color: AppColors.primary, fontWeight: FontWeight.w600)),
             ],
           ),
         ),
@@ -169,6 +195,62 @@ class _PhotoTile extends StatelessWidget {
             right: 6,
             child: GestureDetector(
               onTap: onRemove,
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.55), shape: BoxShape.circle),
+                child: const Icon(Icons.close_rounded, color: Colors.white, size: 14),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A tile for a local pick that hasn't been confirmed in Storage yet —
+/// dimmed with a spinner while uploading, or a clear "Failed — tap to
+/// retry" state so a flaky upload is never just silently dropped.
+class _PendingTile extends StatelessWidget {
+  final PendingPhoto pending;
+  const _PendingTile({required this.pending});
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          Image.file(File(pending.localPath), fit: BoxFit.cover),
+          Container(color: Colors.black.withValues(alpha: pending.isFailed ? 0.45 : 0.35)),
+          if (!pending.isFailed)
+            const Center(
+              child: SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
+              ),
+            )
+          else
+            InkWell(
+              onTap: pending.onRetry,
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.refresh_rounded, color: Colors.white, size: 22),
+                    const SizedBox(height: 2),
+                    Text('Retry', style: AppTextStyles.caption.copyWith(color: Colors.white, fontWeight: FontWeight.w700)),
+                  ],
+                ),
+              ),
+            ),
+          Positioned(
+            top: 6,
+            right: 6,
+            child: GestureDetector(
+              onTap: pending.onCancel,
               child: Container(
                 padding: const EdgeInsets.all(4),
                 decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.55), shape: BoxShape.circle),

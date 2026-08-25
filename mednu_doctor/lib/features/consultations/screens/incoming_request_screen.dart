@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/services/call_notification_service.dart';
 import '../../../shared_core/providers/role_providers.dart';
@@ -36,6 +37,7 @@ class _IncomingRequestScreenState extends State<IncomingRequestScreen>
 
   String? _consultationId;
   String _patientName = 'Patient';
+  String _patientPhotoUrl = '';
   String _chiefComplaint = '';
   String _consultationType = 'Video';
 
@@ -144,6 +146,7 @@ class _IncomingRequestScreenState extends State<IncomingRequestScreen>
       setState(() {
         _consultationId = doc.id;
         _patientName = data['patientName'] as String? ?? 'Patient';
+        _patientPhotoUrl = data['patientPhotoUrl'] as String? ?? '';
         _chiefComplaint = data['chiefComplaint'] as String? ?? '';
         _consultationType = data['consultationType'] as String? ?? 'Video';
         _loading = false;
@@ -308,22 +311,19 @@ class _IncomingRequestScreenState extends State<IncomingRequestScreen>
         children: [
           const _PulsingDot(),
           const SizedBox(height: 28),
-          const Text(
+          Text(
             'Waiting for patient requests...',
-            style: TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 15,
-                color: Colors.white60,
-                letterSpacing: 0.2),
+            style: AppTextStyles.body.copyWith(
+                color: Colors.white60, letterSpacing: 0.2),
           ),
           const SizedBox(height: 40),
           TextButton.icon(
             onPressed: _safeClose,
             icon: const Icon(Icons.arrow_back_rounded,
                 color: Colors.white38, size: 18),
-            label: const Text('Go Back',
-                style: TextStyle(
-                    fontFamily: 'Poppins', fontSize: 13, color: Colors.white38)),
+            label: Text('Go Back',
+                style: AppTextStyles.bodySmall.copyWith(
+                    fontSize: 13, color: Colors.white38)),
           ),
         ],
       ),
@@ -386,11 +386,8 @@ class _IncomingRequestScreenState extends State<IncomingRequestScreen>
               ),
               Text(
                 '$_countdown',
-                style: const TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white),
+                style: AppTextStyles.labelMedium.copyWith(
+                    fontWeight: FontWeight.w700, color: Colors.white),
               ),
             ],
           ),
@@ -427,26 +424,18 @@ class _IncomingRequestScreenState extends State<IncomingRequestScreen>
                   ),
                 ],
               ),
-              child: Center(
-                child: _patientName.isNotEmpty
-                    ? Text(
-                        _patientName
-                            .trim()
-                            .split(' ')
-                            .take(2)
-                            .map((w) => w.isNotEmpty ? w[0].toUpperCase() : '')
-                            .join(),
-                        style: const TextStyle(
-                          fontFamily: 'Poppins',
-                          fontSize: 38,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
-                          height: 1,
-                        ),
-                      )
-                    : const Icon(Icons.person_rounded,
-                        color: Colors.white, size: 58),
-              ),
+              child: _patientPhotoUrl.isNotEmpty
+                  ? ClipOval(
+                      child: Image.network(
+                        _patientPhotoUrl,
+                        width: 110,
+                        height: 110,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) =>
+                            Center(child: _buildAvatarFallback()),
+                      ),
+                    )
+                  : Center(child: _buildAvatarFallback()),
             ),
           ),
         ],
@@ -454,25 +443,38 @@ class _IncomingRequestScreenState extends State<IncomingRequestScreen>
     );
   }
 
+  Widget _buildAvatarFallback() {
+    return _patientName.isNotEmpty
+        ? Text(
+            _patientName
+                .trim()
+                .split(' ')
+                .take(2)
+                .map((w) => w.isNotEmpty ? w[0].toUpperCase() : '')
+                .join(),
+            style: AppTextStyles.display.copyWith(
+              fontSize: 38,
+              color: Colors.white,
+              height: 1,
+            ),
+          )
+        : const Icon(Icons.person_rounded, color: Colors.white, size: 58);
+  }
+
   Widget _buildPatientInfo() {
     return Column(
       children: [
-        const Text(
+        Text(
           'Incoming Consultation',
-          style: TextStyle(
-              fontFamily: 'Poppins', fontSize: 12, color: Colors.white54,
-              letterSpacing: 1.2),
+          style: AppTextStyles.caption.copyWith(
+              fontSize: 12, color: Colors.white54, letterSpacing: 1.2),
         ),
         const SizedBox(height: 8),
         Text(
           _patientName,
           textAlign: TextAlign.center,
-          style: const TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: 28,
-              fontWeight: FontWeight.w800,
-              color: Colors.white,
-              letterSpacing: -0.3),
+          style: AppTextStyles.display.copyWith(
+              fontSize: 28, color: Colors.white, letterSpacing: -0.3),
         ),
         const SizedBox(height: 6),
         Row(
@@ -482,8 +484,8 @@ class _IncomingRequestScreenState extends State<IncomingRequestScreen>
             const SizedBox(width: 4),
             Text(
               '$_consultationType Call',
-              style: const TextStyle(
-                  fontFamily: 'Poppins', fontSize: 12, color: Colors.white38),
+              style: AppTextStyles.caption.copyWith(
+                  fontSize: 12, color: Colors.white38),
             ),
           ],
         ),
@@ -517,20 +519,15 @@ class _IncomingRequestScreenState extends State<IncomingRequestScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Chief Complaint',
-                  style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 10,
-                      color: Colors.white38,
-                      letterSpacing: 0.5),
+                  style: AppTextStyles.caption.copyWith(
+                      fontSize: 10, color: Colors.white38, letterSpacing: 0.5),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   _chiefComplaint,
-                  style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 13,
+                  style: AppTextStyles.labelMedium.copyWith(
                       fontWeight: FontWeight.w500,
                       color: Colors.white.withValues(alpha:0.87)),
                 ),
@@ -550,16 +547,15 @@ class _IncomingRequestScreenState extends State<IncomingRequestScreen>
             (math.sin(_ripple1.value * math.pi * 2) * 0.4 + 0.6).clamp(0.0, 1.0);
         return Opacity(
           opacity: opacity,
-          child: const Row(
+          child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.ring_volume_rounded, color: Colors.white54, size: 13),
-              SizedBox(width: 6),
+              const Icon(Icons.ring_volume_rounded, color: Colors.white54, size: 13),
+              const SizedBox(width: 6),
               Text(
                 'Ringing...',
-                style: TextStyle(
-                    fontFamily: 'Poppins', fontSize: 12, color: Colors.white54,
-                    letterSpacing: 1.0),
+                style: AppTextStyles.caption.copyWith(
+                    fontSize: 12, color: Colors.white54, letterSpacing: 1.0),
               ),
             ],
           ),
@@ -618,7 +614,7 @@ class _IncomingRequestScreenState extends State<IncomingRequestScreen>
           child: Text('Decline',
               textAlign: TextAlign.center,
               style: TextStyle(
-                  fontFamily: 'Poppins', fontSize: 11, color: Colors.white38)),
+                  fontFamily: 'Inter', fontSize: 11, color: Colors.white38)),
         ),
         SizedBox(width: 52),
         SizedBox(
@@ -626,7 +622,7 @@ class _IncomingRequestScreenState extends State<IncomingRequestScreen>
           child: Text('Accept',
               textAlign: TextAlign.center,
               style: TextStyle(
-                  fontFamily: 'Poppins',
+                  fontFamily: 'Inter',
                   fontSize: 11,
                   color: Colors.white60,
                   fontWeight: FontWeight.w600)),
@@ -737,7 +733,7 @@ class _TypeChip extends StatelessWidget {
           Text(
             type,
             style: const TextStyle(
-                fontFamily: 'Poppins',
+                fontFamily: 'Inter',
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
                 color: Colors.white70),

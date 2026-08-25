@@ -7,6 +7,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/widgets/ux_widgets.dart';
+import '../../../core/widgets/mednu_components.dart';
 
 class _PatientSummary {
   final String patientId;
@@ -31,33 +32,7 @@ class PatientsListScreen extends StatefulWidget {
 }
 
 class _PatientsListScreenState extends State<PatientsListScreen> {
-  String _search = '';
   String _debouncedSearch = '';
-  Timer? _searchDebounce;
-  final _searchCtrl = TextEditingController();
-
-  void _onSearchChanged(String v) {
-    setState(() => _search = v);
-    _searchDebounce?.cancel();
-    _searchDebounce = Timer(const Duration(milliseconds: 280), () {
-      if (mounted) setState(() => _debouncedSearch = v);
-    });
-  }
-
-  void _clearSearch() {
-    _searchCtrl.clear();
-    setState(() {
-      _search = '';
-      _debouncedSearch = '';
-    });
-  }
-
-  @override
-  void dispose() {
-    _searchDebounce?.cancel();
-    _searchCtrl.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -157,21 +132,9 @@ class _PatientsListScreenState extends State<PatientsListScreen> {
                 delay: const Duration(milliseconds: 60),
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-                  child: TextField(
-                    controller: _searchCtrl,
-                    onChanged: _onSearchChanged,
-                    decoration: InputDecoration(
-                      hintText: 'Search by patient name...',
-                      prefixIcon: const Icon(Icons.search_rounded,
-                          color: AppColors.textHint),
-                      suffixIcon: _search.isNotEmpty
-                          ? IconButton(
-                              icon: const Icon(Icons.close_rounded,
-                                  color: AppColors.textHint, size: 18),
-                              onPressed: _clearSearch,
-                            )
-                          : null,
-                    ),
+                  child: MedNuSearchField(
+                    hint: 'Search by patient name...',
+                    onChanged: (v) => setState(() => _debouncedSearch = v),
                   ),
                 ),
               ),
@@ -310,7 +273,7 @@ class _StatsBanner extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF880E4F), Color(0xFFC2185B), Color(0xFF7B1FA2)],
+          colors: [AppColors.primaryDark, AppColors.primary, AppColors.secondary],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -363,7 +326,7 @@ class _StatItem extends StatelessWidget {
             Text(
               value,
               style: const TextStyle(
-                fontFamily: 'Poppins',
+                fontFamily: 'Inter',
                 fontSize: 20,
                 fontWeight: FontWeight.w800,
                 color: Colors.white,
@@ -374,7 +337,7 @@ class _StatItem extends StatelessWidget {
             Text(
               label,
               style: const TextStyle(
-                fontFamily: 'Poppins',
+                fontFamily: 'Inter',
                 fontSize: 10,
                 color: Colors.white60,
                 fontWeight: FontWeight.w500,
@@ -454,7 +417,7 @@ class _PatientCard extends StatelessWidget {
             child: Text(
               '${patient.visitCount} visit${patient.visitCount == 1 ? '' : 's'}',
               style: const TextStyle(
-                fontFamily: 'Poppins',
+                fontFamily: 'Inter',
                 fontSize: 10,
                 fontWeight: FontWeight.w700,
                 color: AppColors.primary,

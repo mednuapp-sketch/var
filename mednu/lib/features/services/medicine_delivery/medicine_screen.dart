@@ -254,7 +254,7 @@ class _MedicineScreenState extends ConsumerState<MedicineScreen> {
               SizedBox(height: R.h(context, 14)),
               Padding(
                 padding: EdgeInsets.symmetric(horizontal: R.p(context, 16)),
-                child: Align(alignment: Alignment.centerLeft, child: Text('Available Medicines', style: AppTextStyles.h4)),
+                child: const Align(alignment: Alignment.centerLeft, child: Text('Available Medicines', style: AppTextStyles.h4)),
               ),
               SizedBox(height: R.h(context, 12)),
 

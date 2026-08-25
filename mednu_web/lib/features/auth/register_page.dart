@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../core/constants/app_colors.dart';
 import 'auth_provider.dart';
 
+const _kBloodGroups = ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'];
 const _kGenders = ['Male', 'Female', 'Other'];
 
 class RegisterPage extends ConsumerStatefulWidget {
@@ -23,6 +24,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
   final _cityCtrl = TextEditingController();
 
   String _selectedGender = 'Male';
+  String? _selectedBloodGroup;
 
   @override
   void dispose() {
@@ -57,6 +59,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
           dob: _dobCtrl.text.trim().isEmpty ? null : _dobCtrl.text.trim(),
           gender: _selectedGender,
           city: _cityCtrl.text.trim().isEmpty ? null : _cityCtrl.text.trim(),
+          bloodGroup: _selectedBloodGroup,
         );
   }
 
@@ -92,7 +95,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                   Text('Complete Your Profile', style: GoogleFonts.poppins(fontSize: 26, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
                   const SizedBox(height: 8),
                   Text(
-                    "We're new here — let's set up your MedNU account",
+                    "We're new here — let's set up your MedNu account",
                     textAlign: TextAlign.center,
                     style: GoogleFonts.poppins(fontSize: 14, color: AppColors.textSecondary, height: 1.6),
                   ),
@@ -112,7 +115,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                   ),
                   const SizedBox(height: 32),
 
-                  const _Label('Full Name *'),
+                  _Label('Full Name *'),
                   const SizedBox(height: 6),
                   _TextField(
                     controller: _nameCtrl,
@@ -123,7 +126,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                   ),
                   const SizedBox(height: 16),
 
-                  const _Label('Email Address (optional)'),
+                  _Label('Email Address (optional)'),
                   const SizedBox(height: 6),
                   _TextField(
                     controller: _emailCtrl,
@@ -141,7 +144,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                   Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Expanded(
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        const _Label('Date of Birth'),
+                        _Label('Date of Birth'),
                         const SizedBox(height: 6),
                         GestureDetector(
                           onTap: _pickDob,
@@ -154,7 +157,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                     const SizedBox(width: 14),
                     Expanded(
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        const _Label('City'),
+                        _Label('City'),
                         const SizedBox(height: 6),
                         _TextField(controller: _cityCtrl, hint: 'Your city', icon: Icons.location_city_outlined),
                       ]),
@@ -162,7 +165,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                   ]),
                   const SizedBox(height: 16),
 
-                  const _Label('Gender'),
+                  _Label('Gender'),
                   const SizedBox(height: 8),
                   Row(
                     children: _kGenders.map((g) => Expanded(
@@ -177,6 +180,19 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                     )).toList(),
                   ),
                   const SizedBox(height: 16),
+
+                  _Label('Blood Group (optional)'),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8, runSpacing: 8,
+                    children: _kBloodGroups.map((bg) => _Chip(
+                      label: bg,
+                      width: 64,
+                      selected: _selectedBloodGroup == bg,
+                      onTap: () => setState(() => _selectedBloodGroup = _selectedBloodGroup == bg ? null : bg),
+                    )).toList(),
+                  ),
+                  const SizedBox(height: 12),
 
                   if (authState.error != null) ...[
                     const SizedBox(height: 8),
@@ -279,7 +295,7 @@ class _Chip extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
   final double? width;
-  const _Chip({required this.label, required this.selected, required this.onTap}) : width = null;
+  const _Chip({required this.label, required this.selected, required this.onTap, this.width});
 
   @override
   Widget build(BuildContext context) {

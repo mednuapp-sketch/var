@@ -331,7 +331,7 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _SectionTitle(text: 'Address Type'),
+                  const _SectionTitle(text: 'Address Type'),
                   const SizedBox(height: 14),
                   Row(
                     children: [
@@ -460,7 +460,7 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
                         const Spacer(),
                         GestureDetector(
                           onTap: _pickOnMap,
-                          child: Text(
+                          child: const Text(
                             'Change on map',
                             style: TextStyle(
                               fontFamily: 'Poppins',
@@ -478,12 +478,12 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
                     const SizedBox(height: 8),
                     GestureDetector(
                       onTap: _pickOnMap,
-                      child: Row(
+                      child: const Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.map_rounded,
+                          Icon(Icons.map_rounded,
                               size: 14, color: AppColors.primary),
-                          const SizedBox(width: 6),
+                          SizedBox(width: 6),
                           Text(
                             'Or pick on map',
                             style: TextStyle(
@@ -511,7 +511,7 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _SectionTitle(text: 'Address Details'),
+                  const _SectionTitle(text: 'Address Details'),
                   const SizedBox(height: 14),
 
                   _FormField(
@@ -617,7 +617,7 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
                   ),
                   Switch.adaptive(
                     value: _isDefault,
-                    activeColor: AppColors.primary,
+                    activeThumbColor: AppColors.primary,
                     onChanged: (v) => setState(() => _isDefault = v),
                   ),
                 ],

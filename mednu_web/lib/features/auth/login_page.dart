@@ -50,11 +50,7 @@ class _LoginPageState extends ConsumerState<LoginPage> with TickerProviderStateM
     return Scaffold(
       body: Row(
         children: [
-          // Desktop only. At tablet widths (768-1024) the 5:4 split left the
-          // form panel ~340px wide, squeezing the +91 prefix field and the
-          // 42px hero headline; tablets now get the full-width form, matching
-          // the OTP and Register pages.
-          if (Responsive.isDesktop(context)) Expanded(flex: 5, child: _LoginHeroPanel()),
+          if (!Responsive.isMobile(context)) Expanded(flex: 5, child: _LoginHeroPanel()),
           Expanded(
             flex: 4,
             child: FadeTransition(
@@ -91,26 +87,24 @@ class _LoginHeroPanel extends StatelessWidget {
       ),
       child: Stack(
         children: [
-          const Positioned(top: -80, left: -80, child: _Orb(size: 320, opacity: 0.12)),
-          const Positioned(bottom: -60, right: -60, child: _Orb(size: 280, opacity: 0.1)),
-          // Scrollable so the ~520px feature list cannot overflow vertically
-          // on short desktop viewports (e.g. a 1280x600 window).
-          SingleChildScrollView(
-            child: Container(
-              constraints: BoxConstraints(minHeight: MediaQuery.sizeOf(context).height),
-              alignment: Alignment.center,
+          Positioned(top: -80, left: -80, child: _Orb(size: 320, opacity: 0.12)),
+          Positioned(bottom: -60, right: -60, child: _Orb(size: 280, opacity: 0.1)),
+          Center(
+            child: Padding(
               padding: const EdgeInsets.all(48),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: Image.asset('assets/images/mednu_logo.png', width: 44, height: 44, fit: BoxFit.contain),
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(12)),
+                      child: const Center(child: Text('M', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w800))),
                     ),
                     const SizedBox(width: 12),
-                    Text('MedNU', style: GoogleFonts.poppins(fontSize: 26, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: -0.5)),
+                    Text('MedNu', style: GoogleFonts.poppins(fontSize: 26, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: -0.5)),
                   ]),
                   const SizedBox(height: 48),
                   Text(
@@ -134,16 +128,11 @@ class _LoginHeroPanel extends StatelessWidget {
                       Container(
                         width: 36,
                         height: 36,
-                        decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(10)),
+                        decoration: BoxDecoration(color: Colors.white.withOpacity(0.15), borderRadius: BorderRadius.circular(10)),
                         child: Center(child: Text(item.$1, style: const TextStyle(fontSize: 18))),
                       ),
                       const SizedBox(width: 14),
-                      Expanded(
-                        child: Text(item.$2,
-                            overflow: TextOverflow.ellipsis,
-                            maxLines: 2,
-                            style: GoogleFonts.poppins(fontSize: 14, color: Colors.white, fontWeight: FontWeight.w500)),
-                      ),
+                      Text(item.$2, style: GoogleFonts.poppins(fontSize: 14, color: Colors.white, fontWeight: FontWeight.w500)),
                     ]),
                   )),
                 ],
@@ -168,7 +157,7 @@ class _Orb extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: Colors.white.withValues(alpha: opacity),
+        color: Colors.white.withOpacity(opacity),
       ),
     );
   }
@@ -215,12 +204,14 @@ class _LoginFormPanel extends StatelessWidget {
                     if (Responsive.isMobile(context)) ...[
                       const SizedBox(width: 12),
                       Row(children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: Image.asset('assets/images/mednu_logo.png', width: 32, height: 32, fit: BoxFit.contain),
+                        Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(gradient: AppColors.primaryGradient, borderRadius: BorderRadius.circular(8)),
+                          child: const Center(child: Text('M', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800))),
                         ),
                         const SizedBox(width: 8),
-                        Text('MedNU', style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.primary)),
+                        Text('MedNu', style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.primary)),
                       ]),
                     ],
                   ]),
@@ -292,9 +283,9 @@ class _PhoneForm extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: AppColors.error.withValues(alpha: 0.08),
+                color: AppColors.error.withOpacity(0.08),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+                border: Border.all(color: AppColors.error.withOpacity(0.3)),
               ),
               child: Row(children: [
                 const Icon(Icons.error_outline, color: AppColors.error, size: 16),
@@ -368,7 +359,7 @@ class _GoogleSignInButtonState extends State<_GoogleSignInButton> {
             color: _hovered ? AppColors.background : Colors.white,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(color: _hovered ? AppColors.border : AppColors.divider, width: 1.5),
-            boxShadow: _hovered ? [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 8, offset: const Offset(0, 2))] : [],
+            boxShadow: _hovered ? [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 8, offset: const Offset(0, 2))] : [],
           ),
           child: Center(
             child: Row(mainAxisSize: MainAxisSize.min, children: [

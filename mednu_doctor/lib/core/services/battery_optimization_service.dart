@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Prompts the user (once, ever) to exempt MedNU Doctor from battery
+/// Prompts the user (once, ever) to exempt MedNu Service from battery
 /// optimization.
 ///
 /// Aggressive OEM battery managers (MIUI, ColorOS, FuntouchOS, OneUI) kill
@@ -45,7 +45,7 @@ class BatteryOptimizationService {
           title: const Text('Never miss a patient'),
           content: const Text(
             'To make sure incoming consultation requests and appointment '
-            'reminders always reach you — even when MedNU Doctor is closed — '
+            'reminders always reach you — even when MedNU Service is closed — '
             'please allow it to run in the background on the next screen.',
           ),
           actions: [

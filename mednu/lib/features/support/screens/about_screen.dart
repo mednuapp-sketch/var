@@ -110,7 +110,7 @@ class _AboutScreenState extends State<AboutScreen> {
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
 
                 // Mission
-                _SectionCard(
+                const _SectionCard(
                   icon: Icons.favorite_rounded,
                   color: AppColors.primary,
                   title: 'Our Mission',
@@ -126,7 +126,7 @@ class _AboutScreenState extends State<AboutScreen> {
                     gradient: const LinearGradient(colors: [Color(0xFF1A237E), Color(0xFF5C6BC0)]),
                     borderRadius: BorderRadius.circular(R.r(context, 18)),
                   ),
-                  child: Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: const [
+                  child: const Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
                     _Stat('50K+', 'Patients'),
                     _StatDivider(),
                     _Stat('500+', 'Doctors'),
@@ -140,9 +140,9 @@ class _AboutScreenState extends State<AboutScreen> {
                 SizedBox(height: R.h(context, 20)),
 
                 // Company info
-                _SectionCard(
+                const _SectionCard(
                   icon: Icons.business_rounded,
-                  color: const Color(0xFF1565C0),
+                  color: Color(0xFF1565C0),
                   title: 'Company',
                   content: 'MedNU Healthcare Services Private Limited\n'
                       'Registered in India under the Companies Act, 2013',

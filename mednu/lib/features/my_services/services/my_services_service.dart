@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/unified_booking.dart';
@@ -109,7 +110,7 @@ class MyServicesService {
         .orderBy('createdAt', descending: true)
         .limit(_historyLimit)
         .snapshots()
-        .handleError((_) {})
+        .handleError((e) => debugPrint('MyServicesService: appointments stream error: $e'))
         .map((s) => s.docs
             .map((d) => UnifiedBooking.fromAppointment(d.data(), d.id))
             .toList());
@@ -122,7 +123,7 @@ class MyServicesService {
         .orderBy('createdAt', descending: true)
         .limit(_historyLimit)
         .snapshots()
-        .handleError((_) {})
+        .handleError((e) => debugPrint('MyServicesService: consultations stream error: $e'))
         .map((s) => s.docs
             .map((d) => UnifiedBooking.fromConsultation(d.data(), d.id))
             .toList());
@@ -135,7 +136,7 @@ class MyServicesService {
         .orderBy('createdAt', descending: true)
         .limit(_historyLimit)
         .snapshots()
-        .handleError((_) {})
+        .handleError((e) => debugPrint('MyServicesService: service_requests stream error: $e'))
         .map((s) => s.docs
             .map((d) => UnifiedBooking.fromServiceRequest(d.data(), d.id))
             .toList());
@@ -148,7 +149,7 @@ class MyServicesService {
         .orderBy('createdAt', descending: true)
         .limit(_historyLimit)
         .snapshots()
-        .handleError((_) {})
+        .handleError((e) => debugPrint('MyServicesService: nutrition stream error: $e'))
         .map((s) => s.docs
             .map((d) => UnifiedBooking.fromNutrition(d.data(), d.id))
             .toList());

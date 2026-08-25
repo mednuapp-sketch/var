@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import '../../../core/router/app_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
+import '../../../core/utils/validators.dart';
 import '../../auth/services/doctor_auth_service.dart';
 import '../../../core/widgets/ux_widgets.dart';
 
@@ -36,6 +37,30 @@ class _AvailabilityScreenState extends State<AvailabilityScreen> {
   int _slotDuration = 30;
   bool _loading = true;
   bool _saving = false;
+
+  /// Per-day inline validation error (start/end time-range), shown next to
+  /// that day's time pickers rather than as a generic SnackBar.
+  final Map<String, String?> _dayErrors = {};
+
+  bool get _hasErrors => _dayErrors.values.any((e) => e != null);
+
+  /// Validates a single day's start/end range using [Validators.timeRange].
+  ///
+  /// Note on overlap checking: this screen's data model stores exactly one
+  /// contiguous start/end range per weekday (not a list of discrete slots),
+  /// so there is nothing else on the same day for a range to overlap with —
+  /// `Validators.noOverlap` has no applicable "other existing slots" to
+  /// compare against here. Only the strict start-before-end check applies.
+  String? _validateDay(String day) {
+    final start = _startTimes[day]!;
+    final end = _endTimes[day]!;
+    final base = _weekDates[day] ?? DateTime.now();
+    final startDt =
+        DateTime(base.year, base.month, base.day, start.hour, start.minute);
+    final endDt =
+        DateTime(base.year, base.month, base.day, end.hour, end.minute);
+    return Validators.timeRange(startDt, endDt);
+  }
 
   late final Map<String, DateTime> _weekDates = _buildWeekDates();
 
@@ -106,21 +131,18 @@ class _AvailabilityScreenState extends State<AvailabilityScreen> {
     final uid = DoctorAuthService.currentUid;
     if (uid == null) return;
 
-    for (final day in _days) {
-      if (_enabled[day] == true) {
-        final start = _startTimes[day]!;
-        final end = _endTimes[day]!;
-        final startMins = start.hour * 60 + start.minute;
-        final endMins = end.hour * 60 + end.minute;
-        if (endMins <= startMins) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('$day: End time must be after start time'),
-            backgroundColor: AppColors.error,
-            behavior: SnackBarBehavior.floating,
-          ));
-          return;
-        }
+    setState(() {
+      for (final day in _days) {
+        _dayErrors[day] = _enabled[day] == true ? _validateDay(day) : null;
       }
+    });
+    if (_hasErrors) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Fix the highlighted days before saving'),
+        backgroundColor: AppColors.error,
+        behavior: SnackBarBehavior.floating,
+      ));
+      return;
     }
 
     setState(() => _saving = true);
@@ -175,6 +197,7 @@ class _AvailabilityScreenState extends State<AvailabilityScreen> {
         } else {
           _endTimes[day] = picked;
         }
+        _dayErrors[day] = _validateDay(day);
       });
     }
   }
@@ -223,7 +246,7 @@ class _AvailabilityScreenState extends State<AvailabilityScreen> {
             leading: IconButton(
               icon: const Icon(Icons.arrow_back_ios_new_rounded,
                   color: Colors.white),
-              onPressed: () => context.pop(),
+              onPressed: () => context.safeBack(),
             ),
             actions: [
               _saving
@@ -247,7 +270,7 @@ class _AvailabilityScreenState extends State<AvailabilityScreen> {
                         style: TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.w700,
-                          fontFamily: 'Poppins',
+                          fontFamily: 'Inter',
                           fontSize: 14,
                         ),
                       ),
@@ -324,6 +347,7 @@ class _AvailabilityScreenState extends State<AvailabilityScreen> {
                         onPickStart: () => _pickTime(day, true),
                         onPickEnd: () => _pickTime(day, false),
                         formatTime: _formatDisplay,
+                        errorText: _dayErrors[day],
                       ),
                     );
                   }),
@@ -380,7 +404,7 @@ class _AvailabilityHeader extends StatelessWidget {
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
-          colors: [Color(0xFF880E4F), Color(0xFFC2185B), Color(0xFF7B1FA2)],
+          colors: [AppColors.primaryDark, AppColors.primary, AppColors.secondary],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -431,7 +455,7 @@ class _AvailabilityHeader extends StatelessWidget {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
-                                  fontFamily: 'Poppins',
+                                  fontFamily: 'Inter',
                                   fontSize: 18,
                                   fontWeight: FontWeight.w700,
                                   color: Colors.white,
@@ -443,7 +467,7 @@ class _AvailabilityHeader extends StatelessWidget {
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
-                                  fontFamily: 'Poppins',
+                                  fontFamily: 'Inter',
                                   fontSize: 12,
                                   color: Colors.white70,
                                 ),
@@ -515,8 +539,8 @@ class _SlotDurationCard extends StatelessWidget {
                     gradient: isSelected
                         ? const LinearGradient(
                             colors: [
-                              Color(0xFFC2185B),
-                              Color(0xFF7B1FA2)
+                              AppColors.primary,
+                              AppColors.secondary
                             ],
                           )
                         : null,
@@ -539,7 +563,7 @@ class _SlotDurationCard extends StatelessWidget {
                       Text(
                         '$min',
                         style: TextStyle(
-                          fontFamily: 'Poppins',
+                          fontFamily: 'Inter',
                           fontSize: 16,
                           fontWeight: FontWeight.w800,
                           color: isSelected
@@ -550,7 +574,7 @@ class _SlotDurationCard extends StatelessWidget {
                       Text(
                         'min',
                         style: TextStyle(
-                          fontFamily: 'Poppins',
+                          fontFamily: 'Inter',
                           fontSize: 10,
                           color: isSelected
                               ? Colors.white70
@@ -601,7 +625,7 @@ class _WeeklySummaryBanner extends StatelessWidget {
           child: RichText(
             text: TextSpan(
               style: const TextStyle(
-                fontFamily: 'Poppins',
+                fontFamily: 'Inter',
                 fontSize: 12,
                 color: AppColors.primary,
               ),
@@ -639,6 +663,7 @@ class _DayCard extends StatelessWidget {
   final VoidCallback onPickStart;
   final VoidCallback onPickEnd;
   final String Function(TimeOfDay) formatTime;
+  final String? errorText;
 
   const _DayCard({
     required this.day,
@@ -652,6 +677,7 @@ class _DayCard extends StatelessWidget {
     required this.onPickStart,
     required this.onPickEnd,
     required this.formatTime,
+    this.errorText,
   });
 
   @override
@@ -700,15 +726,13 @@ class _DayCard extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(
                       horizontal: 7, vertical: 2),
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFFC2185B), Color(0xFF7B1FA2)],
-                    ),
+                    gradient: AppColors.primaryGradient,
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Text(
                     'Today',
                     style: TextStyle(
-                      fontFamily: 'Poppins',
+                      fontFamily: 'Inter',
                       fontSize: 9,
                       fontWeight: FontWeight.w700,
                       color: Colors.white,
@@ -719,9 +743,7 @@ class _DayCard extends StatelessWidget {
             ]),
             Text(
               DateFormat('MMM d').format(date),
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 11,
+              style: AppTextStyles.caption.copyWith(
                 color: enabled
                     ? AppColors.primary.withValues(alpha: 0.8)
                     : AppColors.textHint,
@@ -740,12 +762,7 @@ class _DayCard extends StatelessWidget {
               ),
               child: Text(
                 '$slotCount slots',
-                style: const TextStyle(
-                  fontFamily: 'Poppins',
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.success,
-                ),
+                style: AppTextStyles.labelSmall.copyWith(color: AppColors.success),
               ),
             ),
             const SizedBox(width: 10),
@@ -787,6 +804,10 @@ class _DayCard extends StatelessWidget {
           ),
           secondChild: const SizedBox.shrink(),
         ),
+        if (enabled && errorText != null) ...[
+          const SizedBox(height: 8),
+          Text(errorText!, style: AppTextStyles.bodySmall.copyWith(color: AppColors.error)),
+        ],
       ]),
     );
   }
@@ -815,7 +836,7 @@ class _DayToggle extends StatelessWidget {
           borderRadius: BorderRadius.circular(13),
           gradient: value
               ? const LinearGradient(
-                  colors: [Color(0xFFC2185B), Color(0xFF7B1FA2)],
+                  colors: [AppColors.primary, AppColors.secondary],
                   begin: Alignment.centerLeft,
                   end: Alignment.centerRight,
                 )
@@ -824,7 +845,7 @@ class _DayToggle extends StatelessWidget {
           boxShadow: value
               ? [
                   BoxShadow(
-                    color: const Color(0xFFC2185B).withValues(alpha: 0.3),
+                    color: AppColors.primary.withValues(alpha: 0.3),
                     blurRadius: 6,
                     offset: const Offset(0, 2),
                   )
@@ -894,7 +915,7 @@ class _TimeButton extends StatelessWidget {
                   fontSize: 10,
                   color: AppColors.textHint,
                   fontWeight: FontWeight.w500,
-                  fontFamily: 'Poppins',
+                  fontFamily: 'Inter',
                 ),
               ),
               Text(
@@ -903,7 +924,7 @@ class _TimeButton extends StatelessWidget {
                   fontSize: 14,
                   color: AppColors.primary,
                   fontWeight: FontWeight.w700,
-                  fontFamily: 'Poppins',
+                  fontFamily: 'Inter',
                 ),
               ),
             ]),

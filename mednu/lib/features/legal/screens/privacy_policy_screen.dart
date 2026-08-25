@@ -182,9 +182,9 @@ class PrivacyPolicyScreen extends StatelessWidget {
                               ),
                             ),
                             SizedBox(height: R.h(context, 4)),
-                            Text(
+                            const Text(
                               'Last updated: $_lastUpdated',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontFamily: 'Poppins',
                                 fontSize: 12,
                                 color: Colors.white60,
@@ -212,13 +212,13 @@ class PrivacyPolicyScreen extends StatelessWidget {
                 _IntroCard(),
 
                 // Table of contents
-                _TableOfContents(sections: _sections),
+                const _TableOfContents(sections: _sections),
 
                 // Sections
                 ..._sections.map((s) => _SectionCard(section: s)),
 
                 // Contact card
-                _ContactCard(email: _contactEmail),
+                const _ContactCard(email: _contactEmail),
                 SizedBox(height: R.h(context, 40)),
               ],
             ),

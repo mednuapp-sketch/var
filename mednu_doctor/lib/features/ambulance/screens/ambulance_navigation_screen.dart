@@ -83,7 +83,7 @@ class _NextTurnBanner extends StatelessWidget {
       margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(colors: [Color(0xFFC2185B), Color(0xFF7B1FA2)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+        gradient: AppColors.primaryGradient,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
@@ -99,9 +99,9 @@ class _NextTurnBanner extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('In 300 m, turn right', style: TextStyle(fontFamily: 'Poppins', fontSize: 18, fontWeight: FontWeight.w800, color: Colors.white)),
+                Text('In 300 m, turn right', style: AppTextStyles.h3.copyWith(fontSize: 18, fontWeight: FontWeight.w800, color: Colors.white)),
                 const SizedBox(height: 4),
-                Text('Toward $dropAddress', style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: Colors.white70), maxLines: 1, overflow: TextOverflow.ellipsis),
+                Text('Toward $dropAddress', style: AppTextStyles.bodySmall.copyWith(color: Colors.white70), maxLines: 1, overflow: TextOverflow.ellipsis),
               ],
             ),
           ),
@@ -131,7 +131,7 @@ class _BottomEtaBar extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('$etaMinutes min', style: AppTextStyles.h3.copyWith(color: Colors.white)),
-              const Text('Estimated arrival', style: TextStyle(fontFamily: 'Poppins', fontSize: 11, color: Colors.white60)),
+              Text('Estimated arrival', style: AppTextStyles.caption.copyWith(color: Colors.white60)),
             ],
           ),
           Container(width: 1, height: 34, color: Colors.white24),
@@ -139,11 +139,16 @@ class _BottomEtaBar extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('$distanceKm km', style: AppTextStyles.h3.copyWith(color: Colors.white)),
-              const Text('Remaining', style: TextStyle(fontFamily: 'Poppins', fontSize: 11, color: Colors.white60)),
+              Text('Remaining', style: AppTextStyles.caption.copyWith(color: Colors.white60)),
             ],
           ),
           ElevatedButton.icon(
-            onPressed: () {},
+            onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Voice guidance is coming soon.'),
+                behavior: SnackBarBehavior.floating,
+              ),
+            ),
             icon: const Icon(Icons.mic_rounded, size: 18),
             label: const Text('Voice'),
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),

@@ -52,8 +52,19 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   int _currentIndex = 0;
+  // Tabs are mounted (and their Firestore listeners subscribed) only once
+  // visited, so a doctor leaving the dashboard open all day isn't paying for
+  // 4 concurrent StreamBuilder subscriptions when only 1 tab is on screen.
+  final Set<int> _visitedTabs = {0};
   bool _isOnline = false;
   bool _locationTogglingInProgress = false;
+
+  void _selectTab(int i) {
+    setState(() {
+      _currentIndex = i;
+      _visitedTabs.add(i);
+    });
+  }
 
   @override
   void initState() {
@@ -74,7 +85,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (!mounted) return;
       final status = profile?['status'] as String?;
       if (status != 'active') {
-        context.go(profile == null ? AppRoutes.register : AppRoutes.verificationPending);
+        // No base identity document yet — brand-new account (or, on this
+        // screen specifically, an already-authenticated session with no
+        // Firestore profile at all, e.g. a fresh install that restored a
+        // cached Firebase Auth session). Same branch point as OTP
+        // verification: pick a role before registering.
+        context.go(profile == null ? AppRoutes.partnerRoleSelect : AppRoutes.verificationPending);
       }
     } catch (e) {
       debugPrint('[Dashboard] Approval status check failed: $e');
@@ -202,11 +218,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
             child: const Icon(Icons.location_off_rounded, color: AppColors.error, size: 24),
           ),
           const SizedBox(width: 12),
-          const Text('Location Required', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 16)),
+          Text('Location Required', style: AppTextStyles.h4),
         ]),
-        content: const Text(
+        content: Text(
           'Your GPS must be ON to go online. Patients nearby will find you based on your real-time location.\n\nPlease enable Location/GPS from settings.',
-          style: TextStyle(fontFamily: 'Poppins', fontSize: 13, height: 1.5),
+          style: AppTextStyles.bodySmall.copyWith(height: 1.5),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel', style: TextStyle(color: AppColors.textHint))),
@@ -233,11 +249,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
             child: const Icon(Icons.location_searching_rounded, color: AppColors.primary, size: 24),
           ),
           const SizedBox(width: 12),
-          const Text('Allow Location', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 16)),
+          Text('Allow Location', style: AppTextStyles.h4),
         ]),
-        content: const Text(
-          'MedNU Doctor needs location permission to show you to patients within 7–10 km.\n\nPlease allow "While using the app" in app settings.',
-          style: TextStyle(fontFamily: 'Poppins', fontSize: 13, height: 1.5),
+        content: Text(
+          'MedNU Service needs location permission to show you to patients within 7–10 km.\n\nPlease allow "While using the app" in app settings.',
+          style: AppTextStyles.bodySmall.copyWith(height: 1.5),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel', style: TextStyle(color: AppColors.textHint))),
@@ -273,9 +289,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
               onToggle: _toggleOnline,
               toggling: _locationTogglingInProgress,
             ),
-            _AppointmentsTab(),
-            _EarningsTab(),
-            const _ProfileTab(),
+            _visitedTabs.contains(1) ? _AppointmentsTab() : const SizedBox.shrink(),
+            _visitedTabs.contains(2) ? _EarningsTab() : const SizedBox.shrink(),
+            _visitedTabs.contains(3) ? const _ProfileTab() : const SizedBox.shrink(),
           ],
         ),
         bottomNavigationBar: _buildBottomNav(),
@@ -294,10 +310,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
-            _NavItem(Icons.dashboard_rounded, 'Home', 0, _currentIndex, (i) => setState(() => _currentIndex = i)),
-            _NavItem(Icons.calendar_month_rounded, 'Appointments', 1, _currentIndex, (i) => setState(() => _currentIndex = i)),
-            _NavItem(Icons.account_balance_wallet_rounded, 'Earnings', 2, _currentIndex, (i) => setState(() => _currentIndex = i)),
-            _NavItem(Icons.person_rounded, 'Profile', 3, _currentIndex, (i) => setState(() => _currentIndex = i)),
+            _NavItem(Icons.dashboard_rounded, 'Home', 0, _currentIndex, _selectTab),
+            _NavItem(Icons.calendar_month_rounded, 'Appointments', 1, _currentIndex, _selectTab),
+            _NavItem(Icons.account_balance_wallet_rounded, 'Earnings', 2, _currentIndex, _selectTab),
+            _NavItem(Icons.person_rounded, 'Profile', 3, _currentIndex, _selectTab),
           ],
         ),
       ),
@@ -450,11 +466,11 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                         Text(
                           widget.isOnline ? 'You are ONLINE' : 'You are OFFLINE',
-                          style: TextStyle(fontFamily: 'Poppins', fontSize: R.sp(context, 17), fontWeight: FontWeight.w800, color: Colors.white),
+                          style: AppTextStyles.onPrimaryH2.copyWith(fontSize: R.sp(context, 17), fontWeight: FontWeight.w800),
                         ),
                         Text(
                           widget.isOnline ? 'Accepting new consultations' : 'Not accepting consultations',
-                          style: TextStyle(fontFamily: 'Poppins', fontSize: R.sp(context, 11), color: Colors.white70),
+                          style: AppTextStyles.onPrimaryBody.copyWith(fontSize: R.sp(context, 11)),
                         ),
                         SizedBox(height: R.h(context, 8)),
                         if (widget.isOnline) ...[
@@ -464,7 +480,7 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                             child: Row(mainAxisSize: MainAxisSize.min, children: [
                               Container(width: R.w(context, 6), height: R.w(context, 6), decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle)),
                               SizedBox(width: R.p(context, 6)),
-                              Flexible(child: Text('Waiting for requests...', style: TextStyle(fontFamily: 'Poppins', fontSize: R.sp(context, 11), color: Colors.white))),
+                              Flexible(child: Text('Waiting for requests...', style: AppTextStyles.caption.copyWith(fontSize: R.sp(context, 11), color: Colors.white))),
                             ]),
                           ),
                           SizedBox(height: R.h(context, 6)),
@@ -474,7 +490,7 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                             child: Row(mainAxisSize: MainAxisSize.min, children: [
                               Icon(Icons.my_location_rounded, size: R.w(context, 12), color: Colors.white),
                               SizedBox(width: R.p(context, 5)),
-                              Flexible(child: Text('GPS Active • Visible within 10 km', style: TextStyle(fontFamily: 'Poppins', fontSize: R.sp(context, 10), color: Colors.white))),
+                              Flexible(child: Text('GPS Active • Visible within 10 km', style: AppTextStyles.caption.copyWith(fontSize: R.sp(context, 10), color: Colors.white))),
                             ]),
                           ),
                         ],
@@ -555,13 +571,13 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                           const SizedBox(width: 12),
                           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                             Text('$count Consultation Request${count > 1 ? 's' : ''}!',
-                                style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, color: AppColors.primary)),
+                                style: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w700, color: AppColors.primary)),
                             const Text('Tap to view and accept', style: AppTextStyles.bodySmall),
                           ])),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                             decoration: const BoxDecoration(gradient: AppColors.primaryGradient, borderRadius: BorderRadius.all(Radius.circular(10))),
-                            child: const Text('View', style: TextStyle(fontFamily: 'Poppins', fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
+                            child: const Text('View', style: TextStyle(fontFamily: 'Inter', fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
                           ),
                         ]),
                       ),
@@ -601,6 +617,17 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                           const Icon(Icons.calendar_today_outlined, size: 36, color: AppColors.textHint),
                           const SizedBox(height: 8),
                           Text('No upcoming appointments', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textHint)),
+                          const SizedBox(height: 10),
+                          TextButton(
+                            onPressed: () => context.push(AppRoutes.schedule),
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 4),
+                              minimumSize: const Size(0, 32),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            child: const Text('Set Availability',
+                                style: TextStyle(fontFamily: 'Inter', fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary)),
+                          ),
                         ]),
                       ),
                     );
@@ -638,7 +665,7 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                               decoration: const BoxDecoration(gradient: AppColors.primaryGradient, shape: BoxShape.circle),
                               child: Center(child: Text(
                                 patientName.isNotEmpty ? patientName[0].toUpperCase() : '?',
-                                style: const TextStyle(fontFamily: 'Poppins', fontSize: 18, fontWeight: FontWeight.w800, color: Colors.white),
+                                style: const TextStyle(fontFamily: 'Inter', fontSize: 18, fontWeight: FontWeight.w800, color: Colors.white),
                               )),
                             ),
                             const SizedBox(width: 12),
@@ -710,7 +737,7 @@ class _MaternityCareCard extends StatelessWidget {
               ),
               borderRadius: BorderRadius.circular(18),
               boxShadow: [
-                BoxShadow(color: const Color(0xFFC2185B).withValues(alpha:0.3), blurRadius: 12, offset: const Offset(0, 4)),
+                BoxShadow(color: AppColors.primary.withValues(alpha:0.3), blurRadius: 12, offset: const Offset(0, 4)),
               ],
             ),
             child: Row(children: [
@@ -723,16 +750,16 @@ class _MaternityCareCard extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 const Text('Maternity Patients',
-                    style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, color: Colors.white, fontSize: 14)),
+                    style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w700, color: Colors.white, fontSize: 14)),
                 Text(
                   '$count patients${highRisk > 0 ? ' • $highRisk high-risk' : ''}',
-                  style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: Colors.white70),
+                  style: const TextStyle(fontFamily: 'Inter', fontSize: 12, color: Colors.white70),
                 ),
               ])),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(color: Colors.white.withValues(alpha:0.2), borderRadius: BorderRadius.circular(10)),
-                child: const Text('View', style: TextStyle(fontFamily: 'Poppins', fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
+                child: const Text('View', style: TextStyle(fontFamily: 'Inter', fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
               ),
             ]),
           ),
@@ -930,7 +957,7 @@ class _ReviewsSummaryCard extends StatelessWidget {
                         const SizedBox(width: 3),
                         Text('Verified',
                             style: AppTextStyles.caption
-                                .copyWith(color: AppColors.accent)),
+                                .copyWith(color: AppColors.accentText)),
                       ]),
                     ),
                     const SizedBox(width: 4),
@@ -1025,7 +1052,7 @@ class _RealStatsRow extends StatelessWidget {
           .snapshots(),
       builder: (context, snap) {
         final docs = snap.data?.docs ?? [];
-        final totalEarnings = docs.fold<num>(0, (sum, d) => sum + ((d.data()['fee'] as num?) ?? 0));
+        final totalEarnings = docs.fold<num>(0, (acc, d) => acc + ((d.data()['fee'] as num?) ?? 0));
         final consultations = docs.length;
 
         return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
@@ -1043,7 +1070,7 @@ class _RealStatsRow extends StatelessWidget {
             return Padding(
               padding: EdgeInsets.symmetric(horizontal: R.p(context, 16)),
               child: Row(children: [
-                _StatCard('Today\'s Earnings', '₹$totalEarnings', Icons.currency_rupee_rounded, const Color(0xFF1565C0)),
+                _StatCard('Today\'s Earnings', '₹${NumberFormat('#,##0').format(totalEarnings)}', Icons.currency_rupee_rounded, const Color(0xFF1565C0)),
                 SizedBox(width: R.p(context, 10)),
                 _StatCard('Consultations', '$consultations', Icons.video_call_rounded, AppColors.secondary),
                 SizedBox(width: R.p(context, 10)),
@@ -1081,7 +1108,7 @@ class _StatCard extends StatelessWidget {
         SizedBox(height: R.h(context, 5)),
         FittedBox(
           fit: BoxFit.scaleDown,
-          child: Text(value, style: TextStyle(fontFamily: 'Poppins', fontSize: R.sp(context, 15), fontWeight: FontWeight.w800, color: color)),
+          child: Text(value, style: TextStyle(fontFamily: 'Inter', fontSize: R.sp(context, 15), fontWeight: FontWeight.w800, color: color)),
         ),
         Text(label, textAlign: TextAlign.center, style: AppTextStyles.caption, maxLines: 2, overflow: TextOverflow.ellipsis),
       ]),
@@ -1274,6 +1301,7 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
               _scheduledReminderIds.add(appt.id);
               final d = appt.data();
               AppointmentReminderService.scheduleReminders(
+                uid:           uid,
                 appointmentId: appt.id,
                 patientName:   d['patientName'] as String? ?? 'Patient',
                 dateStr:       d['date']        as String? ?? '',
@@ -1297,10 +1325,7 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
                 automaticallyImplyLeading: false,
                 backgroundColor: Colors.white,
                 elevation: 0,
-                title: const Text(
-                  'Appointments',
-                  style: TextStyle(fontFamily: 'Poppins', fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
-                ),
+                toolbarHeight: 0,
                 bottom: PreferredSize(
                   preferredSize: const Size.fromHeight(52),
                   child: Container(
@@ -1313,8 +1338,8 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
                       unselectedLabelColor: AppColors.textHint,
                       indicatorColor: AppColors.primary,
                       indicatorWeight: 3,
-                      labelStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w700),
-                      unselectedLabelStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w500),
+                      labelStyle: const TextStyle(fontFamily: 'Inter', fontSize: 13, fontWeight: FontWeight.w700),
+                      unselectedLabelStyle: const TextStyle(fontFamily: 'Inter', fontSize: 13, fontWeight: FontWeight.w500),
                       tabs: [
                         Tab(text: 'Upcoming (${upcoming.length})'),
                         Tab(text: 'Done (${completed.length})'),
@@ -1343,25 +1368,15 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
 
   Widget _buildList(BuildContext context, List<QueryDocumentSnapshot<Map<String, dynamic>>> appointments, String status) {
     if (appointments.isEmpty) {
-      return Center(
-        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Container(
-            width: 88, height: 88,
-            decoration: BoxDecoration(color: AppColors.primary.withValues(alpha:0.08), shape: BoxShape.circle),
-            child: const Icon(Icons.calendar_month_rounded, size: 40, color: AppColors.primary),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            status == 'booked' ? 'No upcoming appointments' :
+      return AppEmptyState(
+        icon: Icons.calendar_month_rounded,
+        title: status == 'booked' ? 'No upcoming appointments' :
             status == 'completed' ? 'No completed appointments' : 'No cancelled appointments',
-            style: const TextStyle(fontFamily: 'Poppins', fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
-          ),
-          const SizedBox(height: 6),
-          const Text(
-            'Your appointments will appear here',
-            style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: AppColors.textHint),
-          ),
-        ]),
+        message: status == 'booked'
+            ? 'Open slots bring patients your way. Set your availability so patients can book you.'
+            : 'Your appointments will appear here',
+        actionLabel: status == 'booked' ? 'Set Availability' : null,
+        onAction: status == 'booked' ? () => context.push(AppRoutes.schedule) : null,
       );
     }
 
@@ -1420,7 +1435,7 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
                   decoration: const BoxDecoration(gradient: AppColors.primaryGradient, shape: BoxShape.circle),
                   child: Center(child: Text(
                     initial,
-                    style: const TextStyle(fontFamily: 'Poppins', fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white),
+                    style: const TextStyle(fontFamily: 'Inter', fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white),
                   )),
                 ),
                 const SizedBox(width: 12),
@@ -1428,7 +1443,7 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Text(
                       patientName,
-                      style: const TextStyle(fontFamily: 'Poppins', fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                      style: const TextStyle(fontFamily: 'Inter', fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
                       maxLines: 1, overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 3),
@@ -1437,7 +1452,7 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
                       const SizedBox(width: 4),
                       Text(
                         '$displayDate  ·  $time',
-                        style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: AppColors.textSecondary),
+                        style: const TextStyle(fontFamily: 'Inter', fontSize: 12, color: AppColors.textSecondary),
                       ),
                     ]),
                     const SizedBox(height: 6),
@@ -1451,7 +1466,7 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
                         child: Row(mainAxisSize: MainAxisSize.min, children: [
                           Icon(typeIcon, size: 12, color: AppColors.primary),
                           const SizedBox(width: 4),
-                          Text(type, style: const TextStyle(fontFamily: 'Poppins', fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.primary)),
+                          Text(type, style: const TextStyle(fontFamily: 'Inter', fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.primary)),
                         ]),
                       ),
                     ]),
@@ -1467,12 +1482,12 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
                     ),
                     child: Text(
                       statusLabel,
-                      style: TextStyle(fontFamily: 'Poppins', fontSize: 10, fontWeight: FontWeight.w700, color: statusColor, letterSpacing: 0.4),
+                      style: TextStyle(fontFamily: 'Inter', fontSize: 10, fontWeight: FontWeight.w700, color: statusColor, letterSpacing: 0.4),
                     ),
                   ),
                   if (feeText != null) ...[
                     const SizedBox(height: 6),
-                    Text(feeText, style: const TextStyle(fontFamily: 'Poppins', fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.success)),
+                    Text(feeText, style: const TextStyle(fontFamily: 'Inter', fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.success)),
                   ],
                 ]),
               ]),
@@ -1489,6 +1504,7 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
                 data: data,
                 onCancel: () => _cancelAppointment(docId),
                 onStart: () => _startCallForAppointment(docId, data),
+                onComplete: () => _completeAppointment(docId),
               ),
 
             // ── Action buttons for completed ──────────────
@@ -1505,7 +1521,7 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
                         side: BorderSide(color: AppColors.primary.withValues(alpha:0.45)),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         padding: const EdgeInsets.symmetric(vertical: 11),
-                        textStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w600),
+                        textStyle: const TextStyle(fontFamily: 'Inter', fontSize: 13, fontWeight: FontWeight.w600),
                       ),
                       onPressed: () => context.push(AppRoutes.prescription, extra: {
                         'patientId': patientId,
@@ -1531,7 +1547,7 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
                           foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           padding: const EdgeInsets.symmetric(vertical: 11),
-                          textStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w700),
+                          textStyle: const TextStyle(fontFamily: 'Inter', fontSize: 13, fontWeight: FontWeight.w700),
                         ),
                         onPressed: () => context.push(AppRoutes.patientDetail, extra: {
                           'patientId': patientId,
@@ -1637,14 +1653,14 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
                         shape: BoxShape.circle,
                       ),
                       child: Center(child: Text(initial,
-                        style: const TextStyle(fontFamily: 'Poppins', fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white),
+                        style: const TextStyle(fontFamily: 'Inter', fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white),
                       )),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                         Text(patientName,
-                          style: const TextStyle(fontFamily: 'Poppins', fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                          style: const TextStyle(fontFamily: 'Inter', fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
                           maxLines: 1, overflow: TextOverflow.ellipsis,
                         ),
                         if (timeLabel.isNotEmpty) ...[
@@ -1653,7 +1669,7 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
                             const Icon(Icons.access_time_rounded, size: 13, color: AppColors.textHint),
                             const SizedBox(width: 4),
                             Flexible(child: Text(timeLabel,
-                              style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: AppColors.textSecondary),
+                              style: const TextStyle(fontFamily: 'Inter', fontSize: 12, color: AppColors.textSecondary),
                               overflow: TextOverflow.ellipsis,
                             )),
                           ]),
@@ -1662,7 +1678,7 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
                           const SizedBox(height: 4),
                           Text(complaint,
                             maxLines: 1, overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: AppColors.textSecondary),
+                            style: const TextStyle(fontFamily: 'Inter', fontSize: 12, color: AppColors.textSecondary),
                           ),
                         ],
                         const SizedBox(height: 6),
@@ -1677,7 +1693,7 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
                               Icon(typeIcon, size: 12, color: const Color(0xFF0083B0)),
                               const SizedBox(width: 4),
                               Text(type,
-                                style: const TextStyle(fontFamily: 'Poppins', fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF0083B0))),
+                                style: const TextStyle(fontFamily: 'Inter', fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF0083B0))),
                             ]),
                           ),
                           const SizedBox(width: 6),
@@ -1691,7 +1707,7 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
                               Icon(Icons.flash_on_rounded, size: 12, color: AppColors.primary),
                               SizedBox(width: 4),
                               Text('Quick Connect',
-                                style: TextStyle(fontFamily: 'Poppins', fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.primary)),
+                                style: TextStyle(fontFamily: 'Inter', fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.primary)),
                             ]),
                           ),
                         ]),
@@ -1706,7 +1722,7 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: const Text('COMPLETED',
-                          style: TextStyle(fontFamily: 'Poppins', fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.success, letterSpacing: 0.4),
+                          style: TextStyle(fontFamily: 'Inter', fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.success, letterSpacing: 0.4),
                         ),
                       ),
                       if (prescriptionWritten) ...[
@@ -1729,7 +1745,7 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
                           side: BorderSide(color: AppColors.primary.withValues(alpha: 0.45)),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           padding: const EdgeInsets.symmetric(vertical: 11),
-                          textStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w600),
+                          textStyle: const TextStyle(fontFamily: 'Inter', fontSize: 13, fontWeight: FontWeight.w600),
                         ),
                         onPressed: () => context.push(AppRoutes.prescription, extra: {
                           'patientId': patientId,
@@ -1755,7 +1771,7 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
                             foregroundColor: Colors.white,
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                             padding: const EdgeInsets.symmetric(vertical: 11),
-                            textStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w700),
+                            textStyle: const TextStyle(fontFamily: 'Inter', fontSize: 13, fontWeight: FontWeight.w700),
                           ),
                           onPressed: () => context.push(AppRoutes.patientDetail, extra: {
                             'patientId': patientId,
@@ -1942,22 +1958,81 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
     });
   }
 
+  Future<void> _completeAppointment(String docId) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Mark Visit Complete?', style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w700)),
+        content: const Text('This confirms the in-person visit took place.', style: TextStyle(fontFamily: 'Inter', fontSize: 13, height: 1.5)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Not Yet', style: TextStyle(fontFamily: 'Inter', color: AppColors.textSecondary)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.success, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Mark Complete', style: TextStyle(fontFamily: 'Inter')),
+          ),
+        ],
+      ),
+    );
+    if (confirm == true && mounted) {
+      FeedbackService.showLoading(context, 'Marking visit complete...');
+      try {
+        await FirebaseFirestore.instance
+            .collection('appointments')
+            .doc(docId)
+            .update({
+          'status':      'completed',
+          'completedAt': FieldValue.serverTimestamp(),
+          'updatedAt':   FieldValue.serverTimestamp(),
+        });
+        final uid = DoctorAuthService.currentUid;
+        if (uid != null) await AppointmentReminderService.cancelReminders(uid, docId);
+        await OperationLogger.logSuccess(
+          action: DoctorOpAction.appointmentCompleted,
+          entityId: docId,
+          entityType: 'appointment',
+          message: 'In-person visit marked complete by doctor',
+        );
+        if (mounted) {
+          FeedbackService.dismiss(context);
+          FeedbackService.showSuccess(context, 'Visit marked complete');
+        }
+      } catch (e) {
+        await OperationLogger.logError(
+          action: DoctorOpAction.appointmentCompleted,
+          entityId: docId,
+          errorDetails: e.toString(),
+        );
+        if (mounted) {
+          FeedbackService.showError(
+            context,
+            'Failed to mark visit complete. Please try again.',
+          );
+        }
+      }
+    }
+  }
+
   Future<void> _cancelAppointment(String docId) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Cancel Appointment?', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
-        content: const Text('The patient will be notified of the cancellation.', style: TextStyle(fontFamily: 'Poppins', fontSize: 13, height: 1.5)),
+        title: const Text('Cancel Appointment?', style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w700)),
+        content: const Text('The patient will be notified of the cancellation.', style: TextStyle(fontFamily: 'Inter', fontSize: 13, height: 1.5)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Keep', style: TextStyle(fontFamily: 'Poppins', color: AppColors.textSecondary)),
+            child: const Text('Keep', style: TextStyle(fontFamily: 'Inter', color: AppColors.textSecondary)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.error, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Cancel Appointment', style: TextStyle(fontFamily: 'Poppins')),
+            child: const Text('Cancel Appointment', style: TextStyle(fontFamily: 'Inter')),
           ),
         ],
       ),
@@ -1972,8 +2047,9 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
           'status': 'cancelled',
           'updatedAt': FieldValue.serverTimestamp(),
         });
-        // Cancel the scheduled local reminders for this appointment.
-        await AppointmentReminderService.cancelReminders(docId);
+        // Cancel the queued reminders for this appointment.
+        final uid = DoctorAuthService.currentUid;
+        if (uid != null) await AppointmentReminderService.cancelReminders(uid, docId);
         await OperationLogger.logSuccess(
           action: DoctorOpAction.appointmentRejected,
           entityId: docId,
@@ -2060,7 +2136,6 @@ class _EarningsTab extends StatelessWidget {
 
         return Scaffold(
           backgroundColor: AppColors.background,
-          appBar: AppBar(automaticallyImplyLeading: false, title: const Text('Earnings')),
           body: ListView(
             padding: const EdgeInsets.all(16),
             children: [
@@ -2069,9 +2144,9 @@ class _EarningsTab extends StatelessWidget {
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(gradient: AppColors.earningGradient, borderRadius: BorderRadius.circular(20)),
                 child: Column(children: [
-                  const Text('Total Earnings (This Month)', style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: Colors.white70)),
+                  const Text('Total Earnings (This Month)', style: TextStyle(fontFamily: 'Inter', fontSize: 13, color: Colors.white70)),
                   const SizedBox(height: 8),
-                  Text('₹$monthEarnings', style: const TextStyle(fontFamily: 'Poppins', fontSize: 36, fontWeight: FontWeight.w800, color: Colors.white)),
+                  Text('₹$monthEarnings', style: const TextStyle(fontFamily: 'Inter', fontSize: 36, fontWeight: FontWeight.w800, color: Colors.white)),
                   const SizedBox(height: 16),
                   Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
                     _EarnStat('₹$todayEarnings', 'Today'),
@@ -2185,8 +2260,8 @@ class _EarnStat extends StatelessWidget {
   const _EarnStat(this.value, this.label);
   @override
   Widget build(BuildContext context) => Column(children: [
-    Text(value, style: const TextStyle(fontFamily: 'Poppins', fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white)),
-    Text(label, style: const TextStyle(fontFamily: 'Poppins', fontSize: 11, color: Colors.white70)),
+    Text(value, style: const TextStyle(fontFamily: 'Inter', fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white)),
+    Text(label, style: const TextStyle(fontFamily: 'Inter', fontSize: 11, color: Colors.white70)),
   ]);
 }
 
@@ -2203,7 +2278,7 @@ class _QuickEarnCard extends StatelessWidget {
       child: Column(children: [
         Icon(icon, color: color, size: 20),
         const SizedBox(height: 4),
-        Text(value, style: TextStyle(fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w800, color: color)),
+        Text(value, style: TextStyle(fontFamily: 'Inter', fontSize: 13, fontWeight: FontWeight.w800, color: color)),
         Text(label, textAlign: TextAlign.center, style: AppTextStyles.caption, maxLines: 2),
       ]),
     ),
@@ -2219,7 +2294,6 @@ class _ProfileTab extends StatelessWidget {
     final uid = DoctorAuthService.currentUid;
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(automaticallyImplyLeading: false, title: const Text('My Profile')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -2253,13 +2327,13 @@ class _ProfileTab extends StatelessWidget {
                           child: Column(children: [
                             _DoctorAvatarOnGradient(photoUrl: photoUrl, size: 80),
                             const SizedBox(height: 12),
-                            Text(name, style: const TextStyle(fontFamily: 'Poppins', fontSize: 20, fontWeight: FontWeight.w700, color: Colors.white)),
-                            Text(specialty, style: const TextStyle(fontFamily: 'Poppins', fontSize: 13, color: Colors.white70)),
+                            Text(name, style: const TextStyle(fontFamily: 'Inter', fontSize: 20, fontWeight: FontWeight.w700, color: Colors.white)),
+                            Text(specialty, style: const TextStyle(fontFamily: 'Inter', fontSize: 13, color: Colors.white70)),
                             const SizedBox(height: 8),
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                               decoration: BoxDecoration(color: Colors.white.withValues(alpha:0.2), borderRadius: BorderRadius.circular(10)),
-                              child: const Text('✓ MCI Verified', style: TextStyle(fontFamily: 'Poppins', fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white)),
+                              child: const Text('✓ MCI Verified', style: TextStyle(fontFamily: 'Inter', fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white)),
                             ),
                             const SizedBox(height: 16),
                             Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
@@ -2329,8 +2403,8 @@ class _ProfStat extends StatelessWidget {
   const _ProfStat(this.value, this.label);
   @override
   Widget build(BuildContext context) => Column(children: [
-    Text(value, style: const TextStyle(fontFamily: 'Poppins', fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white)),
-    Text(label, style: const TextStyle(fontFamily: 'Poppins', fontSize: 10, color: Colors.white70)),
+    Text(value, style: const TextStyle(fontFamily: 'Inter', fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white)),
+    Text(label, style: const TextStyle(fontFamily: 'Inter', fontSize: 10, color: Colors.white70)),
   ]);
 }
 
@@ -2442,13 +2516,13 @@ class _AutoConnectDialogState extends State<_AutoConnectDialog> {
             const SizedBox(height: 20),
             const Text(
               'Consultation Starting!',
-              style: TextStyle(fontFamily: 'Poppins', fontSize: 18, fontWeight: FontWeight.w800),
+              style: TextStyle(fontFamily: 'Inter', fontSize: 18, fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 8),
             Text(
               'Your appointment with ${widget.patientName} at ${widget.appointmentTime} is starting now.',
               textAlign: TextAlign.center,
-              style: const TextStyle(fontFamily: 'Poppins', fontSize: 13, color: Colors.black54, height: 1.5),
+              style: const TextStyle(fontFamily: 'Inter', fontSize: 13, color: Colors.black54, height: 1.5),
             ),
             const SizedBox(height: 24),
             // Countdown ring
@@ -2468,14 +2542,14 @@ class _AutoConnectDialogState extends State<_AutoConnectDialog> {
                 ),
                 Text(
                   '$_remaining',
-                  style: const TextStyle(fontFamily: 'Poppins', fontSize: 20, fontWeight: FontWeight.w800),
+                  style: const TextStyle(fontFamily: 'Inter', fontSize: 20, fontWeight: FontWeight.w800),
                 ),
               ],
             ),
             const SizedBox(height: 6),
             Text(
               'Auto-joining in $_remaining seconds',
-              style: const TextStyle(fontFamily: 'Poppins', fontSize: 11, color: Colors.black38),
+              style: const TextStyle(fontFamily: 'Inter', fontSize: 11, color: Colors.black38),
             ),
             const SizedBox(height: 28),
             Row(
@@ -2493,7 +2567,7 @@ class _AutoConnectDialogState extends State<_AutoConnectDialog> {
                     ),
                     child: const Text(
                       'Dismiss',
-                      style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, color: AppColors.primary),
+                      style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w600, color: AppColors.primary),
                     ),
                   ),
                 ),
@@ -2509,7 +2583,7 @@ class _AutoConnectDialogState extends State<_AutoConnectDialog> {
                     icon: const Icon(Icons.videocam_rounded, size: 18),
                     label: const Text(
                       'JOIN NOW',
-                      style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w800),
+                      style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w800),
                     ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
@@ -2543,12 +2617,14 @@ class _DoctorScheduledCallSection extends StatefulWidget {
   final Map<String, dynamic> data;
   final VoidCallback onCancel;
   final VoidCallback onStart;
+  final VoidCallback onComplete;
 
   const _DoctorScheduledCallSection({
     required this.appointmentId,
     required this.data,
     required this.onCancel,
     required this.onStart,
+    required this.onComplete,
   });
 
   @override
@@ -2614,9 +2690,11 @@ class _DoctorScheduledCallSectionState
     final timeStr = widget.data['time'] as String? ?? '';
     final type    = widget.data['consultationType'] as String? ?? 'Video';
 
-    // Non-video — always show static buttons.
+    // Non-video (in-person) — no call to start; the doctor confirms the
+    // visit happened directly, since there's no automatic "did they meet"
+    // signal for an in-person appointment.
     if (type != 'Video' && type != 'Audio') {
-      return _buildButtons(context, inWindow: true, label: 'Start Visit');
+      return _buildInPersonButtons(context);
     }
 
     final slot   = _parseSlot(dateStr, timeStr);
@@ -2674,7 +2752,7 @@ class _DoctorScheduledCallSectionState
                   const Text(
                     'Patient is in the waiting room',
                     style: TextStyle(
-                      fontFamily: 'Poppins', fontSize: 12,
+                      fontFamily: 'Inter', fontSize: 12,
                       fontWeight: FontWeight.w600,
                       color: Color(0xFF2E7D32),
                     ),
@@ -2744,7 +2822,7 @@ class _DoctorScheduledCallSectionState
                       borderRadius: BorderRadius.circular(12)),
                   padding: const EdgeInsets.symmetric(vertical: 11),
                   textStyle: const TextStyle(
-                      fontFamily: 'Poppins',
+                      fontFamily: 'Inter',
                       fontSize: 13,
                       fontWeight: FontWeight.w700),
                 ),
@@ -2792,7 +2870,7 @@ class _DoctorScheduledCallSectionState
                       borderRadius: BorderRadius.circular(12)),
                   padding: const EdgeInsets.symmetric(vertical: 11),
                   textStyle: const TextStyle(
-                      fontFamily: 'Poppins',
+                      fontFamily: 'Inter',
                       fontSize: 13,
                       fontWeight: FontWeight.w700),
                 ),
@@ -2825,7 +2903,7 @@ class _DoctorScheduledCallSectionState
               const SizedBox(width: 6),
               Text('Opens in $diffMin min',
                   style: const TextStyle(
-                    fontFamily: 'Poppins', fontSize: 12,
+                    fontFamily: 'Inter', fontSize: 12,
                     fontWeight: FontWeight.w600, color: Colors.orange)),
             ]),
           ),
@@ -2857,9 +2935,35 @@ class _DoctorScheduledCallSectionState
               const SizedBox(width: 6),
               Text('Opens at $opensAt',
                   style: const TextStyle(
-                    fontFamily: 'Poppins', fontSize: 11,
+                    fontFamily: 'Inter', fontSize: 11,
                     fontWeight: FontWeight.w500, color: AppColors.textHint)),
             ]),
+          ),
+        ),
+      ]),
+    );
+  }
+
+  Widget _buildInPersonButtons(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+      child: Row(children: [
+        Expanded(child: _cancelBtn()),
+        const SizedBox(width: 10),
+        Expanded(
+          flex: 2,
+          child: ElevatedButton.icon(
+            icon: const Icon(Icons.check_circle_rounded, size: 18),
+            label: const Text('Mark Visit Complete'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.success,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              padding: const EdgeInsets.symmetric(vertical: 11),
+              textStyle: const TextStyle(
+                  fontFamily: 'Inter', fontSize: 13, fontWeight: FontWeight.w700),
+            ),
+            onPressed: widget.onComplete,
           ),
         ),
       ]),
@@ -2875,7 +2979,7 @@ class _DoctorScheduledCallSectionState
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       padding: const EdgeInsets.symmetric(vertical: 11),
       textStyle: const TextStyle(
-          fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w600),
+          fontFamily: 'Inter', fontSize: 13, fontWeight: FontWeight.w600),
     ),
     onPressed: widget.onCancel,
   );

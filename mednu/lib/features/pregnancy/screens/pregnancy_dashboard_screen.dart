@@ -110,7 +110,7 @@ class _PregnancyDashboardScreenState
                   SizedBox(height: R.h(context, 12)),
                   Row(children: [
                     for (int i = 0; i < 4; i++) ...[
-                      Expanded(child: SkeletonBox(width: double.infinity, height: 80, radius: 14)),
+                      const Expanded(child: SkeletonBox(width: double.infinity, height: 80, radius: 14)),
                       if (i < 3) SizedBox(width: R.w(context, 10)),
                     ],
                   ]),
@@ -136,7 +136,7 @@ class _PregnancyDashboardScreenState
       elevation: 0,
       leading: IconButton(
         icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.primary),
-        onPressed: () => context.pop(),
+        onPressed: () => context.canPop() ? context.pop() : context.go(AppRoutes.home),
       ),
       title: Text('Pregnancy Care',
           style: AppTextStyles.h3.copyWith(color: context.appTextPrimary)),
@@ -182,7 +182,7 @@ class _PregnancyDashboardScreenState
                   padding: EdgeInsets.symmetric(horizontal: R.p(context, 40), vertical: R.p(context, 16)),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.r(context, 14))),
                 ),
-                child: Text('Create Pregnancy Profile', style: AppTextStyles.button),
+                child: const Text('Create Pregnancy Profile', style: AppTextStyles.button),
               ),
             ),
           ],
@@ -200,7 +200,7 @@ class _PregnancyDashboardScreenState
     foregroundColor: Colors.white,
     leading: IconButton(
       icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-      onPressed: () => context.pop(),
+      onPressed: () => context.canPop() ? context.pop() : context.go(AppRoutes.home),
     ),
     actions: [
       IconButton(
@@ -225,7 +225,7 @@ class _PregnancyDashboardScreenState
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                Text('My Pregnancy',
+                const Text('My Pregnancy',
                     style: AppTextStyles.onPrimaryBody),
                 SizedBox(height: R.h(context, 4)),
                 Row(
@@ -376,7 +376,7 @@ class _PregnancyDashboardScreenState
       padding: EdgeInsets.all(R.p(context, 18)),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF7B1FA2), Color(0xFFC2185B)],
+          colors: [Color(0xFF633058), Color(0xFF522546)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -389,7 +389,7 @@ class _PregnancyDashboardScreenState
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Your Baby This Week',
+                const Text('Your Baby This Week',
                     style: AppTextStyles.onPrimaryBody),
                 SizedBox(height: R.h(context, 6)),
                 Text(data.babySizeComparison,

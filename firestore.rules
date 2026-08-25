@@ -153,10 +153,12 @@ service cloud.firestore {
       allow create: if isAuth() &&
                        request.resource.data.patientId == request.auth.uid &&
                        request.resource.data.doctorId != request.auth.uid;
-      // Patient can cancel (status update only); doctor can update consultation status
+      // Patient can cancel (status update only) or reschedule (date/time/type
+      // only — doctorId, patientId, fee stay locked so a reschedule can never
+      // change who's billed or how much); doctor can update consultation status
       allow update: if isAuth() && (
         (resource.data.patientId == request.auth.uid &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'cancelReason', 'updatedAt'])) ||
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'cancelReason', 'updatedAt', 'consultationId', 'date', 'time', 'consultationType'])) ||
         (resource.data.doctorId == request.auth.uid &&
           doesNotModify(['patientId', 'doctorId', 'amount', 'createdAt'])) ||
         isAdmin()
@@ -416,9 +418,15 @@ service cloud.firestore {
       );
       allow create: if isOwner(labId);
       // A lab can update its own profile but not self-approve/self-verify
-      // or inflate its own rating.
+      // or inflate its own rating. Verification documents are submitted
+      // once, up front, during registration — once admin has approved the
+      // profile, the owner can no longer touch `documents` either (only
+      // admin can, e.g. to clear a slot for re-submission), so an approval
+      // already granted against the original files can never be silently
+      // invalidated by a later swap.
       allow update: if (isOwner(labId) &&
-                         doesNotModify(['status', 'isVerified', 'rating', 'totalReviews', 'documentVerification'])) ||
+                         doesNotModify(['status', 'isVerified', 'rating', 'totalReviews', 'documentVerification']) &&
+                         (resource.data.status != 'active' || doesNotModify(['documents']))) ||
                        isAdmin();
       allow delete: if isAdmin();
     }
@@ -506,8 +514,11 @@ service cloud.firestore {
         isOwner(pharmacyId) || isAdmin() || resource.data.status == 'active'
       );
       allow create: if isOwner(pharmacyId);
+      // See lab_profiles' update rule above for why `documents` locks once
+      // `status == 'active'`.
       allow update: if (isOwner(pharmacyId) &&
-                         doesNotModify(['status', 'isVerified', 'rating', 'totalReviews', 'documentVerification'])) ||
+                         doesNotModify(['status', 'isVerified', 'rating', 'totalReviews', 'documentVerification']) &&
+                         (resource.data.status != 'active' || doesNotModify(['documents']))) ||
                        isAdmin();
       allow delete: if isAdmin();
 
@@ -594,9 +605,11 @@ service cloud.firestore {
       );
       allow create: if isOwner(ambulanceId);
       // A partner can update its own profile but not self-approve/self-verify
-      // or inflate its own rating/trip count.
+      // or inflate its own rating/trip count. See lab_profiles' update rule
+      // above for why `documents` locks once `status == 'active'`.
       allow update: if (isOwner(ambulanceId) &&
-                         doesNotModify(['status', 'isVerified', 'rating', 'totalReviews', 'totalTrips', 'documentVerification'])) ||
+                         doesNotModify(['status', 'isVerified', 'rating', 'totalReviews', 'totalTrips', 'documentVerification']) &&
+                         (resource.data.status != 'active' || doesNotModify(['documents']))) ||
                        isAdmin();
       allow delete: if isAdmin();
     }
@@ -674,8 +687,11 @@ service cloud.firestore {
         isOwner(caregiverId) || isAdmin() || resource.data.status == 'active'
       );
       allow create: if isOwner(caregiverId);
+      // See lab_profiles' update rule above for why `documents` locks once
+      // `status == 'active'`.
       allow update: if (isOwner(caregiverId) &&
-                         doesNotModify(['status', 'isVerified', 'rating', 'totalReviews', 'totalVisits', 'documentVerification'])) ||
+                         doesNotModify(['status', 'isVerified', 'rating', 'totalReviews', 'totalVisits', 'documentVerification']) &&
+                         (resource.data.status != 'active' || doesNotModify(['documents']))) ||
                        isAdmin();
       allow delete: if isAdmin();
     }
@@ -1107,6 +1123,21 @@ service cloud.firestore {
     match /water_logs/{docId} {
       allow read, write: if isAuth() && request.auth.uid != null &&
         (resource == null || resource.data.userId == request.auth.uid);
+    }
+
+    // ── Server-driven reminder queue ───────────────────────────────────────────
+    // Client writes one row per future one-time reminder (period pre-alert,
+    // wellness check-in, booking/appointment reminder); a scheduled Cloud
+    // Function (processDueReminders) delivers them via the Admin SDK, which
+    // bypasses these rules entirely — so no client `update` is granted here.
+    // `uid` must match the writer so nobody can enqueue a push to someone else.
+    match /scheduled_reminders/{docId} {
+      allow create: if isAuth() && request.resource.data.uid == request.auth.uid;
+      // resource == null lets a batch delete-by-ID sweep IDs that were never
+      // created (e.g. cancelling a wellness series before every slot in it
+      // was written) without failing the whole batch on a not-found doc.
+      allow read, delete: if isAuth() &&
+        (resource == null || resource.data.uid == request.auth.uid);
     }
 
     // ── Doctor notifications ──────────────────────────────────────────────────

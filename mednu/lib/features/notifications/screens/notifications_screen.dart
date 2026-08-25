@@ -54,15 +54,26 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
         SnackBar(
           content: Row(
             children: [
-              Icon(Icons.done_all_rounded, color: Colors.white, size: R.w(context, 18)),
+              Icon(
+                Icons.done_all_rounded,
+                color: Colors.white,
+                size: R.w(context, 18),
+              ),
               SizedBox(width: R.w(context, 10)),
-              const Text('All notifications marked as read',
-                  style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w500)),
+              const Text(
+                'All notifications marked as read',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
             ],
           ),
           backgroundColor: AppColors.success,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.r(context, 12))),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(R.r(context, 12)),
+          ),
           margin: EdgeInsets.all(R.p(context, 16)),
           duration: const Duration(seconds: 2),
         ),
@@ -76,7 +87,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogCtx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.r(dialogCtx, 20))),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(R.r(dialogCtx, 20)),
+        ),
         title: const Text(
           'Clear Read Notifications',
           style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700),
@@ -88,18 +101,23 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel',
-                style: TextStyle(fontFamily: 'Poppins')),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(fontFamily: 'Poppins'),
+            ),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.error,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(R.r(dialogCtx, 10))),
+                borderRadius: BorderRadius.circular(R.r(dialogCtx, 10)),
+              ),
             ),
-            child: const Text('Clear',
-                style: TextStyle(fontFamily: 'Poppins', color: Colors.white)),
+            child: const Text(
+              'Clear',
+              style: TextStyle(fontFamily: 'Poppins', color: Colors.white),
+            ),
           ),
         ],
       ),
@@ -125,9 +143,13 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
             foregroundColor: Colors.white,
             elevation: 0,
             leading: IconButton(
-              icon: Icon(Icons.arrow_back_ios_new_rounded,
-                  color: Colors.white, size: R.w(context, 20)),
-              onPressed: () => context.pop(),
+              icon: Icon(
+                Icons.arrow_back_ios_new_rounded,
+                color: Colors.white,
+                size: R.w(context, 20),
+              ),
+              onPressed: () =>
+                  context.canPop() ? context.pop() : context.go(AppRoutes.home),
             ),
             title: Row(
               mainAxisSize: MainAxisSize.min,
@@ -145,7 +167,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                   SizedBox(width: R.w(context, 8)),
                   Container(
                     padding: EdgeInsets.symmetric(
-                        horizontal: R.p(context, 7), vertical: R.p(context, 2)),
+                      horizontal: R.p(context, 7),
+                      vertical: R.p(context, 2),
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white.withValues(alpha: 0.25),
                       borderRadius: BorderRadius.circular(R.r(context, 10)),
@@ -170,10 +194,13 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                   final hasRead = list.any((n) => n.isRead);
                   if (!hasUnread && !hasRead) return const SizedBox.shrink();
                   return PopupMenuButton<String>(
-                    icon: const Icon(Icons.more_vert_rounded,
-                        color: Colors.white),
+                    icon: const Icon(
+                      Icons.more_vert_rounded,
+                      color: Colors.white,
+                    ),
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(R.r(context, 14))),
+                      borderRadius: BorderRadius.circular(R.r(context, 14)),
+                    ),
                     onSelected: (v) {
                       if (v == 'mark_all') _markAllRead();
                       if (v == 'clear_read') _clearAllRead(list);
@@ -182,26 +209,44 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                       if (hasUnread)
                         PopupMenuItem(
                           value: 'mark_all',
-                          child: Row(children: [
-                            Icon(Icons.done_all_rounded,
-                                size: R.w(menuCtx, 18), color: AppColors.primary),
-                            SizedBox(width: R.w(menuCtx, 10)),
-                            const Text('Mark all as read',
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.done_all_rounded,
+                                size: R.w(menuCtx, 18),
+                                color: AppColors.primary,
+                              ),
+                              SizedBox(width: R.w(menuCtx, 10)),
+                              const Text(
+                                'Mark all as read',
                                 style: TextStyle(
-                                    fontFamily: 'Poppins', fontSize: 14)),
-                          ]),
+                                  fontFamily: 'Poppins',
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       if (hasRead)
                         PopupMenuItem(
                           value: 'clear_read',
-                          child: Row(children: [
-                            Icon(Icons.delete_sweep_rounded,
-                                size: R.w(menuCtx, 18), color: AppColors.error),
-                            SizedBox(width: R.w(menuCtx, 10)),
-                            const Text('Clear read',
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.delete_sweep_rounded,
+                                size: R.w(menuCtx, 18),
+                                color: AppColors.error,
+                              ),
+                              SizedBox(width: R.w(menuCtx, 10)),
+                              const Text(
+                                'Clear read',
                                 style: TextStyle(
-                                    fontFamily: 'Poppins', fontSize: 14)),
-                          ]),
+                                  fontFamily: 'Poppins',
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                     ],
                   );
@@ -217,7 +262,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
             bottom: PreferredSize(
               preferredSize: Size.fromHeight(R.h(context, 44)),
               child: Container(
-                color: AppColors.primary,
+                decoration: const BoxDecoration(
+                  gradient: AppColors.primaryGradient,
+                ),
                 child: TabBar(
                   controller: _tab,
                   labelStyle: const TextStyle(
@@ -239,13 +286,16 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                   isScrollable: true,
                   tabAlignment: TabAlignment.start,
                   tabs: _tabs
-                      .map((t) => Tab(
-                            child: Padding(
-                              padding:
-                                  EdgeInsets.symmetric(horizontal: R.p(context, 4)),
-                              child: Text(t),
+                      .map(
+                        (t) => Tab(
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: R.p(context, 4),
                             ),
-                          ))
+                            child: Text(t),
+                          ),
+                        ),
+                      )
                       .toList(),
                 ),
               ),
@@ -281,7 +331,11 @@ class _HeaderBackground extends StatelessWidget {
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
-          colors: [AppColors.primaryDark, AppColors.primary, AppColors.secondary],
+          colors: [
+            AppColors.primaryDark,
+            AppColors.primary,
+            AppColors.secondary,
+          ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -289,9 +343,11 @@ class _HeaderBackground extends StatelessWidget {
       child: Stack(
         children: [
           Positioned(
-            top: -24, right: -24,
+            top: -24,
+            right: -24,
             child: Container(
-              width: R.w(context, 130), height: R.h(context, 130),
+              width: R.w(context, 130),
+              height: R.h(context, 130),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: Colors.white.withValues(alpha: 0.06),
@@ -299,9 +355,11 @@ class _HeaderBackground extends StatelessWidget {
             ),
           ),
           Positioned(
-            bottom: 44, left: -30,
+            bottom: 44,
+            left: -30,
             child: Container(
-              width: R.w(context, 90), height: R.h(context, 90),
+              width: R.w(context, 90),
+              height: R.h(context, 90),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: Colors.white.withValues(alpha: 0.04),
@@ -311,73 +369,89 @@ class _HeaderBackground extends StatelessWidget {
           SafeArea(
             child: LayoutBuilder(
               builder: (context, constraints) {
-                return SingleChildScrollView(
-                  physics: const ClampingScrollPhysics(),
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                    child: Padding(
-              padding: EdgeInsets.fromLTRB(R.p(context, 20), R.p(context, 24), R.p(context, 20), R.p(context, 16)),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Container(
-                    width: R.w(context, 44), height: R.h(context, 44),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.18),
-                      borderRadius: BorderRadius.circular(R.r(context, 14)),
+                // No Scrollable here: this background sits inside the outer
+                // NestedScrollView's SliverAppBar, and a nested Scrollable
+                // (even a non-scrolling one) installs a drag recognizer that
+                // competes with the outer scroll in the gesture arena, causing
+                // stuttering/stalling swipes. Content is fixed-size and fits
+                // well within expandedHeight, so ConstrainedBox alone (no
+                // scroll safety-net) is enough to vertically center it.
+                return ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      R.p(context, 20),
+                      R.p(context, 24),
+                      R.p(context, 20),
+                      R.p(context, 16),
                     ),
-                    child: Icon(Icons.notifications_rounded,
-                        color: Colors.white, size: R.w(context, 24)),
-                  ),
-                  SizedBox(width: R.w(context, 14)),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text(
-                        'Notifications',
-                        style: TextStyle(
-                          fontFamily: 'Poppins',
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                        ),
-                      ),
-                      Text(
-                        unreadCount > 0
-                            ? '$unreadCount unread notification${unreadCount == 1 ? '' : 's'}'
-                            : 'All caught up',
-                        style: const TextStyle(
-                          fontFamily: 'Poppins',
-                          fontSize: 13,
-                          color: Colors.white70,
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (unreadCount > 0) ...[
-                    const Spacer(),
-                    Container(
-                      width: R.w(context, 46), height: R.h(context, 46),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.15),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Center(
-                        child: Text(
-                          '$unreadCount',
-                          style: const TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Container(
+                          width: R.w(context, 44),
+                          height: R.h(context, 44),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.18),
+                            borderRadius: BorderRadius.circular(
+                              R.r(context, 14),
+                            ),
+                          ),
+                          child: Icon(
+                            Icons.notifications_rounded,
                             color: Colors.white,
+                            size: R.w(context, 24),
                           ),
                         ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
+                        SizedBox(width: R.w(context, 14)),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Text(
+                              'Notifications',
+                              style: TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: 20,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                              ),
+                            ),
+                            Text(
+                              unreadCount > 0
+                                  ? '$unreadCount unread notification${unreadCount == 1 ? '' : 's'}'
+                                  : 'All caught up',
+                              style: const TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: 13,
+                                color: Colors.white70,
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (unreadCount > 0) ...[
+                          const Spacer(),
+                          Container(
+                            width: R.w(context, 46),
+                            height: R.h(context, 46),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.15),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Center(
+                              child: Text(
+                                '$unreadCount',
+                                style: const TextStyle(
+                                  fontFamily: 'Poppins',
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                 );
@@ -419,39 +493,47 @@ class _NotifListView extends ConsumerWidget {
 
         return RefreshIndicator(
           color: AppColors.primary,
-          onRefresh: () async =>
-              ref.invalidate(patientNotificationsProvider),
+          onRefresh: () async => ref.invalidate(patientNotificationsProvider),
           child: CustomScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
               for (final group in groups) ...[
                 SliverPadding(
-                  padding: EdgeInsets.fromLTRB(R.p(context, 16), R.p(context, 16), R.p(context, 16), R.p(context, 4)),
+                  padding: EdgeInsets.fromLTRB(
+                    R.p(context, 16),
+                    R.p(context, 16),
+                    R.p(context, 16),
+                    R.p(context, 4),
+                  ),
                   sliver: SliverToBoxAdapter(
                     child: _DateHeader(label: group.label),
                   ),
                 ),
                 SliverPadding(
-                  padding: EdgeInsets.fromLTRB(R.p(context, 16), 0, R.p(context, 16), 0),
+                  padding: EdgeInsets.fromLTRB(
+                    R.p(context, 16),
+                    0,
+                    R.p(context, 16),
+                    0,
+                  ),
                   sliver: SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (_, i) {
-                        final notif = group.items[i];
-                        return Dismissible(
-                          key: ValueKey(notif.id),
-                          direction: DismissDirection.endToStart,
-                          background: const _SwipeDeleteBg(),
-                          onDismissed: (_) =>
-                              PatientNotificationService.deleteNotification(
-                                  uid, notif.id),
-                          child: FadeInSlide(
-                            delay: Duration(milliseconds: i * 30),
-                            child: _NotifTile(notif: notif, uid: uid),
-                          ),
-                        );
-                      },
-                      childCount: group.items.length,
-                    ),
+                    delegate: SliverChildBuilderDelegate((_, i) {
+                      final notif = group.items[i];
+                      return Dismissible(
+                        key: ValueKey(notif.id),
+                        direction: DismissDirection.endToStart,
+                        background: const _SwipeDeleteBg(),
+                        onDismissed: (_) =>
+                            PatientNotificationService.deleteNotification(
+                              uid,
+                              notif.id,
+                            ),
+                        child: FadeInSlide(
+                          delay: Duration(milliseconds: i * 30),
+                          child: _NotifTile(notif: notif, uid: uid),
+                        ),
+                      );
+                    }, childCount: group.items.length),
                   ),
                 ),
               ],
@@ -464,7 +546,9 @@ class _NotifListView extends ConsumerWidget {
   }
 
   List<NotificationModel> _applyFilter(
-      List<NotificationModel> all, _TabFilter filter) {
+    List<NotificationModel> all,
+    _TabFilter filter,
+  ) {
     switch (filter) {
       case _TabFilter.all:
         return all;
@@ -562,7 +646,12 @@ class _ShimmerList extends StatelessWidget {
   Widget build(BuildContext context) {
     return AppShimmer(
       child: ListView.separated(
-        padding: EdgeInsets.fromLTRB(R.p(context, 16), R.p(context, 20), R.p(context, 16), R.p(context, 32)),
+        padding: EdgeInsets.fromLTRB(
+          R.p(context, 16),
+          R.p(context, 20),
+          R.p(context, 16),
+          R.p(context, 32),
+        ),
         itemCount: 5,
         separatorBuilder: (_, __) => SizedBox(height: R.h(context, 12)),
         itemBuilder: (_, __) => Container(
@@ -580,13 +669,29 @@ class _ShimmerList extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    SkeletonBox(width: R.w(context, 160), height: R.h(context, 13), radius: R.r(context, 6)),
+                    SkeletonBox(
+                      width: R.w(context, 160),
+                      height: R.h(context, 13),
+                      radius: R.r(context, 6),
+                    ),
                     SizedBox(height: R.h(context, 8)),
-                    SkeletonBox(width: double.infinity, height: R.h(context, 11), radius: R.r(context, 5)),
+                    SkeletonBox(
+                      width: double.infinity,
+                      height: R.h(context, 11),
+                      radius: R.r(context, 5),
+                    ),
                     SizedBox(height: R.h(context, 6)),
-                    SkeletonBox(width: R.w(context, 180), height: R.h(context, 11), radius: R.r(context, 5)),
+                    SkeletonBox(
+                      width: R.w(context, 180),
+                      height: R.h(context, 11),
+                      radius: R.r(context, 5),
+                    ),
                     SizedBox(height: R.h(context, 10)),
-                    SkeletonBox(width: R.w(context, 70), height: R.h(context, 20), radius: R.r(context, 8)),
+                    SkeletonBox(
+                      width: R.w(context, 70),
+                      height: R.h(context, 20),
+                      radius: R.r(context, 8),
+                    ),
                   ],
                 ),
               ),
@@ -619,7 +724,9 @@ class _DateHeader extends StatelessWidget {
           ),
         ),
         SizedBox(width: R.w(context, 10)),
-        Expanded(child: Divider(color: context.appDivider, thickness: 1, height: 1)),
+        Expanded(
+          child: Divider(color: context.appDivider, thickness: 1, height: 1),
+        ),
       ],
     );
   }
@@ -643,7 +750,11 @@ class _SwipeDeleteBg extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.delete_rounded, color: AppColors.error, size: R.w(context, 24)),
+          Icon(
+            Icons.delete_rounded,
+            color: AppColors.error,
+            size: R.w(context, 24),
+          ),
           SizedBox(height: R.h(context, 4)),
           Text(
             'Delete',
@@ -677,26 +788,14 @@ class _NotifTile extends StatelessWidget {
               ? context.appSurface
               : meta.color.withValues(alpha: 0.04),
           borderRadius: BorderRadius.circular(R.r(context, 16)),
-          border: Border(
-            left: BorderSide(
-              color: notif.isRead ? Colors.transparent : meta.color,
-              width: 3.5,
-            ),
-            top: BorderSide(
-              color: notif.isRead
-                  ? context.appBorder
-                  : meta.color.withValues(alpha: 0.2),
-            ),
-            right: BorderSide(
-              color: notif.isRead
-                  ? context.appBorder
-                  : meta.color.withValues(alpha: 0.2),
-            ),
-            bottom: BorderSide(
-              color: notif.isRead
-                  ? context.appBorder
-                  : meta.color.withValues(alpha: 0.2),
-            ),
+          // Border must stay uniform (same width+color on all sides) whenever
+          // borderRadius is set, or BoxDecoration.paint() throws "A borderRadius
+          // can only be given on borders with uniform colors." The unread accent
+          // is drawn separately below as a clipped left stripe instead.
+          border: Border.all(
+            color: notif.isRead
+                ? context.appBorder
+                : meta.color.withValues(alpha: 0.2),
           ),
           boxShadow: [
             BoxShadow(
@@ -708,131 +807,178 @@ class _NotifTile extends StatelessWidget {
             ),
           ],
         ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: () => _onTap(context),
-            borderRadius: BorderRadius.circular(R.r(context, 16)),
-            child: Padding(
-              padding: EdgeInsets.all(R.p(context, 14)),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Icon with colored background
-                  Container(
-                    width: R.w(context, 46), height: R.h(context, 46),
-                    decoration: BoxDecoration(
-                      color: meta.color.withValues(alpha: 0.13),
-                      borderRadius: BorderRadius.circular(R.r(context, 13)),
-                    ),
-                    child: Icon(meta.icon, color: meta.color, size: R.w(context, 22)),
-                  ),
-                  SizedBox(width: R.w(context, 12)),
-
-                  // Content
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(R.r(context, 16)),
+          // IntrinsicHeight lets the stripe stretch to the content's natural
+          // height even though this tile is height-unconstrained (sized by
+          // its content inside a sliver list).
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(
+                  width: R.w(context, 3.5),
+                  color: notif.isRead ? Colors.transparent : meta.color,
+                ),
+                Expanded(
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () => _onTap(context),
+                      child: Padding(
+                        padding: EdgeInsets.all(R.p(context, 14)),
+                        child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            // Icon with colored background
+                            Container(
+                              width: R.w(context, 46),
+                              height: R.h(context, 46),
+                              decoration: BoxDecoration(
+                                color: meta.color.withValues(alpha: 0.13),
+                                borderRadius: BorderRadius.circular(
+                                  R.r(context, 13),
+                                ),
+                              ),
+                              child: Icon(
+                                meta.icon,
+                                color: meta.color,
+                                size: R.w(context, 22),
+                              ),
+                            ),
+                            SizedBox(width: R.w(context, 12)),
+
+                            // Content
                             Expanded(
-                              child: Text(
-                                notif.title,
-                                style: AppTextStyles.labelLarge.copyWith(
-                                  fontWeight: notif.isRead
-                                      ? FontWeight.w600
-                                      : FontWeight.w700,
-                                  fontSize: 13,
-                                ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            SizedBox(width: R.w(context, 6)),
-                            if (!notif.isRead)
-                              Container(
-                                width: R.w(context, 8), height: R.h(context, 8),
-                                margin: EdgeInsets.only(top: R.p(context, 4)),
-                                decoration: BoxDecoration(
-                                  color: meta.color,
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                          ],
-                        ),
-                        SizedBox(height: R.h(context, 4)),
-                        Text(
-                          notif.body,
-                          style: AppTextStyles.bodySmall,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        SizedBox(height: R.h(context, 8)),
-                        Row(
-                          children: [
-                            if (notif.serviceType.isNotEmpty)
-                              Container(
-                                padding: EdgeInsets.symmetric(
-                                    horizontal: R.p(context, 8), vertical: R.p(context, 3)),
-                                decoration: BoxDecoration(
-                                  color: meta.color.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(R.r(context, 8)),
-                                ),
-                                child: Text(
-                                  _serviceLabel(notif.serviceType),
-                                  style: TextStyle(
-                                    fontFamily: 'Poppins',
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w600,
-                                    color: meta.color,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          notif.title,
+                                          style: AppTextStyles.labelLarge
+                                              .copyWith(
+                                                fontWeight: notif.isRead
+                                                    ? FontWeight.w600
+                                                    : FontWeight.w700,
+                                                fontSize: 13,
+                                              ),
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      SizedBox(width: R.w(context, 6)),
+                                      if (!notif.isRead)
+                                        Container(
+                                          width: R.w(context, 8),
+                                          height: R.h(context, 8),
+                                          margin: EdgeInsets.only(
+                                            top: R.p(context, 4),
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: meta.color,
+                                            shape: BoxShape.circle,
+                                          ),
+                                        ),
+                                    ],
                                   ),
-                                ),
+                                  SizedBox(height: R.h(context, 4)),
+                                  Text(
+                                    notif.body,
+                                    style: AppTextStyles.bodySmall,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  SizedBox(height: R.h(context, 8)),
+                                  Row(
+                                    children: [
+                                      if (notif.serviceType.isNotEmpty)
+                                        Container(
+                                          padding: EdgeInsets.symmetric(
+                                            horizontal: R.p(context, 8),
+                                            vertical: R.p(context, 3),
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: meta.color.withValues(
+                                              alpha: 0.1,
+                                            ),
+                                            borderRadius: BorderRadius.circular(
+                                              R.r(context, 8),
+                                            ),
+                                          ),
+                                          child: Text(
+                                            _serviceLabel(notif.serviceType),
+                                            style: TextStyle(
+                                              fontFamily: 'Poppins',
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.w600,
+                                              color: meta.color,
+                                            ),
+                                          ),
+                                        ),
+                                      const Spacer(),
+                                      Text(
+                                        _formatTime(notif.createdAt),
+                                        style: AppTextStyles.caption.copyWith(
+                                          color: context.appTextHint,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  if (_ctaLabel(notif) != null) ...[
+                                    SizedBox(height: R.h(context, 10)),
+                                    SizedBox(
+                                      width: double.infinity,
+                                      child: ElevatedButton(
+                                        onPressed: () {
+                                          PatientNotificationService.markRead(
+                                            uid,
+                                            notif.id,
+                                          );
+                                          _navigate(context);
+                                        },
+                                        style: ElevatedButton.styleFrom(
+                                          padding: EdgeInsets.symmetric(
+                                            vertical: R.p(context, 10),
+                                          ),
+                                          backgroundColor: meta.color,
+                                          foregroundColor: Colors.white,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              R.r(context, 10),
+                                            ),
+                                          ),
+                                          elevation: 0,
+                                          minimumSize: Size(
+                                            double.infinity,
+                                            R.h(context, 38),
+                                          ),
+                                        ),
+                                        child: Text(
+                                          _ctaLabel(notif)!,
+                                          style: const TextStyle(
+                                            fontFamily: 'Poppins',
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
                               ),
-                            const Spacer(),
-                            Text(
-                              _formatTime(notif.createdAt),
-                              style: AppTextStyles.caption
-                                  .copyWith(color: context.appTextHint),
                             ),
                           ],
                         ),
-                        if (_ctaLabel(notif) != null) ...[
-                          SizedBox(height: R.h(context, 10)),
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton(
-                              onPressed: () {
-                                PatientNotificationService.markRead(uid, notif.id);
-                                _navigate(context);
-                              },
-                              style: ElevatedButton.styleFrom(
-                                padding: EdgeInsets.symmetric(vertical: R.p(context, 10)),
-                                backgroundColor: meta.color,
-                                foregroundColor: Colors.white,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(R.r(context, 10)),
-                                ),
-                                elevation: 0,
-                                minimumSize: Size(double.infinity, R.h(context, 38)),
-                              ),
-                              child: Text(
-                                _ctaLabel(notif)!,
-                                style: const TextStyle(
-                                  fontFamily: 'Poppins',
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
+                      ),
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ),
@@ -852,15 +998,24 @@ class _NotifTile extends StatelessWidget {
 
   String? _routeFor(NotificationModel n) {
     switch (n.actionType) {
-      case 'open_call':       return AppRoutes.consultation;
-      case 'open_prescription': return AppRoutes.prescriptionViewer;
-      case 'open_order':      return AppRoutes.orderTracking;
-      case 'open_diagnostics': return AppRoutes.diagnostics;
-      case 'open_ambulance':  return AppRoutes.ambulance;
-      case 'open_pregnancy':  return AppRoutes.pregnancyCheckups;
-      case 'open_appointment': return AppRoutes.appointment;
-      case 'open_service':    return _serviceRoute(n.serviceType);
-      default:                break;
+      case 'open_call':
+        return AppRoutes.consultation;
+      case 'open_prescription':
+        return AppRoutes.prescriptionViewer;
+      case 'open_order':
+        return AppRoutes.orderTracking;
+      case 'open_diagnostics':
+        return AppRoutes.diagnostics;
+      case 'open_ambulance':
+        return AppRoutes.ambulance;
+      case 'open_pregnancy':
+        return AppRoutes.pregnancyCheckups;
+      case 'open_appointment':
+        return AppRoutes.appointment;
+      case 'open_service':
+        return _serviceRoute(n.serviceType);
+      default:
+        break;
     }
 
     switch (n.type) {
@@ -972,20 +1127,32 @@ class _NotifTile extends StatelessWidget {
 
   String? _serviceRoute(String serviceType) {
     switch (serviceType.toLowerCase()) {
-      case 'appointment':   return AppRoutes.appointment;
-      case 'medicine':      return AppRoutes.medicine;
+      case 'appointment':
+        return AppRoutes.appointment;
+      case 'medicine':
+        return AppRoutes.medicine;
       case 'diagnostics':
-      case 'lab':           return AppRoutes.diagnostics;
-      case 'ambulance':     return AppRoutes.ambulance;
+      case 'lab':
+        return AppRoutes.diagnostics;
+      case 'ambulance':
+        return AppRoutes.ambulance;
       case 'home_care':
-      case 'caregiver':     return AppRoutes.caregivers;
-      case 'physiotherapy': return AppRoutes.physio;
-      case 'hospital':      return AppRoutes.hospitals;
-      case 'pregnancy':     return AppRoutes.pregnancyCheckups;
-      case 'nutrition':     return AppRoutes.nutrition;
-      case 'quick_connect': return AppRoutes.consultation;
-      case 'counselling':   return AppRoutes.careAssistant;
-      default:              return AppRoutes.myServices;
+      case 'caregiver':
+        return AppRoutes.caregivers;
+      case 'physiotherapy':
+        return AppRoutes.physio;
+      case 'hospital':
+        return AppRoutes.hospitals;
+      case 'pregnancy':
+        return AppRoutes.pregnancyCheckups;
+      case 'nutrition':
+        return AppRoutes.nutrition;
+      case 'quick_connect':
+        return AppRoutes.consultation;
+      case 'counselling':
+        return AppRoutes.careAssistant;
+      default:
+        return AppRoutes.myServices;
     }
   }
 
@@ -1041,20 +1208,20 @@ class _NotifTile extends StatelessWidget {
 
   String _serviceLabel(String svc) {
     const labels = {
-      'appointment':   'Appointment',
-      'medicine':      'Pharmacy',
-      'diagnostics':   'Lab Test',
-      'lab':           'Lab Test',
-      'ambulance':     'Ambulance',
-      'home_care':     'Home Care',
-      'caregiver':     'Caregiver',
+      'appointment': 'Appointment',
+      'medicine': 'Pharmacy',
+      'diagnostics': 'Lab Test',
+      'lab': 'Lab Test',
+      'ambulance': 'Ambulance',
+      'home_care': 'Home Care',
+      'caregiver': 'Caregiver',
       'physiotherapy': 'Physio',
-      'hospital':      'Hospital',
-      'pregnancy':     'Pregnancy',
-      'nutrition':     'Nutrition',
+      'hospital': 'Hospital',
+      'pregnancy': 'Pregnancy',
+      'nutrition': 'Nutrition',
       'quick_connect': 'Quick Connect',
-      'counselling':   'Counselling',
-      'general':       'General',
+      'counselling': 'Counselling',
+      'general': 'General',
     };
     return labels[svc.toLowerCase()] ?? svc;
   }
@@ -1074,7 +1241,7 @@ class _NotifMeta {
       case PatientNotifType.consultationUpdate:
       case PatientNotifType.followupDay1:
       case PatientNotifType.followupDay2:
-        return const _NotifMeta(Icons.video_call_rounded, Color(0xFFC2185B));
+        return const _NotifMeta(Icons.video_call_rounded, Color(0xFF522546));
       case PatientNotifType.doctorStartedCall:
       case PatientNotifType.quickConnectStarted:
         return const _NotifMeta(Icons.phone_in_talk_rounded, Color(0xFF1565C0));
@@ -1088,7 +1255,10 @@ class _NotifMeta {
         return const _NotifMeta(Icons.schedule_rounded, Color(0xFFE65100));
       case PatientNotifType.appointmentCompleted:
       case PatientNotifType.appointmentReminder:
-        return const _NotifMeta(Icons.event_available_rounded, Color(0xFF1B5E20));
+        return const _NotifMeta(
+          Icons.event_available_rounded,
+          Color(0xFF1B5E20),
+        );
       case PatientNotifType.prescriptionUploaded:
         return const _NotifMeta(Icons.receipt_long_rounded, Color(0xFF6A1B9A));
       case PatientNotifType.reviewPrompt:
@@ -1100,14 +1270,20 @@ class _NotifMeta {
       case PatientNotifType.medicinePacked:
         return const _NotifMeta(Icons.medication_rounded, Color(0xFFE65100));
       case PatientNotifType.medicineOutForDelivery:
-        return const _NotifMeta(Icons.local_shipping_rounded, Color(0xFF0277BD));
+        return const _NotifMeta(
+          Icons.local_shipping_rounded,
+          Color(0xFF0277BD),
+        );
       case PatientNotifType.medicineDelivered:
       case PatientNotifType.orderUpdate:
         return const _NotifMeta(Icons.inventory_2_rounded, Color(0xFF2E7D32));
       case PatientNotifType.medicineRejected:
       case PatientNotifType.medicineCancelled:
       case PatientNotifType.medicineReturned:
-        return const _NotifMeta(Icons.remove_shopping_cart_rounded, Color(0xFFD32F2F));
+        return const _NotifMeta(
+          Icons.remove_shopping_cart_rounded,
+          Color(0xFFD32F2F),
+        );
       case PatientNotifType.labAccepted:
       case PatientNotifType.labAssigned:
       case PatientNotifType.labInProgress:
@@ -1115,7 +1291,10 @@ class _NotifMeta {
       case PatientNotifType.labProcessing:
         return const _NotifMeta(Icons.science_rounded, Color(0xFF0097A7));
       case PatientNotifType.labReportReady:
-        return const _NotifMeta(Icons.assignment_turned_in_rounded, Color(0xFF00695C));
+        return const _NotifMeta(
+          Icons.assignment_turned_in_rounded,
+          Color(0xFF00695C),
+        );
       case PatientNotifType.labCompleted:
         return const _NotifMeta(Icons.biotech_rounded, Color(0xFF2E7D32));
       case PatientNotifType.labRejected:
@@ -1126,7 +1305,10 @@ class _NotifMeta {
       case PatientNotifType.ambulanceEnRoute:
         return const _NotifMeta(Icons.emergency_rounded, Color(0xFFD32F2F));
       case PatientNotifType.ambulanceReached:
-        return const _NotifMeta(Icons.local_hospital_rounded, Color(0xFFC62828));
+        return const _NotifMeta(
+          Icons.local_hospital_rounded,
+          Color(0xFFC62828),
+        );
       case PatientNotifType.ambulanceCompleted:
         return const _NotifMeta(Icons.check_circle_rounded, Color(0xFF2E7D32));
       case PatientNotifType.ambulanceRejected:
@@ -1144,7 +1326,10 @@ class _NotifMeta {
       case PatientNotifType.physioAccepted:
       case PatientNotifType.physioAssigned:
       case PatientNotifType.physioStarted:
-        return const _NotifMeta(Icons.accessibility_new_rounded, Color(0xFF00838F));
+        return const _NotifMeta(
+          Icons.accessibility_new_rounded,
+          Color(0xFF00838F),
+        );
       case PatientNotifType.physioCompleted:
         return const _NotifMeta(Icons.check_circle_rounded, Color(0xFF2E7D32));
       case PatientNotifType.physioRejected:
@@ -1153,19 +1338,28 @@ class _NotifMeta {
       case PatientNotifType.hospitalAccepted:
       case PatientNotifType.hospitalAssigned:
       case PatientNotifType.hospitalAdmitted:
-        return const _NotifMeta(Icons.local_hospital_rounded, Color(0xFF1565C0));
+        return const _NotifMeta(
+          Icons.local_hospital_rounded,
+          Color(0xFF1565C0),
+        );
       case PatientNotifType.hospitalDischarged:
-        return const _NotifMeta(Icons.directions_walk_rounded, Color(0xFF2E7D32));
+        return const _NotifMeta(
+          Icons.directions_walk_rounded,
+          Color(0xFF2E7D32),
+        );
       case PatientNotifType.hospitalRejected:
       case PatientNotifType.hospitalCancelled:
         return const _NotifMeta(Icons.cancel_rounded, Color(0xFFD32F2F));
       case PatientNotifType.pregnancyCheckupBooked:
       case PatientNotifType.pregnancyCheckupConfirmed:
-        return const _NotifMeta(Icons.pregnant_woman_rounded, Color(0xFFAD1457));
+        return const _NotifMeta(
+          Icons.pregnant_woman_rounded,
+          Color(0xFFAD1457),
+        );
       case PatientNotifType.pregnancyCheckupReminder:
         return const _NotifMeta(Icons.alarm_rounded, Color(0xFFE65100));
       case PatientNotifType.pregnancyCheckupCompleted:
-        return const _NotifMeta(Icons.favorite_rounded, Color(0xFFC2185B));
+        return const _NotifMeta(Icons.favorite_rounded, Color(0xFF522546));
       case PatientNotifType.pregnancyCheckupCancelled:
         return const _NotifMeta(Icons.cancel_rounded, Color(0xFFD32F2F));
       case PatientNotifType.nutritionAccepted:
@@ -1202,14 +1396,17 @@ class _NotifMeta {
       case PatientNotifType.waterReminder:
         return const _NotifMeta(Icons.water_drop_rounded, Color(0xFF1565C0));
       case PatientNotifType.periodTracker:
-        return const _NotifMeta(Icons.favorite_rounded, Color(0xFFC2185B));
+        return const _NotifMeta(Icons.favorite_rounded, Color(0xFF522546));
       case PatientNotifType.healthTip:
         return const _NotifMeta(Icons.star_rounded, Color(0xFFF9A825));
       case PatientNotifType.referralReward:
       case PatientNotifType.welcomeBonus:
         return const _NotifMeta(Icons.card_giftcard_rounded, Color(0xFF6A1B9A));
       default:
-        return const _NotifMeta(Icons.notifications_rounded, AppColors.textSecondary);
+        return const _NotifMeta(
+          Icons.notifications_rounded,
+          AppColors.textSecondary,
+        );
     }
   }
 }
@@ -1224,25 +1421,25 @@ class _EmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     final (icon, title, message) = switch (filter) {
       _TabFilter.all => (
-          Icons.notifications_none_rounded,
-          'All caught up!',
-          "You're all caught up!\nWe'll notify you when something needs attention.",
-        ),
+        Icons.notifications_none_rounded,
+        'All caught up!',
+        "You're all caught up!\nWe'll notify you when something needs attention.",
+      ),
       _TabFilter.appointments => (
-          Icons.calendar_today_outlined,
-          'No appointment notifications',
-          'Appointment updates and reminders\nwill appear here.',
-        ),
+        Icons.calendar_today_outlined,
+        'No appointment notifications',
+        'Appointment updates and reminders\nwill appear here.',
+      ),
       _TabFilter.health => (
-          Icons.favorite_border_rounded,
-          'No health notifications',
-          'Water reminders, period tracker alerts,\nand health tips will appear here.',
-        ),
+        Icons.favorite_border_rounded,
+        'No health notifications',
+        'Water reminders, period tracker alerts,\nand health tips will appear here.',
+      ),
       _TabFilter.promotions => (
-          Icons.local_offer_outlined,
-          'No promotions',
-          'Rewards, referral bonuses, and\nspecial offers will appear here.',
-        ),
+        Icons.local_offer_outlined,
+        'No promotions',
+        'Rewards, referral bonuses, and\nspecial offers will appear here.',
+      ),
     };
 
     return FadeInSlide(

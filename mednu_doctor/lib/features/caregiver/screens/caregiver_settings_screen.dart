@@ -4,6 +4,9 @@ import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/services/feedback_service.dart';
+import '../../../core/utils/validators.dart';
+import '../../../core/widgets/mednu_components.dart';
 import '../../../shared_core/shared_core.dart';
 
 /// Reuses `SharedSettingsScreen` (Shared Core) the same way Pharmacy's and
@@ -49,20 +52,20 @@ class _CaregiverSettingsScreenState extends State<CaregiverSettingsScreen> {
   }
 
   Future<void> _signOut() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Sign Out'),
-        content: const Text('Are you sure you want to sign out?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Sign Out')),
-        ],
-      ),
+    final confirmed = await MedNuConfirmationDialog.show(
+      context,
+      title: 'Sign Out',
+      message: 'Are you sure you want to sign out?',
+      confirmLabel: 'Sign Out',
+      destructive: true,
     );
-    if (confirmed != true) return;
-    await FirebaseAuth.instance.signOut();
-    if (mounted) context.go(AppRoutes.login);
+    if (!confirmed) return;
+    try {
+      await FirebaseAuth.instance.signOut();
+      if (mounted) context.go(AppRoutes.login);
+    } catch (e) {
+      if (mounted) FeedbackService.showError(context, Validators.friendlyError(e));
+    }
   }
 
   @override

@@ -3,7 +3,9 @@ import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/widgets/ux_widgets.dart';
 import '../../../shared_core/models/app_role.dart';
+import 'partner_role_register_screen.dart';
 
 /// First step of registration for a brand-new account: which partner service
 /// is this account signing up as?
@@ -18,10 +20,20 @@ import '../../../shared_core/models/app_role.dart';
 /// [AppRole.admin] is deliberately absent — an admin account is never
 /// self-registerable from the partner app.
 class PartnerRoleSelectScreen extends StatelessWidget {
-  const PartnerRoleSelectScreen({super.key});
+  /// Non-empty when this screen is reached from an already-registered
+  /// account adding a second service (via the role switcher sheet's "Add
+  /// another service" action) rather than from OTP verification for a
+  /// brand-new account. Roles already held — and Doctor, which needs its
+  /// own full credential-verification flow, not this generic form — are
+  /// filtered out of the list.
+  final Set<AppRole> existingRoles;
+
+  const PartnerRoleSelectScreen({super.key, this.existingRoles = const {}});
+
+  bool get _isAddingToExistingAccount => existingRoles.isNotEmpty;
 
   /// The self-registerable roles, in the order they are offered.
-  static const _selectableRoles = <AppRole>[
+  static const _allSelectableRoles = <AppRole>[
     AppRole.doctor,
     AppRole.lab,
     AppRole.pharmacy,
@@ -29,11 +41,24 @@ class PartnerRoleSelectScreen extends StatelessWidget {
     AppRole.caregiver,
   ];
 
+  List<AppRole> get _offeredRoles => _isAddingToExistingAccount
+      ? _allSelectableRoles
+          .where((r) => r != AppRole.doctor && !existingRoles.contains(r))
+          .toList()
+      : _allSelectableRoles;
+
   void _onRoleTap(BuildContext context, AppRole role) {
     if (role == AppRole.doctor) {
       // Byte-identical to the pre-existing behaviour of the OTP screen's
       // "profile doesn't exist" branch.
       context.go(AppRoutes.register);
+    } else if (_isAddingToExistingAccount) {
+      // Reached via Navigator.push from the role switcher sheet, not via
+      // go_router — push the registration form the same way so "back"
+      // returns to wherever the sheet was opened from.
+      Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => PartnerRoleRegisterScreen(role: role),
+      ));
     } else {
       context.go(AppRoutes.partnerRoleRegister, extra: role);
     }
@@ -41,105 +66,182 @@ class PartnerRoleSelectScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final roles = _offeredRoles;
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text(
-          'Join MedNU',
-          style: TextStyle(
-            fontFamily: 'Poppins',
-            fontWeight: FontWeight.w700,
-            fontSize: 18,
-            color: Colors.white,
-          ),
+        title: Text(
+          _isAddingToExistingAccount ? 'Add a Service' : 'Join MedNU',
+          style: AppTextStyles.h4.copyWith(color: Colors.white),
         ),
-        automaticallyImplyLeading: false,
+        automaticallyImplyLeading: _isAddingToExistingAccount,
+        iconTheme: const IconThemeData(color: Colors.white),
         backgroundColor: Colors.transparent,
         elevation: 0,
-        flexibleSpace: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Color(0xFF880E4F), Color(0xFFC2185B), Color(0xFF7B1FA2)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
+        flexibleSpace: const DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: AppColors.heroBannerGradient,
           ),
         ),
       ),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('How will you use MedNU?', style: AppTextStyles.h3),
-              const SizedBox(height: 6),
-              const Text(
-                'Pick the service you are registering. Your application is '
-                'reviewed by our team before your account goes live.',
-                style: AppTextStyles.bodyMedium,
-              ),
-              const SizedBox(height: 22),
-              for (final role in _selectableRoles)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: _RoleTile(
-                    role: role,
-                    onTap: () => _onRoleTap(context, role),
+        child: roles.isEmpty
+            ? Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.check_circle_rounded,
+                          color: AppColors.success, size: 48),
+                      const SizedBox(height: 14),
+                      Text(
+                        'Your account already offers every partner service.',
+                        textAlign: TextAlign.center,
+                        style: AppTextStyles.bodyMedium,
+                      ),
+                    ],
                   ),
                 ),
-              const SizedBox(height: 8),
-              const Text(
-                'You can only pick one service now. Additional services can be '
-                'added to your account later by our team.',
-                style: AppTextStyles.caption,
+              )
+            : SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _isAddingToExistingAccount
+                          ? 'Pick another service to offer'
+                          : 'How will you use MedNU?',
+                      style: AppTextStyles.h3,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      _isAddingToExistingAccount
+                          ? 'Your existing services stay exactly as they are. '
+                              'The new one is reviewed by our team before it goes live.'
+                          : 'Pick the service you are registering. Your application is '
+                              'reviewed by our team before your account goes live.',
+                      style: AppTextStyles.bodyMedium,
+                    ),
+                    const SizedBox(height: 22),
+                    // A static 2-column grid, not GridView — this screen's
+                    // body is already a SingleChildScrollView, and a nested
+                    // scrollable grid inside an outer scrollable installs a
+                    // competing drag recognizer that stalls the outer scroll
+                    // (see project notes on this recurring bug class).
+                    for (var i = 0; i < roles.length; i += 2)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 14),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: _RoleCard(
+                                role: roles[i],
+                                onTap: () => _onRoleTap(context, roles[i]),
+                              ),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: i + 1 < roles.length
+                                  ? _RoleCard(
+                                      role: roles[i + 1],
+                                      onTap: () => _onRoleTap(context, roles[i + 1]),
+                                    )
+                                  : const SizedBox.shrink(),
+                            ),
+                          ],
+                        ),
+                      ),
+                    const SizedBox(height: 8),
+                    if (!_isAddingToExistingAccount)
+                      Text(
+                        'You can only pick one service now. Additional services can be '
+                        'added to your account later from Settings.',
+                        style: AppTextStyles.caption,
+                      ),
+                  ],
+                ),
               ),
-            ],
-          ),
-        ),
       ),
     );
   }
 }
 
-/// Visual twin of `role_switcher_sheet.dart`'s `_RoleTile` — same card, icon
-/// tile and label shape, so "choose a role" looks the same everywhere in the
-/// app. Selection state is not modelled here: tapping navigates away.
-class _RoleTile extends StatelessWidget {
+/// A premium, gradient icon card — the same visual language as the
+/// dashboard's `GradientStatCard` (this app's established "this is a
+/// serious, branded surface" treatment), reused here so the very first
+/// screen a partner ever sees already looks like the rest of the app
+/// instead of a plain settings-style list.
+class _RoleCard extends StatelessWidget {
   final AppRole role;
   final VoidCallback onTap;
 
-  const _RoleTile({required this.role, required this.onTap});
+  const _RoleCard({required this.role, required this.onTap});
+
+  /// A darker second gradient stop, computed from the role's own accent
+  /// colour rather than hand-picked per role — a new [AppRole] never needs
+  /// a matching gradient added here by hand.
+  Color _deepen(Color c) {
+    final hsl = HSLColor.fromColor(c);
+    return hsl.withLightness((hsl.lightness - 0.16).clamp(0.0, 1.0)).toColor();
+  }
 
   @override
   Widget build(BuildContext context) {
     final color = role.accentColor;
-    return InkWell(
+    return TapScale(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        padding: const EdgeInsets.fromLTRB(16, 18, 14, 16),
         decoration: BoxDecoration(
-          color: AppColors.surfaceVariant,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.divider),
+          gradient: LinearGradient(
+            colors: [color, _deepen(color)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: color.withValues(alpha: 0.32),
+              blurRadius: 14,
+              offset: const Offset(0, 6),
+            ),
+          ],
         ),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.14),
-                borderRadius: BorderRadius.circular(12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(13),
+                  ),
+                  child: Icon(role.icon, color: Colors.white, size: 24),
+                ),
+                Icon(Icons.arrow_forward_rounded,
+                    color: Colors.white.withValues(alpha: 0.8), size: 18),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              role.label,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: AppTextStyles.labelLarge.copyWith(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+                height: 1.2,
               ),
-              child: Icon(role.icon, color: color, size: 22),
             ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Text(role.label, style: AppTextStyles.labelLarge),
-            ),
-            Icon(Icons.chevron_right_rounded, color: color, size: 22),
           ],
         ),
       ),

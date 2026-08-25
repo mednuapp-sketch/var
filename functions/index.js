@@ -2451,83 +2451,6 @@ exports.grantReferralReward = onCall({ enforceAppCheck: true }, async (request) 
   }
 });
 
-// ── MSG91: Send OTP ───────────────────────────────────────────────────────────
-// Called from Flutter via httpsCallable('msg91SendOtp').
-// Request data: { phone: "+919876543210" }
-exports.msg91SendOtp = onCall(async (request) => {
-  const { phone } = request.data || {};
-
-  if (!phone || !/^\+91\d{10}$/.test(phone)) {
-    throw new HttpsError("invalid-argument", "Invalid phone number. Must be +91 followed by 10 digits.");
-  }
-
-  const authKey = process.env.MSG91_AUTH_KEY;
-  const widgetId = process.env.MSG91_TEMPLATE_ID;
-  if (!authKey || !widgetId) {
-    console.error("MSG91 credentials not configured.");
-    throw new HttpsError("internal", "OTP service not configured.");
-  }
-
-  const identifier = phone.replace("+", "");
-
-  try {
-    const apiRes = await fetch("https://control.msg91.com/api/v5/widget/initiate", {
-      method: "POST",
-      headers: { "authkey": authKey, "Content-Type": "application/json" },
-      body: JSON.stringify({ widgetId, identifier }),
-    });
-    const data = await apiRes.json();
-    console.log("MSG91 widget/initiate response:", JSON.stringify(data));
-
-    if (data.type !== "success") {
-      throw new HttpsError("internal", data.message || "Failed to send OTP. Please try again.");
-    }
-    return { success: true };
-  } catch (err) {
-    if (err instanceof HttpsError) throw err;
-    console.error("MSG91 sendOtp error:", err);
-    throw new HttpsError("internal", "Failed to send OTP. Please try again.");
-  }
-});
-
-// ── MSG91: Resend OTP ─────────────────────────────────────────────────────────
-// Uses MSG91's widget/resend endpoint to retry delivery without creating a new OTP.
-// Request data: { phone: "+919876543210" }
-exports.msg91ResendOtp = onCall(async (request) => {
-  const { phone } = request.data || {};
-
-  if (!phone || !/^\+91\d{10}$/.test(phone)) {
-    throw new HttpsError("invalid-argument", "Invalid phone number. Must be +91 followed by 10 digits.");
-  }
-
-  const authKey = process.env.MSG91_AUTH_KEY;
-  const widgetId = process.env.MSG91_TEMPLATE_ID;
-  if (!authKey || !widgetId) {
-    throw new HttpsError("internal", "OTP service not configured.");
-  }
-
-  const identifier = phone.replace("+", "");
-
-  try {
-    const apiRes = await fetch("https://control.msg91.com/api/v5/widget/resend", {
-      method: "POST",
-      headers: { "authkey": authKey, "Content-Type": "application/json" },
-      body: JSON.stringify({ widgetId, identifier, retryType: "text" }),
-    });
-    const data = await apiRes.json();
-    console.log("MSG91 widget/resend response:", JSON.stringify(data));
-
-    if (data.type !== "success") {
-      throw new HttpsError("internal", data.message || "Failed to resend OTP. Please try again.");
-    }
-    return { success: true };
-  } catch (err) {
-    if (err instanceof HttpsError) throw err;
-    console.error("MSG91 resendOtp error:", err);
-    throw new HttpsError("internal", "Failed to resend OTP. Please try again.");
-  }
-});
-
 // ── MPIN Login: Verify MPIN + Issue Firebase Custom Token ────────────────────
 //
 // Enables passwordless login on any device without OTP.
@@ -2650,65 +2573,6 @@ exports.verifyMpinAndIssueToken = onCall(async (request) => {
 
   const customToken = await auth.createCustomToken(uid);
   console.log(`MPIN login success for uid ${uid}`);
-  return { customToken };
-});
-
-// ── MSG91: Verify OTP + Issue Firebase Custom Token ───────────────────────────
-// Called from Flutter via httpsCallable('msg91VerifyOtp').
-// Request data: { phone: "+919876543210", otp: "1234" }
-exports.msg91VerifyOtp = onCall(async (request) => {
-  const { phone, otp } = request.data || {};
-
-  if (!phone || !/^\+91\d{10}$/.test(phone)) {
-    throw new HttpsError("invalid-argument", "Invalid phone number.");
-  }
-  if (!otp || !/^\d{4}$/.test(otp)) {
-    throw new HttpsError("invalid-argument", "Invalid OTP format.");
-  }
-
-  const authKey = process.env.MSG91_AUTH_KEY;
-  const widgetId = process.env.MSG91_TEMPLATE_ID;
-  if (!authKey || !widgetId) {
-    throw new HttpsError("internal", "OTP service not configured.");
-  }
-
-  const identifier = phone.replace("+", "");
-
-  // ── Step 1: Verify OTP via MSG91 Widget API ───────────────────────────────
-  try {
-    const apiRes = await fetch("https://control.msg91.com/api/v5/widget/verify", {
-      method: "POST",
-      headers: { "authkey": authKey, "Content-Type": "application/json" },
-      body: JSON.stringify({ widgetId, identifier, otp }),
-    });
-    const data = await apiRes.json();
-    console.log("MSG91 widget/verify response:", JSON.stringify(data));
-
-    if (data.type !== "success") {
-      throw new HttpsError("unauthenticated", data.message || "Incorrect OTP. Please try again.");
-    }
-  } catch (err) {
-    if (err instanceof HttpsError) throw err;
-    console.error("MSG91 verifyOtp error:", err);
-    throw new HttpsError("internal", "OTP verification failed. Please try again.");
-  }
-
-  // ── Step 2: Find or create Firebase user by phone ────────────────────────
-  const auth = getAuth();
-  let uid;
-  try {
-    uid = (await auth.getUserByPhoneNumber(phone)).uid;
-  } catch (err) {
-    if (err.code === "auth/user-not-found") {
-      uid = (await auth.createUser({ phoneNumber: phone })).uid;
-    } else {
-      console.error("Firebase auth error:", err);
-      throw new HttpsError("internal", "Authentication failed. Please try again.");
-    }
-  }
-
-  // ── Step 3: Issue Firebase custom token ──────────────────────────────────
-  const customToken = await auth.createCustomToken(uid);
   return { customToken };
 });
 
@@ -3008,6 +2872,103 @@ exports.cleanupStaleDiagnosticBookings = onSchedule({ schedule: "every 60 minute
 
   const { updated, skipped } = await _expireStaleDocs(staleSnap.docs, { status: "expired", updatedAt: FieldValue.serverTimestamp() });
   _logLab("INFO", "stale_cleanup_expired", { count: updated, skippedConcurrentlyModified: skipped });
+});
+
+// ── 4b) Past-due appointment cleanup ─────────────────────────────────────────
+// A confirmed appointment whose scheduled date+time has passed with nobody
+// marking it completed (no prescription written — see write_prescription_
+// screen.dart — and no video call ended — see doctor_video_call_screen.dart)
+// is a missed visit. Left alone it sits in the patient's "Upcoming" tab
+// forever, since that tab filters purely on status. `date`/`time` on this
+// collection are plain strings, not a Timestamp (see doctor_profile_screen.
+// dart), and are written from the device's local calendar — assumed IST
+// since the app is India-only. `_APPOINTMENT_GRACE_HOURS` absorbs late
+// starts/clock skew before a slot is given up on.
+const _APPOINTMENT_GRACE_HOURS = 3;
+const _APPOINTMENT_STALE_STATUSES = ["booked", "confirmed", "accepted", "rescheduled"];
+
+// Converts an appointment's IST wall-clock date+time into a UTC epoch ms.
+// Returns null for anything that doesn't match the "h:mm AM/PM" slot format
+// booking actually writes — such docs are left untouched rather than guessed at.
+function _apptSlotStartMs(dateStr, timeStr) {
+  const m = /^(\d{1,2}):(\d{2})\s*(AM|PM)$/i.exec((timeStr || "").trim());
+  if (!m || !dateStr) return null;
+  let hour = parseInt(m[1], 10) % 12;
+  if (/pm/i.test(m[3])) hour += 12;
+  const minute = parseInt(m[2], 10);
+  const iso = `${dateStr}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00+05:30`;
+  const ms = Date.parse(iso);
+  return Number.isNaN(ms) ? null : ms;
+}
+
+exports.expirePastDueAppointments = onSchedule({ schedule: "every 60 minutes", timeZone: "UTC" }, async () => {
+  const db = getFirestore();
+  const todayIST = new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+  const candidatesSnap = await db.collection("appointments")
+    .where("status", "in", _APPOINTMENT_STALE_STATUSES)
+    .where("date", "<=", todayIST)
+    .limit(300) // bounded per run; the next hourly run picks up any remainder.
+    .get();
+
+  if (candidatesSnap.empty) {
+    console.log("expirePastDueAppointments: none found");
+    return;
+  }
+
+  const graceMs = _APPOINTMENT_GRACE_HOURS * 60 * 60 * 1000;
+  const now = Date.now();
+  const toExpire = [];
+
+  for (const doc of candidatesSnap.docs) {
+    const d = doc.data();
+    const slotStartMs = _apptSlotStartMs(d.date, d.time);
+    if (slotStartMs === null || now - slotStartMs < graceMs) continue;
+
+    // A video appointment mid-call must not be auto-cancelled underneath the
+    // doctor — skip if the linked consultation is actively in progress.
+    // consultationId only exists once someone actually tapped "join"
+    // (appointment_screen.dart); its absence here means nobody ever did.
+    if (d.consultationId) {
+      try {
+        const consultSnap = await db.collection("consultations").doc(d.consultationId).get();
+        if (consultSnap.exists && consultSnap.data().status === "active") continue;
+      } catch (_) {
+        // Lookup failure shouldn't block cleanup of the parent appointment.
+      }
+    }
+
+    toExpire.push(doc);
+  }
+
+  if (toExpire.length === 0) {
+    console.log("expirePastDueAppointments: none past grace period");
+    return;
+  }
+
+  const { updated, skipped } = await _expireStaleDocs(toExpire, {
+    status: "cancelled",
+    cancelReason: "auto_no_show",
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+
+  // Best-effort: mirror onto any linked consultation still sitting idle so
+  // the doctor app's history doesn't show it as forever "scheduled".
+  await Promise.all(toExpire.map(async (doc) => {
+    const consultationId = doc.data().consultationId;
+    if (!consultationId) return;
+    try {
+      const ref = db.collection("consultations").doc(consultationId);
+      const snap = await ref.get();
+      if (snap.exists && ["pending", "scheduled_waiting"].includes(snap.data().status)) {
+        await ref.update({ status: "missed", updatedAt: FieldValue.serverTimestamp() });
+      }
+    } catch (_) {
+      // Best-effort mirror only; the appointment doc is already updated.
+    }
+  }));
+
+  console.log(`expirePastDueAppointments: cancelled ${updated} past-due appointment(s); ${skipped} skipped (concurrently modified).`);
 });
 
 // ── 5) Patient-visible report consistency audit ─────────────────────────────
@@ -4127,4 +4088,188 @@ exports.cleanupStaleCaregiverVisits = onSchedule({ schedule: "every 60 minutes",
 
   const { updated, skipped } = await _expireStaleDocs(staleSnap.docs, { status: "missed", updatedAt: FieldValue.serverTimestamp() });
   _logCaregiver("INFO", "stale_cleanup_missed", { count: updated, skippedConcurrentlyModified: skipped });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ── Server-driven reminders (water / period / booking / appointment) ───────────
+//
+// On-device alarms (flutter_local_notifications) get killed by OEM battery
+// optimization, so client-scheduled reminders silently stop firing once the
+// app is backgrounded/closed. Delivery is moved here instead: the client
+// still decides *what* and *when* — writing a row to `scheduled_reminders`
+// for one-time reminders, or (for water, which repeats daily) just keeping
+// its existing settings doc current — and these two scheduled functions own
+// *firing*, riding FCM's battery-exempt push channel the same way
+// onNewConsultation etc. above already do, instead of depending on the
+// phone's AlarmManager staying alive.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Sends one reminder push. Looks up the FCM token by uid+role, sends a
+ * notification+data message — displayed by the OS itself even if the app
+ * process is dead, unlike a data-only message, which needs the app's own
+ * background isolate to run and is just as Doze-exposed as a local alarm —
+ * and clears the stale token on send failure. Never throws.
+ */
+async function _sendReminderPush(db, messaging, { uid, role, title, body, channelId, data = {} }) {
+  const tokenCollections = role === "doctor" ? ["doctors"] : ["users", "patients"];
+
+  let token = null;
+  const tokenDocs = [];
+  for (const col of tokenCollections) {
+    try {
+      const snap = await db.collection(col).doc(uid).get();
+      if (snap.exists && snap.data()?.fcmToken) {
+        tokenDocs.push(snap.ref);
+        if (!token) token = snap.data().fcmToken;
+      }
+    } catch (_) {}
+  }
+
+  if (!token) {
+    console.log(`_sendReminderPush: no FCM token for ${role} ${uid} — skipped`);
+    return;
+  }
+
+  const fcmData = {};
+  for (const [k, v] of Object.entries(data)) {
+    if (v != null) fcmData[k] = String(v);
+  }
+
+  try {
+    await messaging.send({
+      token,
+      data: fcmData,
+      android: {
+        priority: "high",
+        notification: { channelId, title, body, sound: "default", defaultVibrateTimings: true },
+      },
+      apns: {
+        headers: { "apns-priority": "5" },
+        payload: { aps: { alert: { title, body }, sound: "default" } },
+      },
+    });
+    console.log(`Reminder push sent → ${role} ${uid}: "${title}"`);
+  } catch (err) {
+    console.error(`Reminder push failed for ${role} ${uid}:`, err.message);
+    // Stale/uninstalled-app token — clear it everywhere it's mirrored so we
+    // stop paying for a send that will never succeed again.
+    if (err.code === "messaging/registration-token-not-registered" ||
+        err.code === "messaging/invalid-registration-token") {
+      await Promise.all(tokenDocs.map((ref) =>
+        ref.update({ fcmToken: FieldValue.delete() }).catch(() => {})));
+    }
+  }
+}
+
+// ── One-time reminder queue ─────────────────────────────────────────────────
+// Populated by the client (period pre-alerts, period wellness check-ins,
+// patient booking reminders, doctor appointment reminders) with a
+// deterministic doc ID per reminder instance, so cancel/reschedule is a
+// plain delete-by-ID on the client side. This function only delivers
+// whatever's due — no scheduling logic is duplicated here.
+exports.processDueReminders = onSchedule({ schedule: "every 5 minutes", timeZone: "UTC" }, async () => {
+  const db = getFirestore();
+  const messaging = getMessaging();
+  const now = Timestamp.now();
+
+  const dueSnap = await db.collection("scheduled_reminders")
+    .where("status", "==", "pending")
+    .where("fireAt", "<=", now)
+    .limit(300) // bounded per run; the next 5-minute tick picks up any remainder.
+    .get();
+
+  if (dueSnap.empty) return;
+
+  let sent = 0;
+  await Promise.all(dueSnap.docs.map(async (doc) => {
+    const r = doc.data();
+    if (!r.uid || !r.title || !r.body) {
+      await doc.ref.update({ status: "sent", updatedAt: FieldValue.serverTimestamp() }).catch(() => {});
+      return;
+    }
+    await _sendReminderPush(db, messaging, {
+      uid: r.uid,
+      role: r.role === "doctor" ? "doctor" : "patient",
+      title: r.title,
+      body: r.body,
+      channelId: r.channelId || "mednu_default_channel",
+      data: r.data || {},
+    });
+    await doc.ref.update({ status: "sent", updatedAt: FieldValue.serverTimestamp() }).catch(() => {});
+    sent++;
+  }));
+  console.log(`processDueReminders: sent ${sent}/${dueSnap.size}`);
+});
+
+// ── Recurring water reminders ───────────────────────────────────────────────
+// Water reminders repeat daily on an interval grid (see nextReminderTime()
+// in health_notification_service.dart) rather than firing once, so they
+// don't fit the one-shot queue above — this re-evaluates the grid every
+// tick directly against each user's settings doc instead. The app is
+// India-only (see the IST assumption on _apptSlotStartMs above), so IST is
+// hardcoded rather than requiring a new stored per-user timezone field.
+const _WATER_SPAN_MINUTES = 13 * 60; // matches _reminderSpanMinutes client-side
+const _WATER_TICK_MINUTES = 15;      // matches this function's own schedule below
+
+function _istNowParts() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hour12: false,
+  }).formatToParts(new Date());
+  const get = (t) => parts.find((p) => p.type === t).value;
+  return {
+    dateKey: `${get("year")}-${get("month")}-${get("day")}`,
+    minutesOfDay: Number(get("hour")) * 60 + Number(get("minute")),
+  };
+}
+
+exports.sendDueWaterReminders = onSchedule({ schedule: "every 15 minutes", timeZone: "Asia/Kolkata" }, async () => {
+  const db = getFirestore();
+  const messaging = getMessaging();
+  const { dateKey, minutesOfDay } = _istNowParts();
+
+  // `settings` is also the parent of period-tracker settings docs (same
+  // subcollection name, different doc ID) — filtered out below by doc.ref.id.
+  const snap = await db.collectionGroup("settings")
+    .where("remindersEnabled", "==", true)
+    .get();
+
+  let sent = 0;
+  await Promise.all(snap.docs.map(async (doc) => {
+    if (doc.ref.id !== "water") return;
+    const w = doc.data();
+    const uid = doc.ref.parent.parent?.id;
+    if (!uid) return;
+
+    const intervalMinutes = (w.reminderIntervalHours || 2) * 60;
+    const startMinutes = (w.reminderStartHour ?? 8) * 60 + (w.reminderStartMinute ?? 0);
+
+    // Which slot (if any) falls inside this tick's window?
+    let matchedSlot = null;
+    for (let offset = 0; offset <= _WATER_SPAN_MINUTES; offset += intervalMinutes) {
+      const slotMinute = startMinutes + offset;
+      if (slotMinute >= minutesOfDay && slotMinute < minutesOfDay + _WATER_TICK_MINUTES) {
+        matchedSlot = slotMinute;
+        break;
+      }
+    }
+    if (matchedSlot == null) return;
+
+    const slotKey = `${dateKey}T${String(Math.floor(matchedSlot / 60)).padStart(2, "0")}:${String(matchedSlot % 60).padStart(2, "0")}`;
+    if (w.lastSentSlotKey === slotKey) return; // already sent this exact slot
+
+    await _sendReminderPush(db, messaging, {
+      uid,
+      role: "patient",
+      title: "💧 Time to hydrate!",
+      body: "Keep it up — drink a glass of water to stay healthy.",
+      channelId: "water_reminders",
+      data: { type: "water_reminder" },
+    });
+    await doc.ref.update({ lastSentSlotKey: slotKey }).catch(() => {});
+    sent++;
+  }));
+  console.log(`sendDueWaterReminders: sent ${sent}`);
 });

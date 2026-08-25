@@ -8,14 +8,6 @@
     ],
     "rewrites": [
       {
-        "source": "/api/sendOtp",
-        "run": { "serviceId": "msg91sendotp", "region": "us-central1" }
-      },
-      {
-        "source": "/api/verifyOtp",
-        "run": { "serviceId": "msg91verifyotp", "region": "us-central1" }
-      },
-      {
         "source": "**",
         "destination": "/index.html"
       }

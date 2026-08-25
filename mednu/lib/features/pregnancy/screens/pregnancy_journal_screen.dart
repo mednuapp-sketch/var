@@ -40,8 +40,8 @@ class _JournalEntryDraft {
 const _kMoodData = [
   ('Happy', '😊', Color(0xFFF9A825)),
   ('Calm', '😌', Color(0xFF0097A7)),
-  ('Excited', '🥰', Color(0xFFC2185B)),
-  ('Tired', '😴', Color(0xFF7B1FA2)),
+  ('Excited', '🥰', Color(0xFF522546)),
+  ('Tired', '😴', Color(0xFF633058)),
   ('Anxious', '😰', Color(0xFF1565C0)),
   ('Nauseous', '🤢', Color(0xFF2E7D32)),
   ('Sad', '😢', Color(0xFF546E7A)),
@@ -226,7 +226,7 @@ class _PregnancyJournalScreenState extends ConsumerState<PregnancyJournalScreen>
         ],
       ),
     );
-    if (confirmed == true) {
+    if (confirmed == true && mounted) {
       // Provider doesn't expose delete — we'd need to extend it; show snack for now
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -395,7 +395,7 @@ class _MetricChips extends StatelessWidget {
   Widget build(BuildContext context) {
     final chips = <(String, String, Color)>[];
     if (log.weightKg != null) chips.add(('⚖️', '${log.weightKg} kg', const Color(0xFF2E7D32)));
-    if (log.sleepHours != null) chips.add(('😴', '${log.sleepHours}h sleep', const Color(0xFF7B1FA2)));
+    if (log.sleepHours != null) chips.add(('😴', '${log.sleepHours}h sleep', const Color(0xFF633058)));
     if (log.waterGlasses != null) chips.add(('💧', '${log.waterGlasses} glasses', const Color(0xFF1565C0)));
     if (log.babyMovements != null) chips.add(('💓', '${log.babyMovements} moves', AppColors.primary));
 
@@ -488,7 +488,7 @@ class _JournalEntrySheetState extends State<_JournalEntrySheet> {
       builder: (ctx, scrollController) => Container(
         decoration: BoxDecoration(
           color: context.appSurface,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         ),
         child: Column(
           children: [
@@ -552,7 +552,7 @@ class _JournalEntrySheetState extends State<_JournalEntrySheet> {
                           Expanded(
                             child: Text(
                               widget.weekData.weeklyTip,
-                              style: const TextStyle(fontFamily: 'Poppins', fontSize: 11, color: Color(0xFF880E4F), height: 1.5),
+                              style: const TextStyle(fontFamily: 'Poppins', fontSize: 11, color: Color(0xFF33172C), height: 1.5),
                             ),
                           ),
                         ],
@@ -609,7 +609,7 @@ class _JournalEntrySheetState extends State<_JournalEntrySheet> {
                     const SizedBox(height: 20),
 
                     // Journal text
-                    _SheetSectionLabel(icon: Icons.edit_rounded, label: 'Write your thoughts', color: AppColors.primary),
+                    const _SheetSectionLabel(icon: Icons.edit_rounded, label: 'Write your thoughts', color: AppColors.primary),
                     const SizedBox(height: 10),
                     TextField(
                       controller: _textCtrl,
@@ -638,7 +638,7 @@ class _JournalEntrySheetState extends State<_JournalEntrySheet> {
                     const SizedBox(height: 20),
 
                     // Symptoms
-                    _SheetSectionLabel(icon: Icons.healing_rounded, label: 'Symptoms (optional)', color: const Color(0xFF7B1FA2)),
+                    const _SheetSectionLabel(icon: Icons.healing_rounded, label: 'Symptoms (optional)', color: Color(0xFF633058)),
                     const SizedBox(height: 10),
                     Wrap(
                       spacing: 6,
@@ -649,18 +649,21 @@ class _JournalEntrySheetState extends State<_JournalEntrySheet> {
                           onTap: () {
                             HapticFeedback.selectionClick();
                             setState(() {
-                              if (isSel) _selectedSymptoms.remove(s);
-                              else _selectedSymptoms.add(s);
+                              if (isSel) {
+                                _selectedSymptoms.remove(s);
+                              } else {
+                                _selectedSymptoms.add(s);
+                              }
                             });
                           },
                           child: AnimatedContainer(
                             duration: const Duration(milliseconds: 150),
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                             decoration: BoxDecoration(
-                              color: isSel ? const Color(0xFF7B1FA2) : Colors.white,
+                              color: isSel ? const Color(0xFF633058) : Colors.white,
                               borderRadius: BorderRadius.circular(20),
                               border: Border.all(
-                                color: isSel ? const Color(0xFF7B1FA2) : context.appBorder,
+                                color: isSel ? const Color(0xFF633058) : context.appBorder,
                               ),
                             ),
                             child: Text(
@@ -753,8 +756,8 @@ class _EmptyJournalState extends StatelessWidget {
           Container(
             width: 120,
             height: 120,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
                 colors: [Color(0xFFFCE4EC), Color(0xFFF3E5F5)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
@@ -881,7 +884,7 @@ class _ShimmerEntryState extends State<_ShimmerEntry> with SingleTickerProviderS
     animation: _shimmer,
     builder: (_, __) {
       final shimmerGradient = LinearGradient(
-        colors: [const Color(0xFFE0E0E0), const Color(0xFFF5F5F5), const Color(0xFFE0E0E0)],
+        colors: const [Color(0xFFE0E0E0), Color(0xFFF5F5F5), Color(0xFFE0E0E0)],
         stops: [0.0, _shimmer.value.clamp(0.01, 0.99), 1.0],
         begin: Alignment.centerLeft,
         end: Alignment.centerRight,

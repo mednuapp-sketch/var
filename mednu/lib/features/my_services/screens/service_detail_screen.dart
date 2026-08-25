@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -10,6 +10,7 @@ import 'package:flutter_rating_bar/flutter_rating_bar.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/services/feedback_service.dart';
+import '../../../core/utils/op_slip_service.dart';
 import '../../../core/utils/r.dart';
 import '../models/unified_booking.dart';
 import '../providers/my_services_provider.dart';
@@ -47,8 +48,10 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
       vsync: this,
       duration: const Duration(milliseconds: 500),
     )..forward();
-    _entryAnim =
-        CurvedAnimation(parent: _entryCtrl, curve: Curves.easeOutCubic);
+    _entryAnim = CurvedAnimation(
+      parent: _entryCtrl,
+      curve: Curves.easeOutCubic,
+    );
   }
 
   @override
@@ -73,7 +76,12 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
             _buildSliverAppBar(context, live),
             SliverToBoxAdapter(
               child: Padding(
-                padding: EdgeInsets.fromLTRB(R.p(context, 16), R.p(context, 20), R.p(context, 16), R.p(context, 100)),
+                padding: EdgeInsets.fromLTRB(
+                  R.p(context, 16),
+                  R.p(context, 20),
+                  R.p(context, 16),
+                  R.p(context, 100),
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -112,8 +120,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
       pinned: true,
       expandedHeight: 190,
       leading: IconButton(
-        icon: const Icon(Icons.arrow_back_ios_new_rounded,
-            color: Colors.white),
+        icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
         onPressed: () => context.pop(),
       ),
       actions: [
@@ -130,9 +137,11 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
             children: [
               // Decorative circles
               Positioned(
-                top: -20, right: -20,
+                top: -20,
+                right: -20,
                 child: Container(
-                  width: 120, height: 120,
+                  width: 120,
+                  height: 120,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: Colors.white.withValues(alpha: 0.07),
@@ -145,69 +154,87 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
                     return SingleChildScrollView(
                       physics: const ClampingScrollPhysics(),
                       child: ConstrainedBox(
-                        constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                        constraints: BoxConstraints(
+                          minHeight: constraints.maxHeight,
+                        ),
                         child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 54, 20, 20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            width: 46,
-                            height: 46,
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.2),
-                              borderRadius: BorderRadius.circular(13),
-                            ),
-                            child: Icon(info.icon,
-                                color: Colors.white, size: 22),
+                          padding: const EdgeInsets.fromLTRB(20, 54, 20, 20),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Container(
+                                    width: 46,
+                                    height: 46,
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withValues(
+                                        alpha: 0.2,
+                                      ),
+                                      borderRadius: BorderRadius.circular(13),
+                                    ),
+                                    child: Icon(
+                                      info.icon,
+                                      color: Colors.white,
+                                      size: 22,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          live.serviceType,
+                                          style: AppTextStyles.h3.copyWith(
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                        if (live.providerName != null)
+                                          Text(
+                                            live.providerName!,
+                                            style: AppTextStyles.bodySmall
+                                                .copyWith(
+                                                  color: Colors.white70,
+                                                ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 14),
+                              Row(
+                                children: [
+                                  _AppBarChip(
+                                    icon: Icons.tag_rounded,
+                                    label: live.id
+                                        .substring(
+                                          0,
+                                          live.id.length.clamp(0, 8),
+                                        )
+                                        .toUpperCase(),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  _LiveStatusDot(
+                                    status: live.status,
+                                    pulse: _pulseCtrl,
+                                  ),
+                                  const SizedBox(width: 5),
+                                  Text(
+                                    live.status.label,
+                                    style: const TextStyle(
+                                      fontFamily: 'Poppins',
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(live.serviceType,
-                                    style: AppTextStyles.h3
-                                        .copyWith(color: Colors.white)),
-                                if (live.providerName != null)
-                                  Text(live.providerName!,
-                                      style: AppTextStyles.bodySmall
-                                          .copyWith(
-                                              color: Colors.white70)),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 14),
-                      Row(
-                        children: [
-                          _AppBarChip(
-                            icon: Icons.tag_rounded,
-                            label: live.id
-                                .substring(0,
-                                    live.id.length.clamp(0, 8))
-                                .toUpperCase(),
-                          ),
-                          const SizedBox(width: 8),
-                          _LiveStatusDot(
-                              status: live.status, pulse: _pulseCtrl),
-                          const SizedBox(width: 5),
-                          Text(
-                            live.status.label,
-                            style: const TextStyle(
-                              fontFamily: 'Poppins',
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
                         ),
                       ),
                     );
@@ -233,8 +260,8 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
         color: isDark ? AppColors.darkCard : bg.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-            color:
-                isDark ? AppColors.darkBorder : bg.withValues(alpha: 0.3)),
+          color: isDark ? AppColors.darkBorder : bg.withValues(alpha: 0.3),
+        ),
       ),
       child: Row(
         children: [
@@ -248,7 +275,8 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
                     ? Color.lerp(
                         bg.withValues(alpha: 0.15),
                         bg.withValues(alpha: 0.3),
-                        _pulseCtrl.value)!
+                        _pulseCtrl.value,
+                      )!
                     : bg.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(13),
               ),
@@ -260,13 +288,17 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Current Status',
-                    style: AppTextStyles.caption
-                        .copyWith(color: context.appTextHint)),
+                Text(
+                  'Current Status',
+                  style: AppTextStyles.caption.copyWith(
+                    color: context.appTextHint,
+                  ),
+                ),
                 const SizedBox(height: 2),
-                Text(live.status.label,
-                    style:
-                        AppTextStyles.labelLarge.copyWith(color: fg)),
+                Text(
+                  live.status.label,
+                  style: AppTextStyles.labelLarge.copyWith(color: fg),
+                ),
                 const SizedBox(height: 2),
                 Text(
                   _statusSubtext(live.status),
@@ -280,8 +312,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
           ),
           if (live.isActive)
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
                 color: bg.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(8),
@@ -292,21 +323,26 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
                   AnimatedBuilder(
                     animation: _pulseCtrl,
                     builder: (_, __) => Container(
-                      width: 6, height: 6,
+                      width: 6,
+                      height: 6,
                       decoration: BoxDecoration(
                         color: fg.withValues(
-                            alpha: 0.5 + _pulseCtrl.value * 0.5),
+                          alpha: 0.5 + _pulseCtrl.value * 0.5,
+                        ),
                         shape: BoxShape.circle,
                       ),
                     ),
                   ),
                   const SizedBox(width: 4),
-                  Text('LIVE',
-                      style: TextStyle(
-                          fontFamily: 'Poppins',
-                          fontSize: 9,
-                          fontWeight: FontWeight.w800,
-                          color: fg)),
+                  Text(
+                    'LIVE',
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 9,
+                      fontWeight: FontWeight.w800,
+                      color: fg,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -329,24 +365,30 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
           Row(
             children: [
               Container(
-                width: 32, height: 32,
+                width: 32,
+                height: 32,
                 decoration: BoxDecoration(
                   color: AppColors.primary.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(9),
                 ),
-                child: const Icon(Icons.timeline_rounded,
-                    color: AppColors.primary, size: 16),
+                child: const Icon(
+                  Icons.timeline_rounded,
+                  color: AppColors.primary,
+                  size: 16,
+                ),
               ),
               const SizedBox(width: 10),
-              Text('Progress Timeline', style: AppTextStyles.h4),
+              const Text('Progress Timeline', style: AppTextStyles.h4),
             ],
           ),
           const SizedBox(height: 16),
-          ...steps.asMap().entries.map((e) => _TimelineStep(
-                step: e.value,
-                isLast: e.key == steps.length - 1,
-                pulseCtrl: _pulseCtrl,
-              )),
+          ...steps.asMap().entries.map(
+            (e) => _TimelineStep(
+              step: e.value,
+              isLast: e.key == steps.length - 1,
+              pulseCtrl: _pulseCtrl,
+            ),
+          ),
         ],
       ),
     );
@@ -365,16 +407,20 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
           Row(
             children: [
               Container(
-                width: 32, height: 32,
+                width: 32,
+                height: 32,
                 decoration: BoxDecoration(
                   color: AppColors.primary.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(9),
                 ),
-                child: const Icon(Icons.person_rounded,
-                    color: AppColors.primary, size: 16),
+                child: const Icon(
+                  Icons.person_rounded,
+                  color: AppColors.primary,
+                  size: 16,
+                ),
               ),
               const SizedBox(width: 10),
-              Text('Service Provider', style: AppTextStyles.h4),
+              const Text('Service Provider', style: AppTextStyles.h4),
             ],
           ),
           const SizedBox(height: 16),
@@ -383,11 +429,12 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
               // Provider photo
               ClipRRect(
                 borderRadius: BorderRadius.circular(26),
-                child: live.providerPhoto != null &&
-                        live.providerPhoto!.isNotEmpty
+                child:
+                    live.providerPhoto != null && live.providerPhoto!.isNotEmpty
                     ? CachedNetworkImage(
                         imageUrl: live.providerPhoto!,
-                        width: 52, height: 52,
+                        width: 52,
+                        height: 52,
                         fit: BoxFit.cover,
                         placeholder: (_, __) => _providerAvatar(),
                         errorWidget: (_, __, ___) => _providerAvatar(),
@@ -399,33 +446,42 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(live.providerName ?? 'Provider',
-                        style: AppTextStyles.labelLarge),
+                    Text(
+                      live.providerName ?? 'Provider',
+                      style: AppTextStyles.labelLarge,
+                    ),
                     if (live.providerSpecialty != null)
-                      Text(live.providerSpecialty!,
-                          style: AppTextStyles.bodySmall.copyWith(
-                              color: context.appTextSecondary)),
+                      Text(
+                        live.providerSpecialty!,
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: context.appTextSecondary,
+                        ),
+                      ),
                     const SizedBox(height: 4),
                     // Static 4-star rating display
                     Row(
                       children: List.generate(
-                          5,
-                          (i) => Icon(
-                                i < 4
-                                    ? Icons.star_rounded
-                                    : Icons.star_border_rounded,
-                                size: 14,
-                                color: i < 4
-                                    ? const Color(0xFFF57F17)
-                                    : context.appTextHint,
-                              )),
+                        5,
+                        (i) => Icon(
+                          i < 4
+                              ? Icons.star_rounded
+                              : Icons.star_border_rounded,
+                          size: 14,
+                          color: i < 4
+                              ? const Color(0xFFF57F17)
+                              : context.appTextHint,
+                        ),
+                      ),
                     ),
                     if (live.providerPhone != null) ...[
                       const SizedBox(height: 4),
                       Row(
                         children: [
-                          const Icon(Icons.phone_rounded,
-                              size: 12, color: AppColors.primary),
+                          const Icon(
+                            Icons.phone_rounded,
+                            size: 12,
+                            color: AppColors.primary,
+                          ),
                           const SizedBox(width: 4),
                           Text(
                             live.providerPhone!,
@@ -444,15 +500,20 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
                 GestureDetector(
                   onTap: () => _callProvider(live.providerPhone!),
                   child: Container(
-                    width: 44, height: 44,
+                    width: 44,
+                    height: 44,
                     decoration: BoxDecoration(
                       color: AppColors.success.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(13),
                       border: Border.all(
-                          color: AppColors.success.withValues(alpha: 0.3)),
+                        color: AppColors.success.withValues(alpha: 0.3),
+                      ),
                     ),
-                    child: const Icon(Icons.call_rounded,
-                        color: AppColors.success, size: 20),
+                    child: const Icon(
+                      Icons.call_rounded,
+                      color: AppColors.success,
+                      size: 20,
+                    ),
                   ),
                 ),
             ],
@@ -463,14 +524,14 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
   }
 
   Widget _providerAvatar() => Container(
-        width: 52, height: 52,
-        decoration: const BoxDecoration(
-          gradient: AppColors.primaryGradient,
-          shape: BoxShape.circle,
-        ),
-        child: const Icon(Icons.person_rounded,
-            color: Colors.white, size: 28),
-      );
+    width: 52,
+    height: 52,
+    decoration: const BoxDecoration(
+      gradient: AppColors.primaryGradient,
+      shape: BoxShape.circle,
+    ),
+    child: const Icon(Icons.person_rounded, color: Colors.white, size: 28),
+  );
 
   // ── Booking Info ──────────────────────────────────────────────────────────────
 
@@ -479,32 +540,44 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
     final items = <_DetailItem>[];
 
     if (live.date.isNotEmpty) {
-      items.add(_DetailItem(
+      items.add(
+        _DetailItem(
           icon: Icons.calendar_today_rounded,
           label: 'Date',
           value: _formatDate(live.date),
-          color: const Color(0xFF1565C0)));
+          color: const Color(0xFF1565C0),
+        ),
+      );
     }
     if (live.time.isNotEmpty) {
-      items.add(_DetailItem(
+      items.add(
+        _DetailItem(
           icon: Icons.access_time_rounded,
           label: 'Time',
           value: live.time,
-          color: const Color(0xFF6A1B9A)));
+          color: const Color(0xFF6A1B9A),
+        ),
+      );
     }
     if (live.address != null && live.address!.isNotEmpty) {
-      items.add(_DetailItem(
+      items.add(
+        _DetailItem(
           icon: Icons.location_on_rounded,
           label: 'Location',
           value: live.address!,
-          color: AppColors.error));
+          color: AppColors.error,
+        ),
+      );
     }
     if (live.notes != null && live.notes!.isNotEmpty) {
-      items.add(_DetailItem(
+      items.add(
+        _DetailItem(
           icon: Icons.notes_rounded,
           label: 'Notes',
           value: live.notes!,
-          color: AppColors.warning));
+          color: AppColors.warning,
+        ),
+      );
     }
 
     if (items.isEmpty) return const SizedBox.shrink();
@@ -517,16 +590,20 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
           Row(
             children: [
               Container(
-                width: 32, height: 32,
+                width: 32,
+                height: 32,
                 decoration: BoxDecoration(
                   color: const Color(0xFF1565C0).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(9),
                 ),
-                child: const Icon(Icons.event_note_rounded,
-                    color: Color(0xFF1565C0), size: 16),
+                child: const Icon(
+                  Icons.event_note_rounded,
+                  color: Color(0xFF1565C0),
+                  size: 16,
+                ),
               ),
               const SizedBox(width: 10),
-              Text('Booking Info', style: AppTextStyles.h4),
+              const Text('Booking Info', style: AppTextStyles.h4),
             ],
           ),
           const SizedBox(height: 16),
@@ -563,16 +640,20 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
           Row(
             children: [
               Container(
-                width: 32, height: 32,
+                width: 32,
+                height: 32,
                 decoration: BoxDecoration(
                   color: AppColors.success.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(9),
                 ),
-                child: const Icon(Icons.receipt_long_rounded,
-                    color: AppColors.success, size: 16),
+                child: const Icon(
+                  Icons.receipt_long_rounded,
+                  color: AppColors.success,
+                  size: 16,
+                ),
               ),
               const SizedBox(width: 10),
-              Text('Payment Info', style: AppTextStyles.h4),
+              const Text('Payment Info', style: AppTextStyles.h4),
             ],
           ),
           const SizedBox(height: 16),
@@ -581,9 +662,12 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Amount',
-                  style: AppTextStyles.bodyMedium
-                      .copyWith(color: context.appTextSecondary)),
+              Text(
+                'Amount',
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: context.appTextSecondary,
+                ),
+              ),
               Text(
                 '₹${live.amount!.toStringAsFixed(0)}',
                 style: const TextStyle(
@@ -600,22 +684,25 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
           const SizedBox(height: 12),
 
           _PaymentRow(
-              label: 'Payment Method',
-              value: rawMethod,
-              icon: Icons.credit_card_rounded),
+            label: 'Payment Method',
+            value: rawMethod,
+            icon: Icons.credit_card_rounded,
+          ),
           const SizedBox(height: 10),
           if (txnId != null) ...[
             _PaymentRow(
-                label: 'Transaction ID',
-                value: txnId,
-                icon: Icons.tag_rounded),
+              label: 'Transaction ID',
+              value: txnId,
+              icon: Icons.tag_rounded,
+            ),
             const SizedBox(height: 10),
           ],
           _PaymentRow(
-              label: 'Status',
-              value: isPaid,
-              icon: Icons.check_circle_outline_rounded,
-              isSuccess: true),
+            label: 'Status',
+            value: isPaid,
+            icon: Icons.check_circle_outline_rounded,
+            isSuccess: true,
+          ),
         ],
       ),
     );
@@ -634,23 +721,28 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
           Row(
             children: [
               Container(
-                width: 32, height: 32,
+                width: 32,
+                height: 32,
                 decoration: BoxDecoration(
                   color: const Color(0xFFF57F17).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(9),
                 ),
-                child: const Icon(Icons.star_rounded,
-                    color: Color(0xFFF57F17), size: 16),
+                child: const Icon(
+                  Icons.star_rounded,
+                  color: Color(0xFFF57F17),
+                  size: 16,
+                ),
               ),
               const SizedBox(width: 10),
-              Text('Rate & Review', style: AppTextStyles.h4),
+              const Text('Rate & Review', style: AppTextStyles.h4),
             ],
           ),
           const SizedBox(height: 6),
           Text(
             'How was your experience? Your feedback helps us improve.',
-            style: AppTextStyles.bodySmall
-                .copyWith(color: context.appTextSecondary),
+            style: AppTextStyles.bodySmall.copyWith(
+              color: context.appTextSecondary,
+            ),
           ),
           const SizedBox(height: 16),
           Center(
@@ -662,14 +754,10 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
               itemCount: 5,
               itemSize: 36,
               glow: false,
-              itemPadding:
-                  const EdgeInsets.symmetric(horizontal: 4),
-              itemBuilder: (_, __) => const Icon(
-                Icons.star_rounded,
-                color: Color(0xFFF57F17),
-              ),
-              onRatingUpdate: (r) =>
-                  setState(() => _userRating = r),
+              itemPadding: const EdgeInsets.symmetric(horizontal: 4),
+              itemBuilder: (_, __) =>
+                  const Icon(Icons.star_rounded, color: Color(0xFFF57F17)),
+              onRatingUpdate: (r) => setState(() => _userRating = r),
             ),
           ),
           const SizedBox(height: 14),
@@ -678,8 +766,9 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
             maxLines: 3,
             decoration: InputDecoration(
               hintText: 'Write a review (optional)...',
-              hintStyle: AppTextStyles.bodySmall
-                  .copyWith(color: context.appTextHint),
+              hintStyle: AppTextStyles.bodySmall.copyWith(
+                color: context.appTextHint,
+              ),
               filled: true,
               fillColor: isDark
                   ? AppColors.darkCardElevated
@@ -700,12 +789,17 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
                   : () => _submitReview(context),
               icon: _submittingReview
                   ? const SizedBox(
-                      width: 16, height: 16,
+                      width: 16,
+                      height: 16,
                       child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white))
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
                   : const Icon(Icons.send_rounded, size: 16),
               label: Text(
-                  _submittingReview ? 'Submitting...' : 'Submit Review'),
+                _submittingReview ? 'Submitting...' : 'Submit Review',
+              ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFFF57F17),
                 foregroundColor: Colors.white,
@@ -717,7 +811,8 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
                   fontSize: 14,
                 ),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ),
           ),
@@ -729,12 +824,46 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
   // ── Action Buttons ────────────────────────────────────────────────────────────
 
   Widget _buildActionButtons(BuildContext context, UnifiedBooking live) {
-    final canCancel = live.isActive &&
+    final canCancel =
+        live.isActive &&
         live.status != BookingStatus.inProgress &&
         live.status != BookingStatus.consultationStarted;
 
+    // In-person doctor appointments get the same OP slip + directions
+    // actions here as on the My Appointments card, so they work the same
+    // wherever the patient finds the booking.
+    final isInPersonAppointment =
+        live.source == BookingSource.appointment &&
+        (live.rawData['consultationType'] as String?) == 'In-Person';
+
     return Column(
       children: [
+        if (isInPersonAppointment) ...[
+          _ActionButton(
+            icon: Icons.picture_as_pdf_rounded,
+            label: 'Download OP Slip',
+            color: AppColors.primary,
+            onTap: () => OpSlipService.openSlip(
+              context,
+              appointmentId: live.id,
+              appointmentData: live.rawData,
+            ),
+          ),
+          if (live.isActive) ...[
+            const SizedBox(height: 10),
+            _ActionButton(
+              icon: Icons.directions_rounded,
+              label: 'Directions to Clinic',
+              color: AppColors.info,
+              outlined: true,
+              onTap: () => OpSlipService.openDirections(
+                context,
+                appointmentData: live.rawData,
+              ),
+            ),
+          ],
+          const SizedBox(height: 10),
+        ],
         if (live.isActive || live.isCompleted)
           _ActionButton(
             icon: Icons.headset_mic_rounded,
@@ -749,8 +878,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
             label: 'Reschedule Booking',
             color: AppColors.info,
             outlined: true,
-            onTap: () => FeedbackService.showInfo(
-                context, 'Reschedule coming soon.'),
+            onTap: () => _rescheduleBooking(context, live),
           ),
         ],
         if (canCancel) ...[
@@ -778,8 +906,10 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
             label: 'Download Receipt',
             color: context.appTextSecondary,
             outlined: true,
-            onTap: () =>
-                FeedbackService.showInfo(context, 'Receipt download coming soon.'),
+            onTap: () => FeedbackService.showInfo(
+              context,
+              'Receipt download coming soon.',
+            ),
           ),
         ],
       ],
@@ -808,8 +938,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
         'My ${live.serviceType} booking (#${live.id.substring(0, 8).toUpperCase()}) — Status: ${live.status.label}. Booked via MedNU.';
     Clipboard.setData(ClipboardData(text: text));
     if (mounted) {
-      FeedbackService.showSuccess(
-          context, 'Booking info copied to clipboard');
+      FeedbackService.showSuccess(context, 'Booking info copied to clipboard');
     }
   }
 
@@ -821,8 +950,29 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
         _submittingReview = false;
         _reviewSubmitted = true;
       });
-      FeedbackService.showSuccess(context, 'Thank you for your review!');
+      if (context.mounted) {
+        FeedbackService.showSuccess(context, 'Thank you for your review!');
+      }
     }
+  }
+
+  // Only doctor appointments can be rescheduled from here — the flow needs a
+  // doctorId + slot picker, which other service types (medicine, lab tests,
+  // equipment, etc.) don't have.
+  void _rescheduleBooking(BuildContext context, UnifiedBooking live) {
+    final doctorId = live.rawData['doctorId'] as String? ?? '';
+    if (live.source != BookingSource.appointment || doctorId.isEmpty) {
+      FeedbackService.showInfo(context, 'Reschedule coming soon.');
+      return;
+    }
+    final type = live.rawData['consultationType'] as String? ?? 'Video';
+    context.push(Uri(
+      path: '/doctors/$doctorId',
+      queryParameters: {
+        'rescheduleId': live.id,
+        'rescheduleType': type,
+      },
+    ).toString());
   }
 
   void _contactSupport(BuildContext context, UnifiedBooking live) {
@@ -834,16 +984,15 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
     );
   }
 
-  Future<void> _confirmCancel(
-      BuildContext context, UnifiedBooking live) async {
+  Future<void> _confirmCancel(BuildContext context, UnifiedBooking live) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20)),
-        title: const Text('Cancel Booking',
-            style: TextStyle(
-                fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          'Cancel Booking',
+          style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700),
+        ),
         content: const Text(
           'Are you sure you want to cancel this booking?\nThis action cannot be undone.',
           style: TextStyle(fontFamily: 'Poppins', height: 1.5),
@@ -859,27 +1008,32 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
               backgroundColor: AppColors.error,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
-            child: const Text('Cancel Booking',
-                style: TextStyle(fontFamily: 'Poppins')),
+            child: const Text(
+              'Cancel Booking',
+              style: TextStyle(fontFamily: 'Poppins'),
+            ),
           ),
         ],
       ),
     );
 
-    if (confirm == true && mounted) {
+    if (confirm == true && mounted && context.mounted) {
       FeedbackService.showLoading(context, 'Cancelling booking...');
       try {
         await MyServicesService.updateStatus(live, 'cancelled');
-        if (mounted) {
+        if (mounted && context.mounted) {
           FeedbackService.dismiss(context);
           FeedbackService.showSuccess(
-              context, 'Booking cancelled successfully');
+            context,
+            'Booking cancelled successfully',
+          );
           GoRouter.of(context).pop();
         }
       } catch (e) {
-        if (mounted) {
+        if (mounted && context.mounted) {
           FeedbackService.showError(
             context,
             'Failed to cancel booking. Please try again.',
@@ -898,7 +1052,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
       case BookingStatus.confirmed:
         return (const Color(0xFF1565C0), const Color(0xFF0D47A1));
       case BookingStatus.assigned:
-        return (const Color(0xFF6A1B9A), const Color(0xFF4A148C));
+        return (const Color(0xFF6A1B9A), const Color(0xFF3D1D36));
       case BookingStatus.onTheWay:
         return (const Color(0xFF00695C), const Color(0xFF004D40));
       case BookingStatus.inProgress:
@@ -987,14 +1141,16 @@ class _SectionCard extends StatelessWidget {
         color: isDark ? AppColors.darkCard : context.appSurface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-            color: isDark ? AppColors.darkBorder : context.appBorder),
+          color: isDark ? AppColors.darkBorder : context.appBorder,
+        ),
         boxShadow: isDark
             ? null
             : [
                 BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.04),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2)),
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
               ],
       ),
       child: child,
@@ -1023,45 +1179,59 @@ class _TimelineStep extends StatelessWidget {
     if (step.isCompleted) {
       lineColor = AppColors.success;
       dot = Container(
-        width: 34, height: 34,
+        width: 34,
+        height: 34,
         decoration: const BoxDecoration(
-            color: AppColors.success, shape: BoxShape.circle),
-        child: const Icon(Icons.check_rounded,
-            color: Colors.white, size: 16),
+          color: AppColors.success,
+          shape: BoxShape.circle,
+        ),
+        child: const Icon(Icons.check_rounded, color: Colors.white, size: 16),
       );
     } else if (step.isActive) {
       lineColor = context.appBorder;
       dot = AnimatedBuilder(
         animation: pulseCtrl,
         builder: (_, __) => Container(
-          width: 34, height: 34,
+          width: 34,
+          height: 34,
           decoration: BoxDecoration(
-            color: Color.lerp(AppColors.primary, AppColors.primaryLight,
-                pulseCtrl.value),
+            color: Color.lerp(
+              AppColors.primary,
+              AppColors.primaryLight,
+              pulseCtrl.value,
+            ),
             shape: BoxShape.circle,
             boxShadow: [
               BoxShadow(
-                color: AppColors.primary
-                    .withValues(alpha: 0.3 + pulseCtrl.value * 0.2),
+                color: AppColors.primary.withValues(
+                  alpha: 0.3 + pulseCtrl.value * 0.2,
+                ),
                 blurRadius: 10,
                 spreadRadius: 2,
               ),
             ],
           ),
-          child: const Icon(Icons.radio_button_checked_rounded,
-              color: Colors.white, size: 16),
+          child: const Icon(
+            Icons.radio_button_checked_rounded,
+            color: Colors.white,
+            size: 16,
+          ),
         ),
       );
     } else {
       lineColor = context.appBorder;
       dot = Container(
-        width: 34, height: 34,
+        width: 34,
+        height: 34,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           border: Border.all(color: context.appBorder, width: 2),
         ),
-        child: Icon(Icons.radio_button_unchecked_rounded,
-            size: 14, color: context.appTextHint),
+        child: Icon(
+          Icons.radio_button_unchecked_rounded,
+          size: 14,
+          color: context.appTextHint,
+        ),
       );
     }
 
@@ -1071,8 +1241,7 @@ class _TimelineStep extends StatelessWidget {
         Column(
           children: [
             dot,
-            if (!isLast)
-              Container(width: 2, height: 44, color: lineColor),
+            if (!isLast) Container(width: 2, height: 44, color: lineColor),
           ],
         ),
         const SizedBox(width: 14),
@@ -1088,23 +1257,26 @@ class _TimelineStep extends StatelessWidget {
                     color: step.isCompleted
                         ? AppColors.success
                         : step.isActive
-                            ? AppColors.primary
-                            : context.appTextHint,
+                        ? AppColors.primary
+                        : context.appTextHint,
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   step.description,
                   style: AppTextStyles.bodySmall.copyWith(
-                      color: context.appTextSecondary, height: 1.4),
+                    color: context.appTextSecondary,
+                    height: 1.4,
+                  ),
                 ),
                 if (step.timestamp != null) ...[
                   const SizedBox(height: 4),
                   Text(
-                    DateFormat('dd MMM yyyy, hh:mm a')
-                        .format(step.timestamp!),
+                    DateFormat('dd MMM yyyy, hh:mm a').format(step.timestamp!),
                     style: AppTextStyles.caption.copyWith(
-                        color: context.appTextHint, fontSize: 10),
+                      color: context.appTextHint,
+                      fontSize: 10,
+                    ),
                   ),
                 ],
               ],
@@ -1141,7 +1313,8 @@ class _DetailRow extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
-          width: 36, height: 36,
+          width: 36,
+          height: 36,
           decoration: BoxDecoration(
             color: item.color.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(10),
@@ -1153,14 +1326,19 @@ class _DetailRow extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(item.label,
-                  style: AppTextStyles.caption
-                      .copyWith(color: context.appTextHint)),
+              Text(
+                item.label,
+                style: AppTextStyles.caption.copyWith(
+                  color: context.appTextHint,
+                ),
+              ),
               const SizedBox(height: 2),
-              Text(item.value,
-                  style: AppTextStyles.bodyMedium,
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis),
+              Text(
+                item.value,
+                style: AppTextStyles.bodyMedium,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+              ),
             ],
           ),
         ),
@@ -1188,13 +1366,18 @@ class _PaymentRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Icon(icon,
-            size: 15,
-            color: isSuccess ? AppColors.success : context.appTextHint),
+        Icon(
+          icon,
+          size: 15,
+          color: isSuccess ? AppColors.success : context.appTextHint,
+        ),
         const SizedBox(width: 8),
-        Text(label,
-            style: AppTextStyles.bodySmall
-                .copyWith(color: context.appTextSecondary)),
+        Text(
+          label,
+          style: AppTextStyles.bodySmall.copyWith(
+            color: context.appTextSecondary,
+          ),
+        ),
         const Spacer(),
         Text(
           value,
@@ -1241,11 +1424,13 @@ class _ActionButton extends StatelessWidget {
                 side: BorderSide(color: color.withValues(alpha: 0.6)),
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 textStyle: const TextStyle(
-                    fontFamily: 'Poppins',
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14),
+                  fontFamily: 'Poppins',
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                ),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14)),
+                  borderRadius: BorderRadius.circular(14),
+                ),
               ),
             )
           : ElevatedButton.icon(
@@ -1258,11 +1443,13 @@ class _ActionButton extends StatelessWidget {
                 elevation: 0,
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 textStyle: const TextStyle(
-                    fontFamily: 'Poppins',
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14),
+                  fontFamily: 'Poppins',
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                ),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14)),
+                  borderRadius: BorderRadius.circular(14),
+                ),
               ),
             ),
     );
@@ -1289,12 +1476,15 @@ class _AppBarChip extends StatelessWidget {
         children: [
           Icon(icon, size: 11, color: Colors.white70),
           const SizedBox(width: 4),
-          Text(label,
-              style: const TextStyle(
-                  fontFamily: 'Poppins',
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white)),
+          Text(
+            label,
+            style: const TextStyle(
+              fontFamily: 'Poppins',
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: Colors.white,
+            ),
+          ),
         ],
       ),
     );
@@ -1320,15 +1510,19 @@ class _LiveStatusDot extends StatelessWidget {
   Widget build(BuildContext context) {
     if (!_liveStatuses.contains(status)) {
       return Container(
-        width: 7, height: 7,
+        width: 7,
+        height: 7,
         decoration: const BoxDecoration(
-            color: Colors.white54, shape: BoxShape.circle),
+          color: Colors.white54,
+          shape: BoxShape.circle,
+        ),
       );
     }
     return AnimatedBuilder(
       animation: pulse,
       builder: (_, __) => Container(
-        width: 7, height: 7,
+        width: 7,
+        height: 7,
         decoration: BoxDecoration(
           color: Colors.white.withValues(alpha: 0.5 + pulse.value * 0.5),
           shape: BoxShape.circle,
@@ -1356,57 +1550,69 @@ class _ServiceInfo {
     switch (b.source) {
       case BookingSource.appointment:
         return const _ServiceInfo(
-            icon: Icons.medical_services_rounded,
-            gradient: AppColors.appointmentGrad);
+          icon: Icons.medical_services_rounded,
+          gradient: AppColors.appointmentGrad,
+        );
       case BookingSource.consultation:
         return const _ServiceInfo(
-            icon: Icons.videocam_rounded,
-            gradient: AppColors.consultGrad);
+          icon: Icons.videocam_rounded,
+          gradient: AppColors.consultGrad,
+        );
       case BookingSource.nutrition:
         return const _ServiceInfo(
-            icon: Icons.restaurant_menu_rounded,
-            gradient: AppColors.nutritionGrad);
+          icon: Icons.restaurant_menu_rounded,
+          gradient: AppColors.nutritionGrad,
+        );
       case BookingSource.serviceRequest:
         switch ((b.rawData['type'] as String? ?? '').toLowerCase()) {
           case 'ambulance':
             return const _ServiceInfo(
-                icon: Icons.emergency_rounded,
-                gradient: AppColors.ambulanceGrad);
+              icon: Icons.emergency_rounded,
+              gradient: AppColors.ambulanceGrad,
+            );
           case 'diagnostics':
           case 'lab_test':
             return const _ServiceInfo(
-                icon: Icons.biotech_rounded,
-                gradient: AppColors.diagnosticGrad);
+              icon: Icons.biotech_rounded,
+              gradient: AppColors.diagnosticGrad,
+            );
           case 'caregiver':
           case 'caregivers':
             return const _ServiceInfo(
-                icon: Icons.elderly_rounded,
-                gradient: AppColors.caregiverGrad);
+              icon: Icons.elderly_rounded,
+              gradient: AppColors.caregiverGrad,
+            );
           case 'care_assistant':
             return const _ServiceInfo(
-                icon: Icons.support_agent_rounded,
-                gradient: AppColors.careAssistGrad);
+              icon: Icons.support_agent_rounded,
+              gradient: AppColors.careAssistGrad,
+            );
           case 'physiotherapy':
           case 'physio':
             return const _ServiceInfo(
-                icon: Icons.accessibility_new_rounded,
-                gradient: AppColors.physioGrad);
+              icon: Icons.accessibility_new_rounded,
+              gradient: AppColors.physioGrad,
+            );
           case 'counselling':
             return const _ServiceInfo(
-                icon: Icons.psychology_rounded,
-                gradient: AppColors.counselGrad);
+              icon: Icons.psychology_rounded,
+              gradient: AppColors.counselGrad,
+            );
           case 'equipment':
             return const _ServiceInfo(
-                icon: Icons.medical_information_rounded,
-                gradient: AppColors.equipmentGrad);
+              icon: Icons.medical_information_rounded,
+              gradient: AppColors.equipmentGrad,
+            );
           case 'medicine':
             return const _ServiceInfo(
-                icon: Icons.local_pharmacy_rounded,
-                gradient: AppColors.medicineGrad);
+              icon: Icons.local_pharmacy_rounded,
+              gradient: AppColors.medicineGrad,
+            );
           default:
             return const _ServiceInfo(
-                icon: Icons.health_and_safety_rounded,
-                gradient: AppColors.primaryGradient);
+              icon: Icons.health_and_safety_rounded,
+              gradient: AppColors.primaryGradient,
+            );
         }
     }
   }
@@ -1476,11 +1682,13 @@ class _SupportChatSheetState extends State<_SupportChatSheet> {
         children: [
           // Handle
           Container(
-            width: 40, height: 4,
+            width: 40,
+            height: 4,
             margin: const EdgeInsets.only(top: 12),
             decoration: BoxDecoration(
-                color: Colors.grey.shade300,
-                borderRadius: BorderRadius.circular(2)),
+              color: Colors.grey.shade300,
+              borderRadius: BorderRadius.circular(2),
+            ),
           ),
           // Header
           Padding(
@@ -1488,36 +1696,43 @@ class _SupportChatSheetState extends State<_SupportChatSheet> {
             child: Row(
               children: [
                 Container(
-                  width: 38, height: 38,
+                  width: 38,
+                  height: 38,
                   decoration: BoxDecoration(
                     color: AppColors.primary.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(Icons.headset_mic_rounded,
-                      color: AppColors.primary, size: 20),
+                  child: const Icon(
+                    Icons.headset_mic_rounded,
+                    color: AppColors.primary,
+                    size: 20,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Support Chat',
-                          style: TextStyle(
-                              fontFamily: 'Poppins',
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700)),
+                      const Text(
+                        'Support Chat',
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                       Text(
                         'Booking #${widget.booking.id.substring(0, widget.booking.id.length.clamp(0, 8)).toUpperCase()}',
-                        style: AppTextStyles.caption
-                            .copyWith(color: context.appTextHint),
+                        style: AppTextStyles.caption.copyWith(
+                          color: context.appTextHint,
+                        ),
                       ),
                     ],
                   ),
                 ),
                 IconButton(
                   onPressed: () => Navigator.pop(context),
-                  icon: Icon(Icons.close_rounded,
-                      color: context.appTextHint),
+                  icon: Icon(Icons.close_rounded, color: context.appTextHint),
                 ),
               ],
             ),
@@ -1538,27 +1753,33 @@ class _SupportChatSheetState extends State<_SupportChatSheet> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Container(
-                          width: 60, height: 60,
+                          width: 60,
+                          height: 60,
                           decoration: BoxDecoration(
                             color: AppColors.primary.withValues(alpha: 0.08),
                             shape: BoxShape.circle,
                           ),
-                          child: const Icon(Icons.headset_mic_rounded,
-                              color: AppColors.primary, size: 28),
+                          child: const Icon(
+                            Icons.headset_mic_rounded,
+                            color: AppColors.primary,
+                            size: 28,
+                          ),
                         ),
                         const SizedBox(height: 12),
-                        Text('Send us a message',
-                            style: AppTextStyles.labelLarge),
+                        const Text(
+                          'Send us a message',
+                          style: AppTextStyles.labelLarge,
+                        ),
                         const SizedBox(height: 6),
                         Padding(
-                          padding:
-                              const EdgeInsets.symmetric(horizontal: 40),
+                          padding: const EdgeInsets.symmetric(horizontal: 40),
                           child: Text(
                             'Our support team will respond shortly.',
                             textAlign: TextAlign.center,
                             style: AppTextStyles.bodySmall.copyWith(
-                                color: context.appTextSecondary,
-                                height: 1.5),
+                              color: context.appTextSecondary,
+                              height: 1.5,
+                            ),
                           ),
                         ),
                       ],
@@ -1570,8 +1791,7 @@ class _SupportChatSheetState extends State<_SupportChatSheet> {
                   padding: const EdgeInsets.all(16),
                   itemCount: docs.length,
                   itemBuilder: (_, i) {
-                    final data =
-                        docs[i].data() as Map<String, dynamic>;
+                    final data = docs[i].data() as Map<String, dynamic>;
                     final isMe = data['role'] == 'patient';
                     final text = data['text'] as String? ?? '';
                     return Padding(
@@ -1583,27 +1803,29 @@ class _SupportChatSheetState extends State<_SupportChatSheet> {
                         children: [
                           if (!isMe) ...[
                             Container(
-                              width: 28, height: 28,
+                              width: 28,
+                              height: 28,
                               decoration: BoxDecoration(
-                                color: AppColors.primary
-                                    .withValues(alpha: 0.1),
+                                color: AppColors.primary.withValues(alpha: 0.1),
                                 shape: BoxShape.circle,
                               ),
                               child: const Icon(
-                                  Icons.support_agent_rounded,
-                                  size: 14,
-                                  color: AppColors.primary),
+                                Icons.support_agent_rounded,
+                                size: 14,
+                                color: AppColors.primary,
+                              ),
                             ),
                             const SizedBox(width: 8),
                           ],
                           Container(
                             constraints: BoxConstraints(
                               maxWidth:
-                                  MediaQuery.of(context).size.width *
-                                      0.65,
+                                  MediaQuery.of(context).size.width * 0.65,
                             ),
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 14, vertical: 10),
+                              horizontal: 14,
+                              vertical: 10,
+                            ),
                             decoration: BoxDecoration(
                               color: isMe
                                   ? AppColors.primary
@@ -1611,20 +1833,21 @@ class _SupportChatSheetState extends State<_SupportChatSheet> {
                               borderRadius: BorderRadius.only(
                                 topLeft: const Radius.circular(16),
                                 topRight: const Radius.circular(16),
-                                bottomLeft:
-                                    Radius.circular(isMe ? 16 : 4),
-                                bottomRight:
-                                    Radius.circular(isMe ? 4 : 16),
+                                bottomLeft: Radius.circular(isMe ? 16 : 4),
+                                bottomRight: Radius.circular(isMe ? 4 : 16),
                               ),
                             ),
-                            child: Text(text,
-                                style: TextStyle(
-                                    fontFamily: 'Poppins',
-                                    fontSize: 13,
-                                    color: isMe
-                                        ? Colors.white
-                                        : context.appTextPrimary,
-                                    height: 1.4)),
+                            child: Text(
+                              text,
+                              style: TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: 13,
+                                color: isMe
+                                    ? Colors.white
+                                    : context.appTextPrimary,
+                                height: 1.4,
+                              ),
+                            ),
                           ),
                         ],
                       ),
@@ -1641,9 +1864,10 @@ class _SupportChatSheetState extends State<_SupportChatSheet> {
               color: context.appSurface,
               boxShadow: [
                 BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
-                    blurRadius: 8,
-                    offset: const Offset(0, -2)),
+                  color: Colors.black.withValues(alpha: 0.05),
+                  blurRadius: 8,
+                  offset: const Offset(0, -2),
+                ),
               ],
             ),
             child: Row(
@@ -1659,7 +1883,9 @@ class _SupportChatSheetState extends State<_SupportChatSheet> {
                       filled: true,
                       fillColor: context.appBackground,
                       contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 12),
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(24),
                         borderSide: BorderSide.none,
@@ -1671,7 +1897,8 @@ class _SupportChatSheetState extends State<_SupportChatSheet> {
                 GestureDetector(
                   onTap: _send,
                   child: Container(
-                    width: 46, height: 46,
+                    width: 46,
+                    height: 46,
                     decoration: BoxDecoration(
                       gradient: AppColors.primaryGradient,
                       borderRadius: BorderRadius.circular(14),
@@ -1680,9 +1907,15 @@ class _SupportChatSheetState extends State<_SupportChatSheet> {
                         ? const Padding(
                             padding: EdgeInsets.all(12),
                             child: CircularProgressIndicator(
-                                strokeWidth: 2, color: Colors.white))
-                        : const Icon(Icons.send_rounded,
-                            color: Colors.white, size: 20),
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(
+                            Icons.send_rounded,
+                            color: Colors.white,
+                            size: 20,
+                          ),
                   ),
                 ),
               ],

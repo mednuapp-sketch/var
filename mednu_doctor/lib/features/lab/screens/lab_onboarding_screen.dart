@@ -4,6 +4,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/services/feedback_service.dart';
+import '../../../core/utils/validators.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../models/lab_profile.dart';
 import '../services/lab_profile_service.dart';
@@ -85,12 +86,22 @@ class _LabOnboardingScreenState extends State<LabOnboardingScreen> {
               padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
               sliver: SliverList(
                 delegate: SliverChildListDelegate([
-                  _field(_nameCtrl, 'Lab / Diagnostic Center Name', Icons.storefront_rounded),
+                  _field(
+                    _nameCtrl,
+                    'Lab / Diagnostic Center Name',
+                    Icons.storefront_rounded,
+                    validator: (v) => Validators.name(v, label: 'Lab name'),
+                  ),
                   const SizedBox(height: 14),
                   _field(_licenseCtrl, 'License / Registration Number', Icons.badge_outlined),
                   const SizedBox(height: 14),
-                  _field(_phoneCtrl, 'Contact Phone', Icons.call_outlined,
-                      keyboardType: TextInputType.phone),
+                  _field(
+                    _phoneCtrl,
+                    'Contact Phone',
+                    Icons.call_outlined,
+                    keyboardType: TextInputType.phone,
+                    validator: Validators.phone,
+                  ),
                   const SizedBox(height: 14),
                   _field(_addressCtrl, 'Lab Address', Icons.location_on_outlined, maxLines: 2),
                   const SizedBox(height: 22),
@@ -143,12 +154,14 @@ class _LabOnboardingScreenState extends State<LabOnboardingScreen> {
     IconData icon, {
     int maxLines = 1,
     TextInputType? keyboardType,
+    String? Function(String?)? validator,
   }) {
     return TextFormField(
       controller: ctrl,
       maxLines: maxLines,
       keyboardType: keyboardType,
-      validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+      validator: validator ??
+          (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
       decoration: InputDecoration(
         labelText: label,
         prefixIcon: Icon(icon, color: AppColors.textSecondary),

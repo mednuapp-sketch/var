@@ -79,10 +79,10 @@ class RefundsScreen extends StatelessWidget {
                                               color: Colors.white, size: R.w(context, 24)),
                                         ),
                                         SizedBox(width: R.p(context, 14)),
-                                        Column(
+                                        const Column(
                                           crossAxisAlignment: CrossAxisAlignment.start,
                                           mainAxisSize: MainAxisSize.min,
-                                          children: const [
+                                          children: [
                                             Text(
                                               'My Refunds',
                                               style: TextStyle(
@@ -152,8 +152,8 @@ class _RefundsList extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
             sliver: SliverList(
               delegate: SliverChildBuilderDelegate(
-                (_, __) => Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
+                (_, __) => const Padding(
+                  padding: EdgeInsets.only(bottom: 12),
                   child: SkeletonBox(width: double.infinity, height: 86),
                 ),
                 childCount: 5,
@@ -163,7 +163,7 @@ class _RefundsList extends StatelessWidget {
         }
 
         if (snap.hasError) {
-          return SliverFillRemaining(
+          return const SliverFillRemaining(
             child: AppErrorState(
               message: 'Unable to load refunds. Please try again.',
             ),
@@ -348,8 +348,8 @@ class _EmptyRefunds extends StatelessWidget {
             Container(
               width: 88,
               height: 88,
-              decoration: BoxDecoration(
-                color: const Color(0xFFE3F2FD),
+              decoration: const BoxDecoration(
+                color: Color(0xFFE3F2FD),
                 shape: BoxShape.circle,
               ),
               child: const Icon(Icons.replay_rounded,

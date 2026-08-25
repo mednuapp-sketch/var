@@ -54,8 +54,8 @@ void showAddFamilyMemberSheet(
           final status = await Permission.contacts.request();
           if (!status.isGranted) {
             if (ctx.mounted) {
-              ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
-                content: const Text('Contacts permission required'),
+              ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
+                content: Text('Contacts permission required'),
                 action: SnackBarAction(label: 'Settings', onPressed: openAppSettings),
               ));
             }
@@ -116,7 +116,7 @@ void showAddFamilyMemberSheet(
             _field(phoneCtrl, 'Phone Number', phone: true),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
-              value: gender,
+              initialValue: gender,
               decoration: InputDecoration(
                 labelText: 'Gender',
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
@@ -317,7 +317,7 @@ class FamilyManagementScreen extends ConsumerStatefulWidget {
 
 class _FamilyManagementScreenState extends ConsumerState<FamilyManagementScreen> {
   static const _avatarColors = [
-    Color(0xFFC2185B), Color(0xFF7B1FA2), Color(0xFF1565C0),
+    Color(0xFF522546), Color(0xFF633058), Color(0xFF1565C0),
     Color(0xFF2E7D32), Color(0xFF00695C), Color(0xFFE65100),
   ];
 
@@ -433,7 +433,7 @@ class _FamilyManagementScreenState extends ConsumerState<FamilyManagementScreen>
               background: Container(
                 decoration: const BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [Color(0xFF880E4F), Color(0xFFC2185B), Color(0xFF7B1FA2)],
+                    colors: [Color(0xFF33172C), Color(0xFF522546), Color(0xFF633058)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
@@ -764,7 +764,7 @@ class _FamilyManagementScreenState extends ConsumerState<FamilyManagementScreen>
                       child: DecoratedBox(
                         decoration: BoxDecoration(
                           gradient: const LinearGradient(
-                            colors: [Color(0xFFC2185B), Color(0xFF7B1FA2)],
+                            colors: [Color(0xFF522546), Color(0xFF633058)],
                             begin: Alignment.centerLeft,
                             end: Alignment.centerRight,
                           ),
@@ -829,8 +829,8 @@ class _FamilyManagementScreenState extends ConsumerState<FamilyManagementScreen>
     final status = await Permission.contacts.request();
     if (!status.isGranted) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: const Text('Contacts permission is required to import contacts.'),
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Contacts permission is required to import contacts.'),
           action: SnackBarAction(label: 'Settings', onPressed: openAppSettings),
         ));
       }
@@ -924,7 +924,7 @@ class _ContactPickerSheetState extends State<_ContactPickerSheet> {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
           child: Row(children: [
-            Text('Select Contact', style: AppTextStyles.h4),
+            const Text('Select Contact', style: AppTextStyles.h4),
             const Spacer(),
             IconButton(icon: const Icon(Icons.close_rounded), onPressed: () => Navigator.pop(context)),
           ]),
@@ -948,7 +948,7 @@ class _ContactPickerSheetState extends State<_ContactPickerSheet> {
               ? ListView(physics: const NeverScrollableScrollPhysics(), padding: const EdgeInsets.symmetric(vertical: 8),
                   children: List.generate(5, (_) => const _ContactPickerSkeleton()))
               : _filtered.isEmpty
-                  ? Center(child: Text('No contacts found', style: AppTextStyles.bodySmall))
+                  ? const Center(child: Text('No contacts found', style: AppTextStyles.bodySmall))
                   : ListView.builder(
                       itemCount: _filtered.length,
                       itemBuilder: (_, i) {

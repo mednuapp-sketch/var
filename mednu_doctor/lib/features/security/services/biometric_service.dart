@@ -33,7 +33,7 @@ class BiometricService {
 
   // Returns true if authentication succeeded.
   // biometricOnly: false → allows device PIN/password as fallback.
-  static Future<bool> authenticate({String reason = 'Unlock MedNU Doctor'}) async {
+  static Future<bool> authenticate({String reason = 'Unlock MedNU Service'}) async {
     try {
       final supported = await _auth.isDeviceSupported();
       if (!supported) return true; // no lock hardware — let through

@@ -38,8 +38,8 @@ class _PharmacyScreenState extends State<PharmacyScreen> {
       {'name': 'Syrups', 'icon': Icons.local_drink_rounded, 'color': const Color(0xFF2E7D32)},
       {'name': 'Injections', 'icon': Icons.vaccines_rounded, 'color': const Color(0xFFB71C1C)},
       {'name': 'Vitamins', 'icon': Icons.star_rounded, 'color': const Color(0xFFE65100)},
-      {'name': 'Skincare', 'icon': Icons.face_rounded, 'color': const Color(0xFFC2185B)},
-      {'name': 'Baby Care', 'icon': Icons.child_care_rounded, 'color': const Color(0xFF7B1FA2)},
+      {'name': 'Skincare', 'icon': Icons.face_rounded, 'color': const Color(0xFF522546)},
+      {'name': 'Baby Care', 'icon': Icons.child_care_rounded, 'color': const Color(0xFF633058)},
     ];
 
     return Scaffold(
@@ -78,8 +78,8 @@ class _PharmacyScreenState extends State<PharmacyScreen> {
                               children: [
                                 Icon(Icons.local_pharmacy_rounded, color: Colors.white, size: AppSpacing.headerIconSize(context)),
                                 SizedBox(height: AppSpacing.headerIconGap(context)),
-                                Text('Pharmacy & Medical Shops', style: AppTextStyles.onPrimaryH2),
-                                Text('Find nearby pharmacies • Order online', style: AppTextStyles.onPrimaryBody),
+                                const Text('Pharmacy & Medical Shops', style: AppTextStyles.onPrimaryH2),
+                                const Text('Find nearby pharmacies • Order online', style: AppTextStyles.onPrimaryBody),
                               ],
                             ),
                           ),
@@ -160,7 +160,7 @@ class _PharmacyScreenState extends State<PharmacyScreen> {
                 // ── Categories ───────────────────────────────────────────────
                 Padding(
                   padding: EdgeInsets.fromLTRB(R.p(context, 16), 0, R.p(context, 16), R.p(context, 12)),
-                  child: Text('Categories', style: AppTextStyles.h4),
+                  child: const Text('Categories', style: AppTextStyles.h4),
                 ),
                 SizedBox(
                   height: R.h(context, 90),

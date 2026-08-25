@@ -85,7 +85,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         title: const Text(
           'Remind me before',
           style: TextStyle(
-              fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 16),
+              fontFamily: 'Inter', fontWeight: FontWeight.w700, fontSize: 16),
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -97,7 +97,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               contentPadding: EdgeInsets.zero,
               title: Text(label,
                   style: TextStyle(
-                    fontFamily: 'Poppins',
+                    fontFamily: 'Inter',
                     fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                     color: selected ? AppColors.primary : null,
                   )),
@@ -465,7 +465,7 @@ class _DoctorProfileCard extends StatelessWidget {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF880E4F), Color(0xFFC2185B), Color(0xFF7B1FA2)],
+          colors: [AppColors.primaryDark, AppColors.primary, AppColors.secondary],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -492,7 +492,7 @@ class _DoctorProfileCard extends StatelessWidget {
             child: Text(
               displayName.isNotEmpty ? displayName[0].toUpperCase() : 'D',
               style: const TextStyle(
-                fontFamily: 'Poppins',
+                fontFamily: 'Inter',
                 fontSize: 24,
                 fontWeight: FontWeight.w800,
                 color: Colors.white,
@@ -508,7 +508,7 @@ class _DoctorProfileCard extends StatelessWidget {
               Text(
                 'Dr. $displayName',
                 style: const TextStyle(
-                  fontFamily: 'Poppins',
+                  fontFamily: 'Inter',
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
                   color: Colors.white,
@@ -519,7 +519,7 @@ class _DoctorProfileCard extends StatelessWidget {
               Text(
                 displaySpec,
                 style: const TextStyle(
-                  fontFamily: 'Poppins',
+                  fontFamily: 'Inter',
                   fontSize: 12,
                   color: Colors.white70,
                 ),
@@ -539,7 +539,7 @@ class _DoctorProfileCard extends StatelessWidget {
                   Text(
                     'Verified Doctor',
                     style: TextStyle(
-                      fontFamily: 'Poppins',
+                      fontFamily: 'Inter',
                       fontSize: 10,
                       fontWeight: FontWeight.w600,
                       color: Colors.white,
@@ -584,7 +584,7 @@ class _SectionHeader extends StatelessWidget {
             Text(
               title.toUpperCase(),
               style: TextStyle(
-                fontFamily: 'Poppins',
+                fontFamily: 'Inter',
                 fontSize: 11,
                 fontWeight: FontWeight.w800,
                 color: color,
@@ -791,7 +791,7 @@ class _SignOutButton extends StatelessWidget {
             Text(
               'Sign Out',
               style: TextStyle(
-                fontFamily: 'Poppins',
+                fontFamily: 'Inter',
                 fontSize: 15,
                 fontWeight: FontWeight.w700,
                 color: Colors.red.shade400,

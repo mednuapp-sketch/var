@@ -71,11 +71,11 @@ class _PregnancyWeightTrackerScreenState
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showAddWeightSheet(context, state.profile!),
-        backgroundColor: const Color(0xFF7B1FA2),
+        backgroundColor: const Color(0xFF633058),
         foregroundColor: Colors.white,
         elevation: 3,
         icon: const Icon(Icons.add_rounded),
-        label: Text(
+        label: const Text(
           'Log Weight',
           style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600),
         ),
@@ -88,7 +88,7 @@ class _PregnancyWeightTrackerScreenState
   SliverAppBar _buildAppBar(PregnancyProfile profile) => SliverAppBar(
         expandedHeight: R.h(context, 160),
         pinned: true,
-        backgroundColor: const Color(0xFF7B1FA2),
+        backgroundColor: const Color(0xFF633058),
         foregroundColor: Colors.white,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded,
@@ -99,7 +99,7 @@ class _PregnancyWeightTrackerScreenState
           background: Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
-                colors: [Color(0xFF7B1FA2), Color(0xFFC2185B)],
+                colors: [Color(0xFF633058), Color(0xFF522546)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -117,7 +117,7 @@ class _PregnancyWeightTrackerScreenState
                           crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisAlignment: MainAxisAlignment.end,
                           children: [
-                            Text(
+                            const Text(
                               'Weight Tracker',
                               style: TextStyle(fontFamily: 'Poppins',
                                 color: Colors.white,
@@ -130,7 +130,7 @@ class _PregnancyWeightTrackerScreenState
                               children: [
                                 Text(
                                   'Week ${profile.currentWeek} � ${profile.trimesterLabel}',
-                                  style: TextStyle(fontFamily: 'Poppins',
+                                  style: const TextStyle(fontFamily: 'Poppins',
                                       color: Colors.white70, fontSize: 13),
                                 ),
                                 const Spacer(),
@@ -143,7 +143,7 @@ class _PregnancyWeightTrackerScreenState
                                   ),
                                   child: Text(
                                     '${profile.daysUntilDue} days left',
-                                    style: TextStyle(fontFamily: 'Poppins',
+                                    style: const TextStyle(fontFamily: 'Poppins',
                                       color: Colors.white,
                                       fontSize: 11,
                                       fontWeight: FontWeight.w600,
@@ -175,7 +175,7 @@ class _PregnancyWeightTrackerScreenState
         ? const Color(0xFFEF5350)
         : gain > 0
             ? const Color(0xFF66BB6A)
-            : const Color(0xFF7B1FA2);
+            : const Color(0xFF633058);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
@@ -185,7 +185,7 @@ class _PregnancyWeightTrackerScreenState
             label: 'Starting',
             value: '${profile.weightKg.toStringAsFixed(1)} kg',
             icon: Icons.flag_rounded,
-            color: const Color(0xFF7B1FA2),
+            color: const Color(0xFF633058),
           ),
           const SizedBox(width: 10),
           _summaryTile(
@@ -194,7 +194,7 @@ class _PregnancyWeightTrackerScreenState
                 ? '${profile.weightKg.toStringAsFixed(1)} kg'
                 : '${state.currentWeightKg.toStringAsFixed(1)} kg',
             icon: Icons.monitor_weight_rounded,
-            color: const Color(0xFFC2185B),
+            color: const Color(0xFF522546),
           ),
           const SizedBox(width: 10),
           _summaryTile(
@@ -285,18 +285,18 @@ class _PregnancyWeightTrackerScreenState
         color: const Color(0xFFF3E5F5),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-            color: const Color(0xFF7B1FA2).withValues(alpha: 0.2)),
+            color: const Color(0xFF633058).withValues(alpha: 0.2)),
       ),
       child: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: const Color(0xFF7B1FA2).withValues(alpha: 0.15),
+              color: const Color(0xFF633058).withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(8),
             ),
             child: const Icon(Icons.recommend_rounded,
-                color: Color(0xFF7B1FA2), size: 20),
+                color: Color(0xFF633058), size: 20),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -305,10 +305,10 @@ class _PregnancyWeightTrackerScreenState
               children: [
                 Text(
                   'Recommended Gain: ${minGain.toStringAsFixed(1)}�${maxGain.toStringAsFixed(1)} kg',
-                  style: TextStyle(fontFamily: 'Poppins', 
+                  style: const TextStyle(fontFamily: 'Poppins', 
                     fontWeight: FontWeight.w700,
                     fontSize: 13,
-                    color: const Color(0xFF4A148C),
+                    color: Color(0xFF3D1D36),
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -316,9 +316,9 @@ class _PregnancyWeightTrackerScreenState
                   bmi != null
                       ? 'Pre-pregnancy BMI ${bmi.toStringAsFixed(1)} ($bmiLabel) � IOM 2009'
                       : 'IOM 2009 guidelines � $bmiLabel for accurate range',
-                  style: TextStyle(fontFamily: 'Poppins', 
+                  style: const TextStyle(fontFamily: 'Poppins', 
                     fontSize: 11,
-                    color: const Color(0xFF7B1FA2),
+                    color: Color(0xFF633058),
                   ),
                 ),
               ],
@@ -381,7 +381,7 @@ class _PregnancyWeightTrackerScreenState
           Row(
             children: [
               const Icon(Icons.timeline_rounded,
-                  color: Color(0xFF7B1FA2), size: 18),
+                  color: Color(0xFF633058), size: 18),
               const SizedBox(width: 8),
               Text(
                 'Trimester Weight Targets',
@@ -406,8 +406,8 @@ class _PregnancyWeightTrackerScreenState
 
   Widget _buildTriCard(_TriData tri, double currentGain) {
     final color = tri.isCurrent
-        ? const Color(0xFFC2185B)
-        : const Color(0xFF7B1FA2);
+        ? const Color(0xFF522546)
+        : const Color(0xFF633058);
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 3),
@@ -433,7 +433,7 @@ class _PregnancyWeightTrackerScreenState
                 color: color,
                 borderRadius: BorderRadius.circular(6),
               ),
-              child: Text(
+              child: const Text(
                 'Current',
                 style: TextStyle(fontFamily: 'Poppins', 
                   fontSize: 8,
@@ -523,7 +523,7 @@ class _PregnancyWeightTrackerScreenState
           Row(
             children: [
               const Icon(Icons.auto_graph_rounded,
-                  color: Color(0xFF7B1FA2), size: 18),
+                  color: Color(0xFF633058), size: 18),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -535,10 +535,10 @@ class _PregnancyWeightTrackerScreenState
                   ),
                 ),
               ),
-              _chartLegend(const Color(0xFFC2185B), 'Actual'),
+              _chartLegend(const Color(0xFF522546), 'Actual'),
               const SizedBox(width: 10),
               _chartLegend(
-                  const Color(0xFF7B1FA2).withValues(alpha: 0.3), 'Range'),
+                  const Color(0xFF633058).withValues(alpha: 0.3), 'Range'),
             ],
           ),
           const SizedBox(height: 16),
@@ -599,16 +599,16 @@ class _PregnancyWeightTrackerScreenState
                             FlSpot(40, startWeight + maxGain),
                           ],
                           isCurved: true,
-                          color: const Color(0xFF7B1FA2)
+                          color: const Color(0xFF633058)
                               .withValues(alpha: 0.25),
                           barWidth: 1.5,
                           dotData: const FlDotData(show: false),
                           dashArray: [4, 4],
                           belowBarData: BarAreaData(
                             show: true,
-                            color: const Color(0xFF7B1FA2)
+                            color: const Color(0xFF633058)
                                 .withValues(alpha: 0.06),
-                            spotsLine: BarAreaSpotsLine(show: false),
+                            spotsLine: const BarAreaSpotsLine(show: false),
                           ),
                         ),
                         // Recommended lower band
@@ -618,7 +618,7 @@ class _PregnancyWeightTrackerScreenState
                             FlSpot(40, startWeight + minGain),
                           ],
                           isCurved: true,
-                          color: const Color(0xFF7B1FA2)
+                          color: const Color(0xFF633058)
                               .withValues(alpha: 0.25),
                           barWidth: 1.5,
                           dotData: const FlDotData(show: false),
@@ -629,7 +629,7 @@ class _PregnancyWeightTrackerScreenState
                           spots: spots,
                           isCurved: true,
                           curveSmoothness: 0.35,
-                          color: const Color(0xFFC2185B),
+                          color: const Color(0xFF522546),
                           barWidth: 2.5,
                           isStrokeCapRound: true,
                           dotData: FlDotData(
@@ -637,7 +637,7 @@ class _PregnancyWeightTrackerScreenState
                             getDotPainter: (spot, _, __, ___) =>
                                 FlDotCirclePainter(
                               radius: 4,
-                              color: const Color(0xFFC2185B),
+                              color: const Color(0xFF522546),
                               strokeWidth: 2,
                               strokeColor: Colors.white,
                             ),
@@ -646,9 +646,9 @@ class _PregnancyWeightTrackerScreenState
                             show: true,
                             gradient: LinearGradient(
                               colors: [
-                                const Color(0xFFC2185B)
+                                const Color(0xFF522546)
                                     .withValues(alpha: 0.15),
-                                const Color(0xFFC2185B)
+                                const Color(0xFF522546)
                                     .withValues(alpha: 0.0),
                               ],
                               begin: Alignment.topCenter,
@@ -664,7 +664,7 @@ class _PregnancyWeightTrackerScreenState
                             if (s.barIndex != 2) return null;
                             return LineTooltipItem(
                               'W${s.x.toInt()}\n${s.y.toStringAsFixed(1)} kg',
-                              TextStyle(fontFamily: 'Poppins', 
+                              const TextStyle(fontFamily: 'Poppins', 
                                 color: Colors.white,
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600,
@@ -701,7 +701,7 @@ class _PregnancyWeightTrackerScreenState
           Icon(
             Icons.show_chart_rounded,
             size: 40,
-            color: const Color(0xFF7B1FA2).withValues(alpha: 0.3),
+            color: const Color(0xFF633058).withValues(alpha: 0.3),
           ),
           const SizedBox(height: 10),
           Text(
@@ -766,7 +766,7 @@ class _PregnancyWeightTrackerScreenState
           Row(
             children: [
               const Icon(Icons.history_rounded,
-                  color: Color(0xFF7B1FA2), size: 18),
+                  color: Color(0xFF633058), size: 18),
               const SizedBox(width: 8),
               Text(
                 'Weight Log',
@@ -810,8 +810,8 @@ class _PregnancyWeightTrackerScreenState
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
-                    const Color(0xFF7B1FA2).withValues(alpha: 0.12),
-                    const Color(0xFFC2185B).withValues(alpha: 0.06),
+                    const Color(0xFF633058).withValues(alpha: 0.12),
+                    const Color(0xFF522546).withValues(alpha: 0.06),
                   ],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
@@ -819,7 +819,7 @@ class _PregnancyWeightTrackerScreenState
                 shape: BoxShape.circle,
               ),
               child: const Icon(Icons.monitor_weight_outlined,
-                  color: Color(0xFF7B1FA2), size: 32),
+                  color: Color(0xFF633058), size: 32),
             ),
             const SizedBox(height: 14),
             Text(
@@ -849,7 +849,7 @@ class _PregnancyWeightTrackerScreenState
     final diffLabel =
         diff > 0 ? '+${diff.toStringAsFixed(1)} kg' : '${diff.toStringAsFixed(1)} kg';
     final diffColor =
-        diff > 0 ? const Color(0xFF66BB6A) : const Color(0xFF7B1FA2);
+        diff > 0 ? const Color(0xFF66BB6A) : const Color(0xFF633058);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -867,8 +867,8 @@ class _PregnancyWeightTrackerScreenState
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
-                  const Color(0xFF7B1FA2).withValues(alpha: 0.15),
-                  const Color(0xFFC2185B).withValues(alpha: 0.08),
+                  const Color(0xFF633058).withValues(alpha: 0.15),
+                  const Color(0xFF522546).withValues(alpha: 0.08),
                 ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
@@ -880,10 +880,10 @@ class _PregnancyWeightTrackerScreenState
               children: [
                 Text(
                   'W${log.pregnancyWeek}',
-                  style: TextStyle(fontFamily: 'Poppins', 
+                  style: const TextStyle(fontFamily: 'Poppins', 
                     fontSize: 12,
                     fontWeight: FontWeight.w800,
-                    color: const Color(0xFF7B1FA2),
+                    color: Color(0xFF633058),
                   ),
                 ),
               ],
@@ -896,7 +896,7 @@ class _PregnancyWeightTrackerScreenState
               children: [
                 Text(
                   '${log.weightKg.toStringAsFixed(1)} kg',
-                  style: TextStyle(fontFamily: 'Poppins', 
+                  style: const TextStyle(fontFamily: 'Poppins', 
                       fontWeight: FontWeight.w700, fontSize: 15),
                 ),
                 Text(
@@ -994,7 +994,7 @@ class _PregnancyWeightTrackerScreenState
               decoration: BoxDecoration(
                 color: context.appSurface,
                 borderRadius:
-                    BorderRadius.vertical(top: Radius.circular(24)),
+                    const BorderRadius.vertical(top: Radius.circular(24)),
               ),
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
               child: Form(
@@ -1021,12 +1021,12 @@ class _PregnancyWeightTrackerScreenState
                         Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF7B1FA2)
+                            color: const Color(0xFF633058)
                                 .withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: const Icon(Icons.monitor_weight_rounded,
-                              color: Color(0xFF7B1FA2), size: 22),
+                              color: Color(0xFF633058), size: 22),
                         ),
                         const SizedBox(width: 12),
                         Column(
@@ -1063,11 +1063,11 @@ class _PregnancyWeightTrackerScreenState
                       keyboardType:
                           const TextInputType.numberWithOptions(decimal: true),
                       autofocus: true,
-                      style: TextStyle(fontFamily: 'Poppins', 
+                      style: const TextStyle(fontFamily: 'Poppins', 
                           fontSize: 24, fontWeight: FontWeight.w700),
                       decoration: InputDecoration(
                         labelText: 'Weight (kg)',
-                        labelStyle: TextStyle(fontFamily: 'Poppins', fontSize: 13),
+                        labelStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 13),
                         suffixText: 'kg',
                         suffixStyle: TextStyle(fontFamily: 'Poppins', 
                           fontSize: 16,
@@ -1086,7 +1086,7 @@ class _PregnancyWeightTrackerScreenState
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                           borderSide: const BorderSide(
-                              color: Color(0xFF7B1FA2), width: 2),
+                              color: Color(0xFF633058), width: 2),
                         ),
                         errorBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -1119,7 +1119,7 @@ class _PregnancyWeightTrackerScreenState
                       decoration: InputDecoration(
                         labelText: 'Notes (optional)',
                         hintText: 'e.g. After morning meal, fasting',
-                        labelStyle: TextStyle(fontFamily: 'Poppins', fontSize: 13),
+                        labelStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 13),
                         hintStyle: TextStyle(fontFamily: 'Poppins', 
                             fontSize: 12, color: context.appTextHint),
                         filled: true,
@@ -1135,7 +1135,7 @@ class _PregnancyWeightTrackerScreenState
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                           borderSide: const BorderSide(
-                              color: Color(0xFF7B1FA2), width: 2),
+                              color: Color(0xFF633058), width: 2),
                         ),
                         contentPadding: const EdgeInsets.symmetric(
                             horizontal: 16, vertical: 12),
@@ -1174,13 +1174,13 @@ class _PregnancyWeightTrackerScreenState
                                   }
                                 },
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF7B1FA2),
+                            backgroundColor: const Color(0xFF633058),
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 16),
                             elevation: 0,
                             shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(14)),
-                            textStyle: TextStyle(fontFamily: 'Poppins', 
+                            textStyle: const TextStyle(fontFamily: 'Poppins', 
                                 fontWeight: FontWeight.w700, fontSize: 15),
                           ),
                           child: loading
@@ -1218,9 +1218,9 @@ class _PregnancyWeightTrackerScreenState
                 Row(
                   children: List.generate(
                     3,
-                    (_) => Expanded(
+                    (_) => const Expanded(
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        padding: EdgeInsets.symmetric(horizontal: 4),
                         child: SkeletonBox(
                             width: double.infinity, height: 80, radius: 14),
                       ),
@@ -1260,7 +1260,7 @@ class _PregnancyWeightTrackerScreenState
           elevation: 0,
           leading: IconButton(
             icon: const Icon(Icons.arrow_back_ios_new_rounded,
-                color: Color(0xFF880E4F), size: 20),
+                color: Color(0xFF33172C), size: 20),
             onPressed: () => context.pop(),
           ),
           title: Text(
@@ -1281,14 +1281,14 @@ class _PregnancyWeightTrackerScreenState
                   width: 80,
                   height: 80,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF7B1FA2).withValues(alpha: 0.1),
+                    color: const Color(0xFF633058).withValues(alpha: 0.1),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(Icons.monitor_weight_rounded,
-                      color: Color(0xFF7B1FA2), size: 40),
+                      color: Color(0xFF633058), size: 40),
                 ),
                 const SizedBox(height: 20),
-                Text(
+                const Text(
                   'No Pregnancy Profile',
                   style: TextStyle(fontFamily: 'Poppins', 
                     fontSize: 18,
@@ -1315,7 +1315,7 @@ class _PregnancyWeightTrackerScreenState
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12)),
                     textStyle:
-                        TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600),
+                        const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600),
                   ),
                   child: const Text('Go Back'),
                 ),

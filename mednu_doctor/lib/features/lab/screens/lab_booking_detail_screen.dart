@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/services/feedback_service.dart';
+import '../../../core/utils/validators.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../../../shared_core/shared_core.dart';
 import '../models/diagnostic_booking.dart';
@@ -121,13 +122,31 @@ class _LabBookingDetailScreenState extends ConsumerState<LabBookingDetailScreen>
     );
   }
 
+  static const _allowedReportExtensions = ['pdf', 'jpg', 'jpeg', 'png'];
+
   Future<void> _uploadReport(DiagnosticBooking booking) async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
-      allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
+      allowedExtensions: _allowedReportExtensions,
     );
-    final path = result?.files.single.path;
-    if (path == null) return;
+    final picked = result?.files.single;
+    final path = picked?.path;
+    if (path == null || picked == null) return;
+
+    // FilePicker's allowedExtensions is a filter hint to the OS picker, not
+    // a hard guarantee (some platforms/pickers let users override it) — so
+    // re-validate type and size before it ever reaches the upload call.
+    final extension = picked.extension ?? '';
+    final typeError = Validators.fileType(extension, _allowedReportExtensions);
+    if (typeError != null) {
+      if (mounted) FeedbackService.showError(context, typeError);
+      return;
+    }
+    final sizeError = Validators.fileSize(await File(path).length());
+    if (sizeError != null) {
+      if (mounted) FeedbackService.showError(context, sizeError);
+      return;
+    }
 
     final uid = LabProfileService.currentUid;
     if (uid == null) return;

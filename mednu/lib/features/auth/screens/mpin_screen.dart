@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -81,97 +82,36 @@ class _MPINScreenState extends ConsumerState<MPINScreen>
 
   Future<void> _verify() async {
     setState(() => _isLoading = true);
-    final phone = widget.phone;
+    final ok = await ref.read(authProvider.notifier).verifyMpin(_entered);
+    if (!mounted) return;
 
-    // ── Case 1: Firebase Auth already active (same-device unlock) ────────────
-    if (ref.read(authProvider).user != null) {
-      final ok = await ref.read(authProvider.notifier).verifyMpin(_entered);
-      if (!mounted) return;
-      if (ok) { HapticFeedback.mediumImpact(); context.go(AppRoutes.home); }
-      else     { _onWrongMpin(authState: ref.read(authProvider)); }
-      return;
-    }
-
-    // ── Case 2: No Firebase session — Option A path ───────────────────────────
-    // Same device: verify locally first (instant, no network)
-    final sameDevice = await ref.read(authProvider.notifier).hasLocalMpin(phone);
-    if (sameDevice) {
-      final localOk =
-          await ref.read(authProvider.notifier).verifyMpinLocal(_entered, phone);
-      if (!mounted) return;
-      if (!localOk) {
-        _onWrongMpin(localMessage: 'Incorrect MPIN.');
-        return;
-      }
-      // Local match — sign in silently (token may still be valid)
-      final signedIn =
-          await ref.read(authProvider.notifier).signInSilentlyIfPossible();
-      if (!mounted) return;
-      if (signedIn) {
-        HapticFeedback.mediumImpact();
-        context.go(AppRoutes.home);
-        return;
-      }
-      // Token expired — fall through to cloud function sign-in below
-    }
-
-    // New device OR expired local token: verify via cloud function (no OTP needed)
-    try {
-      await ref
-          .read(authProvider.notifier)
-          .verifyMpinAndSignIn(_entered, phone);
-      if (!mounted) return;
+    if (ok) {
       HapticFeedback.mediumImpact();
       context.go(AppRoutes.home);
-    } catch (e) {
-      if (!mounted) return;
-      final msg = e.toString().replaceFirst('Exception: ', '');
-      _onWrongMpin(localMessage: msg);
+    } else {
+      HapticFeedback.heavyImpact();
+      _shakeCtrl.forward(from: 0);
+      final authState = ref.read(authProvider);
+      setState(() {
+        _entered = '';
+        _isLoading = false;
+        _errorMsg = authState.error;
+        _isLocked = authState.lockedUntil != null &&
+            DateTime.now().isBefore(authState.lockedUntil!);
+      });
     }
   }
 
-  void _onWrongMpin({AuthState? authState, String? localMessage}) {
-    HapticFeedback.heavyImpact();
-    _shakeCtrl.forward(from: 0);
-    setState(() {
-      _entered = '';
-      _isLoading = false;
-      _errorMsg = localMessage ?? authState?.error;
-      _isLocked = authState?.lockedUntil != null &&
-          DateTime.now().isBefore(authState!.lockedUntil!);
-    });
-  }
-
-  Future<void> _forgotMpin() async {
+  void _forgotMpin() {
+    // Re-send OTP to reset MPIN — route to OTP screen in reset mode
     final phone = widget.phone.isNotEmpty
         ? widget.phone
         : ref.read(authProvider).user?.phoneNumber ?? '';
-    if (phone.isEmpty) return;
-
-    setState(() => _isLoading = true);
-    try {
-      await ref.read(authProvider.notifier).sendOtp(phone);
-      if (!mounted) return;
-      context.push(AppRoutes.otp, extra: {
-        'phone': phone,
-        'isExistingUser': true,
-        'mode': 'resetMpin',
-      });
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(
-          e.toString().replaceFirst('Exception: ', ''),
-          style: const TextStyle(color: Colors.white, fontFamily: 'Poppins'),
-        ),
-        backgroundColor: const Color(0xFFB00020),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-      ));
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
+    context.push(AppRoutes.otp, extra: {
+      'phone': phone,
+      'isExistingUser': true,
+      'mode': 'resetMpin',
+    });
   }
 
   @override
@@ -185,9 +125,9 @@ class _MPINScreenState extends ConsumerState<MPINScreen>
       body: Stack(
         children: [
           // ── Gradient background ──────────────────────────────────────────
-          const Positioned.fill(
+          Positioned.fill(
             child: DecoratedBox(
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
@@ -198,188 +138,163 @@ class _MPINScreenState extends ConsumerState<MPINScreen>
           ),
 
           SafeArea(
-            child: SingleChildScrollView(
-              physics: const ClampingScrollPhysics(),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  minHeight: size.height -
-                      MediaQuery.of(context).padding.top -
-                      MediaQuery.of(context).padding.bottom,
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    // ── Top section ────────────────────────────────────────
-                    Column(
-                      children: [
-                        // Top bar
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-                          child: Row(
-                            children: [
-                              if (widget.mode == 'login')
-                                GestureDetector(
-                                  onTap: () => context.canPop()
-                                      ? context.pop()
-                                      : context.go(AppRoutes.login),
-                                  child: Container(
-                                    padding: const EdgeInsets.all(8),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white.withValues(alpha: 0.1),
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    child: const Icon(
-                                        Icons.arrow_back_ios_new_rounded,
-                                        color: Colors.white,
-                                        size: 18),
-                                  ),
-                                ),
-                              const Spacer(),
-                              GestureDetector(
-                                onTap: () async {
-                                  final router = GoRouter.of(context);
-                                  await ref.read(authProvider.notifier).signOut();
-                                  if (!mounted) return;
-                                  router.go(AppRoutes.login);
-                                },
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 14, vertical: 8),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withValues(alpha: 0.1),
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: const Text('Sign out',
-                                      style: TextStyle(
-                                        color: Colors.white70,
-                                        fontSize: 13,
-                                        fontFamily: 'Poppins',
-                                      )),
-                                ),
-                              ),
-                            ],
+            child: Column(
+              children: [
+                // ── Top bar ────────────────────────────────────────────────
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                  child: Row(
+                    children: [
+                      if (widget.mode == 'login')
+                        GestureDetector(
+                          onTap: () => context.pop(),
+                          child: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Icon(Icons.arrow_back_ios_new_rounded,
+                                color: Colors.white, size: 18),
                           ),
                         ),
-
-                        SizedBox(height: size.height * 0.06),
-
-                        // Greeting
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 32),
-                          child: Column(
-                            children: [
-                              const Text('Enter MPIN',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 26,
-                                    fontWeight: FontWeight.w700,
-                                    fontFamily: 'Poppins',
-                                    letterSpacing: -0.3,
-                                  )),
-                              const SizedBox(height: 6),
-                              Text(
-                                userName.isNotEmpty
-                                    ? 'Welcome back, ${userName.split(' ').first}'
-                                    : 'Quick and secure access',
-                                style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.55),
-                                  fontSize: 14,
-                                  fontFamily: 'Poppins',
-                                ),
-                              ),
-                            ],
+                      const Spacer(),
+                      GestureDetector(
+                        onTap: () async {
+                          await ref.read(authProvider.notifier).signOut();
+                          if (mounted) context.go(AppRoutes.login);
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(20),
                           ),
-                        ),
-
-                        SizedBox(height: size.height * 0.05),
-
-                        // PIN dots with shake animation
-                        AnimatedBuilder(
-                          animation: _shakeAnim,
-                          builder: (_, child) {
-                            final offset = _shakeCtrl.isAnimating
-                                ? 10 *
-                                    (0.5 -
-                                        (_shakeAnim.value -
-                                                _shakeAnim.value.floor())
-                                            .abs())
-                                : 0.0;
-                            return Transform.translate(
-                                offset: Offset(offset, 0), child: child);
-                          },
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: List.generate(_pinLength, (i) {
-                              final filled = i < _entered.length;
-                              return AnimatedContainer(
-                                duration: const Duration(milliseconds: 120),
-                                margin:
-                                    const EdgeInsets.symmetric(horizontal: 10),
-                                width: 18,
-                                height: 18,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: filled
-                                      ? const Color(0xFFF2A8D8)
-                                      : Colors.transparent,
-                                  border: Border.all(
-                                    color: filled
-                                        ? const Color(0xFFF2A8D8)
-                                        : Colors.white.withValues(alpha: 0.35),
-                                    width: 2,
-                                  ),
-                                ),
-                              );
-                            }),
-                          ),
-                        ),
-
-                        const SizedBox(height: 16),
-
-                        // Error message
-                        AnimatedOpacity(
-                          opacity: _errorMsg != null ? 1 : 0,
-                          duration: const Duration(milliseconds: 200),
-                          child: Padding(
-                            padding:
-                                const EdgeInsets.symmetric(horizontal: 32),
-                            child: Text(
-                              _errorMsg ?? '',
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                color: Color(0xFFFF6B6B),
+                          child: const Text('Sign out',
+                              style: TextStyle(
+                                color: Colors.white70,
                                 fontSize: 13,
                                 fontFamily: 'Poppins',
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    // ── Bottom section (keypad + forgot) ───────────────────
-                    Column(
-                      children: [
-                        MpinPad(onKey: _onKey, isLoading: _isLoading),
-                        const SizedBox(height: 8),
-                        TextButton(
-                          onPressed: _isLoading ? null : _forgotMpin,
-                          child: Text('Forgot MPIN?',
-                              style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.55),
-                                fontSize: 14,
-                                fontFamily: 'Poppins',
-                                decoration: TextDecoration.underline,
-                                decorationColor: Colors.white38,
                               )),
                         ),
-                        SizedBox(
-                            height: MediaQuery.of(context).padding.bottom + 8),
-                      ],
-                    ),
-                  ],
+                      ),
+                    ],
+                  ),
                 ),
-              ),
+
+                SizedBox(height: size.height * 0.06),
+
+                // ── Greeting ───────────────────────────────────────────────
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                  child: Column(
+                    children: [
+                      const Text('Enter MPIN',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 26,
+                            fontWeight: FontWeight.w700,
+                            fontFamily: 'Poppins',
+                            letterSpacing: -0.3,
+                          )),
+                      const SizedBox(height: 6),
+                      Text(
+                        userName.isNotEmpty
+                            ? 'Welcome back, ${userName.split(' ').first}'
+                            : 'Quick and secure access',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.55),
+                          fontSize: 14,
+                          fontFamily: 'Poppins',
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                SizedBox(height: size.height * 0.05),
+
+                // ── PIN dots with shake animation ──────────────────────────
+                AnimatedBuilder(
+                  animation: _shakeAnim,
+                  builder: (_, child) {
+                    final offset = _shakeCtrl.isAnimating
+                        ? 10 *
+                            (0.5 -
+                                (_shakeAnim.value - _shakeAnim.value.floor())
+                                    .abs())
+                        : 0.0;
+                    return Transform.translate(
+                        offset: Offset(offset, 0), child: child);
+                  },
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(_pinLength, (i) {
+                      final filled = i < _entered.length;
+                      return AnimatedContainer(
+                        duration: const Duration(milliseconds: 120),
+                        margin: const EdgeInsets.symmetric(horizontal: 10),
+                        width: 18, height: 18,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: filled
+                              ? const Color(0xFFF2A8D8)
+                              : Colors.transparent,
+                          border: Border.all(
+                            color: filled
+                                ? const Color(0xFFF2A8D8)
+                                : Colors.white.withValues(alpha: 0.35),
+                            width: 2,
+                          ),
+                        ),
+                      );
+                    }),
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                // ── Error / lock message ───────────────────────────────────
+                AnimatedOpacity(
+                  opacity: _errorMsg != null ? 1 : 0,
+                  duration: const Duration(milliseconds: 200),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 32),
+                    child: Text(
+                      _errorMsg ?? '',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Color(0xFFFF6B6B),
+                        fontSize: 13,
+                        fontFamily: 'Poppins',
+                      ),
+                    ),
+                  ),
+                ),
+
+                const Spacer(),
+
+                // ── Number pad ────────────────────────────────────────────
+                MpinPad(onKey: _onKey, isLoading: _isLoading),
+
+                const SizedBox(height: 20),
+
+                // ── Forgot MPIN ────────────────────────────────────────────
+                TextButton(
+                  onPressed: _isLoading ? null : _forgotMpin,
+                  child: Text('Forgot MPIN?',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.55),
+                        fontSize: 14,
+                        fontFamily: 'Poppins',
+                        decoration: TextDecoration.underline,
+                        decorationColor: Colors.white38,
+                      )),
+                ),
+
+                SizedBox(height: MediaQuery.of(context).padding.bottom + 16),
+              ],
             ),
           ),
 

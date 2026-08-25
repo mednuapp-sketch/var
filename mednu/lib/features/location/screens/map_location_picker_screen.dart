@@ -53,6 +53,9 @@ class _MapLocationPickerScreenState
   // Search
   final _searchCtrl = TextEditingController();
   final _searchFocus = FocusNode();
+  List<PlacesSuggestion> _searchSuggestions = [];
+  Timer? _searchDebounce;
+  bool _suppressSearchListener = false;
   // State
   _Phase _phase = _Phase.checking;
   bool _geocoding = false;
@@ -83,6 +86,7 @@ class _MapLocationPickerScreenState
   void initState() {
     super.initState();
     _preflight();
+    _searchCtrl.addListener(_onSearchTextChanged);
   }
 
   @override
@@ -90,6 +94,8 @@ class _MapLocationPickerScreenState
     _debounceTimer?.cancel();
     _geocodeTimeoutTimer?.cancel();
     _mapLoadTimer?.cancel();
+    _searchDebounce?.cancel();
+    _searchCtrl.removeListener(_onSearchTextChanged);
     _searchCtrl.dispose();
     _searchFocus.dispose();
     _mapCtrl?.dispose();
@@ -162,7 +168,6 @@ class _MapLocationPickerScreenState
   // ── Map callbacks ─────────────────────────────────────────────────────────
 
   void _onMapCreated(GoogleMapController ctrl) {
-    debugPrint('MAP_DEBUG: onMapCreated');
     _mapLoadTimer?.cancel();
     _mapCtrl = ctrl;
     setState(() => _mapReady = true);
@@ -185,27 +190,62 @@ class _MapLocationPickerScreenState
     }
   }
 
-  void _onCameraMoveStarted() {
-    debugPrint('MAP_DEBUG: onCameraMoveStarted');
-    _userMovedMap = true;
-  }
+  void _onCameraMoveStarted() => _userMovedMap = true;
 
   void _onCameraMove(CameraPosition pos) {
-    debugPrint('MAP_DEBUG: onCameraMove ${pos.target}');
     _center = pos.target;
     _geocodingFailed = false;
     if (!_geocoding) setState(() => _geocoding = true);
   }
 
-  void _onCameraIdle() {
-    debugPrint('MAP_DEBUG: onCameraIdle');
-    _scheduleGeocode();
-  }
+  void _onCameraIdle() => _scheduleGeocode();
 
   void _scheduleGeocode() {
     _debounceTimer?.cancel();
     _debounceTimer =
         Timer(const Duration(milliseconds: 600), _reverseGeocode);
+  }
+
+  // ── Address search ───────────────────────────────────────────────────────
+
+  void _onSearchTextChanged() {
+    if (_suppressSearchListener) return;
+    final q = _searchCtrl.text.trim();
+    _searchDebounce?.cancel();
+    if (q.length < 2) {
+      setState(() => _searchSuggestions = []);
+      return;
+    }
+    setState(() {}); // reflect the clear button as the user types
+    _searchDebounce =
+        Timer(const Duration(milliseconds: 350), () => _runSearch(q));
+  }
+
+  Future<void> _runSearch(String q) async {
+    if (!mounted) return;
+    final results = await placesService.autocomplete(
+      q,
+      lat: _center?.latitude,
+      lng: _center?.longitude,
+    );
+    if (!mounted || _searchCtrl.text.trim() != q) return;
+    setState(() => _searchSuggestions = results);
+  }
+
+  Future<void> _selectSuggestion(PlacesSuggestion s) async {
+    _searchFocus.unfocus();
+    _searchDebounce?.cancel();
+    _suppressSearchListener = true;
+    setState(() {
+      _searchSuggestions = [];
+      _searchCtrl.text = s.fullText;
+    });
+    _suppressSearchListener = false;
+    if (_mapCtrl == null) return;
+    final details = await placesService.details(s.placeId);
+    if (!mounted || details == null) return;
+    _userMovedMap = true;
+    _animateTo(LatLng(details.lat, details.lng));
   }
 
   // ── GPS ───────────────────────────────────────────────────────────────────
@@ -425,10 +465,6 @@ class _MapLocationPickerScreenState
   }
 
   Widget _buildMapStack(bool isDark) {
-    debugPrint(
-        'MAP_DEBUG: buildMapStack MediaQuery.size=${MediaQuery.sizeOf(context)} '
-        'viewInsets=${MediaQuery.viewInsetsOf(context)} '
-        'padding=${MediaQuery.paddingOf(context)}');
     final String addressText;
     if (_geocoding) {
       addressText = 'Finding address...';
@@ -438,14 +474,8 @@ class _MapLocationPickerScreenState
       addressText = _picked?.short ?? 'Move map to set location';
     }
 
-    return LayoutBuilder(builder: (context, constraints) {
-      debugPrint('MAP_DEBUG: Stack constraints=$constraints');
-      return _buildInnerStack(isDark, addressText);
-    });
-  }
-
-  Widget _buildInnerStack(bool isDark, String addressText) {
     return Stack(
+      fit: StackFit.expand,
       children: [
         // ── Google Map ─────────────────────────────────────────────────────
         Positioned.fill(
@@ -464,7 +494,7 @@ class _MapLocationPickerScreenState
             zoomControlsEnabled: false,
             compassEnabled: false,
             mapToolbarEnabled: false,
-            padding: EdgeInsets.only(bottom: _sheetHeight),
+            padding: const EdgeInsets.only(bottom: _sheetHeight),
           ),
         ),
 
@@ -478,30 +508,51 @@ class _MapLocationPickerScreenState
             child: _CentrePin(geocoding: _geocoding),
           ),
 
-        // ── Search bar (top, floating over map) ────────────────────────────
-        SafeArea(
-          child: Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            child: Row(
-              children: [
-                _MapIconButton(
-                  icon: Icons.arrow_back_ios_new_rounded,
-                  isDark: isDark,
-                  onTap: () => context.pop(),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _SearchBar(
-                    controller: _searchCtrl,
-                    focusNode: _searchFocus,
-                    isDark: isDark,
-                    addressText: addressText,
-                    isLoading: _geocoding,
-                    onSearchActive: (_) {},
+        // ── Search bar (top, floating over map) + suggestions ───────────────
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          child: SafeArea(
+            child: Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      _MapIconButton(
+                        icon: Icons.arrow_back_ios_new_rounded,
+                        isDark: isDark,
+                        onTap: () => context.pop(),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _SearchBar(
+                          controller: _searchCtrl,
+                          focusNode: _searchFocus,
+                          isDark: isDark,
+                          addressText: addressText,
+                          isLoading: _geocoding,
+                          onSearchActive: (_) {},
+                          onClear: () =>
+                              setState(() => _searchSuggestions = []),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-              ],
+                  if (_searchSuggestions.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8, left: 52),
+                      child: _SearchSuggestionsList(
+                        suggestions: _searchSuggestions,
+                        isDark: isDark,
+                        onTap: _selectSuggestion,
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
         ),
@@ -875,6 +926,7 @@ class _SearchBar extends StatelessWidget {
   final String addressText;
   final bool isLoading;
   final ValueChanged<bool> onSearchActive;
+  final VoidCallback onClear;
 
   const _SearchBar({
     required this.controller,
@@ -883,6 +935,7 @@ class _SearchBar extends StatelessWidget {
     required this.addressText,
     required this.isLoading,
     required this.onSearchActive,
+    required this.onClear,
   });
 
   @override
@@ -922,10 +975,115 @@ class _SearchBar extends StatelessWidget {
             size: 20,
             color: isLoading ? AppColors.primary : Colors.grey.shade500,
           ),
+          suffixIcon: controller.text.isNotEmpty
+              ? IconButton(
+                  icon: Icon(Icons.close_rounded,
+                      size: 18,
+                      color: isDark ? Colors.white60 : Colors.grey.shade500),
+                  onPressed: () {
+                    controller.clear();
+                    onClear();
+                  },
+                )
+              : null,
           border: InputBorder.none,
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         ),
+      ),
+    );
+  }
+}
+
+// ── Search suggestions dropdown ────────────────────────────────────────────
+
+class _SearchSuggestionsList extends StatelessWidget {
+  final List<PlacesSuggestion> suggestions;
+  final bool isDark;
+  final ValueChanged<PlacesSuggestion> onTap;
+
+  const _SearchSuggestionsList({
+    required this.suggestions,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(maxHeight: 260),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF2C2C2C) : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.14),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: ListView.separated(
+        shrinkWrap: true,
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        itemCount: suggestions.length,
+        separatorBuilder: (_, __) => Divider(
+          height: 1,
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.08)
+              : Colors.grey.shade100,
+        ),
+        itemBuilder: (context, i) {
+          final s = suggestions[i];
+          return InkWell(
+            onTap: () => onTap(s),
+            child: Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              child: Row(
+                children: [
+                  Icon(Icons.location_on_outlined,
+                      size: 18,
+                      color: isDark ? Colors.white60 : Colors.grey.shade500),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          s.mainText.isNotEmpty ? s.mainText : s.fullText,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: isDark ? Colors.white : Colors.black87,
+                          ),
+                        ),
+                        if (s.secondaryText.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            s.secondaryText,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 11.5,
+                              color: isDark
+                                  ? Colors.white60
+                                  : Colors.grey.shade600,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }

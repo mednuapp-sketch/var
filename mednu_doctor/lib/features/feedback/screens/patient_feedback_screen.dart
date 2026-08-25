@@ -39,7 +39,7 @@ class _PatientFeedbackScreenState extends State<PatientFeedbackScreen>
         title: const Text(
           'Patient Feedback',
           style: TextStyle(
-            fontFamily: 'Poppins',
+            fontFamily: 'Inter',
             fontWeight: FontWeight.w700,
             color: Colors.white,
             fontSize: 18,
@@ -51,7 +51,7 @@ class _PatientFeedbackScreenState extends State<PatientFeedbackScreen>
         flexibleSpace: Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
-              colors: [Color(0xFF880E4F), Color(0xFFC2185B), Color(0xFF7B1FA2)],
+              colors: [AppColors.primaryDark, AppColors.primary, AppColors.secondary],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
@@ -64,9 +64,9 @@ class _PatientFeedbackScreenState extends State<PatientFeedbackScreen>
           indicatorColor: Colors.white,
           indicatorWeight: 3,
           labelStyle: const TextStyle(
-              fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 13),
+              fontFamily: 'Inter', fontWeight: FontWeight.w700, fontSize: 13),
           unselectedLabelStyle:
-              const TextStyle(fontFamily: 'Poppins', fontSize: 13),
+              const TextStyle(fontFamily: 'Inter', fontSize: 13),
           tabs: const [
             Tab(text: 'Reviews'),
             Tab(text: 'Follow-ups'),
@@ -338,7 +338,7 @@ class _FollowupsList extends StatelessWidget {
                     Text(
                       '${docs.length}',
                       style: const TextStyle(
-                        fontFamily: 'Poppins',
+                        fontFamily: 'Inter',
                         fontSize: 36,
                         fontWeight: FontWeight.w800,
                         color: Colors.white,
@@ -347,7 +347,7 @@ class _FollowupsList extends StatelessWidget {
                     const Text(
                       'Total Follow-ups',
                       style: TextStyle(
-                          fontFamily: 'Poppins',
+                          fontFamily: 'Inter',
                           fontSize: 13,
                           color: Colors.white70),
                     ),
@@ -362,7 +362,7 @@ class _FollowupsList extends StatelessWidget {
                       child: Text(
                         '$upcoming upcoming',
                         style: const TextStyle(
-                            fontFamily: 'Poppins',
+                            fontFamily: 'Inter',
                             fontSize: 11,
                             color: Colors.white,
                             fontWeight: FontWeight.w600),
@@ -411,7 +411,7 @@ class _RatingSummaryCard extends StatelessWidget {
             Text(
               avg > 0 ? avg.toStringAsFixed(1) : '—',
               style: const TextStyle(
-                  fontFamily: 'Poppins',
+                  fontFamily: 'Inter',
                   fontSize: 36,
                   fontWeight: FontWeight.w800,
                   color: Colors.white),
@@ -432,7 +432,7 @@ class _RatingSummaryCard extends StatelessWidget {
             Text(
               '$total $label',
               style: const TextStyle(
-                  fontFamily: 'Poppins', fontSize: 12, color: Colors.white70),
+                  fontFamily: 'Inter', fontSize: 12, color: Colors.white70),
             ),
           ]),
           const Spacer(),
@@ -446,7 +446,7 @@ class _FollowupCard extends StatelessWidget {
   const _FollowupCard({required this.data});
 
   static const _avatarColors = [
-    Color(0xFFC2185B), Color(0xFF7B1FA2),
+    AppColors.primary, AppColors.secondary,
     Color(0xFF1565C0), Color(0xFF2E7D32),
     Color(0xFFE65100), Color(0xFF00695C),
   ];
@@ -498,7 +498,7 @@ class _FollowupCard extends StatelessWidget {
             child: Text(
               patientName.isNotEmpty ? patientName[0].toUpperCase() : '?',
               style: const TextStyle(
-                  fontFamily: 'Poppins',
+                  fontFamily: 'Inter',
                   color: Colors.white,
                   fontWeight: FontWeight.w700),
             ),
@@ -524,7 +524,7 @@ class _FollowupCard extends StatelessWidget {
             child: Text(
               isOverdue ? 'Overdue' : 'Upcoming',
               style: TextStyle(
-                fontFamily: 'Poppins',
+                fontFamily: 'Inter',
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
                 color: isOverdue ? AppColors.error : AppColors.success,
@@ -624,7 +624,7 @@ class _InfoChip extends StatelessWidget {
             const SizedBox(width: 4),
             Text(label,
                 style: TextStyle(
-                    fontFamily: 'Poppins',
+                    fontFamily: 'Inter',
                     fontSize: 10,
                     color: color,
                     fontWeight: FontWeight.w600)),
@@ -633,7 +633,7 @@ class _InfoChip extends StatelessWidget {
           Text(
             value.isNotEmpty ? value : '—',
             style: const TextStyle(
-                fontFamily: 'Poppins',
+                fontFamily: 'Inter',
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
                 color: AppColors.textPrimary),
@@ -649,7 +649,7 @@ class _FeedbackCard extends StatelessWidget {
   const _FeedbackCard({required this.data});
 
   static const _avatarColors = [
-    Color(0xFFC2185B), Color(0xFF7B1FA2),
+    AppColors.primary, AppColors.secondary,
     Color(0xFF1565C0), Color(0xFF2E7D32),
     Color(0xFFE65100), Color(0xFF00695C),
   ];
@@ -714,7 +714,7 @@ class _FeedbackCard extends StatelessWidget {
             child: Text(
               patientName.isNotEmpty ? patientName[0].toUpperCase() : '?',
               style: const TextStyle(
-                  fontFamily: 'Poppins',
+                  fontFamily: 'Inter',
                   color: Colors.white,
                   fontWeight: FontWeight.w700),
             ),
@@ -744,7 +744,7 @@ class _FeedbackCard extends StatelessWidget {
                 Text(
                   '$rating / 5',
                   style: const TextStyle(
-                    fontFamily: 'Poppins',
+                    fontFamily: 'Inter',
                     fontWeight: FontWeight.w700,
                     fontSize: 13,
                     color: Color(0xFFFFA000),
@@ -772,7 +772,7 @@ class _FeedbackCard extends StatelessWidget {
                   Text(
                     feeling,
                     style: TextStyle(
-                      fontFamily: 'Poppins',
+                      fontFamily: 'Inter',
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
                       color: _feelingColor(feeling),

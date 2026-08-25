@@ -39,8 +39,7 @@ class CheckoutDetailsSheet extends ConsumerStatefulWidget {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => ProviderScope(
-        parent: ProviderScope.containerOf(ctx),
+      builder: (_) => ProviderScope(
         child: CheckoutDetailsSheet(themeColor: themeColor),
       ),
     );
@@ -223,7 +222,7 @@ class _CheckoutDetailsSheetState extends ConsumerState<CheckoutDetailsSheet> {
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 8, 12, 0),
               child: Row(children: [
-                Expanded(child: Text('Checkout Details', style: AppTextStyles.h4)),
+                const Expanded(child: Text('Checkout Details', style: AppTextStyles.h4)),
                 IconButton(icon: const Icon(Icons.close_rounded), onPressed: () => Navigator.pop(context)),
               ]),
             ),

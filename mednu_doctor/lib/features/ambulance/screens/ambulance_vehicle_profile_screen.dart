@@ -156,13 +156,13 @@ class AmbulanceVehicleProfileScreen extends ConsumerWidget {
                 const SizedBox(height: 12),
                 Text(
                   vehicle.plateNumber,
-                  style: const TextStyle(fontFamily: 'Poppins', fontSize: 26, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: 1.5),
+                  style: const TextStyle(fontFamily: 'Inter', fontSize: 26, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: 1.5),
                 ),
                 const SizedBox(height: 6),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                   decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(20)),
-                  child: Text(vehicle.vehicleType, style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: Colors.white, fontWeight: FontWeight.w600)),
+                  child: Text(vehicle.vehicleType, style: const TextStyle(fontFamily: 'Inter', fontSize: 12, color: Colors.white, fontWeight: FontWeight.w600)),
                 ),
                 const SizedBox(height: 18),
                 Row(
@@ -232,6 +232,7 @@ class AmbulanceVehicleProfileScreen extends ConsumerWidget {
               uid: AmbulanceProfileService.currentUid!,
               documents: vehicle.documents,
               documentVerification: vehicle.documentVerification,
+              locked: vehicle.status == 'active',
             ),
           ],
         ],
@@ -252,8 +253,8 @@ class _HeroStat extends StatelessWidget {
       children: [
         Icon(icon, color: Colors.amberAccent, size: 20),
         const SizedBox(height: 4),
-        Text(value, style: const TextStyle(fontFamily: 'Poppins', fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white)),
-        Text(label, style: const TextStyle(fontFamily: 'Poppins', fontSize: 11, color: Colors.white60)),
+        Text(value, style: const TextStyle(fontFamily: 'Inter', fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white)),
+        Text(label, style: const TextStyle(fontFamily: 'Inter', fontSize: 11, color: Colors.white60)),
       ],
     );
   }

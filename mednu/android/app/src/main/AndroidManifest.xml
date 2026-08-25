@@ -109,12 +109,6 @@
             android:name="flutterEmbedding"
             android:value="2" />
 
-        <!-- Disable Impeller (Vulkan): breaks touch dispatch to native
-             platform views (Google Maps) on some devices -->
-        <meta-data
-            android:name="io.flutter.embedding.android.EnableImpeller"
-            android:value="false" />
-
         <!-- Boot receiver for WorkManager alarm reschedule -->
         <receiver
             android:name="androidx.work.impl.utils.ForceStopRunnable$BroadcastReceiver"

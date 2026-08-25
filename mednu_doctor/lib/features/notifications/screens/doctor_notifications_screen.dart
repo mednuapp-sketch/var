@@ -33,7 +33,7 @@ class DoctorNotificationsScreen extends ConsumerWidget {
             leading: IconButton(
               icon: const Icon(Icons.arrow_back_ios_new_rounded,
                   color: Colors.white),
-              onPressed: () => context.pop(),
+              onPressed: () => context.safeBack(),
             ),
             actions: [
               notifAsync.when(
@@ -48,7 +48,7 @@ class DoctorNotificationsScreen extends ConsumerWidget {
                       'All read',
                       style: TextStyle(
                         color: Colors.white,
-                        fontFamily: 'Poppins',
+                        fontFamily: 'Inter',
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                       ),
@@ -179,7 +179,7 @@ class _NotifHeader extends StatelessWidget {
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
-          colors: [Color(0xFF880E4F), Color(0xFFC2185B), Color(0xFF7B1FA2)],
+          colors: [AppColors.primaryDark, AppColors.primary, AppColors.secondary],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -232,7 +232,7 @@ class _NotifHeader extends StatelessWidget {
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
-                                    fontFamily: 'Poppins',
+                                    fontFamily: 'Inter',
                                     fontSize: 18,
                                     fontWeight: FontWeight.w700,
                                     color: Colors.white,
@@ -250,7 +250,7 @@ class _NotifHeader extends StatelessWidget {
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(
-                                        fontFamily: 'Poppins',
+                                        fontFamily: 'Inter',
                                         fontSize: 12,
                                         color: Colors.white70,
                                       ),
@@ -279,7 +279,7 @@ class _NotifHeader extends StatelessWidget {
                                   child: Text(
                                     '$unread',
                                     style: const TextStyle(
-                                      fontFamily: 'Poppins',
+                                      fontFamily: 'Inter',
                                       fontSize: 14,
                                       fontWeight: FontWeight.w800,
                                       color: Colors.white,
@@ -387,12 +387,36 @@ class _NotifTile extends StatelessWidget {
             child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-              Text(
-                notif.title,
-                style: notif.isRead
-                    ? AppTextStyles.labelMedium
-                    : AppTextStyles.labelLarge,
-              ),
+              Row(children: [
+                Expanded(
+                  child: Text(
+                    notif.title,
+                    style: notif.isRead
+                        ? AppTextStyles.labelMedium
+                        : AppTextStyles.labelLarge,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (notif.type == NotifType.emergencyRequest) ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppColors.error,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Text('URGENT',
+                        style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 9,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                            letterSpacing: 0.4)),
+                  ),
+                ],
+              ]),
               const SizedBox(height: 3),
               Text(
                 notif.body,
@@ -411,21 +435,25 @@ class _NotifTile extends StatelessWidget {
                 ),
                 const Spacer(),
                 if (!notif.isRead)
-                  GestureDetector(
-                    onTap: () =>
-                        NotificationService.markRead(doctorUid, notif.id),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        'Mark read',
-                        style: AppTextStyles.caption.copyWith(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.w700,
+                  Semantics(
+                    button: true,
+                    label: 'Mark notification as read',
+                    child: GestureDetector(
+                      onTap: () =>
+                          NotificationService.markRead(doctorUid, notif.id),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          'Mark read',
+                          style: AppTextStyles.caption.copyWith(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
                     ),
@@ -484,8 +512,9 @@ class _NotifTile extends StatelessWidget {
   _NotifMeta _meta(NotifType type) {
     switch (type) {
       case NotifType.consultationRequest:
-      case NotifType.emergencyRequest:
         return const _NotifMeta(Icons.video_call_rounded, AppColors.primary);
+      case NotifType.emergencyRequest:
+        return const _NotifMeta(Icons.emergency_rounded, AppColors.error);
       case NotifType.review:
         return _NotifMeta(Icons.star_rounded, Colors.amber.shade600);
       case NotifType.payment:

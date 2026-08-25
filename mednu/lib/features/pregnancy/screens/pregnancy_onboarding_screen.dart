@@ -570,7 +570,11 @@ class _PregnancyOnboardingScreenState
                 selected: _gynConditions,
                 color: AppColors.primary,
                 onToggle: (c, v) => setState(() {
-                  if (v) _gynConditions.add(c); else _gynConditions.remove(c);
+                  if (v) {
+                    _gynConditions.add(c);
+                  } else {
+                    _gynConditions.remove(c);
+                  }
                 }),
               ),
             ],
@@ -592,7 +596,11 @@ class _PregnancyOnboardingScreenState
                 selected: _medicalConditions,
                 color: AppColors.error,
                 onToggle: (c, v) => setState(() {
-                  if (v) _medicalConditions.add(c); else _medicalConditions.remove(c);
+                  if (v) {
+                    _medicalConditions.add(c);
+                  } else {
+                    _medicalConditions.remove(c);
+                  }
                 }),
               ),
               if (_medicalConditions.isNotEmpty || _gynConditions.isNotEmpty || _previousCSections >= 2) ...[

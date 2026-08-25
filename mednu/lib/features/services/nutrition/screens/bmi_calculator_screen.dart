@@ -311,7 +311,7 @@ class _GenderSelector extends StatelessWidget {
         icon: Icons.female_rounded,
         label: 'Female',
         isSelected: selected == 'female',
-        color: const Color(0xFFC2185B),
+        color: const Color(0xFF522546),
         onTap: () { HapticFeedback.selectionClick(); onSelect('female'); },
       )),
     ],
@@ -609,7 +609,7 @@ class _GaugePainter extends CustomPainter {
       ..strokeWidth = 14
       ..strokeCap = StrokeCap.round;
 
-    final segmentSweep = sweepAngle / 4;
+    const segmentSweep = sweepAngle / 4;
     for (int i = 0; i < 4; i++) {
       trackPaint.color = colors[i].withValues(alpha: 0.18);
       canvas.drawArc(
@@ -628,9 +628,13 @@ class _GaugePainter extends CustomPainter {
 
     // Compute current color
     Color gaugeColor = colors[0];
-    if (bmi >= 30) gaugeColor = colors[3];
-    else if (bmi >= 25) gaugeColor = colors[2];
-    else if (bmi >= 18.5) gaugeColor = colors[1];
+    if (bmi >= 30) {
+      gaugeColor = colors[3];
+    } else if (bmi >= 25) {
+      gaugeColor = colors[2];
+    } else if (bmi >= 18.5) {
+      gaugeColor = colors[1];
+    }
 
     trackPaint.color = gaugeColor;
     canvas.drawArc(
@@ -680,13 +684,13 @@ class _BmiScaleBar extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('BMI Scale Reference', style: AppTextStyles.h4),
+          const Text('BMI Scale Reference', style: AppTextStyles.h4),
           const SizedBox(height: 12),
           // Colored bar
           ClipRRect(
             borderRadius: BorderRadius.circular(6),
-            child: Row(
-              children: const [
+            child: const Row(
+              children: [
                 Expanded(child: SizedBox(height: 8, child: ColoredBox(color: Color(0xFF1565C0)))),
                 Expanded(child: SizedBox(height: 8, child: ColoredBox(color: Color(0xFF2E7D32)))),
                 Expanded(child: SizedBox(height: 8, child: ColoredBox(color: Color(0xFFF9A825)))),
@@ -759,9 +763,9 @@ class _BmiHistoryChart extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(children: [
-            const Icon(Icons.show_chart_rounded, color: AppColors.primary, size: 18),
-            const SizedBox(width: 8),
+          const Row(children: [
+            Icon(Icons.show_chart_rounded, color: AppColors.primary, size: 18),
+            SizedBox(width: 8),
             Text('BMI History', style: AppTextStyles.h4),
           ]),
           const SizedBox(height: 16),

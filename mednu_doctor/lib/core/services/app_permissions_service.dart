@@ -121,11 +121,11 @@ class _PermissionsSheetState extends State<_PermissionsSheet> {
                 borderRadius: BorderRadius.circular(16)),
             title: const Text('Open App Settings',
                 style: TextStyle(
-                    fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
+                    fontFamily: 'Inter', fontWeight: FontWeight.w700)),
             content: Text(
               'Some permissions are blocked. Please enable them in App Settings:\n\n'
               '${permanentlyDenied.map((p) => '• ${p.title}').join('\n')}',
-              style: const TextStyle(fontFamily: 'Poppins', fontSize: 13),
+              style: const TextStyle(fontFamily: 'Inter', fontSize: 13),
             ),
             actions: [
               TextButton(
@@ -193,14 +193,14 @@ class _PermissionsSheetState extends State<_PermissionsSheet> {
           const SizedBox(height: 12),
           Text(
             widget.isFirstTime ? 'App Permissions Required' : 'Some Permissions Missing',
-            style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w800, fontSize: 18),
+            style: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w800, fontSize: 18),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 4),
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 24),
             child: Text(
-              'MedNU Doctor needs the following permissions to work properly.',
+              'MedNU Service needs the following permissions to work properly.',
               textAlign: TextAlign.center,
               style: AppTextStyles.bodySmall,
             ),
@@ -274,7 +274,7 @@ class _PermissionsSheetState extends State<_PermissionsSheet> {
                     label: Text(
                       _requesting ? 'Requesting…' : 'Grant Permissions',
                       style: const TextStyle(
-                        fontFamily: 'Poppins', fontWeight: FontWeight.w700,
+                        fontFamily: 'Inter', fontWeight: FontWeight.w700,
                         fontSize: 15, color: Colors.white,
                       ),
                     ),
@@ -344,7 +344,7 @@ class _PermissionRow extends StatelessWidget {
         const SizedBox(width: 12),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(info.title, style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 13)),
+            Text(info.title, style: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w700, fontSize: 13)),
             Text(info.reason, style: AppTextStyles.caption.copyWith(height: 1.4), maxLines: 2, overflow: TextOverflow.ellipsis),
           ]),
         ),
@@ -355,7 +355,7 @@ class _PermissionRow extends StatelessWidget {
           child: Row(mainAxisSize: MainAxisSize.min, children: [
             Icon(badgeIcon, size: 12, color: badgeColor),
             const SizedBox(width: 4),
-            Text(badgeLabel, style: TextStyle(fontFamily: 'Poppins', fontSize: 11, fontWeight: FontWeight.w600, color: badgeColor)),
+            Text(badgeLabel, style: TextStyle(fontFamily: 'Inter', fontSize: 11, fontWeight: FontWeight.w600, color: badgeColor)),
           ]),
         ),
       ]),

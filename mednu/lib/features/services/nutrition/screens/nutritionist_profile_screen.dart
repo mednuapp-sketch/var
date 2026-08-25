@@ -62,13 +62,13 @@ class _LoadingScaffold extends StatelessWidget {
               ),
             ),
           ),
-          SliverToBoxAdapter(
+          const SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.all(16),
               child: AppShimmer(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
+                  children: [
                     SkeletonBox(width: double.infinity, height: 88, radius: 16),
                     SizedBox(height: 16),
                     SkeletonBox(width: double.infinity, height: 120, radius: 16),
@@ -785,7 +785,7 @@ class _ConsultationCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     if (nutritionist.isOnlineAvailable)
-                      _ModeRow(icon: Icons.videocam_rounded, label: 'Online'),
+                      const _ModeRow(icon: Icons.videocam_rounded, label: 'Online'),
                     if (nutritionist.isInPersonAvailable) ...[
                       const SizedBox(height: 6),
                       _ModeRow(

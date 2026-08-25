@@ -233,7 +233,7 @@ class _SubmitReviewScreenState extends State<SubmitReviewScreen>
           const SizedBox(height: 24),
 
           // Overall star rating
-          Text('Overall Rating', style: AppTextStyles.h4),
+          const Text('Overall Rating', style: AppTextStyles.h4),
           const SizedBox(height: 4),
           Text('How would you rate your overall experience?',
               style: AppTextStyles.bodySmall
@@ -263,7 +263,7 @@ class _SubmitReviewScreenState extends State<SubmitReviewScreen>
           const SizedBox(height: 28),
 
           // Category ratings
-          Text('Rate by Category', style: AppTextStyles.h4),
+          const Text('Rate by Category', style: AppTextStyles.h4),
           const SizedBox(height: 4),
           Text('Optional — helps doctors improve specific areas',
               style: AppTextStyles.bodySmall
@@ -316,7 +316,7 @@ class _SubmitReviewScreenState extends State<SubmitReviewScreen>
           const SizedBox(height: 24),
 
           // Written review
-          Text('Your Review', style: AppTextStyles.h4),
+          const Text('Your Review', style: AppTextStyles.h4),
           const SizedBox(height: 4),
           Text('Share what you experienced (optional)',
               style: AppTextStyles.bodySmall

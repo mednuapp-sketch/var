@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../constants/app_colors.dart';
+import '../constants/app_spacing.dart';
+
+const String _kInterFont = 'Inter';
 
 class _SmoothPageTransitionsBuilder extends PageTransitionsBuilder {
   const _SmoothPageTransitionsBuilder();
@@ -62,7 +65,7 @@ class AppTheme {
         onSurface: AppColors.textPrimary,
       ),
       scaffoldBackgroundColor: AppColors.background,
-      fontFamily: 'Poppins',
+      fontFamily: _kInterFont,
 
       // ── AppBar ──────────────────────────────────────────
       appBarTheme: const AppBarTheme(
@@ -78,7 +81,7 @@ class AppTheme {
           systemNavigationBarIconBrightness: Brightness.dark,
         ),
         titleTextStyle: TextStyle(
-          fontFamily: 'Poppins',
+          fontFamily: _kInterFont,
           fontSize: 18,
           fontWeight: FontWeight.w700,
           color: AppColors.textPrimary,
@@ -96,12 +99,13 @@ class AppTheme {
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
+          disabledBackgroundColor: AppColors.primary.withValues(alpha: 0.4),
           elevation: 0,
           shadowColor: Colors.transparent,
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
           textStyle: const TextStyle(
-            fontFamily: 'Poppins',
+            fontFamily: _kInterFont,
             fontSize: 15,
             fontWeight: FontWeight.w700,
             letterSpacing: 0.2,
@@ -116,9 +120,9 @@ class AppTheme {
           foregroundColor: AppColors.primary,
           side: const BorderSide(color: AppColors.primary, width: 1.5),
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
           textStyle: const TextStyle(
-            fontFamily: 'Poppins',
+            fontFamily: _kInterFont,
             fontSize: 15,
             fontWeight: FontWeight.w600,
           ),
@@ -131,7 +135,7 @@ class AppTheme {
         style: TextButton.styleFrom(
           foregroundColor: AppColors.primary,
           textStyle: const TextStyle(
-            fontFamily: 'Poppins',
+            fontFamily: _kInterFont,
             fontSize: 14,
             fontWeight: FontWeight.w600,
           ),
@@ -144,32 +148,32 @@ class AppTheme {
         fillColor: AppColors.background,
         contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(AppRadius.md),
           borderSide: const BorderSide(color: AppColors.border),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(AppRadius.md),
           borderSide: const BorderSide(color: AppColors.border),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(AppRadius.md),
           borderSide: const BorderSide(color: AppColors.primary, width: 1.8),
         ),
         errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(AppRadius.md),
           borderSide: const BorderSide(color: AppColors.error),
         ),
         focusedErrorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(AppRadius.md),
           borderSide: const BorderSide(color: AppColors.error, width: 1.8),
         ),
         hintStyle: const TextStyle(
-          fontFamily: 'Poppins',
+          fontFamily: _kInterFont,
           color: AppColors.textHint,
           fontSize: 14,
         ),
         labelStyle: const TextStyle(
-          fontFamily: 'Poppins',
+          fontFamily: _kInterFont,
           color: AppColors.textSecondary,
           fontSize: 14,
         ),
@@ -182,7 +186,7 @@ class AppTheme {
         color: Colors.white,
         elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(AppRadius.lg),
           side: const BorderSide(color: AppColors.divider),
         ),
         margin: EdgeInsets.zero,
@@ -195,12 +199,12 @@ class AppTheme {
         selectedItemColor: AppColors.primary,
         unselectedItemColor: AppColors.textHint,
         selectedLabelStyle: TextStyle(
-          fontFamily: 'Poppins',
+          fontFamily: _kInterFont,
           fontSize: 11,
           fontWeight: FontWeight.w700,
         ),
         unselectedLabelStyle: TextStyle(
-          fontFamily: 'Poppins',
+          fontFamily: _kInterFont,
           fontSize: 11,
           fontWeight: FontWeight.w500,
         ),
@@ -214,12 +218,12 @@ class AppTheme {
         selectedColor: AppColors.primary.withValues(alpha:0.15),
         disabledColor: AppColors.background,
         labelStyle: const TextStyle(
-          fontFamily: 'Poppins',
+          fontFamily: _kInterFont,
           fontSize: 12,
           color: AppColors.textPrimary,
           fontWeight: FontWeight.w500,
         ),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.pill)),
         side: const BorderSide(color: AppColors.border),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         showCheckmark: false,
@@ -238,11 +242,11 @@ class AppTheme {
       snackBarTheme: SnackBarThemeData(
         backgroundColor: AppColors.textPrimary,
         contentTextStyle: const TextStyle(
-          fontFamily: 'Poppins',
+          fontFamily: _kInterFont,
           fontSize: 13,
           color: Colors.white,
         ),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
         behavior: SnackBarBehavior.floating,
         elevation: 8,
       ),
@@ -250,16 +254,16 @@ class AppTheme {
       // ── Dialog ──────────────────────────────────────────
       dialogTheme: DialogThemeData(
         backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.xl)),
         elevation: 8,
         titleTextStyle: const TextStyle(
-          fontFamily: 'Poppins',
+          fontFamily: _kInterFont,
           fontSize: 17,
           fontWeight: FontWeight.w700,
           color: AppColors.textPrimary,
         ),
         contentTextStyle: const TextStyle(
-          fontFamily: 'Poppins',
+          fontFamily: _kInterFont,
           fontSize: 13,
           color: AppColors.textSecondary,
           height: 1.5,
@@ -267,11 +271,11 @@ class AppTheme {
       ),
 
       // ── BottomSheet ─────────────────────────────────────
-      bottomSheetTheme: const BottomSheetThemeData(
+      bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: Colors.white,
         modalBackgroundColor: Colors.white,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xxl)),
         ),
         elevation: 8,
         modalElevation: 8,
@@ -311,12 +315,12 @@ class AppTheme {
         labelColor: AppColors.primary,
         unselectedLabelColor: AppColors.textSecondary,
         labelStyle: const TextStyle(
-          fontFamily: 'Poppins',
+          fontFamily: _kInterFont,
           fontSize: 13,
           fontWeight: FontWeight.w700,
         ),
         unselectedLabelStyle: const TextStyle(
-          fontFamily: 'Poppins',
+          fontFamily: _kInterFont,
           fontSize: 13,
           fontWeight: FontWeight.w500,
         ),
@@ -339,16 +343,16 @@ class AppTheme {
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         elevation: 4,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.xl)),
       ),
 
       // ── PopupMenu ───────────────────────────────────────
       popupMenuTheme: PopupMenuThemeData(
         color: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.lg)),
         elevation: 8,
         textStyle: const TextStyle(
-          fontFamily: 'Poppins',
+          fontFamily: _kInterFont,
           color: AppColors.textPrimary,
           fontSize: 13,
         ),
@@ -356,21 +360,21 @@ class AppTheme {
 
       // ── Text ────────────────────────────────────────────
       textTheme: const TextTheme(
-        displayLarge: TextStyle(fontFamily: 'Poppins', color: AppColors.textPrimary),
-        displayMedium: TextStyle(fontFamily: 'Poppins', color: AppColors.textPrimary),
-        displaySmall: TextStyle(fontFamily: 'Poppins', color: AppColors.textPrimary),
-        headlineLarge: TextStyle(fontFamily: 'Poppins', color: AppColors.textPrimary),
-        headlineMedium: TextStyle(fontFamily: 'Poppins', color: AppColors.textPrimary),
-        headlineSmall: TextStyle(fontFamily: 'Poppins', color: AppColors.textPrimary),
-        titleLarge: TextStyle(fontFamily: 'Poppins', color: AppColors.textPrimary),
-        titleMedium: TextStyle(fontFamily: 'Poppins', color: AppColors.textPrimary),
-        titleSmall: TextStyle(fontFamily: 'Poppins', color: AppColors.textPrimary),
-        bodyLarge: TextStyle(fontFamily: 'Poppins', color: AppColors.textPrimary),
-        bodyMedium: TextStyle(fontFamily: 'Poppins', color: AppColors.textSecondary),
-        bodySmall: TextStyle(fontFamily: 'Poppins', color: AppColors.textSecondary),
-        labelLarge: TextStyle(fontFamily: 'Poppins', color: AppColors.textPrimary, fontWeight: FontWeight.w600),
-        labelMedium: TextStyle(fontFamily: 'Poppins', color: AppColors.textSecondary),
-        labelSmall: TextStyle(fontFamily: 'Poppins', color: AppColors.textHint),
+        displayLarge: TextStyle(fontFamily: _kInterFont, color: AppColors.textPrimary),
+        displayMedium: TextStyle(fontFamily: _kInterFont, color: AppColors.textPrimary),
+        displaySmall: TextStyle(fontFamily: _kInterFont, color: AppColors.textPrimary),
+        headlineLarge: TextStyle(fontFamily: _kInterFont, color: AppColors.textPrimary),
+        headlineMedium: TextStyle(fontFamily: _kInterFont, color: AppColors.textPrimary),
+        headlineSmall: TextStyle(fontFamily: _kInterFont, color: AppColors.textPrimary),
+        titleLarge: TextStyle(fontFamily: _kInterFont, color: AppColors.textPrimary),
+        titleMedium: TextStyle(fontFamily: _kInterFont, color: AppColors.textPrimary),
+        titleSmall: TextStyle(fontFamily: _kInterFont, color: AppColors.textPrimary),
+        bodyLarge: TextStyle(fontFamily: _kInterFont, color: AppColors.textPrimary),
+        bodyMedium: TextStyle(fontFamily: _kInterFont, color: AppColors.textSecondary),
+        bodySmall: TextStyle(fontFamily: _kInterFont, color: AppColors.textSecondary),
+        labelLarge: TextStyle(fontFamily: _kInterFont, color: AppColors.textPrimary, fontWeight: FontWeight.w600),
+        labelMedium: TextStyle(fontFamily: _kInterFont, color: AppColors.textSecondary),
+        labelSmall: TextStyle(fontFamily: _kInterFont, color: AppColors.textHint),
       ),
     );
   }

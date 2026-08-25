@@ -269,7 +269,7 @@ class CallNotificationService {
     if (!_initialized) await init();
     await _plugin.show(
       _notifId++,
-      title.isNotEmpty ? title : 'MedNU Doctor',
+      title.isNotEmpty ? title : 'MedNU Service',
       body,
       const NotificationDetails(
         android: AndroidNotificationDetails(

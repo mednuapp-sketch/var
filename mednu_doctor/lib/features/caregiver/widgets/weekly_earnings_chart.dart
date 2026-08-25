@@ -46,7 +46,7 @@ class WeeklyEarningsChart extends StatelessWidget {
               tooltipBgColor: AppColors.primaryDark,
               getTooltipItem: (group, groupIndex, rod, rodIndex) => BarTooltipItem(
                 '₹${rod.toY.toInt()}',
-                const TextStyle(color: Colors.white, fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 12),
+                const TextStyle(color: Colors.white, fontFamily: 'Inter', fontWeight: FontWeight.w700, fontSize: 12),
               ),
             ),
           ),
@@ -59,8 +59,8 @@ class WeeklyEarningsChart extends StatelessWidget {
                     toY: values[i],
                     width: 18,
                     borderRadius: BorderRadius.circular(6),
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF00695C), Color(0xFF00897B)],
+                    gradient: LinearGradient(
+                      colors: [AppColors.primary, AppColors.primaryLight],
                       begin: Alignment.bottomCenter,
                       end: Alignment.topCenter,
                     ),

@@ -55,10 +55,10 @@ class DietPlanModel {
     const map = {
       'green': Color(0xFF2E7D32),
       'red': Color(0xFFB71C1C),
-      'pink': Color(0xFFC2185B),
-      'purple': Color(0xFF7B1FA2),
+      'pink': Color(0xFF522546),
+      'purple': Color(0xFF633058),
       'blue': Color(0xFF1565C0),
-      'teal': Color(0xFF00897B),
+      'teal': Color(0xFFF9943B),
       'orange': Color(0xFFE65100),
       'brown': Color(0xFF4E342E),
     };

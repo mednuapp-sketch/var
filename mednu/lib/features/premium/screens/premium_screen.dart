@@ -328,13 +328,13 @@ class _PremiumScreenState extends State<PremiumScreen>
                   const SizedBox(height: 32),
 
                   // ── Comparison table ───────────────────
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 20),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Free vs Premium', style: AppTextStyles.h3),
-                        const SizedBox(height: 16),
+                        Text('Free vs Premium', style: AppTextStyles.h3),
+                        SizedBox(height: 16),
                         _ComparisonTable(rows: _compareRows),
                       ],
                     ),
@@ -565,11 +565,11 @@ class _HeroSection extends StatelessWidget {
                   const SizedBox(height: 14),
 
                   // Benefit chips row
-                  Wrap(
+                  const Wrap(
                     spacing: 8,
                     runSpacing: 8,
                     alignment: WrapAlignment.center,
-                    children: const [
+                    children: [
                       _HeroChip(label: 'Unlimited Consults'),
                       _HeroChip(label: 'Family Coverage'),
                       _HeroChip(label: 'Free Delivery'),
@@ -663,7 +663,7 @@ class _PlanCard extends StatelessWidget {
           boxShadow: selected
               ? [
                   BoxShadow(
-                    color: const Color(0xFF7B1FA2).withValues(alpha: 0.25),
+                    color: const Color(0xFF633058).withValues(alpha: 0.25),
                     blurRadius: 16,
                     offset: const Offset(0, 6),
                   ),
@@ -1003,7 +1003,7 @@ class _ComparisonTable extends StatelessWidget {
                             fontFamily: 'Poppins',
                             fontSize: 11,
                             fontWeight: FontWeight.w700,
-                            color: Color(0xFF7B1FA2),
+                            color: Color(0xFF633058),
                           ),
                           textAlign: TextAlign.center,
                         ),
@@ -1078,7 +1078,7 @@ class _TestimonialCard extends StatelessWidget {
             children: [
               Container(
                 width: 36, height: 36,
-                decoration: BoxDecoration(
+                decoration: const BoxDecoration(
                   gradient: AppColors.primaryGradient,
                   shape: BoxShape.circle,
                 ),
@@ -1161,7 +1161,7 @@ class _SubscribeCTA extends StatelessWidget {
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF7B1FA2).withValues(alpha: 0.3),
+            color: const Color(0xFF633058).withValues(alpha: 0.3),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),

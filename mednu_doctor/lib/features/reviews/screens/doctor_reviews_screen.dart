@@ -231,7 +231,7 @@ class _RatingSummaryCard extends StatelessWidget {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF880E4F), Color(0xFFC2185B), Color(0xFF7B1FA2)],
+          colors: [AppColors.primaryDark, AppColors.primary, AppColors.secondary],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -253,7 +253,7 @@ class _RatingSummaryCard extends StatelessWidget {
             const Text(
               'Patient Satisfaction',
               style: TextStyle(
-                fontFamily: 'Poppins',
+                fontFamily: 'Inter',
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
                 color: Colors.white70,
@@ -273,7 +273,7 @@ class _RatingSummaryCard extends StatelessWidget {
                   Text(
                     '$total verified',
                     style: const TextStyle(
-                      fontFamily: 'Poppins',
+                      fontFamily: 'Inter',
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
                       color: Colors.white,
@@ -289,7 +289,7 @@ class _RatingSummaryCard extends StatelessWidget {
               Text(
                 total > 0 ? avg.toStringAsFixed(1) : '—',
                 style: const TextStyle(
-                  fontFamily: 'Poppins',
+                  fontFamily: 'Inter',
                   fontSize: 58,
                   fontWeight: FontWeight.w900,
                   color: Colors.white,
@@ -301,7 +301,7 @@ class _RatingSummaryCard extends StatelessWidget {
                 child: Text(
                   '/5',
                   style: TextStyle(
-                    fontFamily: 'Poppins',
+                    fontFamily: 'Inter',
                     fontSize: 18,
                     color: Colors.white.withValues(alpha: 0.5),
                   ),
@@ -320,7 +320,7 @@ class _RatingSummaryCard extends StatelessWidget {
                         Text(
                           '$star',
                           style: const TextStyle(
-                            fontFamily: 'Poppins',
+                            fontFamily: 'Inter',
                             fontSize: 10,
                             color: Colors.white60,
                           ),
@@ -352,7 +352,7 @@ class _RatingSummaryCard extends StatelessWidget {
                           child: Text(
                             '$count',
                             style: const TextStyle(
-                              fontFamily: 'Poppins',
+                              fontFamily: 'Inter',
                               fontSize: 10,
                               color: Colors.white70,
                             ),
@@ -383,7 +383,7 @@ class _RatingSummaryCard extends StatelessWidget {
                 Text(
                   _quality(avg),
                   style: const TextStyle(
-                    fontFamily: 'Poppins',
+                    fontFamily: 'Inter',
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
                     color: Colors.white,
@@ -432,7 +432,7 @@ class _StarFilterChip extends StatelessWidget {
         decoration: BoxDecoration(
           gradient: selected
               ? const LinearGradient(
-                  colors: [Color(0xFFC2185B), Color(0xFF7B1FA2)],
+                  colors: [AppColors.primary, AppColors.secondary],
                 )
               : null,
           color: selected ? null : Colors.white,
@@ -455,7 +455,7 @@ class _StarFilterChip extends StatelessWidget {
         child: Text(
           label,
           style: TextStyle(
-            fontFamily: 'Poppins',
+            fontFamily: 'Inter',
             fontSize: 12,
             fontWeight: FontWeight.w700,
             color: selected ? Colors.white : AppColors.textSecondary,
@@ -534,7 +534,7 @@ class _ReviewCard extends StatelessWidget {
                         Text(
                           'Verified',
                           style: TextStyle(
-                            fontFamily: 'Poppins',
+                            fontFamily: 'Inter',
                             fontSize: 9,
                             fontWeight: FontWeight.w700,
                             color: AppColors.success,
@@ -569,7 +569,7 @@ class _ReviewCard extends StatelessWidget {
               Text(
                 rating.toStringAsFixed(1),
                 style: TextStyle(
-                  fontFamily: 'Poppins',
+                  fontFamily: 'Inter',
                   fontSize: 12,
                   fontWeight: FontWeight.w800,
                   color: Colors.amber.shade700,
@@ -633,7 +633,7 @@ class _ReviewCard extends StatelessWidget {
               child: Text(
                 sentiment,
                 style: TextStyle(
-                  fontFamily: 'Poppins',
+                  fontFamily: 'Inter',
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
                   color: sentColor,
@@ -689,7 +689,7 @@ class _ReviewCard extends StatelessWidget {
               Text(
                 '${e.value.toStringAsFixed(0)}★',
                 style: TextStyle(
-                  fontFamily: 'Poppins',
+                  fontFamily: 'Inter',
                   fontSize: 10,
                   fontWeight: FontWeight.w700,
                   color: Colors.amber.shade700,
@@ -761,7 +761,7 @@ class _DismissReviewSheet extends StatelessWidget {
           const Text(
             'Hide This Review?',
             style: TextStyle(
-              fontFamily: 'Poppins',
+              fontFamily: 'Inter',
               fontSize: 17,
               fontWeight: FontWeight.w700,
               color: Color(0xFF1A1A2E),
@@ -772,7 +772,7 @@ class _DismissReviewSheet extends StatelessWidget {
             'This review will be hidden from your list. Your overall rating is not affected.',
             textAlign: TextAlign.center,
             style: TextStyle(
-              fontFamily: 'Poppins',
+              fontFamily: 'Inter',
               fontSize: 13,
               color: Colors.grey.shade600,
               height: 1.55,
@@ -792,7 +792,7 @@ class _DismissReviewSheet extends StatelessWidget {
                 child: const Text(
                   'Cancel',
                   style: TextStyle(
-                    fontFamily: 'Poppins',
+                    fontFamily: 'Inter',
                     fontWeight: FontWeight.w600,
                     color: AppColors.textSecondary,
                   ),
@@ -814,7 +814,7 @@ class _DismissReviewSheet extends StatelessWidget {
                 child: const Text(
                   'Hide Review',
                   style: TextStyle(
-                    fontFamily: 'Poppins',
+                    fontFamily: 'Inter',
                     fontWeight: FontWeight.w700,
                   ),
                 ),

@@ -7,6 +7,7 @@ import '../../core/services/feedback_service.dart';
 import '../models/app_role.dart';
 import '../navigation/role_menu.dart';
 import '../providers/role_providers.dart';
+import '../../features/auth/screens/partner_role_select_screen.dart';
 
 /// Opens the production-grade role switcher bottom sheet.
 ///
@@ -127,7 +128,48 @@ class _RoleSwitcherSheet extends ConsumerWidget {
                 ),
               ),
             ],
-            if (!engine.canSwitchRoles) ...[
+            if (AppRole.values.any((r) =>
+                r != AppRole.admin &&
+                r != AppRole.doctor &&
+                !engine.roles.contains(r))) ...[
+              const SizedBox(height: 10),
+              InkWell(
+                onTap: switching
+                    ? null
+                    : () {
+                        Navigator.of(context).pop();
+                        Navigator.of(context).push(MaterialPageRoute(
+                          builder: (_) => PartnerRoleSelectScreen(
+                            existingRoles: engine.roles.toSet(),
+                          ),
+                        ));
+                      },
+                borderRadius: BorderRadius.circular(14),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: AppColors.divider,
+                      style: BorderStyle.solid,
+                    ),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.add_circle_outline_rounded,
+                          color: AppColors.primary, size: 20),
+                      SizedBox(width: 10),
+                      Expanded(
+                        child: Text('Add another service',
+                            style: AppTextStyles.labelLarge),
+                      ),
+                      Icon(Icons.chevron_right_rounded,
+                          color: AppColors.textHint, size: 20),
+                    ],
+                  ),
+                ),
+              ),
+            ] else if (!engine.canSwitchRoles) ...[
               const SizedBox(height: 4),
               const Text(
                 'More partner services will unlock here as your account is verified for them.',

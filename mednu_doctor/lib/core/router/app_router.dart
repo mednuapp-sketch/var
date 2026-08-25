@@ -1,9 +1,12 @@
 import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../features/auth/services/doctor_auth_service.dart';
+import '../../shared_core/navigation/role_menu.dart';
 import '../../features/auth/screens/doctor_login_screen.dart';
 import '../../features/auth/screens/doctor_register_screen.dart';
 import '../../features/auth/screens/doctor_otp_screen.dart';
@@ -73,15 +76,119 @@ import '../../features/caregiver/screens/caregiver_settings_screen.dart';
 
 /// Bridges Firebase's auth stream into a [Listenable] so GoRouter's
 /// [refreshListenable] re-evaluates the redirect on every auth state change.
+///
+/// Also owns the account's cached, synchronously-readable gate state (role /
+/// profile existence / approval status), kept warm by a pair of realtime
+/// Firestore listeners for the whole signed-in session. `redirect` below
+/// reads these fields directly instead of running its own Firestore `.get()`
+/// on every navigation — that earlier approach worked but added a network
+/// round-trip to every route change, including every bottom-nav tap, which
+/// is what made in-app navigation feel like a full page reload each time.
 class _AuthChangeNotifier extends ChangeNotifier {
   _AuthChangeNotifier() {
-    _sub = FirebaseAuth.instance.authStateChanges().listen((_) => notifyListeners());
+    _authSub = FirebaseAuth.instance.authStateChanges().listen(_onAuthChanged);
   }
-  late final StreamSubscription<User?> _sub;
+  late final StreamSubscription<User?> _authSub;
+
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _doctorSub;
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _roleProfileSub;
+  String? _roleProfileUid;
+  String? _roleProfileCollection;
+  Completer<void> _readyCompleter = Completer<void>();
+
+  bool ready = false;
+  bool profileExists = false;
+  AppRole role = AppRole.doctor;
+  bool roleProfileExists = false;
+  String? status;
+
+  /// Resolves once the first read of this signed-in session lands. Every
+  /// `redirect` call after that is fully synchronous — only the very first
+  /// navigation of a session (or the one right after sign-in) ever actually
+  /// waits on this.
+  Future<void> get onReady => ready ? Future.value() : _readyCompleter.future;
+
+  void _markReady() {
+    ready = true;
+    if (!_readyCompleter.isCompleted) _readyCompleter.complete();
+  }
+
+  void _onAuthChanged(User? user) {
+    _doctorSub?.cancel();
+    _roleProfileSub?.cancel();
+    _doctorSub = null;
+    _roleProfileSub = null;
+    _roleProfileUid = null;
+    _roleProfileCollection = null;
+    if (_readyCompleter.isCompleted) _readyCompleter = Completer<void>();
+    ready = false;
+    profileExists = false;
+    role = AppRole.doctor;
+    roleProfileExists = false;
+    status = null;
+
+    if (user == null) {
+      _markReady();
+      notifyListeners();
+      return;
+    }
+
+    _doctorSub = FirebaseFirestore.instance
+        .collection('doctors')
+        .doc(user.uid)
+        .snapshots()
+        .listen((snap) {
+      profileExists = snap.exists;
+      role = AppRoleX.listFrom(snap.data()?['roles']).first;
+
+      if (role == AppRole.doctor) {
+        status = snap.data()?['status'] as String?;
+        roleProfileExists = profileExists;
+        _roleProfileSub?.cancel();
+        _roleProfileSub = null;
+        _roleProfileUid = null;
+        _markReady();
+        notifyListeners();
+        return;
+      }
+
+      if (!profileExists) {
+        status = null;
+        roleProfileExists = false;
+        _roleProfileSub?.cancel();
+        _roleProfileSub = null;
+        _roleProfileUid = null;
+        _markReady();
+        notifyListeners();
+        return;
+      }
+
+      final collection = '${role.firestoreValue}_profiles';
+      if (_roleProfileUid != user.uid || _roleProfileCollection != collection) {
+        _roleProfileUid = user.uid;
+        _roleProfileCollection = collection;
+        _roleProfileSub?.cancel();
+        _roleProfileSub = FirebaseFirestore.instance
+            .collection(collection)
+            .doc(user.uid)
+            .snapshots()
+            .listen((roleSnap) {
+          roleProfileExists = roleSnap.exists;
+          status = roleSnap.data()?['status'] as String?;
+          _markReady();
+          notifyListeners();
+        });
+      } else {
+        notifyListeners();
+      }
+    });
+  }
 
   @override
   void dispose() {
-    _sub.cancel();
+    _authSub.cancel();
+    _doctorSub?.cancel();
+    _roleProfileSub?.cancel();
     super.dispose();
   }
 }
@@ -144,7 +251,7 @@ class AppRoutes {
   static const pharmacyProfile                  = '/pharmacy/profile';
   static const pharmacySettings                 = '/pharmacy/settings';
 
-  // ── Ambulance partner module (UI-only, mock data) ────────────────────────
+  // ── Ambulance partner module (Firestore-backed) ──────────────────────────
   static const ambulanceDashboard         = '/ambulance/dashboard';
   static const ambulanceIncomingRequests  = '/ambulance/incoming-requests';
   static const ambulanceRequestDetail     = '/ambulance/request-detail';
@@ -155,7 +262,7 @@ class AppRoutes {
   static const ambulanceVehicleProfile    = '/ambulance/vehicle-profile';
   static const ambulanceSettings          = '/ambulance/settings';
 
-  // ── Caregiver / Care Assistant partner module (UI-only, mock data) ───────
+  // ── Caregiver / Care Assistant partner module (Firestore-backed) ─────────
   static const caregiverDashboard         = '/caregiver/dashboard';
   static const caregiverAssignedVisits    = '/caregiver/assigned-visits';
   static const caregiverVisitDetail       = '/caregiver/visit-detail';
@@ -184,12 +291,71 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     initialLocation: initialLocation,
     debugLogDiagnostics: false,
     refreshListenable: _authChangeNotifier,
-    redirect: (context, state) {
+    redirect: (context, state) async {
       final isLoggedIn = DoctorAuthService.currentUid != null;
-      final isPublic = _publicRoutes.contains(state.matchedLocation);
+      final loc = state.matchedLocation;
 
-      if (!isLoggedIn && !isPublic) return AppRoutes.login;
-      if (isLoggedIn && state.matchedLocation == AppRoutes.login) return AppRoutes.dashboard;
+      if (!isLoggedIn) {
+        return _publicRoutes.contains(loc) ? null : AppRoutes.login;
+      }
+
+      // Only the very first navigation of a session (or the one right after
+      // sign-in) ever actually waits here — every subsequent call reads
+      // already-warm cached fields below with no Firestore round-trip.
+      if (!_authChangeNotifier.ready) await _authChangeNotifier.onReady;
+
+      if (!_authChangeNotifier.profileExists) {
+        // Brand-new authenticated session with no base identity doc yet.
+        return loc == AppRoutes.partnerRoleSelect || loc == AppRoutes.partnerRoleRegister
+            ? null
+            : AppRoutes.partnerRoleSelect;
+      }
+
+      final role = _authChangeNotifier.role;
+
+      // Lab/Pharmacy have a dedicated recovery screen for the rare case
+      // where `doctors/{uid}` was written but `{role}_profiles/{uid}`
+      // wasn't (e.g. a registration that failed partway through) — send
+      // them there to finish the one missing step, same as their
+      // dashboard screens' own `_checkOnboarded` already does.
+      if (!_authChangeNotifier.roleProfileExists) {
+        if (role == AppRole.lab) {
+          return loc == AppRoutes.labOnboarding ? null : AppRoutes.labOnboarding;
+        }
+        if (role == AppRole.pharmacy) {
+          return loc == AppRoutes.pharmacyOnboarding ? null : AppRoutes.pharmacyOnboarding;
+        }
+        return loc == AppRoutes.verificationPending ? null : AppRoutes.verificationPending;
+      }
+
+      // Verification documents are only ever submitted once, up front,
+      // during registration — an account that hasn't been approved yet
+      // must only ever reach the pending-review screen (or the
+      // registration flow itself, for an account adding a second role)
+      // until admin flips status to 'active'. No other route in the app is
+      // reachable until then.
+      if (_authChangeNotifier.status != 'active') {
+        const alwaysReachableWhilePending = {
+          AppRoutes.verificationPending,
+          AppRoutes.partnerRoleSelect,
+          AppRoutes.partnerRoleRegister,
+          AppRoutes.labOnboarding,
+          AppRoutes.pharmacyOnboarding,
+        };
+        return alwaysReachableWhilePending.contains(loc) ? null : AppRoutes.verificationPending;
+      }
+
+      // Active — AppRoutes.dashboard is Doctor's own screen, so a non-Doctor
+      // role must land on its own role home instead (mirrors the same
+      // roles-lookup used post-OTP in doctor_login_screen.dart /
+      // doctor_otp_screen.dart).
+      if (loc == AppRoutes.login || loc == AppRoutes.dashboard) {
+        if (role != AppRole.doctor) {
+          final destination = buildMenuForRole(role);
+          if (destination.isNotEmpty) return destination.first.route;
+        }
+        if (loc == AppRoutes.login) return AppRoutes.dashboard;
+      }
       return null;
     },
     routes: [
@@ -201,6 +367,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final extra = s.extra as Map<String, dynamic>?;
           return DoctorOtpScreen(
             phone: extra?['phone'] as String? ?? '',
+            verificationId: extra?['verificationId'] as String? ?? '',
             isLogin: extra?['isLogin'] as bool? ?? true,
           );
         },
@@ -305,8 +472,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
       // ── Lab & Diagnostics partner module ─────────────────────────────────
       GoRoute(path: AppRoutes.labOnboarding,       builder: (c, s) => const LabOnboardingScreen()),
-      GoRoute(path: AppRoutes.labDashboard,        builder: (c, s) => const LabDashboardScreen()),
-      GoRoute(path: AppRoutes.labBookings,         builder: (c, s) => const LabBookingsScreen()),
+      // Bottom-nav-driven routes use pageBuilder + NoTransitionPage instead
+      // of builder — SharedAppShell's bottom nav switches between these via
+      // plain context.go(), and the default MaterialPage slide transition
+      // made every tab tap look like navigating to a brand-new screen
+      // rather than an instant tab switch (Doctor's own dashboard never had
+      // this problem since its tabs are an in-place IndexedStack, not
+      // separate routes).
+      GoRoute(path: AppRoutes.labDashboard,        pageBuilder: (c, s) => const NoTransitionPage(child: LabDashboardScreen())),
+      GoRoute(path: AppRoutes.labBookings,         pageBuilder: (c, s) => const NoTransitionPage(child: LabBookingsScreen())),
       GoRoute(
         path: AppRoutes.labBookingDetail,
         builder: (c, s) {
@@ -314,15 +488,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           return LabBookingDetailScreen(bookingId: extra?['bookingId'] as String? ?? '');
         },
       ),
-      GoRoute(path: AppRoutes.labSampleCollection, builder: (c, s) => const LabSampleCollectionScreen()),
-      GoRoute(path: AppRoutes.labReports,          builder: (c, s) => const LabReportsScreen()),
-      GoRoute(path: AppRoutes.labEarnings,         builder: (c, s) => const LabEarningsScreen()),
-      GoRoute(path: AppRoutes.labProfile,          builder: (c, s) => const LabProfileScreen()),
+      GoRoute(path: AppRoutes.labSampleCollection, pageBuilder: (c, s) => const NoTransitionPage(child: LabSampleCollectionScreen())),
+      GoRoute(path: AppRoutes.labReports,          pageBuilder: (c, s) => const NoTransitionPage(child: LabReportsScreen())),
+      GoRoute(path: AppRoutes.labEarnings,         pageBuilder: (c, s) => const NoTransitionPage(child: LabEarningsScreen())),
+      GoRoute(path: AppRoutes.labProfile,          pageBuilder: (c, s) => const NoTransitionPage(child: LabProfileScreen())),
 
       // ── Pharmacy & Medical Equipment partner module ──────────────────────
       GoRoute(path: AppRoutes.pharmacyOnboarding, builder: (c, s) => const PharmacyOnboardingScreen()),
-      GoRoute(path: AppRoutes.pharmacyDashboard,  builder: (c, s) => const PharmacyDashboardScreen()),
-      GoRoute(path: AppRoutes.pharmacyOrders,     builder: (c, s) => const PharmacyOrdersScreen()),
+      GoRoute(path: AppRoutes.pharmacyDashboard,  pageBuilder: (c, s) => const NoTransitionPage(child: PharmacyDashboardScreen())),
+      GoRoute(path: AppRoutes.pharmacyOrders,     pageBuilder: (c, s) => const NoTransitionPage(child: PharmacyOrdersScreen())),
       GoRoute(
         path: AppRoutes.pharmacyOrderDetail,
         builder: (c, s) {
@@ -332,17 +506,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoutes.pharmacyPrescriptionVerification,
-        builder: (c, s) => const PharmacyPrescriptionVerificationScreen(),
+        pageBuilder: (c, s) => const NoTransitionPage(child: PharmacyPrescriptionVerificationScreen()),
       ),
-      GoRoute(path: AppRoutes.pharmacyInventory,        builder: (c, s) => const PharmacyInventoryScreen()),
+      GoRoute(path: AppRoutes.pharmacyInventory,        pageBuilder: (c, s) => const NoTransitionPage(child: PharmacyInventoryScreen())),
       GoRoute(path: AppRoutes.pharmacyDeliveryTracking, builder: (c, s) => const PharmacyDeliveryTrackingScreen()),
-      GoRoute(path: AppRoutes.pharmacyEarnings,         builder: (c, s) => const PharmacyEarningsScreen()),
-      GoRoute(path: AppRoutes.pharmacyProfile,          builder: (c, s) => const PharmacyProfileScreen()),
+      GoRoute(path: AppRoutes.pharmacyEarnings,         pageBuilder: (c, s) => const NoTransitionPage(child: PharmacyEarningsScreen())),
+      GoRoute(path: AppRoutes.pharmacyProfile,          pageBuilder: (c, s) => const NoTransitionPage(child: PharmacyProfileScreen())),
       GoRoute(path: AppRoutes.pharmacySettings,         builder: (c, s) => const PharmacySettingsScreen()),
 
-      // ── Ambulance partner module (UI-only, mock data) ────────────────────
-      GoRoute(path: AppRoutes.ambulanceDashboard,        builder: (c, s) => const AmbulanceDashboardScreen()),
-      GoRoute(path: AppRoutes.ambulanceIncomingRequests, builder: (c, s) => const AmbulanceIncomingRequestsScreen()),
+      // ── Ambulance partner module (Firestore-backed) ──────────────────────
+      GoRoute(path: AppRoutes.ambulanceDashboard,        pageBuilder: (c, s) => const NoTransitionPage(child: AmbulanceDashboardScreen())),
+      GoRoute(path: AppRoutes.ambulanceIncomingRequests, pageBuilder: (c, s) => const NoTransitionPage(child: AmbulanceIncomingRequestsScreen())),
       GoRoute(
         path: AppRoutes.ambulanceRequestDetail,
         builder: (c, s) {
@@ -350,7 +524,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           return AmbulanceRequestDetailScreen(requestId: extra?['requestId'] as String? ?? '');
         },
       ),
-      GoRoute(path: AppRoutes.ambulanceLiveTracking, builder: (c, s) => const AmbulanceLiveTrackingScreen()),
+      GoRoute(path: AppRoutes.ambulanceLiveTracking, pageBuilder: (c, s) => const NoTransitionPage(child: AmbulanceLiveTrackingScreen())),
       GoRoute(
         path: AppRoutes.ambulanceNavigation,
         builder: (c, s) {
@@ -358,14 +532,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           return AmbulanceNavigationScreen(requestId: extra?['requestId'] as String? ?? '');
         },
       ),
-      GoRoute(path: AppRoutes.ambulanceTripHistory,    builder: (c, s) => const AmbulanceTripHistoryScreen()),
-      GoRoute(path: AppRoutes.ambulanceEarnings,       builder: (c, s) => const AmbulanceEarningsScreen()),
-      GoRoute(path: AppRoutes.ambulanceVehicleProfile, builder: (c, s) => const AmbulanceVehicleProfileScreen()),
+      GoRoute(path: AppRoutes.ambulanceTripHistory,    pageBuilder: (c, s) => const NoTransitionPage(child: AmbulanceTripHistoryScreen())),
+      GoRoute(path: AppRoutes.ambulanceEarnings,       pageBuilder: (c, s) => const NoTransitionPage(child: AmbulanceEarningsScreen())),
+      GoRoute(path: AppRoutes.ambulanceVehicleProfile, pageBuilder: (c, s) => const NoTransitionPage(child: AmbulanceVehicleProfileScreen())),
       GoRoute(path: AppRoutes.ambulanceSettings,       builder: (c, s) => const AmbulanceSettingsScreen()),
 
-      // ── Caregiver / Care Assistant partner module (UI-only, mock data) ───
-      GoRoute(path: AppRoutes.caregiverDashboard,      builder: (c, s) => const CaregiverDashboardScreen()),
-      GoRoute(path: AppRoutes.caregiverAssignedVisits, builder: (c, s) => const CaregiverAssignedVisitsScreen()),
+      // ── Caregiver / Care Assistant partner module (Firestore-backed) ─────
+      GoRoute(path: AppRoutes.caregiverDashboard,      pageBuilder: (c, s) => const NoTransitionPage(child: CaregiverDashboardScreen())),
+      GoRoute(path: AppRoutes.caregiverAssignedVisits, pageBuilder: (c, s) => const NoTransitionPage(child: CaregiverAssignedVisitsScreen())),
       GoRoute(
         path: AppRoutes.caregiverVisitDetail,
         builder: (c, s) {
@@ -401,9 +575,29 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           return CaregiverCompletionSummaryScreen(visitId: extra?['visitId'] as String? ?? '');
         },
       ),
-      GoRoute(path: AppRoutes.caregiverEarnings, builder: (c, s) => const CaregiverEarningsScreen()),
-      GoRoute(path: AppRoutes.caregiverProfile,  builder: (c, s) => const CaregiverProfileScreen()),
+      GoRoute(path: AppRoutes.caregiverEarnings, pageBuilder: (c, s) => const NoTransitionPage(child: CaregiverEarningsScreen())),
+      GoRoute(path: AppRoutes.caregiverProfile,  pageBuilder: (c, s) => const NoTransitionPage(child: CaregiverProfileScreen())),
       GoRoute(path: AppRoutes.caregiverSettings, builder: (c, s) => const CaregiverSettingsScreen()),
     ],
   );
 });
+
+/// Safe back navigation for an app-bar back button.
+///
+/// A screen's own back button calling `context.pop()` assumes something is
+/// actually on the stack to pop back to — but several entry points in this
+/// app (notably `SharedAppShell`'s notification bell and profile-edit
+/// actions) reach their target screen via `context.go(...)`, which replaces
+/// the stack rather than pushing onto it. `context.pop()` on a screen
+/// reached that way has nothing to pop and silently does nothing, making
+/// the back arrow look broken. This checks first and falls back to a
+/// sensible default route instead of failing silently.
+extension SafeBackNavigation on BuildContext {
+  void safeBack({String fallbackRoute = AppRoutes.dashboard}) {
+    if (canPop()) {
+      pop();
+    } else {
+      go(fallbackRoute);
+    }
+  }
+}

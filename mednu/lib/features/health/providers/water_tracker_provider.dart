@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -20,6 +21,8 @@ class WaterTrackerState {
   final int glassSizeMl;
   final bool remindersEnabled;
   final int reminderIntervalHours; // 1, 2, or 3
+  final int reminderStartHour;
+  final int reminderStartMinute;
   final bool isLoading;
 
   const WaterTrackerState({
@@ -28,6 +31,8 @@ class WaterTrackerState {
     this.glassSizeMl = 250,
     this.remindersEnabled = false,
     this.reminderIntervalHours = 2,
+    this.reminderStartHour = 8,
+    this.reminderStartMinute = 0,
     this.isLoading = false,
   });
 
@@ -44,6 +49,8 @@ class WaterTrackerState {
     int? glassSizeMl,
     bool? remindersEnabled,
     int? reminderIntervalHours,
+    int? reminderStartHour,
+    int? reminderStartMinute,
     bool? isLoading,
   }) =>
       WaterTrackerState(
@@ -52,6 +59,8 @@ class WaterTrackerState {
         glassSizeMl: glassSizeMl ?? this.glassSizeMl,
         remindersEnabled: remindersEnabled ?? this.remindersEnabled,
         reminderIntervalHours: reminderIntervalHours ?? this.reminderIntervalHours,
+        reminderStartHour: reminderStartHour ?? this.reminderStartHour,
+        reminderStartMinute: reminderStartMinute ?? this.reminderStartMinute,
         isLoading: isLoading ?? this.isLoading,
       );
 }
@@ -60,12 +69,18 @@ class WaterTrackerState {
 
 class WaterTrackerNotifier extends StateNotifier<WaterTrackerState> {
   WaterTrackerNotifier() : super(const WaterTrackerState()) {
-    _uid = FirebaseAuth.instance.currentUser?.uid;
-    if (_uid != null) _init();
+    // Listen to auth state instead of reading currentUser once — on a cold
+    // start Firebase Auth restores the session asynchronously, so reading
+    // currentUser in the constructor can race and leave _uid stuck at null,
+    // which made logs silently fail to load *and* fail to save.
+    _authSub = FirebaseAuth.instance.authStateChanges().listen(_onAuthChanged);
   }
 
   static final _db = FirebaseFirestore.instance;
   String? _uid;
+  StreamSubscription<User?>? _authSub;
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _settingsSub;
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _logsSub;
 
   static String get _today => DateFormat('yyyy-MM-dd').format(DateTime.now());
 
@@ -85,41 +100,41 @@ class WaterTrackerNotifier extends StateNotifier<WaterTrackerState> {
           .collection('water_logs')
           .doc(_today);
 
-  Future<void> _init() async {
-    state = state.copyWith(isLoading: true);
-    await Future.wait([_loadSettings(), _loadTodayLogs()]);
-    state = state.copyWith(isLoading: false);
-    // Reschedule on every app open — Android clears alarms after reboot.
-    if (state.remindersEnabled) {
-      await HealthNotificationService.scheduleWaterReminders(state.reminderIntervalHours);
+  void _onAuthChanged(User? user) {
+    final newUid = user?.uid;
+    if (newUid == _uid) return;
+    _uid = newUid;
+    _settingsSub?.cancel();
+    _logsSub?.cancel();
+    if (newUid == null) {
+      state = const WaterTrackerState();
+      return;
     }
+    _listen();
   }
 
-  // Re-fetches settings + today's logs without the isLoading flip, so
-  // pull-to-refresh doesn't flash a skeleton over already-visible data.
-  Future<void> refresh() => Future.wait([_loadSettings(), _loadTodayLogs()]);
+  // Live Firestore listeners (not one-shot reads) so logging a glass on one
+  // screen — or another device — is reflected everywhere immediately, and
+  // reopening this screen always shows current server state instead of a
+  // stale in-memory snapshot from before the app was backgrounded.
+  void _listen() {
+    state = state.copyWith(isLoading: true);
 
-  Future<void> _loadSettings() async {
-    if (_settingsRef == null) return;
-    try {
-      final snap = await _settingsRef!.get();
-      if (!snap.exists) return;
+    _settingsSub = _settingsRef!.snapshots().listen((snap) {
       final d = snap.data();
-      if (d == null) return;
-      state = state.copyWith(
-        goalGlasses: d['goalGlasses'] as int? ?? 8,
-        glassSizeMl: d['glassSizeMl'] as int? ?? 250,
-        remindersEnabled: d['remindersEnabled'] as bool? ?? false,
-        reminderIntervalHours: d['reminderIntervalHours'] as int? ?? 2,
-      );
-    } catch (_) {}
-  }
+      if (d != null) {
+        state = state.copyWith(
+          goalGlasses: d['goalGlasses'] as int? ?? 8,
+          glassSizeMl: d['glassSizeMl'] as int? ?? 250,
+          remindersEnabled: d['remindersEnabled'] as bool? ?? false,
+          reminderIntervalHours: d['reminderIntervalHours'] as int? ?? 2,
+          reminderStartHour: d['reminderStartHour'] as int? ?? 8,
+          reminderStartMinute: d['reminderStartMinute'] as int? ?? 0,
+        );
+      }
+    }, onError: (_) {});
 
-  Future<void> _loadTodayLogs() async {
-    if (_todayLogRef == null) return;
-    try {
-      final snap = await _todayLogRef!.get();
-      if (!snap.exists) return;
+    _logsSub = _todayLogRef!.snapshots().listen((snap) {
       final rawLogs = snap.data()?['logs'] as List? ?? [];
       final logs = rawLogs.whereType<Map>().map((e) {
         final m = Map<String, dynamic>.from(e);
@@ -128,8 +143,16 @@ class WaterTrackerNotifier extends StateNotifier<WaterTrackerState> {
           amountMl: m['amountMl'] as int? ?? 250,
         );
       }).toList();
-      state = state.copyWith(todayLogs: logs);
-    } catch (_) {}
+      state = state.copyWith(todayLogs: logs, isLoading: false);
+    }, onError: (_) => state = state.copyWith(isLoading: false));
+  }
+
+  @override
+  void dispose() {
+    _authSub?.cancel();
+    _settingsSub?.cancel();
+    _logsSub?.cancel();
+    super.dispose();
   }
 
   // ─── Public API ─────────────────────────────────────────────────────────
@@ -138,8 +161,9 @@ class WaterTrackerNotifier extends StateNotifier<WaterTrackerState> {
     if (_uid == null || state.goalReached) return;
     final ref = _todayLogRef;
     if (ref == null) return;
+    final previousLogs = state.todayLogs;
     final newLog = WaterLog(loggedAt: DateTime.now(), amountMl: state.glassSizeMl);
-    final updated = [...state.todayLogs, newLog];
+    final updated = [...previousLogs, newLog];
     state = state.copyWith(todayLogs: updated);
     try {
       await ref.set({
@@ -152,7 +176,11 @@ class WaterTrackerNotifier extends StateNotifier<WaterTrackerState> {
             .toList(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
-    } catch (_) {}
+    } catch (_) {
+      // Firestore write failed — roll back the optimistic update so the UI
+      // doesn't show a "saved" log that never actually persisted.
+      state = state.copyWith(todayLogs: previousLogs);
+    }
   }
 
   Future<void> setGlassSizeMl(int ml) async {
@@ -167,24 +195,19 @@ class WaterTrackerNotifier extends StateNotifier<WaterTrackerState> {
 
   Future<bool> setRemindersEnabled(bool enabled) async {
     if (enabled) {
-      // 1. Notification permission (Android 13+)
+      // Notification permission (Android 13+) — still required even though
+      // firing is server-driven now, since the OS needs it to display any
+      // notification at all, local or push.
       final notifGranted =
           await HealthNotificationService.requestNotificationPermission();
       if (!notifGranted) return false;
 
-      // 2. Exact alarm permission — best-effort request (opens settings on Android 12)
-      if (!await HealthNotificationService.hasExactAlarmPermission()) {
-        await HealthNotificationService.requestExactAlarmPermission();
-      }
-
       state = state.copyWith(remindersEnabled: true);
       await _saveSettings();
-      await HealthNotificationService.scheduleWaterReminders(state.reminderIntervalHours);
       return true;
     } else {
       state = state.copyWith(remindersEnabled: false);
       await _saveSettings();
-      await HealthNotificationService.cancelWaterReminders();
       return true;
     }
   }
@@ -192,9 +215,11 @@ class WaterTrackerNotifier extends StateNotifier<WaterTrackerState> {
   Future<void> setReminderInterval(int hours) async {
     state = state.copyWith(reminderIntervalHours: hours);
     await _saveSettings();
-    if (state.remindersEnabled) {
-      await HealthNotificationService.scheduleWaterReminders(hours);
-    }
+  }
+
+  Future<void> setReminderStartTime(int hour, int minute) async {
+    state = state.copyWith(reminderStartHour: hour, reminderStartMinute: minute);
+    await _saveSettings();
   }
 
   Future<void> _saveSettings() async {
@@ -205,6 +230,8 @@ class WaterTrackerNotifier extends StateNotifier<WaterTrackerState> {
         'glassSizeMl': state.glassSizeMl,
         'remindersEnabled': state.remindersEnabled,
         'reminderIntervalHours': state.reminderIntervalHours,
+        'reminderStartHour': state.reminderStartHour,
+        'reminderStartMinute': state.reminderStartMinute,
       }, SetOptions(merge: true));
     } catch (_) {}
   }

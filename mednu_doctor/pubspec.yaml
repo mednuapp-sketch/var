@@ -1,5 +1,5 @@
 name: mednu_doctor
-description: MedNU Doctor App - Healthcare Professional Platform
+description: MedNu Service App - Doctor, Lab, Pharmacy, Ambulance & Caregiver Partner Platform
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -68,6 +68,20 @@ dev_dependencies:
   flutter_lints: ^3.0.2
   riverpod_generator: ^2.6.4
   build_runner: ^2.4.14
+  flutter_launcher_icons: ^0.14.3
+
+flutter_launcher_icons:
+  android: "ic_launcher"
+  ios: true
+  remove_alpha_ios: true
+  image_path: "assets/icons/mednu_logo.png"
+  # Full-bleed source on a brand-plum backdrop for the adaptive-icon
+  # foreground/background split — matches AppColors.primary
+  # (core/constants/app_colors.dart) so the launcher icon reads as part of
+  # the same brand system as the in-app UI, not just a raw logo crop.
+  adaptive_icon_background: "#522546"
+  adaptive_icon_foreground: "assets/icons/mednu_logo.png"
+  min_sdk_android: 21
 
 flutter:
   uses-material-design: true
@@ -75,3 +89,7 @@ flutter:
     - assets/images/
     - assets/animations/
     - assets/icons/
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Variable.ttf

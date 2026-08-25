@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
 import '../../../core/constants/app_text_styles.dart';
+import '../../../core/router/app_router.dart';
 import '../../../core/services/feedback_service.dart';
 import '../../../core/utils/r.dart';
 import '../../../core/widgets/add_to_cart_button.dart';
@@ -38,14 +39,14 @@ class CaregiversScreen extends ConsumerStatefulWidget {
 
 class _CaregiversScreenState extends ConsumerState<CaregiversScreen> {
   static const _palette = [
-    Color(0xFFC2185B), Color(0xFF1565C0), Color(0xFF2E7D32),
+    Color(0xFF522546), Color(0xFF1565C0), Color(0xFF2E7D32),
     Color(0xFF6A1B9A), Color(0xFF0097A7), Color(0xFFE65100),
   ];
 
   Color _colorFor(String type) {
     switch (type.toLowerCase()) {
       case 'nurse':           return const Color(0xFF1565C0);
-      case 'maid':            return const Color(0xFFC2185B);
+      case 'maid':            return const Color(0xFF522546);
       case 'attendant':       return const Color(0xFF2E7D32);
       case 'physiotherapist': return const Color(0xFFE65100);
       default:                return _palette[0];
@@ -184,7 +185,7 @@ class _CaregiversScreenState extends ConsumerState<CaregiversScreen> {
                       borderRadius: BorderRadius.circular(2)),
                 ),
               ),
-              Text('Select Shift Duration', style: AppTextStyles.h4),
+              const Text('Select Shift Duration', style: AppTextStyles.h4),
               const SizedBox(height: 2),
               Text('${c['name']} – ${c['specialty']}',
                   style: AppTextStyles.bodySmall),
@@ -300,7 +301,7 @@ class _CaregiversScreenState extends ConsumerState<CaregiversScreen> {
                 expandedHeight: AppSpacing.headerHeight(context),
                 leading: IconButton(
                   icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-                  onPressed: () => context.pop(),
+                  onPressed: () => context.canPop() ? context.pop() : context.go(AppRoutes.home),
                 ),
                 actions: [
                   IconButton(
@@ -324,7 +325,7 @@ class _CaregiversScreenState extends ConsumerState<CaregiversScreen> {
                   background: Container(
                     decoration: const BoxDecoration(
                       gradient: LinearGradient(
-                        colors: [Color(0xFFEC407A), Color(0xFF880E4F)],
+                        colors: [Color(0xFFEC407A), Color(0xFF33172C)],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
@@ -345,8 +346,8 @@ class _CaregiversScreenState extends ConsumerState<CaregiversScreen> {
                                   children: [
                                     Icon(Icons.elderly_rounded, color: Colors.white, size: AppSpacing.headerIconSize(context)),
                                     SizedBox(height: AppSpacing.headerIconGap(context)),
-                                    Text('Caregivers', style: AppTextStyles.onPrimaryH2),
-                                    Text('Trained & verified home caregivers', style: AppTextStyles.onPrimaryBody),
+                                    const Text('Caregivers', style: AppTextStyles.onPrimaryH2),
+                                    const Text('Trained & verified home caregivers', style: AppTextStyles.onPrimaryBody),
                                   ],
                                 ),
                               ),
@@ -415,7 +416,7 @@ class _CaregiversScreenState extends ConsumerState<CaregiversScreen> {
                           }),
                           child: Text('Clear all',
                               style: AppTextStyles.labelSmall.copyWith(
-                                  color: const Color(0xFFC2185B),
+                                  color: const Color(0xFF522546),
                                   decoration: TextDecoration.underline)),
                         ),
                       ]),
@@ -607,10 +608,10 @@ class _Chip extends StatelessWidget {
       duration: const Duration(milliseconds: 150),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: selected ? const Color(0xFFC2185B) : context.appSurface,
+        color: selected ? const Color(0xFF522546) : context.appSurface,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: selected ? const Color(0xFFC2185B) : context.appBorder,
+          color: selected ? const Color(0xFF522546) : context.appBorder,
         ),
       ),
       child: Text(label,
@@ -665,7 +666,7 @@ class _CaregiverFilterSheetState extends State<_CaregiverFilterSheet> {
             ),
           ),
           Row(children: [
-            Text('Filter Caregivers', style: AppTextStyles.h3),
+            const Text('Filter Caregivers', style: AppTextStyles.h3),
             const Spacer(),
             TextButton(
               onPressed: () => setState(
@@ -676,7 +677,7 @@ class _CaregiverFilterSheetState extends State<_CaregiverFilterSheet> {
           const SizedBox(height: 16),
 
           // Caregiver type
-          Text('Caregiver Type', style: AppTextStyles.labelLarge),
+          const Text('Caregiver Type', style: AppTextStyles.labelLarge),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8, runSpacing: 8,
@@ -689,7 +690,7 @@ class _CaregiverFilterSheetState extends State<_CaregiverFilterSheet> {
           const SizedBox(height: 20),
 
           // Gender
-          Text('Gender', style: AppTextStyles.labelLarge),
+          const Text('Gender', style: AppTextStyles.labelLarge),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8, runSpacing: 8,
@@ -756,10 +757,10 @@ class _ShiftSelector extends StatelessWidget {
                       duration: const Duration(milliseconds: 150),
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
-                        color: isSelected ? const Color(0xFFC2185B) : context.appSurface,
+                        color: isSelected ? const Color(0xFF522546) : context.appSurface,
                         borderRadius: BorderRadius.circular(14),
                         border: Border.all(
-                          color: isSelected ? const Color(0xFFC2185B) : context.appBorder,
+                          color: isSelected ? const Color(0xFF522546) : context.appBorder,
                         ),
                       ),
                       child: Column(

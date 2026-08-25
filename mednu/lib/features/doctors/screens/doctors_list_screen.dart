@@ -198,8 +198,7 @@ class _DoctorsListScreenState extends ConsumerState<DoctorsListScreen>
                   shape: const RoundedRectangleBorder(
                       borderRadius:
                           BorderRadius.vertical(top: Radius.circular(24))),
-                  builder: (ctx) => ProviderScope(
-                    parent: ProviderScope.containerOf(ctx),
+                  builder: (_) => ProviderScope(
                     child: _LocationChangeSheet(),
                   ),
                 );
@@ -258,6 +257,7 @@ class _DoctorsListScreenState extends ConsumerState<DoctorsListScreen>
         leading: widget.showBackButton
             ? IconButton(
                 icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
+                tooltip: 'Back',
                 onPressed: () {
                   if (context.canPop()) {
                     context.pop();
@@ -281,13 +281,14 @@ class _DoctorsListScreenState extends ConsumerState<DoctorsListScreen>
                   ),
                 ),
             ]),
+            tooltip: 'Filter doctors',
             onPressed: _openFilterSheet,
           ),
         ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(46),
           child: Container(
-            color: AppColors.primary,
+            decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
             child: TabBar(
               controller: _tabController,
               indicatorColor: Colors.white,
@@ -587,7 +588,7 @@ class _DoctorsListScreenState extends ConsumerState<DoctorsListScreen>
                     ),
                     child: Row(mainAxisSize: MainAxisSize.min, children: [
                       Icon(Icons.clear_all_rounded, size: 13, color: context.appTextSecondary),
-                      SizedBox(width: 4),
+                      const SizedBox(width: 4),
                       Text('Clear All',
                           style: TextStyle(
                               fontFamily: 'Poppins',
@@ -724,7 +725,7 @@ class _DoctorListView extends StatelessWidget {
           );
         }
         if (snap.hasError) {
-          return AppErrorState(
+          return const AppErrorState(
             message: 'Unable to load doctors. Check your connection.',
           );
         }
@@ -1127,7 +1128,7 @@ class _DoctorCard extends StatelessWidget {
                             context,
                             icon: Icons.currency_rupee_rounded,
                             label: fee > 0 ? '$fee' : 'Free',
-                            color: AppColors.primary,
+                            color: AppColors.accent,
                             bold: true,
                           ),
                         ],
@@ -1201,7 +1202,7 @@ class _DoctorCard extends StatelessWidget {
                       onTap: () => context.push('/doctors/$docId',
                           extra: {'mode': 'quickConnect'}),
                       child: Container(
-                        height: 38,
+                        height: 44,
                         decoration: BoxDecoration(
                           border: Border.all(color: AppColors.primary),
                           borderRadius: BorderRadius.circular(10),
@@ -1233,7 +1234,7 @@ class _DoctorCard extends StatelessWidget {
                   child: GestureDetector(
                     onTap: () => context.push(profilePath),
                     child: Container(
-                      height: 38,
+                      height: 44,
                       decoration: BoxDecoration(
                         gradient: AppColors.primaryGradient,
                         borderRadius: BorderRadius.circular(10),
@@ -1358,7 +1359,7 @@ class _FilterSheetState extends State<_FilterSheet> {
     return Container(
       decoration: BoxDecoration(
         color: context.appSurface,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       padding: EdgeInsets.fromLTRB(
           20, 16, 20, MediaQuery.of(context).padding.bottom + 20),
@@ -1375,7 +1376,7 @@ class _FilterSheetState extends State<_FilterSheet> {
             ),
           ),
           Row(children: [
-            Text('Filter Doctors', style: AppTextStyles.h3),
+            const Text('Filter Doctors', style: AppTextStyles.h3),
             const Spacer(),
             TextButton(
               onPressed: () => setState(
@@ -1386,7 +1387,7 @@ class _FilterSheetState extends State<_FilterSheet> {
           const SizedBox(height: 16),
 
           // Sort by
-          Text('Sort By', style: AppTextStyles.labelLarge),
+          const Text('Sort By', style: AppTextStyles.labelLarge),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8, runSpacing: 8,
@@ -1399,7 +1400,7 @@ class _FilterSheetState extends State<_FilterSheet> {
           const SizedBox(height: 20),
 
           // Max fee
-          Text('Consultation Fee', style: AppTextStyles.labelLarge),
+          const Text('Consultation Fee', style: AppTextStyles.labelLarge),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8, runSpacing: 8,
@@ -1413,7 +1414,7 @@ class _FilterSheetState extends State<_FilterSheet> {
           const SizedBox(height: 20),
 
           // Gender
-          Text('Doctor Gender', style: AppTextStyles.labelLarge),
+          const Text('Doctor Gender', style: AppTextStyles.labelLarge),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8, runSpacing: 8,
@@ -1427,7 +1428,7 @@ class _FilterSheetState extends State<_FilterSheet> {
 
           // Available Now toggle
           Row(children: [
-            Text('Available Now', style: AppTextStyles.labelLarge),
+            const Text('Available Now', style: AppTextStyles.labelLarge),
             const Spacer(),
             Switch(
               value: _state.availableNow,
@@ -1626,7 +1627,7 @@ class _LocationChangeSheetState extends ConsumerState<_LocationChangeSheet> {
                 color: Colors.grey.shade300,
                 borderRadius: BorderRadius.circular(2)),
           ),
-          Text('Change Location', style: AppTextStyles.h4),
+          const Text('Change Location', style: AppTextStyles.h4),
           const SizedBox(height: 12),
           TextField(
             controller: _ctrl,
@@ -1729,7 +1730,7 @@ class _LocationRequiredView extends StatelessWidget {
                 color: AppColors.primary.withValues(alpha:0.08),
                 shape: BoxShape.circle,
               ),
-              child: Icon(Icons.location_searching_rounded,
+              child: const Icon(Icons.location_searching_rounded,
                   size: 42, color: AppColors.primary),
             ),
             const SizedBox(height: 20),

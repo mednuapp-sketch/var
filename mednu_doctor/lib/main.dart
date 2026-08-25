@@ -22,6 +22,7 @@ import 'core/services/battery_optimization_service.dart';
 import 'core/theme/app_theme.dart';
 import 'features/security/services/biometric_service.dart';
 import 'features/security/screens/lock_screen.dart';
+import 'core/widgets/active_session_bridge.dart';
 import 'shared_core/models/app_role.dart';
 import 'shared_core/providers/role_providers.dart';
 import 'features/lab/providers/lab_providers.dart';
@@ -458,7 +459,7 @@ class _MedNUDoctorAppState extends ConsumerState<MedNUDoctorApp>
   Widget build(BuildContext context) {
     final router = ref.watch(appRouterProvider);
     return MaterialApp.router(
-      title:                    'MedNU Doctor',
+      title:                    'MedNU Service',
       debugShowCheckedModeBanner: false,
       theme:                    AppTheme.lightTheme,
       routerConfig:             router,
@@ -476,6 +477,7 @@ class _MedNUDoctorAppState extends ConsumerState<MedNUDoctorApp>
           child: Stack(
             children: [
               child ?? const SizedBox.expand(),
+              const ActiveSessionBridge(),
               if (_isLocked)
                 LockScreen(
                   onAuthStarted: () => _isAuthenticating = true,

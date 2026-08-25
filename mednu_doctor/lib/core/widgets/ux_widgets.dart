@@ -1,5 +1,5 @@
 // ============================================================
-//  MedNU Doctor — Shared UX Widget Library
+//  MedNu Service — Shared UX Widget Library
 //  Shimmer loaders · Empty states · Error states
 //  Animated buttons · Page transitions · Form helpers
 //  Gradient AppBar · Premium Cards · Avatars
@@ -554,11 +554,7 @@ class _GradientHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Color(0xFF880E4F), Color(0xFFC2185B), Color(0xFF7B1FA2)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        gradient: AppColors.heroBannerGradient,
       ),
       child: Stack(
         children: [
@@ -619,24 +615,14 @@ class _GradientHeader extends StatelessWidget {
                                   title,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontFamily: 'Poppins',
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.white,
-                                    letterSpacing: -0.2,
-                                  ),
+                                  style: AppTextStyles.onPrimaryH2,
                                 ),
                                 if (subtitle != null)
                                   Text(
                                     subtitle!,
                                     maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      fontFamily: 'Poppins',
-                                      fontSize: 12,
-                                      color: Colors.white70,
-                                    ),
+                                    style: AppTextStyles.onPrimaryBody,
                                   ),
                               ],
                             ),
@@ -684,7 +670,7 @@ class GradientButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final disabled = onTap == null || isLoading;
-    final gradColors = colors ?? [const Color(0xFFC2185B), const Color(0xFF7B1FA2)];
+    final gradColors = colors ?? const [AppColors.primary, AppColors.secondary];
 
     return TapScale(
       onTap: disabled ? null : onTap,
@@ -731,16 +717,7 @@ class GradientButton extends StatelessWidget {
                         Icon(icon, color: Colors.white, size: 18),
                         const SizedBox(width: 8),
                       ],
-                      Text(
-                        label,
-                        style: const TextStyle(
-                          fontFamily: 'Poppins',
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                          letterSpacing: 0.2,
-                        ),
-                      ),
+                      Text(label, style: AppTextStyles.button),
                     ],
                   ),
           ),
@@ -762,13 +739,13 @@ class AppAvatar extends StatelessWidget {
   final String? imageUrl;
 
   static const _palette = [
-    Color(0xFFC2185B),
-    Color(0xFF7B1FA2),
+    AppColors.primary,
+    AppColors.secondary,
     Color(0xFF1565C0),
     Color(0xFF2E7D32),
-    Color(0xFFE65100),
+    AppColors.accentDark,
     Color(0xFF00695C),
-    Color(0xFF6A1B9A),
+    AppColors.primaryLight,
     Color(0xFF0277BD),
   ];
 
@@ -804,12 +781,7 @@ class AppAvatar extends StatelessWidget {
         child: Center(
           child: Text(
             initial,
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: fontSize,
-              fontWeight: FontWeight.w800,
-              color: c,
-            ),
+            style: AppTextStyles.h4.copyWith(fontSize: fontSize, color: c, fontWeight: FontWeight.w800),
           ),
         ),
       ),
@@ -933,13 +905,7 @@ class GradientStatCard extends StatelessWidget {
             child: Text(
               value,
               maxLines: 1,
-              style: const TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-                color: Colors.white,
-                height: 1,
-              ),
+              style: AppTextStyles.statistic.copyWith(color: Colors.white, height: 1),
             ),
           ),
           const SizedBox(height: 4),
@@ -947,12 +913,7 @@ class GradientStatCard extends StatelessWidget {
             label,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: 12,
-              color: Colors.white70,
-              fontWeight: FontWeight.w500,
-            ),
+            style: AppTextStyles.statisticLabel.copyWith(color: Colors.white70),
           ),
           if (sublabel != null) ...[
             const SizedBox(height: 2),
@@ -960,11 +921,7 @@ class GradientStatCard extends StatelessWidget {
               sublabel!,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 10,
-                color: Colors.white60,
-              ),
+              style: AppTextStyles.caption.copyWith(color: Colors.white60),
             ),
           ],
         ],
@@ -1013,12 +970,7 @@ class InfoChip extends StatelessWidget {
               label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: c,
-              ),
+              style: AppTextStyles.labelSmall.copyWith(color: c),
             ),
           ),
         ],
@@ -1048,13 +1000,7 @@ class DateSectionLabel extends StatelessWidget {
             ),
             child: Text(
               label,
-              style: const TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                color: AppColors.primary,
-                letterSpacing: 0.3,
-              ),
+              style: AppTextStyles.labelSmall.copyWith(color: AppColors.primary, letterSpacing: 0.3),
             ),
           ),
           const SizedBox(width: 10),

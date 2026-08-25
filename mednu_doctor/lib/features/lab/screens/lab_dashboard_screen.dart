@@ -107,7 +107,7 @@ class _LabDashboardScreenState extends ConsumerState<LabDashboardScreen> {
                     value: '${m.pendingCollections}',
                     label: 'Pending Collections',
                     icon: Icons.local_shipping_rounded,
-                    colors: const [Color(0xFF6A1B9A), Color(0xFF4A148C)],
+                    colors: const [Color(0xFF6A1B9A), AppColors.secondaryDark],
                   ),
                   GradientStatCard(
                     value: '${m.processingReports}',

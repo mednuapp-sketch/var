@@ -138,7 +138,7 @@ class SkeletonListTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                SkeletonBox(width: double.infinity, height: 14, radius: 7),
+                const SkeletonBox(width: double.infinity, height: 14, radius: 7),
                 const SizedBox(height: 8),
                 SkeletonBox(width: MediaQuery.of(context).size.width * 0.5, height: 12, radius: 6),
               ],
@@ -221,8 +221,8 @@ class SkeletonNotificationTile extends StatelessWidget {
           children: [
             Container(
               width: 42, height: 42,
-              decoration: BoxDecoration(
-                color: const Color(0xFFE8E8E8),
+              decoration: const BoxDecoration(
+                color: Color(0xFFE8E8E8),
                 shape: BoxShape.circle,
               ),
             ),
@@ -858,7 +858,7 @@ class StatusBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: EdgeInsets.symmetric(
+      padding: const EdgeInsets.symmetric(
           horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
         color: color.withValues(alpha:0.12),
@@ -1098,7 +1098,7 @@ Widget staticGrid({
             : const SizedBox(),
       ));
     }
-    rows.add(Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: rowChildren));
+    rows.add(Row(children: rowChildren));
     if (i + crossAxisCount < children.length) rows.add(SizedBox(height: mainAxisSpacing));
   }
   return Column(children: rows);

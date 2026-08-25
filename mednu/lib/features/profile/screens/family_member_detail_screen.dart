@@ -22,7 +22,7 @@ class FamilyMemberDetailScreen extends ConsumerStatefulWidget {
 
 class _FamilyMemberDetailScreenState extends ConsumerState<FamilyMemberDetailScreen> {
   static const _avatarColors = [
-    Color(0xFFC2185B), Color(0xFF7B1FA2), Color(0xFF1565C0),
+    Color(0xFF522546), Color(0xFF633058), Color(0xFF1565C0),
     Color(0xFF2E7D32), Color(0xFF00695C), Color(0xFFE65100),
   ];
 
@@ -265,7 +265,7 @@ class _FamilyMemberDetailScreenState extends ConsumerState<FamilyMemberDetailScr
                   const SizedBox(height: 20),
 
                   // Quick Actions
-                  Text('Quick Actions', style: AppTextStyles.h4),
+                  const Text('Quick Actions', style: AppTextStyles.h4),
                   const SizedBox(height: 12),
                   Row(children: [
                     Expanded(child: _ActionButton(
@@ -311,7 +311,7 @@ class _FamilyMemberDetailScreenState extends ConsumerState<FamilyMemberDetailScr
                         sub: _countsLoaded
                             ? (_prescCount == 0 ? 'No prescriptions yet' : '$_prescCount prescription${_prescCount == 1 ? '' : 's'}')
                             : 'Loading...',
-                        color: const Color(0xFFC2185B),
+                        color: const Color(0xFF522546),
                         onTap: () => _openRecords(0),
                       ),
                       const Divider(height: 1, indent: 52),
@@ -407,7 +407,7 @@ class _SectionCard extends StatelessWidget {
           decoration: BoxDecoration(
             color: context.appSurface,
             borderRadius: BorderRadius.circular(16),
-            boxShadow: [BoxShadow(color: AppColors.shadow, blurRadius: 8, offset: const Offset(0, 2))],
+            boxShadow: const [BoxShadow(color: AppColors.shadow, blurRadius: 8, offset: Offset(0, 2))],
             border: Border.all(color: context.appBorder),
           ),
           child: child,
@@ -422,7 +422,7 @@ class _InfoRow extends StatelessWidget {
   final String label;
   final String value;
   final Color? valueColor;
-  const _InfoRow({required this.icon, required this.label, required this.value, this.valueColor});
+  const _InfoRow({required this.icon, required this.label, required this.value}) : valueColor = null;
 
   @override
   Widget build(BuildContext context) {

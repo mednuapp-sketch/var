@@ -126,7 +126,7 @@ class _NearbyAmbulancesSheetState extends State<NearbyAmbulancesSheet> {
                       color: _kTeal, size: 20),
                 ),
                 const SizedBox(width: 10),
-                Expanded(
+                const Expanded(
                   child: Text('Nearby Ambulances', style: AppTextStyles.h4),
                 ),
                 IconButton(

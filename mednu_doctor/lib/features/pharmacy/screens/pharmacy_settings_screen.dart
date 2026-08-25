@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/services/feedback_service.dart';
+import '../../../core/widgets/mednu_components.dart';
 import '../../../shared_core/shared_core.dart';
 
 /// First real consumer of `SharedSettingsScreen`/`SettingsSectionData` from
@@ -63,18 +64,14 @@ class _PharmacySettingsScreenState extends State<PharmacySettingsScreen> {
   }
 
   Future<void> _signOut() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Sign Out'),
-        content: const Text('Are you sure you want to sign out?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Sign Out')),
-        ],
-      ),
+    final confirmed = await MedNuConfirmationDialog.show(
+      context,
+      title: 'Sign Out',
+      message: 'Are you sure you want to sign out?',
+      confirmLabel: 'Sign Out',
+      destructive: true,
     );
-    if (confirmed != true) return;
+    if (!confirmed) return;
     await FirebaseAuth.instance.signOut();
     if (mounted) context.go(AppRoutes.login);
   }

@@ -272,11 +272,11 @@ class _PregnancyNutritionScreenState
                           style: TextStyle(
                               fontWeight: FontWeight.w700,
                               fontSize: 14,
-                              color: Color(0xFF4A148C))),
+                              color: Color(0xFF3D1D36))),
                       SizedBox(height: 2),
                       Text('Focus on these for optimal development',
                           style: TextStyle(
-                              fontSize: 11, color: Color(0xFF7B1FA2))),
+                              fontSize: 11, color: Color(0xFF633058))),
                     ],
                   ),
                 ),
@@ -345,9 +345,9 @@ class _HeroBanner extends StatelessWidget {
                   color: Colors.white.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: Text(
+                child: const Text(
                   'Personalized',
-                  style: const TextStyle(
+                  style: TextStyle(
                       color: Colors.white,
                       fontSize: 10,
                       fontWeight: FontWeight.w600),
@@ -391,9 +391,9 @@ class _MacroPieCardState extends State<_MacroPieCard> {
   Widget build(BuildContext context) {
     // Macro distribution: carbs, protein, fat
     final macros = [
-      _MacroData('Carbohydrates', 50, const Color(0xFF43A047)),
-      _MacroData('Protein', 25, const Color(0xFFC2185B)),
-      _MacroData('Healthy Fats', 25, const Color(0xFF7B1FA2)),
+      const _MacroData('Carbohydrates', 50, Color(0xFF43A047)),
+      const _MacroData('Protein', 25, Color(0xFF522546)),
+      const _MacroData('Healthy Fats', 25, Color(0xFF633058)),
     ];
 
     return Container(
@@ -538,15 +538,15 @@ class _DailyTargetsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final targets = [
-      _TargetItem('💧', 'Water', '8–10\nglasses', const Color(0xFF1976D2)),
-      _TargetItem('🥩', 'Protein', '71g\n/day', const Color(0xFFC2185B)),
-      _TargetItem('🦴', 'Calcium', '1000mg\n/day', const Color(0xFF0097A7)),
+      const _TargetItem('💧', 'Water', '8–10\nglasses', Color(0xFF1976D2)),
+      const _TargetItem('🥩', 'Protein', '71g\n/day', Color(0xFF522546)),
+      const _TargetItem('🦴', 'Calcium', '1000mg\n/day', Color(0xFF0097A7)),
       _TargetItem('🔥', 'Extra Cal',
           extraCals > 0 ? '+${extraCals}kcal' : '—', const Color(0xFFE65100)),
-      _TargetItem('💊', 'Iron', '27mg\n/day', const Color(0xFFB71C1C)),
-      _TargetItem('🧬', 'Folate', '600mcg\n/day', const Color(0xFF7B1FA2)),
-      _TargetItem('☀️', 'Vitamin D', '600IU\n/day', const Color(0xFFFFA000)),
-      _TargetItem('🐟', 'Omega-3', '200mg\nDHA', const Color(0xFF00695C)),
+      const _TargetItem('💊', 'Iron', '27mg\n/day', Color(0xFFB71C1C)),
+      const _TargetItem('🧬', 'Folate', '600mcg\n/day', Color(0xFF633058)),
+      const _TargetItem('☀️', 'Vitamin D', '600IU\n/day', Color(0xFFFFA000)),
+      const _TargetItem('🐟', 'Omega-3', '200mg\nDHA', Color(0xFF00695C)),
     ];
 
     return Container(
@@ -660,7 +660,7 @@ class _WeeklyTipCard extends StatelessWidget {
                   style: TextStyle(
                       fontWeight: FontWeight.w700,
                       fontSize: 14,
-                      color: Color(0xFF880E4F))),
+                      color: Color(0xFF33172C))),
             ],
           ),
           const SizedBox(height: 10),
@@ -669,7 +669,7 @@ class _WeeklyTipCard extends StatelessWidget {
             style: const TextStyle(
                 fontSize: 13,
                 height: 1.65,
-                color: Color(0xFF4A148C)),
+                color: Color(0xFF3D1D36)),
           ),
         ],
       ),
@@ -786,7 +786,7 @@ class _NutrientCard extends StatelessWidget {
       '🧬',
       'Prevents neural tube defects',
       '600 mcg/day',
-      Color(0xFF7B1FA2)
+      Color(0xFF633058)
     ),
     'Iron': (
       '💪',
@@ -871,7 +871,7 @@ class _NutrientCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final info =
-        _data[nutrient] ?? ('💊', 'Important for your pregnancy', 'Daily', const Color(0xFF7B1FA2));
+        _data[nutrient] ?? ('💊', 'Important for your pregnancy', 'Daily', const Color(0xFF633058));
     final color = info.$4;
 
     return Container(

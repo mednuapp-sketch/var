@@ -2,9 +2,12 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/router/app_router.dart';
+import '../../legal/screens/privacy_policy_screen.dart';
+import '../../legal/screens/terms_of_service_screen.dart';
 import '../providers/auth_provider.dart';
 
 class PhoneEntryScreen extends ConsumerStatefulWidget {
@@ -87,24 +90,12 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen>
     HapticFeedback.mediumImpact();
     setState(() => _isLoading = true);
     try {
-      // Check Firestore phone_index — works on any device, no auth needed
-      final hasMpin =
-          await ref.read(authProvider.notifier).checkPhoneHasMpin(_fullPhone);
+      await ref.read(authProvider.notifier).sendOtp(_fullPhone);
       if (!mounted) return;
-
-      if (hasMpin) {
-        // Existing user with MPIN — skip OTP, go directly to MPIN screen
-        context.push(AppRoutes.mpin,
-            extra: {'phone': _fullPhone, 'mode': 'login'});
-      } else {
-        // New user — standard OTP flow
-        await ref.read(authProvider.notifier).sendOtp(_fullPhone);
-        if (!mounted) return;
-        context.push(AppRoutes.otp, extra: {
-          'phone': _fullPhone,
-          'isExistingUser': false,
-        });
-      }
+      context.push(AppRoutes.otp, extra: {
+        'phone': _fullPhone,
+        'isExistingUser': false,
+      });
     } catch (e) {
       if (!mounted) return;
       _showError(e.toString().replaceFirst('Exception: ', ''));
@@ -127,9 +118,7 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen>
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
     final bottom = MediaQuery.of(context).viewInsets.bottom;
-    final isSmall = size.height < 750;
-    final isVerySmall = size.height < 620;
-    final isDark = context.isDarkMode;
+    final isSmall = size.height < 700;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
@@ -145,7 +134,7 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen>
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
-                    colors: [Color(0xFF0D0520), Color(0xFF3B0F50), Color(0xFF7B1FA2)],
+                    colors: [Color(0xFF0D0520), Color(0xFF3B0F50), Color(0xFF633058)],
                     stops: [0.0, 0.5, 1.0],
                   ),
                 ),
@@ -255,132 +244,152 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen>
                       Expanded(
                         child: SingleChildScrollView(
                           physics: const ClampingScrollPhysics(),
-                          child: Padding(
-                            padding: EdgeInsets.fromLTRB(
-                                28, isVerySmall ? 14 : (isSmall ? 20 : 32), 28, 16),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                // Logo badge
-                                AnimatedBuilder(
-                                  animation: _pulseCtrl,
-                                  builder: (_, __) {
-                                    final p = _pulseCtrl.value;
-                                    final glowSize = isVerySmall ? 64.0 : (isSmall ? 76.0 : 88.0);
-                                    final logoSize = isVerySmall ? 46.0 : (isSmall ? 54.0 : 64.0);
-                                    return Stack(
-                                      alignment: Alignment.center,
-                                      children: [
-                                        Container(
-                                          width: glowSize, height: glowSize,
-                                          decoration: BoxDecoration(
-                                            shape: BoxShape.circle,
-                                            gradient: RadialGradient(colors: [
-                                              const Color(0xFFF2A8D8)
-                                                  .withValues(alpha: 0.18 + p * 0.10),
-                                              Colors.transparent,
-                                            ]),
-                                          ),
+                          padding: EdgeInsets.fromLTRB(28, isSmall ? 20 : 32, 28, 0),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Logo badge
+                              AnimatedBuilder(
+                                animation: _pulseCtrl,
+                                builder: (_, __) {
+                                  final p = _pulseCtrl.value;
+                                  return Stack(
+                                    alignment: Alignment.center,
+                                    children: [
+                                      Container(
+                                        width: 88, height: 88,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          gradient: RadialGradient(colors: [
+                                            const Color(0xFFF2A8D8)
+                                                .withValues(alpha: 0.18 + p * 0.10),
+                                            Colors.transparent,
+                                          ]),
                                         ),
-                                        Container(
-                                          width: logoSize, height: logoSize,
-                                          decoration: BoxDecoration(
-                                            borderRadius: BorderRadius.circular(18),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: AppColors.primary
-                                                    .withValues(alpha: 0.30 + p * 0.18),
-                                                blurRadius: 22,
-                                                offset: const Offset(0, 8),
-                                              ),
-                                            ],
-                                          ),
-                                          child: ClipRRect(
-                                            borderRadius: BorderRadius.circular(18),
-                                            child: Image.asset(
-                                              'assets/icons/mednu_logo.png',
-                                              fit: BoxFit.contain,
+                                      ),
+                                      Container(
+                                        width: 64, height: 64,
+                                        decoration: BoxDecoration(
+                                          borderRadius: BorderRadius.circular(18),
+                                          gradient: AppColors.heroBannerGradient,
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: AppColors.primary
+                                                  .withValues(alpha: 0.30 + p * 0.18),
+                                              blurRadius: 22,
+                                              offset: const Offset(0, 8),
                                             ),
-                                          ),
+                                          ],
                                         ),
-                                      ],
-                                    );
-                                  },
+                                        child: Stack(
+                                          alignment: Alignment.center,
+                                          children: [
+                                            Padding(
+                                              padding: const EdgeInsets.all(14),
+                                              child: SvgPicture.asset(
+                                                'assets/icons/med-nu-icon-stethoscope.svg',
+                                                fit: BoxFit.contain,
+                                                colorFilter: const ColorFilter.mode(
+                                                  Colors.white,
+                                                  BlendMode.srcIn,
+                                                ),
+                                              ),
+                                            ),
+                                            Positioned(
+                                              bottom: 6, right: 6,
+                                              child: Container(
+                                                width: 14, height: 14,
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFF4CAF50),
+                                                  shape: BoxShape.circle,
+                                                  border: Border.all(
+                                                      color: Colors.white, width: 1.5),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                },
+                              ),
+
+                              SizedBox(height: isSmall ? 20 : 28),
+
+                              const Text(
+                                'Your health,\nalways protected.',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 30,
+                                  fontWeight: FontWeight.w800,
+                                  fontFamily: 'Poppins',
+                                  height: 1.2,
+                                  letterSpacing: -0.5,
                                 ),
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                'Sign in or create your account with\nyour mobile number.',
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.55),
+                                  fontSize: 15,
+                                  fontFamily: 'Poppins',
+                                  height: 1.5,
+                                ),
+                              ),
 
-                                SizedBox(height: isVerySmall ? 12 : (isSmall ? 16 : 24)),
+                              SizedBox(height: isSmall ? 14 : 20),
 
-                                Text(
-                                  'Your health,\nalways protected.',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: isVerySmall ? 24 : (isSmall ? 27 : 30),
-                                    fontWeight: FontWeight.w800,
-                                    fontFamily: 'Poppins',
-                                    height: 1.2,
-                                    letterSpacing: -0.5,
+                              // ── Social proof strip ───────────────────────
+                              Row(
+                                children: [
+                                  const Icon(Icons.star_rounded, color: Color(0xFFFFC857), size: 16),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '4.9',
+                                    style: TextStyle(
+                                      color: Colors.white.withValues(alpha: 0.85),
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      fontFamily: 'Poppins',
+                                    ),
                                   ),
-                                ),
-                                SizedBox(height: isVerySmall ? 6 : 10),
-                                Text(
-                                  'Sign in or create your account with\nyour mobile number.',
-                                  style: TextStyle(
-                                    color: Colors.white.withValues(alpha: 0.55),
-                                    fontSize: isVerySmall ? 13 : 15,
-                                    fontFamily: 'Poppins',
-                                    height: 1.4,
+                                  Container(
+                                    margin: const EdgeInsets.symmetric(horizontal: 8),
+                                    width: 3, height: 3,
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withValues(alpha: 0.35),
+                                      shape: BoxShape.circle,
+                                    ),
                                   ),
-                                ),
-
-                                SizedBox(height: isVerySmall ? 10 : (isSmall ? 14 : 20)),
-
-                                // ── Social proof strip ───────────────────────
-                                Row(
-                                  children: [
-                                    const Icon(Icons.star_rounded, color: Color(0xFFFFC857), size: 16),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      '4.9',
-                                      style: TextStyle(
-                                        color: Colors.white.withValues(alpha: 0.85),
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w700,
-                                        fontFamily: 'Poppins',
-                                      ),
+                                  Text(
+                                    'Trusted by 50,000+ patients',
+                                    style: TextStyle(
+                                      color: Colors.white.withValues(alpha: 0.55),
+                                      fontSize: 12.5,
+                                      fontFamily: 'Poppins',
                                     ),
-                                    Container(
-                                      margin: const EdgeInsets.symmetric(horizontal: 8),
-                                      width: 3, height: 3,
-                                      decoration: BoxDecoration(
-                                        color: Colors.white.withValues(alpha: 0.35),
-                                        shape: BoxShape.circle,
-                                      ),
-                                    ),
-                                    Text(
-                                      'Trusted by 50,000+ patients',
-                                      style: TextStyle(
-                                        color: Colors.white.withValues(alpha: 0.55),
-                                        fontSize: 12.5,
-                                        fontFamily: 'Poppins',
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                                  ),
+                                ],
+                              ),
 
-                                SizedBox(height: isVerySmall ? 12 : (isSmall ? 16 : 24)),
+                              SizedBox(height: isSmall ? 16 : 24),
 
-                                // ── Feature pills ────────────────────────────
-                                const Wrap(
-                                  spacing: 8, runSpacing: 8,
-                                  children: [
-                                    _FeaturePill(icon: Icons.verified_rounded, label: '100% Secure'),
-                                    _FeaturePill(icon: Icons.lock_rounded, label: 'Private'),
-                                    _FeaturePill(icon: Icons.health_and_safety_rounded, label: 'HIPAA'),
-                                    _FeaturePill(icon: Icons.phone_android_rounded, label: 'OTP Verified'),
-                                  ],
-                                ),
-                              ],
-                            ),
+                              // ── Feature pills ────────────────────────────
+                              const Wrap(
+                                spacing: 8, runSpacing: 8,
+                                children: [
+                                  _FeaturePill(icon: Icons.verified_rounded, label: '100% Secure'),
+                                  _FeaturePill(icon: Icons.lock_rounded, label: 'Private'),
+                                  _FeaturePill(icon: Icons.health_and_safety_rounded, label: 'HIPAA'),
+                                  _FeaturePill(icon: Icons.phone_android_rounded, label: 'OTP Verified'),
+                                ],
+                              ),
+
+                              SizedBox(height: size.height * 0.025),
+                            ],
                           ),
                         ),
                       ),
@@ -395,7 +404,7 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen>
                           padding: EdgeInsets.fromLTRB(
                               24, 16, 24, 24 + MediaQuery.of(context).padding.bottom),
                           decoration: BoxDecoration(
-                            color: isDark ? AppColors.darkSurface : Colors.white,
+                            color: Colors.white,
                             borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
                             boxShadow: [
                               BoxShadow(
@@ -428,18 +437,18 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen>
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        Text('Enter mobile number',
+                                        const Text('Enter mobile number',
                                             style: TextStyle(
                                               fontSize: 18,
                                               fontWeight: FontWeight.w700,
-                                              color: isDark ? Colors.white : const Color(0xFF1A0A2E),
+                                              color: Color(0xFF1A0A2E),
                                               fontFamily: 'Poppins',
                                             )),
                                         const SizedBox(height: 4),
-                                        Text("Enter your registered mobile number",
+                                        Text("We'll send a one-time password to verify",
                                             style: TextStyle(
                                               fontSize: 13,
-                                              color: context.appTextSecondary,
+                                              color: Colors.grey.shade500,
                                               fontFamily: 'Poppins',
                                             )),
                                       ],
@@ -462,7 +471,7 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen>
                               AnimatedContainer(
                                 duration: const Duration(milliseconds: 180),
                                 decoration: BoxDecoration(
-                                  color: isDark ? AppColors.darkCard : const Color(0xFFF8F4FF),
+                                  color: const Color(0xFFF8F4FF),
                                   borderRadius: BorderRadius.circular(16),
                                   border: Border.all(
                                     color: _focused || _isValid
@@ -485,11 +494,9 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen>
                                     Container(
                                       padding: const EdgeInsets.symmetric(
                                           horizontal: 12, vertical: 17),
-                                      decoration: BoxDecoration(
-                                        color: isDark
-                                            ? AppColors.darkCardElevated
-                                            : const Color(0xFFEDE0F0),
-                                        borderRadius: const BorderRadius.horizontal(
+                                      decoration: const BoxDecoration(
+                                        color: Color(0xFFEDE0F0),
+                                        borderRadius: BorderRadius.horizontal(
                                             left: Radius.circular(16)),
                                       ),
                                       child: const Row(
@@ -527,22 +534,22 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen>
                                           if (v.length == 10) HapticFeedback.selectionClick();
                                         },
                                         onSubmitted: (_) => _continue(),
-                                        decoration: InputDecoration(
+                                        decoration: const InputDecoration(
                                           hintText: '98765 43210',
                                           hintStyle: TextStyle(
-                                              color: context.appTextHint,
+                                              color: Color(0xFFBBBBBB),
                                               fontFamily: 'Poppins',
                                               fontSize: 16),
                                           border: InputBorder.none,
                                           counterText: '',
-                                          contentPadding: const EdgeInsets.symmetric(
+                                          contentPadding: EdgeInsets.symmetric(
                                               horizontal: 16, vertical: 17),
                                         ),
-                                        style: TextStyle(
+                                        style: const TextStyle(
                                           fontSize: 18,
                                           fontWeight: FontWeight.w600,
                                           fontFamily: 'Poppins',
-                                          color: isDark ? Colors.white : const Color(0xFF1A0A2E),
+                                          color: Color(0xFF1A0A2E),
                                           letterSpacing: 2,
                                         ),
                                       ),
@@ -640,7 +647,7 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen>
                                                 : const Row(
                                                     mainAxisAlignment: MainAxisAlignment.center,
                                                     children: [
-                                                      Text('Continue',
+                                                      Text('Get OTP',
                                                           style: TextStyle(
                                                             fontSize: 16,
                                                             fontWeight: FontWeight.w700,
@@ -667,18 +674,22 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen>
                                   alignment: WrapAlignment.center,
                                   children: [
                                     Icon(Icons.lock_outline_rounded,
-                                        size: 12, color: context.appTextHint),
+                                        size: 12, color: Colors.grey.shade400),
                                     const SizedBox(width: 4),
                                     Text(
                                       'By continuing, you agree to our ',
                                       style: TextStyle(
                                         fontSize: 11,
-                                        color: context.appTextHint,
+                                        color: Colors.grey.shade400,
                                         fontFamily: 'Poppins',
                                       ),
                                     ),
                                     GestureDetector(
-                                      onTap: () => context.push(AppRoutes.termsOfService),
+                                      onTap: () => Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                            builder: (_) => const TermsOfServiceScreen()),
+                                      ),
                                       child: Text(
                                         'Terms',
                                         style: TextStyle(
@@ -695,12 +706,16 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen>
                                       ' & ',
                                       style: TextStyle(
                                         fontSize: 11,
-                                        color: context.appTextHint,
+                                        color: Colors.grey.shade400,
                                         fontFamily: 'Poppins',
                                       ),
                                     ),
                                     GestureDetector(
-                                      onTap: () => context.push(AppRoutes.privacyPolicy),
+                                      onTap: () => Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                            builder: (_) => const PrivacyPolicyScreen()),
+                                      ),
                                       child: Text(
                                         'Privacy Policy',
                                         style: TextStyle(

@@ -19,6 +19,7 @@ import 'features/security/services/biometric_service.dart';
 import 'features/security/screens/lock_screen.dart';
 import 'features/health/services/health_notification_service.dart';
 import 'core/widgets/offline_banner.dart';
+import 'core/widgets/active_session_bridge.dart';
 
 class MedNUApp extends ConsumerStatefulWidget {
   const MedNUApp({super.key});
@@ -39,6 +40,8 @@ class _MedNUAppState extends ConsumerState<MedNUApp>
   StreamSubscription<String>? _tokenRefreshSub;
   StreamSubscription<List<UnifiedBooking>>? _bookingReminderSub;
   bool _initialNotifLoad = true;
+  List<UnifiedBooking>? _pendingReminderBookings;
+  bool _reminderSyncRunning = false;
 
   String? _lastAlertedCallId;
 
@@ -57,6 +60,8 @@ class _MedNUAppState extends ConsumerState<MedNUApp>
       _bookingReminderSub?.cancel();
       _initialNotifLoad = true;
       _lastAlertedCallId = null;
+      _pendingReminderBookings = null;
+      _reminderSyncRunning = false;
 
       if (user == null) {
         FirebaseCrashlytics.instance.setUserIdentifier('');
@@ -145,21 +150,50 @@ class _MedNUAppState extends ConsumerState<MedNUApp>
       });
 
       // ── Booking reminders ───────────────────────────────────────────────────
-      _bookingReminderSub = MyServicesService.allBookingsStream().listen((bookings) async {
+      // Stream.listen's callback is fire-and-forget: if a second snapshot
+      // arrives before the first async run finishes, Dart starts it
+      // concurrently rather than queuing it. Two overlapping runs racing a
+      // cancel()-then-create() on the same scheduled_reminders doc ID can
+      // land the second create as an update, which the rules reject (no
+      // client update is allowed on that collection by design). Coalescing
+      // into a single-flight worker keeps runs serialized per user.
+      _bookingReminderSub =
+          MyServicesService.allBookingsStream().listen((bookings) {
+        _queueReminderSync(user.uid, bookings);
+      });
+    });
+  }
+
+  // Latest-wins queue: a new snapshot while a sync is in flight just replaces
+  // the pending batch rather than starting a second overlapping run.
+  void _queueReminderSync(String uid, List<UnifiedBooking> bookings) {
+    _pendingReminderBookings = bookings;
+    if (_reminderSyncRunning) return;
+    _reminderSyncRunning = true;
+    unawaited(_drainReminderSyncQueue(uid));
+  }
+
+  Future<void> _drainReminderSyncQueue(String uid) async {
+    try {
+      while (_pendingReminderBookings != null) {
+        final bookings = _pendingReminderBookings!;
+        _pendingReminderBookings = null;
         try {
           final prefs = await SharedPreferences.getInstance();
           final enabled = prefs.getBool('booking_reminder_enabled') ?? true;
           if (!enabled) {
             for (final b in bookings) {
-              await BookingReminderService.cancelReminder(b.id);
+              await BookingReminderService.cancelReminder(uid, b.id);
             }
-            return;
+            continue;
           }
           final minutes = prefs.getInt('booking_reminder_minutes') ?? 15;
-          await BookingReminderService.syncReminders(bookings, minutes);
+          await BookingReminderService.syncReminders(uid, bookings, minutes);
         } catch (_) {}
-      });
-    });
+      }
+    } finally {
+      _reminderSyncRunning = false;
+    }
   }
 
   Future<void> _saveFcmToken(String uid) async {
@@ -258,6 +292,7 @@ class _MedNUAppState extends ConsumerState<MedNUApp>
           child: Stack(
             children: [
               OfflineBanner(child: child ?? const SizedBox.expand()),
+              const ActiveSessionBridge(),
               if (_isLocked)
                 LockScreen(
                   onAuthStarted: () => _isAuthenticating = true,

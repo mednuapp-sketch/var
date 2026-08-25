@@ -124,10 +124,9 @@ class _GradientAppBar extends StatelessWidget {
       leading: const BackButton(color: Colors.white),
       backgroundColor: AppColors.primary,
       elevation: 0,
-      title: const Text(
+      title: Text(
         'Earnings & Analytics',
-        style: TextStyle(
-          fontFamily: 'Poppins',
+        style: AppTextStyles.h4.copyWith(
           fontSize: 17,
           fontWeight: FontWeight.w600,
           color: Colors.white,
@@ -139,11 +138,7 @@ class _GradientAppBar extends StatelessWidget {
           children: [
             Container(
               decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Color(0xFF1A0030), Color(0xFFC2185B), Color(0xFF7B1FA2)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
+                gradient: AppColors.earningGradient,
               ),
             ),
             Positioned(
@@ -193,10 +188,9 @@ class _GradientAppBar extends StatelessWidget {
                                   color: Colors.white.withValues(alpha: 0.15),
                                   borderRadius: BorderRadius.circular(20),
                                 ),
-                                child: const Text(
+                                child: Text(
                                   'Last 12 Months',
-                                  style: TextStyle(
-                                    fontFamily: 'Poppins',
+                                  style: AppTextStyles.caption.copyWith(
                                     fontSize: 10,
                                     color: Colors.white70,
                                     fontWeight: FontWeight.w500,
@@ -206,11 +200,10 @@ class _GradientAppBar extends StatelessWidget {
                               const SizedBox(height: 4),
                               Text(
                                 '₹${_formatAmount(lifetime!)}',
-                                style: const TextStyle(
-                                  fontFamily: 'Poppins',
+                                style: AppTextStyles.display.copyWith(
                                   fontSize: 38,
                                   fontWeight: FontWeight.w800,
-                                  color: Colors.white,
+                                  color: AppColors.accentText,
                                   height: 1.1,
                                 ),
                               ),
@@ -610,7 +603,7 @@ class _WalletSection extends StatelessWidget {
             Text(
               'Wallet & Payouts',
               style: TextStyle(
-                fontFamily: 'Poppins',
+                fontFamily: 'Inter',
                 fontSize: 15,
                 fontWeight: FontWeight.w700,
                 color: Colors.white,
@@ -640,7 +633,7 @@ class _WalletSection extends StatelessWidget {
                     ? 'Request Withdrawal  ₹${_formatAmount(pending)}'
                     : 'No Pending Payout',
                 style: const TextStyle(
-                  fontFamily: 'Poppins',
+                  fontFamily: 'Inter',
                   fontWeight: FontWeight.w600,
                   fontSize: 13,
                 ),
@@ -741,12 +734,12 @@ class _WeeklyBarChart extends StatelessWidget {
             toY: weeklyMap[i] ?? 0,
             gradient: isToday
                 ? const LinearGradient(
-                    colors: [Color(0xFFC2185B), Color(0xFF7B1FA2)],
+                    colors: [AppColors.primary, AppColors.secondary],
                     begin: Alignment.bottomCenter,
                     end: Alignment.topCenter,
                   )
                 : const LinearGradient(
-                    colors: [Color(0xFFE91E8C), Color(0xFF9C27B0)],
+                    colors: [AppColors.primaryLight, AppColors.secondaryLight],
                     begin: Alignment.bottomCenter,
                     end: Alignment.topCenter,
                   ),
@@ -796,7 +789,7 @@ class _WeeklyBarChart extends StatelessWidget {
                                 ? dayLabels[idx]
                                 : '',
                             style: TextStyle(
-                              fontFamily: 'Poppins',
+                              fontFamily: 'Inter',
                               fontSize: 11,
                               fontWeight: isToday
                                   ? FontWeight.w700
@@ -817,7 +810,7 @@ class _WeeklyBarChart extends StatelessWidget {
                         BarTooltipItem(
                       '₹${_formatAmount(rod.toY)}',
                       const TextStyle(
-                        fontFamily: 'Poppins',
+                        fontFamily: 'Inter',
                         color: Colors.white,
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
@@ -842,7 +835,7 @@ class _WeeklyBarChart extends StatelessWidget {
             const Text(
               'Today highlighted',
               style: TextStyle(
-                fontFamily: 'Poppins',
+                fontFamily: 'Inter',
                 fontSize: 10,
                 color: AppColors.textHint,
               ),
@@ -906,7 +899,7 @@ class _MonthlyTrendChart extends StatelessWidget {
                   getTitlesWidget: (value, meta) => Text(
                     '₹${_formatAmount(value)}',
                     style: const TextStyle(
-                      fontFamily: 'Poppins',
+                      fontFamily: 'Inter',
                       fontSize: 9,
                       color: AppColors.textHint,
                     ),
@@ -941,7 +934,7 @@ class _MonthlyTrendChart extends StatelessWidget {
                     .map((s) => LineTooltipItem(
                           '₹${_formatAmount(s.y)}',
                           const TextStyle(
-                            fontFamily: 'Poppins',
+                            fontFamily: 'Inter',
                             color: Colors.white,
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
@@ -986,7 +979,7 @@ class _ConsultGrid extends StatelessWidget {
       _GridItem('Video', '$video', Icons.videocam_rounded,
           const Color(0xFF6A1B9A)),
       _GridItem('In-Person', '$inPerson', Icons.person_pin_circle_rounded,
-          AppColors.accent),
+          AppColors.accentText),
     ];
 
     // A plain Column-of-Rows, not a shrink-wrapped GridView: this grid sits
@@ -1033,7 +1026,7 @@ class _ConsultGrid extends StatelessWidget {
               Text(
                 item.value,
                 style: TextStyle(
-                  fontFamily: 'Poppins',
+                  fontFamily: 'Inter',
                   fontSize: 18,
                   fontWeight: FontWeight.w800,
                   color: item.color,
@@ -1042,7 +1035,7 @@ class _ConsultGrid extends StatelessWidget {
               Text(
                 item.label,
                 style: const TextStyle(
-                  fontFamily: 'Poppins',
+                  fontFamily: 'Inter',
                   fontSize: 10,
                   color: AppColors.textSecondary,
                 ),
@@ -1116,7 +1109,7 @@ class _HeroStat extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
-              fontFamily: 'Poppins',
+              fontFamily: 'Inter',
               fontSize: 15,
               fontWeight: FontWeight.w800,
               color: Colors.white,
@@ -1127,7 +1120,7 @@ class _HeroStat extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
-              fontFamily: 'Poppins',
+              fontFamily: 'Inter',
               fontSize: 10,
               color: Colors.white70,
             ),
@@ -1183,7 +1176,7 @@ class _QuickStatCard extends StatelessWidget {
             Text(
               value,
               style: TextStyle(
-                fontFamily: 'Poppins',
+                fontFamily: 'Inter',
                 fontSize: 14,
                 fontWeight: FontWeight.w800,
                 color: color,
@@ -1193,7 +1186,7 @@ class _QuickStatCard extends StatelessWidget {
             Text(
               label,
               style: const TextStyle(
-                fontFamily: 'Poppins',
+                fontFamily: 'Inter',
                 fontSize: 10,
                 color: AppColors.textHint,
               ),
@@ -1251,7 +1244,7 @@ class _InsightCard extends StatelessWidget {
             Text(
               value,
               style: const TextStyle(
-                fontFamily: 'Poppins',
+                fontFamily: 'Inter',
                 fontSize: 14,
                 fontWeight: FontWeight.w800,
                 color: AppColors.textPrimary,
@@ -1264,7 +1257,7 @@ class _InsightCard extends StatelessWidget {
             Text(
               label,
               style: const TextStyle(
-                fontFamily: 'Poppins',
+                fontFamily: 'Inter',
                 fontSize: 10,
                 color: AppColors.textHint,
               ),
@@ -1288,7 +1281,7 @@ class _WalletStat extends StatelessWidget {
           Text(
             value,
             style: const TextStyle(
-              fontFamily: 'Poppins',
+              fontFamily: 'Inter',
               fontSize: 14,
               fontWeight: FontWeight.w800,
               color: Colors.white,
@@ -1300,7 +1293,7 @@ class _WalletStat extends StatelessWidget {
           Text(
             label,
             style: const TextStyle(
-              fontFamily: 'Poppins',
+              fontFamily: 'Inter',
               fontSize: 9,
               color: Colors.white60,
             ),
@@ -1370,7 +1363,7 @@ class _TransactionTile extends StatelessWidget {
           child: Text(
             '+₹$fee',
             style: const TextStyle(
-              fontFamily: 'Poppins',
+              fontFamily: 'Inter',
               fontSize: 13,
               fontWeight: FontWeight.w700,
               color: AppColors.success,

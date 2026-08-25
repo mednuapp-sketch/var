@@ -46,7 +46,6 @@ import '../../features/profile/screens/profile_screen.dart';
 import '../../features/profile/screens/family_management_screen.dart';
 import '../../features/profile/screens/family_member_detail_screen.dart';
 import '../../features/profile/screens/settings_screen.dart';
-import '../../features/profile/screens/language_screen.dart';
 import '../../features/education/screens/education_screen.dart';
 import '../../features/premium/screens/premium_screen.dart';
 import '../../features/health/screens/health_dashboard_screen.dart';
@@ -126,7 +125,6 @@ class AppRoutes {
   static const familyMemberDetail = '/profile/family/member';
   static const favouriteDoctors   = '/profile/favourites';
   static const settings           = '/profile/settings';
-  static const language           = '/profile/language';
   static const education          = '/education';
   static const premium            = '/premium';
   static const healthDashboard    = '/health';
@@ -271,7 +269,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: AppRoutes.appointment,        builder: (c, s) => const AppointmentScreen()),
       GoRoute(path: AppRoutes.doctors,            builder: (c, s) => DoctorsListScreen(initialSpecialty: s.uri.queryParameters['specialty'], initialMode: s.uri.queryParameters['mode'], initialType: s.uri.queryParameters['type'], initialDuration: int.tryParse(s.uri.queryParameters['duration'] ?? ''))),
       GoRoute(path: AppRoutes.specialities,       builder: (c, s) => const SpecialitiesScreen()),
-      GoRoute(path: AppRoutes.doctorProfile,      builder: (c, s) => DoctorProfileScreen(doctorId: s.pathParameters['id'] ?? '', initialDuration: int.tryParse(s.uri.queryParameters['duration'] ?? ''))),
+      GoRoute(path: AppRoutes.doctorProfile,      builder: (c, s) => DoctorProfileScreen(doctorId: s.pathParameters['id'] ?? '', initialDuration: int.tryParse(s.uri.queryParameters['duration'] ?? ''), rescheduleAppointmentId: s.uri.queryParameters['rescheduleId'], rescheduleType: s.uri.queryParameters['rescheduleType'])),
       GoRoute(path: AppRoutes.hospitals,          builder: (c, s) => HospitalsScreen(initialQuery: s.uri.queryParameters['q'])),
       GoRoute(path: AppRoutes.pharmacy,           builder: (c, s) => const PharmacyScreen()),
       GoRoute(path: AppRoutes.records, builder: (c, s) {
@@ -289,7 +287,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: AppRoutes.family,             builder: (c, s) => const FamilyManagementScreen()),
       GoRoute(path: AppRoutes.familyMemberDetail, builder: (c, s) => FamilyMemberDetailScreen(member: s.extra as Map<String, dynamic>? ?? {})),
       GoRoute(path: AppRoutes.settings,           builder: (c, s) => const SettingsScreen()),
-      GoRoute(path: AppRoutes.language,           builder: (c, s) => const LanguageScreen()),
       GoRoute(path: AppRoutes.education,          builder: (c, s) => const EducationScreen()),
       GoRoute(path: AppRoutes.premium,            builder: (c, s) => const PremiumScreen()),
 GoRoute(path: AppRoutes.healthDashboard,    builder: (c, s) => const HealthDashboardScreen()),

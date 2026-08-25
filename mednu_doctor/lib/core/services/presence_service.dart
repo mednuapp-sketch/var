@@ -115,7 +115,7 @@ class PresenceService with WidgetsBindingObserver {
     try {
       await FlutterForegroundTask.startService(
         serviceId: 1001,
-        notificationTitle: 'MedNU Doctor — You are Online',
+        notificationTitle: 'MedNU Service — You are Online',
         notificationText: 'Patients can find you. Tap to return to app.',
         callback: presenceTaskCallback,
       );

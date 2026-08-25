@@ -4,10 +4,13 @@ import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/services/feedback_service.dart';
 import '../../../core/widgets/ux_widgets.dart';
-import '../../home/providers/home_nav_provider.dart' show bottomNavIndexProvider;
+import '../../home/providers/home_nav_provider.dart'
+    show bottomNavIndexProvider;
 import '../models/unified_booking.dart';
 import '../providers/my_services_provider.dart';
+import '../services/my_services_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  MyServicesScreen
@@ -57,8 +60,21 @@ class _MyServicesScreenState extends ConsumerState<MyServicesScreen>
         foregroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-          onPressed: () => context.pop(),
+          icon: const Icon(
+            Icons.arrow_back_ios_new_rounded,
+            color: Colors.white,
+          ),
+          onPressed: () {
+            // When embedded as the Home shell's "Services" bottom-nav tab
+            // (see HomeScreen's IndexedStack), there's nothing on the
+            // navigator stack to pop, so fall back to switching to the
+            // Home tab instead of a no-op pop.
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              ref.read(bottomNavIndexProvider.notifier).state = 0;
+            }
+          },
         ),
         actions: [
           IconButton(
@@ -91,9 +107,11 @@ class _MyServicesScreenState extends ConsumerState<MyServicesScreen>
             fontSize: 13,
           ),
           tabs: _tabLabels
-              .map((t) => Tab(
-                    child: Text(t, maxLines: 1, overflow: TextOverflow.ellipsis),
-                  ))
+              .map(
+                (t) => Tab(
+                  child: Text(t, maxLines: 1, overflow: TextOverflow.ellipsis),
+                ),
+              )
               .toList(),
         ),
       ),
@@ -138,9 +156,7 @@ class _BookingsList extends ConsumerWidget {
             .where((b) => b.isActive && !_upcomingStatuses.contains(b.status))
             .toList();
       case _BookingFilter.upcoming:
-        return all
-            .where((b) => _upcomingStatuses.contains(b.status))
-            .toList();
+        return all.where((b) => _upcomingStatuses.contains(b.status)).toList();
       case _BookingFilter.completed:
         return all.where((b) => b.isCompleted).toList();
       case _BookingFilter.cancelled:
@@ -190,6 +206,19 @@ class _BookingsList extends ConsumerWidget {
   bool get _showBrowseAction =>
       filter == _BookingFilter.active || filter == _BookingFilter.upcoming;
 
+  void _browseServices(BuildContext context, WidgetRef ref) {
+    ref.read(bottomNavIndexProvider.notifier).state = 0;
+    // When this screen was pushed on top of the Home shell (e.g. from the
+    // Profile menu's "My Services" tracker), switching the tab index alone
+    // is invisible — it changes the IndexedStack underneath this route.
+    // Pop back to the shell so the Home tab is actually shown.
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go(AppRoutes.home);
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(allBookingsProvider);
@@ -202,8 +231,8 @@ class _BookingsList extends ConsumerWidget {
           itemCount: 4,
           itemBuilder: (_, __) => const _LoadingShimmer(),
         ),
-        error: (e, _) => _ErrorState(
-            onRetry: () => ref.invalidate(allBookingsProvider)),
+        error: (e, _) =>
+            _ErrorState(onRetry: () => ref.invalidate(allBookingsProvider)),
         data: (all) {
           final items = _filtered(all);
           if (items.isEmpty) {
@@ -212,17 +241,19 @@ class _BookingsList extends ConsumerWidget {
                 physics: const AlwaysScrollableScrollPhysics(),
                 children: [
                   ConstrainedBox(
-                    constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                    constraints: BoxConstraints(
+                      minHeight: constraints.maxHeight,
+                    ),
                     child: Center(
                       child: AppEmptyState(
                         icon: _emptyIcon,
                         title: _emptyTitle,
                         message: _emptyMessage,
-                        actionLabel: _showBrowseAction ? 'Browse Services' : null,
+                        actionLabel: _showBrowseAction
+                            ? 'Browse Services'
+                            : null,
                         onAction: _showBrowseAction
-                            ? () => ref
-                                .read(bottomNavIndexProvider.notifier)
-                                .state = 0
+                            ? () => _browseServices(context, ref)
                             : null,
                       ),
                     ),
@@ -274,10 +305,7 @@ class _BookingCard extends StatelessWidget {
     final statusInfo = _resolveStatusInfo(booking.status);
 
     return GestureDetector(
-      onTap: () => context.push(
-        AppRoutes.serviceDetail,
-        extra: booking,
-      ),
+      onTap: () => context.push(AppRoutes.serviceDetail, extra: booking),
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
         decoration: BoxDecoration(
@@ -296,61 +324,77 @@ class _BookingCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Header row
+            // Note: a single-sided Border (bottom only) combined with
+            // borderRadius throws "A borderRadius can only be given on
+            // borders with uniform colors" — BorderSide.none on the other
+            // three sides makes the border non-uniform. Draw the divider as
+            // a separate 1px Container instead of via `border:`.
             Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
                 color: statusInfo.color.withValues(alpha: 0.04),
                 borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(18)),
-                border:
-                    Border(bottom: BorderSide(color: context.appBorder)),
+                  top: Radius.circular(18),
+                ),
               ),
-              child: Row(
+              child: Column(
                 children: [
-                  Container(
-                    width: 44, height: 44,
-                    decoration: BoxDecoration(
-                      gradient: AppColors.primaryGradient,
-                      borderRadius: BorderRadius.circular(12),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
                     ),
-                    child: Icon(
-                      _iconForService(booking.serviceType),
-                      color: Colors.white, size: 22,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    child: Row(
                       children: [
-                        Text(
-                          booking.serviceName,
-                          style: AppTextStyles.labelLarge.copyWith(
-                              color: context.appTextPrimary),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                        Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            gradient: AppColors.primaryGradient,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(
+                            _iconForService(booking.serviceType),
+                            color: Colors.white,
+                            size: 22,
+                          ),
                         ),
-                        const SizedBox(height: 2),
-                        Text(
-                          booking.providerName ?? booking.serviceType,
-                          style: AppTextStyles.bodySmall.copyWith(
-                              color: context.appTextSecondary),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                booking.serviceName,
+                                style: AppTextStyles.labelLarge.copyWith(
+                                  color: context.appTextPrimary,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                booking.providerName ?? booking.serviceType,
+                                style: AppTextStyles.bodySmall.copyWith(
+                                  color: context.appTextSecondary,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
                         ),
+                        _StatusChip(info: statusInfo),
                       ],
                     ),
                   ),
-                  _StatusChip(info: statusInfo),
+                  Container(height: 1, color: context.appBorder),
                 ],
               ),
             ),
 
             // Details + actions
             Padding(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 16, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               child: Column(
                 children: [
                   Row(
@@ -372,8 +416,7 @@ class _BookingCard extends StatelessWidget {
                       _InfoCell(
                         icon: Icons.currency_rupee_rounded,
                         label: 'Amount',
-                        value:
-                            '₹${(booking.amount ?? 0).toStringAsFixed(0)}',
+                        value: '₹${(booking.amount ?? 0).toStringAsFixed(0)}',
                       ),
                     ],
                   ),
@@ -396,8 +439,11 @@ class _BookingCard extends StatelessWidget {
 class _InfoCell extends StatelessWidget {
   final IconData icon;
   final String label, value;
-  const _InfoCell(
-      {required this.icon, required this.label, required this.value});
+  const _InfoCell({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -410,11 +456,14 @@ class _InfoCell extends StatelessWidget {
               Icon(icon, size: 11, color: context.appTextHint),
               const SizedBox(width: 3),
               Flexible(
-                child: Text(label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.caption
-                        .copyWith(color: context.appTextHint)),
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.caption.copyWith(
+                    color: context.appTextHint,
+                  ),
+                ),
               ),
             ],
           ),
@@ -422,8 +471,9 @@ class _InfoCell extends StatelessWidget {
           Text(
             value,
             style: AppTextStyles.bodySmall.copyWith(
-                color: context.appTextPrimary,
-                fontWeight: FontWeight.w600),
+              color: context.appTextPrimary,
+              fontWeight: FontWeight.w600,
+            ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -450,7 +500,8 @@ class _CardActions extends StatelessWidget {
       BookingStatus.inProgress,
       BookingStatus.consultationStarted,
     }.contains(status);
-    final canRate = status == BookingStatus.completed &&
+    final canRate =
+        status == BookingStatus.completed &&
         !(booking.rawData['isRated'] as bool? ?? false);
     final canCancel = const {
       BookingStatus.pending,
@@ -462,26 +513,28 @@ class _CardActions extends StatelessWidget {
       children: [
         Expanded(
           child: OutlinedButton(
-            onPressed: () => context.push(
-              AppRoutes.serviceDetail,
-              extra: booking,
-            ),
+            onPressed: () =>
+                context.push(AppRoutes.serviceDetail, extra: booking),
             style: OutlinedButton.styleFrom(
               foregroundColor: AppColors.primary,
               side: const BorderSide(color: AppColors.primary),
               padding: const EdgeInsets.symmetric(vertical: 10),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
-            child: const Text('View Details',
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                softWrap: false,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600)),
+            child: const Text(
+              'View Details',
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              softWrap: false,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
         ),
         if (canTrack) ...[
@@ -497,21 +550,25 @@ class _CardActions extends StatelessWidget {
                 },
               ),
               icon: const Icon(Icons.location_on_rounded, size: 15),
-              label: const Text('Track',
-                  maxLines: 1,
-                  softWrap: false,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600)),
+              label: const Text(
+                'Track',
+                maxLines: 1,
+                softWrap: false,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.accent,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 10),
                 elevation: 0,
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ),
           ),
@@ -529,26 +586,30 @@ class _CardActions extends StatelessWidget {
                   'doctorSpecialty': booking.providerSpecialty ?? '',
                   'consultationType':
                       booking.source == BookingSource.consultation
-                          ? 'Video'
-                          : 'In-person',
+                      ? 'Video'
+                      : 'In-person',
                 },
               ),
               icon: const Icon(Icons.star_rounded, size: 15),
-              label: const Text('Rate',
-                  maxLines: 1,
-                  softWrap: false,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600)),
+              label: const Text(
+                'Rate',
+                maxLines: 1,
+                softWrap: false,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.amber.shade700,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 10),
                 elevation: 0,
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ),
           ),
@@ -560,10 +621,17 @@ class _CardActions extends StatelessWidget {
             style: OutlinedButton.styleFrom(
               foregroundColor: AppColors.error,
               side: const BorderSide(color: AppColors.error),
-              padding:
-                  const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+              // Theme's default OutlinedButtonThemeData forces
+              // minimumSize: Size(double.infinity, 52) for full-width
+              // buttons; this one is icon-only and sits as a bare (non-
+              // Expanded) Row child, so it must override that back to a
+              // finite size or layout throws "BoxConstraints forces an
+              // infinite width."
+              minimumSize: const Size(44, 44),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
             child: const Icon(Icons.close_rounded, size: 18),
           ),
@@ -572,42 +640,68 @@ class _CardActions extends StatelessWidget {
     );
   }
 
-  void _showCancelDialog(BuildContext context) {
-    showDialog(
+  Future<void> _showCancelDialog(BuildContext context) async {
+    final confirm = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20)),
-        title: Text('Cancel Booking',
-            style: AppTextStyles.h4.copyWith(color: context.appTextPrimary)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          'Cancel Booking',
+          style: AppTextStyles.h4.copyWith(color: context.appTextPrimary),
+        ),
         content: Text(
           'Are you sure you want to cancel this service?\n'
           'Cancellation charges may apply.',
-          style: AppTextStyles.bodyMedium
-              .copyWith(color: context.appTextSecondary),
+          style: AppTextStyles.bodyMedium.copyWith(
+            color: context.appTextSecondary,
+          ),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Keep Booking',
-                style: TextStyle(
-                    fontFamily: 'Poppins',
-                    color: context.appTextSecondary)),
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(
+              'Keep Booking',
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                color: context.appTextSecondary,
+              ),
+            ),
           ),
           ElevatedButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.error,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
-            child: const Text('Yes, Cancel',
-                style: TextStyle(
-                    fontFamily: 'Poppins', color: Colors.white)),
+            child: const Text(
+              'Yes, Cancel',
+              style: TextStyle(fontFamily: 'Poppins', color: Colors.white),
+            ),
           ),
         ],
       ),
     );
+
+    if (confirm != true || !context.mounted) return;
+
+    FeedbackService.showLoading(context, 'Cancelling booking...');
+    try {
+      await MyServicesService.updateStatus(booking, 'cancelled');
+      if (context.mounted) {
+        FeedbackService.dismiss(context);
+        FeedbackService.showSuccess(context, 'Booking cancelled successfully');
+      }
+    } catch (e) {
+      if (context.mounted) {
+        FeedbackService.showError(
+          context,
+          'Failed to cancel booking. Please try again.',
+          onRetry: () => _showCancelDialog(context),
+        );
+      }
+    }
   }
 }
 
@@ -627,27 +721,37 @@ _StatusMeta _resolveStatusInfo(BookingStatus status) {
     case BookingStatus.pending:
     case BookingStatus.requested:
       return _StatusMeta(
-          status.label, AppColors.warning, Icons.schedule_rounded);
+        status.label,
+        AppColors.warning,
+        Icons.schedule_rounded,
+      );
     case BookingStatus.confirmed:
     case BookingStatus.rescheduled:
-      return _StatusMeta(
-          status.label, AppColors.primary, Icons.check_rounded);
+      return _StatusMeta(status.label, AppColors.primary, Icons.check_rounded);
     case BookingStatus.assigned:
       return _StatusMeta(
-          status.label, Colors.blue.shade700, Icons.person_pin_rounded);
+        status.label,
+        Colors.blue.shade700,
+        Icons.person_pin_rounded,
+      );
     case BookingStatus.onTheWay:
     case BookingStatus.inProgress:
     case BookingStatus.consultationStarted:
       return _StatusMeta(
-          status.label, AppColors.accent, Icons.play_circle_rounded);
+        status.label,
+        AppColors.accent,
+        Icons.play_circle_rounded,
+      );
     case BookingStatus.sampleCollected:
     case BookingStatus.delivered:
     case BookingStatus.completed:
       return _StatusMeta(
-          status.label, AppColors.success, Icons.check_circle_rounded);
+        status.label,
+        AppColors.success,
+        Icons.check_circle_rounded,
+      );
     case BookingStatus.cancelled:
-      return _StatusMeta(
-          status.label, AppColors.error, Icons.cancel_rounded);
+      return _StatusMeta(status.label, AppColors.error, Icons.cancel_rounded);
   }
 }
 
@@ -658,22 +762,21 @@ class _StatusChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding:
-          const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
       decoration: BoxDecoration(
         color: info.color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(20),
-        border:
-            Border.all(color: info.color.withValues(alpha: 0.3)),
+        border: Border.all(color: info.color.withValues(alpha: 0.3)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(info.icon, size: 11, color: info.color),
           const SizedBox(width: 4),
-          Text(info.label,
-              style: AppTextStyles.labelSmall
-                  .copyWith(color: info.color)),
+          Text(
+            info.label,
+            style: AppTextStyles.labelSmall.copyWith(color: info.color),
+          ),
         ],
       ),
     );
@@ -716,31 +819,38 @@ class _ErrorState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.wifi_off_rounded,
-                size: 56,
-                color: AppColors.error.withValues(alpha: 0.5)),
+            Icon(
+              Icons.wifi_off_rounded,
+              size: 56,
+              color: AppColors.error.withValues(alpha: 0.5),
+            ),
             const SizedBox(height: 16),
-            Text('Something went wrong',
-                style: AppTextStyles.h4
-                    .copyWith(color: context.appTextSecondary)),
+            Text(
+              'Something went wrong',
+              style: AppTextStyles.h4.copyWith(color: context.appTextSecondary),
+            ),
             const SizedBox(height: 8),
             Text(
               'Could not load your bookings.\nCheck your connection and try again.',
-              style: AppTextStyles.bodySmall
-                  .copyWith(color: context.appTextHint),
+              style: AppTextStyles.bodySmall.copyWith(
+                color: context.appTextHint,
+              ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 20),
             ElevatedButton.icon(
               onPressed: onRetry,
               icon: const Icon(Icons.refresh_rounded, size: 18),
-              label: const Text('Retry',
-                  style: TextStyle(fontFamily: 'Poppins')),
+              label: const Text(
+                'Retry',
+                style: TextStyle(fontFamily: 'Poppins'),
+              ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ),
           ],

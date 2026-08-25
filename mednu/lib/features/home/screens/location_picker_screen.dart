@@ -78,7 +78,9 @@ class _LocationPickerScreenState extends ConsumerState<LocationPickerScreen>
       if (!ok) return;
       final perm = await Geolocator.checkPermission();
       if (perm == LocationPermission.denied ||
-          perm == LocationPermission.deniedForever) return;
+          perm == LocationPermission.deniedForever) {
+        return;
+      }
       final pos = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.low,
         timeLimit: const Duration(seconds: 5),
@@ -354,7 +356,7 @@ class _LocationPickerScreenState extends ConsumerState<LocationPickerScreen>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            SizedBox(
+            const SizedBox(
               width: 32,
               height: 32,
               child: CircularProgressIndicator(
@@ -449,7 +451,7 @@ class _LocationPickerScreenState extends ConsumerState<LocationPickerScreen>
                 minimumSize: Size.zero,
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
-              child: Text(
+              child: const Text(
                 'Manage',
                 style: TextStyle(
                   fontFamily: 'Poppins',

@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>MedNU Doctor</string>
+	<string>MedNu Service</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -47,23 +47,23 @@
 	<true/>
 	<!-- Contacts permission for SOS emergency contacts -->
 	<key>NSContactsUsageDescription</key>
-	<string>MedNU Doctor needs access to your contacts so you can select emergency contacts for SOS alerts.</string>
+	<string>MedNu Service needs access to your contacts so you can select emergency contacts for SOS alerts.</string>
 	<!-- Camera & Microphone for video consultations -->
 	<key>NSCameraUsageDescription</key>
-	<string>MedNU Doctor uses the camera for video consultations and profile photos.</string>
+	<string>MedNu Service uses the camera for video consultations and profile photos.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>MedNU Doctor uses the microphone so you can speak with patients during video consultations.</string>
+	<string>MedNu Service uses the microphone so you can speak with patients during video consultations.</string>
 	<!-- Photos / Files -->
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>MedNU Doctor accesses your photo library to upload profile photos and medical documents.</string>
+	<string>MedNu Service accesses your photo library to upload profile photos and medical documents.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>MedNU Doctor saves prescriptions and reports to your photo library.</string>
+	<string>MedNu Service saves prescriptions and reports to your photo library.</string>
 	<!-- Location permissions for doctor GPS tracking -->
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>MedNU Doctor uses your GPS location to show you to patients within 10 km. Location must be ON while you are online.</string>
+	<string>MedNu Service uses your GPS location to show you to patients within 10 km. Location must be ON while you are online.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>MedNU Doctor uses your GPS location to show you to patients within 10 km. Location must be ON while you are online.</string>
+	<string>MedNu Service uses your GPS location to show you to patients within 10 km. Location must be ON while you are online.</string>
 	<key>NSLocationAlwaysUsageDescription</key>
-	<string>MedNU Doctor uses your GPS location to show you to patients within 10 km.</string>
+	<string>MedNu Service uses your GPS location to show you to patients within 10 km.</string>
 </dict>
 </plist>

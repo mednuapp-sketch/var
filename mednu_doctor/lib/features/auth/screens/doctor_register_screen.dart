@@ -1,8 +1,5 @@
 import 'dart:io';
-import 'dart:typed_data';
-import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/doctor_auth_service.dart';
@@ -10,7 +7,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/services/image_upload_service.dart';
-import '../../../core/widgets/ux_widgets.dart';
+import '../../../core/utils/validators.dart';
 
 class DoctorRegisterScreen extends StatefulWidget {
   const DoctorRegisterScreen({super.key});
@@ -29,6 +26,8 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
   final _emailCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
   String _selectedGender = 'Male';
+  String? _nameError;
+  String? _emailError;
 
   // ── Step 2: Professional ──────────────────────────────────────────────────
   final _regNoCtrl      = TextEditingController();
@@ -37,7 +36,6 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
   final _feeCtrl        = TextEditingController();
   final _otherSpecCtrl  = TextEditingController();
   String _selectedSpec  = 'General';
-  String _professionalType = 'doctor'; // 'doctor' | 'therapist'
 
   // Names match patient app specialty filters exactly so search/filter works
   static const _specialties = [
@@ -65,28 +63,12 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
     'Other',
   ];
 
-  // Shown instead of _specialties when registering as a Therapist —
-  // names match the therapy types on the patient app's Counselling screen.
-  static const _therapistSpecialties = [
-    'Psychiatry',
-    'Psychology',
-    'Counselling',
-    'Pediatric Psychiatry',
-    'Other',
-  ];
-
-  List<String> get _activeSpecialties =>
-      _professionalType == 'therapist' ? _therapistSpecialties : _specialties;
-
   // ── Step 3: Documents ─────────────────────────────────────────────────────
   File? _mbbsDegreeFile;
   File? _specCertFile;
   File? _mbbsRegCertFile;
   File? _renewalCertFile;
   File? _profilePhotoFile;
-
-  // ── Signature ─────────────────────────────────────────────────────────────
-  final _sigController = _SignatureController();
 
   // ── Step 4: Declaration ───────────────────────────────────────────────────
   bool _declarationAccepted = false;
@@ -121,32 +103,24 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
       _specCertFile    != null &&
       _mbbsRegCertFile != null &&
       _renewalCertFile != null &&
-      _profilePhotoFile != null &&
-      _sigController.hasSignature;
+      _profilePhotoFile != null;
 
   void _nextPage() => _pageController.nextPage(
       duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
 
   bool _validatePage1() {
-    if (_nameCtrl.text.trim().isEmpty) {
-      _snack('Please enter your full name'); return false;
-    }
-    if (_emailCtrl.text.trim().isEmpty ||
-        !_emailCtrl.text.contains('@')) {
-      _snack('Please enter a valid email address'); return false;
-    }
-    return true;
+    final nameErr = Validators.name(_nameCtrl.text, label: 'Full Name');
+    final emailErr = Validators.email(_emailCtrl.text);
+    setState(() {
+      _nameError = nameErr;
+      _emailError = emailErr;
+    });
+    return nameErr == null && emailErr == null;
   }
 
   bool _validatePage2() {
-    if (_selectedSpec == 'Other') {
-      final customSpec = _otherSpecCtrl.text.trim();
-      if (customSpec.isEmpty) {
-        _snack('Please specify your specialization'); return false;
-      }
-      if (customSpec.length > 100) {
-        _snack('Specialization must be under 100 characters'); return false;
-      }
+    if (_selectedSpec == 'Other' && _otherSpecCtrl.text.trim().isEmpty) {
+      _snack('Please specify your specialization'); return false;
     }
     if (_regNoCtrl.text.trim().isEmpty) {
       _snack('Please enter your registration number'); return false;
@@ -188,12 +162,12 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
             const SizedBox(height: 16),
             ListTile(
               leading: const Icon(Icons.camera_alt_rounded, color: AppColors.primary),
-              title: const Text('Take a Photo', style: TextStyle(fontFamily: 'Poppins')),
+              title: const Text('Take a Photo', style: TextStyle(fontFamily: 'Inter')),
               onTap: () => Navigator.pop(context, 'camera'),
             ),
             ListTile(
               leading: const Icon(Icons.photo_library_rounded, color: AppColors.primary),
-              title: const Text('Choose from Gallery', style: TextStyle(fontFamily: 'Poppins')),
+              title: const Text('Choose from Gallery', style: TextStyle(fontFamily: 'Inter')),
               onTap: () => Navigator.pop(context, 'gallery'),
             ),
           ]),
@@ -223,17 +197,6 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
     setState(() { _isLoading = true; _uploadStatus = 'Uploading documents…'; });
 
     try {
-      // Export signature as PNG bytes
-      if (mounted) setState(() => _uploadStatus = 'Exporting signature…');
-      final sigBytes = await _sigController.toBytes();
-      if (sigBytes == null) {
-        if (mounted) {
-          setState(() { _isLoading = false; _uploadStatus = ''; });
-          _snack('Could not export signature. Please redraw and try again.');
-        }
-        return;
-      }
-
       // Upload all 5 documents to Firebase Storage
       final uploads = <String, Future<String>>{
         'mbbs_degree':    ImageUploadService.uploadDoctorDocument(file: _mbbsDegreeFile!,  uid: uid, docType: 'mbbs_degree'),
@@ -249,12 +212,6 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
         urls[entry.key] = await entry.value;
       }
 
-      if (mounted) setState(() => _uploadStatus = 'Uploading signature…');
-      final signatureUrl = await ImageUploadService.uploadDoctorSignatureBytes(
-        bytes: sigBytes,
-        uid: uid,
-      );
-
       if (mounted) setState(() => _uploadStatus = 'Saving profile…');
 
       await DoctorAuthService.saveProfile(
@@ -264,7 +221,6 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
             ? _phoneCtrl.text.trim()
             : FirebaseAuth.instance.currentUser?.phoneNumber ?? '',
         email:              _emailCtrl.text.trim(),
-        type:               _professionalType,
         specialty:          _effectiveSpecialty,
         qualifications:     _qualCtrl.text.trim(),
         experience:         _expCtrl.text.trim(),
@@ -272,14 +228,13 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
         gender:             _selectedGender,
         registrationNumber: _regNoCtrl.text.trim(),
         documentUrls:       urls,
-        signatureUrl:       signatureUrl,
       );
 
       if (mounted) context.go(AppRoutes.verificationPending);
     } catch (e) {
       if (mounted) {
         setState(() { _isLoading = false; _uploadStatus = ''; });
-        _snack('Error: $e');
+        _snack(Validators.friendlyError(e));
       }
     }
   }
@@ -299,31 +254,20 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Doctor Registration',
-            style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 18, color: Colors.white)),
+        title: const Text('Doctor Registration'),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded),
           onPressed: () {
             if (_currentPage > 0) {
               _pageController.previousPage(
                   duration: const Duration(milliseconds: 300),
                   curve: Curves.easeInOut);
             } else {
-              context.canPop() ? context.pop() : context.go(AppRoutes.login);
+              context.pop();
             }
           },
         ),
-        backgroundColor: Colors.transparent,
         elevation: 0,
-        flexibleSpace: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Color(0xFF880E4F), Color(0xFFC2185B), Color(0xFF7B1FA2)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-          ),
-        ),
       ),
       body: Column(
         children: [
@@ -351,14 +295,8 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
   // ── Step progress bar ─────────────────────────────────────────────────────
 
   Widget _buildStepBar() => Container(
-    decoration: const BoxDecoration(
-      gradient: LinearGradient(
-        colors: [Color(0xFF7B1FA2), Color(0xFFC2185B)],
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-      ),
-    ),
-    padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
+    color: Colors.white,
+    padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
     child: Row(
       children: List.generate(4, (i) {
         final isActive = i == _currentPage;
@@ -371,23 +309,14 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
                   duration: const Duration(milliseconds: 250),
                   width: 32, height: 32,
                   decoration: BoxDecoration(
-                    color: isDone
-                        ? AppColors.success
-                        : isActive
-                            ? Colors.white
-                            : Colors.white.withValues(alpha: 0.25),
+                    color: isDone ? AppColors.success
+                        : isActive ? AppColors.primary
+                        : AppColors.divider,
                     shape: BoxShape.circle,
-                    boxShadow: isActive ? [
-                      BoxShadow(color: Colors.black.withValues(alpha: 0.18), blurRadius: 8, offset: const Offset(0, 2)),
-                    ] : null,
                   ),
                   child: Icon(
                     isDone ? Icons.check_rounded : _stepIcons[i],
-                    color: isDone
-                        ? Colors.white
-                        : isActive
-                            ? AppColors.primary
-                            : Colors.white.withValues(alpha: 0.7),
+                    color: (isDone || isActive) ? Colors.white : AppColors.textHint,
                     size: 16,
                   ),
                 ),
@@ -395,10 +324,10 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
                 Text(
                   _stepLabels[i],
                   style: TextStyle(
-                    fontFamily: 'Poppins',
+                    fontFamily: 'Inter',
                     fontSize: 9,
-                    fontWeight: isActive ? FontWeight.w700 : FontWeight.w400,
-                    color: isActive ? Colors.white : Colors.white.withValues(alpha: 0.65),
+                    fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+                    color: isActive ? AppColors.primary : AppColors.textHint,
                   ),
                 ),
               ]),
@@ -409,7 +338,7 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
                   duration: const Duration(milliseconds: 250),
                   height: 2,
                   margin: const EdgeInsets.only(bottom: 18),
-                  color: isDone ? AppColors.success : Colors.white.withValues(alpha: 0.3),
+                  color: isDone ? AppColors.success : AppColors.divider,
                 ),
               ),
           ]),
@@ -468,11 +397,15 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
         )),
       ])),
       const SizedBox(height: 24),
-      _Field('Full Name (as per medical license) *', _nameCtrl, 'Dr. Firstname Lastname'),
+      _field('Full Name (as per medical license) *', _nameCtrl, 'Dr. Firstname Lastname',
+          errorText: _nameError,
+          onChanged: (_) { if (_nameError != null) setState(() => _nameError = null); }),
       const SizedBox(height: 14),
-      _Field('Email Address *', _emailCtrl, 'doctor@example.com', type: TextInputType.emailAddress),
+      _field('Email Address *', _emailCtrl, 'doctor@example.com', type: TextInputType.emailAddress,
+          errorText: _emailError,
+          onChanged: (_) { if (_emailError != null) setState(() => _emailError = null); }),
       const SizedBox(height: 14),
-      _Field('Mobile Number', _phoneCtrl, '10-digit number (auto-filled)', type: TextInputType.phone),
+      _field('Mobile Number', _phoneCtrl, '10-digit number (auto-filled)', type: TextInputType.phone),
       const SizedBox(height: 14),
       const Text('Gender', style: AppTextStyles.labelLarge),
       const SizedBox(height: 8),
@@ -491,7 +424,7 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
                   width: _selectedGender == g ? 2 : 1),
             ),
             child: Text(g, textAlign: TextAlign.center,
-                style: TextStyle(fontFamily: 'Poppins', fontSize: 13,
+                style: TextStyle(fontFamily: 'Inter', fontSize: 13,
                     fontWeight: FontWeight.w600,
                     color: _selectedGender == g ? AppColors.primary : AppColors.textSecondary)),
           ),
@@ -509,36 +442,6 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       const _SectionHeader(icon: Icons.work_rounded, title: 'Professional Details', subtitle: 'Your medical qualifications'),
       const SizedBox(height: 20),
-      const Text('I am registering as a *', style: AppTextStyles.labelLarge),
-      const SizedBox(height: 8),
-      Row(children: [
-        Expanded(
-          child: _TypeChoiceCard(
-            label: 'Doctor',
-            icon: Icons.local_hospital_rounded,
-            selected: _professionalType == 'doctor',
-            onTap: () => setState(() {
-              _professionalType = 'doctor';
-              _selectedSpec = _specialties.first;
-              _otherSpecCtrl.clear();
-            }),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _TypeChoiceCard(
-            label: 'Therapist',
-            icon: Icons.psychology_rounded,
-            selected: _professionalType == 'therapist',
-            onTap: () => setState(() {
-              _professionalType = 'therapist';
-              _selectedSpec = _therapistSpecialties.first;
-              _otherSpecCtrl.clear();
-            }),
-          ),
-        ),
-      ]),
-      const SizedBox(height: 20),
       const Text('Specialization *', style: AppTextStyles.labelLarge),
       const SizedBox(height: 8),
       DropdownButtonFormField<String>(
@@ -552,7 +455,7 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
           contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
           prefixIcon: const Icon(Icons.local_hospital_rounded, color: AppColors.primary, size: 20),
         ),
-        items: _activeSpecialties.map((s) => DropdownMenuItem(
+        items: _specialties.map((s) => DropdownMenuItem(
           value: s,
           child: Text(s, style: AppTextStyles.bodyMedium.copyWith(
             fontWeight: s == 'Other' ? FontWeight.w600 : FontWeight.normal,
@@ -584,14 +487,14 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
         ),
       ],
       const SizedBox(height: 14),
-      _Field('Medical Registration Number *', _regNoCtrl, 'e.g. MCI-12345'),
+      _field('Medical Registration Number *', _regNoCtrl, 'e.g. MCI-12345'),
       const SizedBox(height: 14),
-      _Field('Qualifications *', _qualCtrl, 'e.g. MBBS, MD, DNB'),
+      _field('Qualifications *', _qualCtrl, 'e.g. MBBS, MD, DNB'),
       const SizedBox(height: 14),
       Row(children: [
-        Expanded(child: _Field('Experience (years) *', _expCtrl, 'e.g. 10', type: TextInputType.number)),
+        Expanded(child: _field('Experience (years) *', _expCtrl, 'e.g. 10', type: TextInputType.number)),
         const SizedBox(width: 12),
-        Expanded(child: _Field('Consultation Fee (₹) *', _feeCtrl, 'e.g. 500', type: TextInputType.number)),
+        Expanded(child: _field('Consultation Fee (₹) *', _feeCtrl, 'e.g. 500', type: TextInputType.number)),
       ]),
       const SizedBox(height: 32),
       _NextButton(onTap: () { if (_validatePage2()) _nextPage(); }),
@@ -662,99 +565,18 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
         onTap: () => _pickDoc('Profile Photo', (f) => _profilePhotoFile = f),
       ),
       const SizedBox(height: 20),
-
-      // ── Doctor Signature ──────────────────────────────────────────────
-      Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Container(
-              width: 40, height: 40,
-              decoration: BoxDecoration(
-                gradient: AppColors.primaryGradient,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Icon(Icons.draw_rounded, color: Colors.white, size: 20),
-            ),
-            const SizedBox(width: 12),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text('Doctor Signature *', style: AppTextStyles.labelLarge),
-              Text('Sign in the box below using your finger',
-                  style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
-            ])),
-            TextButton.icon(
-              onPressed: () {
-                _sigController.clear();
-                setState(() {});
-              },
-              icon: const Icon(Icons.refresh_rounded, size: 14),
-              label: const Text('Clear', style: TextStyle(fontFamily: 'Poppins', fontSize: 12)),
-            ),
-          ]),
-          const SizedBox(height: 12),
-          Container(
-            height: 160,
-            decoration: BoxDecoration(
-              color: const Color(0xFFF9F9FF),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: _sigController.hasSignature
-                    ? AppColors.success
-                    : AppColors.primary.withValues(alpha: 0.4),
-                width: 1.5,
-              ),
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(9),
-              child: _SignaturePad(controller: _sigController, onChanged: () => setState(() {})),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Row(children: [
-            Icon(
-              _sigController.hasSignature ? Icons.check_circle_rounded : Icons.info_outline_rounded,
-              size: 14,
-              color: _sigController.hasSignature ? AppColors.success : AppColors.textHint,
-            ),
-            const SizedBox(width: 6),
-            Text(
-              _sigController.hasSignature
-                  ? 'Signature captured'
-                  : 'This signature will appear on every prescription',
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 11,
-                color: _sigController.hasSignature ? AppColors.success : AppColors.textHint,
-              ),
-            ),
-          ]),
-        ]),
-      ),
-      const SizedBox(height: 16),
-
       // Progress indicator
       _DocsProgressBar(
         uploaded: [_mbbsDegreeFile, _specCertFile, _mbbsRegCertFile, _renewalCertFile, _profilePhotoFile]
             .where((f) => f != null).length,
         total: 5,
-        signatureDone: _sigController.hasSignature,
       ),
       const SizedBox(height: 24),
       _NextButton(
         label: 'Next: Declaration',
         icon: Icons.arrow_forward_rounded,
         enabled: _allDocsUploaded,
-        onTap: _allDocsUploaded
-            ? _nextPage
-            : () => _snack(
-                !_sigController.hasSignature
-                    ? 'Please draw your signature'
-                    : 'Please upload all 5 required documents'),
+        onTap: _allDocsUploaded ? _nextPage : () => _snack('Please upload all 5 required documents'),
       ),
     ]),
   );
@@ -817,7 +639,7 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
               const SizedBox(width: 10),
               const Expanded(child: Text(
                 'I confirm that I wish to work with MedNU as a medical professional and all the above statements are true.',
-                style: TextStyle(fontFamily: 'Poppins', fontSize: 13, height: 1.5),
+                style: TextStyle(fontFamily: 'Inter', fontSize: 13, height: 1.5),
               )),
             ]),
           ),
@@ -838,8 +660,8 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
           Row(children: [
             Container(
               padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(color: const Color(0xFF7B1FA2).withValues(alpha:0.1), borderRadius: BorderRadius.circular(10)),
-              child: const Icon(Icons.description_rounded, color: Color(0xFF7B1FA2), size: 20),
+              decoration: BoxDecoration(color: AppColors.secondary.withValues(alpha:0.1), borderRadius: BorderRadius.circular(10)),
+              child: const Icon(Icons.description_rounded, color: AppColors.secondary, size: 20),
             ),
             const SizedBox(width: 10),
             const Text('Terms & Conditions', style: AppTextStyles.h4),
@@ -855,7 +677,7 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
             ),
             child: const SingleChildScrollView(
               child: _DeclText(
-                'By registering on MedNU Doctor platform, you agree to:\n\n'
+                'By registering on MedNU Service platform, you agree to:\n\n'
                 '• Provide accurate and up-to-date medical consultations to patients.\n\n'
                 '• Maintain patient confidentiality and comply with applicable privacy laws.\n\n'
                 '• Not misuse the platform for non-medical solicitation or advertising.\n\n'
@@ -875,10 +697,10 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
                 duration: const Duration(milliseconds: 200),
                 width: 22, height: 22,
                 decoration: BoxDecoration(
-                  color: _termsAccepted ? const Color(0xFF7B1FA2) : Colors.white,
+                  color: _termsAccepted ? AppColors.secondary : Colors.white,
                   borderRadius: BorderRadius.circular(6),
                   border: Border.all(
-                      color: _termsAccepted ? const Color(0xFF7B1FA2) : AppColors.border,
+                      color: _termsAccepted ? AppColors.secondary : AppColors.border,
                       width: 2),
                 ),
                 child: _termsAccepted
@@ -888,7 +710,7 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
               const SizedBox(width: 10),
               const Expanded(child: Text(
                 'I have read and agree to the MedNU Terms & Conditions and Privacy Policy.',
-                style: TextStyle(fontFamily: 'Poppins', fontSize: 13, height: 1.5),
+                style: TextStyle(fontFamily: 'Inter', fontSize: 13, height: 1.5),
               )),
             ]),
           ),
@@ -897,15 +719,26 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
 
       const SizedBox(height: 24),
 
-      GradientButton(
-        label: 'Submit for Admin Approval',
-        icon: Icons.send_rounded,
+      // Submit button
+      SizedBox(
         width: double.infinity,
-        height: 54,
-        colors: (_declarationAccepted && _termsAccepted)
-            ? null
-            : [AppColors.divider, AppColors.divider],
-        onTap: (_declarationAccepted && _termsAccepted) ? _submit : () => _snack('Please accept the declaration and terms to proceed'),
+        child: ElevatedButton(
+          onPressed: (_declarationAccepted && _termsAccepted) ? _submit : null,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.primary,
+            disabledBackgroundColor: AppColors.divider,
+            foregroundColor: Colors.white,
+            elevation: 0,
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          ),
+          child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            Icon(Icons.send_rounded, size: 18),
+            SizedBox(width: 8),
+            Text('Submit for Admin Approval',
+                style: TextStyle(fontFamily: 'Inter', fontSize: 15, fontWeight: FontWeight.w700)),
+          ]),
+        ),
       ),
       const SizedBox(height: 12),
       Center(child: Text(
@@ -918,47 +751,6 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
 }
 
 // ── Shared widgets ─────────────────────────────────────────────────────────────
-
-class _TypeChoiceCard extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final bool selected;
-  final VoidCallback onTap;
-  const _TypeChoiceCard({
-    required this.label,
-    required this.icon,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) => GestureDetector(
-    onTap: onTap,
-    child: AnimatedContainer(
-      duration: const Duration(milliseconds: 180),
-      padding: const EdgeInsets.symmetric(vertical: 14),
-      decoration: BoxDecoration(
-        color: selected ? AppColors.primary.withValues(alpha: 0.08) : Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: selected ? AppColors.primary : AppColors.border,
-          width: selected ? 2 : 1,
-        ),
-      ),
-      child: Column(children: [
-        Icon(icon, color: selected ? AppColors.primary : AppColors.textSecondary, size: 24),
-        const SizedBox(height: 6),
-        Text(
-          label,
-          style: AppTextStyles.bodyMedium.copyWith(
-            fontWeight: FontWeight.w600,
-            color: selected ? AppColors.primary : AppColors.textSecondary,
-          ),
-        ),
-      ]),
-    ),
-  );
-}
 
 class _SectionHeader extends StatelessWidget {
   final IconData icon;
@@ -993,13 +785,24 @@ class _NextButton extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) => GradientButton(
-    label: label,
-    icon: icon,
+  Widget build(BuildContext context) => SizedBox(
     width: double.infinity,
-    height: 52,
-    colors: enabled ? null : [AppColors.divider, AppColors.divider],
-    onTap: onTap,
+    child: ElevatedButton(
+      onPressed: enabled ? onTap : null,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: AppColors.primary,
+        disabledBackgroundColor: AppColors.divider,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        padding: const EdgeInsets.symmetric(vertical: 15),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      ),
+      child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+        Text(label, style: const TextStyle(fontFamily: 'Inter', fontSize: 15, fontWeight: FontWeight.w600)),
+        const SizedBox(width: 8),
+        Icon(icon, size: 18),
+      ]),
+    ),
   );
 }
 
@@ -1061,7 +864,7 @@ class _DocUploadTile extends StatelessWidget {
               decoration: BoxDecoration(
                   color: AppColors.primary, borderRadius: BorderRadius.circular(8)),
               child: const Text('Upload',
-                  style: TextStyle(fontFamily: 'Poppins', fontSize: 11,
+                  style: TextStyle(fontFamily: 'Inter', fontSize: 11,
                       fontWeight: FontWeight.w700, color: Colors.white)),
             )
           else
@@ -1074,7 +877,7 @@ class _DocUploadTile extends StatelessWidget {
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: AppColors.success.withValues(alpha:0.3))),
                 child: const Text('Change',
-                    style: TextStyle(fontFamily: 'Poppins', fontSize: 11,
+                    style: TextStyle(fontFamily: 'Inter', fontSize: 11,
                         fontWeight: FontWeight.w600, color: AppColors.success)),
               ),
             ),
@@ -1086,15 +889,12 @@ class _DocUploadTile extends StatelessWidget {
 
 class _DocsProgressBar extends StatelessWidget {
   final int uploaded, total;
-  final bool signatureDone;
-  const _DocsProgressBar({required this.uploaded, required this.total, this.signatureDone = false});
+  const _DocsProgressBar({required this.uploaded, required this.total});
 
   @override
   Widget build(BuildContext context) {
-    final steps = total + 1; // docs + signature
-    final done = uploaded + (signatureDone ? 1 : 0);
-    final pct = done / steps;
-    final allDone = done == steps;
+    final pct = uploaded / total;
+    final allDone = uploaded == total;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -1109,9 +909,9 @@ class _DocsProgressBar extends StatelessWidget {
               color: allDone ? AppColors.success : AppColors.warning, size: 18),
           const SizedBox(width: 8),
           Text(
-            allDone ? 'All documents & signature done!' : '$done of $steps steps complete',
+            allDone ? 'All documents uploaded!' : '$uploaded of $total documents uploaded',
             style: TextStyle(
-                fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w600,
+                fontFamily: 'Inter', fontSize: 13, fontWeight: FontWeight.w600,
                 color: allDone ? AppColors.success : AppColors.warning),
           ),
         ]),
@@ -1138,7 +938,7 @@ class _DeclText extends StatelessWidget {
   Widget build(BuildContext context) => Text(
     text,
     style: const TextStyle(
-      fontFamily: 'Poppins',
+      fontFamily: 'Inter',
       fontSize: 12.5,
       height: 1.6,
       color: AppColors.textSecondary,
@@ -1146,127 +946,8 @@ class _DeclText extends StatelessWidget {
   );
 }
 
-// ── Signature Pad ─────────────────────────────────────────────────────────────
-
-class _SignatureController {
-  _SignaturePadState? _state;
-
-  bool get hasSignature => _state?._isEmpty == false;
-
-  void clear() => _state?._clear();
-
-  Future<Uint8List?> toBytes() async {
-    return _state?._toBytes();
-  }
-}
-
-class _SignaturePad extends StatefulWidget {
-  final _SignatureController controller;
-  final VoidCallback onChanged;
-  const _SignaturePad({required this.controller, required this.onChanged});
-
-  @override
-  State<_SignaturePad> createState() => _SignaturePadState();
-}
-
-class _SignaturePadState extends State<_SignaturePad> {
-  final _repaintKey = GlobalKey();
-  final List<List<Offset>> _strokes = [];
-  List<Offset>? _current;
-
-  bool get _isEmpty => _strokes.isEmpty || _strokes.every((s) => s.isEmpty);
-
-  @override
-  void initState() {
-    super.initState();
-    widget.controller._state = this;
-  }
-
-  void _clear() {
-    setState(() => _strokes.clear());
-    widget.onChanged();
-  }
-
-  Future<Uint8List?> _toBytes() async {
-    final boundary = _repaintKey.currentContext?.findRenderObject()
-        as RenderRepaintBoundary?;
-    if (boundary == null) return null;
-    final image = await boundary.toImage(pixelRatio: 3.0);
-    final data = await image.toByteData(format: ui.ImageByteFormat.png);
-    return data?.buffer.asUint8List();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return RepaintBoundary(
-      key: _repaintKey,
-      child: GestureDetector(
-        onPanStart: (d) {
-          setState(() {
-            _current = [d.localPosition];
-            _strokes.add(_current!);
-          });
-        },
-        onPanUpdate: (d) {
-          setState(() => _current?.add(d.localPosition));
-          widget.onChanged();
-        },
-        onPanEnd: (_) => _current = null,
-        child: CustomPaint(
-          painter: _SignaturePainter(_strokes),
-          child: Container(
-            color: const Color(0xFFF9F9FF),
-            child: _isEmpty
-                ? const Center(
-                    child: Text(
-                      'Sign here',
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 13,
-                        color: Color(0xFFBBBBCC),
-                        fontStyle: FontStyle.italic,
-                      ),
-                    ),
-                  )
-                : null,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SignaturePainter extends CustomPainter {
-  final List<List<Offset>> strokes;
-  _SignaturePainter(this.strokes);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = const Color(0xFF1A1A2E)
-      ..strokeWidth = 2.5
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round
-      ..style = PaintingStyle.stroke;
-
-    for (final stroke in strokes) {
-      if (stroke.length < 2) continue;
-      final path = Path()..moveTo(stroke.first.dx, stroke.first.dy);
-      for (int i = 1; i < stroke.length; i++) {
-        path.lineTo(stroke[i].dx, stroke[i].dy);
-      }
-      canvas.drawPath(path, paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _SignaturePainter old) => true;
-}
-
-// ── Field ─────────────────────────────────────────────────────────────────────
-
-Widget _Field(String label, TextEditingController ctrl, String hint,
-    {TextInputType type = TextInputType.text}) =>
+Widget _field(String label, TextEditingController ctrl, String hint,
+    {TextInputType type = TextInputType.text, String? errorText, ValueChanged<String>? onChanged}) =>
     Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text(label, style: AppTextStyles.labelLarge),
       const SizedBox(height: 6),
@@ -1274,12 +955,16 @@ Widget _Field(String label, TextEditingController ctrl, String hint,
         controller: ctrl,
         keyboardType: type,
         style: AppTextStyles.bodyLarge,
+        onChanged: onChanged,
         decoration: InputDecoration(
           hintText: hint,
           filled: true, fillColor: Colors.white,
+          errorText: errorText,
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppColors.border)),
           enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppColors.border)),
           focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppColors.primary, width: 2)),
+          errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppColors.error)),
+          focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppColors.error, width: 2)),
           contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         ),
       ),

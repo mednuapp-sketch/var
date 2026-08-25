@@ -14,6 +14,11 @@ class CaregiverProfile {
   final int experienceYears;
   final bool documentsVerified;
 
+  /// Admin-approval status: 'pending' | 'active'. Distinct from
+  /// [documentsVerified] (a per-document flag) — this is the account-level
+  /// gate the router and the Documents section's `locked` state key off.
+  final String status;
+
   /// Raw `documents` / `documentVerification` maps, keyed by canonical
   /// docType. Kept untyped here so the shared documents layer
   /// (`shared_core/documents`) owns their parsing for every role.
@@ -30,6 +35,7 @@ class CaregiverProfile {
     required this.totalVisits,
     required this.experienceYears,
     required this.documentsVerified,
+    this.status = 'pending',
     this.documents = const {},
     this.documentVerification = const {},
   });
@@ -66,6 +72,7 @@ class CaregiverProfile {
       totalVisits: ((d['totalVisits'] as num?) ?? 0).toInt(),
       experienceYears: ((d['experienceYears'] as num?) ?? 0).toInt(),
       documentsVerified: d['documentsVerified'] as bool? ?? false,
+      status: d['status'] as String? ?? 'pending',
       documents: Map<String, dynamic>.from(
           (d['documents'] as Map?) ?? const <String, dynamic>{}),
       documentVerification: Map<String, dynamic>.from(

@@ -80,11 +80,11 @@ class _EducationScreenState extends State<EducationScreen> {
 
   final List<_CategoryConfig> _categoryConfigs = const [
     _CategoryConfig(name: 'All', icon: Icons.apps_rounded, color: Color(0xFF3F51B5)),
-    _CategoryConfig(name: 'Heart Health', icon: Icons.favorite_rounded, color: Color(0xFFC2185B)),
+    _CategoryConfig(name: 'Heart Health', icon: Icons.favorite_rounded, color: Color(0xFF522546)),
     _CategoryConfig(name: 'Diabetes', icon: Icons.bloodtype_rounded, color: Color(0xFFB71C1C)),
-    _CategoryConfig(name: 'Pregnancy', icon: Icons.pregnant_woman_rounded, color: Color(0xFFE91E8C)),
+    _CategoryConfig(name: 'Pregnancy', icon: Icons.pregnant_woman_rounded, color: Color(0xFFA36BAC)),
     _CategoryConfig(name: 'Nutrition', icon: Icons.restaurant_rounded, color: Color(0xFF2E7D32)),
-    _CategoryConfig(name: 'Mental Health', icon: Icons.psychology_rounded, color: Color(0xFF7B1FA2)),
+    _CategoryConfig(name: 'Mental Health', icon: Icons.psychology_rounded, color: Color(0xFF633058)),
     _CategoryConfig(name: 'Fitness', icon: Icons.fitness_center_rounded, color: Color(0xFF1565C0)),
   ];
 
@@ -105,7 +105,7 @@ class _EducationScreenState extends State<EducationScreen> {
           readTime: '8 min read',
           author: 'Dr. Priya Mehta',
           icon: Icons.favorite_rounded,
-          color: Color(0xFFC2185B),
+          color: Color(0xFF522546),
           views: '32.1K',
           date: 'Jun 20',
           isFeatured: true,
@@ -140,7 +140,7 @@ class _EducationScreenState extends State<EducationScreen> {
           readTime: '6 min read',
           author: 'Dr. Ananya Singh',
           icon: Icons.psychology_rounded,
-          color: Color(0xFF7B1FA2),
+          color: Color(0xFF633058),
           views: '15.1K',
           date: 'Jun 12',
         ),
@@ -151,7 +151,7 @@ class _EducationScreenState extends State<EducationScreen> {
           readTime: '9 min read',
           author: 'Dr. Kavitha Nair',
           icon: Icons.pregnant_woman_rounded,
-          color: Color(0xFFE91E8C),
+          color: Color(0xFFA36BAC),
           views: '20.3K',
           date: 'Jun 10',
           isBookmarked: true,
@@ -185,7 +185,7 @@ class _EducationScreenState extends State<EducationScreen> {
           readTime: '5 min read',
           author: 'Dr. Ananya Singh',
           icon: Icons.spa_rounded,
-          color: Color(0xFF7B1FA2),
+          color: Color(0xFF633058),
           views: '9.7K',
           date: 'Jun 3',
         ),
@@ -554,7 +554,7 @@ class _EducationScreenState extends State<EducationScreen> {
                         if (_filtered.isEmpty)
                           Padding(
                             padding: EdgeInsets.only(top: R.p(context, 8)),
-                            child: AppEmptyState(
+                            child: const AppEmptyState(
                               icon: Icons.article_outlined,
                               title: 'No Articles Found',
                               message: 'No articles in this category yet.',
@@ -587,7 +587,7 @@ class _EducationScreenState extends State<EducationScreen> {
                                 const Icon(Icons.bookmark_rounded,
                                     color: Color(0xFFF57F17), size: 18),
                                 SizedBox(width: R.w(context, 8)),
-                                Text('Saved Articles',
+                                const Text('Saved Articles',
                                     style: AppTextStyles.h4),
                                 SizedBox(width: R.w(context, 8)),
                                 Container(
@@ -659,7 +659,7 @@ class _LoadingShimmer extends StatelessWidget {
                 4,
                 (i) => Padding(
                   padding: EdgeInsets.only(right: R.p(context, 8)),
-                  child: SkeletonBox(width: 80, height: 36, radius: 20),
+                  child: const SkeletonBox(width: 80, height: 36, radius: 20),
                 ),
               ),
             ),
@@ -670,7 +670,7 @@ class _LoadingShimmer extends StatelessWidget {
               3,
               (_) => Padding(
                 padding: EdgeInsets.only(bottom: R.p(context, 12)),
-                child: SkeletonBox(width: double.infinity, height: 88, radius: 16),
+                child: const SkeletonBox(width: double.infinity, height: 88, radius: 16),
               ),
             ),
           ],

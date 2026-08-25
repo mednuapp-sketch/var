@@ -115,6 +115,7 @@ class _PharmacyProfileScreenState extends ConsumerState<PharmacyProfileScreen> {
                 uid: profile.uid,
                 documents: profile.documents,
                 documentVerification: profile.documentVerification,
+                locked: profile.status == 'active',
               ),
               const SizedBox(height: 24),
               if (_editing)

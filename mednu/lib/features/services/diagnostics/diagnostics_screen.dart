@@ -26,7 +26,7 @@ class _DiagnosticsScreenState extends ConsumerState<DiagnosticsScreen> {
 
   static const _palette = [
     Color(0xFF1565C0), Color(0xFFB71C1C), Color(0xFF6A1B9A),
-    Color(0xFFC2185B), Color(0xFF2E7D32), Color(0xFF0097A7),
+    Color(0xFF522546), Color(0xFF2E7D32), Color(0xFF0097A7),
     Color(0xFFE65100), Color(0xFF37474F), Color(0xFF4527A0),
     Color(0xFF00838F), Color(0xFF283593), Color(0xFF558B2F),
   ];
@@ -69,7 +69,7 @@ class _DiagnosticsScreenState extends ConsumerState<DiagnosticsScreen> {
             expandedHeight: AppSpacing.headerHeight(context),
             leading: IconButton(
               icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-              onPressed: () => context.pop(),
+              onPressed: () => context.canPop() ? context.pop() : context.go(AppRoutes.home),
             ),
             actions: const [CartBadgeAction()],
             flexibleSpace: FlexibleSpaceBar(
@@ -97,8 +97,8 @@ class _DiagnosticsScreenState extends ConsumerState<DiagnosticsScreen> {
                               children: [
                                 Icon(Icons.science_rounded, color: Colors.white, size: AppSpacing.headerIconSize(context)),
                                 SizedBox(height: AppSpacing.headerIconGap(context)),
-                                Text('Diagnostics', style: AppTextStyles.onPrimaryH2),
-                                Text('Realtime availability', style: AppTextStyles.onPrimaryBody),
+                                const Text('Diagnostics', style: AppTextStyles.onPrimaryH2),
+                                const Text('Realtime availability', style: AppTextStyles.onPrimaryBody),
                               ],
                             ),
                           ),
@@ -203,7 +203,7 @@ class _DiagnosticsScreenState extends ConsumerState<DiagnosticsScreen> {
       Padding(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
         child: Row(children: [
-          Text('Available Tests', style: AppTextStyles.h4),
+          const Text('Available Tests', style: AppTextStyles.h4),
           const Spacer(),
           if (_query.isNotEmpty)
             Text('${filtered.length} result${filtered.length == 1 ? '' : 's'}', style: AppTextStyles.bodySmall),
@@ -222,7 +222,7 @@ class _DiagnosticsScreenState extends ConsumerState<DiagnosticsScreen> {
             ),
             if (_query.isEmpty) ...[
               const SizedBox(height: 6),
-              Text('Tests will appear here once added by the team', style: AppTextStyles.bodySmall, textAlign: TextAlign.center),
+              const Text('Tests will appear here once added by the team', style: AppTextStyles.bodySmall, textAlign: TextAlign.center),
             ],
           ]),
         )
@@ -298,9 +298,9 @@ class _PopularTestsRow extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
-          child: Text('Popular Tests', style: const TextStyle(
+        const Padding(
+          padding: EdgeInsets.fromLTRB(16, 4, 16, 10),
+          child: Text('Popular Tests', style: TextStyle(
               fontFamily: 'Poppins', fontSize: 15, fontWeight: FontWeight.w700,
               color: Color(0xFF1A1A2E))),
         ),
@@ -388,7 +388,7 @@ class _MyDiagnosticsBookings extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('My Diagnostics', style: AppTextStyles.h4),
+                  const Text('My Diagnostics', style: AppTextStyles.h4),
                   TextButton(
                     onPressed: () => context.push(AppRoutes.myServices),
                     child: const Text(

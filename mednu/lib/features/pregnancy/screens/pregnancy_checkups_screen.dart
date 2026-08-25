@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/router/app_router.dart';
 import '../models/pregnancy_models.dart';
 import '../providers/pregnancy_provider.dart';
 import '../data/pregnancy_week_data.dart';
@@ -44,7 +45,7 @@ class _PregnancyCheckupsScreenState
         leading: IconButton(
           icon: Icon(Icons.arrow_back_ios_new_rounded,
               color: context.appTextPrimary, size: 20),
-          onPressed: () => context.pop(),
+          onPressed: () => context.canPop() ? context.pop() : context.go(AppRoutes.pregnancy),
         ),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -100,7 +101,7 @@ class _PregnancyCheckupsScreenState
       body: TabBarView(
         controller: _tab,
         children: [
-          _MyCheckupsTab(),
+          const _MyCheckupsTab(),
           _buildStandardScheduleTab(),
         ],
       ),
@@ -134,7 +135,7 @@ class _PregnancyCheckupsScreenState
                 ),
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
-                    color: const Color(0xFF7B1FA2).withValues(alpha: 0.18)),
+                    color: const Color(0xFF633058).withValues(alpha: 0.18)),
               ),
               child: Row(
                 children: [
@@ -142,11 +143,11 @@ class _PregnancyCheckupsScreenState
                     width: 40,
                     height: 40,
                     decoration: BoxDecoration(
-                      color: const Color(0xFF7B1FA2).withValues(alpha: 0.12),
+                      color: const Color(0xFF633058).withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: const Icon(Icons.calendar_month_rounded,
-                        color: Color(0xFF7B1FA2), size: 20),
+                        color: Color(0xFF633058), size: 20),
                   ),
                   const SizedBox(width: 12),
                   const Expanded(
@@ -154,7 +155,7 @@ class _PregnancyCheckupsScreenState
                       'Standard pregnancy checkup schedule. Your doctor may adjust this based on your individual needs.',
                       style: TextStyle(
                           fontSize: 12,
-                          color: Color(0xFF4A148C),
+                          color: Color(0xFF3D1D36),
                           height: 1.55),
                     ),
                   ),
@@ -496,7 +497,7 @@ class _PregnancyCheckupsScreenState
   Color _typeColorByStr(String type) {
     switch (type) {
       case 'ultrasound':
-        return const Color(0xFF7B1FA2);
+        return const Color(0xFF633058);
       case 'blood_test':
         return const Color(0xFFEF5350);
       case 'scan':
@@ -637,7 +638,7 @@ class _StatsRow extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF7B1FA2), Color(0xFFC2185B)],
+          colors: [Color(0xFF633058), Color(0xFF522546)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -885,9 +886,9 @@ class _CheckupCard extends ConsumerWidget {
             ),
             if (isUpcoming)
               Container(
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF7F4F8),
-                  borderRadius: const BorderRadius.vertical(
+                decoration: const BoxDecoration(
+                  color: Color(0xFFF7F4F8),
+                  borderRadius: BorderRadius.vertical(
                       bottom: Radius.circular(14)),
                 ),
                 child: Material(
@@ -1031,8 +1032,8 @@ class _CheckupsEmptyState extends StatelessWidget {
             Container(
               width: 100,
               height: 100,
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
                   colors: [Color(0xFFE3F2FD), Color(0xFFEDE7F6)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
@@ -1073,7 +1074,7 @@ class _CheckupsEmptyState extends StatelessWidget {
                       'Regular checkups help monitor your baby\'s growth and keep you both healthy.',
                       style: TextStyle(
                           fontSize: 12,
-                          color: Color(0xFF4A148C),
+                          color: Color(0xFF3D1D36),
                           height: 1.5),
                     ),
                   ),

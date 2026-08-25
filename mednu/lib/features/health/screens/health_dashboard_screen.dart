@@ -172,11 +172,11 @@ class _DashboardContent extends ConsumerWidget {
       children: [
         _header(context, userName),
         Expanded(
-          child: ListView(
+          child: SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: EdgeInsets.fromLTRB(R.p(context, 16), R.p(context, 14),
                   R.p(context, 16), R.p(context, 40)),
-              children: [
+              child: Column(children: [
                 // ── Health Score ───────────────────────────────────────────────
                 RepaintBoundary(
                     child: _HealthScoreCard(waterState: waterState, uid: uid)),
@@ -192,8 +192,8 @@ class _DashboardContent extends ConsumerWidget {
                 SizedBox(height: R.h(context, 22)),
 
                 // ── Water ─────────────────────────────────────────────────────
-                _SecHead('Water Intake', Icons.water_drop_rounded,
-                    const Color(0xFF1565C0)),
+                const _SecHead('Water Intake', Icons.water_drop_rounded,
+                    Color(0xFF1565C0)),
                 SizedBox(height: R.h(context, 10)),
                 RepaintBoundary(
                     child: _WaterCard(state: waterState, notifier: waterNotifier)),
@@ -218,15 +218,15 @@ class _DashboardContent extends ConsumerWidget {
                 SizedBox(height: R.h(context, 22)),
 
                 // ── Health Records Quick Links ────────────────────────────────
-                _SecHead('Health Records', Icons.folder_open_rounded,
-                    const Color(0xFF6A1B9A)),
+                const _SecHead('Health Records', Icons.folder_open_rounded,
+                    Color(0xFF6A1B9A)),
                 SizedBox(height: R.h(context, 10)),
                 RepaintBoundary(child: _QuickActions(uid: uid)),
                 SizedBox(height: R.h(context, 22)),
 
                 // ── Women's Health ────────────────────────────────────────────
                 if (!isMale) ...[
-                  _SecHead("Women's Health", Icons.favorite_rounded,
+                  const _SecHead("Women's Health", Icons.favorite_rounded,
                       AppColors.primary),
                   SizedBox(height: R.h(context, 10)),
                   const RepaintBoundary(child: _WomensHealth()),
@@ -234,11 +234,11 @@ class _DashboardContent extends ConsumerWidget {
                 ],
 
                 // ── BMI ───────────────────────────────────────────────────────
-                _SecHead('BMI Calculator', Icons.monitor_weight_rounded,
-                    const Color(0xFF2E7D32)),
+                const _SecHead('BMI Calculator', Icons.monitor_weight_rounded,
+                    Color(0xFF2E7D32)),
                 SizedBox(height: R.h(context, 10)),
                 RepaintBoundary(child: _BMICard(uid: uid)),
-              ],
+              ]),
             ),
         ),
       ],
@@ -382,14 +382,14 @@ class _HealthScoreCard extends StatelessWidget {
               padding: EdgeInsets.all(R.p(context, 18)),
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
-                  colors: [Color(0xFFC2185B), Color(0xFF7B1FA2)],
+                  colors: [Color(0xFF522546), Color(0xFF633058)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
                 borderRadius: BorderRadius.circular(R.r(context, 20)),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFFC2185B).withValues(alpha: 0.25),
+                    color: const Color(0xFF522546).withValues(alpha: 0.25),
                     blurRadius: 16,
                     offset: const Offset(0, 6),
                   ),
@@ -448,14 +448,27 @@ class _HealthScoreCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(children: [
-                          Text(
-                            'Health Score',
-                            style: TextStyle(
-                              fontFamily: 'Poppins',
-                              fontSize: R.sp(context, 16),
-                              fontWeight: FontWeight.w800,
-                              color: Colors.white,
+                          Flexible(
+                            child: Text(
+                              'Activity Score',
+                              style: TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: R.sp(context, 16),
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
+                          ),
+                          SizedBox(width: R.w(context, 4)),
+                          Tooltip(
+                            message:
+                                'Reflects app engagement (water tracking, bookings, prescriptions) — not a clinical measurement.',
+                            triggerMode: TooltipTriggerMode.tap,
+                            child: Icon(Icons.info_outline_rounded,
+                                size: R.sp(context, 14),
+                                color: Colors.white.withValues(alpha: 0.7)),
                           ),
                           SizedBox(width: R.w(context, 8)),
                           Container(
@@ -646,7 +659,7 @@ class _VitalsSection extends StatelessWidget {
           return _vitalsLoading(context);
         }
         if (snap.hasError || snap.data == null) {
-          return _InfoCard(
+          return const _InfoCard(
             icon: Icons.error_outline_rounded,
             iconColor: AppColors.error,
             text: 'Could not load vitals. Tap "Log Vitals" to add your first reading.',
@@ -654,7 +667,7 @@ class _VitalsSection extends StatelessWidget {
         }
         final docs = snap.data!.docs;
         if (docs.isEmpty) {
-          return _InfoCard(
+          return const _InfoCard(
             icon: Icons.monitor_heart_outlined,
             iconColor: AppColors.error,
             text: 'No vitals recorded yet. Tap "Log Vitals" to track BP, heart rate, blood sugar & more.',
@@ -1047,7 +1060,7 @@ class _AppointmentsSection extends StatelessWidget {
           return _loadingCard(70);
         }
         if (snap.hasError) {
-          return _InfoCard(
+          return const _InfoCard(
               icon: Icons.calendar_today_rounded,
               iconColor: AppColors.info,
               text: 'Could not load appointments.');
@@ -1170,9 +1183,9 @@ class _PrescriptionsSection extends StatelessWidget {
           return _loadingCard(70);
         }
         if (snap.hasError) {
-          return _InfoCard(
+          return const _InfoCard(
               icon: Icons.medication_rounded,
-              iconColor: const Color(0xFF2E7D32),
+              iconColor: Color(0xFF2E7D32),
               text: 'Could not load prescriptions.');
         }
         final docs = snap.data?.docs ?? [];
@@ -1315,12 +1328,12 @@ class _WomensHealth extends StatelessWidget {
             padding: const EdgeInsets.all(15),
             decoration: BoxDecoration(
               gradient: LinearGradient(colors: [
-                const Color(0xFF880E4F).withValues(alpha:0.08),
-                const Color(0xFFE91E8C).withValues(alpha:0.08),
+                const Color(0xFF33172C).withValues(alpha:0.08),
+                const Color(0xFFA36BAC).withValues(alpha:0.08),
               ]),
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                  color: const Color(0xFFE91E8C).withValues(alpha:0.3)),
+                  color: const Color(0xFFA36BAC).withValues(alpha:0.3)),
             ),
             child: Row(children: [
               Container(
@@ -1328,7 +1341,7 @@ class _WomensHealth extends StatelessWidget {
                 height: 44,
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
-                      colors: [Color(0xFF880E4F), Color(0xFFE91E8C)]),
+                      colors: [Color(0xFF33172C), Color(0xFFA36BAC)]),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Center(
@@ -1353,7 +1366,7 @@ class _WomensHealth extends StatelessWidget {
                     ]),
               ),
               const Icon(Icons.chevron_right_rounded,
-                  color: Color(0xFFE91E8C)),
+                  color: Color(0xFFA36BAC)),
             ]),
           ),
         ),
@@ -1364,14 +1377,14 @@ class _WomensHealth extends StatelessWidget {
             padding: const EdgeInsets.all(15),
             decoration: BoxDecoration(
               gradient: const LinearGradient(
-                colors: [Color(0xFFC2185B), Color(0xFF7B1FA2)],
+                colors: [Color(0xFF522546), Color(0xFF633058)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
-                    color: const Color(0xFFC2185B).withValues(alpha:0.2),
+                    color: const Color(0xFF522546).withValues(alpha:0.2),
                     blurRadius: 10,
                     offset: const Offset(0, 4))
               ],
@@ -1542,7 +1555,7 @@ class _BMICard extends StatelessWidget {
             decoration: BoxDecoration(
                 color: context.appSurface,
                 borderRadius:
-                    BorderRadius.vertical(top: Radius.circular(24))),
+                    const BorderRadius.vertical(top: Radius.circular(24))),
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               Container(
                   width: 36,
@@ -1551,7 +1564,7 @@ class _BMICard extends StatelessWidget {
                       color: context.appDivider,
                       borderRadius: BorderRadius.circular(2))),
               const SizedBox(height: 14),
-              Text('BMI Calculator', style: AppTextStyles.h3),
+              const Text('BMI Calculator', style: AppTextStyles.h3),
               const SizedBox(height: 18),
               Text('Height: ${h.round()} cm', style: AppTextStyles.labelLarge),
               Slider(
@@ -1736,7 +1749,7 @@ class _LogVitalsSheetState extends State<_LogVitalsSheet> {
           padding: const EdgeInsets.fromLTRB(20, 14, 20, 28),
           decoration: BoxDecoration(
             color: context.appSurface,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           ),
           child: SingleChildScrollView(
             child: Column(
@@ -1752,7 +1765,7 @@ class _LogVitalsSheetState extends State<_LogVitalsSheet> {
                             borderRadius: BorderRadius.circular(2))),
                   ),
                   const SizedBox(height: 14),
-                  Text('Log Today\'s Vitals', style: AppTextStyles.h3),
+                  const Text('Log Today\'s Vitals', style: AppTextStyles.h3),
                   const SizedBox(height: 4),
                   Text('Fill in any or all fields',
                       style: AppTextStyles.bodySmall

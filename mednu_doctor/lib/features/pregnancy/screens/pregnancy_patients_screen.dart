@@ -42,14 +42,14 @@ class _PregnancyPatientsScreenState extends State<PregnancyPatientsScreen>
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-          onPressed: () => context.pop(),
+          onPressed: () => context.safeBack(),
         ),
         title: const Text('Maternity Patients',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16, fontFamily: 'Poppins')),
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16, fontFamily: 'Inter')),
         flexibleSpace: Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
-              colors: [Color(0xFF880E4F), Color(0xFFC2185B), Color(0xFF7B1FA2)],
+              colors: [AppColors.primaryDark, AppColors.primary, AppColors.secondary],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
@@ -61,8 +61,8 @@ class _PregnancyPatientsScreenState extends State<PregnancyPatientsScreen>
           unselectedLabelColor: Colors.white60,
           indicatorColor: Colors.white,
           indicatorSize: TabBarIndicatorSize.label,
-          labelStyle: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 13),
-          unselectedLabelStyle: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w500, fontSize: 13),
+          labelStyle: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w700, fontSize: 13),
+          unselectedLabelStyle: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w500, fontSize: 13),
           tabs: const [
             Tab(text: 'My Patients'),
             Tab(text: 'Alerts'),
@@ -168,7 +168,7 @@ class _PregnancyPatientsScreenState extends State<PregnancyPatientsScreen>
               height: 50,
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [Color(0xFFC2185B), Color(0xFF7B1FA2)],
+                  colors: [AppColors.primary, AppColors.secondary],
                 ),
                 shape: BoxShape.circle,
               ),
@@ -204,11 +204,11 @@ class _PregnancyPatientsScreenState extends State<PregnancyPatientsScreen>
                   ]),
                   const SizedBox(height: 4),
                   Row(children: [
-                    _infoChip(Icons.pregnant_woman_rounded, 'Week $week', const Color(0xFFC2185B)),
+                    _infoChip(Icons.pregnant_woman_rounded, 'Week $week', AppColors.primary),
                     const SizedBox(width: 6),
                     _infoChip(Icons.calendar_today_rounded,
                         'Due ${DateFormat('dd MMM').format((d['dueDate'] as Timestamp?)?.toDate() ?? DateTime.now())}',
-                        const Color(0xFF7B1FA2)),
+                        AppColors.secondary),
                   ]),
                 ],
               ),

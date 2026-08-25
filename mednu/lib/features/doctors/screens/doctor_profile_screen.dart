@@ -38,7 +38,18 @@ int _feeForDuration(int baseFee, int minutes) =>
 class DoctorProfileScreen extends StatefulWidget {
   final String doctorId;
   final int? initialDuration;
-  const DoctorProfileScreen({super.key, required this.doctorId, this.initialDuration});
+  // When set, this screen is rescheduling an existing appointment rather than
+  // creating a new one: booking is locked to this doctor, no payment is
+  // collected, and confirming just moves the existing appointment's slot.
+  final String? rescheduleAppointmentId;
+  final String? rescheduleType;
+  const DoctorProfileScreen({
+    super.key,
+    required this.doctorId,
+    this.initialDuration,
+    this.rescheduleAppointmentId,
+    this.rescheduleType,
+  });
   @override
   State<DoctorProfileScreen> createState() => _DoctorProfileScreenState();
 }
@@ -61,11 +72,13 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
   String? _hospital;
   String? _hospitalAddress;
   List<String> _languages = [];
-  List<String> _supportedModes = ['Video', 'Audio', 'In-Person', 'Chat'];
+  List<String> _supportedModes = ['Video', 'In-Person'];
 
   StreamSubscription<DocumentSnapshot>? _docSub;
   StreamSubscription<DocumentSnapshot>? _favSub;
   Timer? _slotTimer;
+
+  bool get _isRescheduling => widget.rescheduleAppointmentId != null;
 
   @override
   void initState() {
@@ -75,6 +88,9 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
     _selectedDuration = _kSessionDurations.contains(widget.initialDuration)
         ? widget.initialDuration!
         : 30;
+    if (_isRescheduling && _kConsultMeta.containsKey(widget.rescheduleType)) {
+      _consultationType = widget.rescheduleType!;
+    }
     _subscribeDoctor();
     _subscribeFavouriteState();
     _slotTimer = Timer.periodic(const Duration(minutes: 1), (_) { if (mounted) setState(() {}); });
@@ -122,7 +138,8 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
         _hospitalAddress = d['hospitalAddress'] as String? ?? d['clinicAddress'] as String?;
         _languages = (d['languages'] as List<dynamic>?)?.cast<String>() ?? [];
         if (modes != null && modes.isNotEmpty) {
-          _supportedModes = modes.cast<String>();
+          final allowed = modes.cast<String>().where((m) => m == 'Video' || m == 'In-Person').toList();
+          if (allowed.isNotEmpty) _supportedModes = allowed;
         }
         _loadingDoc = false;
       });
@@ -311,9 +328,12 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
           .where('date', isEqualTo: dateKey)
           .where('time', isEqualTo: slot)
           .where('status', isEqualTo: 'booked')
-          .limit(1)
+          .limit(2)
           .get();
-      if (existing.docs.isNotEmpty) throw Exception('slot_taken');
+      final clash = existing.docs
+          .where((d) => d.id != widget.rescheduleAppointmentId)
+          .isNotEmpty;
+      if (clash) throw Exception('slot_taken');
     } catch (e) {
       if (!mounted) return;
       setState(() => _booking = false);
@@ -327,6 +347,46 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
     }
 
     setState(() => _booking = false);
+
+    // ── Reschedule mode: move the existing appointment, no payment ───────────
+    // The patient already paid for this appointment, so rescheduling only
+    // updates its date/time/type — it never opens PaymentScreen or creates a
+    // new appointment/payment record.
+    if (_isRescheduling) {
+      setState(() => _booking = true);
+      try {
+        await db.collection('appointments').doc(widget.rescheduleAppointmentId).update({
+          'date':             dateKey,
+          'time':             slot,
+          'consultationType': _consultationType,
+          'status':           'booked',
+          'updatedAt':        Timestamp.now(),
+        });
+        if (mounted) {
+          final bookedSlot = slot;
+          final bookedDate = _dates[_selectedDateIndex];
+          setState(() { _selectedSlot = null; _booking = false; });
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(
+              'Appointment rescheduled to ${DateFormat('d MMM').format(bookedDate)} at $bookedSlot',
+            ),
+            backgroundColor: const Color(0xFF2E7D32),
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 4),
+          ));
+          _showBookingConfirmation(doc, bookedSlot, bookedDate);
+        }
+      } catch (e) {
+        if (mounted) {
+          setState(() => _booking = false);
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Could not reschedule. Please try again.'),
+            backgroundColor: AppColors.error, behavior: SnackBarBehavior.floating,
+          ));
+        }
+      }
+      return;
+    }
 
     // ── Open PaymentScreen — the slot is free, now collect payment ───────────
     // PaymentScreen pops with `true` only after Razorpay verifies the payment
@@ -425,10 +485,10 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
               child: const Icon(Icons.check_rounded, color: Colors.white, size: 36),
             ),
             const SizedBox(height: 20),
-            Text('Appointment Booked!',
+            Text(_isRescheduling ? 'Appointment Rescheduled!' : 'Appointment Booked!',
                 style: TextStyle(fontFamily: 'Poppins', fontSize: 20, fontWeight: FontWeight.w800, color: context.appTextPrimary)),
             const SizedBox(height: 6),
-            Text('Your slot is confirmed', style: AppTextStyles.bodyMedium.copyWith(color: context.appTextSecondary)),
+            Text(_isRescheduling ? 'Your new slot is confirmed' : 'Your slot is confirmed', style: AppTextStyles.bodyMedium.copyWith(color: context.appTextSecondary)),
             const SizedBox(height: 20),
             Container(
               padding: const EdgeInsets.all(16),
@@ -445,10 +505,12 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                 _ConfirmRow(Icons.schedule_rounded, slot, const Color(0xFF2E7D32)),
                 const SizedBox(height: 10),
                 _ConfirmRow(Icons.videocam_rounded, _consultationType, const Color(0xFF6A1B9A)),
-                const SizedBox(height: 10),
-                _ConfirmRow(Icons.timer_outlined,
-                    '$_selectedDuration min · ₹${_feeForDuration(doc.fee, _selectedDuration)}',
-                    const Color(0xFF00897B)),
+                if (!_isRescheduling) ...[
+                  const SizedBox(height: 10),
+                  _ConfirmRow(Icons.timer_outlined,
+                      '$_selectedDuration min · ₹${_feeForDuration(doc.fee, _selectedDuration)}',
+                      const Color(0xFFF9943B)),
+                ],
               ]),
             ),
             const SizedBox(height: 24),
@@ -507,7 +569,6 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // ── Quick Trust Stats ───────────────────
-                Container(color: Colors.blue, height: 30, width: double.infinity, child: const Text('DEBUG: STATS ROW STARTS HERE', style: TextStyle(color: Colors.white, fontSize: 10))),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
                   child: _TrustStatsRow(doc: doc, doctorId: widget.doctorId),
@@ -515,7 +576,6 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                 const SizedBox(height: 24),
 
                 // ── Consultation Type Cards ──────────────
-                Container(color: Colors.orange, height: 30, width: double.infinity, child: const Text('DEBUG: CONSULT TYPE STARTS HERE', style: TextStyle(color: Colors.black, fontSize: 10))),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: _buildConsultationTypes(),
@@ -535,20 +595,6 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                   child: _AboutSection(about: doc.about),
                 ),
                 const SizedBox(height: 24),
-
-                // ── Specialities ─────────────────────────
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: _buildSpecialities(doc),
-                ),
-                const SizedBox(height: 24),
-
-                // ── Hospital Card ─────────────────────────
-                if (_hospital != null)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-                    child: _HospitalCard(name: _hospital!, address: _hospitalAddress),
-                  ),
 
                 // ── Languages ────────────────────────────
                 if (_languages.isNotEmpty)
@@ -608,6 +654,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
         ),
         child: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 18),
+          tooltip: 'Back',
           onPressed: () => context.pop(),
         ),
       ),
@@ -633,6 +680,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                     _isFavourite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
                     color: _isFavourite ? Colors.red.shade300 : Colors.white, size: 20,
                   ),
+                  tooltip: _isFavourite ? 'Remove from favourites' : 'Add to favourites',
                   onPressed: _toggleFavourite,
                 ),
         ),
@@ -644,6 +692,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
           ),
           child: IconButton(
             icon: const Icon(Icons.share_rounded, color: Colors.white, size: 20),
+            tooltip: 'Share',
             onPressed: _shareDoctor,
           ),
         ),
@@ -800,7 +849,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _PremiumSectionTitle('Consultation Type', Icons.medical_services_rounded, AppColors.primary),
+        const _PremiumSectionTitle('Consultation Type', Icons.medical_services_rounded, AppColors.primary),
         const SizedBox(height: 14),
         staticGrid(
           crossAxisCount: 2,
@@ -863,30 +912,57 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
             );
           }).toList(),
         ),
-        if (_consultationType == 'In-Person' && (_hospital != null || _hospitalAddress != null))
+        if (_consultationType == 'In-Person') ...[
           Padding(
             padding: const EdgeInsets.only(top: 12),
             child: Container(
-              padding: const EdgeInsets.all(14),
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
-                color: const Color(0xFFB71C1C).withValues(alpha:0.05),
+                color: Colors.orange.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFB71C1C).withValues(alpha:0.15)),
+                border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
               ),
               child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Icon(Icons.place_rounded, size: 18, color: Color(0xFFB71C1C)),
-                const SizedBox(width: 10),
-                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  if (_hospital != null)
-                    Text(_hospital!, style: AppTextStyles.labelMedium.copyWith(color: const Color(0xFFB71C1C))),
-                  if (_hospitalAddress != null) ...[
-                    const SizedBox(height: 3),
-                    Text(_hospitalAddress!, style: AppTextStyles.caption.copyWith(color: context.appTextSecondary)),
-                  ],
-                ])),
+                Icon(Icons.info_outline_rounded, size: 16, color: Colors.orange.shade800),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'In-person visit required — you\'ll need to travel to the hospital/clinic below for this consultation.',
+                    style: TextStyle(
+                      fontFamily: 'Poppins', fontSize: 11.5, fontWeight: FontWeight.w500,
+                      color: Colors.orange.shade900,
+                    ),
+                  ),
+                ),
               ]),
             ),
           ),
+          if (_hospital != null || _hospitalAddress != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFB71C1C).withValues(alpha:0.05),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFB71C1C).withValues(alpha:0.15)),
+                ),
+                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Icon(Icons.place_rounded, size: 18, color: Color(0xFFB71C1C)),
+                  const SizedBox(width: 10),
+                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    if (_hospital != null)
+                      Text(_hospital!, style: AppTextStyles.labelMedium.copyWith(color: const Color(0xFFB71C1C))),
+                    if (_hospitalAddress != null) ...[
+                      const SizedBox(height: 3),
+                      Text(_hospitalAddress!, style: AppTextStyles.caption.copyWith(color: context.appTextSecondary)),
+                    ],
+                  ])),
+                ]),
+              ),
+            ),
+        ],
       ],
     );
   }
@@ -896,7 +972,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _PremiumSectionTitle('Session Duration', Icons.timer_outlined, const Color(0xFF00897B)),
+        const _PremiumSectionTitle('Session Duration', Icons.timer_outlined, Color(0xFFF9943B)),
         const SizedBox(height: 14),
         Row(
           children: _kSessionDurations.map((mins) {
@@ -967,51 +1043,13 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
     );
   }
 
-  // ── Specialities ──────────────────────────────────────
-  Widget _buildSpecialities(DocData doc) {
-    final specs = doc.specialities.where((s) => s.isNotEmpty).toList();
-    if (specs.isEmpty) return const SizedBox.shrink();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _PremiumSectionTitle('Specialities', Icons.local_pharmacy_rounded, const Color(0xFF6A1B9A)),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 8, runSpacing: 8,
-          children: specs.asMap().entries.map((entry) {
-            final colors = [
-              const Color(0xFF1565C0), const Color(0xFF2E7D32),
-              const Color(0xFF6A1B9A), const Color(0xFFB71C1C),
-              const Color(0xFF00897B), const Color(0xFFF57F17),
-            ];
-            final c = colors[entry.key % colors.length];
-            return Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(
-                color: c.withValues(alpha:0.08),
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: c.withValues(alpha:0.25)),
-              ),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                Icon(Icons.local_pharmacy_rounded, size: 13, color: c),
-                const SizedBox(width: 5),
-                Text(entry.value, style: TextStyle(
-                  fontFamily: 'Poppins', fontSize: 12, fontWeight: FontWeight.w700, color: c,
-                )),
-              ]),
-            );
-          }).toList(),
-        ),
-      ],
-    );
-  }
 
   // ── Languages ─────────────────────────────────────────
   Widget _buildLanguages() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _PremiumSectionTitle('Languages', Icons.translate_rounded, const Color(0xFF00897B)),
+        const _PremiumSectionTitle('Languages', Icons.translate_rounded, Color(0xFFF9943B)),
         const SizedBox(height: 12),
         Wrap(
           spacing: 8, runSpacing: 8,
@@ -1041,7 +1079,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(children: [
-          _PremiumSectionTitle('Select Date', Icons.event_rounded, AppColors.primary),
+          const _PremiumSectionTitle('Select Date', Icons.event_rounded, AppColors.primary),
           const Spacer(),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
@@ -1124,12 +1162,12 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(children: [
+        const Row(children: [
           _PremiumSectionTitle('Available Slots', Icons.access_time_rounded, AppColors.primary),
-          const Spacer(),
+          Spacer(),
           _LegendDot(AppColors.primary, 'Available'),
-          const SizedBox(width: 14),
-          _LegendDot(const Color(0xFFD1D5DB), 'Booked'),
+          SizedBox(width: 14),
+          _LegendDot(Color(0xFFD1D5DB), 'Booked'),
         ]),
         const SizedBox(height: 16),
         StreamBuilder<Set<String>>(
@@ -1231,7 +1269,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
       padding: EdgeInsets.fromLTRB(20, 14, 20, MediaQuery.of(context).padding.bottom + 14),
       decoration: BoxDecoration(
         color: context.appSurface,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
         boxShadow: const [BoxShadow(color: Color(0x12000000), blurRadius: 24, offset: Offset(0, -6))],
       ),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -1268,7 +1306,9 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '$_consultationType · $_selectedDuration min · ₹${_feeForDuration(doc.fee, _selectedDuration)}',
+                  _isRescheduling
+                      ? '$_consultationType · $_selectedDuration min'
+                      : '$_consultationType · $_selectedDuration min · ₹${_feeForDuration(doc.fee, _selectedDuration)}',
                   style: const TextStyle(
                     fontFamily: 'Poppins', fontSize: 11.5, color: Color(0xFF6B7280),
                     fontWeight: FontWeight.w500,
@@ -1279,8 +1319,8 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                 onTap: () => setState(() => _selectedSlot = null),
                 child: Container(
                   width: 28, height: 28,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF3F4F6), shape: BoxShape.circle,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFF3F4F6), shape: BoxShape.circle,
                   ),
                   child: const Icon(Icons.close_rounded, size: 14, color: Color(0xFF9CA3AF)),
                 ),
@@ -1335,9 +1375,11 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                       ),
                       child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                        const Icon(Icons.calendar_month_rounded, size: 19, color: Colors.white),
+                        Icon(_isRescheduling ? Icons.edit_calendar_rounded : Icons.calendar_month_rounded, size: 19, color: Colors.white),
                         const SizedBox(width: 8),
-                        Text('Book Appointment · ₹${_feeForDuration(doc.fee, _selectedDuration)}',
+                        Text(_isRescheduling
+                            ? 'Confirm Reschedule'
+                            : 'Book Appointment · ₹${_feeForDuration(doc.fee, _selectedDuration)}',
                           style: const TextStyle(
                             fontFamily: 'Poppins', fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white,
                           )),
@@ -1360,6 +1402,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
             backgroundColor: AppColors.primary,
             leading: IconButton(
               icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
+              tooltip: 'Back',
               onPressed: () => context.pop(),
             ),
             flexibleSpace: FlexibleSpaceBar(
@@ -1392,16 +1435,16 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
               ),
             ),
           ),
-          SliverToBoxAdapter(
+          const SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.all(20),
+              padding: EdgeInsets.all(20),
               child: Column(children: [
                 SkeletonBox(width: double.infinity, height: 80),
-                const SizedBox(height: 16),
+                SizedBox(height: 16),
                 SkeletonBox(width: double.infinity, height: 120),
-                const SizedBox(height: 16),
+                SizedBox(height: 16),
                 SkeletonBox(width: double.infinity, height: 100),
-                const SizedBox(height: 16),
+                SizedBox(height: 16),
                 SkeletonBox(width: double.infinity, height: 180),
               ]),
             ),
@@ -1417,6 +1460,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded),
+          tooltip: 'Back',
           onPressed: () => context.pop(),
         ),
       ),
@@ -1612,7 +1656,7 @@ class _AboutSectionState extends State<_AboutSection> {
   Widget build(BuildContext context) {
     const maxLines = 3;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      _PremiumSectionTitle('About Doctor', Icons.info_outline_rounded, AppColors.primary),
+      const _PremiumSectionTitle('About Doctor', Icons.info_outline_rounded, AppColors.primary),
       const SizedBox(height: 10),
       AnimatedCrossFade(
         duration: const Duration(milliseconds: 250),
@@ -1643,53 +1687,6 @@ class _AboutSectionState extends State<_AboutSection> {
 }
 
 // ── Hospital card ─────────────────────────────────────────
-class _HospitalCard extends StatelessWidget {
-  final String name;
-  final String? address;
-  const _HospitalCard({required this.name, this.address});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      _PremiumSectionTitle('Hospital / Clinic', Icons.local_hospital_rounded, const Color(0xFF1565C0)),
-      const SizedBox(height: 12),
-      Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: context.appSurface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFF1565C0).withValues(alpha:0.1)),
-          boxShadow: [BoxShadow(color: const Color(0xFF1565C0).withValues(alpha:0.06), blurRadius: 12, offset: const Offset(0, 4))],
-        ),
-        child: Row(children: [
-          Container(
-            width: 50, height: 50,
-            decoration: BoxDecoration(
-              color: const Color(0xFF1565C0).withValues(alpha:0.1),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: const Icon(Icons.local_hospital_rounded, color: Color(0xFF1565C0), size: 26),
-          ),
-          const SizedBox(width: 14),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(name, style: AppTextStyles.labelLarge.copyWith(color: context.appTextPrimary)),
-            if (address != null) ...[
-              const SizedBox(height: 4),
-              Row(children: [
-                Icon(Icons.place_rounded, size: 12, color: context.appTextHint),
-                const SizedBox(width: 3),
-                Expanded(child: Text(address!,
-                    style: AppTextStyles.caption.copyWith(color: context.appTextSecondary),
-                    overflow: TextOverflow.ellipsis)),
-              ]),
-            ],
-          ])),
-        ]),
-      ),
-    ]);
-  }
-}
-
 // ── Slot Section (Morning / Afternoon / Evening) ──────────
 class _SlotSection extends StatelessWidget {
   final String label;
@@ -1728,8 +1725,11 @@ class _SlotSection extends StatelessWidget {
         )),
       ]),
       const SizedBox(height: 10),
-      Wrap(
-        spacing: 8, runSpacing: 8,
+      staticGrid(
+        crossAxisCount: 3,
+        aspectRatio: 2.3,
+        mainAxisSpacing: 8,
+        crossAxisSpacing: 8,
         children: slots.map((slot) {
           final isBooked = booked.contains(slot);
           final isSelected = selected == slot;
@@ -1737,8 +1737,6 @@ class _SlotSection extends StatelessWidget {
             onTap: isBooked ? null : () => onTap(slot),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 180),
-              width: 100,
-              height: 42,
               alignment: Alignment.center,
               decoration: BoxDecoration(
                 gradient: isSelected ? AppColors.primaryGradient : null,
@@ -1956,7 +1954,7 @@ class _ReviewsSectionState extends State<_ReviewsSection> {
         stream: ReviewService.reviewsStream(doctorId, limit: 5),
         builder: (context, snap) {
           if (snap.connectionState == ConnectionState.waiting) {
-            return Column(children: const [
+            return const Column(children: [
               _ReviewCardSkeleton(), _ReviewCardSkeleton(), _ReviewCardSkeleton(),
             ]);
           }
@@ -2031,9 +2029,9 @@ class _ReviewCard extends StatelessWidget {
                   color: AppColors.accent.withValues(alpha:0.1), borderRadius: BorderRadius.circular(6),
                   border: Border.all(color: AppColors.accent.withValues(alpha:0.2)),
                 ),
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  const Icon(Icons.verified_rounded, size: 10, color: AppColors.accent),
-                  const SizedBox(width: 3),
+                child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(Icons.verified_rounded, size: 10, color: AppColors.accent),
+                  SizedBox(width: 3),
                   Text('Verified', style: TextStyle(
                       fontFamily: 'Poppins', fontSize: 9, fontWeight: FontWeight.w700, color: AppColors.accent)),
                 ]),

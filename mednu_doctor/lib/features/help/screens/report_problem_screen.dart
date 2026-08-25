@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
+import '../../../core/router/app_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:go_router/go_router.dart';
 import 'dart:io';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
@@ -131,19 +131,19 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
       appBar: AppBar(
         title: const Text(
           'Report a Problem',
-          style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, color: Colors.white, fontSize: 18),
+          style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w700, color: Colors.white, fontSize: 18),
         ),
         backgroundColor: Colors.transparent,
         foregroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-          onPressed: () => context.pop(),
+          onPressed: () => context.safeBack(),
         ),
         flexibleSpace: Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
-              colors: [Color(0xFF880E4F), Color(0xFFC2185B), Color(0xFF7B1FA2)],
+              colors: [AppColors.primaryDark, AppColors.primary, AppColors.secondary],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
@@ -181,7 +181,7 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
               child: Text(
                 'Ticket ID: $_ticketId',
                 style: const TextStyle(
-                  fontFamily: 'Poppins',
+                  fontFamily: 'Inter',
                   fontWeight: FontWeight.w700,
                   fontSize: 14,
                   color: AppColors.primary,
@@ -200,7 +200,7 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
               icon: Icons.arrow_back_rounded,
               width: double.infinity,
               height: 52,
-              onTap: () => context.pop(),
+              onTap: () => context.safeBack(),
             ),
           ],
         ),
@@ -256,7 +256,7 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
                           value: c,
                           child: Text(c,
                               style: const TextStyle(
-                                  fontFamily: 'Poppins', fontSize: 13)),
+                                  fontFamily: 'Inter', fontSize: 13)),
                         ))
                     .toList(),
                 onChanged: (v) => setState(() => _category = v!),
@@ -330,7 +330,7 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
                         Text(
                           'Tap to add a screenshot',
                           style: TextStyle(
-                              fontFamily: 'Poppins',
+                              fontFamily: 'Inter',
                               fontSize: 13,
                               color: AppColors.textHint),
                         ),
@@ -346,7 +346,7 @@ class _ReportProblemScreenState extends State<ReportProblemScreen> {
             width: double.infinity,
             height: 52,
             isLoading: _submitting,
-            colors: const [Color(0xFFB71C1C), Color(0xFFC2185B)],
+            colors: const [Color(0xFFB71C1C), AppColors.primary],
             onTap: _submitting ? () {} : _submit,
           ),
           const SizedBox(height: 40),

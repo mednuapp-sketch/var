@@ -54,26 +54,30 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _toggleAppointmentReminder(bool value) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('booking_reminder_enabled', value);
     if (mounted) setState(() => _appointmentReminder = value);
     if (!value) {
-      await BookingReminderService.cancelAllReminders();
+      await BookingReminderService.cancelAllReminders(uid);
     } else {
       try {
         final bookings = await MyServicesService.allBookingsStream().first;
-        await BookingReminderService.syncReminders(bookings, _appointmentReminderMinutes);
+        await BookingReminderService.syncReminders(uid, bookings, _appointmentReminderMinutes);
       } catch (_) {}
     }
   }
 
   Future<void> _setReminderMinutes(int minutes) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('booking_reminder_minutes', minutes);
     if (mounted) setState(() => _appointmentReminderMinutes = minutes);
     try {
       final bookings = await MyServicesService.allBookingsStream().first;
-      await BookingReminderService.syncReminders(bookings, minutes);
+      await BookingReminderService.syncReminders(uid, bookings, minutes);
     } catch (_) {}
   }
 
@@ -218,7 +222,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               background: Container(
                 decoration: const BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [Color(0xFF880E4F), Color(0xFFC2185B), Color(0xFF7B1FA2)],
+                    colors: [Color(0xFF33172C), Color(0xFF522546), Color(0xFF633058)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
@@ -371,10 +375,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 // Notifications
-                _SectionHeader(
+                const _SectionHeader(
                   icon: Icons.notifications_rounded,
                   title: 'Notifications',
-                  color: const Color(0xFF7B1FA2),
+                  color: Color(0xFF633058),
                 ),
                 SizedBox(height: R.h(context, 8)),
                 _SettingsCard(children: [
@@ -400,7 +404,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     'Get notified before upcoming appointments & services',
                     _appointmentReminder,
                     _toggleAppointmentReminder,
-                    iconColor: const Color(0xFF00897B),
+                    iconColor: const Color(0xFFF9943B),
                   ),
                   if (_appointmentReminder) ...[
                     const Divider(height: 1, indent: 62),
@@ -414,10 +418,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 SizedBox(height: R.h(context, 20)),
 
                 // Security
-                _SectionHeader(
+                const _SectionHeader(
                   icon: Icons.security_rounded,
                   title: 'Security & Privacy',
-                  color: const Color(0xFF1565C0),
+                  color: Color(0xFF1565C0),
                 ),
                 SizedBox(height: R.h(context, 8)),
                 _SettingsCard(children: [
@@ -452,10 +456,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 SizedBox(height: R.h(context, 20)),
 
                 // Appearance
-                _SectionHeader(
+                const _SectionHeader(
                   icon: Icons.palette_rounded,
                   title: 'Appearance',
-                  color: const Color(0xFF00897B),
+                  color: Color(0xFFF9943B),
                 ),
                 SizedBox(height: R.h(context, 8)),
                 _SettingsCard(children: [
@@ -472,7 +476,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 SizedBox(height: R.h(context, 20)),
 
                 // Account
-                _SectionHeader(
+                const _SectionHeader(
                   icon: Icons.manage_accounts_rounded,
                   title: 'Account',
                   color: AppColors.primary,
@@ -491,10 +495,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 SizedBox(height: R.h(context, 20)),
 
                 // Support
-                _SectionHeader(
+                const _SectionHeader(
                   icon: Icons.help_rounded,
                   title: 'Support',
-                  color: const Color(0xFFE65100),
+                  color: Color(0xFFE65100),
                 ),
                 SizedBox(height: R.h(context, 8)),
                 _SettingsCard(children: [
@@ -564,7 +568,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       );
                       if (confirm == true && mounted) {
                         await FirebaseAuth.instance.signOut();
-                        if (!mounted) return;
+                        if (!mounted || !context.mounted) return;
                         context.go(AppRoutes.login);
                       }
                     },
@@ -611,7 +615,7 @@ class _BiometricTile extends StatelessWidget {
               color: supported ? const Color(0xFF1565C0) : context.appTextHint,
               size: R.w(context, 20)),
         ),
-        title: Text('Biometric Login', style: AppTextStyles.labelLarge),
+        title: const Text('Biometric Login', style: AppTextStyles.labelLarge),
         subtitle: Text(
           supported
               ? 'Use fingerprint or face to unlock'
@@ -763,13 +767,13 @@ class _ReminderTimingTile extends StatelessWidget {
         width: R.w(context, 38),
         height: R.h(context, 38),
         decoration: BoxDecoration(
-          color: const Color(0xFF00897B).withValues(alpha: 0.1),
+          color: const Color(0xFFF9943B).withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(R.r(context, 11)),
         ),
         child: Icon(Icons.schedule_rounded,
-            color: const Color(0xFF00897B), size: R.w(context, 20)),
+            color: const Color(0xFFF9943B), size: R.w(context, 20)),
       ),
-      title: Text('Reminder Timing', style: AppTextStyles.labelLarge),
+      title: const Text('Reminder Timing', style: AppTextStyles.labelLarge),
       subtitle: Text(label, style: AppTextStyles.caption),
       trailing: Icon(Icons.chevron_right_rounded,
           color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),

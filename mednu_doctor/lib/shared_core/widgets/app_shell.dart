@@ -281,7 +281,7 @@ class _BottomNavIcon extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
               style: TextStyle(
-                fontFamily: 'Poppins',
+                fontFamily: 'Inter',
                 fontSize: 10,
                 fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                 color: color,

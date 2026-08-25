@@ -31,14 +31,14 @@ class CaregiverEarningsScreen extends ConsumerWidget {
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(colors: [Color(0xFF00695C), Color(0xFF00897B)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+              gradient: AppColors.earningGradient,
               borderRadius: BorderRadius.circular(22),
-              boxShadow: [BoxShadow(color: AppColors.accent.withValues(alpha: 0.3), blurRadius: 16, offset: const Offset(0, 6))],
+              boxShadow: [BoxShadow(color: AppColors.primary.withValues(alpha: 0.3), blurRadius: 16, offset: const Offset(0, 6))],
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('This Week', style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: Colors.white70)),
+                const Text('This Week', style: TextStyle(fontFamily: 'Inter', fontSize: 13, color: Colors.white70)),
                 const SizedBox(height: 6),
                 Text('₹${total.toInt()}', style: AppTextStyles.onPrimaryH2.copyWith(fontSize: 30)),
                 const SizedBox(height: 4),

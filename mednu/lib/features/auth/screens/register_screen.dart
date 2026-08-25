@@ -8,6 +8,7 @@ import '../../../core/services/image_upload_service.dart';
 import '../../referral/referral_service.dart';
 import '../providers/auth_provider.dart';
 
+const _bloodGroups = ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'];
 
 class RegisterScreen extends ConsumerStatefulWidget {
   final String phone;
@@ -24,25 +25,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
   final _emailCtrl   = TextEditingController();
   final _dobCtrl     = TextEditingController();
   final _cityCtrl    = TextEditingController();
-  DateTime? _dobDate;
-
-  static const int _minAge = 18;
-
-  int _ageFromDob(DateTime dob) {
-    final now = DateTime.now();
-    int age = now.year - dob.year;
-    if (now.month < dob.month ||
-        (now.month == dob.month && now.day < dob.day)) {
-      age--;
-    }
-    return age;
-  }
   final _referralCtrl = TextEditingController();
-  final _checkupCtrl    = TextEditingController();
-  final _allergiesCtrl  = TextEditingController();
-  final _conditionsCtrl = TextEditingController();
 
   String  _selectedGender    = 'Male';
+  String? _selectedBloodGroup;
   bool    _isLoading         = false;
   bool    _termsAccepted     = false;
   File?   _profileImage;
@@ -73,9 +59,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
     _dobCtrl.dispose();
     _cityCtrl.dispose();
     _referralCtrl.dispose();
-    _checkupCtrl.dispose();
-    _allergiesCtrl.dispose();
-    _conditionsCtrl.dispose();
     super.dispose();
   }
 
@@ -192,38 +175,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
       ),
     );
     if (picked != null) {
-      if (_ageFromDob(picked) < _minAge) {
-        _showError('You must be at least $_minAge years old to use MedNU.');
-        return;
-      }
       setState(() {
-        _dobDate = picked;
         _dobCtrl.text =
-            '${picked.day.toString().padLeft(2, '0')}/${picked.month.toString().padLeft(2, '0')}/${picked.year}';
-      });
-    }
-  }
-
-  // ── Last checkup picker ───────────────────────────────────────────────────
-  Future<void> _pickCheckup() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: DateTime.now(),
-      firstDate: DateTime(1940),
-      lastDate: DateTime.now(),
-      builder: (ctx, child) => Theme(
-        data: Theme.of(ctx).copyWith(
-          colorScheme: const ColorScheme.light(
-            primary: Color(0xFF7b2d6e),
-            onPrimary: Colors.white,
-          ),
-        ),
-        child: child!,
-      ),
-    );
-    if (picked != null) {
-      setState(() {
-        _checkupCtrl.text =
             '${picked.day.toString().padLeft(2, '0')}/${picked.month.toString().padLeft(2, '0')}/${picked.year}';
       });
     }
@@ -240,25 +193,12 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
       _showError('Please select your date of birth.');
       return;
     }
-    if (_dobDate != null && _ageFromDob(_dobDate!) < _minAge) {
-      _showError('You must be at least $_minAge years old to use MedNU.');
-      return;
-    }
-
-    // Always use the Firebase-verified phone as the authoritative source
-    final authState = ref.read(authProvider);
-    final phone = authState.user?.phoneNumber ?? widget.phone;
-
-    if (phone.isEmpty) {
-      _showError('Phone number not verified. Please restart the sign-up process.');
-      return;
-    }
 
     setState(() => _isLoading = true);
     try {
       String? photoUrl;
       if (_profileImage != null) {
-        final uid = authState.user?.uid ?? '';
+        final uid = ref.read(authProvider).user?.uid ?? '';
         photoUrl = await ImageUploadService.uploadUserProfileImage(
           imageFile: _profileImage!,
           uid: uid,
@@ -268,17 +208,19 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
 
       await ref.read(authProvider.notifier).completeRegistration(
         name:         _nameCtrl.text.trim(),
-        phone:        phone,
+        phone:        widget.phone,
         dob:          _dobCtrl.text.trim(),
         gender:       _selectedGender,
         email:        _emailCtrl.text.trim().isEmpty ? null : _emailCtrl.text.trim(),
         city:         _cityCtrl.text.trim().isEmpty ? null : _cityCtrl.text.trim(),
+        bloodGroup:   _selectedBloodGroup,
         referralCode: _referralCtrl.text.trim().isEmpty ? null : _referralCtrl.text.trim(),
-        photoUrl:     photoUrl,
-        lastCheckup:       _checkupCtrl.text.trim().isEmpty ? null : _checkupCtrl.text.trim(),
-        allergies:         _allergiesCtrl.text.trim().isEmpty ? null : _allergiesCtrl.text.trim(),
-        chronicConditions: _conditionsCtrl.text.trim().isEmpty ? null : _conditionsCtrl.text.trim(),
       );
+
+      // Update photo URL if uploaded
+      if (photoUrl != null && mounted) {
+        await ref.read(authProvider.notifier).updatePhotoUrl(photoUrl);
+      }
 
       if (!mounted) return;
       context.go(AppRoutes.createMpin, extra: {'mode': 'setup'});
@@ -302,11 +244,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
 
   @override
   Widget build(BuildContext context) {
-    // Real-time verified phone from Firebase Auth — the authoritative source.
-    // Falls back to the nav param only if the auth state hasn't resolved yet.
-    final verifiedPhone =
-        ref.watch(authProvider).user?.phoneNumber ?? widget.phone;
-
     return Scaffold(
       backgroundColor: const Color(0xFF0D0520),
       body: Stack(
@@ -386,7 +323,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                           shape: BoxShape.circle,
                           gradient: _profileImage == null
                               ? const LinearGradient(
-                                  colors: [Color(0xFF9C27B0), Color(0xFF7b2d6e)],
+                                  colors: [Color(0xFFA36BAC), Color(0xFF7b2d6e)],
                                   begin: Alignment.topLeft,
                                   end: Alignment.bottomRight,
                                 )
@@ -444,10 +381,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                         children: [
 
                           // ── Verified phone ────────────────────────────
-                          if (verifiedPhone.isNotEmpty) ...[
+                          if (widget.phone.isNotEmpty) ...[
                             _sectionLabel('Mobile Number'),
                             const SizedBox(height: 8),
-                            _VerifiedPhone(phone: verifiedPhone),
+                            _VerifiedPhone(phone: widget.phone),
                             const SizedBox(height: 20),
                           ],
 
@@ -494,16 +431,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                                 hint: 'DD / MM / YYYY',
                                 prefix: Icons.cake_outlined,
                                 suffix: Icons.calendar_today_rounded,
-                                validator: (v) {
-                                  if (v == null || v.trim().isEmpty) {
-                                    return 'Select your date of birth';
-                                  }
-                                  if (_dobDate != null &&
-                                      _ageFromDob(_dobDate!) < _minAge) {
-                                    return 'You must be at least $_minAge years old';
-                                  }
-                                  return null;
-                                },
+                                validator: (v) => v == null || v.trim().isEmpty
+                                    ? 'Select your date of birth'
+                                    : null,
                               ),
                             ),
                           ),
@@ -545,44 +475,18 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
 
                           const SizedBox(height: 20),
 
-                          // ══ Health Info (optional) ═════════════════════
+                          // ══ Health Info ════════════════════════════════
                           _SectionHeader(
-                              icon: Icons.health_and_safety_rounded,
-                              label: 'Health Info (optional)'),
+                              icon: Icons.favorite_rounded,
+                              label: 'Health Info'),
                           const SizedBox(height: 12),
 
-                          _sectionLabel('Last Checkup'),
+                          _sectionLabel('Blood Group (optional)'),
                           const SizedBox(height: 6),
-                          GestureDetector(
-                            onTap: _pickCheckup,
-                            child: AbsorbPointer(
-                              child: _field(
-                                controller: _checkupCtrl,
-                                hint: 'DD / MM / YYYY',
-                                prefix: Icons.event_available_outlined,
-                                suffix: Icons.calendar_today_rounded,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 14),
-
-                          _sectionLabel('Allergies (if any)'),
-                          const SizedBox(height: 6),
-                          _field(
-                            controller: _allergiesCtrl,
-                            hint: 'e.g. Penicillin, Peanuts',
-                            prefix: Icons.warning_amber_rounded,
-                            capitalization: TextCapitalization.words,
-                          ),
-                          const SizedBox(height: 14),
-
-                          _sectionLabel('Chronic Conditions (if any)'),
-                          const SizedBox(height: 6),
-                          _field(
-                            controller: _conditionsCtrl,
-                            hint: 'e.g. Diabetes, Hypertension',
-                            prefix: Icons.monitor_heart_outlined,
-                            capitalization: TextCapitalization.words,
+                          _BloodGroupPicker(
+                            selected: _selectedBloodGroup,
+                            onSelect: (v) =>
+                                setState(() => _selectedBloodGroup = v),
                           ),
 
                           const SizedBox(height: 20),
@@ -741,7 +645,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(16),
                               gradient: const LinearGradient(
-                                colors: [Color(0xFF9C27B0), Color(0xFF7b2d6e)],
+                                colors: [Color(0xFFA36BAC), Color(0xFF7b2d6e)],
                               ),
                               boxShadow: [
                                 BoxShadow(
@@ -906,82 +810,45 @@ class _VerifiedPhone extends StatelessWidget {
   final String phone;
   const _VerifiedPhone({required this.phone});
 
-  String get _displayPhone {
-    // Format +919876543210 → 🇮🇳 +91  98765 43210
-    if (phone.startsWith('+91') && phone.length >= 13) {
-      final digits = phone.substring(3);
-      return '+91  ${digits.substring(0, 5)} ${digits.substring(5)}';
-    }
-    return phone;
-  }
-
   @override
   Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
     decoration: BoxDecoration(
-      color: const Color(0xFFF0FAF4),
+      color: const Color(0xFFF0FAF0),
       borderRadius: BorderRadius.circular(12),
-      border: Border.all(color: const Color(0xFF2E7D32).withValues(alpha: 0.35)),
+      border: Border.all(color: const Color(0xFF2E7D32).withValues(alpha: 0.3)),
     ),
     child: Row(
       children: [
-        // Flag + prefix badge
+        const Icon(Icons.phone_android_rounded,
+            color: Color(0xFF2E7D32), size: 18),
+        const SizedBox(width: 10),
+        Text(phone,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF1A0A2E),
+              fontFamily: 'Poppins',
+            )),
+        const Spacer(),
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
-          decoration: const BoxDecoration(
-            color: Color(0xFFE6F4EC),
-            borderRadius: BorderRadius.horizontal(left: Radius.circular(12)),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            color: const Color(0xFF2E7D32).withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(6),
           ),
           child: const Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('🇮🇳', style: TextStyle(fontSize: 16)),
-            ],
-          ),
-        ),
-        Container(width: 1, height: 26,
-            color: const Color(0xFF2E7D32).withValues(alpha: 0.2)),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Text(
-            _displayPhone,
-            style: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF1A0A2E),
-              fontFamily: 'Poppins',
-              letterSpacing: 0.5,
-            ),
-          ),
-        ),
-        // Lock + verified badge
-        Padding(
-          padding: const EdgeInsets.only(right: 12),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF2E7D32).withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.lock_rounded, size: 11, color: Color(0xFF2E7D32)),
-                    SizedBox(width: 4),
-                    Icon(Icons.verified_rounded, size: 11, color: Color(0xFF2E7D32)),
-                    SizedBox(width: 3),
-                    Text('Verified',
-                        style: TextStyle(
-                          color: Color(0xFF2E7D32),
-                          fontSize: 11,
-                          fontFamily: 'Poppins',
-                          fontWeight: FontWeight.w700,
-                        )),
-                  ],
-                ),
-              ),
+              Icon(Icons.verified_rounded, size: 11, color: Color(0xFF2E7D32)),
+              SizedBox(width: 3),
+              Text('Verified',
+                  style: TextStyle(
+                    color: Color(0xFF2E7D32),
+                    fontSize: 11,
+                    fontFamily: 'Poppins',
+                    fontWeight: FontWeight.w600,
+                  )),
             ],
           ),
         ),
@@ -1044,3 +911,50 @@ class _GenderChip extends StatelessWidget {
   );
 }
 
+class _BloodGroupPicker extends StatelessWidget {
+  final String? selected;
+  final void Function(String?) onSelect;
+  const _BloodGroupPicker({required this.selected, required this.onSelect});
+
+  @override
+  Widget build(BuildContext context) => Wrap(
+    spacing: 8,
+    runSpacing: 8,
+    children: _bloodGroups.map((bg) {
+      final isSelected = selected == bg;
+      return GestureDetector(
+        onTap: () => onSelect(isSelected ? null : bg),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          width: 60, height: 44,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: isSelected ? const Color(0xFF7b2d6e) : const Color(0xFFF8F4FF),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: isSelected
+                  ? const Color(0xFF7b2d6e)
+                  : const Color(0xFF7b2d6e).withValues(alpha: 0.2),
+            ),
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: const Color(0xFF7b2d6e).withValues(alpha: 0.25),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Text(bg,
+              style: TextStyle(
+                color: isSelected ? Colors.white : const Color(0xFF7b2d6e),
+                fontWeight: FontWeight.w700,
+                fontFamily: 'Poppins',
+                fontSize: 13,
+              )),
+        ),
+      );
+    }).toList(),
+  );
+}

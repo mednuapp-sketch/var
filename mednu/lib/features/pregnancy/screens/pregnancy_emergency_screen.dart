@@ -226,7 +226,7 @@ class _PregnancyEmergencyScreenState
                   color: Colors.red, size: 36),
             ),
             const SizedBox(height: 16),
-            Text('SOS Alert Sent', style: AppTextStyles.h3),
+            const Text('SOS Alert Sent', style: AppTextStyles.h3),
             const SizedBox(height: 8),
             Text(
               'Your doctor and the MedNU team have been alerted.\nThey will contact you shortly.',
@@ -265,7 +265,7 @@ class _PregnancyEmergencyScreenState
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12)),
                 ),
-                child: Text('OK', style: AppTextStyles.button),
+                child: const Text('OK', style: AppTextStyles.button),
               ),
             ),
           ],
@@ -477,12 +477,12 @@ class _PregnancyEmergencyScreenState
 
   Widget _buildQuickDial(dynamic profile) {
     final contacts = [
-      _DialContact(
+      const _DialContact(
         label: 'Women\nHelpline',
         number: '181',
         icon: Icons.support_agent_rounded,
-        color: const Color(0xFF6A1B9A),
-        gradient: const LinearGradient(
+        color: Color(0xFF6A1B9A),
+        gradient: LinearGradient(
           colors: [Color(0xFFAB47BC), Color(0xFF6A1B9A)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -550,7 +550,7 @@ class _PregnancyEmergencyScreenState
                   Text(
                     c.label,
                     maxLines: 2,
-                    style: TextStyle(fontFamily: 'Poppins', 
+                    style: const TextStyle(fontFamily: 'Poppins', 
                       color: Colors.white,
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
@@ -559,7 +559,7 @@ class _PregnancyEmergencyScreenState
                   ),
                   Text(
                     c.number,
-                    style: TextStyle(fontFamily: 'Poppins', 
+                    style: const TextStyle(fontFamily: 'Poppins', 
                       color: Colors.white70,
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
@@ -878,18 +878,18 @@ class _PregnancyEmergencyScreenState
         border: Border.all(
             color: const Color(0xFFFF6F00).withValues(alpha: 0.3)),
       ),
-      child: Row(
+      child: const Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.info_outline_rounded,
+          Icon(Icons.info_outline_rounded,
               color: Color(0xFFE65100), size: 18),
-          const SizedBox(width: 10),
+          SizedBox(width: 10),
           Expanded(
             child: Text(
               'This screen is for informational and alert purposes only. In a life-threatening emergency, always seek immediate emergency medical help and do not wait for a digital response.',
               style: TextStyle(fontFamily: 'Poppins', 
                 fontSize: 11,
-                color: const Color(0xFFE65100),
+                color: Color(0xFFE65100),
                 height: 1.5,
               ),
             ),

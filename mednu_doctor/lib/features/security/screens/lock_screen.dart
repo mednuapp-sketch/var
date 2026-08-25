@@ -35,7 +35,7 @@ class _LockScreenState extends State<LockScreen> {
     });
     widget.onAuthStarted();
     final success = await BiometricService.authenticate(
-      reason: 'Unlock MedNU Doctor to continue',
+      reason: 'Unlock MedNU Service to continue',
     );
     widget.onAuthEnded();
     if (!mounted) return;
@@ -83,9 +83,9 @@ class _LockScreenState extends State<LockScreen> {
                 ),
                 const SizedBox(height: 28),
                 const Text(
-                  'MedNU Doctor',
+                  'MedNU Service',
                   style: TextStyle(
-                    fontFamily: 'Poppins',
+                    fontFamily: 'Inter',
                     fontSize: 26,
                     fontWeight: FontWeight.w800,
                     color: AppColors.textPrimary,
@@ -95,7 +95,7 @@ class _LockScreenState extends State<LockScreen> {
                 const Text(
                   'App is locked',
                   style: TextStyle(
-                    fontFamily: 'Poppins',
+                    fontFamily: 'Inter',
                     fontSize: 14,
                     color: AppColors.textSecondary,
                   ),
@@ -137,7 +137,7 @@ class _LockScreenState extends State<LockScreen> {
                 const Text(
                   'Use fingerprint or device PIN',
                   style: TextStyle(
-                    fontFamily: 'Poppins',
+                    fontFamily: 'Inter',
                     fontSize: 13,
                     color: AppColors.textSecondary,
                   ),
@@ -149,7 +149,7 @@ class _LockScreenState extends State<LockScreen> {
                     _errorMessage!,
                     textAlign: TextAlign.center,
                     style: const TextStyle(
-                      fontFamily: 'Poppins',
+                      fontFamily: 'Inter',
                       fontSize: 13,
                       color: AppColors.error,
                     ),

@@ -7,7 +7,6 @@ import 'package:intl/intl.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../core/constants/app_spacing.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/utils/r.dart';
 import '../../../core/widgets/ux_widgets.dart';
@@ -298,18 +297,18 @@ class _ConfettiDots extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Row(children: [
-          _Dot(color: Colors.amber, size: 8),
+          const _Dot(color: Colors.amber, size: 8),
           const SizedBox(width: 10),
-          _Dot(color: Colors.white38, size: 5),
+          const _Dot(color: Colors.white38, size: 5),
           const SizedBox(width: 14),
           _Dot(color: Colors.pinkAccent.shade100, size: 7),
         ]),
         const SizedBox(height: 8),
-        Row(children: [
+        const Row(children: [
           _Dot(color: Colors.white24, size: 5),
-          const SizedBox(width: 18),
+          SizedBox(width: 18),
           _Dot(color: Colors.amber, size: 6),
-          const SizedBox(width: 8),
+          SizedBox(width: 8),
           _Dot(color: Colors.white38, size: 8),
         ]),
         const SizedBox(height: 10),
@@ -317,7 +316,7 @@ class _ConfettiDots extends StatelessWidget {
           const SizedBox(width: 8),
           _Dot(color: Colors.pinkAccent.shade100, size: 5),
           const SizedBox(width: 12),
-          _Dot(color: Colors.amber, size: 7),
+          const _Dot(color: Colors.amber, size: 7),
         ]),
       ],
     );
@@ -579,7 +578,7 @@ class _CodeAndQRCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Your Referral Code', style: AppTextStyles.h4),
+            const Text('Your Referral Code', style: AppTextStyles.h4),
             const SizedBox(height: 14),
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -795,7 +794,7 @@ class _SocialShareRow extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Share via', style: AppTextStyles.labelLarge),
+            const Text('Share via', style: AppTextStyles.labelLarge),
             const SizedBox(height: 14),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -909,14 +908,14 @@ class _HowItWorks extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 14),
-          _StepRow(
+          const _StepRow(
             number: '1',
             title: 'Share Your Code',
             desc: 'Send your referral code or QR to friends and family.',
             icon: Icons.share_rounded,
             color: AppColors.primary,
           ),
-          _StepRow(
+          const _StepRow(
             number: '2',
             title: 'Friend Signs Up',
             desc:

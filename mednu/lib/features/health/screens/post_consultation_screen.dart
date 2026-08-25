@@ -305,9 +305,9 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
                     SizedBox(height: R.h(context, 24)),
                   ],
                   // Auto-nav hint
-                  Text(
+                  const Text(
                     'Returning to home in 3 seconds...',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontFamily: 'Poppins',
                       fontSize: 12,
                       color: Colors.white38,
@@ -345,7 +345,7 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
         backgroundColor: AppColors.primaryDark,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-          onPressed: () => context.pop(),
+          onPressed: () => context.canPop() ? context.pop() : context.go(AppRoutes.home),
         ),
         title: const Text('Follow-up', style: TextStyle(fontFamily: 'Poppins', color: Colors.white)),
       ),
@@ -400,7 +400,7 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
           expandedHeight: R.h(context, 170),
           leading: IconButton(
             icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-            onPressed: () => context.pop(),
+            onPressed: () => context.canPop() ? context.pop() : context.go(AppRoutes.home),
           ),
           flexibleSpace: FlexibleSpaceBar(
             background: Container(
@@ -562,7 +562,7 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
       child: Row(children: [
         Container(
           width: 48, height: 48,
-          decoration: BoxDecoration(
+          decoration: const BoxDecoration(
             gradient: AppColors.primaryGradient,
             shape: BoxShape.circle,
           ),
@@ -781,7 +781,7 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
             onChanged: (v) => setState(() => _painLevel = v.round()),
           ),
         ),
-        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+        const Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
           Text('No Pain 😊', style: AppTextStyles.caption),
           Text('Moderate 😐', style: AppTextStyles.caption),
           Text('Severe 😣', style: AppTextStyles.caption),

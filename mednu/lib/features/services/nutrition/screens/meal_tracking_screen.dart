@@ -134,7 +134,7 @@ class _DailySummary extends StatelessWidget {
           _SumItem(label: 'Calories', value: '${cals.toInt()}', unit: 'kcal', color: const Color(0xFFE65100)),
           _SumItem(label: 'Protein', value: '${protein.toInt()}', unit: 'g', color: const Color(0xFF1565C0)),
           _SumItem(label: 'Carbs', value: '${carbs.toInt()}', unit: 'g', color: const Color(0xFF2E7D32)),
-          _SumItem(label: 'Fat', value: '${fat.toInt()}', unit: 'g', color: const Color(0xFF7B1FA2)),
+          _SumItem(label: 'Fat', value: '${fat.toInt()}', unit: 'g', color: const Color(0xFF633058)),
         ],
       ),
     );
@@ -182,7 +182,7 @@ class _MealTypeFilter extends StatelessWidget {
     'breakfast': Color(0xFFF9A825),
     'lunch': Color(0xFF2E7D32),
     'dinner': Color(0xFF1565C0),
-    'snack': Color(0xFF7B1FA2),
+    'snack': Color(0xFF633058),
   };
 
   @override
@@ -239,7 +239,7 @@ class _MealTile extends StatelessWidget {
     'breakfast': Color(0xFFF9A825),
     'lunch': Color(0xFF2E7D32),
     'dinner': Color(0xFF1565C0),
-    'snack': Color(0xFF7B1FA2),
+    'snack': Color(0xFF633058),
   };
 
   @override
@@ -281,7 +281,7 @@ class _MealTile extends StatelessWidget {
                     children: [
                       if (log.protein > 0) _MacroTag(label: 'P: ${log.protein.toInt()}g', color: const Color(0xFF1565C0)),
                       if (log.carbs > 0) _MacroTag(label: 'C: ${log.carbs.toInt()}g', color: const Color(0xFF2E7D32)),
-                      if (log.fat > 0) _MacroTag(label: 'F: ${log.fat.toInt()}g', color: const Color(0xFF7B1FA2)),
+                      if (log.fat > 0) _MacroTag(label: 'F: ${log.fat.toInt()}g', color: const Color(0xFF633058)),
                     ],
                   ),
                 ],
@@ -480,7 +480,7 @@ class _AddMealSheetState extends State<_AddMealSheet> {
             const SizedBox(height: 16),
 
             // ── Food name + search ──
-            _FieldLabel(label: 'Food Name', required: true),
+            const _FieldLabel(label: 'Food Name', required: true),
             const SizedBox(height: 6),
             Row(
               children: [
@@ -560,7 +560,7 @@ class _AddMealSheetState extends State<_AddMealSheet> {
                               const SizedBox(width: 8),
                               Text(
                                 '${food.caloriesPer100g.toStringAsFixed(0)} kcal/100g',
-                                style: TextStyle(fontFamily: 'Poppins', fontSize: 10, color: const Color(0xFFE65100), fontWeight: FontWeight.w600),
+                                style: const TextStyle(fontFamily: 'Poppins', fontSize: 10, color: Color(0xFFE65100), fontWeight: FontWeight.w600),
                               ),
                             ],
                           ),
@@ -583,7 +583,7 @@ class _AddMealSheetState extends State<_AddMealSheet> {
             const SizedBox(height: 14),
 
             // ── Quantity + unit ──
-            _FieldLabel(label: 'Quantity & Unit'),
+            const _FieldLabel(label: 'Quantity & Unit'),
             const SizedBox(height: 6),
             Row(
               children: [
@@ -644,7 +644,7 @@ class _AddMealSheetState extends State<_AddMealSheet> {
             // ── Nutrition fields ──
             Row(
               children: [
-                _FieldLabel(label: 'Nutrition'),
+                const _FieldLabel(label: 'Nutrition'),
                 if (_autoFilled) ...[
                   const SizedBox(width: 8),
                   Container(
@@ -677,7 +677,7 @@ class _AddMealSheetState extends State<_AddMealSheet> {
                     children: [
                       Expanded(child: _NutriField(controller: _carbsCtrl, label: 'Carbs', unit: 'g', color: const Color(0xFF2E7D32))),
                       const SizedBox(width: 10),
-                      Expanded(child: _NutriField(controller: _fatCtrl, label: 'Fat', unit: 'g', color: const Color(0xFF7B1FA2))),
+                      Expanded(child: _NutriField(controller: _fatCtrl, label: 'Fat', unit: 'g', color: const Color(0xFF633058))),
                     ],
                   ),
                 ],
@@ -776,7 +776,7 @@ class _MealTypeRow extends StatelessWidget {
     'breakfast': Color(0xFFF9A825),
     'lunch': Color(0xFF2E7D32),
     'dinner': Color(0xFF1565C0),
-    'snack': Color(0xFF7B1FA2),
+    'snack': Color(0xFF633058),
   };
 
   @override

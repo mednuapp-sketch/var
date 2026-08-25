@@ -109,7 +109,7 @@ class _PharmacyDashboardScreenState extends ConsumerState<PharmacyDashboardScree
                     value: '${m.packedAwaitingDispatch}',
                     label: 'Packed',
                     icon: Icons.inventory_2_rounded,
-                    colors: const [Color(0xFF6A1B9A), Color(0xFF4A148C)],
+                    colors: const [AppColors.secondary, AppColors.secondaryDark],
                   ),
                   GradientStatCard(
                     value: '${m.outForDelivery}',

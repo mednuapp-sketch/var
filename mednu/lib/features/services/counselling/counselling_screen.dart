@@ -37,15 +37,15 @@ class _CounsellingScreenState extends State<CounsellingScreen> {
   final _moods = [
     {'emoji': '😊', 'label': 'Great',   'value': 'great',   'color': const Color(0xFF2E7D32)},
     {'emoji': '😐', 'label': 'Okay',    'value': 'okay',    'color': const Color(0xFF1565C0)},
-    {'emoji': '😔', 'label': 'Low',     'value': 'low',     'color': const Color(0xFF7B1FA2)},
+    {'emoji': '😔', 'label': 'Low',     'value': 'low',     'color': const Color(0xFF633058)},
     {'emoji': '😰', 'label': 'Anxious', 'value': 'anxious', 'color': const Color(0xFFE65100)},
     {'emoji': '😡', 'label': 'Angry',   'value': 'angry',   'color': const Color(0xFFB71C1C)},
   ];
 
   final _types = [
-    {'title': 'Depression & Anxiety', 'icon': Icons.psychology_rounded,      'color': const Color(0xFF7B1FA2), 'specialty': 'Psychiatry'},
+    {'title': 'Depression & Anxiety', 'icon': Icons.psychology_rounded,      'color': const Color(0xFF633058), 'specialty': 'Psychiatry'},
     {'title': 'Stress Management',    'icon': Icons.self_improvement_rounded, 'color': const Color(0xFF1565C0), 'specialty': 'Psychology'},
-    {'title': 'Relationship Therapy', 'icon': Icons.favorite_rounded,         'color': const Color(0xFFC2185B), 'specialty': 'Counselling'},
+    {'title': 'Relationship Therapy', 'icon': Icons.favorite_rounded,         'color': const Color(0xFF522546), 'specialty': 'Counselling'},
     {'title': 'Child & Teen Therapy', 'icon': Icons.child_care_rounded,       'color': const Color(0xFF2E7D32), 'specialty': 'Pediatric Psychiatry'},
     {'title': 'Addiction Recovery',   'icon': Icons.healing_rounded,          'color': const Color(0xFFE65100), 'specialty': 'Psychiatry'},
     {'title': 'Grief Therapy',        'icon': Icons.spa_rounded,              'color': const Color(0xFF37474F), 'specialty': 'Counselling'},
@@ -109,7 +109,7 @@ class _CounsellingScreenState extends State<CounsellingScreen> {
           const SizedBox(height: 20),
 
           // ── Session duration selector ───────────────────────
-          Align(
+          const Align(
             alignment: Alignment.centerLeft,
             child: Text('Session Duration', style: AppTextStyles.labelLarge),
           ),
@@ -213,7 +213,7 @@ class _CounsellingScreenState extends State<CounsellingScreen> {
             ),
           ]),
           const SizedBox(height: 16),
-          Text(
+          const Text(
             'Certified therapists • Fully confidential • Billed by session length',
             style: AppTextStyles.caption,
             textAlign: TextAlign.center,
@@ -243,7 +243,7 @@ class _CounsellingScreenState extends State<CounsellingScreen> {
               background: Container(
                 decoration: const BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [Color(0xFF4A148C), Color(0xFF7B1FA2)],
+                    colors: [Color(0xFF3D1D36), Color(0xFF633058)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
@@ -264,8 +264,8 @@ class _CounsellingScreenState extends State<CounsellingScreen> {
                               children: [
                                 Icon(Icons.psychology_rounded, color: Colors.white, size: AppSpacing.headerIconSize(context)),
                                 SizedBox(height: AppSpacing.headerIconGap(context)),
-                                Text('Therapy and Counselling', style: AppTextStyles.onPrimaryH2),
-                                Text('Confidential mental health support', style: AppTextStyles.onPrimaryBody),
+                                const Text('Therapy and Counselling', style: AppTextStyles.onPrimaryH2),
+                                const Text('Confidential mental health support', style: AppTextStyles.onPrimaryBody),
                               ],
                             ),
                           ),
@@ -290,13 +290,13 @@ class _CounsellingScreenState extends State<CounsellingScreen> {
                     icon: const Icon(Icons.support_agent_rounded, size: 20),
                     label: const Text('Talk to Someone Now'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF7B1FA2),
+                      backgroundColor: const Color(0xFF633058),
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                       textStyle: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 15),
                       elevation: 3,
-                      shadowColor: const Color(0xFF7B1FA2).withValues(alpha: 0.4),
+                      shadowColor: const Color(0xFF633058).withValues(alpha: 0.4),
                     ),
                   ),
                 ),
@@ -327,15 +327,15 @@ class _CounsellingScreenState extends State<CounsellingScreen> {
                 SizedBox(height: AppSpacing.sectionGap(context)),
 
                 // Session info row
-                Row(children: [
-                  _InfoChip(Icons.verified_rounded, 'Certified', const Color(0xFF1565C0)),
-                  const SizedBox(width: 8),
-                  _InfoChip(Icons.video_call_rounded, 'Video/Chat', const Color(0xFFE65100)),
+                const Row(children: [
+                  _InfoChip(Icons.verified_rounded, 'Certified', Color(0xFF1565C0)),
+                  SizedBox(width: 8),
+                  _InfoChip(Icons.video_call_rounded, 'Video/Chat', Color(0xFFE65100)),
                 ]),
                 SizedBox(height: AppSpacing.sectionGap(context)),
 
                 // ── A. Mood check section ───────────────────────────────────
-                Text('How are you feeling today?', style: AppTextStyles.h4),
+                const Text('How are you feeling today?', style: AppTextStyles.h4),
                 const SizedBox(height: 4),
                 Text(
                   'We\'ll personalise your therapy recommendation',
@@ -394,19 +394,19 @@ class _CounsellingScreenState extends State<CounsellingScreen> {
                     duration: const Duration(milliseconds: 300),
                     padding: EdgeInsets.symmetric(horizontal: R.p(context, 14), vertical: R.p(context, 10)),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF7B1FA2).withValues(alpha: 0.07),
+                      color: const Color(0xFF633058).withValues(alpha: 0.07),
                       borderRadius: BorderRadius.circular(R.r(context, 12)),
-                      border: Border.all(color: const Color(0xFF7B1FA2).withValues(alpha: 0.2)),
+                      border: Border.all(color: const Color(0xFF633058).withValues(alpha: 0.2)),
                     ),
                     child: Row(children: [
-                      const Icon(Icons.auto_awesome_rounded, color: Color(0xFF7B1FA2), size: 16),
+                      const Icon(Icons.auto_awesome_rounded, color: Color(0xFF633058), size: 16),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           'Based on your mood, we recommend: $_recommendedTitle',
                           style: const TextStyle(
                             fontFamily: 'Poppins', fontSize: 12, fontWeight: FontWeight.w500,
-                            color: Color(0xFF7B1FA2),
+                            color: Color(0xFF633058),
                           ),
                         ),
                       ),
@@ -415,7 +415,7 @@ class _CounsellingScreenState extends State<CounsellingScreen> {
                 ],
 
                 SizedBox(height: AppSpacing.sectionGap(context)),
-                Text('I need help with...', style: AppTextStyles.h4),
+                const Text('I need help with...', style: AppTextStyles.h4),
                 SizedBox(height: R.h(context, 12)),
 
                 // ── Therapy type grid ──────────────────────────────────────
@@ -489,7 +489,7 @@ class _CounsellingScreenState extends State<CounsellingScreen> {
                     icon: const Icon(Icons.calendar_month_rounded, size: 18),
                     label: const Text('Find a Therapist'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF7B1FA2),
+                      backgroundColor: const Color(0xFF633058),
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     ),

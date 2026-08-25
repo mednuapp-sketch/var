@@ -357,18 +357,18 @@ class _NutritionistCard extends StatelessWidget {
                   color: context.appTextSecondary,
                 ),
                 if (nutritionist.isOnlineAvailable)
-                  _InfoChip(
+                  const _InfoChip(
                     icon: Icons.videocam_rounded,
                     label: 'Online',
                     color: _kGreen,
                     bgColor: _kGreenBg,
                   ),
                 if (nutritionist.isInPersonAvailable)
-                  _InfoChip(
+                  const _InfoChip(
                     icon: Icons.local_hospital_rounded,
                     label: 'In-Person',
                     color: AppColors.info,
-                    bgColor: const Color(0xFFE3F2FD),
+                    bgColor: Color(0xFFE3F2FD),
                   ),
               ],
             ),
@@ -606,7 +606,7 @@ class _EmptyState extends StatelessWidget {
           children: [
             Container(
               padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 color: _kGreenBg,
                 shape: BoxShape.circle,
               ),
@@ -655,10 +655,10 @@ class _NutritionistCardSkeleton extends StatelessWidget {
               color: Color(0x08000000), blurRadius: 10, offset: Offset(0, 2))
         ],
       ),
-      child: AppShimmer(
+      child: const AppShimmer(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: const [
+          children: [
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [

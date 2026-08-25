@@ -4,6 +4,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/services/feedback_service.dart';
+import '../../../core/widgets/mednu_components.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../../../shared_core/shared_core.dart';
 import '../models/inventory_item.dart';
@@ -156,7 +157,33 @@ class PharmacyInventoryScreen extends ConsumerWidget {
           return ListView.builder(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
             itemCount: items.length,
-            itemBuilder: (context, i) => _InventoryTile(item: items[i], pharmacyId: uid ?? ''),
+            itemBuilder: (context, i) => Dismissible(
+              key: ValueKey(items[i].id),
+              direction: DismissDirection.endToStart,
+              background: Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                alignment: Alignment.centerRight,
+                decoration: BoxDecoration(
+                  color: AppColors.error,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Icon(Icons.delete_outline_rounded, color: Colors.white),
+              ),
+              confirmDismiss: (_) => MedNuConfirmationDialog.show(
+                context,
+                title: 'Remove Item',
+                message: 'Remove "${items[i].name}" from your inventory? This cannot be undone.',
+                confirmLabel: 'Remove',
+                destructive: true,
+              ),
+              onDismissed: (_) {
+                if (uid != null) {
+                  PharmacyInventoryService.deleteItem(uid, items[i].id);
+                }
+              },
+              child: _InventoryTile(item: items[i], pharmacyId: uid ?? ''),
+            ),
           );
         },
       ),

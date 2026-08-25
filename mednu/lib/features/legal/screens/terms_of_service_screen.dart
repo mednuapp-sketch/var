@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 
@@ -61,7 +61,7 @@ class TermsOfServiceScreen extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
+                        const Text(
                           'Terms of Service',
                           style: TextStyle(fontFamily: 'Poppins', 
                             color: Colors.white,
@@ -102,7 +102,7 @@ class TermsOfServiceScreen extends StatelessWidget {
             ),
 
             // ── Terms sections ────────────────────────────────────
-            _TermsSection(
+            const _TermsSection(
               number: 1,
               title: 'Acceptance of Terms',
               body: 'By downloading, installing, or using the MedNU application ("App"), you '
@@ -112,7 +112,7 @@ class TermsOfServiceScreen extends StatelessWidget {
                   'Healthcare Services Private Limited ("Company", "we", "us", "our").',
             ),
 
-            _TermsSection(
+            const _TermsSection(
               number: 2,
               title: 'Description of Services',
               body: 'MedNU provides a digital healthcare facilitation platform that includes:\n\n'
@@ -125,7 +125,7 @@ class TermsOfServiceScreen extends StatelessWidget {
                   'medical services are rendered by independent, licensed professionals.',
             ),
 
-            _TermsSection(
+            const _TermsSection(
               number: 3,
               title: 'User Accounts & Responsibilities',
               body: 'To access MedNU you must:\n\n'
@@ -140,7 +140,7 @@ class TermsOfServiceScreen extends StatelessWidget {
                   '• Harass, abuse, or threaten healthcare providers or staff',
             ),
 
-            _TermsSection(
+            const _TermsSection(
               number: 4,
               title: 'Medical Disclaimer',
               body: 'MedNU is NOT a substitute for professional medical advice, diagnosis, or '
@@ -154,7 +154,7 @@ class TermsOfServiceScreen extends StatelessWidget {
                   'something you read or did in MedNU.',
             ),
 
-            _TermsSection(
+            const _TermsSection(
               number: 5,
               title: 'Payment Terms & Refunds',
               body: 'All payments are processed securely via Razorpay. By making a payment '
@@ -167,7 +167,7 @@ class TermsOfServiceScreen extends StatelessWidget {
                   'Wallet credits are non-transferable and expire after 12 months of account inactivity.',
             ),
 
-            _TermsSection(
+            const _TermsSection(
               number: 6,
               title: 'Cancellation Policy',
               body: 'You may cancel a booked appointment free of charge up to 24 hours '
@@ -178,7 +178,7 @@ class TermsOfServiceScreen extends StatelessWidget {
                   'automatically within 3 business days.',
             ),
 
-            _TermsSection(
+            const _TermsSection(
               number: 7,
               title: 'Intellectual Property',
               body: 'All content, design, trademarks, logos, source code, and intellectual '
@@ -189,7 +189,7 @@ class TermsOfServiceScreen extends StatelessWidget {
                   'use may result in account termination and legal action.',
             ),
 
-            _TermsSection(
+            const _TermsSection(
               number: 8,
               title: 'Limitation of Liability',
               body: 'To the maximum extent permitted by applicable law, MedNU shall not be '
@@ -202,7 +202,7 @@ class TermsOfServiceScreen extends StatelessWidget {
                   '• Unauthorised access to or alteration of your data',
             ),
 
-            _TermsSection(
+            const _TermsSection(
               number: 9,
               title: 'Privacy',
               body: 'Your use of MedNU is also governed by our Privacy Policy, which is '
@@ -212,7 +212,7 @@ class TermsOfServiceScreen extends StatelessWidget {
                   'as described in the Privacy Policy.',
             ),
 
-            _TermsSection(
+            const _TermsSection(
               number: 10,
               title: 'Governing Law',
               body: 'These Terms shall be governed by and construed in accordance with the '
@@ -221,7 +221,7 @@ class TermsOfServiceScreen extends StatelessWidget {
                   'Karnataka, India.',
             ),
 
-            _TermsSection(
+            const _TermsSection(
               number: 11,
               title: 'Contact Information',
               body: 'For questions, concerns, or notices regarding these Terms:\n\n'
@@ -286,7 +286,7 @@ class _TermsSection extends StatelessWidget {
                       ),
                       child: Text(
                         number.toString().padLeft(2, '0'),
-                        style: TextStyle(fontFamily: 'Poppins', 
+                        style: const TextStyle(fontFamily: 'Poppins', 
                           color: Colors.white,
                           fontSize: 11,
                           fontWeight: FontWeight.w700,

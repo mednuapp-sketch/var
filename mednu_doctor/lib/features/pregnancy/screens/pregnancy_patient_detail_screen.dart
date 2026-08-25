@@ -63,11 +63,11 @@ class _PregnancyPatientDetailScreenState
               SliverAppBar(
                 expandedHeight: 200,
                 pinned: true,
-                backgroundColor: const Color(0xFFC2185B),
+                backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
                 leading: IconButton(
                   icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-                  onPressed: () => context.pop(),
+                  onPressed: () => context.safeBack(),
                 ),
                 actions: [
                   IconButton(
@@ -95,7 +95,7 @@ class _PregnancyPatientDetailScreenState
                   background: Container(
                     decoration: const BoxDecoration(
                       gradient: LinearGradient(
-                        colors: [Color(0xFFC2185B), Color(0xFF7B1FA2)],
+                        colors: [AppColors.primary, AppColors.secondary],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
@@ -205,9 +205,9 @@ class _PregnancyPatientDetailScreenState
         children: [
           // Key stats
           Row(children: [
-            _statCard('Week', '$week/40', const Color(0xFFC2185B), Icons.pregnant_woman_rounded),
+            _statCard('Week', '$week/40', AppColors.primary, Icons.pregnant_woman_rounded),
             const SizedBox(width: 8),
-            _statCard('Weight', '${weight}kg', const Color(0xFF7B1FA2), Icons.monitor_weight_rounded),
+            _statCard('Weight', '${weight}kg', AppColors.secondary, Icons.monitor_weight_rounded),
             const SizedBox(width: 8),
             _statCard('Age', '$age yrs', const Color(0xFF42A5F5), Icons.person_rounded),
           ]),
@@ -217,7 +217,7 @@ class _PregnancyPatientDetailScreenState
           _sectionCard(
             title: 'Doctor\'s Notes',
             icon: Icons.notes_rounded,
-            color: const Color(0xFF7B1FA2),
+            color: AppColors.secondary,
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
                   .collection('pregnancy_doctor_notes')
@@ -305,7 +305,7 @@ class _PregnancyPatientDetailScreenState
           icon: Icons.book_rounded,
           title: 'No journal entries yet',
           message: 'The patient\'s weekly health logs will appear here.',
-          iconColor: Color(0xFFC2185B),
+          iconColor: AppColors.primary,
         );
       }
       return ListView.builder(
@@ -407,7 +407,7 @@ class _PregnancyPatientDetailScreenState
           icon: Icons.event_available_rounded,
           title: 'No checkups scheduled',
           message: 'Prenatal checkup appointments will appear here.',
-          iconColor: Color(0xFFC2185B),
+          iconColor: AppColors.primary,
         );
       }
       return ListView.builder(

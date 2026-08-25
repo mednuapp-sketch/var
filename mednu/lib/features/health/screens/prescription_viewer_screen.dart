@@ -15,26 +15,27 @@ import '../../../core/router/app_router.dart';
 
 /// Shares a prescription summary as text using the system share sheet.
 Future<void> sharePrescription(Map<String, dynamic> rx) async {
-  final doctor    = rx['doctorName']      as String? ?? 'Doctor';
+  final doctor = rx['doctorName'] as String? ?? 'Doctor';
   final specialty = rx['doctorSpecialty'] as String? ?? '';
-  final diagnosis = rx['diagnosis']       as String? ?? '';
+  final diagnosis = rx['diagnosis'] as String? ?? '';
   final medicines = (rx['medicines'] as List? ?? [])
       .map((m) {
-        final name = m['medicineName'] as String?
-            ?? m['name'] as String? ?? '';
+        final name = m['medicineName'] as String? ?? m['name'] as String? ?? '';
         final dosage = m['dosage'] as String? ?? '';
-        final freq   = m['frequency'] as String? ?? '';
+        final freq = m['frequency'] as String? ?? '';
         return '$name — $dosage, $freq';
       })
       .join('\n');
 
-  final text = '''
+  final text =
+      '''
 MedNU Prescription
 Doctor: $doctor${specialty.isNotEmpty ? ' ($specialty)' : ''}
 Diagnosis: $diagnosis
 ${medicines.isNotEmpty ? 'Medicines:\n$medicines' : ''}
 
-Shared via MedNU App'''.trim();
+Shared via MedNU App'''
+          .trim();
 
   await Share.share(text, subject: 'Prescription from $doctor');
 }
@@ -67,42 +68,40 @@ class PrescriptionViewerScreen extends StatefulWidget {
       _PrescriptionViewerScreenState();
 }
 
-class _PrescriptionViewerScreenState
-    extends State<PrescriptionViewerScreen> {
+class _PrescriptionViewerScreenState extends State<PrescriptionViewerScreen> {
   bool _pdfBusy = false;
 
   // ── Data accessors ───────────────────────────────────────────────────────
 
   Map<String, dynamic> get _d => widget.data ?? {};
 
-  String get _doctorName    => _d['doctorName']      as String? ?? 'Doctor';
-  String get _specialty     => _d['doctorSpecialty'] as String? ?? '';
-  String get _regNo         => _d['doctorRegNo']     as String? ?? '';
-  String get _hospital      => _d['doctorHospital']  as String? ?? '';
-  String get _patientName   => _d['patientName']     as String? ?? 'Patient';
-  String get _patientAge    => _d['patientAge']      as String? ?? '--';
-  String get _patientGender => _d['patientGender']   as String? ?? '--';
-  String get _patientPhone  => _d['patientPhone']    as String? ?? '';
-  String get _diagnosis     => _d['diagnosis']       as String? ?? '';
-  String get _rxId          =>
-      _d['rxId'] as String? ?? _d['id'] as String? ?? 'RX-0000';
-  String get _signatureUrl  => _d['doctorSignatureUrl'] as String? ?? '';
+  String get _doctorName => _d['doctorName'] as String? ?? 'Doctor';
+  String get _specialty => _d['doctorSpecialty'] as String? ?? '';
+  String get _regNo => _d['doctorRegNo'] as String? ?? '';
+  String get _hospital => _d['doctorHospital'] as String? ?? '';
+  String get _patientName => _d['patientName'] as String? ?? 'Patient';
+  String get _patientAge => _d['patientAge'] as String? ?? '--';
+  String get _patientGender => _d['patientGender'] as String? ?? '--';
+  String get _patientPhone => _d['patientPhone'] as String? ?? '';
+  String get _diagnosis => _d['diagnosis'] as String? ?? '';
+  String get _rxId => _d['rxId'] as String? ?? _d['id'] as String? ?? 'RX-0000';
+  String get _signatureUrl => _d['doctorSignatureUrl'] as String? ?? '';
 
   // In-person visits are framed as an "OP" (out-patient) slip rather than a
   // generic prescription — same document, different title/watermark.
-  bool   get _isOP        => (_d['consultationType'] as String?) == 'In-Person';
-  String get _docTitle    => _isOP ? 'OP Slip' : 'Prescription';
-  String get _docWatermark => _isOP ? 'Digital OP Slip' : 'Digital Prescription';
-  String get _rxWatermark  => _isOP ? 'OP' : 'Rx';
+  bool get _isOP => (_d['consultationType'] as String?) == 'In-Person';
+  String get _docTitle => _isOP ? 'OP Slip' : 'Prescription';
+  String get _docWatermark =>
+      _isOP ? 'Digital OP Slip' : 'Digital Prescription';
+  String get _rxWatermark => _isOP ? 'OP' : 'Rx';
 
   // New fields with legacy fallbacks
-  String get _chiefComplaints    => _d['chiefComplaints']    as String? ?? '';
-  String get _history            =>
-      _d['history'] as String?
-          ?? _d['historyComorbidities'] as String? ?? '';
-  String get _examination        => _d['examination']        as String? ?? '';
+  String get _chiefComplaints => _d['chiefComplaints'] as String? ?? '';
+  String get _history =>
+      _d['history'] as String? ?? _d['historyComorbidities'] as String? ?? '';
+  String get _examination => _d['examination'] as String? ?? '';
   String get _specialInstructions => _d['specialInstructions'] as String? ?? '';
-  String get _additionalNotes    => _d['additionalNotes']    as String? ?? '';
+  String get _additionalNotes => _d['additionalNotes'] as String? ?? '';
 
   List<String> get _investigations {
     final raw = _d['investigations'];
@@ -110,10 +109,8 @@ class _PrescriptionViewerScreenState
     return (raw as List).map((e) => e.toString()).toList();
   }
 
-  bool get _followUpRequired =>
-      _d['followUpRequired'] as bool? ?? false;
-  int  get _followUpDays     =>
-      (_d['followUpDays'] as num?)?.toInt() ?? 7;
+  bool get _followUpRequired => _d['followUpRequired'] as bool? ?? false;
+  int get _followUpDays => (_d['followUpDays'] as num?)?.toInt() ?? 7;
 
   String get _dateStr {
     final ts = _d['createdAt'];
@@ -149,8 +146,7 @@ class _PrescriptionViewerScreenState
   }
 
   String _medicineName(Map<String, dynamic> m) =>
-      (m['medicineName'] as String?
-              ?? m['name'] as String? ?? '')
+      (m['medicineName'] as String? ?? m['name'] as String? ?? '')
           .toUpperCase();
 
   // ── Signature bytes ──────────────────────────────────────────────────────
@@ -177,456 +173,560 @@ class _PrescriptionViewerScreenState
     final sigBytes = await _fetchSignatureBytes();
     final doc = pw.Document();
 
-    doc.addPage(pw.MultiPage(
-      pageFormat: PdfPageFormat.a4,
-      margin: const pw.EdgeInsets.symmetric(horizontal: 36, vertical: 30),
-      header: (ctx) => _pdfHeader(),
-      footer: (ctx) => _pdfFooter(ctx),
-      build: (ctx) => [
-        pw.SizedBox(height: 10),
-        _pdfDoctorPatientRow(),
-        pw.SizedBox(height: 10),
-        if (_chiefComplaints.isNotEmpty) ...[
-          _pdfSectionBox(
-            label: 'Chief Complaints',
-            content: _chiefComplaints,
-            bg: PdfColors.red50,
-            border: PdfColors.red200,
-            labelColor: PdfColors.red800,
-          ),
+    doc.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.symmetric(horizontal: 36, vertical: 30),
+        header: (ctx) => _pdfHeader(),
+        footer: (ctx) => _pdfFooter(ctx),
+        build: (ctx) => [
           pw.SizedBox(height: 10),
-        ],
-        if (_history.isNotEmpty) ...[
-          _pdfSectionBox(
-            label: 'History & Comorbidities',
-            content: _history,
-            bg: PdfColors.purple50,
-            border: PdfColors.purple200,
-            labelColor: PdfColors.purple800,
-          ),
+          _pdfDoctorPatientRow(),
           pw.SizedBox(height: 10),
-        ],
-        if (_examination.isNotEmpty) ...[
-          _pdfSectionBox(
-            label: 'Examination / Vitals',
-            content: _examination,
-            bg: PdfColors.blue50,
-            border: PdfColors.blue200,
-            labelColor: PdfColors.blue800,
-          ),
+          if (_chiefComplaints.isNotEmpty) ...[
+            _pdfSectionBox(
+              label: 'Chief Complaints',
+              content: _chiefComplaints,
+              bg: PdfColors.red50,
+              border: PdfColors.red200,
+              labelColor: PdfColors.red800,
+            ),
+            pw.SizedBox(height: 10),
+          ],
+          if (_history.isNotEmpty) ...[
+            _pdfSectionBox(
+              label: 'History & Comorbidities',
+              content: _history,
+              bg: PdfColors.purple50,
+              border: PdfColors.purple200,
+              labelColor: PdfColors.purple800,
+            ),
+            pw.SizedBox(height: 10),
+          ],
+          if (_examination.isNotEmpty) ...[
+            _pdfSectionBox(
+              label: 'Examination / Vitals',
+              content: _examination,
+              bg: PdfColors.blue50,
+              border: PdfColors.blue200,
+              labelColor: PdfColors.blue800,
+            ),
+            pw.SizedBox(height: 10),
+          ],
+          if (_investigations.isNotEmpty) ...[
+            _pdfInvestigations(),
+            pw.SizedBox(height: 10),
+          ],
+          _pdfDiagnosis(),
+          pw.SizedBox(height: 12),
+          _pdfRxMedicines(),
           pw.SizedBox(height: 10),
+          if (_adviceLines.isNotEmpty) ...[
+            _pdfSpecialInstructions(),
+            pw.SizedBox(height: 10),
+          ],
+          if (_additionalNotes.isNotEmpty) ...[
+            _pdfSectionBox(
+              label: 'Additional Notes',
+              content: _additionalNotes,
+              bg: PdfColors.grey50,
+              border: PdfColors.grey300,
+              labelColor: PdfColors.grey700,
+            ),
+            pw.SizedBox(height: 10),
+          ],
+          if (_followUpRequired) ...[_pdfFollowUp(), pw.SizedBox(height: 10)],
+          pw.SizedBox(height: 6),
+          _pdfSignature(sigBytes),
         ],
-        if (_investigations.isNotEmpty) ...[
-          _pdfInvestigations(),
-          pw.SizedBox(height: 10),
-        ],
-        _pdfDiagnosis(),
-        pw.SizedBox(height: 12),
-        _pdfRxMedicines(),
-        pw.SizedBox(height: 10),
-        if (_adviceLines.isNotEmpty) ...[
-          _pdfSpecialInstructions(),
-          pw.SizedBox(height: 10),
-        ],
-        if (_additionalNotes.isNotEmpty) ...[
-          _pdfSectionBox(
-            label: 'Additional Notes',
-            content: _additionalNotes,
-            bg: PdfColors.grey50,
-            border: PdfColors.grey300,
-            labelColor: PdfColors.grey700,
-          ),
-          pw.SizedBox(height: 10),
-        ],
-        if (_followUpRequired) ...[
-          _pdfFollowUp(),
-          pw.SizedBox(height: 10),
-        ],
-        pw.SizedBox(height: 6),
-        _pdfSignature(sigBytes),
-      ],
-    ));
+      ),
+    );
 
     return doc.save();
   }
 
   pw.Widget _pdfHeader() => pw.Container(
-        padding: const pw.EdgeInsets.all(14),
-        decoration: const pw.BoxDecoration(
-            color: PdfColor.fromInt(0xFF522546)),
-        child: pw.Row(
-          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+    padding: const pw.EdgeInsets.all(14),
+    decoration: const pw.BoxDecoration(color: PdfColor.fromInt(0xFF522546)),
+    child: pw.Row(
+      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+      children: [
+        pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
-            pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-              pw.Text('MedNU Healthcare',
-                  style: pw.TextStyle(
-                      color: PdfColors.white,
-                      fontSize: 18,
-                      fontWeight: pw.FontWeight.bold)),
-              if (_hospital.isNotEmpty)
-                pw.Text(_hospital,
-                    style: const pw.TextStyle(
-                        color: PdfColors.grey200, fontSize: 10)),
-              pw.Text(_docWatermark,
-                  style: const pw.TextStyle(
-                      color: PdfColors.grey200, fontSize: 11)),
-            ]),
-            pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.end,
-                children: [
-              pw.Text('Rx  $_rxId',
-                  style: pw.TextStyle(
-                      color: PdfColors.white,
-                      fontWeight: pw.FontWeight.bold,
-                      fontSize: 13)),
-              pw.Text('Date: $_dateStr',
-                  style: const pw.TextStyle(
-                      color: PdfColors.grey200, fontSize: 9)),
-            ]),
+            pw.Text(
+              'MedNU Healthcare',
+              style: pw.TextStyle(
+                color: PdfColors.white,
+                fontSize: 18,
+                fontWeight: pw.FontWeight.bold,
+              ),
+            ),
+            if (_hospital.isNotEmpty)
+              pw.Text(
+                _hospital,
+                style: const pw.TextStyle(
+                  color: PdfColors.grey200,
+                  fontSize: 10,
+                ),
+              ),
+            pw.Text(
+              _docWatermark,
+              style: const pw.TextStyle(color: PdfColors.grey200, fontSize: 11),
+            ),
           ],
         ),
-      );
+        pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.end,
+          children: [
+            pw.Text(
+              'Rx  $_rxId',
+              style: pw.TextStyle(
+                color: PdfColors.white,
+                fontWeight: pw.FontWeight.bold,
+                fontSize: 13,
+              ),
+            ),
+            pw.Text(
+              'Date: $_dateStr',
+              style: const pw.TextStyle(color: PdfColors.grey200, fontSize: 9),
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
 
   pw.Widget _pdfFooter(pw.Context ctx) => pw.Container(
-        alignment: pw.Alignment.centerRight,
-        margin: const pw.EdgeInsets.only(top: 6),
-        child: pw.Text(
-          'Page ${ctx.pageNumber} of ${ctx.pagesCount}  |  Generated by MedNU — $_rxId',
-          style: const pw.TextStyle(color: PdfColors.grey600, fontSize: 8),
-        ),
-      );
+    alignment: pw.Alignment.centerRight,
+    margin: const pw.EdgeInsets.only(top: 6),
+    child: pw.Text(
+      'Page ${ctx.pageNumber} of ${ctx.pagesCount}  |  Generated by MedNU — $_rxId',
+      style: const pw.TextStyle(color: PdfColors.grey600, fontSize: 8),
+    ),
+  );
 
   pw.Widget _pdfDoctorPatientRow() => pw.Row(
-        crossAxisAlignment: pw.CrossAxisAlignment.start,
-        children: [
-          pw.Expanded(
-              child: pw.Container(
-            padding: const pw.EdgeInsets.all(10),
-            decoration: pw.BoxDecoration(
-                border: pw.Border.all(color: PdfColors.grey300),
-                borderRadius:
-                    const pw.BorderRadius.all(pw.Radius.circular(6))),
-            child: pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-              pw.Text('Doctor Details',
-                  style: pw.TextStyle(
-                      fontWeight: pw.FontWeight.bold,
-                      fontSize: 10,
-                      color: PdfColors.grey700)),
-              pw.SizedBox(height: 4),
-              pw.Text('Dr. $_doctorName',
-                  style: pw.TextStyle(
-                      fontWeight: pw.FontWeight.bold, fontSize: 13)),
-              pw.Text(_specialty,
-                  style: const pw.TextStyle(
-                      fontSize: 11, color: PdfColors.grey700)),
-              pw.Text('Reg. No: $_regNo',
-                  style: const pw.TextStyle(
-                      fontSize: 9, color: PdfColors.grey600)),
-              if (_hospital.isNotEmpty)
-                pw.Text(_hospital,
-                    style: const pw.TextStyle(
-                        fontSize: 9, color: PdfColors.grey600)),
-            ]),
-          )),
-          pw.SizedBox(width: 10),
-          pw.Expanded(
-              child: pw.Container(
-            padding: const pw.EdgeInsets.all(10),
-            decoration: pw.BoxDecoration(
-                border: pw.Border.all(color: PdfColors.grey300),
-                borderRadius:
-                    const pw.BorderRadius.all(pw.Radius.circular(6))),
-            child: pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-              pw.Text('Patient Details',
-                  style: pw.TextStyle(
-                      fontWeight: pw.FontWeight.bold,
-                      fontSize: 10,
-                      color: PdfColors.grey700)),
-              pw.SizedBox(height: 4),
-              pw.Text(_patientName,
-                  style: pw.TextStyle(
-                      fontWeight: pw.FontWeight.bold, fontSize: 13)),
+    crossAxisAlignment: pw.CrossAxisAlignment.start,
+    children: [
+      pw.Expanded(
+        child: pw.Container(
+          padding: const pw.EdgeInsets.all(10),
+          decoration: pw.BoxDecoration(
+            border: pw.Border.all(color: PdfColors.grey300),
+            borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
+          ),
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
               pw.Text(
-                  'Age: $_patientAge  |  Gender: $_patientGender',
+                'Doctor Details',
+                style: pw.TextStyle(
+                  fontWeight: pw.FontWeight.bold,
+                  fontSize: 10,
+                  color: PdfColors.grey700,
+                ),
+              ),
+              pw.SizedBox(height: 4),
+              pw.Text(
+                'Dr. $_doctorName',
+                style: pw.TextStyle(
+                  fontWeight: pw.FontWeight.bold,
+                  fontSize: 13,
+                ),
+              ),
+              pw.Text(
+                _specialty,
+                style: const pw.TextStyle(
+                  fontSize: 11,
+                  color: PdfColors.grey700,
+                ),
+              ),
+              pw.Text(
+                'Reg. No: $_regNo',
+                style: const pw.TextStyle(
+                  fontSize: 9,
+                  color: PdfColors.grey600,
+                ),
+              ),
+              if (_hospital.isNotEmpty)
+                pw.Text(
+                  _hospital,
                   style: const pw.TextStyle(
-                      fontSize: 11, color: PdfColors.grey700)),
+                    fontSize: 9,
+                    color: PdfColors.grey600,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+      pw.SizedBox(width: 10),
+      pw.Expanded(
+        child: pw.Container(
+          padding: const pw.EdgeInsets.all(10),
+          decoration: pw.BoxDecoration(
+            border: pw.Border.all(color: PdfColors.grey300),
+            borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
+          ),
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text(
+                'Patient Details',
+                style: pw.TextStyle(
+                  fontWeight: pw.FontWeight.bold,
+                  fontSize: 10,
+                  color: PdfColors.grey700,
+                ),
+              ),
+              pw.SizedBox(height: 4),
+              pw.Text(
+                _patientName,
+                style: pw.TextStyle(
+                  fontWeight: pw.FontWeight.bold,
+                  fontSize: 13,
+                ),
+              ),
+              pw.Text(
+                'Age: $_patientAge  |  Gender: $_patientGender',
+                style: const pw.TextStyle(
+                  fontSize: 11,
+                  color: PdfColors.grey700,
+                ),
+              ),
               if (_patientPhone.isNotEmpty)
-                pw.Text('Phone: $_patientPhone',
-                    style: const pw.TextStyle(
-                        fontSize: 9, color: PdfColors.grey600)),
-            ]),
-          )),
-        ],
-      );
+                pw.Text(
+                  'Phone: $_patientPhone',
+                  style: const pw.TextStyle(
+                    fontSize: 9,
+                    color: PdfColors.grey600,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    ],
+  );
 
   pw.Widget _pdfSectionBox({
-    required String   label,
-    required String   content,
+    required String label,
+    required String content,
     required PdfColor bg,
     required PdfColor border,
     required PdfColor labelColor,
-  }) =>
-      pw.Container(
-        width: double.infinity,
-        padding: const pw.EdgeInsets.all(10),
-        decoration: pw.BoxDecoration(
-          color: bg,
-          border: pw.Border.all(color: border),
-          borderRadius:
-              const pw.BorderRadius.all(pw.Radius.circular(6)),
+  }) => pw.Container(
+    width: double.infinity,
+    padding: const pw.EdgeInsets.all(10),
+    decoration: pw.BoxDecoration(
+      color: bg,
+      border: pw.Border.all(color: border),
+      borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
+    ),
+    child: pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Text(
+          label,
+          style: pw.TextStyle(
+            fontWeight: pw.FontWeight.bold,
+            fontSize: 10,
+            color: labelColor,
+          ),
         ),
-        child: pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-          pw.Text(label,
-              style: pw.TextStyle(
-                  fontWeight: pw.FontWeight.bold,
-                  fontSize: 10,
-                  color: labelColor)),
-          pw.SizedBox(height: 4),
-          pw.Text(content,
-              style: const pw.TextStyle(
-                  fontSize: 11,
-                  color: PdfColors.grey800,
-                  lineSpacing: 3)),
-        ]),
-      );
+        pw.SizedBox(height: 4),
+        pw.Text(
+          content,
+          style: const pw.TextStyle(
+            fontSize: 11,
+            color: PdfColors.grey800,
+            lineSpacing: 3,
+          ),
+        ),
+      ],
+    ),
+  );
 
   pw.Widget _pdfInvestigations() => pw.Container(
-        width: double.infinity,
-        padding: const pw.EdgeInsets.all(10),
-        decoration: pw.BoxDecoration(
-          color: PdfColors.teal50,
-          border: pw.Border.all(color: PdfColors.teal200),
-          borderRadius:
-              const pw.BorderRadius.all(pw.Radius.circular(6)),
-        ),
-        child: pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-          pw.Text('Suggested Investigations',
-              style: pw.TextStyle(
-                  fontWeight: pw.FontWeight.bold,
-                  fontSize: 10,
-                  color: PdfColors.teal800)),
-          pw.SizedBox(height: 6),
-          pw.Wrap(
-            spacing: 6,
-            runSpacing: 4,
-            children: _investigations
-                .map((inv) => pw.Container(
-                      padding: const pw.EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      decoration: pw.BoxDecoration(
-                        color: PdfColors.white,
-                        border:
-                            pw.Border.all(color: PdfColors.teal300),
-                        borderRadius: const pw.BorderRadius.all(
-                            pw.Radius.circular(4)),
-                      ),
-                      child: pw.Text(inv,
-                          style: pw.TextStyle(
-                              fontSize: 9,
-                              color: PdfColors.teal800,
-                              fontWeight: pw.FontWeight.bold)),
-                    ))
-                .toList(),
+    width: double.infinity,
+    padding: const pw.EdgeInsets.all(10),
+    decoration: pw.BoxDecoration(
+      color: PdfColors.teal50,
+      border: pw.Border.all(color: PdfColors.teal200),
+      borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
+    ),
+    child: pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Text(
+          'Suggested Investigations',
+          style: pw.TextStyle(
+            fontWeight: pw.FontWeight.bold,
+            fontSize: 10,
+            color: PdfColors.teal800,
           ),
-        ]),
-      );
+        ),
+        pw.SizedBox(height: 6),
+        pw.Wrap(
+          spacing: 6,
+          runSpacing: 4,
+          children: _investigations
+              .map(
+                (inv) => pw.Container(
+                  padding: const pw.EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: pw.BoxDecoration(
+                    color: PdfColors.white,
+                    border: pw.Border.all(color: PdfColors.teal300),
+                    borderRadius: const pw.BorderRadius.all(
+                      pw.Radius.circular(4),
+                    ),
+                  ),
+                  child: pw.Text(
+                    inv,
+                    style: pw.TextStyle(
+                      fontSize: 9,
+                      color: PdfColors.teal800,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                ),
+              )
+              .toList(),
+        ),
+      ],
+    ),
+  );
 
   pw.Widget _pdfDiagnosis() => pw.Container(
-        width: double.infinity,
-        padding: const pw.EdgeInsets.all(12),
-        decoration: pw.BoxDecoration(
-          color: PdfColors.green50,
-          border: pw.Border.all(color: PdfColors.green300, width: 1.5),
-          borderRadius:
-              const pw.BorderRadius.all(pw.Radius.circular(6)),
+    width: double.infinity,
+    padding: const pw.EdgeInsets.all(12),
+    decoration: pw.BoxDecoration(
+      color: PdfColors.green50,
+      border: pw.Border.all(color: PdfColors.green300, width: 1.5),
+      borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
+    ),
+    child: pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Text(
+          'DIAGNOSIS',
+          style: pw.TextStyle(
+            fontWeight: pw.FontWeight.bold,
+            fontSize: 10,
+            color: PdfColors.green800,
+            letterSpacing: 1.2,
+          ),
         ),
-        child: pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-          pw.Text('DIAGNOSIS',
-              style: pw.TextStyle(
-                  fontWeight: pw.FontWeight.bold,
-                  fontSize: 10,
-                  color: PdfColors.green800,
-                  letterSpacing: 1.2)),
-          pw.SizedBox(height: 5),
-          pw.Text(_diagnosis,
-              style: pw.TextStyle(
-                  fontSize: 13,
-                  color: PdfColors.green900,
-                  fontWeight: pw.FontWeight.bold,
-                  lineSpacing: 3)),
-        ]),
-      );
+        pw.SizedBox(height: 5),
+        pw.Text(
+          _diagnosis,
+          style: pw.TextStyle(
+            fontSize: 13,
+            color: PdfColors.green900,
+            fontWeight: pw.FontWeight.bold,
+            lineSpacing: 3,
+          ),
+        ),
+      ],
+    ),
+  );
 
   pw.Widget _pdfRxMedicines() {
     if (_medicines.isEmpty) {
       return pw.Container(
         padding: const pw.EdgeInsets.all(10),
-        child: pw.Text('No medicines prescribed.',
-            style: const pw.TextStyle(
-                fontSize: 10, color: PdfColors.grey600)),
+        child: pw.Text(
+          'No medicines prescribed.',
+          style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey600),
+        ),
       );
     }
 
     return pw.Column(
-        crossAxisAlignment: pw.CrossAxisAlignment.start,
-        children: [
-      pw.Row(children: [
-        pw.Text(_rxWatermark,
-            style: pw.TextStyle(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Row(
+          children: [
+            pw.Text(
+              _rxWatermark,
+              style: pw.TextStyle(
                 fontSize: 28,
                 fontWeight: pw.FontWeight.bold,
                 color: PdfColors.pink800,
-                fontStyle: pw.FontStyle.italic)),
-        pw.SizedBox(width: 8),
-        pw.Text('Prescribed Medicines',
-            style: pw.TextStyle(
-                fontWeight: pw.FontWeight.bold, fontSize: 14)),
-      ]),
-      pw.SizedBox(height: 6),
-      pw.Table(
-        border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
-        columnWidths: {
-          0: const pw.FixedColumnWidth(20),
-          1: const pw.FlexColumnWidth(3),
-          2: const pw.FlexColumnWidth(1.5),
-          3: const pw.FlexColumnWidth(2),
-          4: const pw.FlexColumnWidth(1.5),
-          5: const pw.FlexColumnWidth(1.8),
-        },
-        children: [
-          pw.TableRow(
-            decoration: const pw.BoxDecoration(
-                color: PdfColor.fromInt(0xFF522546)),
-            children: [
-              '#', 'MEDICINE', 'STRENGTH', 'DOSE', 'DURATION', 'FOOD'
-            ]
-                .map((h) => pw.Padding(
-                      padding: const pw.EdgeInsets.symmetric(
-                          horizontal: 5, vertical: 5),
-                      child: pw.Text(h,
-                          style: pw.TextStyle(
+                fontStyle: pw.FontStyle.italic,
+              ),
+            ),
+            pw.SizedBox(width: 8),
+            pw.Text(
+              'Prescribed Medicines',
+              style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 14),
+            ),
+          ],
+        ),
+        pw.SizedBox(height: 6),
+        pw.Table(
+          border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
+          columnWidths: {
+            0: const pw.FixedColumnWidth(20),
+            1: const pw.FlexColumnWidth(3),
+            2: const pw.FlexColumnWidth(1.5),
+            3: const pw.FlexColumnWidth(2),
+            4: const pw.FlexColumnWidth(1.5),
+            5: const pw.FlexColumnWidth(1.8),
+          },
+          children: [
+            pw.TableRow(
+              decoration: const pw.BoxDecoration(
+                color: PdfColor.fromInt(0xFF522546),
+              ),
+              children:
+                  ['#', 'MEDICINE', 'STRENGTH', 'DOSE', 'DURATION', 'FOOD']
+                      .map(
+                        (h) => pw.Padding(
+                          padding: const pw.EdgeInsets.symmetric(
+                            horizontal: 5,
+                            vertical: 5,
+                          ),
+                          child: pw.Text(
+                            h,
+                            style: pw.TextStyle(
                               fontWeight: pw.FontWeight.bold,
                               fontSize: 8,
-                              color: PdfColors.white)),
-                    ))
-                .toList(),
-          ),
-          ..._medicines.asMap().entries.map((e) {
-            final m     = e.value;
-            final name  = _medicineName(m);
-            final strength = m['strength'] as String? ?? m['dosage'] as String? ?? '';
-            final morn  = m['morning']   as bool? ?? false;
-            final aft   = m['afternoon'] as bool? ?? false;
-            final night = m['night']     as bool? ?? false;
-            final freq  = m['frequency'] as String? ?? '';
-            final doseStr = [
-              if (morn)  'M',
-              if (aft)   'A',
-              if (night) 'N',
-            ].join('-');
-            final finalDose = doseStr.isNotEmpty ? doseStr : freq;
-            final duration  = m['duration']   as String? ?? '';
-            final food      = m['foodTiming'] as String? ?? m['timing'] as String? ?? '';
-            final isEven = e.key % 2 == 1;
+                              color: PdfColors.white,
+                            ),
+                          ),
+                        ),
+                      )
+                      .toList(),
+            ),
+            ..._medicines.asMap().entries.map((e) {
+              final m = e.value;
+              final name = _medicineName(m);
+              final strength =
+                  m['strength'] as String? ?? m['dosage'] as String? ?? '';
+              final morn = m['morning'] as bool? ?? false;
+              final aft = m['afternoon'] as bool? ?? false;
+              final night = m['night'] as bool? ?? false;
+              final freq = m['frequency'] as String? ?? '';
+              final doseStr = [
+                if (morn) 'M',
+                if (aft) 'A',
+                if (night) 'N',
+              ].join('-');
+              final finalDose = doseStr.isNotEmpty ? doseStr : freq;
+              final duration = m['duration'] as String? ?? '';
+              final food =
+                  m['foodTiming'] as String? ?? m['timing'] as String? ?? '';
+              final isEven = e.key % 2 == 1;
 
-            return pw.TableRow(
-              decoration: pw.BoxDecoration(
-                  color: isEven ? PdfColors.grey50 : PdfColors.white),
-              children: [
-                _pdfMedCell('${e.key + 1}', bold: true),
-                _pdfMedCell(name, bold: true),
-                _pdfMedCell(strength),
-                _pdfMedCell(finalDose),
-                _pdfMedCell(duration),
-                _pdfMedCell(food),
-              ],
-            );
-          }),
-        ],
-      ),
-    ]);
+              return pw.TableRow(
+                decoration: pw.BoxDecoration(
+                  color: isEven ? PdfColors.grey50 : PdfColors.white,
+                ),
+                children: [
+                  _pdfMedCell('${e.key + 1}', bold: true),
+                  _pdfMedCell(name, bold: true),
+                  _pdfMedCell(strength),
+                  _pdfMedCell(finalDose),
+                  _pdfMedCell(duration),
+                  _pdfMedCell(food),
+                ],
+              );
+            }),
+          ],
+        ),
+      ],
+    );
   }
 
   pw.Widget _pdfMedCell(String t, {bool bold = false}) => pw.Padding(
-        padding:
-            const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 5),
-        child: pw.Text(t,
-            style: pw.TextStyle(
-                fontSize: 9,
-                fontWeight:
-                    bold ? pw.FontWeight.bold : pw.FontWeight.normal)),
-      );
+    padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 5),
+    child: pw.Text(
+      t,
+      style: pw.TextStyle(
+        fontSize: 9,
+        fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
+      ),
+    ),
+  );
 
   pw.Widget _pdfSpecialInstructions() => pw.Container(
-        width: double.infinity,
-        padding: const pw.EdgeInsets.all(12),
-        decoration: pw.BoxDecoration(
-          border: pw.Border.all(color: PdfColors.orange300, width: 1.5),
-          borderRadius:
-              const pw.BorderRadius.all(pw.Radius.circular(6)),
+    width: double.infinity,
+    padding: const pw.EdgeInsets.all(12),
+    decoration: pw.BoxDecoration(
+      border: pw.Border.all(color: PdfColors.orange300, width: 1.5),
+      borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
+    ),
+    child: pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Text(
+          'Special Instructions',
+          style: pw.TextStyle(
+            fontWeight: pw.FontWeight.bold,
+            fontSize: 11,
+            color: PdfColors.orange800,
+          ),
         ),
-        child: pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-          pw.Text('Special Instructions',
-              style: pw.TextStyle(
-                  fontWeight: pw.FontWeight.bold,
-                  fontSize: 11,
-                  color: PdfColors.orange800)),
-          pw.SizedBox(height: 6),
-          ..._adviceLines.map((a) => pw.Padding(
-                padding: const pw.EdgeInsets.only(bottom: 3),
-                child: pw.Row(
-                    crossAxisAlignment: pw.CrossAxisAlignment.start,
-                    children: [
-                  pw.Text('• ',
-                      style: pw.TextStyle(
-                          fontWeight: pw.FontWeight.bold,
-                          color: PdfColors.orange700)),
-                  pw.Expanded(
-                      child: pw.Text(a,
-                          style: const pw.TextStyle(
-                              fontSize: 10, lineSpacing: 2))),
-                ]),
-              )),
-        ]),
-      );
+        pw.SizedBox(height: 6),
+        ..._adviceLines.map(
+          (a) => pw.Padding(
+            padding: const pw.EdgeInsets.only(bottom: 3),
+            child: pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text(
+                  '• ',
+                  style: pw.TextStyle(
+                    fontWeight: pw.FontWeight.bold,
+                    color: PdfColors.orange700,
+                  ),
+                ),
+                pw.Expanded(
+                  child: pw.Text(
+                    a,
+                    style: const pw.TextStyle(fontSize: 10, lineSpacing: 2),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
 
   pw.Widget _pdfFollowUp() => pw.Container(
-        padding: const pw.EdgeInsets.all(10),
-        decoration: pw.BoxDecoration(
-          color: PdfColors.orange50,
-          border: pw.Border.all(color: PdfColors.orange300),
-          borderRadius:
-              const pw.BorderRadius.all(pw.Radius.circular(6)),
+    padding: const pw.EdgeInsets.all(10),
+    decoration: pw.BoxDecoration(
+      color: PdfColors.orange50,
+      border: pw.Border.all(color: PdfColors.orange300),
+      borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
+    ),
+    child: pw.Row(
+      children: [
+        pw.Text(
+          'Follow-up Required: ',
+          style: pw.TextStyle(
+            fontWeight: pw.FontWeight.bold,
+            fontSize: 10,
+            color: PdfColors.orange800,
+          ),
         ),
-        child: pw.Row(children: [
-          pw.Text('Follow-up Required: ',
-              style: pw.TextStyle(
-                  fontWeight: pw.FontWeight.bold,
-                  fontSize: 10,
-                  color: PdfColors.orange800)),
-          pw.Text('Please visit after $_followUpDays days',
-              style: const pw.TextStyle(
-                  fontSize: 10, color: PdfColors.grey800)),
-        ]),
-      );
+        pw.Text(
+          'Please visit after $_followUpDays days',
+          style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey800),
+        ),
+      ],
+    ),
+  );
 
   pw.Widget _pdfSignature(Uint8List? sigBytes) {
-    final sigImage =
-        sigBytes != null ? pw.MemoryImage(sigBytes) : null;
+    final sigImage = sigBytes != null ? pw.MemoryImage(sigBytes) : null;
 
     return pw.Container(
       padding: const pw.EdgeInsets.all(12),
@@ -637,9 +737,10 @@ class _PrescriptionViewerScreenState
       child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
-          pw.Text('Digitally Signed By',
-              style: const pw.TextStyle(
-                  fontSize: 8, color: PdfColors.grey600)),
+          pw.Text(
+            'Digitally Signed By',
+            style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
+          ),
           pw.SizedBox(height: 6),
           if (sigImage != null)
             pw.Container(
@@ -649,46 +750,62 @@ class _PrescriptionViewerScreenState
               decoration: pw.BoxDecoration(
                 color: PdfColors.white,
                 border: pw.Border.all(color: PdfColors.grey200),
-                borderRadius:
-                    const pw.BorderRadius.all(pw.Radius.circular(4)),
+                borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
               ),
               child: pw.Image(sigImage, fit: pw.BoxFit.contain),
             )
           else
-            pw.Text('Dr. $_doctorName',
-                style: pw.TextStyle(
-                    fontWeight: pw.FontWeight.bold,
-                    fontSize: 14,
-                    fontStyle: pw.FontStyle.italic)),
-          pw.SizedBox(height: 6),
-          pw.Text('Dr. $_doctorName',
+            pw.Text(
+              'Dr. $_doctorName',
               style: pw.TextStyle(
-                  fontWeight: pw.FontWeight.bold, fontSize: 11)),
-          pw.Text('$_specialty  •  Reg: $_regNo',
-              style: const pw.TextStyle(
-                  fontSize: 9, color: PdfColors.grey600)),
-          pw.SizedBox(height: 6),
-          pw.Row(children: [
-            pw.Container(
-              padding: const pw.EdgeInsets.symmetric(
-                  horizontal: 8, vertical: 4),
-              decoration: pw.BoxDecoration(
-                color: PdfColors.green50,
-                border: pw.Border.all(color: PdfColors.green300),
-                borderRadius:
-                    const pw.BorderRadius.all(pw.Radius.circular(4)),
+                fontWeight: pw.FontWeight.bold,
+                fontSize: 14,
+                fontStyle: pw.FontStyle.italic,
               ),
-              child: pw.Text('DIGITALLY SIGNED & VERIFIED by MedNU',
-                  style: pw.TextStyle(
-                      fontSize: 8,
-                      fontWeight: pw.FontWeight.bold,
-                      color: PdfColors.green800)),
             ),
-            pw.Spacer(),
-            pw.Text('Rx: $_rxId',
+          pw.SizedBox(height: 6),
+          pw.Text(
+            'Dr. $_doctorName',
+            style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 11),
+          ),
+          pw.Text(
+            '$_specialty  •  Reg: $_regNo',
+            style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey600),
+          ),
+          pw.SizedBox(height: 6),
+          pw.Row(
+            children: [
+              pw.Container(
+                padding: const pw.EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 4,
+                ),
+                decoration: pw.BoxDecoration(
+                  color: PdfColors.green50,
+                  border: pw.Border.all(color: PdfColors.green300),
+                  borderRadius: const pw.BorderRadius.all(
+                    pw.Radius.circular(4),
+                  ),
+                ),
+                child: pw.Text(
+                  'DIGITALLY SIGNED & VERIFIED by MedNU',
+                  style: pw.TextStyle(
+                    fontSize: 8,
+                    fontWeight: pw.FontWeight.bold,
+                    color: PdfColors.green800,
+                  ),
+                ),
+              ),
+              pw.Spacer(),
+              pw.Text(
+                'Rx: $_rxId',
                 style: const pw.TextStyle(
-                    fontSize: 8, color: PdfColors.grey500)),
-          ]),
+                  fontSize: 8,
+                  color: PdfColors.grey500,
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -698,8 +815,8 @@ class _PrescriptionViewerScreenState
 
   Future<File> _savePdfToTemp() async {
     final bytes = await _buildPdf();
-    final dir   = await getTemporaryDirectory();
-    final file  = File('${dir.path}/prescription_$_rxId.pdf');
+    final dir = await getTemporaryDirectory();
+    final file = File('${dir.path}/prescription_$_rxId.pdf');
     await file.writeAsBytes(bytes);
     return file;
   }
@@ -716,8 +833,9 @@ class _PrescriptionViewerScreenState
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to share: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to share: $e')));
       }
     } finally {
       if (mounted) setState(() => _pdfBusy = false);
@@ -728,22 +846,24 @@ class _PrescriptionViewerScreenState
     if (_pdfBusy) return;
     setState(() => _pdfBusy = true);
     try {
-      final bytes    = await _buildPdf();
-      final dir      = await getApplicationDocumentsDirectory();
-      final filename = 'MedNu_Rx_$_rxId.pdf';
-      final file     = File('${dir.path}/$filename');
-      await file.writeAsBytes(bytes);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Saved as $filename'),
-          action: SnackBarAction(label: 'Share', onPressed: _handleShare),
-          behavior: SnackBarBehavior.floating,
-        ));
-      }
+      // getApplicationDocumentsDirectory() is the app's private sandbox — a
+      // file written there is invisible to any file manager or other app, so
+      // it can never actually reach the user. Android's scoped storage (API
+      // 29+) blocks writing straight into the public Downloads folder without
+      // extra runtime permissions, so the OS share sheet — which offers
+      // "Save to Files/Downloads" as a target — is the permission-free way to
+      // actually hand the user a file they can keep. Same mechanism as Share.
+      final file = await _savePdfToTemp();
+      await Share.shareXFiles(
+        [XFile(file.path, mimeType: 'application/pdf')],
+        subject: '$_docTitle from $_doctorName',
+        text: '$_docTitle issued on $_dateStr by Dr. $_doctorName',
+      );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Download failed: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Download failed: $e')));
       }
     } finally {
       if (mounted) setState(() => _pdfBusy = false);
@@ -757,30 +877,38 @@ class _PrescriptionViewerScreenState
     return Scaffold(
       backgroundColor: context.appBackground,
       appBar: AppBar(
-        title: Text(_docTitle,
-            style: const TextStyle(
-              fontFamily: 'Poppins',
-              fontWeight: FontWeight.w700,
-              color: Colors.white,
-              fontSize: 18,
-            )),
+        title: Text(
+          _docTitle,
+          style: const TextStyle(
+            fontFamily: 'Poppins',
+            fontWeight: FontWeight.w700,
+            color: Colors.white,
+            fontSize: 18,
+          ),
+        ),
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded,
-              color: Colors.white),
-          onPressed: () => context.canPop() ? context.pop() : context.go(AppRoutes.home),
+          icon: const Icon(
+            Icons.arrow_back_ios_new_rounded,
+            color: Colors.white,
+          ),
+          onPressed: () =>
+              context.canPop() ? context.pop() : context.go(AppRoutes.home),
         ),
         actions: [
           if (_pdfBusy)
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
               child: SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                      strokeWidth: 2, color: Colors.white)),
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              ),
             )
           else ...[
             IconButton(
@@ -816,7 +944,9 @@ class _PrescriptionViewerScreenState
                 iconColor: const Color(0xFFE53935),
                 title: 'Chief Complaints',
                 child: _buildContentBox(
-                    _chiefComplaints, const Color(0xFFE53935)),
+                  _chiefComplaints,
+                  const Color(0xFFE53935),
+                ),
               ),
               const SizedBox(height: 16),
             ],
@@ -827,8 +957,7 @@ class _PrescriptionViewerScreenState
                 icon: Icons.history_edu_rounded,
                 iconColor: const Color(0xFF633058),
                 title: 'History & Comorbidities',
-                child: _buildContentBox(
-                    _history, const Color(0xFF633058)),
+                child: _buildContentBox(_history, const Color(0xFF633058)),
               ),
               const SizedBox(height: 16),
             ],
@@ -881,7 +1010,9 @@ class _PrescriptionViewerScreenState
                 iconColor: context.appTextSecondary,
                 title: 'Additional Notes',
                 child: _buildContentBox(
-                    _additionalNotes, context.appTextSecondary),
+                  _additionalNotes,
+                  context.appTextSecondary,
+                ),
               ),
               const SizedBox(height: 16),
             ],
@@ -917,7 +1048,8 @@ class _PrescriptionViewerScreenState
           foregroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(vertical: 14),
           shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14)),
+            borderRadius: BorderRadius.circular(14),
+          ),
           elevation: 0,
         ),
         icon: const Icon(Icons.notification_add_rounded, size: 18),
@@ -945,15 +1077,15 @@ class _PrescriptionViewerScreenState
             ),
           );
           if (picked != null && context.mounted) {
-            final formatted =
-                DateFormat('d MMM yyyy').format(picked);
+            final formatted = DateFormat('d MMM yyyy').format(picked);
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text('Reminder set for $formatted'),
                 backgroundColor: const Color(0xFF633058),
                 behavior: SnackBarBehavior.floating,
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
+                  borderRadius: BorderRadius.circular(12),
+                ),
                 duration: const Duration(seconds: 3),
               ),
             );
@@ -966,126 +1098,160 @@ class _PrescriptionViewerScreenState
   // ── Card builders ─────────────────────────────────────────────────────────
 
   Widget _buildHeaderCard() => Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-            gradient: AppColors.primaryGradient,
-            borderRadius: BorderRadius.circular(20)),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-          Row(children: [
+    padding: const EdgeInsets.all(20),
+    decoration: BoxDecoration(
+      gradient: AppColors.primaryGradient,
+      borderRadius: BorderRadius.circular(20),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
             Container(
-              width: 50, height: 50,
+              width: 50,
+              height: 50,
               decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.2),
-                  shape: BoxShape.circle),
-              child: const Icon(Icons.local_hospital_rounded,
-                  color: Colors.white, size: 28),
+                color: Colors.white.withValues(alpha: 0.2),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.local_hospital_rounded,
+                color: Colors.white,
+                size: 28,
+              ),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                const Text('MedNU Healthcare',
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'MedNU Healthcare',
                     style: TextStyle(
                       fontFamily: 'Poppins',
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
                       color: Colors.white,
-                    )),
-                if (_hospital.isNotEmpty)
-                  Text(_hospital,
+                    ),
+                  ),
+                  if (_hospital.isNotEmpty)
+                    Text(
+                      _hospital,
                       style: const TextStyle(
                         fontFamily: 'Poppins',
                         fontSize: 11,
                         color: Colors.white70,
-                      )),
-                Text(_docWatermark,
+                      ),
+                    ),
+                  Text(
+                    _docWatermark,
                     style: const TextStyle(
                       fontFamily: 'Poppins',
                       fontSize: 12,
                       color: Colors.white70,
-                    )),
-              ]),
+                    ),
+                  ),
+                ],
+              ),
             ),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(8)),
-              child: const Text('VERIFIED',
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
-                  )),
+                color: Colors.white.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Text(
+                'VERIFIED',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                ),
+              ),
             ),
-          ]),
-          const Divider(color: Colors.white24, height: 22),
-          Row(children: [
+          ],
+        ),
+        const Divider(color: Colors.white24, height: 22),
+        Row(
+          children: [
             Expanded(
-                child: _PrescriptionInfoChip('Doctor',
-                    'Dr. $_doctorName')),
+              child: _PrescriptionInfoChip('Doctor', 'Dr. $_doctorName'),
+            ),
             Expanded(
-                child: _PrescriptionInfoChip(
-                    'Specialty', _specialty.isNotEmpty ? _specialty : '--')),
-          ]),
-          const SizedBox(height: 8),
-          Row(children: [
-            Expanded(
-                child: _PrescriptionInfoChip('Date', _dateStr)),
-            Expanded(
-                child: _PrescriptionInfoChip('Rx ID', _rxId)),
-          ]),
-        ]),
-      );
+              child: _PrescriptionInfoChip(
+                'Specialty',
+                _specialty.isNotEmpty ? _specialty : '--',
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(child: _PrescriptionInfoChip('Date', _dateStr)),
+            Expanded(child: _PrescriptionInfoChip('Rx ID', _rxId)),
+          ],
+        ),
+      ],
+    ),
+  );
 
   Widget _buildPatientCard() => _card(
-        child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-          Row(children: [
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
             Container(
-              width: 38, height: 38,
+              width: 38,
+              height: 38,
               decoration: BoxDecoration(
                 color: AppColors.primary.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: const Icon(Icons.person_rounded,
-                  color: AppColors.primary, size: 20),
+              child: const Icon(
+                Icons.person_rounded,
+                color: AppColors.primary,
+                size: 20,
+              ),
             ),
             const SizedBox(width: 12),
             const Text('Patient Details', style: AppTextStyles.h4),
-          ]),
-          const SizedBox(height: 14),
-          Row(children: [
-            Expanded(
-                child: _DetailItem('Name', _patientName)),
-            Expanded(child: _DetailItem('Age', _patientAge)),
-          ]),
-          const SizedBox(height: 8),
-          _DetailItem('Gender', _patientGender),
-          if (_patientPhone.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            _DetailItem('Phone', _patientPhone),
           ],
-        ]),
-      );
+        ),
+        const SizedBox(height: 14),
+        Row(
+          children: [
+            Expanded(child: _DetailItem('Name', _patientName)),
+            Expanded(child: _DetailItem('Age', _patientAge)),
+          ],
+        ),
+        const SizedBox(height: 8),
+        _DetailItem('Gender', _patientGender),
+        if (_patientPhone.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          _DetailItem('Phone', _patientPhone),
+        ],
+      ],
+    ),
+  );
 
   Widget _buildSectionCard({
     required IconData icon,
-    required Color    iconColor,
-    required String   title,
-    required Widget   child,
-  }) =>
-      _card(
-        child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-          Row(children: [
+    required Color iconColor,
+    required String title,
+    required Widget child,
+  }) => _card(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
             Container(
-              width: 36, height: 36,
+              width: 36,
+              height: 36,
               decoration: BoxDecoration(
                 color: iconColor.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(10),
@@ -1094,124 +1260,152 @@ class _PrescriptionViewerScreenState
             ),
             const SizedBox(width: 10),
             Text(title, style: AppTextStyles.h4),
-          ]),
-          const SizedBox(height: 12),
-          child,
-        ]),
-      );
+          ],
+        ),
+        const SizedBox(height: 12),
+        child,
+      ],
+    ),
+  );
 
   Widget _buildContentBox(String text, Color color) => Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: color.withValues(alpha: 0.15)),
-        ),
-        child: Text(text,
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: 13,
-              color: context.appTextSecondary,
-              height: 1.55,
-            )),
-      );
+    width: double.infinity,
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: 0.05),
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: color.withValues(alpha: 0.15)),
+    ),
+    child: Text(
+      text,
+      style: TextStyle(
+        fontFamily: 'Poppins',
+        fontSize: 13,
+        color: context.appTextSecondary,
+        height: 1.55,
+      ),
+    ),
+  );
 
   Widget _buildVitalsBox(String text) => Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: const Color(0xFF1565C0).withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-              color: const Color(0xFF1565C0).withValues(alpha: 0.15)),
-        ),
-        child: Text(text,
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: 12,
-              color: context.appTextSecondary,
-              height: 1.7,
-            )),
-      );
+    width: double.infinity,
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: const Color(0xFF1565C0).withValues(alpha: 0.05),
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(
+        color: const Color(0xFF1565C0).withValues(alpha: 0.15),
+      ),
+    ),
+    child: Text(
+      text,
+      style: TextStyle(
+        fontFamily: 'Poppins',
+        fontSize: 12,
+        color: context.appTextSecondary,
+        height: 1.7,
+      ),
+    ),
+  );
 
   Widget _buildInvestigationsChips() => Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: _investigations
-            .map((inv) => Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF00838F).withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                        color: const Color(0xFF00838F)
-                            .withValues(alpha: 0.3)),
+    spacing: 8,
+    runSpacing: 8,
+    children: _investigations
+        .map(
+          (inv) => Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: const Color(0xFF00838F).withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: const Color(0xFF00838F).withValues(alpha: 0.3),
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.science_outlined,
+                  size: 13,
+                  color: Color(0xFF00838F),
+                ),
+                const SizedBox(width: 5),
+                Text(
+                  inv,
+                  style: const TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF00838F),
                   ),
-                  child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    const Icon(Icons.science_outlined,
-                        size: 13, color: Color(0xFF00838F)),
-                    const SizedBox(width: 5),
-                    Text(inv,
-                        style: const TextStyle(
-                          fontFamily: 'Poppins',
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF00838F),
-                        )),
-                  ]),
-                ))
-            .toList(),
-      );
+                ),
+              ],
+            ),
+          ),
+        )
+        .toList(),
+  );
 
   Widget _buildDiagnosisCard() => Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              const Color(0xFF2E7D32).withValues(alpha: 0.08),
-              const Color(0xFF2E7D32).withValues(alpha: 0.03),
-            ],
-          ),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-              color: const Color(0xFF2E7D32).withValues(alpha: 0.3),
-              width: 1.5),
-        ),
-        child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-          Row(children: [
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      gradient: LinearGradient(
+        colors: [
+          const Color(0xFF2E7D32).withValues(alpha: 0.08),
+          const Color(0xFF2E7D32).withValues(alpha: 0.03),
+        ],
+      ),
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(
+        color: const Color(0xFF2E7D32).withValues(alpha: 0.3),
+        width: 1.5,
+      ),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
             Container(
-              width: 36, height: 36,
+              width: 36,
+              height: 36,
               decoration: BoxDecoration(
                 color: const Color(0xFF2E7D32).withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: const Icon(Icons.medical_information_rounded,
-                  color: Color(0xFF2E7D32), size: 18),
+              child: const Icon(
+                Icons.medical_information_rounded,
+                color: Color(0xFF2E7D32),
+                size: 18,
+              ),
             ),
             const SizedBox(width: 10),
-            const Text('Diagnosis',
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF2E7D32),
-                )),
-          ]),
-          const SizedBox(height: 12),
-          Text(_diagnosis,
+            const Text(
+              'Diagnosis',
               style: TextStyle(
                 fontFamily: 'Poppins',
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                color: context.appTextPrimary,
-                height: 1.5,
-              )),
-        ]),
-      );
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF2E7D32),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Text(
+          _diagnosis,
+          style: TextStyle(
+            fontFamily: 'Poppins',
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+            color: context.appTextPrimary,
+            height: 1.5,
+          ),
+        ),
+      ],
+    ),
+  );
 
   Widget _buildMedicinesCard() {
     final medColors = [
@@ -1224,343 +1418,424 @@ class _PrescriptionViewerScreenState
 
     return _card(
       child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-        Row(children: [
-          // Rx / OP mark
-          Text(_rxWatermark,
-              style: const TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 28,
-                fontWeight: FontWeight.w900,
-                fontStyle: FontStyle.italic,
-                color: AppColors.primary,
-              )),
-          const SizedBox(width: 10),
-          const Text('Prescribed Medicines', style: AppTextStyles.h4),
-          const Spacer(),
-          if (_medicines.isNotEmpty)
-            GestureDetector(
-              onTap: () =>
-                  context.push(AppRoutes.medicine, extra: _medicines),
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 12, vertical: 7),
-                decoration: BoxDecoration(
-                  gradient: AppColors.primaryGradient,
-                  borderRadius: BorderRadius.circular(10),
-                  boxShadow: [
-                    BoxShadow(
-                        color: AppColors.primary.withValues(alpha: 0.25),
-                        blurRadius: 6,
-                        offset: const Offset(0, 2))
-                  ],
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              // Rx / OP mark
+              Text(
+                _rxWatermark,
+                style: const TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 28,
+                  fontWeight: FontWeight.w900,
+                  fontStyle: FontStyle.italic,
+                  color: AppColors.primary,
                 ),
-                child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                  Icon(Icons.shopping_cart_rounded,
-                      size: 13, color: Colors.white),
-                  SizedBox(width: 5),
-                  Text('Order All',
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                      )),
-                ]),
               ),
-            ),
-        ]),
-        const SizedBox(height: 14),
-        if (_medicines.isEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Text('No medicines prescribed.',
-                style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 13,
-                    color: context.appTextHint)),
-          ),
-        ..._medicines.asMap().entries.map((e) {
-          final m     = e.value;
-          final color = medColors[e.key % medColors.length];
-          final name  = _medicineName(m);
-          final strength  = m['strength']   as String? ?? '';
-          final morning   = m['morning']   as bool? ?? false;
-          final afternoon = m['afternoon'] as bool? ?? false;
-          final night     = m['night']     as bool? ?? false;
-          final foodTiming = m['foodTiming'] as String?
-              ?? m['timing'] as String? ?? '';
-          final duration  = m['duration']   as String? ?? '';
-          final instruction = m['instruction'] as String? ?? '';
-          final hasDose = morning || afternoon || night;
-
-          return Container(
-            margin: const EdgeInsets.only(bottom: 12),
-            decoration: BoxDecoration(
-              color: context.appSurface,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                  color: color.withValues(alpha: 0.2)),
-              boxShadow: [
-                BoxShadow(
-                    color: color.withValues(alpha: 0.06),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2))
-              ],
-            ),
-            child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-              // Header
-              Container(
-                padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.07),
-                  borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(13)),
-                ),
-                child: Row(children: [
-                  Container(
-                    width: 28, height: 28,
-                    decoration: BoxDecoration(
-                        color: color, shape: BoxShape.circle),
-                    child: Center(
-                      child: Text('${e.key + 1}',
-                          style: const TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 12,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.white,
-                          )),
+              const SizedBox(width: 10),
+              const Text('Prescribed Medicines', style: AppTextStyles.h4),
+              const Spacer(),
+              if (_medicines.isNotEmpty)
+                GestureDetector(
+                  onTap: () =>
+                      context.push(AppRoutes.medicine, extra: _medicines),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 7,
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                      Text(name,
+                    decoration: BoxDecoration(
+                      gradient: AppColors.primaryGradient,
+                      borderRadius: BorderRadius.circular(10),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.primary.withValues(alpha: 0.25),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.shopping_cart_rounded,
+                          size: 13,
+                          color: Colors.white,
+                        ),
+                        SizedBox(width: 5),
+                        Text(
+                          'Order All',
                           style: TextStyle(
                             fontFamily: 'Poppins',
-                            fontSize: 14,
+                            fontSize: 11,
                             fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          if (_medicines.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text(
+                'No medicines prescribed.',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 13,
+                  color: context.appTextHint,
+                ),
+              ),
+            ),
+          ..._medicines.asMap().entries.map((e) {
+            final m = e.value;
+            final color = medColors[e.key % medColors.length];
+            final name = _medicineName(m);
+            final strength = m['strength'] as String? ?? '';
+            final morning = m['morning'] as bool? ?? false;
+            final afternoon = m['afternoon'] as bool? ?? false;
+            final night = m['night'] as bool? ?? false;
+            final foodTiming =
+                m['foodTiming'] as String? ?? m['timing'] as String? ?? '';
+            final duration = m['duration'] as String? ?? '';
+            final instruction = m['instruction'] as String? ?? '';
+            final hasDose = morning || afternoon || night;
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: BoxDecoration(
+                color: context.appSurface,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: color.withValues(alpha: 0.2)),
+                boxShadow: [
+                  BoxShadow(
+                    color: color.withValues(alpha: 0.06),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.07),
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(13),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 28,
+                          height: 28,
+                          decoration: BoxDecoration(
                             color: color,
-                          )),
-                      if (strength.isNotEmpty)
-                        Text(strength,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Center(
+                            child: Text(
+                              '${e.key + 1}',
+                              style: const TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                name,
+                                style: TextStyle(
+                                  fontFamily: 'Poppins',
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  color: color,
+                                ),
+                              ),
+                              if (strength.isNotEmpty)
+                                Text(
+                                  strength,
+                                  style: TextStyle(
+                                    fontFamily: 'Poppins',
+                                    fontSize: 12,
+                                    color: context.appTextSecondary,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                        const Icon(
+                          Icons.medication_rounded,
+                          size: 20,
+                          color: Colors.white60,
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Dosage chips
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (hasDose ||
+                            foodTiming.isNotEmpty ||
+                            duration.isNotEmpty)
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 6,
+                            children: [
+                              if (morning)
+                                const _DoseChip(
+                                  Icons.wb_sunny_outlined,
+                                  'Morning',
+                                  Color(0xFFFF9800),
+                                ),
+                              if (afternoon)
+                                const _DoseChip(
+                                  Icons.wb_twilight_rounded,
+                                  'Afternoon',
+                                  Color(0xFFF44336),
+                                ),
+                              if (night)
+                                const _DoseChip(
+                                  Icons.nights_stay_outlined,
+                                  'Night',
+                                  Color(0xFF5C6BC0),
+                                ),
+                              if (!hasDose) ...[
+                                // Legacy format chips
+                                if ((m['frequency'] as String? ?? '')
+                                    .isNotEmpty)
+                                  _MedChip(m['frequency'] as String, color),
+                                if ((m['dosage'] as String? ?? '').isNotEmpty)
+                                  _MedChip(m['dosage'] as String, color),
+                              ],
+                              if (foodTiming.isNotEmpty)
+                                _MedChip(foodTiming, AppColors.accent),
+                              if (duration.isNotEmpty)
+                                _MedChip(duration, const Color(0xFF633058)),
+                            ],
+                          ),
+                        if (instruction.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            instruction,
                             style: TextStyle(
                               fontFamily: 'Poppins',
-                              fontSize: 12,
+                              fontSize: 11,
                               color: context.appTextSecondary,
-                            )),
-                    ]),
-                  ),
-                  const Icon(Icons.medication_rounded,
-                      size: 20, color: Colors.white60),
-                ]),
-              ),
-
-              // Dosage chips
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                  if (hasDose || foodTiming.isNotEmpty || duration.isNotEmpty)
-                    Wrap(spacing: 6, runSpacing: 6, children: [
-                      if (morning)
-                        const _DoseChip(Icons.wb_sunny_outlined,
-                            'Morning', Color(0xFFFF9800)),
-                      if (afternoon)
-                        const _DoseChip(Icons.wb_twilight_rounded,
-                            'Afternoon', Color(0xFFF44336)),
-                      if (night)
-                        const _DoseChip(Icons.nights_stay_outlined,
-                            'Night', Color(0xFF5C6BC0)),
-                      if (!hasDose) ...[
-                        // Legacy format chips
-                        if ((m['frequency'] as String? ?? '').isNotEmpty)
-                          _MedChip(m['frequency'] as String, color),
-                        if ((m['dosage'] as String? ?? '').isNotEmpty)
-                          _MedChip(m['dosage'] as String, color),
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                        ],
                       ],
-                      if (foodTiming.isNotEmpty)
-                        _MedChip(foodTiming, AppColors.accent),
-                      if (duration.isNotEmpty)
-                        _MedChip(duration, const Color(0xFF633058)),
-                    ]),
-                  if (instruction.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    Text(instruction,
-                        style: TextStyle(
-                          fontFamily: 'Poppins',
-                          fontSize: 11,
-                          color: context.appTextSecondary,
-                          fontStyle: FontStyle.italic,
-                        )),
-                  ],
-                ]),
+                    ),
+                  ),
+                ],
               ),
-            ]),
-          );
-        }),
-      ]),
+            );
+          }),
+        ],
+      ),
     );
   }
 
   Widget _buildAdviceList() => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: _adviceLines
-            .map((a) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                    Container(
-                      margin: const EdgeInsets.only(top: 3),
-                      width: 6, height: 6,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFF57F17),
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                        child: Text(a,
-                            style: AppTextStyles.bodyMedium
-                                .copyWith(height: 1.5))),
-                  ]),
-                ))
-            .toList(),
-      );
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: _adviceLines
+        .map(
+          (a) => Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  margin: const EdgeInsets.only(top: 3),
+                  width: 6,
+                  height: 6,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFF57F17),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    a,
+                    style: AppTextStyles.bodyMedium.copyWith(height: 1.5),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        )
+        .toList(),
+  );
 
   Widget _buildFollowUpCard() => Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: const Color(0xFFFFF3E0),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-              color: const Color(0xFFFFB74D).withValues(alpha: 0.4),
-              width: 1.5),
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: const Color(0xFFFFF3E0),
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(
+        color: const Color(0xFFFFB74D).withValues(alpha: 0.4),
+        width: 1.5,
+      ),
+    ),
+    child: Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFE0B2),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: const Icon(
+            Icons.event_repeat_rounded,
+            color: Color(0xFFE65100),
+            size: 22,
+          ),
         ),
-        child: Row(children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: const Color(0xFFFFE0B2),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(Icons.event_repeat_rounded,
-                color: Color(0xFFE65100), size: 22),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-              const Text('Follow-up Required',
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFFE65100),
-                  )),
-              Text(
-                  'Please schedule a follow-up in $_followUpDays days.',
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 12,
-                    color: context.appTextSecondary,
-                    height: 1.4,
-                  )),
-            ]),
-          ),
-        ]),
-      );
-
-  Widget _buildSignatureCard() => _card(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Digitally Signed By',
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Follow-up Required',
                 style: TextStyle(
                   fontFamily: 'Poppins',
-                  fontSize: 11,
-                  color: context.appTextHint,
-                )),
-            const SizedBox(height: 10),
-            // Actual handwritten signature image
-            if (_signatureUrl.isNotEmpty)
-              Container(
-                height: 80,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF9F9FF),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                      color: AppColors.primary.withValues(alpha: 0.15)),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFFE65100),
                 ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(9),
-                  child: Image.network(
-                    _signatureUrl,
-                    fit: BoxFit.contain,
-                    errorBuilder: (_, __, ___) => Center(
-                      child: Icon(Icons.draw_rounded,
-                          color: context.appTextHint, size: 28),
-                    ),
+              ),
+              Text(
+                'Please schedule a follow-up in $_followUpDays days.',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 12,
+                  color: context.appTextSecondary,
+                  height: 1.4,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+
+  Widget _buildSignatureCard() => _card(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Digitally Signed By',
+          style: TextStyle(
+            fontFamily: 'Poppins',
+            fontSize: 11,
+            color: context.appTextHint,
+          ),
+        ),
+        const SizedBox(height: 10),
+        // Actual handwritten signature image
+        if (_signatureUrl.isNotEmpty)
+          Container(
+            height: 80,
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF9F9FF),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: AppColors.primary.withValues(alpha: 0.15),
+              ),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(9),
+              child: Image.network(
+                _signatureUrl,
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => Center(
+                  child: Icon(
+                    Icons.draw_rounded,
+                    color: context.appTextHint,
+                    size: 28,
                   ),
                 ),
               ),
-            const SizedBox(height: 10),
-            Text('Dr. $_doctorName',
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                  color: context.appTextPrimary,
-                )),
-            Text(
-                '$_specialty${_regNo.isNotEmpty ? '  •  Reg. No: $_regNo' : ''}',
+            ),
+          ),
+        const SizedBox(height: 10),
+        Text(
+          'Dr. $_doctorName',
+          style: TextStyle(
+            fontFamily: 'Poppins',
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+            color: context.appTextPrimary,
+          ),
+        ),
+        Text(
+          '$_specialty${_regNo.isNotEmpty ? '  •  Reg. No: $_regNo' : ''}',
+          style: TextStyle(
+            fontFamily: 'Poppins',
+            fontSize: 11,
+            color: context.appTextSecondary,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+          decoration: BoxDecoration(
+            color: AppColors.accent.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: AppColors.accent.withValues(alpha: 0.3)),
+          ),
+          child: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.verified_rounded, color: AppColors.accent, size: 16),
+              SizedBox(width: 6),
+              Text(
+                'Digitally Signed & Verified by MedNU',
                 style: TextStyle(
                   fontFamily: 'Poppins',
                   fontSize: 11,
-                  color: context.appTextSecondary,
-                )),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 14, vertical: 7),
-              decoration: BoxDecoration(
-                color: AppColors.accent.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                    color: AppColors.accent.withValues(alpha: 0.3)),
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.accent,
+                ),
               ),
-              child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                Icon(Icons.verified_rounded,
-                    color: AppColors.accent, size: 16),
-                SizedBox(width: 6),
-                Text('Digitally Signed & Verified by MedNU',
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.accent,
-                    )),
-              ]),
-            ),
-          ],
+            ],
+          ),
         ),
-      );
+      ],
+    ),
+  );
 
-
-  Widget _buildActionButtons(BuildContext context) => Column(children: [
-        // Download + Share row
-        Row(children: [
+  Widget _buildActionButtons(BuildContext context) => Column(
+    children: [
+      // Download + Share row
+      Row(
+        children: [
           Expanded(
             child: _ActionButton(
               icon: Icons.download_rounded,
@@ -1578,11 +1853,13 @@ class _PrescriptionViewerScreenState
               onTap: _handleShare,
             ),
           ),
-        ]),
-        const SizedBox(height: 12),
+        ],
+      ),
+      const SizedBox(height: 12),
 
-        // Book Follow-up + Order Medicines row
-        Row(children: [
+      // Book Follow-up + Order Medicines row
+      Row(
+        children: [
           if (_followUpRequired)
             Expanded(
               child: _ActionButton(
@@ -1598,43 +1875,44 @@ class _PrescriptionViewerScreenState
               icon: Icons.shopping_cart_rounded,
               label: 'Order Medicines',
               color: const Color(0xFF2E7D32),
-              onTap: () =>
-                  context.push(AppRoutes.medicine, extra: _medicines),
+              onTap: () => context.push(AppRoutes.medicine, extra: _medicines),
             ),
           ),
-        ]),
-        const SizedBox(height: 12),
+        ],
+      ),
+      const SizedBox(height: 12),
 
-        // Book Lab Tests
-        if (_investigations.isNotEmpty)
-          _ActionButton(
-            icon: Icons.science_rounded,
-            label: 'Book Lab Tests',
-            color: const Color(0xFF00838F),
-            onTap: () => context.push(AppRoutes.diagnostics),
-            fullWidth: true,
-          ),
-      ]);
+      // Book Lab Tests
+      if (_investigations.isNotEmpty)
+        _ActionButton(
+          icon: Icons.science_rounded,
+          label: 'Book Lab Tests',
+          color: const Color(0xFF00838F),
+          onTap: () => context.push(AppRoutes.diagnostics),
+          fullWidth: true,
+        ),
+    ],
+  );
 
   // ── Shared card wrapper ───────────────────────────────────────────────────
 
   Widget _card({required Widget child}) => Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: context.appSurface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: context.appBorder),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
+    width: double.infinity,
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: context.appSurface,
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: context.appBorder),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withValues(alpha: 0.04),
+          blurRadius: 8,
+          offset: const Offset(0, 2),
         ),
-        child: child,
-      );
+      ],
+    ),
+    child: child,
+  );
 }
 
 // ── Small helper widgets ──────────────────────────────────────────────────────
@@ -1645,20 +1923,29 @@ class _PrescriptionInfoChip extends StatelessWidget {
   const _PrescriptionInfoChip(this.label, this.value);
 
   @override
-  Widget build(BuildContext context) =>
-      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(label,
-            style: const TextStyle(
-                fontFamily: 'Poppins', fontSize: 10, color: Colors.white60)),
-        Text(value,
-            style: const TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: Colors.white,
-            ),
-            overflow: TextOverflow.ellipsis),
-      ]);
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        label,
+        style: const TextStyle(
+          fontFamily: 'Poppins',
+          fontSize: 10,
+          color: Colors.white60,
+        ),
+      ),
+      Text(
+        value,
+        style: const TextStyle(
+          fontFamily: 'Poppins',
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          color: Colors.white,
+        ),
+        overflow: TextOverflow.ellipsis,
+      ),
+    ],
+  );
 }
 
 class _DetailItem extends StatelessWidget {
@@ -1667,70 +1954,79 @@ class _DetailItem extends StatelessWidget {
   const _DetailItem(this.label, this.value);
 
   @override
-  Widget build(BuildContext context) =>
-      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(label, style: AppTextStyles.caption),
-        Text(value, style: AppTextStyles.labelMedium),
-      ]);
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(label, style: AppTextStyles.caption),
+      Text(value, style: AppTextStyles.labelMedium),
+    ],
+  );
 }
 
 class _DoseChip extends StatelessWidget {
   final IconData icon;
-  final String   label;
-  final Color    color;
+  final String label;
+  final Color color;
   const _DoseChip(this.icon, this.label, this.color);
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: color.withValues(alpha: 0.3)),
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: 0.12),
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(color: color.withValues(alpha: 0.3)),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 12, color: color),
+        const SizedBox(width: 4),
+        Text(
+          label,
+          style: TextStyle(
+            fontFamily: 'Poppins',
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: color,
+          ),
         ),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(icon, size: 12, color: color),
-          const SizedBox(width: 4),
-          Text(label,
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: color,
-              )),
-        ]),
-      );
+      ],
+    ),
+  );
 }
 
 class _MedChip extends StatelessWidget {
   final String label;
-  final Color  color;
+  final Color color;
   const _MedChip(this.label, this.color);
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: color.withValues(alpha: 0.2)),
-        ),
-        child: Text(label,
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-              color: color,
-            )),
-      );
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: 0.08),
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(color: color.withValues(alpha: 0.2)),
+    ),
+    child: Text(
+      label,
+      style: TextStyle(
+        fontFamily: 'Poppins',
+        fontSize: 11,
+        fontWeight: FontWeight.w500,
+        color: color,
+      ),
+    ),
+  );
 }
 
 class _ActionButton extends StatelessWidget {
   final IconData icon;
-  final String   label;
-  final Color    color;
+  final String label;
+  final Color color;
   final VoidCallback onTap;
-  final bool     fullWidth;
+  final bool fullWidth;
   const _ActionButton({
     required this.icon,
     required this.label,
@@ -1741,30 +2037,31 @@ class _ActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => GestureDetector(
-        onTap: onTap,
-        child: Container(
-          width: fullWidth ? double.infinity : null,
-          padding: const EdgeInsets.symmetric(vertical: 13),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(12),
-            border:
-                Border.all(color: color.withValues(alpha: 0.25)),
+    onTap: onTap,
+    child: Container(
+      width: fullWidth ? double.infinity : null,
+      padding: const EdgeInsets.symmetric(vertical: 13),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: 7),
+          Text(
+            label,
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: color,
+            ),
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 16, color: color),
-              const SizedBox(width: 7),
-              Text(label,
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: color,
-                  )),
-            ],
-          ),
-        ),
-      );
+        ],
+      ),
+    ),
+  );
 }

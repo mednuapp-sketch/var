@@ -12,8 +12,7 @@ import 'nav_item.dart';
 /// returning an empty list for it here is intentional and keeps this layer
 /// honest about what's actually built. Lab (`features/lab/`), Pharmacy
 /// (`features/pharmacy/`), Ambulance (`features/ambulance/`), and Caregiver
-/// (`features/caregiver/`) are real modules — Ambulance and Caregiver are
-/// UI-only (mock providers) as of their own prompts.
+/// (`features/caregiver/`) are all real, Firestore-backed modules.
 List<NavItem> buildMenuForRole(AppRole role) {
   switch (role) {
     case AppRole.doctor:

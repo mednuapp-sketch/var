@@ -6,15 +6,16 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
+import '../../../core/router/app_router.dart';
 import '../../../core/utils/r.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../providers/period_tracker_provider.dart';
 
 // ── Brand colours ─────────────────────────────────────────────────────────────
-const _kPink      = Color(0xFFE91E8C);
-const _kPinkDark  = Color(0xFF880E4F);
+const _kPink      = Color(0xFFA36BAC);
+const _kPinkDark  = Color(0xFF33172C);
 const _kPinkLight = Color(0xFFFCE4EC);
-const _kPurple    = Color(0xFF7B1FA2);
+const _kPurple    = Color(0xFF633058);
 const _kGreen     = Color(0xFF388E3C);
 const _kGreenBg   = Color(0xFFE8F5E9);
 
@@ -67,7 +68,7 @@ class _NotApplicableScreen extends StatelessWidget {
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded),
-          onPressed: () => context.pop(),
+          onPressed: () => context.canPop() ? context.pop() : context.go(AppRoutes.home),
         ),
         title: const Text('Period Tracker',
             style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
@@ -565,7 +566,7 @@ class _CalendarScreenState extends ConsumerState<_CalendarScreen> {
       expandedHeight: 160,
       leading: IconButton(
         icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-        onPressed: () => context.pop(),
+        onPressed: () => context.canPop() ? context.pop() : context.go(AppRoutes.home),
       ),
       actions: [
         IconButton(
@@ -589,14 +590,14 @@ class _CalendarScreenState extends ConsumerState<_CalendarScreen> {
                   physics: const ClampingScrollPhysics(),
                   child: ConstrainedBox(
                     constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 48, 20, 16),
+                    child: const Padding(
+                      padding: EdgeInsets.fromLTRB(20, 48, 20, 16),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
-                          const Text('🌸', style: TextStyle(fontSize: 30)),
-                          const SizedBox(height: 4),
+                          Text('🌸', style: TextStyle(fontSize: 30)),
+                          SizedBox(height: 4),
                           Text('Period Tracker', style: AppTextStyles.onPrimaryH2),
                           Text('Track your cycle & stay informed',
                               style: AppTextStyles.onPrimaryBody),
@@ -640,8 +641,7 @@ class _CycleRingPainter extends CustomPainter {
     required this.progress,
     required this.activeColor,
     required this.trackColor,
-    this.strokeWidth = 15,
-  });
+  }) : strokeWidth = 15;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -685,7 +685,7 @@ class _FloHero extends StatelessWidget {
     'Menstruation': (_kPink,   _kPink,                  _kPinkLight,             '🩸'),
     'Follicular':   (Color(0xFF1E88E5), Color(0xFF1565C0), Color(0xFFE3F2FD), '🌱'),
     'Ovulation':    (_kPurple, _kPurple,                Color(0xFFF3E5F5),      '✨'),
-    'Luteal':       (Color(0xFF00897B), Color(0xFF00695C), Color(0xFFE0F2F1), '🌙'),
+    'Luteal':       (Color(0xFFF9943B), Color(0xFF00695C), Color(0xFFE0F2F1), '🌙'),
   };
 
   @override
@@ -1270,7 +1270,7 @@ class _Legend extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8)],
       ),
-      child: Row(
+      child: const Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
           _LegendItem(color: _kPink, label: 'Period'),
@@ -1328,8 +1328,8 @@ class _HistorySection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
+        const Padding(
+          padding: EdgeInsets.fromLTRB(20, 20, 20, 10),
           child: Text('Cycle History', style: AppTextStyles.h4),
         ),
         ...state.entries.take(5).map((e) => _EntryCard(
@@ -1466,7 +1466,7 @@ void _showDaySheet(
     builder: (_) => Container(
       decoration: BoxDecoration(
         color: context.appSurface,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -1483,11 +1483,11 @@ void _showDaySheet(
             _DayInfoChip(color: _kPink, icon: '🩸',
                 text: '${entry.flowLevel} flow · Day ${date.difference(entry.startDate).inDays + 1} of period'),
           if (isOvulation)
-            _DayInfoChip(color: _kPurple, icon: '🥚', text: 'Ovulation day (estimated)'),
+            const _DayInfoChip(color: _kPurple, icon: '🥚', text: 'Ovulation day (estimated)'),
           if (isFertile && !isOvulation)
-            _DayInfoChip(color: _kGreen, icon: '🌱', text: 'Fertile window (estimated)'),
+            const _DayInfoChip(color: _kGreen, icon: '🌱', text: 'Fertile window (estimated)'),
           if (isPredicted)
-            _DayInfoChip(color: _kPinkDark, icon: '📅', text: 'Predicted period start'),
+            const _DayInfoChip(color: _kPinkDark, icon: '📅', text: 'Predicted period start'),
           if (!isPeriod && !isFertile && !isOvulation && !isPredicted)
             _DayInfoChip(color: context.appTextSecondary, icon: '📆', text: 'No events on this day'),
           const SizedBox(height: 16),
@@ -1755,7 +1755,7 @@ class _LogPeriodSheetState extends State<_LogPeriodSheet> {
       builder: (_, ctrl) => Container(
         decoration: BoxDecoration(
           color: context.appSurface,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         ),
         child: Column(
           children: [
@@ -2140,7 +2140,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
       builder: (_, ctrl) => Container(
         decoration: BoxDecoration(
           color: context.appSurface,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         ),
         child: Column(
           children: [

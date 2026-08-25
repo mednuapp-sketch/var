@@ -1,10 +1,10 @@
 import 'dart:io';
+import '../../../core/router/app_router.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
@@ -221,7 +221,7 @@ class _LiveChatScreenState extends State<LiveChatScreen> {
       flexibleSpace: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            colors: [Color(0xFF880E4F), Color(0xFFC2185B), Color(0xFF7B1FA2)],
+            colors: [AppColors.primaryDark, AppColors.primary, AppColors.secondary],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
@@ -229,7 +229,7 @@ class _LiveChatScreenState extends State<LiveChatScreen> {
       ),
       leading: IconButton(
         icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-        onPressed: () => context.pop(),
+        onPressed: () => context.safeBack(),
       ),
       title: Row(
         children: [
@@ -250,7 +250,7 @@ class _LiveChatScreenState extends State<LiveChatScreen> {
               Text(
                 'MedNU Support',
                 style: TextStyle(
-                    fontFamily: 'Poppins',
+                    fontFamily: 'Inter',
                     fontWeight: FontWeight.w700,
                     fontSize: 15,
                     color: Colors.white),
@@ -258,7 +258,7 @@ class _LiveChatScreenState extends State<LiveChatScreen> {
               Text(
                 '24/7 Live Support',
                 style: TextStyle(
-                    fontFamily: 'Poppins',
+                    fontFamily: 'Inter',
                     fontSize: 11,
                     color: Colors.white70),
               ),
@@ -293,7 +293,7 @@ class _LiveChatScreenState extends State<LiveChatScreen> {
               child: Text(
                 status == 'resolved' ? 'Resolved' : 'Online',
                 style: const TextStyle(
-                    fontFamily: 'Poppins',
+                    fontFamily: 'Inter',
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
                     color: Colors.white),
@@ -412,7 +412,7 @@ class _LiveChatScreenState extends State<LiveChatScreen> {
           child: Text(
             label,
             style: const TextStyle(
-                fontFamily: 'Poppins',
+                fontFamily: 'Inter',
                 fontSize: 11,
                 color: Colors.black54,
                 fontWeight: FontWeight.w500),
@@ -446,7 +446,7 @@ class _LiveChatScreenState extends State<LiveChatScreen> {
                 child: Text(
                   data['senderName'] as String? ?? 'Support',
                   style: const TextStyle(
-                      fontFamily: 'Poppins',
+                      fontFamily: 'Inter',
                       fontSize: 11,
                       color: AppColors.textHint,
                       fontWeight: FontWeight.w600),
@@ -501,7 +501,7 @@ class _LiveChatScreenState extends State<LiveChatScreen> {
                         child: Text(
                           text,
                           style: TextStyle(
-                            fontFamily: 'Poppins',
+                            fontFamily: 'Inter',
                             fontSize: 13,
                             color: isDoctor ? Colors.white : AppColors.textPrimary,
                             height: 1.4,
@@ -516,7 +516,7 @@ class _LiveChatScreenState extends State<LiveChatScreen> {
                           Text(
                             _formatTime(ts),
                             style: TextStyle(
-                              fontFamily: 'Poppins',
+                              fontFamily: 'Inter',
                               fontSize: 10,
                               color: isDoctor
                                   ? Colors.white60
@@ -579,7 +579,7 @@ class _LiveChatScreenState extends State<LiveChatScreen> {
                 child: Row(children: [
                   const Text('Support is typing',
                       style: TextStyle(
-                          fontFamily: 'Poppins',
+                          fontFamily: 'Inter',
                           fontSize: 12,
                           color: AppColors.textHint)),
                   const SizedBox(width: 6),
@@ -641,7 +641,7 @@ class _LiveChatScreenState extends State<LiveChatScreen> {
                 maxLines: 4,
                 minLines: 1,
                 textInputAction: TextInputAction.newline,
-                style: const TextStyle(fontFamily: 'Poppins', fontSize: 13),
+                style: const TextStyle(fontFamily: 'Inter', fontSize: 13),
                 decoration: const InputDecoration(
                   hintText: 'Type a message...',
                   border: InputBorder.none,

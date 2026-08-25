@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
 import '../../../core/constants/app_text_styles.dart';
+import '../../../core/router/app_router.dart';
 import '../../../core/services/booking_service.dart';
 import '../../../core/utils/r.dart';
 import '../../home/providers/location_provider.dart';
@@ -427,7 +428,8 @@ class _AmbulanceScreenState extends ConsumerState<AmbulanceScreen> {
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded,
               color: Colors.white),
-          onPressed: () => context.pop(),
+          onPressed: () =>
+              context.canPop() ? context.pop() : context.go(AppRoutes.home),
         ),
         flexibleSpace: FlexibleSpaceBar(
           background: Container(
@@ -455,9 +457,9 @@ class _AmbulanceScreenState extends ConsumerState<AmbulanceScreen> {
                             Icon(Icons.local_shipping_rounded,
                                 color: Colors.white, size: AppSpacing.headerIconSize(context)),
                             SizedBox(height: AppSpacing.headerIconGap(context)),
-                            Text('Ambulance Service',
+                            const Text('Ambulance Service',
                                 style: AppTextStyles.onPrimaryH2),
-                            Text('Available 24/7 • GPS Precision Dispatch',
+                            const Text('Available 24/7 • GPS Precision Dispatch',
                                 style: AppTextStyles.onPrimaryBody),
                           ],
                         ),
@@ -481,7 +483,7 @@ class _AmbulanceScreenState extends ConsumerState<AmbulanceScreen> {
           children: [
             const Icon(Icons.emergency_rounded, color: _kRed, size: 18),
             const SizedBox(width: 6),
-            Text('Pickup Location', style: AppTextStyles.h4),
+            const Text('Pickup Location', style: AppTextStyles.h4),
             const Spacer(),
             if (!_locationLoading)
               _smallBtn(
@@ -663,7 +665,7 @@ class _AmbulanceScreenState extends ConsumerState<AmbulanceScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Select Pickup Location',
+                    const Text('Select Pickup Location',
                         style: AppTextStyles.labelLarge),
                     Text(
                       'Tap to detect GPS or pick on map',
@@ -777,7 +779,7 @@ class _AmbulanceScreenState extends ConsumerState<AmbulanceScreen> {
   Widget _buildTypesSection() => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Select Ambulance Type', style: AppTextStyles.h4),
+          const Text('Select Ambulance Type', style: AppTextStyles.h4),
           SizedBox(height: R.h(context, 12)),
           ..._types.map((t) {
             final selected = _selectedType == t.name;
@@ -848,7 +850,7 @@ class _AmbulanceScreenState extends ConsumerState<AmbulanceScreen> {
   Widget _buildNotesSection() => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Emergency Notes (Optional)', style: AppTextStyles.h4),
+          const Text('Emergency Notes (Optional)', style: AppTextStyles.h4),
           const SizedBox(height: 8),
           TextField(
             controller: _notesCtrl,
@@ -983,9 +985,9 @@ class _AmbulanceScreenState extends ConsumerState<AmbulanceScreen> {
                     color: _kRed, size: 52),
               ),
               const SizedBox(height: 20),
-              Text('Ambulance Booked!', style: AppTextStyles.h2),
+              const Text('Ambulance Booked!', style: AppTextStyles.h2),
               const SizedBox(height: 8),
-              Text(
+              const Text(
                 'Emergency request received.\nAn ambulance has been dispatched to your location.',
                 style: AppTextStyles.bodyMedium,
                 textAlign: TextAlign.center,

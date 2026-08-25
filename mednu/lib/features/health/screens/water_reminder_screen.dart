@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
+import '../../../core/router/app_router.dart';
 import '../providers/water_tracker_provider.dart';
 import '../services/health_notification_service.dart'
     show HealthNotificationService;
@@ -42,7 +43,7 @@ class WaterReminderScreen extends ConsumerWidget {
       leading: Builder(
         builder: (ctx) => IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-          onPressed: () => ctx.pop(),
+          onPressed: () => ctx.canPop() ? ctx.pop() : ctx.go(AppRoutes.healthDashboard),
         ),
       ),
       flexibleSpace: FlexibleSpaceBar(
@@ -227,11 +228,11 @@ class _Body extends StatelessWidget {
           _QuickAddButtons(notifier: notifier, state: state),
           SizedBox(height: R.h(context, 20)),
           // Reminder time picker tile
-          _ReminderTimeTile(state: state),
+          _ReminderTimeTile(state: state, notifier: notifier),
           SizedBox(height: R.h(context, 20)),
           _SettingsCard(state: state, notifier: notifier),
           SizedBox(height: R.h(context, 20)),
-          Text("Today's Log", style: AppTextStyles.h4),
+          const Text("Today's Log", style: AppTextStyles.h4),
           SizedBox(height: R.h(context, 12)),
           _TodayLogList(state: state),
           SizedBox(height: R.h(context, 40)),
@@ -420,41 +421,26 @@ class _QuickAddButtons extends StatelessWidget {
 
 // ─── Reminder Time Tile ───────────────────────────────────────────────────────
 
-class _ReminderTimeTile extends StatefulWidget {
+class _ReminderTimeTile extends StatelessWidget {
   final WaterTrackerState state;
-  const _ReminderTimeTile({required this.state});
-
-  @override
-  State<_ReminderTimeTile> createState() => _ReminderTimeTileState();
-}
-
-class _ReminderTimeTileState extends State<_ReminderTimeTile> {
-  TimeOfDay? _selectedTime;
-
-  String _formatTime(TimeOfDay t) {
-    final now = DateTime.now();
-    final dt = DateTime(now.year, now.month, now.day, t.hour, t.minute);
-    return DateFormat('h:mm a').format(dt);
-  }
+  final WaterTrackerNotifier notifier;
+  const _ReminderTimeTile({required this.state, required this.notifier});
 
   @override
   Widget build(BuildContext context) {
     final next = HealthNotificationService.nextReminderTime(
-        widget.state.reminderIntervalHours);
-    final displayTime = _selectedTime != null
-        ? _formatTime(_selectedTime!)
-        : next != null
-            ? DateFormat('h:mm a').format(next)
-            : '--';
+      state.reminderIntervalHours,
+      startHour: state.reminderStartHour,
+      startMinute: state.reminderStartMinute,
+    );
+    final displayTime = next != null ? DateFormat('h:mm a').format(next) : '--';
 
     return GestureDetector(
       onTap: () async {
         final picked = await showTimePicker(
           context: context,
-          initialTime: _selectedTime ??
-              (next != null
-                  ? TimeOfDay.fromDateTime(next)
-                  : TimeOfDay.now()),
+          initialTime:
+              TimeOfDay(hour: state.reminderStartHour, minute: state.reminderStartMinute),
           builder: (ctx, child) => Theme(
             data: Theme.of(ctx).copyWith(
               colorScheme: const ColorScheme.light(
@@ -465,7 +451,7 @@ class _ReminderTimeTileState extends State<_ReminderTimeTile> {
           ),
         );
         if (picked != null) {
-          setState(() => _selectedTime = picked);
+          await notifier.setReminderStartTime(picked.hour, picked.minute);
         }
       },
       child: Container(
@@ -539,7 +525,6 @@ class _NotifStatusBanner extends StatefulWidget {
 
 class _NotifStatusBannerState extends State<_NotifStatusBanner> {
   bool? _notifGranted;
-  bool? _exactAlarm;
 
   @override
   void initState() {
@@ -549,11 +534,9 @@ class _NotifStatusBannerState extends State<_NotifStatusBanner> {
 
   Future<void> _checkAll() async {
     final n = await HealthNotificationService.hasNotificationPermission();
-    final e = await HealthNotificationService.hasExactAlarmPermission();
     if (mounted) {
       setState(() {
         _notifGranted = n;
-        _exactAlarm = e;
       });
     }
   }
@@ -561,8 +544,7 @@ class _NotifStatusBannerState extends State<_NotifStatusBanner> {
   @override
   Widget build(BuildContext context) {
     if (_notifGranted == null) return const SizedBox.shrink();
-    final allGood = _notifGranted! && (_exactAlarm ?? true);
-    if (allGood) return const SizedBox.shrink();
+    if (_notifGranted!) return const SizedBox.shrink();
 
     return Container(
       margin: EdgeInsets.only(bottom: R.h(context, 12)),
@@ -588,21 +570,13 @@ class _NotifStatusBannerState extends State<_NotifStatusBanner> {
             ),
           ]),
           SizedBox(height: R.h(context, 8)),
-          if (!(_notifGranted ?? true))
-            _IssueItem('Notification permission denied — reminders cannot fire.'),
-          if (!(_exactAlarm ?? true))
-            _IssueItem('Exact alarm permission missing — reminders may fire late.'),
+          const _IssueItem('Notification permission denied — reminders cannot fire.'),
           SizedBox(height: R.h(context, 10)),
           SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
               onPressed: () async {
-                if (!(_notifGranted ?? true)) {
-                  await HealthNotificationService.requestNotificationPermission();
-                }
-                if (!(_exactAlarm ?? true)) {
-                  await HealthNotificationService.requestExactAlarmPermission();
-                }
+                await HealthNotificationService.requestNotificationPermission();
                 await _checkAll();
               },
               icon: Icon(Icons.settings_rounded, color: Colors.orange.shade700),
@@ -655,7 +629,7 @@ class _SettingsCard extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Settings', style: AppTextStyles.h4),
+        const Text('Settings', style: AppTextStyles.h4),
         SizedBox(height: R.h(context, 12)),
 
         // Show warning banner only when reminders are meant to be on
@@ -701,7 +675,7 @@ class _SettingsCard extends StatelessWidget {
                       ));
                     }
                   },
-                  activeColor: const Color(0xFF1565C0),
+                  activeThumbColor: const Color(0xFF1565C0),
                 ),
               ]),
 
@@ -735,7 +709,10 @@ class _SettingsCard extends StatelessWidget {
                 // Next reminder time chip
                 Builder(builder: (_) {
                   final next = HealthNotificationService.nextReminderTime(
-                      state.reminderIntervalHours);
+                    state.reminderIntervalHours,
+                    startHour: state.reminderStartHour,
+                    startMinute: state.reminderStartMinute,
+                  );
                   if (next == null) return const SizedBox.shrink();
                   final label = DateFormat('h:mm a').format(next);
                   return Padding(

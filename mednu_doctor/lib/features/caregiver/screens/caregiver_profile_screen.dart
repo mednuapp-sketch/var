@@ -156,9 +156,9 @@ class CaregiverProfileScreen extends ConsumerWidget {
               children: [
                 SharedProfileAvatar(name: profile.name, size: 76, isVerified: profile.documentsVerified),
                 const SizedBox(height: 14),
-                Text(profile.name, style: const TextStyle(fontFamily: 'Poppins', fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white)),
+                Text(profile.name, style: const TextStyle(fontFamily: 'Inter', fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white)),
                 const SizedBox(height: 4),
-                Text('${profile.experienceYears} years of experience', style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: Colors.white70)),
+                Text('${profile.experienceYears} years of experience', style: const TextStyle(fontFamily: 'Inter', fontSize: 12, color: Colors.white70)),
                 const SizedBox(height: 18),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -207,7 +207,7 @@ class CaregiverProfileScreen extends ConsumerWidget {
                   spacing: 8,
                   runSpacing: 8,
                   children: profile.specialties
-                      .map((s) => InfoChip(icon: Icons.favorite_border_rounded, label: s, color: AppColors.accent))
+                      .map((s) => InfoChip(icon: Icons.favorite_border_rounded, label: s, color: AppColors.accentText))
                       .toList(),
                 ),
               ],
@@ -220,6 +220,7 @@ class CaregiverProfileScreen extends ConsumerWidget {
               uid: CaregiverProfileService.currentUid!,
               documents: profile.documents,
               documentVerification: profile.documentVerification,
+              locked: profile.status == 'active',
             ),
           ],
         ],
@@ -240,8 +241,8 @@ class _HeroStat extends StatelessWidget {
       children: [
         Icon(icon, color: Colors.amberAccent, size: 20),
         const SizedBox(height: 4),
-        Text(value, style: const TextStyle(fontFamily: 'Poppins', fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white)),
-        Text(label, style: const TextStyle(fontFamily: 'Poppins', fontSize: 11, color: Colors.white60)),
+        Text(value, style: const TextStyle(fontFamily: 'Inter', fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white)),
+        Text(label, style: const TextStyle(fontFamily: 'Inter', fontSize: 11, color: Colors.white60)),
       ],
     );
   }

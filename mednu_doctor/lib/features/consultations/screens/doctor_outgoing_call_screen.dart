@@ -330,7 +330,7 @@ class _DoctorOutgoingCallScreenState extends State<DoctorOutgoingCallScreen>
           Text(
             label,
             style: TextStyle(
-              fontFamily: 'Poppins',
+              fontFamily: 'Inter',
               fontSize: 13,
               fontWeight: FontWeight.w600,
               color: color,
@@ -419,7 +419,7 @@ class _DoctorOutgoingCallScreenState extends State<DoctorOutgoingCallScreen>
           widget.patientName,
           textAlign: TextAlign.center,
           style: const TextStyle(
-            fontFamily: 'Poppins',
+            fontFamily: 'Inter',
             fontSize: 28,
             fontWeight: FontWeight.w800,
             color: Colors.white,
@@ -435,7 +435,7 @@ class _DoctorOutgoingCallScreenState extends State<DoctorOutgoingCallScreen>
             Text(
               'Video Consultation',
               style: TextStyle(
-                  fontFamily: 'Poppins', fontSize: 13, color: Colors.white54),
+                  fontFamily: 'Inter', fontSize: 13, color: Colors.white54),
             ),
           ],
         ),
@@ -447,7 +447,7 @@ class _DoctorOutgoingCallScreenState extends State<DoctorOutgoingCallScreen>
     return Text(
       _elapsedLabel,
       style: const TextStyle(
-        fontFamily: 'Poppins',
+        fontFamily: 'Inter',
         fontSize: 14,
         color: Colors.white30,
         letterSpacing: 2,
@@ -482,7 +482,7 @@ class _DoctorOutgoingCallScreenState extends State<DoctorOutgoingCallScreen>
         const Text(
           'Cancel',
           style: TextStyle(
-              fontFamily: 'Poppins', fontSize: 12, color: Colors.white38),
+              fontFamily: 'Inter', fontSize: 12, color: Colors.white38),
         ),
       ],
     );

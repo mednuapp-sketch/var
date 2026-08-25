@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../../core/router/app_router.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
-import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
@@ -120,12 +120,12 @@ class _SosScreenState extends State<SosScreen> {
           ),
           const SizedBox(width: 12),
           const Expanded(
-            child: Text('Contacts Permission', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 16)),
+            child: Text('Contacts Permission', style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w700, fontSize: 16)),
           ),
         ]),
         content: const Text(
-          'Contacts permission was previously denied.\n\nTo add emergency contacts, please open App Settings and allow "Contacts" access for MedNU Doctor.',
-          style: TextStyle(fontFamily: 'Poppins', fontSize: 13, height: 1.6),
+          'Contacts permission was previously denied.\n\nTo add emergency contacts, please open App Settings and allow "Contacts" access for MedNU Service.',
+          style: TextStyle(fontFamily: 'Inter', fontSize: 13, height: 1.6),
         ),
         actions: [
           TextButton(
@@ -161,8 +161,8 @@ class _SosScreenState extends State<SosScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Remove Contact', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
-        content: Text('Remove $name from your emergency contacts?', style: const TextStyle(fontFamily: 'Poppins')),
+        title: const Text('Remove Contact', style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w700)),
+        content: Text('Remove $name from your emergency contacts?', style: const TextStyle(fontFamily: 'Inter')),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -185,7 +185,7 @@ class _SosScreenState extends State<SosScreen> {
 
   void _showSnack(String msg, {bool isError = false}) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg, style: const TextStyle(fontFamily: 'Poppins')),
+      content: Text(msg, style: const TextStyle(fontFamily: 'Inter')),
       backgroundColor: isError ? AppColors.error : AppColors.success,
       behavior: SnackBarBehavior.floating,
     ));
@@ -201,7 +201,7 @@ class _SosScreenState extends State<SosScreen> {
         title: const Text(
           'SOS Emergency',
           style: TextStyle(
-            fontFamily: 'Poppins',
+            fontFamily: 'Inter',
             fontWeight: FontWeight.w700,
             color: Colors.white,
             fontSize: 18,
@@ -212,7 +212,7 @@ class _SosScreenState extends State<SosScreen> {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-          onPressed: () => context.pop(),
+          onPressed: () => context.safeBack(),
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
@@ -223,7 +223,7 @@ class _SosScreenState extends State<SosScreen> {
             : const Icon(Icons.contacts_rounded, color: Colors.white),
         label: Text(
           _picking ? 'Opening...' : 'Add from Contacts',
-          style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, color: Colors.white),
+          style: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w700, color: Colors.white),
         ),
       ),
       body: uid == null
@@ -361,7 +361,7 @@ class _ContactCard extends StatelessWidget {
               child: Text(
                 contact.name.isNotEmpty ? contact.name[0].toUpperCase() : '?',
                 style: const TextStyle(
-                  fontFamily: 'Poppins',
+                  fontFamily: 'Inter',
                   fontSize: 20,
                   fontWeight: FontWeight.w800,
                   color: AppColors.error,
@@ -380,32 +380,47 @@ class _ContactCard extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 4),
           // Call button
-          GestureDetector(
-            onTap: onCall,
-            child: Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                color: AppColors.success.withValues(alpha:0.1),
-                shape: BoxShape.circle,
+          Tooltip(
+            message: 'Call ${contact.name}',
+            child: Semantics(
+              button: true,
+              label: 'Call ${contact.name}',
+              child: GestureDetector(
+                onTap: onCall,
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: AppColors.success.withValues(alpha:0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.call_rounded, color: AppColors.success, size: 20),
+                ),
               ),
-              child: const Icon(Icons.call_rounded, color: AppColors.success, size: 20),
             ),
           ),
-          const SizedBox(width: 8),
           // Delete button
-          GestureDetector(
-            onTap: onDelete,
-            child: Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                color: AppColors.error.withValues(alpha:0.1),
-                shape: BoxShape.circle,
+          Tooltip(
+            message: 'Remove ${contact.name}',
+            child: Semantics(
+              button: true,
+              label: 'Remove ${contact.name}',
+              child: GestureDetector(
+                onTap: onDelete,
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: AppColors.error.withValues(alpha:0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.delete_outline_rounded, color: AppColors.error, size: 20),
+                ),
               ),
-              child: const Icon(Icons.delete_outline_rounded, color: AppColors.error, size: 20),
             ),
           ),
         ],
@@ -483,7 +498,7 @@ class _ContactPickerSheetState extends State<_ContactPickerSheet> {
               children: [
                 const Icon(Icons.contacts_rounded, color: AppColors.error, size: 22),
                 const SizedBox(width: 8),
-                const Text('Select Contact', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 17, color: AppColors.textPrimary)),
+                const Text('Select Contact', style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w700, fontSize: 17, color: AppColors.textPrimary)),
                 const Spacer(),
                 IconButton(
                   icon: const Icon(Icons.close_rounded),
@@ -513,14 +528,14 @@ class _ContactPickerSheetState extends State<_ContactPickerSheet> {
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Align(
               alignment: Alignment.centerLeft,
-              child: Text('${_filtered.length} contacts', style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: AppColors.textHint)),
+              child: Text('${_filtered.length} contacts', style: const TextStyle(fontFamily: 'Inter', fontSize: 12, color: AppColors.textHint)),
             ),
           ),
           const SizedBox(height: 4),
           // List
           Expanded(
             child: _filtered.isEmpty
-                ? const Center(child: Text('No contacts found', style: TextStyle(fontFamily: 'Poppins', color: AppColors.textHint)))
+                ? const Center(child: Text('No contacts found', style: TextStyle(fontFamily: 'Inter', color: AppColors.textHint)))
                 : ListView.builder(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                     itemCount: _filtered.length,
@@ -533,10 +548,10 @@ class _ContactPickerSheetState extends State<_ContactPickerSheet> {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         leading: CircleAvatar(
                           backgroundColor: AppColors.error.withValues(alpha:0.1),
-                          child: Text(initial, style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, color: AppColors.error)),
+                          child: Text(initial, style: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w700, color: AppColors.error)),
                         ),
-                        title: Text(c.displayName, style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 14)),
-                        subtitle: Text(phone, style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: AppColors.textSecondary)),
+                        title: Text(c.displayName, style: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w600, fontSize: 14)),
+                        subtitle: Text(phone, style: const TextStyle(fontFamily: 'Inter', fontSize: 12, color: AppColors.textSecondary)),
                       );
                     },
                   ),

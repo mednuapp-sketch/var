@@ -52,13 +52,13 @@ class CaregiverDashboardScreen extends ConsumerWidget {
                 value: '₹${metrics.todayEarnings}',
                 label: "Today's Earnings",
                 icon: Icons.account_balance_wallet_rounded,
-                colors: const [Color(0xFFEF6C00), Color(0xFFE65100)],
+                colors: const [AppColors.accent, AppColors.accentDark],
               ),
               GradientStatCard(
                 value: metrics.rating.toStringAsFixed(1),
                 label: 'Caregiver Rating',
                 icon: Icons.star_rounded,
-                colors: const [Color(0xFF6A1B9A), Color(0xFF4A148C)],
+                colors: const [AppColors.primary, AppColors.secondary],
               ),
             ],
           ),
@@ -92,12 +92,12 @@ class _DutyHeroCard extends ConsumerWidget {
       padding: EdgeInsets.all(R.p(context, 20)),
       decoration: BoxDecoration(
         gradient: onDuty
-            ? const LinearGradient(colors: [Color(0xFF00695C), Color(0xFF00897B)], begin: Alignment.topLeft, end: Alignment.bottomRight)
+            ? AppColors.onlineGradient
             : const LinearGradient(colors: [Color(0xFF455A64), Color(0xFF607D8B)], begin: Alignment.topLeft, end: Alignment.bottomRight),
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: (onDuty ? AppColors.accent : AppColors.offline).withValues(alpha: 0.35),
+            color: (onDuty ? AppColors.online : AppColors.offline).withValues(alpha: 0.35),
             blurRadius: 18,
             offset: const Offset(0, 8),
           ),
@@ -113,12 +113,12 @@ class _DutyHeroCard extends ConsumerWidget {
               children: [
                 Text(
                   onDuty ? 'You are ON DUTY' : 'You are OFF DUTY',
-                  style: TextStyle(fontFamily: 'Poppins', fontSize: R.sp(context, 18), fontWeight: FontWeight.w800, color: Colors.white),
+                  style: TextStyle(fontFamily: 'Inter', fontSize: R.sp(context, 18), fontWeight: FontWeight.w800, color: Colors.white),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   onDuty ? 'Visible for new visit assignments' : 'Not receiving new assignments',
-                  style: TextStyle(fontFamily: 'Poppins', fontSize: R.sp(context, 12), color: Colors.white70),
+                  style: TextStyle(fontFamily: 'Inter', fontSize: R.sp(context, 12), color: Colors.white70),
                 ),
               ],
             ),

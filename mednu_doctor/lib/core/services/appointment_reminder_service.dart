@@ -1,40 +1,59 @@
+import 'dart:io';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:timezone/timezone.dart' as tz;
-import 'package:timezone/data/latest_all.dart' as tz_data;
 
 const _kReminderMinutes = 'appt_reminder_minutes';
 const _kDefaultMinutes  = 15;
 
-/// Schedules and cancels local appointment-reminder notifications for doctors.
+/// Queues appointment-reminder pushes for doctors via the server-driven
+/// `scheduled_reminders` collection — a Cloud Function (processDueReminders)
+/// delivers them via FCM, so a reminder still arrives even if the app is
+/// fully closed by the time it's due (unlike the old on-device alarm, which
+/// OEM battery optimization could kill).
 ///
-/// Two notifications are fired per upcoming appointment:
+/// Two reminders are queued per upcoming appointment:
 ///   • T-N min  — configurable (default 15), stored in SharedPreferences
 ///   • T-0 min  — fires at the exact slot time as a "starting now" alert
 ///
-/// Must call [init] once during app startup before any other method.
+/// Must call [init] once during app startup — the FCM push references the
+/// `appointment_reminders` channel below, which needs to exist on-device
+/// *before* the push arrives (the old local-scheduling path created it
+/// implicitly via zonedSchedule; nothing does that anymore).
 class AppointmentReminderService {
   AppointmentReminderService._();
 
-  static final _plugin = FlutterLocalNotificationsPlugin();
+  static const _channelId = 'appointment_reminders';
+  static const _channelName = 'Appointment Reminders';
+  static final _queueCol =
+      FirebaseFirestore.instance.collection('scheduled_reminders');
   static bool _initialised = false;
 
-  // ── Notification channel ────────────────────────────────────────────────────
-  static const _channelId   = 'appointment_reminders';
-  static const _channelName = 'Appointment Reminders';
-
-  static const _androidDetails = AndroidNotificationDetails(
-    _channelId,
-    _channelName,
-    channelDescription: 'Reminders before scheduled consultations',
-    importance: Importance.high,
-    priority: Priority.high,
-    icon: '@mipmap/ic_launcher',
-    enableVibration: true,
-    playSound: true,
-  );
-
-  static const _notifDetails = NotificationDetails(android: _androidDetails);
+  static Future<void> init() async {
+    if (_initialised) return;
+    if (Platform.isAndroid) {
+      final plugin = FlutterLocalNotificationsPlugin();
+      await plugin.initialize(
+        const InitializationSettings(
+          android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+        ),
+      );
+      await plugin
+          .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>()
+          ?.createNotificationChannel(
+            const AndroidNotificationChannel(
+              _channelId,
+              _channelName,
+              description: 'Reminders before scheduled consultations',
+              importance: Importance.high,
+              playSound: true,
+              enableVibration: true,
+            ),
+          );
+    }
+    _initialised = true;
+  }
 
   // ── Reminder preference ─────────────────────────────────────────────────────
 
@@ -48,49 +67,19 @@ class AppointmentReminderService {
     await prefs.setInt(_kReminderMinutes, minutes);
   }
 
-  // ── Initialisation ─────────────────────────────────────────────────────────
+  // ── Queue reminders for an upcoming appointment ────────────────────────────
 
-  static Future<void> init() async {
-    if (_initialised) return;
-    tz_data.initializeTimeZones();
-    final platformTz = DateTime.now().timeZoneName;
-    try {
-      tz.setLocalLocation(tz.getLocation(platformTz));
-    } catch (_) {
-      final offsetMinutes = DateTime.now().timeZoneOffset.inMinutes;
-      for (final loc in tz.timeZoneDatabase.locations.values) {
-        try {
-          final tzNow = tz.TZDateTime.now(loc);
-          if (tzNow.timeZoneOffset.inMinutes == offsetMinutes) {
-            tz.setLocalLocation(loc);
-            break;
-          }
-        } catch (_) {}
-      }
-    }
-
-    await _plugin.initialize(
-      const InitializationSettings(
-        android: AndroidInitializationSettings('@mipmap/ic_launcher'),
-        iOS: DarwinInitializationSettings(),
-      ),
-    );
-    _initialised = true;
-  }
-
-  // ── Schedule reminders for an upcoming appointment ─────────────────────────
-
-  /// [appointmentId] must be the Firestore document ID.
+  /// [uid]           the doctor's own uid (recipient of the push).
+  /// [appointmentId]  must be the Firestore document ID.
   /// [dateStr]       YYYY-MM-DD (ISO date stored in Firestore).
   /// [timeStr]       slot string, e.g. "10:00 AM" or "02:30 PM".
   static Future<void> scheduleReminders({
+    required String uid,
     required String appointmentId,
     required String patientName,
     required String dateStr,
     required String timeStr,
   }) async {
-    if (!_initialised) await init();
-
     final slotTime = _parseSlot(dateStr, timeStr);
     if (slotTime == null) return;
 
@@ -102,53 +91,64 @@ class AppointmentReminderService {
 
     final reminderTime = slotTime.subtract(Duration(minutes: minutes));
     if (reminderTime.isAfter(now)) {
-      await _schedule(
-        id:    _reminderNotifId(appointmentId),
+      await _queue(
+        docId: _reminderDocId(uid, appointmentId),
+        uid: uid,
         title: 'Appointment in $timeLabel',
-        body:  '$patientName — tap to get ready.',
-      when:  reminderTime,
+        body: '$patientName — tap to get ready.',
+        fireAt: reminderTime,
+        data: {'type': 'appointment_reminder', 'appointmentId': appointmentId},
       );
+    } else {
+      await _queueCol.doc(_reminderDocId(uid, appointmentId)).delete().catchError((_) {});
     }
 
     if (slotTime.isAfter(now)) {
-      await _schedule(
-        id:    _startNotifId(appointmentId),
+      await _queue(
+        docId: _startDocId(uid, appointmentId),
+        uid: uid,
         title: 'Consultation Starting NOW',
-        body:  'Your appointment with $patientName is starting. Tap to join.',
-        when:  slotTime,
+        body: 'Your appointment with $patientName is starting. Tap to join.',
+        fireAt: slotTime,
+        data: {'type': 'appointment_start', 'appointmentId': appointmentId},
       );
+    } else {
+      await _queueCol.doc(_startDocId(uid, appointmentId)).delete().catchError((_) {});
     }
   }
 
   // ── Cancel reminders (e.g. appointment cancelled) ─────────────────────────
 
-  static Future<void> cancelReminders(String appointmentId) async {
-    await _plugin.cancel(_reminderNotifId(appointmentId));
-    await _plugin.cancel(_startNotifId(appointmentId));
+  static Future<void> cancelReminders(String uid, String appointmentId) async {
+    final batch = FirebaseFirestore.instance.batch();
+    batch.delete(_queueCol.doc(_reminderDocId(uid, appointmentId)));
+    batch.delete(_queueCol.doc(_startDocId(uid, appointmentId)));
+    await batch.commit().catchError((_) {});
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
-  static Future<void> _schedule({
-    required int id,
+  static Future<void> _queue({
+    required String docId,
+    required String uid,
     required String title,
     required String body,
-    required DateTime when,
+    required DateTime fireAt,
+    required Map<String, dynamic> data,
   }) async {
     try {
-      await _plugin.zonedSchedule(
-        id,
-        title,
-        body,
-        tz.TZDateTime.from(when, tz.local),
-        _notifDetails,
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        uiLocalNotificationDateInterpretation:
-            UILocalNotificationDateInterpretation.absoluteTime,
-      );
-    } catch (_) {
-      // Exact alarm permission denied on some Android 12+ devices; silently skip.
-    }
+      await _queueCol.doc(docId).set({
+        'uid': uid,
+        'role': 'doctor',
+        'title': title,
+        'body': body,
+        'channelId': _channelId,
+        'data': data,
+        'fireAt': Timestamp.fromDate(fireAt),
+        'status': 'pending',
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    } catch (_) {}
   }
 
   static DateTime? _parseSlot(String dateStr, String timeStr) {
@@ -166,11 +166,9 @@ class AppointmentReminderService {
     }
   }
 
-  /// Stable notification ID for the pre-appointment reminder.
-  static int _reminderNotifId(String appointmentId) =>
-      (appointmentId.hashCode.abs() % 1000000) * 10 + 1;
+  static String _reminderDocId(String uid, String appointmentId) =>
+      '${uid}_appt_${appointmentId}_reminder';
 
-  /// Stable notification ID for the "starting now" alert.
-  static int _startNotifId(String appointmentId) =>
-      (appointmentId.hashCode.abs() % 1000000) * 10 + 2;
+  static String _startDocId(String uid, String appointmentId) =>
+      '${uid}_appt_${appointmentId}_start';
 }

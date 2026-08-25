@@ -223,7 +223,7 @@ class _HomeBodyState extends ConsumerState<_HomeBody>
                                     const Icon(Icons.location_on_outlined,
                                         size: 14, color: AppColors.primary),
                                   const SizedBox(width: 3),
-                                  Text('Your Location',
+                                  const Text('Your Location',
                                       style: AppTextStyles.caption),
                                   const Icon(
                                       Icons.keyboard_arrow_down_rounded,
@@ -234,7 +234,7 @@ class _HomeBodyState extends ConsumerState<_HomeBody>
                               AnimatedSwitcher(
                                 duration: const Duration(milliseconds: 300),
                                 child: locState.isDetecting
-                                    ? _DetectingDots(key: const ValueKey('detecting'))
+                                    ? const _DetectingDots(key: ValueKey('detecting'))
                                     : Text(
                                         locState.displayName,
                                         key: ValueKey(locState.displayName),
@@ -297,15 +297,15 @@ class _HomeBodyState extends ConsumerState<_HomeBody>
                         decoration: BoxDecoration(
                           color: isDark
                               ? AppColors.darkCard
-                              : Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.45),
+                              : Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.45),
                           borderRadius: BorderRadius.circular(14),
                           border: Border.all(
                             color: isDark
-                                ? Colors.white.withOpacity(0.09)
-                                : Theme.of(context).colorScheme.outline.withOpacity(0.15),
+                                ? Colors.white.withValues(alpha: 0.09)
+                                : Theme.of(context).colorScheme.outline.withValues(alpha: 0.15),
                           ),
                           boxShadow: isDark
-                              ? [BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 4))]
+                              ? [BoxShadow(color: Colors.black.withValues(alpha: 0.3), blurRadius: 12, offset: const Offset(0, 4))]
                               : null,
                         ),
                         child: Row(
@@ -315,7 +315,7 @@ class _HomeBodyState extends ConsumerState<_HomeBody>
                                 size: 20,
                                 color: isDark
                                     ? const Color(0xFF4A6080)
-                                    : Theme.of(context).colorScheme.onSurface.withOpacity(0.45)),
+                                    : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.45)),
                             const SizedBox(width: 10),
                             Expanded(
                               child: Text(
@@ -323,7 +323,7 @@ class _HomeBodyState extends ConsumerState<_HomeBody>
                                 style: AppTextStyles.bodySmall.copyWith(
                                   color: isDark
                                       ? const Color(0xFF4A6080)
-                                      : Theme.of(context).colorScheme.onSurface.withOpacity(0.45),
+                                      : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.45),
                                 ),
                               ),
                             ),
@@ -331,10 +331,10 @@ class _HomeBodyState extends ConsumerState<_HomeBody>
                               margin: const EdgeInsets.only(right: 10),
                               padding: const EdgeInsets.all(7),
                               decoration: BoxDecoration(
-                                color: AppColors.primary.withOpacity(isDark ? 0.18 : 0.10),
+                                color: AppColors.primary.withValues(alpha: isDark ? 0.18 : 0.10),
                                 borderRadius: BorderRadius.circular(9),
                                 border: isDark
-                                    ? Border.all(color: AppColors.primary.withOpacity(0.3), width: 1)
+                                    ? Border.all(color: AppColors.primary.withValues(alpha: 0.3), width: 1)
                                     : null,
                               ),
                               child: const Icon(Icons.tune_rounded,
@@ -361,8 +361,8 @@ class _HomeBodyState extends ConsumerState<_HomeBody>
                 const SizedBox(height: 12),
                 const NotificationStrip(),
                 const SizedBox(height: 20),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 20),
                   child: Text('Our Services', style: AppTextStyles.h4),
                 ),
                 const SizedBox(height: 10),
@@ -373,7 +373,7 @@ class _HomeBodyState extends ConsumerState<_HomeBody>
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('Upcoming', style: AppTextStyles.h4),
+                      const Text('Upcoming', style: AppTextStyles.h4),
                       TextButton(
                           onPressed: () =>
                               context.push(AppRoutes.appointment),
@@ -383,8 +383,8 @@ class _HomeBodyState extends ConsumerState<_HomeBody>
                 ),
                 const UpcomingAppointmentCard(),
                 const SizedBox(height: 20),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 20),
                   child: Text('Health Tips', style: AppTextStyles.h4),
                 ),
                 const SizedBox(height: 12),
@@ -516,7 +516,7 @@ class _FindBodyState extends ConsumerState<_FindBody> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Find your Doctor', style: AppTextStyles.h3),
+                        const Text('Find your Doctor', style: AppTextStyles.h3),
                         Row(
                           children: [
                             const Icon(Icons.location_on_outlined,
@@ -546,7 +546,7 @@ class _FindBodyState extends ConsumerState<_FindBody> {
                   child: Container(
                     width: 40, height: 40,
                     decoration: BoxDecoration(
-                      color: AppColors.primary.withOpacity(0.09),
+                      color: AppColors.primary.withValues(alpha: 0.09),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: const Icon(Icons.tune_rounded,
@@ -568,7 +568,7 @@ class _FindBodyState extends ConsumerState<_FindBody> {
                 prefixIcon:
                     const Icon(Icons.search_rounded, size: 20),
                 filled: true,
-                fillColor: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.5),
+                fillColor: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
                 contentPadding: const EdgeInsets.symmetric(
                     horizontal: 16, vertical: 12),
                 border: OutlineInputBorder(
@@ -587,8 +587,8 @@ class _FindBodyState extends ConsumerState<_FindBody> {
                 _ConsultTopDoctorsBanner(),
                 const SizedBox(height: 20),
                 // Specialty filter chips
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 20),
                   child: Text('Specialties', style: AppTextStyles.h4),
                 ),
                 const SizedBox(height: 10),
@@ -618,7 +618,7 @@ class _FindBodyState extends ConsumerState<_FindBody> {
                             border: Border.all(
                               color: active
                                   ? AppColors.primary
-                                  : Theme.of(context).colorScheme.outline.withOpacity(0.4),
+                                  : Theme.of(context).colorScheme.outline.withValues(alpha: 0.4),
                             ),
                           ),
                           child: Text(
@@ -629,7 +629,7 @@ class _FindBodyState extends ConsumerState<_FindBody> {
                               fontWeight: FontWeight.w600,
                               color: active
                                   ? Colors.white
-                                  : Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                                  : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
                             ),
                           ),
                         ),
@@ -644,7 +644,7 @@ class _FindBodyState extends ConsumerState<_FindBody> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('Top Doctors Near You',
+                      const Text('Top Doctors Near You',
                           style: AppTextStyles.h4),
                       StreamBuilder<QuerySnapshot>(
                         stream: FirebaseFirestore.instance
@@ -693,7 +693,7 @@ class _ConsultTopDoctorsBanner extends StatelessWidget {
         gradient: AppColors.primaryGradient,
         boxShadow: [
           BoxShadow(
-            color: AppColors.primary.withOpacity(0.3),
+            color: AppColors.primary.withValues(alpha: 0.3),
             blurRadius: 16,
             offset: const Offset(0, 6),
           ),
@@ -704,11 +704,11 @@ class _ConsultTopDoctorsBanner extends StatelessWidget {
           Positioned(
             right: -15, top: -15,
             child: Container(width: 80, height: 80,
-                decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), shape: BoxShape.circle))),
+                decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.1), shape: BoxShape.circle))),
           Positioned(
             right: 50, bottom: -25,
             child: Container(width: 60, height: 60,
-                decoration: BoxDecoration(color: Colors.white.withOpacity(0.07), shape: BoxShape.circle))),
+                decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.07), shape: BoxShape.circle))),
           Padding(
             padding: const EdgeInsets.all(18),
             child: Row(
@@ -729,13 +729,13 @@ class _ConsultTopDoctorsBanner extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
                           decoration: BoxDecoration(
                               color: Colors.white, borderRadius: BorderRadius.circular(20)),
-                          child: Row(
+                          child: const Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Text('Quick Connect',
                                   style: TextStyle(fontFamily: 'Poppins', fontSize: 11,
                                       fontWeight: FontWeight.w700, color: AppColors.primary)),
-                              const SizedBox(width: 4),
+                              SizedBox(width: 4),
                               Icon(Icons.arrow_forward_rounded, size: 12, color: AppColors.primary),
                             ],
                           ),
@@ -748,7 +748,7 @@ class _ConsultTopDoctorsBanner extends StatelessWidget {
                   width: 80, height: 80,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white.withOpacity(0.4), width: 2),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.4), width: 2),
                   ),
                   child: ClipOval(
                     child: Transform.scale(
@@ -761,7 +761,7 @@ class _ConsultTopDoctorsBanner extends StatelessWidget {
                         width: 80, height: 80,
                         fit: BoxFit.cover,
                         errorBuilder: (_, __, ___) => Container(
-                          color: Colors.white.withOpacity(0.18),
+                          color: Colors.white.withValues(alpha: 0.18),
                           child: const Icon(Icons.medical_services_rounded, color: Colors.white, size: 32),
                         ),
                       ),
@@ -873,11 +873,11 @@ class _DoctorCard extends StatelessWidget {
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: context.appBorder),
-        boxShadow: [
+        boxShadow: const [
           BoxShadow(
               color: AppColors.shadow,
               blurRadius: 12,
-              offset: const Offset(0, 3)),
+              offset: Offset(0, 3)),
         ],
       ),
       child: Row(
@@ -939,7 +939,7 @@ class _DoctorCard extends StatelessWidget {
                     if (exp.isNotEmpty) ...[
                       const SizedBox(width: 8),
                       Icon(Icons.work_outline_rounded,
-                          size: 12, color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4)),
+                          size: 12, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4)),
                       const SizedBox(width: 3),
                       Text(exp.contains('yr') ? exp : '$exp yrs',
                           style: AppTextStyles.caption),
@@ -956,8 +956,8 @@ class _DoctorCard extends StatelessWidget {
                           horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
                         color: isOnline
-                            ? const Color(0xFF2E7D32).withOpacity(isDark ? 0.18 : 0.12)
-                            : const Color(0xFFE65100).withOpacity(isDark ? 0.18 : 0.12),
+                            ? const Color(0xFF2E7D32).withValues(alpha: isDark ? 0.18 : 0.12)
+                            : const Color(0xFFE65100).withValues(alpha: isDark ? 0.18 : 0.12),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
@@ -1145,8 +1145,8 @@ class _RecordsBodyState extends State<_RecordsBody> with SingleTickerProviderSta
 
   Color _specColor(String? s) {
     switch ((s ?? '').toLowerCase()) {
-      case 'cardiologist':  return const Color(0xFFC2185B);
-      case 'dermatologist': return const Color(0xFF00897B);
+      case 'cardiologist':  return const Color(0xFF522546);
+      case 'dermatologist': return const Color(0xFFF9943B);
       case 'neurologist':   return const Color(0xFF5E35B1);
       case 'pediatrician':  return const Color(0xFFE65100);
       case 'orthopedic':    return const Color(0xFF1565C0);
@@ -1197,7 +1197,7 @@ class _RecordsBodyState extends State<_RecordsBody> with SingleTickerProviderSta
         const SizedBox(height: 16),
         Text('No prescriptions yet', style: AppTextStyles.h4.copyWith(color: context.appTextPrimary)),
         const SizedBox(height: 6),
-        Text('Prescriptions from your doctors\nwill appear here after consultations', style: AppTextStyles.bodySmall, textAlign: TextAlign.center),
+        const Text('Prescriptions from your doctors\nwill appear here after consultations', style: AppTextStyles.bodySmall, textAlign: TextAlign.center),
       ]));
     }
     return ListView.builder(
@@ -1254,7 +1254,7 @@ class _RecordsBodyState extends State<_RecordsBody> with SingleTickerProviderSta
         const SizedBox(height: 16),
         Text('No reports uploaded yet', style: AppTextStyles.h4.copyWith(color: context.appTextPrimary)),
         const SizedBox(height: 6),
-        Text('Go to Records to upload your lab reports', style: AppTextStyles.bodySmall, textAlign: TextAlign.center),
+        const Text('Go to Records to upload your lab reports', style: AppTextStyles.bodySmall, textAlign: TextAlign.center),
         const SizedBox(height: 16),
         ElevatedButton.icon(
           onPressed: () => context.push(AppRoutes.records, extra: {'tab': 1}),
@@ -1328,7 +1328,7 @@ class _RecordsBodyState extends State<_RecordsBody> with SingleTickerProviderSta
         const SizedBox(height: 16),
         Text('No consultations yet', style: AppTextStyles.h4.copyWith(color: context.appTextHint)),
         const SizedBox(height: 4),
-        Text('Start a video consultation to see history here', style: AppTextStyles.bodySmall),
+        const Text('Start a video consultation to see history here', style: AppTextStyles.bodySmall),
       ]));
     }
     return ListView.builder(
@@ -1492,11 +1492,11 @@ class _ProfileBody extends ConsumerWidget {
                   _MenuItem(icon: Icons.medical_services_rounded, iconColor: AppColors.primary, label: 'My Services', badge: 'Tracker', onTap: () => context.push(AppRoutes.myServices)),
                   _MenuItem(icon: Icons.favorite_rounded, iconColor: const Color(0xFFE53935), label: 'Favourite Doctors', onTap: () => context.push(AppRoutes.favouriteDoctors)),
                   _MenuItem(icon: Icons.folder_rounded, iconColor: const Color(0xFF2E7D32), label: 'My Health Records', onTap: () => context.push(AppRoutes.records)),
-                  _MenuItem(icon: Icons.people_rounded, iconColor: const Color(0xFFC2185B), label: 'Family Members', onTap: () => context.push(AppRoutes.family)),
+                  _MenuItem(icon: Icons.people_rounded, iconColor: const Color(0xFF522546), label: 'Family Members', onTap: () => context.push(AppRoutes.family)),
                   _MenuItem(icon: Icons.medication_rounded, iconColor: const Color(0xFF00695C), label: 'My Medicines', onTap: () => context.push(AppRoutes.medicine)),
                   _MenuItem(icon: Icons.monitor_heart_rounded, iconColor: AppColors.primary, label: 'Health Dashboard', onTap: () => context.push(AppRoutes.healthDashboard)),
                   if (!isMale)
-                    _MenuItem(icon: Icons.favorite_rounded, iconColor: const Color(0xFFE91E8C), label: 'Period Tracker', onTap: () => context.push(AppRoutes.periodTracker)),
+                    _MenuItem(icon: Icons.favorite_rounded, iconColor: const Color(0xFFA36BAC), label: 'Period Tracker', onTap: () => context.push(AppRoutes.periodTracker)),
                   _MenuItem(icon: Icons.water_drop_rounded, iconColor: const Color(0xFF1565C0), label: 'Water Reminder', onTap: () => context.push(AppRoutes.waterReminder)),
                   _MenuItem(icon: Icons.local_shipping_rounded, iconColor: const Color(0xFFE65100), label: 'Track Order', onTap: () => context.push(AppRoutes.orderTracking)),
                 ]),
@@ -1520,9 +1520,9 @@ class _ProfileBody extends ConsumerWidget {
 
                 const SizedBox(height: 20),
 
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: const _SignOutButton(),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16),
+                  child: _SignOutButton(),
                 ),
 
                 const SizedBox(height: 16),
@@ -1586,10 +1586,10 @@ class _ProfileHeader extends StatelessWidget {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      Expanded(
+                      const Expanded(
                         child: Text(
                           'My Profile',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontFamily: 'Poppins',
                             fontSize: 20,
                             fontWeight: FontWeight.w700,
@@ -1654,7 +1654,7 @@ class _ProfileHeader extends StatelessWidget {
               borderRadius: BorderRadius.circular(20),
               boxShadow: [
                 BoxShadow(
-                    color: const Color(0xFFFFB300).withOpacity(0.35),
+                    color: const Color(0xFFFFB300).withValues(alpha: 0.35),
                     blurRadius: 8,
                     offset: const Offset(0, 3))
               ],
@@ -1698,7 +1698,7 @@ class _HeaderIconButton extends StatelessWidget {
         width: 36,
         height: 36,
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.18),
+          color: Colors.white.withValues(alpha: 0.18),
           borderRadius: BorderRadius.circular(10),
         ),
         child: Icon(icon, color: Colors.white, size: 18),
@@ -1729,11 +1729,11 @@ class _ProfileAvatar extends StatelessWidget {
             border: Border.all(color: Colors.white, width: 3.5),
             boxShadow: [
               BoxShadow(
-                  color: AppColors.primary.withOpacity(0.28),
+                  color: AppColors.primary.withValues(alpha: 0.28),
                   blurRadius: 20,
                   offset: const Offset(0, 6)),
               BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
+                  color: Colors.black.withValues(alpha: 0.1),
                   blurRadius: 6,
                   offset: const Offset(0, 2)),
             ],
@@ -1754,7 +1754,7 @@ class _ProfileAvatar extends StatelessWidget {
             border: Border.all(color: Colors.white, width: 2),
             boxShadow: [
               BoxShadow(
-                  color: AppColors.primary.withOpacity(0.3),
+                  color: AppColors.primary.withValues(alpha: 0.3),
                   blurRadius: 6,
                   offset: const Offset(0, 2))
             ],
@@ -1809,7 +1809,7 @@ class _StatCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: isDark ? iconColor.withOpacity(0.1) : AppColors.shadow,
+              color: isDark ? iconColor.withValues(alpha: 0.1) : AppColors.shadow,
               blurRadius: 12,
               offset: const Offset(0, 4),
             ),
@@ -1822,7 +1822,7 @@ class _StatCard extends StatelessWidget {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: isDark ? iconColor.withOpacity(0.18) : iconBg,
+                color: isDark ? iconColor.withValues(alpha: 0.18) : iconBg,
                 shape: BoxShape.circle,
               ),
               child: Icon(icon, color: iconColor, size: 20),
@@ -1871,14 +1871,14 @@ class _ReferralBanner extends StatelessWidget {
         decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: [
-              AppColors.primary.withOpacity(0.07),
-              AppColors.secondary.withOpacity(0.07),
+              AppColors.primary.withValues(alpha: 0.07),
+              AppColors.secondary.withValues(alpha: 0.07),
             ],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.primary.withOpacity(0.22), width: 1.5),
+          border: Border.all(color: AppColors.primary.withValues(alpha: 0.22), width: 1.5),
         ),
         child: Row(
           children: [
@@ -1921,7 +1921,7 @@ class _ReferralBanner extends StatelessWidget {
                 borderRadius: BorderRadius.circular(10),
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.primary.withOpacity(0.28),
+                    color: AppColors.primary.withValues(alpha: 0.28),
                     blurRadius: 8,
                     offset: const Offset(0, 3),
                   ),
@@ -1978,7 +1978,7 @@ class _MenuSection extends StatelessWidget {
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
-                  color: isDark ? Colors.black.withOpacity(0.3) : AppColors.shadow,
+                  color: isDark ? Colors.black.withValues(alpha: 0.3) : AppColors.shadow,
                   blurRadius: 10,
                   offset: const Offset(0, 3),
                 ),
@@ -1995,7 +1995,7 @@ class _MenuSection extends StatelessWidget {
                       indent: 66,
                       endIndent: 0,
                       color: isDark
-                          ? Colors.white.withOpacity(0.06)
+                          ? Colors.white.withValues(alpha: 0.06)
                           : const Color(0xFFF0F0F0),
                     ),
                 ],
@@ -2033,8 +2033,8 @@ class _MenuItem extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        splashColor: iconColor.withOpacity(0.08),
-        highlightColor: iconColor.withOpacity(0.04),
+        splashColor: iconColor.withValues(alpha: 0.08),
+        highlightColor: iconColor.withValues(alpha: 0.04),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
           child: Row(
@@ -2044,8 +2044,8 @@ class _MenuItem extends StatelessWidget {
                 height: 38,
                 decoration: BoxDecoration(
                   color: isDark
-                      ? iconColor.withOpacity(0.15)
-                      : iconColor.withOpacity(0.1),
+                      ? iconColor.withValues(alpha: 0.15)
+                      : iconColor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(11),
                 ),
                 child: Icon(icon, color: iconColor, size: 19),
@@ -2058,7 +2058,7 @@ class _MenuItem extends StatelessWidget {
                     fontFamily: 'Poppins',
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
-                    color: isDark ? Colors.white.withOpacity(0.9) : AppColors.textPrimary,
+                    color: isDark ? Colors.white.withValues(alpha: 0.9) : AppColors.textPrimary,
                   ),
                 ),
               ),
@@ -2146,9 +2146,9 @@ class _SignOutButton extends ConsumerWidget {
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 15),
         decoration: BoxDecoration(
-          color: AppColors.error.withOpacity(0.07),
+          color: AppColors.error.withValues(alpha: 0.07),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.error.withOpacity(0.2)),
+          border: Border.all(color: AppColors.error.withValues(alpha: 0.2)),
         ),
         child: const Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -2186,27 +2186,27 @@ class _MedNUBottomNav extends StatelessWidget {
         border: Border(
           top: BorderSide(
             color: isDark
-                ? Colors.white.withOpacity(0.07)
-                : Colors.black.withOpacity(0.06),
+                ? Colors.white.withValues(alpha: 0.07)
+                : Colors.black.withValues(alpha: 0.06),
             width: 1,
           ),
         ),
         boxShadow: isDark
             ? [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.5),
+                  color: Colors.black.withValues(alpha: 0.5),
                   blurRadius: 32,
                   offset: const Offset(0, -8),
                 ),
-                BoxShadow(
+                const BoxShadow(
                   color: AppColors.primaryGlowDark,
                   blurRadius: 40,
-                  offset: const Offset(0, -2),
+                  offset: Offset(0, -2),
                 ),
               ]
             : [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.06),
+                  color: Colors.black.withValues(alpha: 0.06),
                   blurRadius: 20,
                   offset: const Offset(0, -4),
                 ),
@@ -2231,7 +2231,7 @@ class _MedNUBottomNav extends StatelessWidget {
                     borderRadius: BorderRadius.circular(18),
                     boxShadow: [
                       BoxShadow(
-                        color: AppColors.primary.withOpacity(isDark ? 0.5 : 0.3),
+                        color: AppColors.primary.withValues(alpha: isDark ? 0.5 : 0.3),
                         blurRadius: isDark ? 20 : 12,
                         offset: const Offset(0, 4),
                       ),
@@ -2270,7 +2270,7 @@ class _NavItem extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final inactiveColor = isDark
         ? const Color(0xFF4A6080)
-        : Theme.of(context).colorScheme.onSurface.withOpacity(0.40);
+        : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.40);
 
     return GestureDetector(
       onTap: () => onTap(index),
@@ -2282,12 +2282,12 @@ class _NavItem extends StatelessWidget {
         decoration: BoxDecoration(
           color: isActive
               ? (isDark
-                  ? AppColors.primary.withOpacity(0.14)
-                  : AppColors.primary.withOpacity(0.08))
+                  ? AppColors.primary.withValues(alpha: 0.14)
+                  : AppColors.primary.withValues(alpha: 0.08))
               : Colors.transparent,
           borderRadius: BorderRadius.circular(14),
           border: isActive && isDark
-              ? Border.all(color: AppColors.primary.withOpacity(0.25), width: 1)
+              ? Border.all(color: AppColors.primary.withValues(alpha: 0.25), width: 1)
               : null,
         ),
         child: Column(
@@ -2365,8 +2365,8 @@ class _ConsultConfirmSheet extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
                 color: isOnline
-                    ? const Color(0xFF2E7D32).withOpacity(isDark ? 0.18 : 0.12)
-                    : const Color(0xFFE65100).withOpacity(isDark ? 0.18 : 0.12),
+                    ? const Color(0xFF2E7D32).withValues(alpha: isDark ? 0.18 : 0.12)
+                    : const Color(0xFFE65100).withValues(alpha: isDark ? 0.18 : 0.12),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
@@ -2380,9 +2380,9 @@ class _ConsultConfirmSheet extends StatelessWidget {
         const SizedBox(height: 20),
         const Divider(height: 1),
         const SizedBox(height: 20),
-        Row(children: [
+        const Row(children: [
           Expanded(child: _ConsultTypeOption(icon: Icons.video_call_rounded, label: 'Video Call', sublabel: 'Connect online now')),
-          const SizedBox(width: 12),
+          SizedBox(width: 12),
           Expanded(child: _ConsultTypeOption(icon: Icons.calendar_month_rounded, label: 'Book Slot', sublabel: 'Schedule for later')),
         ]),
         const SizedBox(height: 20),
@@ -2431,9 +2431,9 @@ class _ConsultTypeOption extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
       decoration: BoxDecoration(
-        color: AppColors.primary.withOpacity(0.06),
+        color: AppColors.primary.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
       ),
       child: Column(children: [
         Icon(icon, color: AppColors.primary, size: 28),

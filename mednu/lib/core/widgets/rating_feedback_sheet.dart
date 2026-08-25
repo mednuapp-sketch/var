@@ -92,7 +92,7 @@ class _RatingFeedbackSheetState extends State<_RatingFeedbackSheet> {
       Container(
         width: 64, height: 64,
         decoration: BoxDecoration(
-          color: AppColors.success.withOpacity(0.12),
+          color: AppColors.success.withValues(alpha: 0.12),
           shape: BoxShape.circle,
         ),
         child: const Icon(Icons.favorite_rounded, color: AppColors.success, size: 32),
@@ -129,7 +129,7 @@ class _RatingFeedbackSheetState extends State<_RatingFeedbackSheet> {
       Container(
         width: 56, height: 56,
         decoration: BoxDecoration(
-          color: widget.themeColor.withOpacity(0.10),
+          color: widget.themeColor.withValues(alpha: 0.10),
           shape: BoxShape.circle,
         ),
         child: Icon(Icons.star_rounded, color: widget.themeColor, size: 28),

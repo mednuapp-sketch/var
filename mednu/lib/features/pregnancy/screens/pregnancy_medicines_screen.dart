@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -195,7 +194,7 @@ class _PregnancyMedicinesScreenState
         foregroundColor: Colors.white,
         elevation: 3,
         icon: const Icon(Icons.add_rounded),
-        label: Text(
+        label: const Text(
           'Add Medicine',
           style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600),
         ),
@@ -279,7 +278,7 @@ class _PregnancyMedicinesScreenState
               padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12)),
-              textStyle: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600),
+              textStyle: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600),
             ),
           ),
         ],
@@ -355,7 +354,7 @@ class _PregnancyMedicinesScreenState
               ),
               child: Text(
                 '${todayMeds.length}',
-                style: TextStyle(fontFamily: 'Poppins', 
+                style: const TextStyle(fontFamily: 'Poppins', 
                     color: Colors.white,
                     fontSize: 11,
                     fontWeight: FontWeight.w700),
@@ -480,7 +479,7 @@ class _PregnancyMedicinesScreenState
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF7B1FA2), Color(0xFFC2185B)],
+          colors: [Color(0xFF633058), Color(0xFF522546)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -501,7 +500,7 @@ class _PregnancyMedicinesScreenState
               const Icon(Icons.medical_services_rounded,
                   color: Colors.white70, size: 16),
               const SizedBox(width: 6),
-              Text(
+              const Text(
                 'Active Prescriptions',
                 style: TextStyle(fontFamily: 'Poppins', 
                   color: Colors.white70,
@@ -526,7 +525,7 @@ class _PregnancyMedicinesScreenState
                       const SizedBox(width: 4),
                       Text(
                         '$refill refill${refill > 1 ? 's' : ''} soon',
-                        style: TextStyle(fontFamily: 'Poppins', 
+                        style: const TextStyle(fontFamily: 'Poppins', 
                           color: Colors.orange,
                           fontSize: 10,
                           fontWeight: FontWeight.w600,
@@ -540,7 +539,7 @@ class _PregnancyMedicinesScreenState
           const SizedBox(height: 8),
           Text(
             '$active items',
-            style: TextStyle(fontFamily: 'Poppins', 
+            style: const TextStyle(fontFamily: 'Poppins', 
               color: Colors.white,
               fontSize: 26,
               fontWeight: FontWeight.w800,
@@ -555,7 +554,7 @@ class _PregnancyMedicinesScreenState
                         children: [
                           Text(
                             '${types[t]}',
-                            style: TextStyle(fontFamily: 'Poppins', 
+                            style: const TextStyle(fontFamily: 'Poppins', 
                               color: Colors.white,
                               fontWeight: FontWeight.w700,
                               fontSize: 16,
@@ -563,7 +562,7 @@ class _PregnancyMedicinesScreenState
                           ),
                           Text(
                             _typeLabel(t),
-                            style: TextStyle(fontFamily: 'Poppins', 
+                            style: const TextStyle(fontFamily: 'Poppins', 
                               color: Colors.white60,
                               fontSize: 9,
                             ),
@@ -608,7 +607,7 @@ class _PregnancyMedicinesScreenState
               ),
               const SizedBox(width: 8),
               Text(
-                _typeLabel(type) + 's',
+                '${_typeLabel(type)}s',
                 style: TextStyle(fontFamily: 'Poppins', 
                   fontWeight: FontWeight.w700,
                   color: context.appTextPrimary,
@@ -643,9 +642,7 @@ class _PregnancyMedicinesScreenState
   Widget _buildMedicineCard(PregnancyMedicine m, Color color) {
     final nearingEnd = _isNearingEnd(m);
     final expired = _isExpired(m);
-    final daysLeft = m.endDate != null
-        ? m.endDate!.difference(DateTime.now()).inDays
-        : null;
+    final daysLeft = m.endDate?.difference(DateTime.now()).inDays;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -748,7 +745,7 @@ class _PregnancyMedicinesScreenState
                             _chip(
                               icon: Icons.person_rounded,
                               label: 'Dr. ${m.prescribedBy}',
-                              color: const Color(0xFF7B1FA2),
+                              color: const Color(0xFF633058),
                             ),
                         ],
                       ),
@@ -799,9 +796,9 @@ class _PregnancyMedicinesScreenState
           ),
           // Action row
           Container(
-            decoration: BoxDecoration(
-              color: const Color(0xFFF7F4F8),
-              borderRadius: const BorderRadius.vertical(
+            decoration: const BoxDecoration(
+              color: Color(0xFFF7F4F8),
+              borderRadius: BorderRadius.vertical(
                   bottom: Radius.circular(14)),
             ),
             child: Row(
@@ -814,7 +811,7 @@ class _PregnancyMedicinesScreenState
                     style: TextButton.styleFrom(
                       foregroundColor: color,
                       textStyle:
-                          TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600),
+                          const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600),
                       padding: const EdgeInsets.symmetric(vertical: 10),
                     ),
                   ),
@@ -828,7 +825,7 @@ class _PregnancyMedicinesScreenState
                     style: TextButton.styleFrom(
                       foregroundColor: Colors.red,
                       textStyle:
-                          TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600),
+                          const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600),
                       padding: const EdgeInsets.symmetric(vertical: 10),
                     ),
                   ),
@@ -1015,7 +1012,7 @@ class _AddMedicineSheetState extends ConsumerState<_AddMedicineSheet> {
         decoration: BoxDecoration(
           color: context.appSurface,
           borderRadius:
-              BorderRadius.vertical(top: Radius.circular(24)),
+              const BorderRadius.vertical(top: Radius.circular(24)),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1191,7 +1188,7 @@ class _AddMedicineSheetState extends ConsumerState<_AddMedicineSheet> {
                                 .map((f) => DropdownMenuItem(
                                       value: f,
                                       child: Text(f,
-                                          style: TextStyle(fontFamily: 'Poppins', 
+                                          style: const TextStyle(fontFamily: 'Poppins', 
                                               fontSize: 13)),
                                     ))
                                 .toList(),
@@ -1325,7 +1322,7 @@ class _AddMedicineSheetState extends ConsumerState<_AddMedicineSheet> {
                             const Icon(Icons.notifications_rounded,
                                 color: AppColors.primary, size: 18),
                             const SizedBox(width: 10),
-                            Expanded(
+                            const Expanded(
                               child: Text(
                                 'Enable Reminders',
                                 style: TextStyle(fontFamily: 'Poppins', 
@@ -1337,7 +1334,7 @@ class _AddMedicineSheetState extends ConsumerState<_AddMedicineSheet> {
                               value: _reminderEnabled,
                               onChanged: (v) =>
                                   setState(() => _reminderEnabled = v),
-                              activeColor: AppColors.primary,
+                              activeThumbColor: AppColors.primary,
                             ),
                           ],
                         ),
@@ -1388,7 +1385,7 @@ class _AddMedicineSheetState extends ConsumerState<_AddMedicineSheet> {
                     elevation: 0,
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14)),
-                    textStyle: TextStyle(fontFamily: 'Poppins', 
+                    textStyle: const TextStyle(fontFamily: 'Poppins', 
                         fontWeight: FontWeight.w700, fontSize: 15),
                   ),
                   child: _saving
@@ -1541,14 +1538,14 @@ class _MedicineCardSkeleton extends StatelessWidget {
               BoxShadow(color: Color(0x0A000000), blurRadius: 6)
             ],
           ),
-          child: Column(
+          child: const Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
                   SkeletonBox(width: 44, height: 44, radius: 11),
-                  const SizedBox(width: 12),
-                  const Expanded(
+                  SizedBox(width: 12),
+                  Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -1561,12 +1558,12 @@ class _MedicineCardSkeleton extends StatelessWidget {
                       ],
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  const SkeletonBox(width: 72, height: 26, radius: 13),
+                  SizedBox(width: 8),
+                  SkeletonBox(width: 72, height: 26, radius: 13),
                 ],
               ),
-              const SizedBox(height: 10),
-              const Row(
+              SizedBox(height: 10),
+              Row(
                 children: [
                   SkeletonBox(width: 80, height: 20, radius: 10),
                   SizedBox(width: 6),

@@ -4,11 +4,9 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import '../../../core/services/msg91_service.dart';
 import '../../referral/referral_service.dart';
 
 // ── MPIN hash: SHA-256(uid:mpin:MEDNU_V1) ────────────────────────────────────
@@ -40,6 +38,7 @@ class AuthState {
   final User? user;
   final bool isLoading;
   final String? error;
+  final String? verificationId;
   final int loginAttempts;
   final DateTime? lockedUntil;
 
@@ -47,6 +46,7 @@ class AuthState {
     this.user,
     this.isLoading = false,
     this.error,
+    this.verificationId,
     this.loginAttempts = 0,
     this.lockedUntil,
   });
@@ -55,6 +55,7 @@ class AuthState {
     User? user,
     bool? isLoading,
     String? error,
+    String? verificationId,
     int? loginAttempts,
     DateTime? lockedUntil,
   }) =>
@@ -62,6 +63,7 @@ class AuthState {
         user: user ?? this.user,
         isLoading: isLoading ?? this.isLoading,
         error: error,
+        verificationId: verificationId ?? this.verificationId,
         loginAttempts: loginAttempts ?? this.loginAttempts,
         lockedUntil: lockedUntil ?? this.lockedUntil,
       );
@@ -75,30 +77,18 @@ class AuthNotifier extends StateNotifier<AuthState> {
     aOptions: AndroidOptions(encryptedSharedPreferences: true),
   );
 
-  // Phone stored between sendOtp() and verifyOtp() calls
-  String? _pendingPhone;
+  // In-flight OTP state
+  PhoneAuthCredential? _autoVerifiedCredential;
+  int? _resendToken;
 
   // Lock policy
   static const _maxAttempts = 5;
   static const _lockMinutes = 15;
 
-  // Local MPIN cache keys (for MPIN-first login on same device)
-  static const _localHashKey  = 'local_mpin_hash';
-  static const _localUidKey   = 'local_mpin_uid';
-  static const _localPhoneKey = 'local_mpin_phone';
-
-  late final StreamSubscription<User?> _authSub;
-
   AuthNotifier() : super(const AuthState()) {
-    _authSub = _auth.authStateChanges().listen((user) {
+    _auth.authStateChanges().listen((user) {
       state = state.copyWith(user: user);
     });
-  }
-
-  @override
-  void dispose() {
-    _authSub.cancel();
-    super.dispose();
   }
 
   // ── Check if current authenticated user has a Firestore profile ──────────
@@ -132,43 +122,76 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
-  // ── Send OTP via MSG91 ────────────────────────────────────────────────────
+  // ── Send OTP ──────────────────────────────────────────────────────────────
   Future<void> sendOtp(String phone, {bool isResend = false}) async {
+    _autoVerifiedCredential = null;
     state = state.copyWith(isLoading: true, error: null);
-    try {
-      _pendingPhone = phone;
-      if (isResend) {
-        await Msg91Service.resendOtp(phone);
-      } else {
-        await Msg91Service.sendOtp(phone);
-      }
-      state = state.copyWith(isLoading: false);
-    } catch (e) {
-      debugPrint('🔴 MSG91 sendOtp error → $e');
-      final msg = e.toString().replaceFirst('Exception: ', '');
-      state = state.copyWith(isLoading: false, error: msg);
-      throw Exception(msg);
-    }
+
+    final completer = Completer<void>();
+
+    await _auth.verifyPhoneNumber(
+      phoneNumber: phone,
+      timeout: const Duration(seconds: 60),
+      forceResendingToken: isResend ? _resendToken : null,
+
+      verificationCompleted: (PhoneAuthCredential credential) {
+        _autoVerifiedCredential = credential;
+        state = state.copyWith(isLoading: false);
+        if (!completer.isCompleted) completer.complete();
+      },
+
+      verificationFailed: (FirebaseAuthException e) {
+        debugPrint('🔴 OTP error → ${e.code}: ${e.message}');
+        final msg = _friendlyError(e.code);
+        state = state.copyWith(isLoading: false, error: msg);
+        if (!completer.isCompleted) completer.completeError(Exception(msg));
+      },
+
+      codeSent: (String verificationId, int? resendToken) {
+        _resendToken = resendToken;
+        state = state.copyWith(
+            isLoading: false, verificationId: verificationId);
+        if (!completer.isCompleted) completer.complete();
+      },
+
+      codeAutoRetrievalTimeout: (String verificationId) {
+        state = state.copyWith(verificationId: verificationId);
+        if (!completer.isCompleted) completer.complete();
+      },
+    );
+
+    return completer.future;
   }
 
-  // ── Verify OTP via MSG91 → Firebase custom token sign-in ─────────────────
+  // ── Verify OTP → Firebase sign-in ────────────────────────────────────────
   Future<void> verifyOtp(String otp) async {
     state = state.copyWith(isLoading: true, error: null);
     try {
-      final phone = _pendingPhone;
-      if (phone == null) {
-        throw Exception('OTP session expired. Please request a new code.');
+      PhoneAuthCredential credential;
+      if (_autoVerifiedCredential != null) {
+        credential = _autoVerifiedCredential!;
+        _autoVerifiedCredential = null;
+      } else {
+        final vid = state.verificationId;
+        if (vid == null) {
+          throw Exception(
+              'OTP session expired. Please request a new code.');
+        }
+        credential = PhoneAuthProvider.credential(
+            verificationId: vid, smsCode: otp);
       }
-      final customToken = await Msg91Service.verifyOtp(phone, otp);
-      await _auth.signInWithCustomToken(customToken);
-      _pendingPhone = null;
-      await _sec.write(key: 'last_phone', value: phone);
+      await _auth.signInWithCredential(credential);
       state = state.copyWith(isLoading: false);
-    } catch (e) {
-      debugPrint('🔴 MSG91 verifyOtp error → $e');
-      final msg = e.toString().replaceFirst('Exception: ', '');
+    } on FirebaseAuthException catch (e) {
+      debugPrint('🔴 Firebase Auth Error → ${e.code}: ${e.message}');
+      final msg = _friendlyError(e.code);
       state = state.copyWith(isLoading: false, error: msg);
       throw Exception(msg);
+    } catch (e) {
+      debugPrint('🔴 OTP verify error → $e');
+      final msg = e.toString().replaceFirst('Exception: ', '');
+      state = state.copyWith(isLoading: false, error: msg);
+      rethrow;
     }
   }
 
@@ -181,11 +204,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
     required String gender,
     String? email,
     String? city,
+    String? bloodGroup,
     String? referralCode,
-    String? photoUrl,
-    String? lastCheckup,
-    String? allergies,
-    String? chronicConditions,
   }) async {
     state = state.copyWith(isLoading: true, error: null);
     try {
@@ -200,22 +220,18 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final batch = _db.batch();
       final now = FieldValue.serverTimestamp();
 
-      final photoUrlValue = photoUrl ?? '';
-
       batch.set(_db.collection('users').doc(uid), {
         'uid':                uid,
         'name':               name,
         'phone':              phone,
         'email':              email ?? '',
-        'photoUrl':           photoUrlValue,
+        'photoUrl':           '',
         'isPhoneVerified':    true,
         'isProfileCompleted': true,
         'gender':             gender,
         'dob':                dob,
         if (city != null && city.isNotEmpty) 'city': city,
-        if (lastCheckup != null && lastCheckup.isNotEmpty) 'lastCheckup': lastCheckup,
-        if (allergies != null && allergies.isNotEmpty) 'allergies': allergies,
-        if (chronicConditions != null && chronicConditions.isNotEmpty) 'chronicConditions': chronicConditions,
+        if (bloodGroup != null && bloodGroup.isNotEmpty) 'bloodGroup': bloodGroup,
         'role':               'patient',
         'status':             'active',
         'createdAt':          now,
@@ -224,7 +240,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
         'familyMembers':      [],
         'isPremium':          false,
         'walletBalance':      0.0,
-        'mednuMoneyBalance':  0.0,
         'referralCode':       myReferralCode,
         'referralPoints':     0,
         'rewardPoints':       0,
@@ -243,7 +258,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
         'uid': uid, 'phone': phone, 'name': name, 'dob': dob, 'gender': gender,
         'email': email ?? '',
         if (city != null) 'city': city,
-        'photoUrl': photoUrlValue, 'isActive': true, 'createdAt': now, 'updatedAt': now,
+        if (bloodGroup != null) 'bloodGroup': bloodGroup,
+        'photoUrl': '', 'isActive': true, 'createdAt': now, 'updatedAt': now,
       });
 
       batch.set(_db.collection('notifications').doc(uid), {
@@ -285,110 +301,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
         'lockedUntil':   FieldValue.delete(),
       });
 
-      // Write to phone_index so any device can detect this user has MPIN.
-      // Fire-and-forget: this is a secondary optimisation index — failure here
-      // must not block MPIN creation (the hash is already stored on users/{uid}).
-      // Use the stored phone from secure storage because custom-token auth
-      // does not populate currentUser.phoneNumber.
-      final phone = (await _sec.read(key: 'last_phone')) ?? '';
-      if (phone.isNotEmpty) {
-        _db.collection('phone_index').doc(phone).set({
-          'hasMpin':   true,
-          'uid':       uid,
-          'updatedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true)).ignore();
-      }
-
-      // Also cache locally for same-device instant verification (no network)
-      await _sec.write(key: _localHashKey,  value: mpinHash);
-      await _sec.write(key: _localUidKey,   value: uid);
-      if (phone.isNotEmpty) await _sec.write(key: _localPhoneKey, value: phone);
-
       state = state.copyWith(isLoading: false, loginAttempts: 0, lockedUntil: null);
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
       rethrow;
     }
-  }
-
-  // ── Local MPIN helpers (MPIN-first login on same device) ─────────────────
-
-  /// Returns the phone number that has a locally cached MPIN on this device.
-  Future<String?> getLocalMpinPhone() => _sec.read(key: _localPhoneKey);
-
-  /// Checks Firestore phone_index — works on ANY device, no auth required.
-  Future<bool> checkPhoneHasMpin(String phone) async {
-    try {
-      final doc = await _db.collection('phone_index').doc(phone).get();
-      return doc.exists && (doc.data()?['hasMpin'] == true);
-    } catch (_) {
-      return false;
-    }
-  }
-
-  // ── MPIN-first login on ANY device (Option A) ────────────────────────────
-  // Calls verifyMpinAndIssueToken cloud function which verifies the MPIN
-  // server-side and returns a custom token — no OTP required on any device.
-  Future<void> verifyMpinAndSignIn(String mpin, String phone) async {
-    state = state.copyWith(isLoading: true, error: null);
-    try {
-      final callable = FirebaseFunctions.instance
-          .httpsCallable('verifyMpinAndIssueToken');
-      final result = await callable.call({'phone': phone, 'mpin': mpin});
-      final customToken = result.data['customToken'] as String;
-      await _auth.signInWithCustomToken(customToken);
-
-      // Cache locally so same-device future logins skip even the network call.
-      final uid = _auth.currentUser?.uid;
-      if (uid != null) {
-        final mpinHash = _hashMpin(mpin, uid);
-        await _sec.write(key: _localHashKey,  value: mpinHash);
-        await _sec.write(key: _localUidKey,   value: uid);
-        await _sec.write(key: _localPhoneKey, value: phone);
-      }
-      await _sec.write(key: 'last_phone', value: phone);
-
-      state = state.copyWith(isLoading: false, loginAttempts: 0, lockedUntil: null);
-    } on FirebaseFunctionsException catch (e) {
-      final msg = e.message ?? 'Login failed. Please try again.';
-      state = state.copyWith(isLoading: false, error: msg);
-      throw Exception(msg);
-    } catch (e) {
-      final msg = e.toString().replaceFirst('Exception: ', '');
-      state = state.copyWith(isLoading: false, error: msg);
-      throw Exception(msg);
-    }
-  }
-
-  /// True if this device has a locally cached MPIN for [phone] (same-device fast path).
-  Future<bool> hasLocalMpin(String phone) async {
-    try {
-      final storedPhone = await _sec.read(key: _localPhoneKey);
-      final storedHash  = await _sec.read(key: _localHashKey);
-      return storedPhone == phone && storedHash != null;
-    } catch (_) {
-      return false;
-    }
-  }
-
-  /// Verifies MPIN without requiring an active Firebase Auth session.
-  Future<bool> verifyMpinLocal(String mpin, String phone) async {
-    try {
-      final storedPhone = await _sec.read(key: _localPhoneKey);
-      final storedHash  = await _sec.read(key: _localHashKey);
-      final storedUid   = await _sec.read(key: _localUidKey);
-      if (storedPhone != phone || storedHash == null || storedUid == null) {
-        return false;
-      }
-      return _hashMpin(mpin, storedUid) == storedHash;
-    } catch (_) {
-      return false;
-    }
-  }
-
-  /// Returns true if there is an active Firebase Auth session.
-  Future<bool> signInSilentlyIfPossible() async {
-    return _auth.currentUser != null;
   }
 
   // ── Verify MPIN ───────────────────────────────────────────────────────────
@@ -444,17 +361,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
           if (fcmToken != null) 'fcmToken': fcmToken,
         });
         _auditLogin(uid, success: true);
-
-        // Heal phone_index so future logins can skip OTP.
-        final phone = await _sec.read(key: 'last_phone') ?? '';
-        if (phone.isNotEmpty) {
-          _db.collection('phone_index').doc(phone).set({
-            'hasMpin':   true,
-            'uid':       uid,
-            'updatedAt': FieldValue.serverTimestamp(),
-          }, SetOptions(merge: true)).ignore();
-        }
-
         state = state.copyWith(
             isLoading: false, loginAttempts: 0, lockedUntil: null);
         return true;
@@ -500,12 +406,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   // ── Sign out ──────────────────────────────────────────────────────────────
   Future<void> signOut() async {
     await _auth.signOut();
-    await Future.wait([
-      _sec.delete(key: 'mpin_set'),
-      _sec.delete(key: _localHashKey),
-      _sec.delete(key: _localUidKey),
-      _sec.delete(key: _localPhoneKey),
-    ]);
+    await _sec.delete(key: 'mpin_set');
     state = const AuthState();
   }
 
@@ -545,11 +446,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
     try {
       final uid = _auth.currentUser?.uid;
       if (uid == null) throw Exception('Session expired. Please sign in again.');
-      // Write to both collections atomically so every reader sees the same URL.
-      final batch = _db.batch();
-      batch.update(_db.collection('users').doc(uid),            {'photoUrl': photoUrl});
-      batch.update(_db.collection('patient_profiles').doc(uid), {'photoUrl': photoUrl});
-      await batch.commit();
+      await _db
+          .collection('users')
+          .doc(uid)
+          .update({'photoUrl': photoUrl});
     } catch (e) {
       state = state.copyWith(error: e.toString());
       rethrow;
@@ -560,16 +460,15 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<void> addFamilyMember(Map<String, dynamic> member) async {
     try {
       final docRef = _db.collection('users').doc(_uid);
-      final snap = await docRef.get();
-      final current = _parseFamilyList(snap.data()?['familyMembers']);
-      if (current.length >= 4) {
-        throw Exception('You can only add up to 4 family members.');
-      }
-      current.add({
-        ...member,
-        'id': DateTime.now().millisecondsSinceEpoch.toString(),
+      await _db.runTransaction((tx) async {
+        final snap = await tx.get(docRef);
+        final current = _parseFamilyList(snap.data()?['familyMembers']);
+        current.add({
+          ...member,
+          'id': DateTime.now().millisecondsSinceEpoch.toString(),
+        });
+        tx.set(docRef, {'familyMembers': current}, SetOptions(merge: true));
       });
-      await docRef.update({'familyMembers': current});
     } catch (e) {
       state = state.copyWith(error: e.toString());
       rethrow;
@@ -579,12 +478,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<void> removeFamilyMember(Map<String, dynamic> member) async {
     try {
       final docRef = _db.collection('users').doc(_uid);
-      final snap = await docRef.get();
-      final current = _parseFamilyList(snap.data()?['familyMembers']);
-      current.removeWhere((m) => member['id'] != null
-          ? m['id'] == member['id']
-          : m['name'] == member['name'] && m['relation'] == member['relation']);
-      await docRef.update({'familyMembers': current});
+      await _db.runTransaction((tx) async {
+        final snap = await tx.get(docRef);
+        final current = _parseFamilyList(snap.data()?['familyMembers']);
+        current.removeWhere((m) => member['id'] != null
+            ? m['id'] == member['id']
+            : m['name'] == member['name'] && m['relation'] == member['relation']);
+        tx.set(docRef, {'familyMembers': current}, SetOptions(merge: true));
+      });
     } catch (e) {
       state = state.copyWith(error: e.toString());
       rethrow;
@@ -597,20 +498,22 @@ class AuthNotifier extends StateNotifier<AuthState> {
   ) async {
     try {
       final docRef = _db.collection('users').doc(_uid);
-      final snap = await docRef.get();
-      final current = _parseFamilyList(snap.data()?['familyMembers']);
-      final idx = current.indexWhere((m) => oldMember['id'] != null
-          ? m['id'] == oldMember['id']
-          : m['name'] == oldMember['name'] &&
-              m['relation'] == oldMember['relation']);
-      if (idx != -1) {
-        current[idx] = {
-          ...newMember,
-          'id': oldMember['id'] ??
-              DateTime.now().millisecondsSinceEpoch.toString(),
-        };
-      }
-      await docRef.update({'familyMembers': current});
+      await _db.runTransaction((tx) async {
+        final snap = await tx.get(docRef);
+        final current = _parseFamilyList(snap.data()?['familyMembers']);
+        final idx = current.indexWhere((m) => oldMember['id'] != null
+            ? m['id'] == oldMember['id']
+            : m['name'] == oldMember['name'] &&
+                m['relation'] == oldMember['relation']);
+        if (idx != -1) {
+          current[idx] = {
+            ...newMember,
+            'id': oldMember['id'] ??
+                DateTime.now().millisecondsSinceEpoch.toString(),
+          };
+        }
+        tx.set(docRef, {'familyMembers': current}, SetOptions(merge: true));
+      });
     } catch (e) {
       state = state.copyWith(error: e.toString());
       rethrow;
@@ -642,6 +545,21 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }).ignore();
   }
 
+  String _friendlyError(String code) => switch (code) {
+        'invalid-phone-number' =>
+          'Invalid phone number. Please check and try again.',
+        'too-many-requests' =>
+          'Too many attempts. Please wait a while and try again.',
+        'invalid-verification-code' =>
+          'Incorrect OTP. Please check and try again.',
+        'session-expired'        => 'OTP expired. Please request a new one.',
+        'quota-exceeded'         => 'SMS quota exceeded. Please try again later.',
+        'network-request-failed' => 'No internet connection. Please check and try again.',
+        'missing-client-identifier' ||
+        'missing-app-credential'    =>
+          'Verification service unavailable. Please try again.',
+        _ => 'Error ($code). Please try again.',
+      };
 }
 
 // ── Providers ─────────────────────────────────────────────────────────────────

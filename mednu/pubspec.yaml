@@ -125,13 +125,14 @@ dev_dependencies:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/images/mednu_logo.png"
+  image_path: "assets/images/mednu_icon_flat.png"
   min_sdk_android: 21
-  adaptive_icon_background: "#C2185B"
-  adaptive_icon_foreground: "assets/images/mednu_logo_fg.png"
+  remove_alpha_ios: true
+  adaptive_icon_background: "#522546"
+  adaptive_icon_foreground: "assets/images/mednu_icon_foreground.png"
 
 flutter_native_splash:
-  color: "#C2185B"
+  color: "#522546"
   image: assets/images/mednu_splash.png
   android: true
   ios: true

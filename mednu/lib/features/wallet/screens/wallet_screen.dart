@@ -126,7 +126,7 @@ class WalletScreen extends ConsumerWidget {
                   // Transaction history header
                   Row(
                     children: [
-                      Text('Transaction History', style: AppTextStyles.h4),
+                      const Text('Transaction History', style: AppTextStyles.h4),
                       const Spacer(),
                       txAsync.maybeWhen(
                         data: (list) => list.isNotEmpty
@@ -230,15 +230,15 @@ class WalletScreen extends ConsumerWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Wallet Help', style: AppTextStyles.h3),
+            const Text('Wallet Help', style: AppTextStyles.h3),
             SizedBox(height: R.h(ctx, 16)),
-            _HelpItem(Icons.add_circle_outline_rounded, 'Add Money',
+            const _HelpItem(Icons.add_circle_outline_rounded, 'Add Money',
                 'Add funds using UPI, card, or net banking. Reflects instantly.'),
-            _HelpItem(Icons.security_rounded, 'Secure',
+            const _HelpItem(Icons.security_rounded, 'Secure',
                 'All transactions use atomic writes. No double deductions ever.'),
-            _HelpItem(Icons.replay_rounded, 'Refunds',
+            const _HelpItem(Icons.replay_rounded, 'Refunds',
                 'Refunds are credited automatically within 24 hours.'),
-            _HelpItem(Icons.support_agent_rounded, 'Support',
+            const _HelpItem(Icons.support_agent_rounded, 'Support',
                 'Contact support@mednu.in for any wallet issues.'),
             SizedBox(height: R.h(ctx, 8)),
           ],
@@ -468,12 +468,12 @@ class _MednuMoneyCard extends StatelessWidget {
           SizedBox(height: R.h(context, 10)),
           Row(
             children: [
-              Expanded(
+              const Expanded(
                 child: _MednuMoneyBullet(Icons.check_circle_outline_rounded,
                     'Use for consultations & bookings'),
               ),
               SizedBox(width: R.w(context, 12)),
-              Expanded(
+              const Expanded(
                 child: _MednuMoneyBullet(
                     Icons.block_rounded, 'Cannot transfer or withdraw'),
               ),
@@ -1136,7 +1136,7 @@ class _AddMoneySheetState extends ConsumerState<_AddMoneySheet> {
         'name': 'MedNU Healthcare',
         'description': 'Wallet top-up',
         'prefill': const {'contact': '', 'email': ''},
-        'theme': {'color': '#C2185B'},
+        'theme': {'color': '#522546'},
       });
     } catch (e) {
       if (!mounted) return;
@@ -1241,7 +1241,7 @@ class _AddMoneySheetState extends ConsumerState<_AddMoneySheet> {
           ),
           SizedBox(height: R.h(context, 20)),
 
-          Text('Add Money to Wallet', style: AppTextStyles.h3),
+          const Text('Add Money to Wallet', style: AppTextStyles.h3),
           SizedBox(height: R.h(context, 6)),
           Text('Amount will be credited instantly',
               style: AppTextStyles.bodySmall
@@ -1406,7 +1406,7 @@ class _TransferSheetState extends ConsumerState<_TransferSheet> {
             ),
           ),
           SizedBox(height: R.h(context, 20)),
-          Text('Transfer Money', style: AppTextStyles.h3),
+          const Text('Transfer Money', style: AppTextStyles.h3),
           SizedBox(height: R.h(context, 4)),
           Text('Send wallet balance to another MedNU user',
               style: AppTextStyles.bodySmall
@@ -1576,7 +1576,7 @@ class _StatementSheetState extends ConsumerState<_StatementSheet> {
             padding: EdgeInsets.symmetric(horizontal: R.p(context, 20)),
             child: Row(
               children: [
-                Expanded(child: Text('Statement', style: AppTextStyles.h3)),
+                const Expanded(child: Text('Statement', style: AppTextStyles.h3)),
                 txAsync.maybeWhen(
                   data: (list) => IconButton(
                     icon: const Icon(Icons.share_rounded),
@@ -1618,7 +1618,7 @@ class _StatementSheetState extends ConsumerState<_StatementSheet> {
                 itemCount: 6,
                 itemBuilder: (_, __) => Padding(
                   padding: EdgeInsets.only(bottom: R.p(context, 10)),
-                  child: SkeletonBox(width: double.infinity, height: 70),
+                  child: const SkeletonBox(width: double.infinity, height: 70),
                 ),
               ),
               error: (e, _) => AppErrorState(
@@ -1628,7 +1628,7 @@ class _StatementSheetState extends ConsumerState<_StatementSheet> {
               data: (all) {
                 final list = _filtered(all);
                 if (list.isEmpty) {
-                  return AppEmptyState(
+                  return const AppEmptyState(
                     icon: Icons.receipt_long_rounded,
                     title: 'No transactions yet',
                     message: 'Your transaction history will appear here once you start using your wallet.',
@@ -1822,7 +1822,7 @@ class _RefundsSheet extends StatelessWidget {
                       color: const Color(0xFF1565C0), size: R.w(context, 20)),
                 ),
                 SizedBox(width: R.w(context, 10)),
-                Text('My Refunds', style: AppTextStyles.h3),
+                const Text('My Refunds', style: AppTextStyles.h3),
                 const Spacer(),
                 if (refunds.isNotEmpty)
                   Container(

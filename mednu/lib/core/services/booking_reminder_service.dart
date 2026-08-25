@@ -1,97 +1,69 @@
 import 'dart:io';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:flutter_timezone/flutter_timezone.dart';
-import 'package:timezone/timezone.dart' as tz;
-import 'package:timezone/data/latest_all.dart' as tz_data;
+import 'scheduled_reminder_queue.dart';
 import '../../features/my_services/models/unified_booking.dart';
 
-/// Schedules and cancels local reminders for all patient booking types.
+/// Queues and cancels reminders for all patient booking types via the
+/// server-driven `scheduled_reminders` queue (see [ScheduledReminderQueue]) —
+/// delivery is a Cloud Function push, not a local device alarm, so a
+/// reminder still arrives even if the app is fully closed by the time it's
+/// due.
 ///
-/// Notification IDs are derived deterministically from booking IDs in the
-/// range 2000–2499, so [cancelAllReminders] can sweep the entire range.
+/// Doc IDs are deterministic (`{uid}_booking_{bookingId}`) so re-syncing a
+/// booking overwrites its existing reminder rather than duplicating it.
 class BookingReminderService {
   BookingReminderService._();
 
-  static final _plugin = FlutterLocalNotificationsPlugin();
+  static const _channelId = 'booking_reminders';
+  static const _channelName = 'Appointment & Service Reminders';
   static bool _initialised = false;
 
-  static const _channelId   = 'booking_reminders';
-  static const _channelName = 'Appointment & Service Reminders';
-
-  static const _notifDetails = NotificationDetails(
-    android: AndroidNotificationDetails(
-      _channelId,
-      _channelName,
-      channelDescription: 'Reminders before your upcoming appointments and services',
-      importance: Importance.high,
-      priority: Priority.high,
-      icon: '@mipmap/ic_launcher',
-      enableVibration: true,
-      playSound: true,
-    ),
-    iOS: DarwinNotificationDetails(
-      presentAlert: true,
-      presentBadge: true,
-      presentSound: true,
-    ),
-  );
-
-  // ── Initialisation ──────────────────────────────────────────────────────────
-
-  static Future<void> init() async {
+  /// Creates the `booking_reminders` channel the FCM push references — the
+  /// old local-scheduling path created it implicitly on first zonedSchedule
+  /// call; nothing does that anymore now that firing is server-side.
+  static Future<void> _ensureInit() async {
     if (_initialised) return;
-
-    tz_data.initializeTimeZones();
-    try {
-      final tzName = await FlutterTimezone.getLocalTimezone();
-      tz.setLocalLocation(tz.getLocation(tzName));
-    } catch (_) {
-      tz.setLocalLocation(tz.UTC);
-    }
-
-    await _plugin.initialize(
-      const InitializationSettings(
-        android: AndroidInitializationSettings('@mipmap/ic_launcher'),
-        iOS: DarwinInitializationSettings(),
-      ),
-    );
-
     if (Platform.isAndroid) {
-      final androidPlugin = _plugin.resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>();
-      await androidPlugin?.createNotificationChannel(
-        const AndroidNotificationChannel(
-          _channelId,
-          _channelName,
-          description: 'Reminders before your upcoming appointments and services',
-          importance: Importance.high,
-          playSound: true,
-          enableVibration: true,
+      final plugin = FlutterLocalNotificationsPlugin();
+      await plugin.initialize(
+        const InitializationSettings(
+          android: AndroidInitializationSettings('@mipmap/ic_launcher'),
         ),
       );
+      await plugin
+          .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>()
+          ?.createNotificationChannel(
+            const AndroidNotificationChannel(
+              _channelId,
+              _channelName,
+              description: 'Reminders before your upcoming appointments and services',
+              importance: Importance.high,
+              playSound: true,
+              enableVibration: true,
+            ),
+          );
     }
-
     _initialised = true;
   }
 
-  // ── Sync ────────────────────────────────────────────────────────────────────
-
-  /// Cancel then re-schedule reminders for the provided [bookings].
+  /// Cancel then re-queue reminders for the provided [bookings].
   ///
   /// Every booking's existing reminder is cancelled first (handles stale
-  /// notifications from previous sessions), then a new reminder is scheduled
-  /// for each upcoming active booking.
+  /// reminders from a previous minutesBefore setting), then a new one is
+  /// queued for each upcoming active booking.
   static Future<void> syncReminders(
+    String uid,
     List<UnifiedBooking> bookings,
     int minutesBefore,
   ) async {
-    if (!_initialised) await init();
-
+    await _ensureInit();
     final now = DateTime.now();
 
     for (final booking in bookings) {
-      final id = _notifId(booking.id);
-      await _plugin.cancel(id);
+      final docId = _docId(uid, booking.id);
+      await ScheduledReminderQueue.cancel(docId);
 
       if (!booking.isActive) continue;
 
@@ -102,45 +74,37 @@ class BookingReminderService {
       if (!reminderTime.isAfter(now)) continue;
 
       final (:title, :body) = _buildMessage(booking, minutesBefore);
-      await _schedule(id: id, title: title, body: body, when: reminderTime);
+      await ScheduledReminderQueue.queue(
+        docId: docId,
+        uid: uid,
+        role: 'patient',
+        title: title,
+        body: body,
+        channelId: _channelId,
+        fireAt: reminderTime,
+        data: {'type': 'booking', 'bookingId': booking.id},
+      );
     }
   }
 
   /// Cancel a single booking's reminder (e.g. after manual cancellation).
-  static Future<void> cancelReminder(String bookingId) async {
-    await _plugin.cancel(_notifId(bookingId));
-  }
+  static Future<void> cancelReminder(String uid, String bookingId) =>
+      ScheduledReminderQueue.cancel(_docId(uid, bookingId));
 
-  /// Cancel all booking reminders by sweeping the reserved ID range 2000–2499.
-  static Future<void> cancelAllReminders() async {
-    for (int id = 2000; id < 2500; id++) {
-      await _plugin.cancel(id);
-    }
+  /// Cancel every booking reminder queued for this user.
+  static Future<void> cancelAllReminders(String uid) async {
+    final snap = await FirebaseFirestore.instance
+        .collection('scheduled_reminders')
+        .where('uid', isEqualTo: uid)
+        .get();
+    final prefix = '${uid}_booking_';
+    final ids = snap.docs.map((d) => d.id).where((id) => id.startsWith(prefix));
+    await ScheduledReminderQueue.cancelMany(ids);
   }
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
 
-  static Future<void> _schedule({
-    required int id,
-    required String title,
-    required String body,
-    required DateTime when,
-  }) async {
-    try {
-      await _plugin.zonedSchedule(
-        id,
-        title,
-        body,
-        tz.TZDateTime.from(when, tz.local),
-        _notifDetails,
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        uiLocalNotificationDateInterpretation:
-            UILocalNotificationDateInterpretation.absoluteTime,
-      );
-    } catch (_) {
-      // Exact alarm permission may be denied on Android 12+; silently skip.
-    }
-  }
+  static String _docId(String uid, String bookingId) => '${uid}_booking_$bookingId';
 
   static DateTime? _parseBookingTime(UnifiedBooking booking) {
     try {
@@ -197,8 +161,4 @@ class BookingReminderService {
         );
     }
   }
-
-  /// Deterministic notification ID in range 2000–2499.
-  static int _notifId(String bookingId) =>
-      2000 + (bookingId.hashCode.abs() % 500);
 }

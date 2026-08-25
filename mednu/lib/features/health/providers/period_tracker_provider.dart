@@ -116,9 +116,7 @@ class PeriodTrackerState {
   DateTime? get lastPeriodStart =>
       entries.isEmpty ? null : entries.first.startDate;
 
-  DateTime? get nextPeriodDate => lastPeriodStart == null
-      ? null
-      : lastPeriodStart!.add(Duration(days: avgCycleLength));
+  DateTime? get nextPeriodDate => lastPeriodStart?.add(Duration(days: avgCycleLength));
 
   int get daysToNextPeriod {
     if (nextPeriodDate == null) return 0;
@@ -394,11 +392,13 @@ class PeriodTrackerNotifier extends StateNotifier<PeriodTrackerState> {
 
       if (state.remindersEnabled && state.nextPeriodDate != null) {
         await HealthNotificationService.schedulePeriodReminder(
+          _uid!,
           state.nextPeriodDate!,
           state.reminderDaysBefore,
         );
       }
       await HealthNotificationService.schedulePeriodWellnessNotifications(
+        uid: _uid!,
         periodStartDate: startDate,
       );
     } catch (_) {}
@@ -451,6 +451,7 @@ class PeriodTrackerNotifier extends StateNotifier<PeriodTrackerState> {
     bool? remindersEnabled,
     int? reminderDaysBefore,
   }) async {
+    if (_uid == null) return;
     state = state.copyWith(
       avgCycleLength: cycleLength,
       periodDuration: periodDuration,
@@ -463,11 +464,12 @@ class PeriodTrackerNotifier extends StateNotifier<PeriodTrackerState> {
 
     if (state.remindersEnabled && state.nextPeriodDate != null) {
       await HealthNotificationService.schedulePeriodReminder(
+        _uid!,
         state.nextPeriodDate!,
         state.reminderDaysBefore,
       );
     } else if (!state.remindersEnabled) {
-      await HealthNotificationService.cancelPeriodReminder();
+      await HealthNotificationService.cancelPeriodReminder(_uid!);
     }
   }
 

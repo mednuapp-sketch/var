@@ -35,7 +35,7 @@ class FavouriteDoctorsScreen extends StatelessWidget {
               background: Container(
                 decoration: const BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [Color(0xFF880E4F), Color(0xFFC2185B), Color(0xFF7B1FA2)],
+                    colors: [Color(0xFF33172C), Color(0xFF522546), Color(0xFF633058)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
@@ -148,7 +148,7 @@ class FavouriteDoctorsScreen extends StatelessWidget {
                 }
                 final docs = snap.data?.docs ?? [];
                 if (docs.isEmpty) {
-                  return SliverFillRemaining(
+                  return const SliverFillRemaining(
                     child: AppEmptyState(
                       icon: Icons.favorite_border_rounded,
                       title: 'No favourites yet',

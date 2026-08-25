@@ -28,7 +28,7 @@ class MedicineOrdersScreen extends ConsumerWidget {
       backgroundColor: isDark ? AppColors.darkBase : AppColors.background,
       body: CustomScrollView(
         slivers: [
-          const GradientAppBar(title: 'Medicine Orders'),
+          const SliverToBoxAdapter(child: GradientAppBar(title: 'Medicine Orders')),
           SliverToBoxAdapter(
             child: ordersAsync.when(
               loading: () => const Padding(

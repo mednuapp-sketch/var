@@ -22,6 +22,11 @@ class ConsultationScreen extends ConsumerStatefulWidget {
 
 class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
     with SingleTickerProviderStateMixin {
+  // The pinned TabBar is additional height on top of the hero content, not
+  // space carved out of it — otherwise the header shrinks below what the
+  // icon/title/subtitle need and they sink into the tab bar.
+  static const _tabBarHeight = 48.0;
+
   late TabController _tabController;
   int _selectedDateIndex = 0;
   int _selectedTimeIndex = -1;
@@ -38,6 +43,10 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
   List<Map<String, dynamic>> _onlineDoctors = [];
   List<Map<String, dynamic>> _allDoctors = [];
   StreamSubscription<QuerySnapshot>? _doctorSub;
+
+  // Guards Quick Connect against double-tap (which could create duplicate
+  // consultation docs) and drives the connecting spinner on the tapped card.
+  String? _connectingDoctorUid;
   StreamSubscription<QuerySnapshot>? _onlineDoctorSub;
   bool _quickConnectLoading = true;
 
@@ -85,7 +94,9 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
       if (_allDoctors.length == all.length &&
           _allDoctors.isNotEmpty &&
           all.isNotEmpty &&
-          _allDoctors.first['uid'] == all.first['uid']) return;
+          _allDoctors.first['uid'] == all.first['uid']) {
+        return;
+      }
       final wasNull = _selectedDoctor == null;
       setState(() {
         _allDoctors = all;
@@ -135,7 +146,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
     if (isOnline) {
       final firestoreWait = d['waitTime'];
       if (firestoreWait != null) {
-        waitLabel = '~${firestoreWait} min wait';
+        waitLabel = '~$firestoreWait min wait';
       } else {
         // Stable pseudo-random 2-8 min based on doc id hash
         final seed = doc.id.codeUnits.fold(0, (a, b) => a + b) % 7;
@@ -288,7 +299,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
 
   Color _colorForSpecialty(String specialty) {
     if (specialty.contains('Gynaecology') || specialty.contains('Obstetrics')) {
-      return const Color(0xFFE91E8C);
+      return const Color(0xFFA36BAC);
     } else if (specialty.contains('Cardiology')) {
       return const Color(0xFFE53935);
     } else if (specialty.contains('Dermatology')) {
@@ -322,13 +333,13 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
       body: NestedScrollView(
         headerSliverBuilder: (ctx, innerBoxIsScrolled) => [
           SliverAppBar(
-            expandedHeight: AppSpacing.headerHeight(context),
+            expandedHeight: AppSpacing.headerHeight(context) + _tabBarHeight,
             pinned: true,
             forceElevated: innerBoxIsScrolled,
             backgroundColor: AppColors.primaryDark,
             leading: IconButton(
               icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-              onPressed: () => context.pop(),
+              onPressed: () => context.canPop() ? context.pop() : context.go(AppRoutes.home),
             ),
             flexibleSpace: FlexibleSpaceBar(
               background: Container(
@@ -336,16 +347,15 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
                 child: SafeArea(
                   child: LayoutBuilder(
                     builder: (context, constraints) {
-                      // The TabBar below is pinned on top of the last 48px of this
-                      // FlexibleSpaceBar's area, so the centered title/subtitle must
-                      // be constrained to the space above it — otherwise they sink
-                      // down and get visually covered by the tab bar.
-                      const tabBarHeight = 48.0;
+                      // expandedHeight already reserves _tabBarHeight on top of
+                      // the hero content's own height, so the centered
+                      // title/subtitle only need to stay clear of that trailing
+                      // strip — they're never squeezed by it.
                       return SingleChildScrollView(
                         physics: const ClampingScrollPhysics(),
                         child: ConstrainedBox(
                           constraints: BoxConstraints(
-                              minHeight: constraints.maxHeight - tabBarHeight),
+                              minHeight: constraints.maxHeight - _tabBarHeight),
                           child: Padding(
                             padding: AppSpacing.headerPaddingWithBottomWidget(context),
                             child: Column(
@@ -353,9 +363,12 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
                               mainAxisAlignment: MainAxisAlignment.center,
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Text('Consultation', style: AppTextStyles.onPrimaryH2),
+                                const Text('Consultation',
+                                    maxLines: 1, overflow: TextOverflow.ellipsis,
+                                    style: AppTextStyles.onPrimaryH2),
                                 SizedBox(height: R.h(context, 4)),
-                                Text('Connect instantly or book in advance',
+                                const Text('Connect instantly or book in advance',
+                                    maxLines: 1, overflow: TextOverflow.ellipsis,
                                     style: AppTextStyles.onPrimaryBody),
                               ],
                             ),
@@ -368,7 +381,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
               ),
             ),
             bottom: PreferredSize(
-              preferredSize: const Size.fromHeight(48),
+              preferredSize: const Size.fromHeight(_tabBarHeight),
               child: Container(
                 color: AppColors.primaryDark,
                 child: TabBar(
@@ -542,7 +555,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
             ),
           ),
           const SizedBox(height: 20),
-          Text('Available Now', style: AppTextStyles.h4),
+          const Text('Available Now', style: AppTextStyles.h4),
           const SizedBox(height: 12),
           if (_quickConnectLoading) ...[
             AppShimmer(
@@ -570,6 +583,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
           ] else
             ..._onlineDoctors.map((doctor) => _QuickConnectCard(
                   doctor: doctor,
+                  connecting: _connectingDoctorUid == doctor['uid'],
                   onConnect: () => _startQuickCall(context, doctor),
                 )),
         ],
@@ -578,17 +592,22 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
   }
 
   void _startQuickCall(BuildContext context, Map<String, dynamic> doctor) async {
+    if (_connectingDoctorUid != null) return; // already connecting — ignore double-tap
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    // Fetch patient's stored FCM token from 'users' collection.
+    setState(() => _connectingDoctorUid = doctor['uid'] as String?);
+
+    // Fetch patient's stored FCM token + profile photo from 'users' collection.
     String patientFcmToken = '';
+    String patientPhotoUrl = '';
     try {
       final patSnap = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
           .get();
       patientFcmToken = patSnap.data()?['fcmToken'] as String? ?? '';
+      patientPhotoUrl = patSnap.data()?['photoUrl'] as String? ?? '';
     } catch (_) {}
 
     final ref = FirebaseFirestore.instance.collection('consultations').doc();
@@ -604,6 +623,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
         'patientId': user.uid,
         'patientName': user.displayName ?? user.email ?? 'Patient',
         'patientFcmToken': patientFcmToken,
+        'patientPhotoUrl': patientPhotoUrl,
         'doctorId': doctor['uid'] ?? '',
         'doctorName': doctor['name'],
         'doctorSpecialty': doctor['specialty'],
@@ -625,9 +645,31 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
           ),
         );
       }
+      if (mounted) setState(() => _connectingDoctorUid = null);
       return;
     }
 
+    if (!context.mounted) return;
+
+    // Play the connecting sheet (already-built, previously unused) while the
+    // doc we just created propagates, then hand off to the outgoing call screen.
+    await showModalBottomSheet(
+      context: context,
+      isDismissible: false,
+      enableDrag: false,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => _ConnectingSheet(
+        doctor: doctor,
+        onConnected: () {
+          if (Navigator.of(sheetContext).canPop()) {
+            Navigator.of(sheetContext).pop();
+          }
+        },
+      ),
+    );
+
+    if (mounted) setState(() => _connectingDoctorUid = null);
     if (!context.mounted) return;
     context.push(
       AppRoutes.outgoingCall,
@@ -705,11 +747,11 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: Colors.orange.withValues(alpha:0.3)),
                   ),
-                  child: Row(children: [
-                    const Icon(Icons.location_on_rounded,
+                  child: const Row(children: [
+                    Icon(Icons.location_on_rounded,
                         color: Colors.orange, size: 16),
-                    const SizedBox(width: 8),
-                    const Expanded(
+                    SizedBox(width: 8),
+                    Expanded(
                       child: Text(
                         'In-Person visits are location-based. Tap to browse nearby doctors.',
                         style: TextStyle(
@@ -719,7 +761,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
                         ),
                       ),
                     ),
-                    const Icon(Icons.chevron_right_rounded,
+                    Icon(Icons.chevron_right_rounded,
                         color: Colors.orange, size: 18),
                   ]),
                 ),
@@ -749,7 +791,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
           // Doctors List
           Padding(
             padding: AppSpacing.pageHorizontal(context),
-            child: Text('Available Doctors', style: AppTextStyles.h4),
+            child: const Text('Available Doctors', style: AppTextStyles.h4),
           ),
           SizedBox(height: AppSpacing.cardGap(context)),
           Builder(builder: (_) {
@@ -804,7 +846,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
             // Date picker
             Padding(
               padding: AppSpacing.pageHorizontal(context),
-              child: Text('Select Date', style: AppTextStyles.h4),
+              child: const Text('Select Date', style: AppTextStyles.h4),
             ),
             SizedBox(height: AppSpacing.cardGap(context)),
             SizedBox(
@@ -894,7 +936,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
             // Time picker
             Padding(
               padding: AppSpacing.pageHorizontal(context),
-              child: Text('Select Time', style: AppTextStyles.h4),
+              child: const Text('Select Time', style: AppTextStyles.h4),
             ),
             SizedBox(height: AppSpacing.cardGap(context)),
             if (_scheduleSlots.isEmpty)
@@ -1008,7 +1050,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
                   children: [
                     _FeeRow('Consultation Fee', _selectedDoctor!['fee']),
                     const Divider(height: 20),
-                    _FeeRow('Platform Fee', '₹20'),
+                    const _FeeRow('Platform Fee', '₹20'),
                     const Divider(height: 20),
                     _FeeRow(
                       'Total',
@@ -1085,8 +1127,13 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
 class _QuickConnectCard extends StatelessWidget {
   final Map<String, dynamic> doctor;
   final VoidCallback onConnect;
+  final bool connecting;
 
-  const _QuickConnectCard({required this.doctor, required this.onConnect});
+  const _QuickConnectCard({
+    required this.doctor,
+    required this.onConnect,
+    this.connecting = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1104,8 +1151,8 @@ class _QuickConnectCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: context.appSurface,
         borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(color: AppColors.shadow, blurRadius: 12, offset: const Offset(0, 4)),
+        boxShadow: const [
+          BoxShadow(color: AppColors.shadow, blurRadius: 12, offset: Offset(0, 4)),
         ],
       ),
       child: Row(
@@ -1211,32 +1258,44 @@ class _QuickConnectCard extends StatelessWidget {
           ),
           const SizedBox(width: 10),
           // Prominent green "Connect Now" button
-          GestureDetector(
-            onTap: onConnect,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: const Color(0xFF2E7D32),
-                borderRadius: BorderRadius.circular(14),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF2E7D32).withValues(alpha: 0.35),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: const Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.video_call_rounded, color: Colors.white, size: 22),
-                  SizedBox(height: 3),
-                  Text('Connect Now',
-                      style: TextStyle(
-                        fontFamily: 'Poppins', fontSize: 9,
-                        fontWeight: FontWeight.w700, color: Colors.white,
-                      )),
-                ],
+          Semantics(
+            button: true,
+            enabled: !connecting,
+            label: connecting ? 'Connecting to $name' : 'Connect now with $name',
+            child: GestureDetector(
+              onTap: connecting ? null : onConnect,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2E7D32).withValues(alpha: connecting ? 0.7 : 1),
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF2E7D32).withValues(alpha: 0.35),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: connecting
+                    ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                            color: Colors.white, strokeWidth: 2.4),
+                      )
+                    : const Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.video_call_rounded, color: Colors.white, size: 22),
+                          SizedBox(height: 3),
+                          Text('Connect Now',
+                              style: TextStyle(
+                                fontFamily: 'Poppins', fontSize: 9,
+                                fontWeight: FontWeight.w700, color: Colors.white,
+                              )),
+                        ],
+                      ),
               ),
             ),
           ),
@@ -1339,7 +1398,7 @@ class _ConnectingSheetState extends State<_ConnectingSheet>
                 value: _progress.value,
                 minHeight: 6,
                 backgroundColor: context.appDivider,
-                valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+                valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
               ),
             ),
           ),
@@ -1617,7 +1676,7 @@ class _BookingConfirmSheetState extends State<_BookingConfirmSheet> {
             child: const Icon(Icons.check_rounded, color: Colors.white, size: 36),
           ),
           const SizedBox(height: 16),
-          Text('Confirm Booking', style: AppTextStyles.h3),
+          const Text('Confirm Booking', style: AppTextStyles.h3),
           const SizedBox(height: 24),
           _ConfirmRow(Icons.person_rounded, 'Doctor', widget.doctor['name']),
           _ConfirmRow(Icons.medical_services_rounded, 'Specialty', widget.doctor['specialty']),

@@ -343,7 +343,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               background: Container(
                 decoration: const BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [Color(0xFF880E4F), Color(0xFFC2185B), Color(0xFF7B1FA2)],
+                    colors: [Color(0xFF33172C), Color(0xFF522546), Color(0xFF633058)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
@@ -526,7 +526,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   ],
                 ),
               ),
-              error: (e, _) => AppErrorState(
+              error: (e, _) => const AppErrorState(
                 message: 'Unable to load profile. Please try again.',
               ),
               data: (_) => Padding(
@@ -687,7 +687,7 @@ class _FamilyMembersRow extends StatelessWidget {
   const _FamilyMembersRow({required this.uid});
 
   static const _colors = [
-    Color(0xFFC2185B), Color(0xFF7B1FA2), Color(0xFF1565C0),
+    Color(0xFF522546), Color(0xFF633058), Color(0xFF1565C0),
     Color(0xFF2E7D32), Color(0xFF00695C), Color(0xFFE65100),
   ];
 
@@ -710,7 +710,7 @@ class _FamilyMembersRow extends StatelessWidget {
         ),
         child: effectiveUid.isEmpty
             ? Row(children: [
-                Text('No members added yet', style: AppTextStyles.bodySmall),
+                const Text('No members added yet', style: AppTextStyles.bodySmall),
                 const Spacer(),
                 Icon(Icons.arrow_forward_ios_rounded, size: R.w(context, 14), color: context.appTextHint),
               ])
@@ -728,7 +728,7 @@ class _FamilyMembersRow extends StatelessWidget {
 
                   return Row(children: [
                     if (members.isEmpty)
-                      Expanded(child: Text('No members added yet', style: AppTextStyles.bodySmall))
+                      const Expanded(child: Text('No members added yet', style: AppTextStyles.bodySmall))
                     else
                       Expanded(
                         child: Wrap(
@@ -906,7 +906,7 @@ class _ReferralEntryCard extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Referral & Rewards',
+                  const Text('Referral & Rewards',
                       style: AppTextStyles.labelLarge),
                   SizedBox(height: R.h(context, 3)),
                   statsAsync.isLoading

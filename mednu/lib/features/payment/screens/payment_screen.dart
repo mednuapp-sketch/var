@@ -283,7 +283,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen>
       'name': 'MedNU Healthcare',
       'description': widget.description,
       'prefill': prefill,
-      'theme': {'color': '#C2185B'},
+      'theme': {'color': '#522546'},
       'external': {
         'wallets': ['paytm', 'phonepe']
       },
@@ -444,17 +444,18 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen>
       centerTitle: true,
       leading: IconButton(
         icon: const Icon(Icons.arrow_back_ios_new_rounded),
+        tooltip: 'Back',
         onPressed: () => context.pop(),
       ),
-      actions: [
+      actions: const [
         Padding(
-          padding: const EdgeInsets.only(right: 14),
+          padding: EdgeInsets.only(right: 14),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.lock_rounded, size: 14, color: _kGreen),
-              const SizedBox(width: 4),
-              const Text(
+              Icon(Icons.lock_rounded, size: 14, color: _kGreen),
+              SizedBox(width: 4),
+              Text(
                 'SSL',
                 style: TextStyle(
                   fontFamily: 'Poppins',
@@ -577,7 +578,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen>
                   fontFamily: 'Poppins',
                   fontSize: 22,
                   fontWeight: FontWeight.w800,
-                  color: AppColors.primary,
+                  color: AppColors.accent,
                 ),
               ),
             ],
@@ -1139,21 +1140,21 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen>
 
   // ── Success Sheet ──────────────────────────────────────
   void _showSuccessSheet(String paymentId) {
+    FocusScope.of(context).unfocus();
     showModalBottomSheet(
       context: context,
       isDismissible: false,
       enableDrag: false,
       backgroundColor: Colors.transparent,
-      builder: (_) => _SuccessSheet(
+      builder: (sheetContext) => _SuccessSheet(
         amount: widget.amount,
         paymentId: paymentId,
         description: widget.description,
-        onDone: () {
-          Navigator.pop(context);
-          context.pop(true);
-        },
+        onDone: () => Navigator.pop(sheetContext),
       ),
-    );
+    ).then((_) {
+      if (mounted) context.pop(true);
+    });
   }
 }
 

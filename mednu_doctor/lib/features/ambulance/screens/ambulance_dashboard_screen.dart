@@ -62,7 +62,7 @@ class AmbulanceDashboardScreen extends ConsumerWidget {
                 value: metrics.rating.toStringAsFixed(1),
                 label: 'Driver Rating',
                 icon: Icons.star_rounded,
-                colors: const [Color(0xFF6A1B9A), Color(0xFF4A148C)],
+                colors: const [Color(0xFF6A1B9A), AppColors.secondaryDark],
               ),
             ],
           ),
@@ -98,7 +98,7 @@ class _OnlineHeroCard extends ConsumerWidget {
       padding: EdgeInsets.all(R.p(context, 20)),
       decoration: BoxDecoration(
         gradient: online
-            ? const LinearGradient(colors: [Color(0xFF2E7D32), Color(0xFF43A047)], begin: Alignment.topLeft, end: Alignment.bottomRight)
+            ? AppColors.onlineGradient
             : const LinearGradient(colors: [Color(0xFF455A64), Color(0xFF607D8B)], begin: Alignment.topLeft, end: Alignment.bottomRight),
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
@@ -119,12 +119,12 @@ class _OnlineHeroCard extends ConsumerWidget {
               children: [
                 Text(
                   online ? 'You are ON DUTY' : 'You are OFF DUTY',
-                  style: TextStyle(fontFamily: 'Poppins', fontSize: R.sp(context, 18), fontWeight: FontWeight.w800, color: Colors.white),
+                  style: AppTextStyles.h3.copyWith(fontSize: R.sp(context, 18), fontWeight: FontWeight.w800, color: Colors.white),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   online ? 'Visible to dispatch • Accepting emergencies' : 'Not receiving new requests',
-                  style: TextStyle(fontFamily: 'Poppins', fontSize: R.sp(context, 12), color: Colors.white70),
+                  style: AppTextStyles.bodySmall.copyWith(fontSize: R.sp(context, 12), color: Colors.white70),
                 ),
               ],
             ),

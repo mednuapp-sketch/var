@@ -42,13 +42,13 @@ class AdaptiveSideRail extends StatelessWidget {
                 onDestinationSelected: (i) => onSelect(items[i]),
                 selectedIconTheme: const IconThemeData(color: AppColors.primary),
                 selectedLabelTextStyle: const TextStyle(
-                  fontFamily: 'Poppins',
+                  fontFamily: 'Inter',
                   color: AppColors.primary,
                   fontWeight: FontWeight.w700,
                 ),
                 unselectedIconTheme: const IconThemeData(color: AppColors.textSecondary),
                 unselectedLabelTextStyle: const TextStyle(
-                  fontFamily: 'Poppins',
+                  fontFamily: 'Inter',
                   color: AppColors.textSecondary,
                 ),
                 destinations: [

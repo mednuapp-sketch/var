@@ -825,7 +825,7 @@ class _ActiveGoalCard extends StatelessWidget {
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
             gradient: const LinearGradient(
-              colors: [Color(0xFF4A148C), Color(0xFF9C27B0)],
+              colors: [Color(0xFF3D1D36), Color(0xFFA36BAC)],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),

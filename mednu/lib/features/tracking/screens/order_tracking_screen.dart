@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
+import '../../../core/router/app_router.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../../../core/utils/r.dart';
 
@@ -400,7 +401,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
           color: Colors.white.withValues(alpha: 0.15),
           shape: const CircleBorder(),
           child: InkWell(
-            onTap: () => context.pop(),
+            onTap: () => context.canPop() ? context.pop() : context.go(AppRoutes.home),
             customBorder: const CircleBorder(),
             child: Padding(
               padding: EdgeInsets.all(R.p(context, 8)),
@@ -463,7 +464,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
                                   style: AppTextStyles.onPrimaryH2,
                                   overflow: TextOverflow.ellipsis,
                                 ),
-                                Text(
+                                const Text(
                                   'Track your booking',
                                   style: AppTextStyles.onPrimaryBody,
                                 ),
@@ -830,7 +831,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
                 children: [
                   Container(
                     width: R.w(context, 58), height: R.h(context, 58),
-                    decoration: BoxDecoration(
+                    decoration: const BoxDecoration(
                       gradient: AppColors.primaryGradient,
                       shape: BoxShape.circle,
                     ),

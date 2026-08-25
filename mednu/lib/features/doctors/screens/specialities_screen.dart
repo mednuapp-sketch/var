@@ -23,7 +23,7 @@ class _SpecialitiesScreenState extends State<SpecialitiesScreen> {
     _SpecialtyData('Dermatologist', 'Dermatology',
         Icons.face_rounded, Color(0xFF6A1B9A), Color(0xFFF3E5F5)),
     _SpecialtyData('Gynecologist', 'Gynaecology',
-        Icons.pregnant_woman_rounded, Color(0xFFE91E8C), Color(0xFFFCE4EC)),
+        Icons.pregnant_woman_rounded, Color(0xFFA36BAC), Color(0xFFFCE4EC)),
     _SpecialtyData('Neurologist', 'Neurology',
         Icons.psychology_rounded, Color(0xFF5E35B1), Color(0xFFEDE7F6)),
     _SpecialtyData('Orthopedic', 'Orthopaedics',
@@ -43,7 +43,7 @@ class _SpecialitiesScreenState extends State<SpecialitiesScreen> {
     _SpecialtyData('Nephrologist', 'Nephrology',
         Icons.water_drop_rounded, Color(0xFF283593), Color(0xFFE8EAF6)),
     _SpecialtyData('Urologist', 'Urology',
-        Icons.health_and_safety_rounded, Color(0xFF7B1FA2), Color(0xFFF3E5F5)),
+        Icons.health_and_safety_rounded, Color(0xFF633058), Color(0xFFF3E5F5)),
     _SpecialtyData('Pulmonologist', 'Pulmonology',
         Icons.air_rounded, Color(0xFF006064), Color(0xFFE0F7FA)),
     _SpecialtyData('General Surgeon', 'General Surgery',
@@ -97,10 +97,10 @@ class _SpecialitiesScreenState extends State<SpecialitiesScreen> {
                               mainAxisAlignment: MainAxisAlignment.end,
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Text('Specialities',
+                                const Text('Specialities',
                                     style: AppTextStyles.onPrimaryH2),
                                 SizedBox(height: R.h(context, 4)),
-                                Text('Browse doctors by medical specialty',
+                                const Text('Browse doctors by medical specialty',
                                     style: AppTextStyles.onPrimaryBody),
                               ],
                             ),
@@ -329,7 +329,7 @@ class _PopularNowSection extends StatelessWidget {
                   R.p(context, 16), R.p(context, 12)),
               child: Row(
                 children: [
-                  Text('Available Now', style: AppTextStyles.h4),
+                  const Text('Available Now', style: AppTextStyles.h4),
                   const Spacer(),
                   GestureDetector(
                     onTap: () => context.push('/doctors'),

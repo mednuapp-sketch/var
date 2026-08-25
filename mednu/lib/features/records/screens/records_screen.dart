@@ -162,8 +162,8 @@ class _RecordsScreenState extends State<RecordsScreen>
 
   Color _specialtyColor(String? specialty) {
     switch ((specialty ?? '').toLowerCase()) {
-      case 'cardiologist': return const Color(0xFFC2185B);
-      case 'dermatologist': return const Color(0xFF00897B);
+      case 'cardiologist': return const Color(0xFF522546);
+      case 'dermatologist': return const Color(0xFFF9943B);
       case 'neurologist': return const Color(0xFF5E35B1);
       case 'pediatrician': return const Color(0xFFE65100);
       case 'orthopedic': return const Color(0xFF1565C0);
@@ -263,8 +263,8 @@ class _RecordsScreenState extends State<RecordsScreen>
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: const Row(children: [
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Row(children: [
             Icon(Icons.check_circle_rounded, color: Colors.white),
             SizedBox(width: 8),
             Text('Report uploaded successfully'),
@@ -356,7 +356,7 @@ class _RecordsScreenState extends State<RecordsScreen>
           : Container(
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
-                  colors: [Color(0xFFC2185B), Color(0xFF7B1FA2)],
+                  colors: [Color(0xFF522546), Color(0xFF633058)],
                   begin: Alignment.centerLeft,
                   end: Alignment.centerRight,
                 ),
@@ -587,7 +587,7 @@ class _RecordsScreenState extends State<RecordsScreen>
         minChildSize: 0.5,
         builder: (sheetCtx, ctrl) => Container(
           decoration: BoxDecoration(
-              color: context.appSurface, borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+              color: context.appSurface, borderRadius: const BorderRadius.vertical(top: Radius.circular(24))),
           child: Column(children: [
             Container(width: 40, height: 4, margin: const EdgeInsets.only(top: 12, bottom: 16),
                 decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
@@ -713,14 +713,14 @@ class _SourcePicker extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
       decoration: BoxDecoration(
-          color: context.appSurface, borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+          color: context.appSurface, borderRadius: const BorderRadius.vertical(top: Radius.circular(24))),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         Container(width: 40, height: 4,
             decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
         const SizedBox(height: 20),
-        Text('Upload Report', style: AppTextStyles.h4),
+        const Text('Upload Report', style: AppTextStyles.h4),
         const SizedBox(height: 6),
-        Text('Take a photo or upload from gallery', style: AppTextStyles.bodySmall),
+        const Text('Take a photo or upload from gallery', style: AppTextStyles.bodySmall),
         const SizedBox(height: 20),
         Row(children: [
           Expanded(

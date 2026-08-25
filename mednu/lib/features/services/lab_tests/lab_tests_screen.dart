@@ -25,7 +25,7 @@ class _LabTestsScreenState extends ConsumerState<LabTestsScreen> {
 
   static const _palette = [
     Color(0xFF1565C0), Color(0xFFB71C1C), Color(0xFF6A1B9A),
-    Color(0xFFC2185B), Color(0xFF2E7D32), Color(0xFF3949AB),
+    Color(0xFF522546), Color(0xFF2E7D32), Color(0xFF3949AB),
     Color(0xFFE65100), Color(0xFF37474F), Color(0xFF4527A0),
     Color(0xFF00838F), Color(0xFF283593), Color(0xFF558B2F),
   ];
@@ -87,14 +87,14 @@ class _LabTestsScreenState extends ConsumerState<LabTestsScreen> {
                         physics: const ClampingScrollPhysics(),
                         child: ConstrainedBox(
                           constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(20, 50, 20, 16),
+                          child: const Padding(
+                            padding: EdgeInsets.fromLTRB(20, 50, 20, 16),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                const Icon(Icons.bloodtype_rounded, color: Colors.white, size: 36),
-                                const SizedBox(height: 8),
+                                Icon(Icons.bloodtype_rounded, color: Colors.white, size: 36),
+                                SizedBox(height: 8),
                                 Text('Lab Tests', style: AppTextStyles.onPrimaryH2),
                                 Text('Realtime availability', style: AppTextStyles.onPrimaryBody),
                               ],
@@ -201,7 +201,7 @@ class _LabTestsScreenState extends ConsumerState<LabTestsScreen> {
       Padding(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
         child: Row(children: [
-          Text('Available Tests', style: AppTextStyles.h4),
+          const Text('Available Tests', style: AppTextStyles.h4),
           const Spacer(),
           if (_query.isNotEmpty)
             Text('${filtered.length} result${filtered.length == 1 ? '' : 's'}', style: AppTextStyles.bodySmall),
@@ -220,7 +220,7 @@ class _LabTestsScreenState extends ConsumerState<LabTestsScreen> {
             ),
             if (_query.isEmpty) ...[
               const SizedBox(height: 6),
-              Text('Tests will appear here once added by the team', style: AppTextStyles.bodySmall, textAlign: TextAlign.center),
+              const Text('Tests will appear here once added by the team', style: AppTextStyles.bodySmall, textAlign: TextAlign.center),
             ],
           ]),
         )
@@ -286,7 +286,7 @@ class _PopularLabTestsRow extends StatelessWidget {
     {'name': 'Complete Blood Count (CBC)', 'price': 299, 'icon': Icons.bloodtype_rounded, 'color': Color(0xFFB71C1C)},
     {'name': 'Blood Sugar (Fasting)', 'price': 149, 'icon': Icons.water_drop_rounded, 'color': Color(0xFF1565C0)},
     {'name': 'Lipid Profile', 'price': 499, 'icon': Icons.favorite_rounded, 'color': Color(0xFFE53935)},
-    {'name': 'Thyroid Panel (T3/T4/TSH)', 'price': 699, 'icon': Icons.science_rounded, 'color': Color(0xFF7B1FA2)},
+    {'name': 'Thyroid Panel (T3/T4/TSH)', 'price': 699, 'icon': Icons.science_rounded, 'color': Color(0xFF633058)},
     {'name': 'Vitamin D', 'price': 899, 'icon': Icons.wb_sunny_rounded, 'color': Color(0xFFE65100)},
     {'name': 'HbA1c', 'price': 349, 'icon': Icons.monitor_heart_rounded, 'color': Color(0xFF2E7D32)},
   ];
@@ -296,9 +296,9 @@ class _PopularLabTestsRow extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
-          child: Text('Popular Tests', style: const TextStyle(
+        const Padding(
+          padding: EdgeInsets.fromLTRB(16, 4, 16, 10),
+          child: Text('Popular Tests', style: TextStyle(
               fontFamily: 'Poppins', fontSize: 15, fontWeight: FontWeight.w700,
               color: Color(0xFF1A1A2E))),
         ),
@@ -386,7 +386,7 @@ class _MyLabTestBookings extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('My Lab Tests', style: AppTextStyles.h4),
+                  const Text('My Lab Tests', style: AppTextStyles.h4),
                   TextButton(
                     onPressed: () => context.push(AppRoutes.myServices),
                     child: const Text(

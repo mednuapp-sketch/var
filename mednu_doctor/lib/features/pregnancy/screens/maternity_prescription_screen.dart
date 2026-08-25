@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import '../../../core/router/app_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/constants/app_text_styles.dart';
+import '../../../core/utils/validators.dart';
 import '../../../core/widgets/ux_widgets.dart';
 
 class MaternityPrescriptionScreen extends StatefulWidget {
@@ -45,10 +47,36 @@ class _MaternityPrescriptionScreenState
   }
 
   Future<void> _save() async {
-    final validItems = _items.where((i) => (i['name'] as String).trim().isNotEmpty).toList();
-    if (validItems.isEmpty) {
+    final touchedItems = _items.where((i) =>
+        (i['name'] as String).trim().isNotEmpty ||
+        (i['dosage'] as String).trim().isNotEmpty ||
+        (i['frequency'] as String).trim().isNotEmpty).toList();
+    if (touchedItems.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Add at least one medicine')),
+      );
+      return;
+    }
+    // A medicine name alone isn't enough to prescribe safely — dosage and
+    // frequency are required for every item the doctor has started filling
+    // in, so a prescription can't go out half-specified.
+    final incompleteIndex = _items.indexWhere((i) =>
+        (i['name'] as String).trim().isNotEmpty &&
+        ((i['dosage'] as String).trim().isEmpty ||
+            (i['frequency'] as String).trim().isEmpty));
+    if (incompleteIndex != -1) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(
+            'Item ${incompleteIndex + 1}: dosage and frequency are required')),
+      );
+      return;
+    }
+    final validItems = touchedItems
+        .where((i) => (i['name'] as String).trim().isNotEmpty)
+        .toList();
+    if (validItems.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Add at least one medicine name')),
       );
       return;
     }
@@ -98,15 +126,15 @@ class _MaternityPrescriptionScreenState
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Prescription saved and patient notified! 💊'),
-          backgroundColor: Color(0xFF2E7D32),
+          content: Text('Prescription saved and patient notified'),
+          backgroundColor: AppColors.success,
         ),
       );
-      context.pop();
+      context.safeBack();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
+        SnackBar(content: Text(Validators.friendlyError(e))),
       );
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -116,39 +144,28 @@ class _MaternityPrescriptionScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F4F8),
+      backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         foregroundColor: Colors.white,
         elevation: 0,
-        flexibleSpace: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Color(0xFF880E4F), Color(0xFFC2185B), Color(0xFF7B1FA2)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
+        flexibleSpace: const DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: AppColors.heroBannerGradient,
           ),
         ),
         leading: IconButton(
           icon: const Icon(Icons.close_rounded, color: Colors.white),
-          onPressed: () => context.pop(),
+          onPressed: () => context.safeBack(),
         ),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Maternity Prescription',
-                style: TextStyle(
-                    color: Colors.white,
-                    fontFamily: 'Poppins',
-                    fontWeight: FontWeight.w700,
-                    fontSize: 15)),
+            Text('Maternity Prescription',
+                style: AppTextStyles.h4.copyWith(color: Colors.white)),
             Text(
               widget.patientName,
-              style: const TextStyle(
-                  color: Colors.white70,
-                  fontFamily: 'Poppins',
-                  fontSize: 12),
+              style: AppTextStyles.caption.copyWith(color: Colors.white70),
             ),
           ],
         ),
@@ -158,11 +175,7 @@ class _MaternityPrescriptionScreenState
             child: _saving
                 ? const SizedBox(width: 20, height: 20,
                     child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                : const Text('Save', style: TextStyle(
-                    color: Colors.white,
-                    fontFamily: 'Poppins',
-                    fontWeight: FontWeight.w700,
-                    fontSize: 15)),
+                : Text('Save', style: AppTextStyles.labelLarge.copyWith(color: Colors.white)),
           ),
         ],
       ),
@@ -196,7 +209,7 @@ class _MaternityPrescriptionScreenState
           // Quick templates
           Container(
             height: 44,
-            color: const Color(0xFFFFF0F5),
+            color: AppColors.surfaceVariant,
             child: ListView(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),

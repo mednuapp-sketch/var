@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
 import '../../../core/constants/app_text_styles.dart';
+import '../../../core/router/app_router.dart';
 import '../../../core/services/feedback_service.dart';
 import '../../../core/utils/r.dart';
 import '../../../core/widgets/add_to_cart_button.dart';
@@ -162,7 +163,9 @@ class _CareAssistantScreenState extends ConsumerState<CareAssistantScreen> {
                 expandedHeight: AppSpacing.headerHeight(context),
                 leading: IconButton(
                   icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-                  onPressed: () => context.pop(),
+                  onPressed: () => context.canPop()
+                      ? context.pop()
+                      : context.go(AppRoutes.home),
                 ),
                 actions: [
                   IconButton(
@@ -207,8 +210,8 @@ class _CareAssistantScreenState extends ConsumerState<CareAssistantScreen> {
                                   children: [
                                     Icon(Icons.support_agent_rounded, color: Colors.white, size: AppSpacing.headerIconSize(context)),
                                     SizedBox(height: AppSpacing.headerIconGap(context)),
-                                    Text('Care Assistant', style: AppTextStyles.onPrimaryH2),
-                                    Text('Book a trusted person to help your loved ones', style: AppTextStyles.onPrimaryBody),
+                                    const Text('Care Assistant', style: AppTextStyles.onPrimaryH2),
+                                    const Text('Book a trusted person to help your loved ones', style: AppTextStyles.onPrimaryBody),
                                   ],
                                 ),
                               ),
@@ -263,7 +266,7 @@ class _CareAssistantScreenState extends ConsumerState<CareAssistantScreen> {
                     SizedBox(height: R.h(context, 10)),
 
                     // Duration selector — drives displayed price on every card below.
-                    Text('Duration', style: AppTextStyles.labelLarge),
+                    const Text('Duration', style: AppTextStyles.labelLarge),
                     SizedBox(height: R.h(context, 8)),
                     Wrap(
                       spacing: 8, runSpacing: 8,
@@ -339,7 +342,7 @@ class _CareAssistantScreenState extends ConsumerState<CareAssistantScreen> {
                                   decoration: BoxDecoration(
                                       color: _themeColor.withValues(alpha: 0.15),
                                       shape: BoxShape.circle),
-                                  child: Icon(Icons.support_agent_rounded, size: 30, color: _themeColor),
+                                  child: const Icon(Icons.support_agent_rounded, size: 30, color: _themeColor),
                                 ),
                                 if (isVerified)
                                   Positioned(
@@ -438,7 +441,7 @@ class _CareAssistantScreenState extends ConsumerState<CareAssistantScreen> {
     );
   }
 
-  Widget _buildError() => AppErrorState(message: 'Could not load care assistants. Please try again.');
+  Widget _buildError() => const AppErrorState(message: 'Could not load care assistants. Please try again.');
 
   Widget _buildEmpty() => const AppEmptyState(
     icon: Icons.support_agent_outlined,
@@ -542,7 +545,7 @@ class _AssistantFilterSheetState extends State<_AssistantFilterSheet> {
             ),
           ),
           Row(children: [
-            Text('Filter Care Assistants', style: AppTextStyles.h3),
+            const Text('Filter Care Assistants', style: AppTextStyles.h3),
             const Spacer(),
             TextButton(
               onPressed: () => setState(
@@ -553,7 +556,7 @@ class _AssistantFilterSheetState extends State<_AssistantFilterSheet> {
           const SizedBox(height: 16),
 
           // Gender
-          Text('Gender', style: AppTextStyles.labelLarge),
+          const Text('Gender', style: AppTextStyles.labelLarge),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8, runSpacing: 8,
@@ -566,7 +569,7 @@ class _AssistantFilterSheetState extends State<_AssistantFilterSheet> {
           const SizedBox(height: 20),
 
           // Duration
-          Text('Duration', style: AppTextStyles.labelLarge),
+          const Text('Duration', style: AppTextStyles.labelLarge),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8, runSpacing: 8,

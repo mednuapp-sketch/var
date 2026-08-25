@@ -95,7 +95,9 @@ class _EmergencyScreenState extends State<EmergencyScreen>
       if (perm == LocationPermission.denied) {
         perm = await Geolocator.requestPermission();
         if (perm == LocationPermission.denied ||
-            perm == LocationPermission.deniedForever) return null;
+            perm == LocationPermission.deniedForever) {
+          return null;
+        }
       }
       return await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
@@ -153,8 +155,8 @@ class _EmergencyScreenState extends State<EmergencyScreen>
                               children: [
                                 Icon(Icons.emergency_rounded, color: Colors.white, size: AppSpacing.headerIconSize(context)),
                                 SizedBox(height: AppSpacing.headerIconGap(context)),
-                                Text('Emergency', style: AppTextStyles.onPrimaryH2),
-                                Text('Instant High Priority Assistence', style: AppTextStyles.onPrimaryBody),
+                                const Text('Emergency', style: AppTextStyles.onPrimaryH2),
+                                const Text('Instant High Priority Assistence', style: AppTextStyles.onPrimaryBody),
                               ],
                             ),
                           ),
@@ -379,9 +381,9 @@ class _EmergencyScreenState extends State<EmergencyScreen>
           SizedBox(width: 8),
           Text('You are Offline', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
         ]),
-        content: Text(
+        content: const Text(
           'Please check your connection. You can try calling $_mednuCallCenterNumber to receive immediate assistance.',
-          style: const TextStyle(fontFamily: 'Poppins'),
+          style: TextStyle(fontFamily: 'Poppins'),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),

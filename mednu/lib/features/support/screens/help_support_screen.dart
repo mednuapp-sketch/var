@@ -45,7 +45,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
     _FaqSection(
       title: 'Appointments',
       icon: Icons.calendar_today_rounded,
-      color: Color(0xFFC2185B),
+      color: Color(0xFF522546),
       faqs: [
         _Faq(
           q: 'How do I book a doctor appointment?',
@@ -91,7 +91,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
     _FaqSection(
       title: 'Technical',
       icon: Icons.settings_rounded,
-      color: Color(0xFF7B1FA2),
+      color: Color(0xFF633058),
       faqs: [
         _Faq(
           q: 'How do I track my medicine order?',

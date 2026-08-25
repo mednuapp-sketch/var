@@ -35,24 +35,24 @@ class SearchService {
   static const _services = <SearchResult>[
     SearchResult(
       id: 'video_consult',
-      title: 'Video Consultation',
+      title: 'Consultation',
       subtitle: 'Online doctor consultation from home',
       route: AppRoutes.consultation,
       icon: Icons.video_call_rounded,
-      color: Color(0xFF7B1FA2),
+      color: Color(0xFF633058),
       category: SearchCategory.service,
-      keywords: ['video', 'online', 'consultation', 'teleconsult', 'virtual', 'call doctor', 'video call'],
+      keywords: ['video', 'online', 'consultation', 'video consultation', 'teleconsult', 'virtual', 'call doctor', 'video call'],
       badge: 'Online',
     ),
     SearchResult(
       id: 'ambulance',
-      title: 'Ambulance Service',
+      title: 'Ambulance',
       subtitle: 'Book emergency ambulance instantly',
       route: AppRoutes.ambulance,
       icon: Icons.emergency_share_rounded,
       color: Color(0xFFB71C1C),
       category: SearchCategory.service,
-      keywords: ['ambulance', 'emergency transport', 'urgent transport', 'ems'],
+      keywords: ['ambulance', 'ambulance service', 'emergency transport', 'urgent transport', 'ems'],
       badge: '24/7',
     ),
     SearchResult(
@@ -83,7 +83,7 @@ class SearchService {
       icon: Icons.sports_gymnastics_rounded,
       color: Color(0xFF1565C0),
       category: SearchCategory.service,
-      keywords: ['physio', 'physiotherapy', 'rehab', 'rehabilitation', 'back pain', 'joint pain', 'mobility'],
+      keywords: ['physio', 'physiotherapy', 'physical therapy', 'therapy', 'therapist', 'rehab', 'rehabilitation', 'back pain', 'joint pain', 'mobility'],
     ),
     SearchResult(
       id: 'caregivers',
@@ -97,33 +97,33 @@ class SearchService {
     ),
     SearchResult(
       id: 'care_assistant',
-      title: 'Care Assistant',
+      title: 'Care Assist',
       subtitle: 'Personal healthcare assistant service',
       route: AppRoutes.careAssistant,
       icon: Icons.support_agent_rounded,
       color: Color(0xFFE65100),
       category: SearchCategory.service,
-      keywords: ['care assistant', 'personal care', 'home help', 'assistant', 'home care'],
+      keywords: ['care assist', 'care assistant', 'personal care', 'home help', 'assistant', 'home care'],
     ),
     SearchResult(
       id: 'equipment',
-      title: 'Medical Equipment',
+      title: 'Equipment',
       subtitle: 'Rent or buy medical devices & aids',
       route: AppRoutes.equipment,
       icon: Icons.medical_information_rounded,
       color: Color(0xFF546E7A),
       category: SearchCategory.service,
-      keywords: ['equipment', 'wheelchair', 'walker', 'oxygen', 'nebulizer', 'hospital bed', 'crutches', 'bp machine', 'rent'],
+      keywords: ['equipment', 'medical equipment', 'wheelchair', 'walker', 'oxygen', 'nebulizer', 'hospital bed', 'crutches', 'bp machine', 'rent'],
     ),
     SearchResult(
       id: 'medicines',
-      title: 'Pharmacy Delivery',
+      title: 'Pharmacy',
       subtitle: 'Order medicines online, delivered fast',
       route: AppRoutes.medicine,
       icon: Icons.medication_rounded,
       color: Color(0xFF2E7D32),
       category: SearchCategory.medicine,
-      keywords: ['medicine', 'drug', 'tablet', 'capsule', 'order medicine', 'prescription delivery', 'pharmacy'],
+      keywords: ['medicine', 'drug', 'tablet', 'capsule', 'order medicine', 'pharmacy delivery', 'prescription delivery', 'pharmacy'],
     ),
     SearchResult(
       id: 'pharmacy',
@@ -137,24 +137,24 @@ class SearchService {
     ),
     SearchResult(
       id: 'emergency',
-      title: 'Emergency Services',
+      title: 'Emergency',
       subtitle: 'Immediate emergency medical help',
       route: AppRoutes.emergency,
       icon: Icons.emergency_rounded,
       color: Color(0xFFB71C1C),
       category: SearchCategory.service,
-      keywords: ['emergency', 'urgent', 'sos', 'critical', 'accident', 'heart attack', 'first aid'],
+      keywords: ['emergency', 'emergency services', 'urgent', 'sos', 'critical', 'accident', 'heart attack', 'first aid'],
       badge: '24/7',
     ),
     SearchResult(
       id: 'pregnancy',
-      title: 'Pregnancy Care',
+      title: 'Pregnancy',
       subtitle: 'Complete pregnancy tracking & support',
       route: AppRoutes.pregnancy,
       icon: Icons.pregnant_woman_rounded,
-      color: Color(0xFFC2185B),
+      color: Color(0xFF522546),
       category: SearchCategory.service,
-      keywords: ['pregnancy', 'pregnant', 'maternity', 'antenatal', 'prenatal', 'baby', 'trimester', 'gynecologist'],
+      keywords: ['pregnancy', 'pregnancy care', 'pregnant', 'maternity', 'antenatal', 'prenatal', 'baby', 'trimester', 'gynecologist'],
     ),
     SearchResult(
       id: 'hospitals',
@@ -182,29 +182,29 @@ class SearchService {
       subtitle: 'Browse all medical specialities',
       route: AppRoutes.specialities,
       icon: Icons.category_rounded,
-      color: Color(0xFF7B1FA2),
+      color: Color(0xFF633058),
       category: SearchCategory.speciality,
       keywords: ['speciality', 'specialist', 'browse speciality', 'all doctors'],
     ),
     SearchResult(
       id: 'nutrition',
-      title: 'Nutrition & Diet',
+      title: 'Nutrition and Diet',
       subtitle: 'Diet plans and nutrition guidance',
       route: AppRoutes.nutrition,
       icon: Icons.restaurant_menu_rounded,
       color: Color(0xFF558B2F),
       category: SearchCategory.service,
-      keywords: ['nutrition', 'diet', 'food', 'dietitian', 'weight loss', 'meal plan', 'nutritionist'],
+      keywords: ['nutrition', 'nutrition & diet', 'diet', 'food', 'dietitian', 'weight loss', 'meal plan', 'nutritionist'],
     ),
     SearchResult(
       id: 'counselling',
-      title: 'Counselling',
+      title: 'Therapy and Counselling',
       subtitle: 'Mental health & wellness support',
       route: AppRoutes.counselling,
       icon: Icons.psychology_rounded,
       color: Color(0xFF6A1B9A),
       category: SearchCategory.service,
-      keywords: ['counselling', 'mental health', 'counseling', 'psychologist', 'anxiety', 'depression', 'stress', 'wellness'],
+      keywords: ['counselling', 'mental health', 'counseling', 'therapy', 'therapist', 'psychotherapy', 'psychologist', 'anxiety', 'depression', 'stress', 'wellness', 'counsellor', 'counselor'],
     ),
     SearchResult(
       id: 'health_dashboard',
@@ -212,7 +212,7 @@ class SearchService {
       subtitle: 'Track vitals and health metrics',
       route: AppRoutes.healthDashboard,
       icon: Icons.dashboard_rounded,
-      color: Color(0xFF00897B),
+      color: Color(0xFFF9943B),
       category: SearchCategory.service,
       keywords: ['health dashboard', 'vitals', 'bmi', 'health tracking', 'steps', 'heart rate', 'monitor'],
     ),
@@ -222,7 +222,7 @@ class SearchService {
       subtitle: 'Check your Body Mass Index',
       route: AppRoutes.nutritionBmi,
       icon: Icons.monitor_weight_rounded,
-      color: Color(0xFF00897B),
+      color: Color(0xFFF9943B),
       category: SearchCategory.service,
       keywords: ['bmi', 'body mass index', 'weight', 'height', 'calculator', 'obesity'],
     ),
@@ -232,7 +232,7 @@ class SearchService {
       subtitle: 'Track menstrual cycle and ovulation',
       route: AppRoutes.periodTracker,
       icon: Icons.favorite_rounded,
-      color: Color(0xFFE91E8C),
+      color: Color(0xFFA36BAC),
       category: SearchCategory.service,
       keywords: ['period', 'menstrual', 'cycle', 'ovulation', 'fertility', 'pms', 'womens health'],
     ),
@@ -252,7 +252,7 @@ class SearchService {
       subtitle: 'AI-powered health tips and articles',
       route: AppRoutes.education,
       icon: Icons.auto_awesome_rounded,
-      color: Color(0xFF7B1FA2),
+      color: Color(0xFF633058),
       category: SearchCategory.service,
       keywords: ['education', 'health tips', 'article', 'ai health', 'wellness', 'blog', 'guide'],
     ),
@@ -322,7 +322,7 @@ class SearchService {
       subtitle: 'Manage health records for family',
       route: AppRoutes.family,
       icon: Icons.family_restroom_rounded,
-      color: Color(0xFF7B1FA2),
+      color: Color(0xFF633058),
       category: SearchCategory.service,
       keywords: ['family', 'family members', 'dependent', 'spouse', 'children', 'parents', 'family health'],
     ),
@@ -342,9 +342,69 @@ class SearchService {
       subtitle: 'Manage delivery and home visit addresses',
       route: AppRoutes.addressBook,
       icon: Icons.location_on_rounded,
-      color: Color(0xFF00897B),
+      color: Color(0xFFF9943B),
       category: SearchCategory.service,
       keywords: ['address', 'location', 'home address', 'saved address', 'delivery address', 'my address'],
+    ),
+    SearchResult(
+      id: 'help_support',
+      title: 'Help & Support',
+      subtitle: 'FAQs, contact us and support tickets',
+      route: AppRoutes.helpSupport,
+      icon: Icons.support_agent_rounded,
+      color: Color(0xFF1565C0),
+      category: SearchCategory.service,
+      keywords: ['help', 'support', 'faq', 'contact us', 'customer care', 'complaint', 'assistance', 'query'],
+    ),
+    SearchResult(
+      id: 'notifications',
+      title: 'Notifications',
+      subtitle: 'Updates, reminders and alerts',
+      route: AppRoutes.notifications,
+      icon: Icons.notifications_rounded,
+      color: Color(0xFFF9943B),
+      category: SearchCategory.service,
+      keywords: ['notifications', 'alerts', 'reminders', 'updates', 'inbox'],
+    ),
+    SearchResult(
+      id: 'settings',
+      title: 'Settings',
+      subtitle: 'App preferences and account settings',
+      route: AppRoutes.settings,
+      icon: Icons.settings_rounded,
+      color: Color(0xFF546E7A),
+      category: SearchCategory.service,
+      keywords: ['settings', 'preferences', 'account settings', 'app settings', 'privacy', 'security'],
+    ),
+    SearchResult(
+      id: 'cart',
+      title: 'Cart',
+      subtitle: 'Review items before checkout',
+      route: AppRoutes.cart,
+      icon: Icons.shopping_cart_rounded,
+      color: Color(0xFF2E7D32),
+      category: SearchCategory.service,
+      keywords: ['cart', 'checkout', 'basket', 'my cart'],
+    ),
+    SearchResult(
+      id: 'sos_contacts',
+      title: 'SOS Emergency Contacts',
+      subtitle: 'Manage your emergency contact list',
+      route: AppRoutes.sosContacts,
+      icon: Icons.contact_phone_rounded,
+      color: Color(0xFFB71C1C),
+      category: SearchCategory.service,
+      keywords: ['sos', 'emergency contacts', 'sos contacts', 'trusted contacts', 'safety contacts'],
+    ),
+    SearchResult(
+      id: 'nutritionists',
+      title: 'Find Nutritionists',
+      subtitle: 'Book a certified dietitian',
+      route: AppRoutes.nutritionNutritionists,
+      icon: Icons.restaurant_rounded,
+      color: Color(0xFF558B2F),
+      category: SearchCategory.service,
+      keywords: ['nutritionist', 'dietitian', 'diet expert', 'book nutritionist', 'find dietitian'],
     ),
   ];
 
@@ -359,7 +419,7 @@ class SearchService {
       color: Color(0xFF2E7D32),
       category: SearchCategory.speciality,
       keywords: ['general physician', 'gp', 'fever', 'cold', 'cough', 'flu', 'general doctor', 'family doctor'],
-      extra: const <String, dynamic>{'specialty': 'General Medicine', 'mode': 'filter'},
+      extra: <String, dynamic>{'specialty': 'General Medicine', 'mode': 'filter'},
     ),
     SearchResult(
       id: 'spec_cardiology',
@@ -370,7 +430,7 @@ class SearchService {
       color: Color(0xFFEF5350),
       category: SearchCategory.speciality,
       keywords: ['cardiologist', 'cardiac', 'heart', 'cardiology', 'heart attack', 'bp', 'blood pressure', 'chest pain'],
-      extra: const <String, dynamic>{'specialty': 'Cardiology', 'mode': 'filter'},
+      extra: <String, dynamic>{'specialty': 'Cardiology', 'mode': 'filter'},
     ),
     SearchResult(
       id: 'spec_gynecology',
@@ -378,10 +438,10 @@ class SearchService {
       subtitle: "Women's health",
       route: AppRoutes.doctors,
       icon: Icons.pregnant_woman_rounded,
-      color: Color(0xFFC2185B),
+      color: Color(0xFF522546),
       category: SearchCategory.speciality,
       keywords: ['gynaecologist', 'gynecologist', 'gynecology', 'women', 'pcos', 'fertility', 'ovarian', 'uterus'],
-      extra: const <String, dynamic>{'specialty': 'Gynaecology', 'mode': 'filter'},
+      extra: <String, dynamic>{'specialty': 'Gynaecology', 'mode': 'filter'},
     ),
     SearchResult(
       id: 'spec_pediatrics',
@@ -392,7 +452,7 @@ class SearchService {
       color: Color(0xFF1565C0),
       category: SearchCategory.speciality,
       keywords: ['pediatrician', 'pediatrics', 'child', 'baby', 'infant', 'kid', 'vaccination', 'growth', 'children'],
-      extra: const <String, dynamic>{'specialty': 'Paediatrics', 'mode': 'filter'},
+      extra: <String, dynamic>{'specialty': 'Paediatrics', 'mode': 'filter'},
     ),
     SearchResult(
       id: 'spec_dermatology',
@@ -403,7 +463,7 @@ class SearchService {
       color: Color(0xFFFF6F00),
       category: SearchCategory.speciality,
       keywords: ['dermatologist', 'skin', 'dermatology', 'acne', 'rash', 'hair loss', 'eczema', 'psoriasis'],
-      extra: const <String, dynamic>{'specialty': 'Dermatology', 'mode': 'filter'},
+      extra: <String, dynamic>{'specialty': 'Dermatology', 'mode': 'filter'},
     ),
     SearchResult(
       id: 'spec_orthopedics',
@@ -414,7 +474,7 @@ class SearchService {
       color: Color(0xFF546E7A),
       category: SearchCategory.speciality,
       keywords: ['orthopedic', 'ortho', 'bone', 'joint', 'spine', 'fracture', 'knee', 'back pain', 'sports injury'],
-      extra: const <String, dynamic>{'specialty': 'Orthopedics', 'mode': 'filter'},
+      extra: <String, dynamic>{'specialty': 'Orthopedics', 'mode': 'filter'},
     ),
     SearchResult(
       id: 'spec_neurology',
@@ -425,7 +485,7 @@ class SearchService {
       color: Color(0xFF6A1B9A),
       category: SearchCategory.speciality,
       keywords: ['neurologist', 'neurology', 'brain', 'nerve', 'headache', 'migraine', 'epilepsy', 'paralysis'],
-      extra: const <String, dynamic>{'specialty': 'Neurology', 'mode': 'filter'},
+      extra: <String, dynamic>{'specialty': 'Neurology', 'mode': 'filter'},
     ),
     SearchResult(
       id: 'spec_psychiatry',
@@ -436,7 +496,7 @@ class SearchService {
       color: Color(0xFF4527A0),
       category: SearchCategory.speciality,
       keywords: ['psychiatrist', 'psychiatry', 'mental health', 'depression', 'anxiety', 'ocd', 'bipolar'],
-      extra: const <String, dynamic>{'specialty': 'Psychiatry', 'mode': 'filter'},
+      extra: <String, dynamic>{'specialty': 'Psychiatry', 'mode': 'filter'},
     ),
     SearchResult(
       id: 'spec_ophthalmology',
@@ -447,7 +507,7 @@ class SearchService {
       color: Color(0xFF00838F),
       category: SearchCategory.speciality,
       keywords: ['ophthalmologist', 'eye', 'vision', 'glasses', 'cataract', 'glaucoma', 'retina', 'lasik'],
-      extra: const <String, dynamic>{'specialty': 'Ophthalmology', 'mode': 'filter'},
+      extra: <String, dynamic>{'specialty': 'Ophthalmology', 'mode': 'filter'},
     ),
     SearchResult(
       id: 'spec_ent',
@@ -458,7 +518,7 @@ class SearchService {
       color: Color(0xFF00695C),
       category: SearchCategory.speciality,
       keywords: ['ent', 'ear', 'nose', 'throat', 'sinus', 'tonsil', 'hearing', 'vertigo'],
-      extra: const <String, dynamic>{'specialty': 'ENT', 'mode': 'filter'},
+      extra: <String, dynamic>{'specialty': 'ENT', 'mode': 'filter'},
     ),
     SearchResult(
       id: 'spec_diabetes',
@@ -469,7 +529,7 @@ class SearchService {
       color: Color(0xFFE65100),
       category: SearchCategory.speciality,
       keywords: ['diabetologist', 'diabetes', 'sugar', 'endocrinology', 'insulin', 'thyroid', 'hormone'],
-      extra: const <String, dynamic>{'specialty': 'Diabetology', 'mode': 'filter'},
+      extra: <String, dynamic>{'specialty': 'Diabetology', 'mode': 'filter'},
     ),
     SearchResult(
       id: 'spec_oncology',
@@ -477,10 +537,10 @@ class SearchService {
       subtitle: 'Cancer care',
       route: AppRoutes.doctors,
       icon: Icons.biotech_rounded,
-      color: Color(0xFF880E4F),
+      color: Color(0xFF33172C),
       category: SearchCategory.speciality,
       keywords: ['oncologist', 'cancer', 'oncology', 'tumor', 'chemo', 'radiation'],
-      extra: const <String, dynamic>{'specialty': 'Oncology', 'mode': 'filter'},
+      extra: <String, dynamic>{'specialty': 'Oncology', 'mode': 'filter'},
     ),
   ];
 
@@ -627,11 +687,62 @@ class SearchService {
         }
       }
 
+      // Typo-tolerant fallback — only runs when nothing above already
+      // matched, so it never outranks a real substring/keyword hit.
+      if (score == 0) {
+        for (final word in titleLower.split(' ')) {
+          if (_isCloseMatch(word, q)) {
+            score += 5;
+            break;
+          }
+        }
+        if (score == 0) {
+          for (final kw in item.keywords) {
+            if (_isCloseMatch(kw, q)) {
+              score += 4;
+              break;
+            }
+          }
+        }
+      }
+
       if (score > 0) scored.add(MapEntry(score, item));
     }
 
     scored.sort((a, b) => b.key.compareTo(a.key));
     return scored.map((e) => e.value).toList();
+  }
+
+  /// True if [word] and [q] are close enough to be the same typed word
+  /// (substring either way, or a small edit distance for likely typos).
+  static bool _isCloseMatch(String word, String q) {
+    if (word.isEmpty || q.isEmpty) return false;
+    if (word.contains(q) || q.contains(word)) return true;
+    if ((word.length - q.length).abs() > 3) return false;
+    final threshold = q.length <= 4 ? 1 : (q.length <= 8 ? 2 : 3);
+    return _levenshtein(word, q) <= threshold;
+  }
+
+  static int _levenshtein(String a, String b) {
+    if (a == b) return 0;
+    if (a.isEmpty) return b.length;
+    if (b.isEmpty) return a.length;
+    var prev = List<int>.generate(b.length + 1, (i) => i);
+    var curr = List<int>.filled(b.length + 1, 0);
+    for (var i = 0; i < a.length; i++) {
+      curr[0] = i + 1;
+      for (var j = 0; j < b.length; j++) {
+        final cost = a[i] == b[j] ? 0 : 1;
+        final del = prev[j + 1] + 1;
+        final ins = curr[j] + 1;
+        final sub = prev[j] + cost;
+        curr[j + 1] = del < ins ? (del < sub ? del : sub) : (ins < sub ? ins : sub);
+      }
+      final tmp = prev;
+      prev = curr;
+      curr = tmp;
+    }
+    return prev[b.length];
   }
 
   /// Queries the live Firestore `doctors` collection.

@@ -81,7 +81,7 @@ class NutritionHomeScreen extends ConsumerWidget {
       backgroundColor: AppColors.accent,
       leading: IconButton(
         icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
-        onPressed: () => context.pop(),
+        onPressed: () => context.canPop() ? context.pop() : context.go(AppRoutes.home),
       ),
       flexibleSpace: FlexibleSpaceBar(
         collapseMode: CollapseMode.parallax,
@@ -317,10 +317,10 @@ class _QuickActionsGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final actions = [
-      _QuickAction(Icons.dashboard_rounded, 'Dashboard', AppColors.accent),
-      _QuickAction(Icons.restaurant_menu_rounded, 'Track Meals', const Color(0xFFE65100)),
-      _QuickAction(Icons.flag_rounded, 'My Goals', AppColors.secondary),
-      _QuickAction(Icons.calculate_rounded, 'BMI Check', AppColors.info),
+      const _QuickAction(Icons.dashboard_rounded, 'Dashboard', AppColors.accent),
+      const _QuickAction(Icons.restaurant_menu_rounded, 'Track Meals', Color(0xFFE65100)),
+      const _QuickAction(Icons.flag_rounded, 'My Goals', AppColors.secondary),
+      const _QuickAction(Icons.calculate_rounded, 'BMI Check', AppColors.info),
     ];
     final callbacks = [onDashboard, onMeals, onGoals, onBmi];
 
@@ -827,7 +827,7 @@ class _NutritionistCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(colors: [AppColors.accent, Color(0xFF4DB6AC)]),
+                    gradient: const LinearGradient(colors: [AppColors.accent, Color(0xFFFBB878)]),
                     borderRadius: BorderRadius.circular(9),
                   ),
                   child: const Text(

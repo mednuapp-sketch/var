@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/utils/op_slip_service.dart';
 import '../../../core/widgets/ux_widgets.dart';
 
 // Converts "09:00 AM" / "02:30 PM" to total minutes since midnight for sorting.
@@ -47,13 +48,17 @@ class _AppointmentScreenState extends State<AppointmentScreen>
 
   static DateTime? _parseApptDate(String dateStr) {
     if (dateStr.isEmpty) return null;
-    try { return DateTime.parse(dateStr); } catch (_) {}
+    try {
+      return DateTime.parse(dateStr);
+    } catch (_) {}
     for (final fmt in [
       DateFormat('EEE, d MMM yyyy'),
       DateFormat('EEE, dd MMM yyyy'),
       DateFormat('d MMM yyyy'),
     ]) {
-      try { return fmt.parse(dateStr); } catch (_) {}
+      try {
+        return fmt.parse(dateStr);
+      } catch (_) {}
     }
     return null;
   }
@@ -88,8 +93,12 @@ class _AppointmentScreenState extends State<AppointmentScreen>
         foregroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-          onPressed: () => context.canPop() ? context.pop() : context.go(AppRoutes.home),
+          icon: const Icon(
+            Icons.arrow_back_ios_new_rounded,
+            color: Colors.white,
+          ),
+          onPressed: () =>
+              context.canPop() ? context.pop() : context.go(AppRoutes.home),
         ),
         bottom: TabBar(
           controller: _tab,
@@ -99,16 +108,21 @@ class _AppointmentScreenState extends State<AppointmentScreen>
           indicatorWeight: 3,
           tabs: const [
             Tab(
-              child: Text('Upcoming',
-                  maxLines: 1, overflow: TextOverflow.ellipsis),
+              child: Text(
+                'Upcoming',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
             Tab(
-              child: Text('Past',
-                  maxLines: 1, overflow: TextOverflow.ellipsis),
+              child: Text('Past', maxLines: 1, overflow: TextOverflow.ellipsis),
             ),
             Tab(
-              child: Text('Cancelled',
-                  maxLines: 1, overflow: TextOverflow.ellipsis),
+              child: Text(
+                'Cancelled',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           ],
         ),
@@ -119,15 +133,21 @@ class _AppointmentScreenState extends State<AppointmentScreen>
         builder: (context, authSnap) {
           // Use authStateChanges data, with currentUser as immediate fallback
           // so there's no loading flash when the user is already signed in.
-          final uid = authSnap.data?.uid ??
-              FirebaseAuth.instance.currentUser?.uid;
+          final uid =
+              authSnap.data?.uid ?? FirebaseAuth.instance.currentUser?.uid;
 
           if (uid == null) {
             if (authSnap.connectionState == ConnectionState.waiting) {
               return ListView(
                 physics: const NeverScrollableScrollPhysics(),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                children: List.generate(4, (_) => const _AppointmentCardSkeleton()),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
+                children: List.generate(
+                  4,
+                  (_) => const _AppointmentCardSkeleton(),
+                ),
               );
             }
             return const AppEmptyState(
@@ -149,8 +169,14 @@ class _AppointmentScreenState extends State<AppointmentScreen>
               if (snap.connectionState == ConnectionState.waiting) {
                 return ListView(
                   physics: const NeverScrollableScrollPhysics(),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  children: List.generate(4, (_) => const _AppointmentCardSkeleton()),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
+                  children: List.generate(
+                    4,
+                    (_) => const _AppointmentCardSkeleton(),
+                  ),
                 );
               }
               if (snap.hasError) {
@@ -159,7 +185,9 @@ class _AppointmentScreenState extends State<AppointmentScreen>
                 );
               }
 
-              final docs = List<QueryDocumentSnapshot<Map<String, dynamic>>>.of(snap.data?.docs ?? []);
+              final docs = List<QueryDocumentSnapshot<Map<String, dynamic>>>.of(
+                snap.data?.docs ?? [],
+              );
 
               final today = DateTime.now();
               final todayDate = DateTime(today.year, today.month, today.day);
@@ -168,26 +196,54 @@ class _AppointmentScreenState extends State<AppointmentScreen>
                 final dateStr = d['date'] as String? ?? '';
                 final apptDate = _parseApptDate(dateStr);
                 if (apptDate == null) return false;
-                return apptDate.isBefore(todayDate);
+                if (apptDate.isBefore(todayDate)) return true;
+                if (apptDate.isAfter(todayDate)) return false;
+                // Same calendar day — a date-only comparison can't tell a
+                // 9 AM slot from an 9 PM one, so fall through to the slot
+                // time itself (+30 min grace, matching the join window
+                // below) instead of leaving it in Upcoming until midnight.
+                final timeStr = d['time'] as String? ?? '';
+                if (timeStr.isEmpty) return false;
+                final slotDateTime = todayDate.add(
+                  Duration(minutes: _slotToMinutes(timeStr)),
+                );
+                return slotDateTime
+                    .add(const Duration(minutes: 30))
+                    .isBefore(today);
               }
 
               // Upcoming: booked & date is today or future — sorted closest first
-              final upcoming = docs
-                  .where((d) =>
-                      d['status'] == 'booked' && !isDatePast(d.data()))
-                  .toList()
-                ..sort((a, b) => _apptSortKey(a.data()).compareTo(_apptSortKey(b.data())));
+              final upcoming =
+                  docs
+                      .where(
+                        (d) => d['status'] == 'booked' && !isDatePast(d.data()),
+                      )
+                      .toList()
+                    ..sort(
+                      (a, b) => _apptSortKey(
+                        a.data(),
+                      ).compareTo(_apptSortKey(b.data())),
+                    );
               // Past: completed OR booked but date already passed — newest first
-              final past = docs
-                  .where((d) =>
-                      d['status'] == 'completed' ||
-                      (d['status'] == 'booked' && isDatePast(d.data())))
-                  .toList()
-                ..sort((a, b) => _apptSortKey(b.data()).compareTo(_apptSortKey(a.data())));
-              final cancelled = docs
-                  .where((d) => d['status'] == 'cancelled')
-                  .toList()
-                ..sort((a, b) => _apptSortKey(b.data()).compareTo(_apptSortKey(a.data())));
+              final past =
+                  docs
+                      .where(
+                        (d) =>
+                            d['status'] == 'completed' ||
+                            (d['status'] == 'booked' && isDatePast(d.data())),
+                      )
+                      .toList()
+                    ..sort(
+                      (a, b) => _apptSortKey(
+                        b.data(),
+                      ).compareTo(_apptSortKey(a.data())),
+                    );
+              final cancelled =
+                  docs.where((d) => d['status'] == 'cancelled').toList()..sort(
+                    (a, b) => _apptSortKey(
+                      b.data(),
+                    ).compareTo(_apptSortKey(a.data())),
+                  );
 
               return TabBarView(
                 controller: _tab,
@@ -205,11 +261,14 @@ class _AppointmentScreenState extends State<AppointmentScreen>
         onPressed: () => context.push(AppRoutes.doctors),
         backgroundColor: AppColors.primary,
         icon: const Icon(Icons.add_rounded, color: Colors.white),
-        label: const Text('Book Appointment',
-            style: TextStyle(
-                color: Colors.white,
-                fontFamily: 'Poppins',
-                fontWeight: FontWeight.w600)),
+        label: const Text(
+          'Book Appointment',
+          style: TextStyle(
+            color: Colors.white,
+            fontFamily: 'Poppins',
+            fontWeight: FontWeight.w600,
+          ),
+        ),
       ),
     );
   }
@@ -240,8 +299,11 @@ class _AppointmentScreenState extends State<AppointmentScreen>
                     ),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.calendar_today_outlined,
-                      size: 44, color: AppColors.primary),
+                  child: const Icon(
+                    Icons.calendar_today_outlined,
+                    size: 44,
+                    color: AppColors.primary,
+                  ),
                 ),
                 const SizedBox(height: 24),
                 Text(
@@ -270,7 +332,9 @@ class _AppointmentScreenState extends State<AppointmentScreen>
                   onTap: () => context.push(AppRoutes.doctors),
                   child: Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 32, vertical: 15),
+                      horizontal: 32,
+                      vertical: 15,
+                    ),
                     decoration: BoxDecoration(
                       gradient: AppColors.primaryGradient,
                       borderRadius: BorderRadius.circular(14),
@@ -285,8 +349,7 @@ class _AppointmentScreenState extends State<AppointmentScreen>
                     child: const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.add_rounded,
-                            size: 18, color: Colors.white),
+                        Icon(Icons.add_rounded, size: 18, color: Colors.white),
                         SizedBox(width: 8),
                         Text(
                           'Book Your First Appointment',
@@ -356,13 +419,16 @@ class _AppointmentScreenState extends State<AppointmentScreen>
         final type = data['consultationType'] as String? ?? 'Video';
         final isInPerson = type == 'In-Person';
         final opPrescriptionId = data['prescriptionId'] as String?;
-        final hasOpSlip = opPrescriptionId != null && opPrescriptionId.isNotEmpty;
+        final hasOpSlip =
+            opPrescriptionId != null && opPrescriptionId.isNotEmpty;
 
         final accentColor = isUpcoming
             ? AppColors.accent
             : isCompleted
-                ? (badgeLabel == 'Past' ? AppColors.textHint : const Color(0xFF43A047))
-                : AppColors.error;
+            ? (badgeLabel == 'Past'
+                  ? AppColors.textHint
+                  : const Color(0xFF43A047))
+            : AppColors.error;
 
         return Container(
           margin: const EdgeInsets.only(bottom: 14),
@@ -371,9 +437,10 @@ class _AppointmentScreenState extends State<AppointmentScreen>
             borderRadius: BorderRadius.circular(18),
             boxShadow: [
               BoxShadow(
-                  color: accentColor.withValues(alpha: isUpcoming ? 0.12 : 0.06),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4))
+                color: accentColor.withValues(alpha: isUpcoming ? 0.12 : 0.06),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
             ],
           ),
           child: ClipRRect(
@@ -396,247 +463,298 @@ class _AppointmentScreenState extends State<AppointmentScreen>
                     child: Padding(
                       padding: const EdgeInsets.all(16),
                       child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(children: [
-                Container(
-                  width: 56,
-                  height: 56,
-                  decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          AppColors.primary.withValues(alpha: 0.15),
-                          AppColors.secondary.withValues(alpha: 0.08),
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                width: 56,
+                                height: 56,
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      AppColors.primary.withValues(alpha: 0.15),
+                                      AppColors.secondary.withValues(
+                                        alpha: 0.08,
+                                      ),
+                                    ],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  ),
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: const Icon(
+                                  Icons.person_rounded,
+                                  size: 30,
+                                  color: AppColors.primary,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      doctorName,
+                                      style: AppTextStyles.labelLarge,
+                                    ),
+                                    if (specialty.isNotEmpty)
+                                      Text(
+                                        specialty,
+                                        style: AppTextStyles.bodySmall,
+                                      ),
+                                  ],
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 5,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: accentColor.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: accentColor.withValues(alpha: 0.25),
+                                  ),
+                                ),
+                                child: Text(
+                                  badgeLabel,
+                                  style: TextStyle(
+                                    fontFamily: 'Poppins',
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: accentColor,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 14),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 10,
+                              horizontal: 12,
+                            ),
+                            decoration: BoxDecoration(
+                              color: context.appBackground,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: context.appBorder.withValues(alpha: 0.5),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: _AptDetail(
+                                    Icons.calendar_today_rounded,
+                                    displayDate,
+                                  ),
+                                ),
+                                Container(
+                                  width: 1,
+                                  height: 28,
+                                  color: context.appBorder,
+                                ),
+                                Expanded(
+                                  child: _AptDetail(
+                                    Icons.access_time_rounded,
+                                    time,
+                                  ),
+                                ),
+                                Container(
+                                  width: 1,
+                                  height: 28,
+                                  color: context.appBorder,
+                                ),
+                                Expanded(
+                                  child: _AptDetail(
+                                    type == 'Video'
+                                        ? Icons.video_call_rounded
+                                        : type == 'Audio'
+                                        ? Icons.phone_in_talk_rounded
+                                        : type == 'In-Person'
+                                        ? Icons.local_hospital_rounded
+                                        : Icons.chat_bubble_rounded,
+                                    type,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (isInPerson && (isUpcoming || isCompleted)) ...[
+                            const SizedBox(height: 10),
+                            _OpStatusChip(
+                              ready: hasOpSlip,
+                              onTap: () =>
+                                  _viewPrescription(appointments[i].id, data),
+                            ),
+                          ],
+                          if (isUpcoming) ...[
+                            const SizedBox(height: 12),
+                            _ScheduledJoinSection(
+                              appointmentId: appointments[i].id,
+                              data: data,
+                              type: type,
+                              doctorName: doctorName,
+                              specialty: specialty,
+                              onCancel: () =>
+                                  _cancelAppointment(appointments[i].id),
+                            ),
+                            const SizedBox(height: 10),
+                            // ── Reschedule button ──────────────────────────────────────
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: AppColors.secondary,
+                                  side: BorderSide(
+                                    color: AppColors.secondary.withValues(
+                                      alpha: 0.5,
+                                    ),
+                                  ),
+                                  backgroundColor: AppColors.secondary
+                                      .withValues(alpha: 0.04),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 11,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                icon: const Icon(
+                                  Icons.edit_calendar_rounded,
+                                  size: 16,
+                                ),
+                                label: const Text(
+                                  'Reschedule',
+                                  style: TextStyle(
+                                    fontFamily: 'Poppins',
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                onPressed: () {
+                                  final doctorId =
+                                      data['doctorId'] as String? ?? '';
+                                  if (doctorId.isNotEmpty) {
+                                    context.push(Uri(
+                                      path: '/doctors/$doctorId',
+                                      queryParameters: {
+                                        'rescheduleId': appointments[i].id,
+                                        'rescheduleType': type,
+                                      },
+                                    ).toString());
+                                  } else {
+                                    context.push(AppRoutes.doctors);
+                                  }
+                                },
+                              ),
+                            ),
+                          ],
+                          if (isCompleted) ...[
+                            const SizedBox(height: 12),
+                            // ── Status timeline ────────────────────────────────────────
+                            _StatusTimeline(
+                              steps: const [
+                                'Booked',
+                                'Consulting',
+                                'Completed',
+                              ],
+                              currentIndex: actualStatus == 'completed' ? 2 : 1,
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    icon: const Icon(
+                                      Icons.receipt_long_rounded,
+                                      size: 16,
+                                    ),
+                                    label: Text(
+                                      isInPerson
+                                          ? 'Download OP Slip'
+                                          : 'Prescription',
+                                    ),
+                                    onPressed: () => _viewPrescription(
+                                      appointments[i].id,
+                                      data,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: ElevatedButton.icon(
+                                    icon: const Icon(
+                                      Icons.replay_rounded,
+                                      size: 16,
+                                    ),
+                                    label: const Text('Book Again'),
+                                    onPressed: () {
+                                      final doctorId =
+                                          data['doctorId'] as String? ?? '';
+                                      if (doctorId.isNotEmpty) {
+                                        context.push('/doctors/$doctorId');
+                                      } else {
+                                        context.push(AppRoutes.doctors);
+                                      }
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            // Rate Doctor button — shown only for completed appointments
+                            // that haven't been reviewed yet.
+                            _RateButton(
+                              appointmentId: appointments[i].id,
+                              doctorId: data['doctorId'] as String? ?? '',
+                              doctorName: doctorName,
+                              doctorSpecialty: specialty,
+                              consultationType: type,
+                            ),
+                          ],
                         ],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(16)),
-                  child: const Icon(Icons.person_rounded,
-                      size: 30, color: AppColors.primary),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(doctorName, style: AppTextStyles.labelLarge),
-                        if (specialty.isNotEmpty)
-                          Text(specialty,
-                              style: AppTextStyles.bodySmall),
-                      ]),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: accentColor.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: accentColor.withValues(alpha: 0.25)),
-                  ),
-                  child: Text(
-                    badgeLabel,
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: accentColor,
-                    ),
-                  ),
-                ),
-              ]),
-              const SizedBox(height: 14),
-              Container(
-                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-                decoration: BoxDecoration(
-                    color: context.appBackground,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: context.appBorder.withValues(alpha: 0.5))),
-                child: Row(
-                  children: [
-                    Expanded(child: _AptDetail(Icons.calendar_today_rounded, displayDate)),
-                    Container(width: 1, height: 28, color: context.appBorder),
-                    Expanded(child: _AptDetail(Icons.access_time_rounded, time)),
-                    Container(width: 1, height: 28, color: context.appBorder),
-                    Expanded(child: _AptDetail(
-                      type == 'Video'
-                          ? Icons.video_call_rounded
-                          : type == 'Audio'
-                              ? Icons.phone_in_talk_rounded
-                              : type == 'In-Person'
-                                  ? Icons.local_hospital_rounded
-                                  : Icons.chat_bubble_rounded,
-                      type,
-                    )),
-                  ],
-                ),
-              ),
-              if (isInPerson && (isUpcoming || isCompleted)) ...[
-                const SizedBox(height: 10),
-                _OpStatusChip(ready: hasOpSlip),
-              ],
-              if (isUpcoming) ...[
-                const SizedBox(height: 12),
-                _ScheduledJoinSection(
-                  appointmentId: appointments[i].id,
-                  data: data,
-                  type: type,
-                  doctorName: doctorName,
-                  specialty: specialty,
-                  onCancel: () => _cancelAppointment(appointments[i].id),
-                ),
-                const SizedBox(height: 10),
-                // ── Reschedule button ──────────────────────────────────────
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.secondary,
-                      side: BorderSide(
-                          color: AppColors.secondary.withValues(alpha: 0.5)),
-                      backgroundColor:
-                          AppColors.secondary.withValues(alpha: 0.04),
-                      padding: const EdgeInsets.symmetric(vertical: 11),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
-                    ),
-                    icon: const Icon(Icons.edit_calendar_rounded, size: 16),
-                    label: const Text('Reschedule',
-                        style: TextStyle(
-                          fontFamily: 'Poppins',
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                        )),
-                    onPressed: () {
-                      final doctorId =
-                          data['doctorId'] as String? ?? '';
-                      if (doctorId.isNotEmpty) {
-                        context.push('/doctors/$doctorId');
-                      } else {
-                        context.push(AppRoutes.doctors);
-                      }
-                    },
-                  ),
-                ),
-              ],
-              if (isCompleted) ...[
-                const SizedBox(height: 12),
-                // ── Status timeline ────────────────────────────────────────
-                _StatusTimeline(
-                  steps: const ['Booked', 'Consulting', 'Completed'],
-                  currentIndex: actualStatus == 'completed' ? 2 : 1,
-                ),
-                const SizedBox(height: 12),
-                Row(children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                        icon: const Icon(Icons.receipt_long_rounded,
-                            size: 16),
-                        label: Text(isInPerson ? 'Download OP Slip' : 'Prescription'),
-                        onPressed: () => _viewPrescription(
-                          appointments[i].id,
-                          data,
-                        )),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: ElevatedButton.icon(
-                        icon: const Icon(Icons.replay_rounded, size: 16),
-                        label: const Text('Book Again'),
-                        onPressed: () {
-                          final doctorId = data['doctorId'] as String? ?? '';
-                          if (doctorId.isNotEmpty) {
-                            context.push('/doctors/$doctorId');
-                          } else {
-                            context.push(AppRoutes.doctors);
-                          }
-                        }),
-                  ),
-                ]),
-                const SizedBox(height: 10),
-                // Rate Doctor button — shown only for completed appointments
-                // that haven't been reviewed yet.
-                _RateButton(
-                  appointmentId: appointments[i].id,
-                  doctorId: data['doctorId'] as String? ?? '',
-                  doctorName: doctorName,
-                  doctorSpecialty: specialty,
-                  consultationType: type,
-                ),
-              ],
-            ],
-                      ),  // Column
-                    ),    // Padding
-                  ),      // Expanded
-                ],        // Row children
-              ),          // Row
-            ),            // IntrinsicHeight
-          ),              // ClipRRect
+                      ), // Column
+                    ), // Padding
+                  ), // Expanded
+                ], // Row children
+              ), // Row
+            ), // IntrinsicHeight
+          ), // ClipRRect
         );
       },
     );
   }
 
-  Future<void> _viewPrescription(String apptId, Map<String, dynamic> data) async {
-    final consultationId = (data['consultationId'] as String?)?.isNotEmpty == true
-        ? data['consultationId'] as String
-        : apptId;
-
-    // Try fetching prescription linked to this appointment/consultation
-    final snap = await FirebaseFirestore.instance
-        .collection('prescriptions')
-        .where('appointmentId', isEqualTo: apptId)
-        .limit(1)
-        .get();
-
-    Map<String, dynamic>? rxData;
-    if (snap.docs.isNotEmpty) {
-      rxData = snap.docs.first.data();
-    } else {
-      // Fallback: check by consultationId
-      final snap2 = await FirebaseFirestore.instance
-          .collection('prescriptions')
-          .where('consultationId', isEqualTo: consultationId)
-          .limit(1)
-          .get();
-      if (snap2.docs.isNotEmpty) rxData = snap2.docs.first.data();
-    }
-
-    if (!mounted) return;
-    if (rxData == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No prescription found for this appointment')),
+  Future<void> _viewPrescription(String apptId, Map<String, dynamic> data) =>
+      OpSlipService.openSlip(
+        context,
+        appointmentId: apptId,
+        appointmentData: data,
       );
-      return;
-    }
-    context.push(AppRoutes.prescriptionViewer, extra: {
-      ...rxData,
-      'doctorName': data['doctorName'],
-      'doctorSpecialty': data['doctorSpecialty'],
-      'date': data['date'],
-      'consultationType': data['consultationType'],
-    });
-  }
 
   Future<void> _cancelAppointment(String docId) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16)),
-        title: const Text('Cancel Appointment?',
-            style: TextStyle(
-                fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          'Cancel Appointment?',
+          style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700),
+        ),
         content: const Text(
-            'This will free up the slot for other patients.',
-            style: TextStyle(fontFamily: 'Poppins', fontSize: 13)),
+          'This will free up the slot for other patients.',
+          style: TextStyle(fontFamily: 'Poppins', fontSize: 13),
+        ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Keep')),
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Keep'),
+          ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.error),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Cancel Appointment'),
           ),
@@ -649,9 +767,9 @@ class _AppointmentScreenState extends State<AppointmentScreen>
           .collection('appointments')
           .doc(docId)
           .update({
-        'status': 'cancelled',
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
+            'status': 'cancelled',
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
       // Slot availability is derived from appointments where status == 'booked';
       // cancelled appointments are automatically excluded from that query.
     }
@@ -667,7 +785,13 @@ class _AppointmentCardSkeleton extends StatelessWidget {
       decoration: BoxDecoration(
         color: context.appSurface,
         borderRadius: BorderRadius.circular(18),
-        boxShadow: const [BoxShadow(color: Color(0x08000000), blurRadius: 12, offset: Offset(0, 4))],
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x08000000),
+            blurRadius: 12,
+            offset: Offset(0, 4),
+          ),
+        ],
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(18),
@@ -683,25 +807,58 @@ class _AppointmentCardSkeleton extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(children: [
-                          SkeletonBox(width: 56, height: 56, radius: 16),
-                          SizedBox(width: 12),
-                          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                            SkeletonBox(width: double.infinity, height: 14, radius: 4),
-                            SizedBox(height: 6),
-                            SkeletonBox(width: 140, height: 11, radius: 4),
-                          ])),
-                          SizedBox(width: 8),
-                          SkeletonBox(width: 64, height: 24, radius: 12),
-                        ]),
+                        Row(
+                          children: [
+                            SkeletonBox(width: 56, height: 56, radius: 16),
+                            SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  SkeletonBox(
+                                    width: double.infinity,
+                                    height: 14,
+                                    radius: 4,
+                                  ),
+                                  SizedBox(height: 6),
+                                  SkeletonBox(
+                                    width: 140,
+                                    height: 11,
+                                    radius: 4,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            SizedBox(width: 8),
+                            SkeletonBox(width: 64, height: 24, radius: 12),
+                          ],
+                        ),
                         SizedBox(height: 14),
-                        SkeletonBox(width: double.infinity, height: 44, radius: 12),
+                        SkeletonBox(
+                          width: double.infinity,
+                          height: 44,
+                          radius: 12,
+                        ),
                         SizedBox(height: 12),
-                        Row(children: [
-                          Expanded(child: SkeletonBox(width: double.infinity, height: 40, radius: 10)),
-                          SizedBox(width: 10),
-                          Expanded(child: SkeletonBox(width: double.infinity, height: 40, radius: 10)),
-                        ]),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: SkeletonBox(
+                                width: double.infinity,
+                                height: 40,
+                                radius: 10,
+                              ),
+                            ),
+                            SizedBox(width: 10),
+                            Expanded(
+                              child: SkeletonBox(
+                                width: double.infinity,
+                                height: 40,
+                                radius: 10,
+                              ),
+                            ),
+                          ],
+                        ),
                       ],
                     ),
                   ),
@@ -721,21 +878,22 @@ class _AptDetail extends StatelessWidget {
   const _AptDetail(this.icon, this.label);
   @override
   Widget build(BuildContext context) => Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, size: 14, color: AppColors.primary),
-          const SizedBox(width: 5),
-          Flexible(
-            child: Text(
-              label,
-              style: AppTextStyles.labelSmall
-                  .copyWith(color: context.appTextPrimary),
-              overflow: TextOverflow.ellipsis,
-              maxLines: 1,
-            ),
+    mainAxisAlignment: MainAxisAlignment.center,
+    children: [
+      Icon(icon, size: 14, color: AppColors.primary),
+      const SizedBox(width: 5),
+      Flexible(
+        child: Text(
+          label,
+          style: AppTextStyles.labelSmall.copyWith(
+            color: context.appTextPrimary,
           ),
-        ],
-      );
+          overflow: TextOverflow.ellipsis,
+          maxLines: 1,
+        ),
+      ),
+    ],
+  );
 }
 
 // OP (out-patient) status chip for in-person appointments. `ready` flips to
@@ -745,37 +903,47 @@ class _AptDetail extends StatelessWidget {
 // listener needed.
 class _OpStatusChip extends StatelessWidget {
   final bool ready;
-  const _OpStatusChip({required this.ready});
+  final VoidCallback onTap;
+  const _OpStatusChip({required this.ready, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     final color = ready ? const Color(0xFF2E7D32) : AppColors.warning;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            ready ? Icons.picture_as_pdf_rounded : Icons.hourglass_top_rounded,
-            size: 14,
-            color: color,
-          ),
-          const SizedBox(width: 6),
-          Text(
-            ready ? 'OP Slip Ready' : 'OP Pending — filled after your visit',
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              ready ? Icons.picture_as_pdf_rounded : Icons.download_rounded,
+              size: 14,
               color: color,
             ),
-          ),
-        ],
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                ready
+                    ? 'OP Slip Ready — tap to download'
+                    : 'Download OP Slip (bring it to the hospital)',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: color,
+                ),
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, size: 16, color: color),
+          ],
+        ),
       ),
     );
   }
@@ -815,18 +983,29 @@ class _RateButton extends StatelessWidget {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 10),
             decoration: BoxDecoration(
-              color: AppColors.accent.withValues(alpha:0.08),
+              color: AppColors.accent.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppColors.accent.withValues(alpha:0.3)),
+              border: Border.all(
+                color: AppColors.accent.withValues(alpha: 0.3),
+              ),
             ),
-            child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-              const Icon(Icons.check_circle_rounded,
-                  size: 15, color: AppColors.accent),
-              const SizedBox(width: 6),
-              Text('Review Submitted',
-                  style: AppTextStyles.labelSmall
-                      .copyWith(color: AppColors.accent)),
-            ]),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(
+                  Icons.check_circle_rounded,
+                  size: 15,
+                  color: AppColors.accent,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  'Review Submitted',
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: AppColors.accent,
+                  ),
+                ),
+              ],
+            ),
           );
         }
         return SizedBox(
@@ -835,7 +1014,7 @@ class _RateButton extends StatelessWidget {
             style: OutlinedButton.styleFrom(
               foregroundColor: Colors.amber.shade700,
               side: BorderSide(color: Colors.amber.shade300),
-              backgroundColor: Colors.amber.withValues(alpha:0.05),
+              backgroundColor: Colors.amber.withValues(alpha: 0.05),
             ),
             icon: const Icon(Icons.star_rounded, size: 16),
             label: const Text('Rate Doctor'),
@@ -873,9 +1052,7 @@ class _StatusTimeline extends StatelessWidget {
           return Expanded(
             child: Container(
               height: 2,
-              color: filled
-                  ? const Color(0xFF43A047)
-                  : context.appBorder,
+              color: filled ? const Color(0xFF43A047) : context.appBorder,
             ),
           );
         }
@@ -903,8 +1080,7 @@ class _StatusTimeline extends StatelessWidget {
               style: TextStyle(
                 fontFamily: 'Poppins',
                 fontSize: 9,
-                fontWeight:
-                    isCurrent ? FontWeight.w700 : FontWeight.w500,
+                fontWeight: isCurrent ? FontWeight.w700 : FontWeight.w500,
                 color: color,
               ),
             ),
@@ -949,9 +1125,9 @@ class _ScheduledJoinSectionState extends State<_ScheduledJoinSection>
   bool _joining = false;
 
   // ── Join window constants ──────────────────────────────────────────────────
-  static const _openBeforeMin  = 10;  // window opens 10 min before slot
-  static const _closeAfterMin  = 30;  // window closes 30 min after slot
-  static const _alertBeforeMin = 15;  // show countdown chip from 15 min out
+  static const _openBeforeMin = 10; // window opens 10 min before slot
+  static const _closeAfterMin = 30; // window closes 30 min after slot
+  static const _alertBeforeMin = 15; // show countdown chip from 15 min out
 
   @override
   void initState() {
@@ -979,24 +1155,32 @@ class _ScheduledJoinSectionState extends State<_ScheduledJoinSection>
     if (dateStr.isEmpty || timeStr.isEmpty) return null;
     try {
       DateTime? date;
-      try { date = DateTime.parse(dateStr); } catch (_) {
+      try {
+        date = DateTime.parse(dateStr);
+      } catch (_) {
         for (final fmt in [
           DateFormat('EEE, d MMM yyyy'),
           DateFormat('EEE, dd MMM yyyy'),
           DateFormat('d MMM yyyy'),
         ]) {
-          try { date = fmt.parse(dateStr); break; } catch (_) {}
+          try {
+            date = fmt.parse(dateStr);
+            break;
+          } catch (_) {}
         }
       }
       if (date == null) return null;
       final parts = timeStr.trim().split(' ');
-      final hm    = parts[0].split(':');
-      int h       = int.parse(hm[0]);
-      final m     = int.parse(hm[1]);
-      if (parts.length > 1 && parts[1].toUpperCase() == 'PM' && h != 12) h += 12;
+      final hm = parts[0].split(':');
+      int h = int.parse(hm[0]);
+      final m = int.parse(hm[1]);
+      if (parts.length > 1 && parts[1].toUpperCase() == 'PM' && h != 12)
+        h += 12;
       if (parts.length > 1 && parts[1].toUpperCase() == 'AM' && h == 12) h = 0;
       return DateTime(date.year, date.month, date.day, h, m);
-    } catch (_) { return null; }
+    } catch (_) {
+      return null;
+    }
   }
 
   // ── Navigation ─────────────────────────────────────────────────────────────
@@ -1006,31 +1190,43 @@ class _ScheduledJoinSectionState extends State<_ScheduledJoinSection>
     setState(() => _joining = true);
 
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) { setState(() => _joining = false); return; }
+    if (user == null) {
+      setState(() => _joining = false);
+      return;
+    }
 
-    final data        = widget.data;
-    final doctorName  = widget.doctorName;
-    final specialty   = widget.specialty;
-    final photoUrl    = data['doctorPhotoUrl'] as String? ?? '';
-    final type        = data['consultationType'] as String? ?? 'Video';
-    final db          = FirebaseFirestore.instance;
+    final data = widget.data;
+    final doctorName = widget.doctorName;
+    final specialty = widget.specialty;
+    final photoUrl = data['doctorPhotoUrl'] as String? ?? '';
+    final type = data['consultationType'] as String? ?? 'Video';
+    final db = FirebaseFirestore.instance;
 
     // Re-read appointment to get the freshest consultationId (doctor may have
     // already started the consultation from their side).
     String? consultationId;
     String? existingStatus;
     try {
-      final snap = await db.collection('appointments').doc(widget.appointmentId).get();
+      final snap = await db
+          .collection('appointments')
+          .doc(widget.appointmentId)
+          .get();
       consultationId = (snap.data()?['consultationId'] as String?)
           ?.trim()
           .replaceAll('', '');
       if (consultationId != null && consultationId.isNotEmpty) {
-        final cSnap = await db.collection('consultations').doc(consultationId).get();
+        final cSnap = await db
+            .collection('consultations')
+            .doc(consultationId)
+            .get();
         existingStatus = cSnap.data()?['status'] as String?;
       }
     } catch (_) {}
 
-    if (!mounted) { setState(() => _joining = false); return; }
+    if (!mounted) {
+      setState(() => _joining = false);
+      return;
+    }
 
     // Doctor already made the call active — jump straight to video.
     if (consultationId != null &&
@@ -1050,10 +1246,10 @@ class _ScheduledJoinSectionState extends State<_ScheduledJoinSection>
         AppRoutes.outgoingCall,
         extra: {
           'consultationId': consultationId,
-          'doctorName':     doctorName,
+          'doctorName': doctorName,
           'doctorSpecialty': specialty,
           'doctorPhotoUrl': photoUrl,
-          'isScheduled':    true,
+          'isScheduled': true,
         },
       );
       setState(() => _joining = false);
@@ -1069,25 +1265,26 @@ class _ScheduledJoinSectionState extends State<_ScheduledJoinSection>
     } catch (_) {}
 
     final consultRef = db.collection('consultations').doc();
-    final now        = FieldValue.serverTimestamp();
+    final now = FieldValue.serverTimestamp();
     try {
       final batch = db.batch();
       batch.set(consultRef, {
-        'appointmentId':   widget.appointmentId,
-        'channelName':     widget.appointmentId, // stable channel = appointment doc ID
-        'doctorId':        data['doctorId']      ?? '',
-        'doctorName':      doctorName,
+        'appointmentId': widget.appointmentId,
+        'channelName':
+            widget.appointmentId, // stable channel = appointment doc ID
+        'doctorId': data['doctorId'] ?? '',
+        'doctorName': doctorName,
         'doctorSpecialty': specialty,
-        'doctorPhotoUrl':  photoUrl,
-        'patientId':       user.uid,
-        'patientName':     patientName,
+        'doctorPhotoUrl': photoUrl,
+        'patientId': user.uid,
+        'patientName': patientName,
         'consultationType': type,
-        'chiefComplaint':  data['chiefComplaint'] ?? '',
-        'callerType':      'patient',
-        'isScheduled':     true,
-        'status':          'scheduled_waiting',
-        'createdAt':       now,
-        'updatedAt':       now,
+        'chiefComplaint': data['chiefComplaint'] ?? '',
+        'callerType': 'patient',
+        'isScheduled': true,
+        'status': 'scheduled_waiting',
+        'createdAt': now,
+        'updatedAt': now,
       });
       batch.update(db.collection('appointments').doc(widget.appointmentId), {
         'consultationId': consultRef.id,
@@ -1095,25 +1292,30 @@ class _ScheduledJoinSectionState extends State<_ScheduledJoinSection>
       await batch.commit();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Could not join: ${e.toString()}'),
-          backgroundColor: Colors.red.shade700,
-          behavior: SnackBarBehavior.floating,
-        ));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not join: ${e.toString()}'),
+            backgroundColor: Colors.red.shade700,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
       }
       setState(() => _joining = false);
       return;
     }
 
-    if (!mounted) { setState(() => _joining = false); return; }
+    if (!mounted) {
+      setState(() => _joining = false);
+      return;
+    }
     context.push(
       AppRoutes.outgoingCall,
       extra: {
-        'consultationId':  consultRef.id,
-        'doctorName':      doctorName,
+        'consultationId': consultRef.id,
+        'doctorName': doctorName,
         'doctorSpecialty': specialty,
-        'doctorPhotoUrl':  photoUrl,
-        'isScheduled':     true,
+        'doctorPhotoUrl': photoUrl,
+        'isScheduled': true,
       },
     );
     setState(() => _joining = false);
@@ -1125,7 +1327,7 @@ class _ScheduledJoinSectionState extends State<_ScheduledJoinSection>
   Widget build(BuildContext context) {
     final dateStr = widget.data['date'] as String? ?? '';
     final timeStr = widget.data['time'] as String? ?? '';
-    final type    = widget.type;
+    final type = widget.type;
 
     // Non-video/audio types get simple static buttons.
     if (type != 'Video' && type != 'Audio') {
@@ -1133,7 +1335,7 @@ class _ScheduledJoinSectionState extends State<_ScheduledJoinSection>
     }
 
     final slot = _parseSlot(dateStr, timeStr);
-    final now  = DateTime.now();
+    final now = DateTime.now();
 
     if (slot == null) {
       // Can't parse time — show static join button as fallback.
@@ -1150,12 +1352,16 @@ class _ScheduledJoinSectionState extends State<_ScheduledJoinSection>
         key: ValueKey(consultationId),
         stream: _consultationStream(),
         builder: (context, snap) {
-          final cData   = snap.data?.data();
+          final cData = snap.data?.data();
           final cStatus = cData?['status'] as String?;
 
           // Doctor already made the session active — show "Rejoin" instantly.
           if (cStatus == 'active') {
-            return _buildActionRow(context, inWindow: true, label: 'Rejoin Call');
+            return _buildActionRow(
+              context,
+              inWindow: true,
+              label: 'Rejoin Call',
+            );
           }
 
           // Patient is already waiting in OutgoingCallScreen — show status chip.
@@ -1185,238 +1391,342 @@ class _ScheduledJoinSectionState extends State<_ScheduledJoinSection>
 
   // ── Sub-builders ───────────────────────────────────────────────────────────
 
-  Widget _buildActionRow(BuildContext context, {
+  Widget _buildActionRow(
+    BuildContext context, {
     required bool inWindow,
     String label = 'Join Now',
   }) {
-    return Row(children: [
-      Expanded(child: _cancelBtn()),
-      const SizedBox(width: 10),
-      Expanded(
-        flex: 2,
-        child: AnimatedBuilder(
-          animation: _pulseCtrl,
-          builder: (_, child) => Transform.scale(
-            scale: inWindow ? (1.0 + _pulseCtrl.value * 0.03) : 1.0,
-            child: child,
+    return Row(
+      children: [
+        Expanded(child: _cancelBtn()),
+        const SizedBox(width: 10),
+        Expanded(
+          flex: 2,
+          child: AnimatedBuilder(
+            animation: _pulseCtrl,
+            builder: (_, child) => Transform.scale(
+              scale: inWindow ? (1.0 + _pulseCtrl.value * 0.03) : 1.0,
+              child: child,
+            ),
+            child: GestureDetector(
+              onTap: _joining ? null : _joinCall,
+              child: Container(
+                height: 44,
+                decoration: BoxDecoration(
+                  gradient: AppColors.primaryGradient,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: inWindow
+                      ? [
+                          BoxShadow(
+                            color: AppColors.primary.withValues(alpha: 0.4),
+                            blurRadius: 14,
+                            offset: const Offset(0, 4),
+                          ),
+                        ]
+                      : null,
+                ),
+                child: _joining
+                    ? const Center(
+                        child: SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            color: Colors.white,
+                          ),
+                        ),
+                      )
+                    : Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(
+                            Icons.video_call_rounded,
+                            size: 18,
+                            color: Colors.white,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            label,
+                            style: const TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+              ),
+            ),
           ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildWaitingRow(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(child: _cancelBtn()),
+        const SizedBox(width: 10),
+        Expanded(
+          flex: 2,
+          child: Container(
+            height: 44,
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: AppColors.primary.withValues(alpha: 0.3),
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: AppColors.primary.withValues(alpha: 0.6),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const Text(
+                  'Waiting for doctor',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.primary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDoctorCallingRow(BuildContext context, String consultationId) {
+    return Row(
+      children: [
+        Expanded(child: _cancelBtn()),
+        const SizedBox(width: 10),
+        Expanded(
+          flex: 2,
           child: GestureDetector(
-            onTap: _joining ? null : _joinCall,
+            onTap: () => context.push(
+              AppRoutes.incomingCall,
+              extra: {
+                'consultationId': consultationId,
+                'doctorName': widget.doctorName,
+                'doctorSpecialty': widget.specialty,
+                'consultationType': widget.data['consultationType'] ?? 'Video',
+                'doctorPhotoUrl': widget.data['doctorPhotoUrl'] ?? '',
+              },
+            ),
+            child: AnimatedBuilder(
+              animation: _pulseCtrl,
+              builder: (_, child) => Transform.scale(
+                scale: 1.0 + _pulseCtrl.value * 0.03,
+                child: child,
+              ),
+              child: Container(
+                height: 44,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF43A047), Color(0xFF1B5E20)],
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF43A047).withValues(alpha: 0.4),
+                      blurRadius: 14,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.phone_in_talk_rounded,
+                      size: 16,
+                      color: Colors.white,
+                    ),
+                    SizedBox(width: 6),
+                    Text(
+                      'Doctor is calling',
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCountdownRow(BuildContext context, int diffMin) {
+    return Row(
+      children: [
+        Expanded(child: _cancelBtn()),
+        const SizedBox(width: 10),
+        Expanded(
+          flex: 2,
+          child: Container(
+            height: 44,
+            decoration: BoxDecoration(
+              color: Colors.orange.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.orange.withValues(alpha: 0.35)),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(
+                  Icons.access_time_rounded,
+                  size: 15,
+                  color: Colors.orange,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  'Opens in $diffMin min',
+                  style: const TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.orange,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFarOutRow(BuildContext context, DateTime slot) {
+    final label = DateFormat(
+      'h:mm a',
+    ).format(slot.subtract(const Duration(minutes: _openBeforeMin)));
+    return Row(
+      children: [
+        Expanded(child: _cancelBtn()),
+        const SizedBox(width: 10),
+        Expanded(
+          flex: 2,
+          child: Container(
+            height: 44,
+            decoration: BoxDecoration(
+              color: context.appBackground,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: context.appBorder),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.lock_clock_rounded,
+                  size: 14,
+                  color: context.appTextHint,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  'Join opens at $label',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                    color: context.appTextHint,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  bool _openingDirections = false;
+
+  Future<void> _openDirections() async {
+    if (_openingDirections) return;
+    setState(() => _openingDirections = true);
+    try {
+      await OpSlipService.openDirections(context, appointmentData: widget.data);
+    } finally {
+      if (mounted) setState(() => _openingDirections = false);
+    }
+  }
+
+  Widget _buildStaticActionRow(BuildContext context, String type) {
+    final icon = type == 'Chat'
+        ? Icons.chat_bubble_rounded
+        : Icons.directions_rounded;
+    final label = type == 'Chat' ? 'Chat Now' : 'Directions';
+    return Row(
+      children: [
+        Expanded(child: _cancelBtn()),
+        const SizedBox(width: 10),
+        Expanded(
+          flex: 2,
+          child: GestureDetector(
+            onTap: () {
+              if (type == 'Chat') {
+                context.push(AppRoutes.consultation);
+              } else {
+                _openDirections();
+              }
+            },
             child: Container(
               height: 44,
               decoration: BoxDecoration(
                 gradient: AppColors.primaryGradient,
                 borderRadius: BorderRadius.circular(12),
-                boxShadow: inWindow
-                    ? [BoxShadow(
-                        color: AppColors.primary.withValues(alpha: 0.4),
-                        blurRadius: 14,
-                        offset: const Offset(0, 4),
-                      )]
-                    : null,
               ),
-              child: _joining
-                  ? const Center(child: SizedBox(
-                      width: 20, height: 20,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (type != 'Chat' && _openingDirections)
+                    const SizedBox(
+                      width: 15,
+                      height: 15,
                       child: CircularProgressIndicator(
-                        strokeWidth: 2.5, color: Colors.white)))
-                  : Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                      const Icon(Icons.video_call_rounded,
-                          size: 18, color: Colors.white),
-                      const SizedBox(width: 6),
-                      Text(label,
-                          style: const TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                          )),
-                    ]),
-            ),
-          ),
-        ),
-      ),
-    ]);
-  }
-
-  Widget _buildWaitingRow(BuildContext context) {
-    return Row(children: [
-      Expanded(child: _cancelBtn()),
-      const SizedBox(width: 10),
-      Expanded(
-        flex: 2,
-        child: Container(
-          height: 44,
-          decoration: BoxDecoration(
-            color: AppColors.primary.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
-          ),
-          child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-            SizedBox(
-              width: 14, height: 14,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: AppColors.primary.withValues(alpha: 0.6),
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  else
+                    Icon(icon, size: 15, color: Colors.white),
+                  const SizedBox(width: 5),
+                  Text(
+                    label,
+                    style: const TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(width: 8),
-            const Text('Waiting for doctor',
-                style: TextStyle(
-                  fontFamily: 'Poppins', fontSize: 12,
-                  fontWeight: FontWeight.w600, color: AppColors.primary)),
-          ]),
-        ),
-      ),
-    ]);
-  }
-
-  Widget _buildDoctorCallingRow(BuildContext context, String consultationId) {
-    return Row(children: [
-      Expanded(child: _cancelBtn()),
-      const SizedBox(width: 10),
-      Expanded(
-        flex: 2,
-        child: GestureDetector(
-          onTap: () => context.push(
-            AppRoutes.incomingCall,
-            extra: {
-              'consultationId':   consultationId,
-              'doctorName':       widget.doctorName,
-              'doctorSpecialty':  widget.specialty,
-              'consultationType': widget.data['consultationType'] ?? 'Video',
-              'doctorPhotoUrl':   widget.data['doctorPhotoUrl']   ?? '',
-            },
-          ),
-          child: AnimatedBuilder(
-            animation: _pulseCtrl,
-            builder: (_, child) => Transform.scale(
-              scale: 1.0 + _pulseCtrl.value * 0.03,
-              child: child,
-            ),
-            child: Container(
-              height: 44,
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF43A047), Color(0xFF1B5E20)],
-                ),
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [BoxShadow(
-                  color: const Color(0xFF43A047).withValues(alpha: 0.4),
-                  blurRadius: 14, offset: const Offset(0, 4),
-                )],
-              ),
-              child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                Icon(Icons.phone_in_talk_rounded, size: 16, color: Colors.white),
-                SizedBox(width: 6),
-                Text('Doctor is calling',
-                    style: TextStyle(
-                      fontFamily: 'Poppins', fontSize: 13,
-                      fontWeight: FontWeight.w700, color: Colors.white)),
-              ]),
-            ),
           ),
         ),
-      ),
-    ]);
-  }
-
-  Widget _buildCountdownRow(BuildContext context, int diffMin) {
-    return Row(children: [
-      Expanded(child: _cancelBtn()),
-      const SizedBox(width: 10),
-      Expanded(
-        flex: 2,
-        child: Container(
-          height: 44,
-          decoration: BoxDecoration(
-            color: Colors.orange.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.orange.withValues(alpha: 0.35)),
-          ),
-          child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-            const Icon(Icons.access_time_rounded, size: 15, color: Colors.orange),
-            const SizedBox(width: 6),
-            Text(
-              'Opens in $diffMin min',
-              style: const TextStyle(
-                fontFamily: 'Poppins', fontSize: 12,
-                fontWeight: FontWeight.w600, color: Colors.orange),
-            ),
-          ]),
-        ),
-      ),
-    ]);
-  }
-
-  Widget _buildFarOutRow(BuildContext context, DateTime slot) {
-    final label = DateFormat('h:mm a').format(
-      slot.subtract(const Duration(minutes: _openBeforeMin)));
-    return Row(children: [
-      Expanded(child: _cancelBtn()),
-      const SizedBox(width: 10),
-      Expanded(
-        flex: 2,
-        child: Container(
-          height: 44,
-          decoration: BoxDecoration(
-            color: context.appBackground,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: context.appBorder),
-          ),
-          child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-            Icon(Icons.lock_clock_rounded,
-                size: 14, color: context.appTextHint),
-            const SizedBox(width: 6),
-            Text(
-              'Join opens at $label',
-              style: TextStyle(
-                fontFamily: 'Poppins', fontSize: 11,
-                fontWeight: FontWeight.w500, color: context.appTextHint),
-            ),
-          ]),
-        ),
-      ),
-    ]);
-  }
-
-  Widget _buildStaticActionRow(BuildContext context, String type) {
-    final icon = type == 'Chat' ? Icons.chat_bubble_rounded : Icons.directions_rounded;
-    final label = type == 'Chat' ? 'Chat Now' : 'Directions';
-    return Row(children: [
-      Expanded(child: _cancelBtn()),
-      const SizedBox(width: 10),
-      Expanded(
-        flex: 2,
-        child: GestureDetector(
-          onTap: () {
-            if (type == 'Chat') {
-              context.push(AppRoutes.consultation);
-            } else {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                content: Text('Please visit the clinic at your scheduled time.'),
-                behavior: SnackBarBehavior.floating,
-              ));
-            }
-          },
-          child: Container(
-            height: 44,
-            decoration: BoxDecoration(
-              gradient: AppColors.primaryGradient,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-              Icon(icon, size: 15, color: Colors.white),
-              const SizedBox(width: 5),
-              Text(label,
-                  style: const TextStyle(
-                    fontFamily: 'Poppins', fontSize: 12,
-                    fontWeight: FontWeight.w700, color: Colors.white)),
-            ]),
-          ),
-        ),
-      ),
-    ]);
+      ],
+    );
   }
 
   Widget _cancelBtn() => GestureDetector(
@@ -1427,14 +1737,22 @@ class _ScheduledJoinSectionState extends State<_ScheduledJoinSection>
         border: Border.all(color: AppColors.error.withValues(alpha: 0.5)),
         borderRadius: BorderRadius.circular(12),
       ),
-      child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-        Icon(Icons.cancel_outlined, size: 15, color: AppColors.error),
-        SizedBox(width: 5),
-        Text('Cancel',
+      child: const Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.cancel_outlined, size: 15, color: AppColors.error),
+          SizedBox(width: 5),
+          Text(
+            'Cancel',
             style: TextStyle(
-              fontFamily: 'Poppins', fontSize: 12,
-              fontWeight: FontWeight.w600, color: AppColors.error)),
-      ]),
+              fontFamily: 'Poppins',
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: AppColors.error,
+            ),
+          ),
+        ],
+      ),
     ),
   );
 

@@ -14,6 +14,11 @@ class VehicleProfile {
   final double rating;
   final int totalTrips;
 
+  /// Admin-approval status: 'pending' | 'active'. Distinct from
+  /// [documentsVerified] (a per-document flag) — this is the account-level
+  /// gate the router and the Documents section's `locked` state key off.
+  final String status;
+
   /// Raw `documents` / `documentVerification` maps, keyed by canonical
   /// docType. Kept untyped here so the shared documents layer
   /// (`shared_core/documents`) owns their parsing for every role.
@@ -30,6 +35,7 @@ class VehicleProfile {
     required this.documentsVerified,
     required this.rating,
     required this.totalTrips,
+    this.status = 'pending',
     this.documents = const {},
     this.documentVerification = const {},
   });
@@ -64,6 +70,7 @@ class VehicleProfile {
       documentsVerified: d['documentsVerified'] as bool? ?? false,
       rating: ((d['rating'] as num?) ?? 0).toDouble(),
       totalTrips: ((d['totalTrips'] as num?) ?? 0).toInt(),
+      status: d['status'] as String? ?? 'pending',
       documents: Map<String, dynamic>.from(
           (d['documents'] as Map?) ?? const <String, dynamic>{}),
       documentVerification: Map<String, dynamic>.from(

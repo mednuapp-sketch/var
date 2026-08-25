@@ -482,9 +482,9 @@ class _OutgoingCallScreenState extends State<OutgoingCallScreen>
         ),
         if (widget.isScheduled && isCountdown) ...[
           const SizedBox(height: 6),
-          Text(
+          const Text(
             'Your doctor will join shortly',
-            style: const TextStyle(
+            style: TextStyle(
               fontFamily: 'Poppins',
               fontSize: 11,
               color: Colors.white24,

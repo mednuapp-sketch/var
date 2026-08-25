@@ -3,6 +3,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
+import '../../../core/services/scheduled_reminder_queue.dart';
 
 class HealthNotificationService {
   HealthNotificationService._();
@@ -121,16 +122,24 @@ class HealthNotificationService {
     }
   }
 
-  /// Returns the next scheduled water reminder time based on [intervalHours].
-  static DateTime? nextReminderTime(int intervalHours) {
+  /// Returns the next scheduled water reminder time based on [intervalHours],
+  /// starting the daily slot grid at [startHour]:[startMinute].
+  static DateTime? nextReminderTime(int intervalHours,
+      {int startHour = 8, int startMinute = 0}) {
     final now = DateTime.now();
-    for (int hour = 8; hour <= 21; hour += intervalHours) {
-      final candidate = DateTime(now.year, now.month, now.day, hour);
+    final today = DateTime(now.year, now.month, now.day);
+    final startOfDay = today.add(Duration(minutes: startHour * 60 + startMinute));
+    for (int offset = 0; offset <= _reminderSpanMinutes; offset += intervalHours * 60) {
+      final candidate = startOfDay.add(Duration(minutes: offset));
       if (candidate.isAfter(now)) return candidate;
     }
     // All today's slots passed — return first slot tomorrow
-    return DateTime(now.year, now.month, now.day + 1, 8);
+    return startOfDay.add(const Duration(days: 1));
   }
+
+  // Slots span 13 hours from the start time (e.g. 8 AM–9 PM by default),
+  // matching a typical waking day.
+  static const _reminderSpanMinutes = 13 * 60;
 
   static const _periodWellnessChannelId   = 'period_wellness';
   static const _periodWellnessChannelName = 'Period Wellness';
@@ -178,92 +187,44 @@ class HealthNotificationService {
     );
   }
 
-  // Water reminder IDs: 100-119
-  static Future<void> cancelWaterReminders() async {
-    for (int id = 100; id < 120; id++) {
-      await _plugin.cancel(id);
-    }
-  }
+  // Water reminders are now delivered server-side (Cloud Function
+  // sendDueWaterReminders, driven off this same settings doc) so they still
+  // fire even if the app is fully closed — see the reminders migration plan.
+  // The _waterChannelId channel above is still created here so the FCM
+  // message that references it has somewhere to land.
 
-  /// Schedules daily water reminders from 8 AM to 9 PM at [intervalHours] gaps.
-  static Future<void> scheduleWaterReminders(int intervalHours) async {
-    await cancelWaterReminders();
-    final now = tz.TZDateTime.now(tz.local);
-    int notifId = 100;
+  // Period reminders and wellness check-ins are delivered server-side (Cloud
+  // Function processDueReminders, polling the `scheduled_reminders`
+  // collection this queues into) so they still fire even if the app is
+  // fully closed — see the reminders migration plan. Message content stays
+  // here since it's unchanged; only the delivery sink moved.
 
-    for (int hour = 8; hour <= 21 && notifId < 120; hour += intervalHours) {
-      var scheduled = tz.TZDateTime(tz.local, now.year, now.month, now.day, hour, 0);
-      if (scheduled.isBefore(now)) {
-        scheduled = scheduled.add(const Duration(days: 1));
-      }
-      await _plugin.zonedSchedule(
-        notifId++,
-        '💧 Time to hydrate!',
-        'Keep it up — drink a glass of water to stay healthy.',
-        scheduled,
-        const NotificationDetails(
-          android: AndroidNotificationDetails(
-            _waterChannelId,
-            _waterChannelName,
-            importance: Importance.high,
-            priority: Priority.high,
-            playSound: true,
-            enableVibration: true,
-          ),
-          iOS: DarwinNotificationDetails(
-            presentAlert: true,
-            presentBadge: true,
-            presentSound: true,
-          ),
-        ),
-        payload: 'water_reminder',
-        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-        matchDateTimeComponents: DateTimeComponents.time,
-        uiLocalNotificationDateInterpretation:
-            UILocalNotificationDateInterpretation.absoluteTime,
-      );
-    }
-  }
-
-  // Period reminder ID: 200
   static Future<void> schedulePeriodReminder(
-      DateTime nextPeriodDate, int daysBefore) async {
-    await cancelPeriodReminder();
+      String uid, DateTime nextPeriodDate, int daysBefore) async {
     final reminderDay = nextPeriodDate.subtract(Duration(days: daysBefore));
     final reminderDateTime =
         DateTime(reminderDay.year, reminderDay.month, reminderDay.day, 9, 0);
-    if (reminderDateTime.isBefore(DateTime.now())) return;
+    if (reminderDateTime.isBefore(DateTime.now())) {
+      await cancelPeriodReminder(uid);
+      return;
+    }
 
-    await _plugin.zonedSchedule(
-      200,
-      '🌸 Period coming soon',
-      'Your period is expected in $daysBefore day${daysBefore == 1 ? '' : 's'}. Stay prepared!',
-      tz.TZDateTime.from(reminderDateTime, tz.local),
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-          _periodChannelId,
-          _periodChannelName,
-          importance: Importance.high,
-          priority: Priority.high,
-          playSound: true,
-          enableVibration: true,
-        ),
-        iOS: DarwinNotificationDetails(
-          presentAlert: true,
-          presentBadge: true,
-          presentSound: true,
-        ),
-      ),
-      payload: 'period_tracker',
-      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
+    await ScheduledReminderQueue.queue(
+      docId: '${uid}_period_reminder',
+      uid: uid,
+      role: 'patient',
+      title: '🌸 Period coming soon',
+      body: 'Your period is expected in $daysBefore day${daysBefore == 1 ? '' : 's'}. Stay prepared!',
+      channelId: _periodChannelId,
+      fireAt: reminderDateTime,
+      data: const {'type': 'period_tracker'},
     );
   }
 
-  static Future<void> cancelPeriodReminder() => _plugin.cancel(200);
+  static Future<void> cancelPeriodReminder(String uid) =>
+      ScheduledReminderQueue.cancel('${uid}_period_reminder');
 
-  // Period wellness IDs: 300–370 (7 days × 3 slots/day + buffer)
+  // Period wellness slots: 7 days × 3/day (morning/afternoon/evening)
   static const _wellnessMessages = [
     // [title, body] — morning slot (index 0,3,6,...)
     ['🌸 Good morning, take care!', 'Your body is working hard today. Stay warm and drink plenty of water. 💕'],
@@ -297,50 +258,20 @@ class HealthNotificationService {
     ['🌸 Rest & recover', 'Your body is doing something incredible. Honor it with rest and warmth tonight. 💕'],
   ];
 
-  static const _wellnessDetails = NotificationDetails(
-    android: AndroidNotificationDetails(
-      _periodWellnessChannelId,
-      _periodWellnessChannelName,
-      importance: Importance.high,
-      priority: Priority.high,
-      playSound: true,
-      enableVibration: true,
-    ),
-    iOS: DarwinNotificationDetails(
-      presentAlert: true,
-      presentBadge: true,
-      presentSound: true,
-    ),
-  );
+  static const _wellnessSlotHours = [9, 13, 19]; // morning / afternoon / evening
 
-  /// Schedules caring wellness notifications for [durationDays] days
-  /// starting from [periodStartDate]. 3 per day: 9 AM, 1 PM, 7 PM.
+  /// Queues caring wellness reminders for [durationDays] days starting from
+  /// [periodStartDate]. 3 per day, at 9 AM / 1 PM / 7 PM.
   static Future<void> schedulePeriodWellnessNotifications({
+    required String uid,
     required DateTime periodStartDate,
     int durationDays = 7,
   }) async {
-    if (!_initialized) await init();
-    await cancelPeriodWellnessNotifications();
-
-    if (Platform.isAndroid) {
-      final androidPlugin = _plugin.resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>();
-      await androidPlugin?.createNotificationChannel(
-        const AndroidNotificationChannel(
-          _periodWellnessChannelId,
-          _periodWellnessChannelName,
-          description: 'Caring wellness check-ins during your period',
-          importance: Importance.high,
-          playSound: true,
-          enableVibration: true,
-        ),
-      );
-    }
+    await cancelPeriodWellnessNotifications(uid, durationDays: durationDays);
 
     final now = DateTime.now();
-    int notifId = 300;
 
-    for (int day = 0; day < durationDays && notifId < 370; day++) {
+    for (int day = 0; day < durationDays; day++) {
       final base = DateTime(
         periodStartDate.year,
         periodStartDate.month,
@@ -348,36 +279,34 @@ class HealthNotificationService {
       );
 
       final slots = [
-        (9, _wellnessMessages[day % _wellnessMessages.length]),
-        (13, _foodMessages[day % _foodMessages.length]),
-        (19, _eveningMessages[day % _eveningMessages.length]),
+        (_wellnessSlotHours[0], _wellnessMessages[day % _wellnessMessages.length]),
+        (_wellnessSlotHours[1], _foodMessages[day % _foodMessages.length]),
+        (_wellnessSlotHours[2], _eveningMessages[day % _eveningMessages.length]),
       ];
 
       for (final (hour, msg) in slots) {
-        if (notifId >= 370) break;
         final scheduled = DateTime(base.year, base.month, base.day, hour);
-        if (scheduled.isBefore(now)) {
-          notifId++;
-          continue;
-        }
-        await _plugin.zonedSchedule(
-          notifId++,
-          msg[0],
-          msg[1],
-          tz.TZDateTime.from(scheduled, tz.local),
-          _wellnessDetails,
-          payload: 'period_tracker',
-          androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-          uiLocalNotificationDateInterpretation:
-              UILocalNotificationDateInterpretation.absoluteTime,
+        if (scheduled.isBefore(now)) continue;
+        await ScheduledReminderQueue.queue(
+          docId: '${uid}_wellness_${day}_$hour',
+          uid: uid,
+          role: 'patient',
+          title: msg[0],
+          body: msg[1],
+          channelId: _periodWellnessChannelId,
+          fireAt: scheduled,
+          data: const {'type': 'period_tracker'},
         );
       }
     }
   }
 
-  static Future<void> cancelPeriodWellnessNotifications() async {
-    for (int id = 300; id < 370; id++) {
-      await _plugin.cancel(id);
-    }
+  static Future<void> cancelPeriodWellnessNotifications(String uid,
+      {int durationDays = 7}) {
+    final docIds = <String>[
+      for (int day = 0; day < durationDays; day++)
+        for (final hour in _wellnessSlotHours) '${uid}_wellness_${day}_$hour',
+    ];
+    return ScheduledReminderQueue.cancelMany(docIds);
   }
 }

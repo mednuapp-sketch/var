@@ -44,9 +44,11 @@ class HelpSupportScreen extends StatelessWidget {
       if (await canLaunchUrl(uri)) {
         await launchUrl(uri);
       } else {
+        if (!context.mounted) return;
         _showFallback(context, 'Helpline', supportPhone);
       }
     } catch (_) {
+      if (!context.mounted) return;
       _showFallback(context, 'Helpline', supportPhone);
     }
   }
@@ -56,7 +58,7 @@ class HelpSupportScreen extends StatelessWidget {
       scheme: 'mailto',
       path: 'doctors@mednu.in',
       queryParameters: {
-        'subject': 'Doctor Support Request - MedNU Doctor App',
+        'subject': 'Doctor Support Request - MedNU Service App',
         'body':
             'Hi MedNU Support Team,\n\nI need help with:\n\n[Describe your issue here]\n\nThank you.',
       },
@@ -65,9 +67,11 @@ class HelpSupportScreen extends StatelessWidget {
       if (await canLaunchUrl(uri)) {
         await launchUrl(uri);
       } else {
+        if (!context.mounted) return;
         _showFallback(context, 'Email Support', 'doctors@mednu.in');
       }
     } catch (_) {
+      if (!context.mounted) return;
       _showFallback(context, 'Email Support', 'doctors@mednu.in');
     }
   }
@@ -82,7 +86,7 @@ class HelpSupportScreen extends StatelessWidget {
           const SizedBox(width: 8),
           Text(title,
               style: const TextStyle(
-                  fontFamily: 'Poppins',
+                  fontFamily: 'Inter',
                   fontWeight: FontWeight.w700,
                   fontSize: 16)),
         ]),
@@ -92,7 +96,7 @@ class HelpSupportScreen extends StatelessWidget {
           children: [
             const Text(
               'No compatible app found. Please contact us directly:',
-              style: TextStyle(fontFamily: 'Poppins', fontSize: 13),
+              style: TextStyle(fontFamily: 'Inter', fontSize: 13),
             ),
             const SizedBox(height: 12),
             Container(
@@ -106,7 +110,7 @@ class HelpSupportScreen extends StatelessWidget {
                 contact,
                 textAlign: TextAlign.center,
                 style: const TextStyle(
-                  fontFamily: 'Poppins',
+                  fontFamily: 'Inter',
                   fontWeight: FontWeight.w700,
                   fontSize: 14,
                   color: AppColors.primary,
@@ -139,7 +143,7 @@ class HelpSupportScreen extends StatelessWidget {
             leading: IconButton(
               icon: const Icon(Icons.arrow_back_ios_new_rounded,
                   color: Colors.white),
-              onPressed: () => context.pop(),
+              onPressed: () => context.safeBack(),
             ),
             flexibleSpace: FlexibleSpaceBar(
               collapseMode: CollapseMode.pin,
@@ -147,9 +151,9 @@ class HelpSupportScreen extends StatelessWidget {
                 decoration: const BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
-                      Color(0xFF880E4F),
-                      Color(0xFFC2185B),
-                      Color(0xFF7B1FA2)
+                      AppColors.primaryDark,
+                      AppColors.primary,
+                      AppColors.secondary
                     ],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
@@ -211,7 +215,7 @@ class HelpSupportScreen extends StatelessWidget {
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
                                             style: TextStyle(
-                                              fontFamily: 'Poppins',
+                                              fontFamily: 'Inter',
                                               fontSize: 18,
                                               fontWeight: FontWeight.w700,
                                               color: Colors.white,
@@ -222,7 +226,7 @@ class HelpSupportScreen extends StatelessWidget {
                                             maxLines: 2,
                                             overflow: TextOverflow.ellipsis,
                                             style: TextStyle(
-                                              fontFamily: 'Poppins',
+                                              fontFamily: 'Inter',
                                               fontSize: 12,
                                               color: Colors.white70,
                                             ),
@@ -316,7 +320,7 @@ class HelpSupportScreen extends StatelessWidget {
                         const Text(
                           'Experiencing a technical issue? Let us know and we\'ll fix it fast.',
                           style: TextStyle(
-                              fontFamily: 'Poppins',
+                              fontFamily: 'Inter',
                               fontSize: 12,
                               color: AppColors.textSecondary),
                         ),
@@ -428,7 +432,7 @@ class _FaqTileState extends State<_FaqTile> {
                   child: const Center(
                       child: Text('?',
                           style: TextStyle(
-                              fontFamily: 'Poppins',
+                              fontFamily: 'Inter',
                               fontWeight: FontWeight.w800,
                               color: AppColors.primary,
                               fontSize: 14))),

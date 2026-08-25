@@ -302,14 +302,14 @@ class _DoctorVideoCallScreenState extends State<DoctorVideoCallScreen>
           const SizedBox(height: 16),
           Text(widget.patientName,
               style: const TextStyle(
-                  fontFamily: 'Poppins',
+                  fontFamily: 'Inter',
                   fontSize: 22,
                   fontWeight: FontWeight.w700,
                   color: Colors.white)),
           const SizedBox(height: 6),
           const Text('Waiting for patient to join...',
               style: TextStyle(
-                  fontFamily: 'Poppins', fontSize: 13, color: Colors.white54)),
+                  fontFamily: 'Inter', fontSize: 13, color: Colors.white54)),
         ]),
       );
     }
@@ -349,7 +349,7 @@ class _DoctorVideoCallScreenState extends State<DoctorVideoCallScreen>
                       style: TextStyle(
                           color: Colors.white60,
                           fontSize: 10,
-                          fontFamily: 'Poppins')),
+                          fontFamily: 'Inter')),
                 ],
               )
             : _engineReady
@@ -424,7 +424,7 @@ class _DoctorVideoCallScreenState extends State<DoctorVideoCallScreen>
             Text(
               'Reconnecting...',
               style: TextStyle(
-                  fontFamily: 'Poppins',
+                  fontFamily: 'Inter',
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
                   color: Colors.white),
@@ -454,7 +454,7 @@ class _DoctorVideoCallScreenState extends State<DoctorVideoCallScreen>
               child: Text(
                 _agoraError ?? '',
                 style: const TextStyle(
-                    fontFamily: 'Poppins',
+                    fontFamily: 'Inter',
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
                     color: Colors.white),
@@ -483,7 +483,7 @@ class _DoctorVideoCallScreenState extends State<DoctorVideoCallScreen>
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           const Text('Consultation Notes',
               style: TextStyle(
-                  fontFamily: 'Poppins',
+                  fontFamily: 'Inter',
                   fontWeight: FontWeight.w700,
                   color: Colors.white,
                   fontSize: 12)),
@@ -492,7 +492,7 @@ class _DoctorVideoCallScreenState extends State<DoctorVideoCallScreen>
             controller: _notesCtrl,
             maxLines: 4,
             style: const TextStyle(
-                color: Colors.white, fontFamily: 'Poppins', fontSize: 12),
+                color: Colors.white, fontFamily: 'Inter', fontSize: 12),
             decoration: InputDecoration(
               hintText: 'Symptoms, diagnosis...',
               hintStyle:
@@ -541,17 +541,19 @@ class _DoctorVideoCallScreenState extends State<DoctorVideoCallScreen>
                 style: const TextStyle(
                     color: Colors.white,
                     fontSize: 11,
-                    fontFamily: 'Poppins',
+                    fontFamily: 'Inter',
                     fontWeight: FontWeight.w600),
               ),
             ]),
           ),
           const Spacer(),
           _TopBtn(Icons.chat_rounded,
-              () => _showChat(context)),
+              () => _showChat(context),
+              tooltip: 'Chat'),
           const SizedBox(width: 8),
           _TopBtn(Icons.note_alt_rounded,
-              () => setState(() => _showNotes = !_showNotes)),
+              () => setState(() => _showNotes = !_showNotes),
+              tooltip: 'Consultation notes'),
           const SizedBox(width: 8),
           _TopBtn(Icons.medical_information_rounded, () {
             if (_patientId != null && _patientId!.isNotEmpty) {
@@ -559,8 +561,17 @@ class _DoctorVideoCallScreenState extends State<DoctorVideoCallScreen>
                 'patientId': _patientId!,
                 'patientName': _consultPatientName,
               });
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Patient details are still loading…'),
+                  duration: Duration(seconds: 2),
+                ),
+              );
             }
-          }),
+          },
+              tooltip: 'Patient history',
+              enabled: _patientId != null && _patientId!.isNotEmpty),
         ]),
       ),
     );
@@ -669,7 +680,7 @@ class _DoctorVideoCallScreenState extends State<DoctorVideoCallScreen>
             style: TextStyle(
                 color: Colors.orangeAccent,
                 fontSize: 11,
-                fontFamily: 'Poppins'),
+                fontFamily: 'Inter'),
           )),
         ]),
       );
@@ -690,7 +701,7 @@ class _DoctorVideoCallScreenState extends State<DoctorVideoCallScreen>
                 style: TextStyle(
                     color: Colors.white70,
                     fontSize: 11,
-                    fontFamily: 'Poppins'))),
+                    fontFamily: 'Inter'))),
         GestureDetector(
           onTap: () => _confirmEnd(context),
           child: Container(
@@ -703,7 +714,7 @@ class _DoctorVideoCallScreenState extends State<DoctorVideoCallScreen>
                 style: TextStyle(
                     color: Colors.white,
                     fontSize: 11,
-                    fontFamily: 'Poppins',
+                    fontFamily: 'Inter',
                     fontWeight: FontWeight.w700)),
           ),
         ),
@@ -732,18 +743,18 @@ class _DoctorVideoCallScreenState extends State<DoctorVideoCallScreen>
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('End Consultation?',
             style: TextStyle(
-                fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
+                fontFamily: 'Inter', fontWeight: FontWeight.w700)),
         content: Text(
           _patientJoinedAtLeastOnce
               ? 'The call will be ended and you can write a prescription for this patient.'
               : 'The patient has not joined yet. The consultation will be marked as ended.',
-          style: const TextStyle(fontFamily: 'Poppins'),
+          style: const TextStyle(fontFamily: 'Inter'),
         ),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context),
               child: const Text('Cancel',
-                  style: TextStyle(fontFamily: 'Poppins'))),
+                  style: TextStyle(fontFamily: 'Inter'))),
           ElevatedButton(
             onPressed: () {
               Navigator.pop(context);
@@ -753,7 +764,7 @@ class _DoctorVideoCallScreenState extends State<DoctorVideoCallScreen>
                 backgroundColor: const Color(0xFFE53935)),
             child: Text(
               _patientJoinedAtLeastOnce ? 'End & Write Prescription' : 'End Call',
-              style: const TextStyle(fontFamily: 'Poppins'),
+              style: const TextStyle(fontFamily: 'Inter'),
             ),
           ),
         ],
@@ -781,15 +792,21 @@ class _DoctorVideoCallScreenState extends State<DoctorVideoCallScreen>
           'endedAt': FieldValue.serverTimestamp(),
           if (_notesCtrl.text.isNotEmpty) 'doctorNotes': _notesCtrl.text,
         });
-      } else {
+      } else if (_notesCtrl.text.isNotEmpty) {
         // Remote ended (patient left) — preserve any doctor notes
-        if (_notesCtrl.text.isNotEmpty) {
-          await consultRef
-              .update({'doctorNotes': _notesCtrl.text}).catchError((_) {});
-        }
+        await consultRef.update({'doctorNotes': _notesCtrl.text});
       }
     } catch (e) {
       debugPrint('[DoctorVideoCall] End-call Firestore update failed: $e');
+      if (mounted && _notesCtrl.text.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Consultation notes could not be saved.'),
+            backgroundColor: Colors.redAccent,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
     }
 
     // Always mark the linked appointment completed — idempotent even if patient
@@ -929,17 +946,30 @@ class _AnimatedTapState extends State<_AnimatedTap>
 class _TopBtn extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
-  const _TopBtn(this.icon, this.onTap);
+  final String tooltip;
+  final bool enabled;
+  const _TopBtn(this.icon, this.onTap,
+      {required this.tooltip, this.enabled = true});
 
   @override
-  Widget build(BuildContext context) => _AnimatedTap(
-        onTap: onTap,
-        child: Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha:0.4), shape: BoxShape.circle),
-          child: Icon(icon, color: Colors.white, size: 18),
+  Widget build(BuildContext context) => Semantics(
+        button: true,
+        label: tooltip,
+        child: Tooltip(
+          message: tooltip,
+          child: _AnimatedTap(
+            onTap: onTap,
+            child: Container(
+              width: 44,
+              height: 44,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: enabled ? 0.4 : 0.25),
+                  shape: BoxShape.circle),
+              child: Icon(icon,
+                  color: enabled ? Colors.white : Colors.white38, size: 18),
+            ),
+          ),
         ),
       );
 }
@@ -973,7 +1003,7 @@ class _CallBtn extends StatelessWidget {
               style: const TextStyle(
                   color: Colors.white70,
                   fontSize: 11,
-                  fontFamily: 'Poppins')),
+                  fontFamily: 'Inter')),
         ]),
       );
 }
@@ -1067,7 +1097,7 @@ class _DoctorConsultationChatState extends State<_DoctorConsultationChat> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text('Chat with ${widget.patientName}',
-                      style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 15)),
+                      style: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w700, fontSize: 15)),
                 ),
                 IconButton(
                   icon: const Icon(Icons.close_rounded, color: Colors.black54),
@@ -1096,7 +1126,7 @@ class _DoctorConsultationChatState extends State<_DoctorConsultationChat> {
                         Icon(Icons.chat_bubble_outline_rounded, size: 40, color: Colors.black12),
                         SizedBox(height: 10),
                         Text('Start chatting during the call',
-                            style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: Colors.black38)),
+                            style: TextStyle(fontFamily: 'Inter', fontSize: 13, color: Colors.black38)),
                       ],
                     ),
                   );
@@ -1149,7 +1179,7 @@ class _DoctorConsultationChatState extends State<_DoctorConsultationChat> {
                                 ),
                                 child: Text(text,
                                     style: TextStyle(
-                                        fontFamily: 'Poppins',
+                                        fontFamily: 'Inter',
                                         fontSize: 13,
                                         color: isMe ? Colors.white : Colors.black87,
                                         height: 1.4)),
@@ -1157,7 +1187,7 @@ class _DoctorConsultationChatState extends State<_DoctorConsultationChat> {
                               const SizedBox(height: 3),
                               Text(time,
                                   style: const TextStyle(
-                                      fontFamily: 'Poppins', fontSize: 9, color: Colors.black38)),
+                                      fontFamily: 'Inter', fontSize: 9, color: Colors.black38)),
                             ],
                           ),
                           if (isMe) const SizedBox(width: 8),
@@ -1184,7 +1214,7 @@ class _DoctorConsultationChatState extends State<_DoctorConsultationChat> {
                     onSubmitted: (_) => _send(),
                     decoration: InputDecoration(
                       hintText: 'Message patient...',
-                      hintStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 13, color: Colors.black38),
+                      hintStyle: const TextStyle(fontFamily: 'Inter', fontSize: 13, color: Colors.black38),
                       filled: true,
                       fillColor: const Color(0xFFF5F5F5),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),

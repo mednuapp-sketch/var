@@ -38,9 +38,9 @@ String _fruitEmoji(int week) {
 
 List<Color> _heroGradient(int week) {
   final t = _trimesterOf(week);
-  if (t == 1) return const [Color(0xFF7B1FA2), Color(0xFFC2185B)];
+  if (t == 1) return const [Color(0xFF633058), Color(0xFF522546)];
   if (t == 2) return const [Color(0xFF1565C0), Color(0xFF0097A7)];
-  return const [Color(0xFFC2185B), Color(0xFFE65100)];
+  return const [Color(0xFF522546), Color(0xFFE65100)];
 }
 
 // --- Screen -------------------------------------------------------------------
@@ -686,7 +686,7 @@ class _TipsTab extends StatelessWidget {
         _TipCard(emoji: '??', title: 'Tip of the Week', content: weekData.weeklyTip, gradient: gradient),
         const SizedBox(height: 12),
         _TipCard(emoji: '??', title: 'Your Body', content: weekData.motherChanges,
-            gradient: const [Color(0xFFC2185B), Color(0xFFFF6B9D)]),
+            gradient: const [Color(0xFF522546), Color(0xFFFF6B9D)]),
         const SizedBox(height: 12),
         _TipCard(emoji: '??', title: 'Nutrition', content: weekData.nutritionTip,
             gradient: const [Color(0xFF2E7D32), Color(0xFF66BB6A)]),

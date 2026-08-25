@@ -4,10 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/services/booking_service.dart';
 import '../../../core/services/feedback_service.dart';
+import '../../../core/widgets/ux_widgets.dart';
 import '../models/cart_item.dart';
 import '../providers/cart_provider.dart';
 import '../widgets/checkout_details_sheet.dart';
@@ -158,7 +158,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
       appBar: AppBar(
         title: const Text('My Cart', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 17)),
         centerTitle: true,
-        leading: IconButton(icon: const Icon(Icons.arrow_back_ios_new_rounded), onPressed: () => context.pop()),
+        leading: IconButton(icon: const Icon(Icons.arrow_back_ios_new_rounded), tooltip: 'Back', onPressed: () => context.pop()),
         actions: [
           if (items.isNotEmpty)
             TextButton(
@@ -172,21 +172,12 @@ class _CartScreenState extends ConsumerState<CartScreen> {
     );
   }
 
-  Widget _buildEmpty() => Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Icon(Icons.shopping_cart_outlined, size: 72, color: Colors.grey.shade300),
-            const SizedBox(height: 16),
-            Text('Your cart is empty', style: AppTextStyles.h4),
-            const SizedBox(height: 6),
-            Text(
-              'Add medicines or services to get started',
-              style: AppTextStyles.bodySmall,
-              textAlign: TextAlign.center,
-            ),
-          ]),
-        ),
+  Widget _buildEmpty() => AppEmptyState(
+        icon: Icons.shopping_cart_outlined,
+        title: 'Your cart is empty',
+        message: 'Add medicines or services to get started',
+        actionLabel: 'Browse Pharmacy',
+        onAction: () => context.push(AppRoutes.pharmacy),
       );
 
   Widget _buildList(List<CartItem> items) => ListView.separated(
@@ -258,28 +249,37 @@ class _CartItemTile extends ConsumerWidget {
                 style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: context.appTextSecondary)),
           ]),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 4),
         Container(
-          height: 30,
-          decoration: BoxDecoration(color: item.themeColor, borderRadius: BorderRadius.circular(9)),
+          height: 44,
+          decoration: BoxDecoration(color: item.themeColor, borderRadius: BorderRadius.circular(12)),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
-            InkWell(
-              onTap: () => ref.read(cartProvider.notifier).decrementQty(item.id),
-              child: const SizedBox(width: 26, height: 30, child: Icon(Icons.remove_rounded, size: 15, color: Colors.white)),
+            Tooltip(
+              message: 'Decrease quantity',
+              child: InkWell(
+                borderRadius: const BorderRadius.horizontal(left: Radius.circular(12)),
+                onTap: () => ref.read(cartProvider.notifier).decrementQty(item.id),
+                child: const SizedBox(width: 40, height: 44, child: Icon(Icons.remove_rounded, size: 16, color: Colors.white)),
+              ),
             ),
             SizedBox(
-                width: 20,
+                width: 22,
                 child: Text('${item.quantity}',
                     textAlign: TextAlign.center,
                     style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white))),
-            InkWell(
-              onTap: () => ref.read(cartProvider.notifier).incrementQty(item.id),
-              child: const SizedBox(width: 26, height: 30, child: Icon(Icons.add_rounded, size: 15, color: Colors.white)),
+            Tooltip(
+              message: 'Increase quantity',
+              child: InkWell(
+                borderRadius: const BorderRadius.horizontal(right: Radius.circular(12)),
+                onTap: () => ref.read(cartProvider.notifier).incrementQty(item.id),
+                child: const SizedBox(width: 40, height: 44, child: Icon(Icons.add_rounded, size: 16, color: Colors.white)),
+              ),
             ),
           ]),
         ),
         IconButton(
           icon: Icon(Icons.close_rounded, size: 18, color: context.appTextHint),
+          tooltip: 'Remove item',
           onPressed: () => ref.read(cartProvider.notifier).removeItem(item.id),
         ),
       ]),

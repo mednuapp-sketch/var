@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -6,7 +7,6 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
 import '../services/doctor_auth_service.dart';
-import '../../../core/widgets/ux_widgets.dart';
 import '../../../shared_core/models/app_role.dart';
 import '../../../shared_core/navigation/role_menu.dart';
 
@@ -19,13 +19,14 @@ class VerificationPendingScreen extends StatefulWidget {
 }
 
 class _VerificationPendingScreenState extends State<VerificationPendingScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   String _status = 'pending';
   bool _loading = true;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _statusSub;
 
   late AnimationController _pulseCtrl;
   late Animation<double> _pulse;
+  late AnimationController _rotateCtrl;
 
   @override
   void initState() {
@@ -38,12 +39,17 @@ class _VerificationPendingScreenState extends State<VerificationPendingScreen>
     _pulse = Tween<double>(begin: 0.9, end: 1.1).animate(
       CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut),
     );
+    _rotateCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 14),
+    )..repeat();
   }
 
   @override
   void dispose() {
     _statusSub?.cancel();
     _pulseCtrl.dispose();
+    _rotateCtrl.dispose();
     super.dispose();
   }
 
@@ -100,7 +106,7 @@ class _VerificationPendingScreenState extends State<VerificationPendingScreen>
 
   Future<void> _refreshStatus() async {
     setState(() => _loading = true);
-    _statusSub?.cancel();
+    await _statusSub?.cancel();
     _startListening();
   }
 
@@ -130,7 +136,7 @@ class _VerificationPendingScreenState extends State<VerificationPendingScreen>
                 gradient: LinearGradient(
                   colors: isSuspended
                       ? [const Color(0xFFB71C1C), const Color(0xFFC62828)]
-                      : [const Color(0xFF880E4F), const Color(0xFFC2185B), const Color(0xFF7B1FA2)],
+                      : [AppColors.primaryDark, AppColors.primary, AppColors.secondary],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
@@ -185,48 +191,30 @@ class _VerificationPendingScreenState extends State<VerificationPendingScreen>
               padding: const EdgeInsets.fromLTRB(24, 0, 24, 40),
               child: Column(
                 children: [
-                  const SizedBox(height: 30),
+                  const SizedBox(height: 20),
 
-                  // Status icon with pulse
-                  AnimatedBuilder(
-                    animation: _pulse,
-                    builder: (_, child) => Transform.scale(
-                      scale: isSuspended ? 1.0 : _pulse.value,
-                      child: child,
-                    ),
-                    child: Container(
-                      width: 100,
-                      height: 100,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha:0.18),
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha:0.3),
-                          width: 2,
-                        ),
-                      ),
-                      child: Icon(
-                        isSuspended
-                            ? Icons.cancel_rounded
-                            : Icons.hourglass_top_rounded,
-                        color: Colors.white,
-                        size: 50,
-                      ),
-                    ),
+                  // Layered status illustration: a rotating dashed ring
+                  // (still "in progress"), a pulsing center badge, and
+                  // small orbiting accent icons — reads as an active,
+                  // living process rather than a single static glyph.
+                  _StatusIllustration(
+                    isSuspended: isSuspended,
+                    pulse: _pulse,
+                    rotation: _rotateCtrl,
                   ),
 
                   const SizedBox(height: 16),
                   Text(
                     isSuspended ? 'Application Rejected' : 'Verification Pending',
                     style: const TextStyle(
-                      fontFamily: 'Poppins',
+                      fontFamily: 'Inter',
                       fontSize: 20,
                       fontWeight: FontWeight.w700,
                       color: Colors.white,
                     ),
                     textAlign: TextAlign.center,
                   ),
-                  const SizedBox(height: 60),
+                  const SizedBox(height: 48),
 
                   // Content card
                   Container(
@@ -281,13 +269,13 @@ class _VerificationPendingScreenState extends State<VerificationPendingScreen>
                           ),
                         ],
                       ),
-                      child: const Column(
+                      child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text('Application Progress',
                               style: AppTextStyles.labelLarge),
-                          SizedBox(height: 16),
-                          ...[
+                          const SizedBox(height: 16),
+                          ...const [
                             _ProgressStep(
                               icon: Icons.check_circle_rounded,
                               label: 'Registration Submitted',
@@ -349,7 +337,7 @@ class _VerificationPendingScreenState extends State<VerificationPendingScreen>
                             child: Text(
                               "We'll notify you via SMS & email once verified. Check back anytime.",
                               style: TextStyle(
-                                fontFamily: 'Poppins',
+                                fontFamily: 'Inter',
                                 fontSize: 12,
                                 color: AppColors.primary,
                                 height: 1.5,
@@ -364,18 +352,27 @@ class _VerificationPendingScreenState extends State<VerificationPendingScreen>
                   const SizedBox(height: 28),
 
                   // Action buttons
-                  GradientButton(
-                    label: isSuspended ? 'Contact Support & Sign Out' : 'Sign Out',
-                    icon: Icons.logout_rounded,
+                  SizedBox(
                     width: double.infinity,
                     height: 52,
-                    colors: isSuspended
-                        ? [AppColors.error, const Color(0xFFB71C1C)]
-                        : null,
-                    onTap: () async {
-                      await DoctorAuthService.signOut();
-                      if (mounted) context.go(AppRoutes.login);
-                    },
+                    child: ElevatedButton.icon(
+                      onPressed: () async {
+                        await DoctorAuthService.signOut();
+                        if (mounted && context.mounted) context.go(AppRoutes.login);
+                      },
+                      icon: const Icon(Icons.logout_rounded, size: 18),
+                      label: Text(
+                        isSuspended ? 'Contact Support & Sign Out' : 'Sign Out',
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor:
+                            isSuspended ? AppColors.error : AppColors.primary,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                    ),
                   ),
 
                   if (!isSuspended) ...[
@@ -405,6 +402,168 @@ class _VerificationPendingScreenState extends State<VerificationPendingScreen>
       ),
     );
   }
+}
+
+/// A layered "this is actively happening" illustration: a slowly rotating
+/// dashed ring, a pulsing centre badge, and three small satellite icons
+/// (document / magnifier / shield) fixed at even angles around the ring —
+/// reads as a living review process rather than one static glyph.
+class _StatusIllustration extends StatelessWidget {
+  final bool isSuspended;
+  final Animation<double> pulse;
+  final Animation<double> rotation;
+
+  const _StatusIllustration({
+    required this.isSuspended,
+    required this.pulse,
+    required this.rotation,
+  });
+
+  static const _satellites = [
+    (Icons.description_outlined, -1.0), // top-left-ish
+    (Icons.search_rounded, 0.0), // right
+    (Icons.verified_user_outlined, 1.0), // bottom-left-ish
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    const size = 148.0;
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // Rotating dashed ring — suppressed for the rejected state, where
+          // "still in progress" would be the wrong signal.
+          if (!isSuspended)
+            AnimatedBuilder(
+              animation: rotation,
+              builder: (_, __) => Transform.rotate(
+                angle: rotation.value * 2 * math.pi,
+                child: CustomPaint(
+                  size: const Size(size, size),
+                  painter: _DashedRingPainter(
+                    color: Colors.white.withValues(alpha: 0.55),
+                  ),
+                ),
+              ),
+            ),
+
+          // Satellite badges, evenly spaced around the ring.
+          if (!isSuspended)
+            for (var i = 0; i < _satellites.length; i++)
+              _SatelliteIcon(
+                icon: _satellites[i].$1,
+                angle: (2 * math.pi / _satellites.length) * i - (math.pi / 2),
+                radius: size / 2 - 6,
+              ),
+
+          // Centre badge with the existing pulse animation.
+          AnimatedBuilder(
+            animation: pulse,
+            builder: (_, child) => Transform.scale(
+              scale: isSuspended ? 1.0 : pulse.value,
+              child: child,
+            ),
+            child: Container(
+              width: 92,
+              height: 92,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.2),
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.35),
+                  width: 2,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.08),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: Icon(
+                isSuspended ? Icons.cancel_rounded : Icons.hourglass_top_rounded,
+                color: Colors.white,
+                size: 44,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SatelliteIcon extends StatelessWidget {
+  final IconData icon;
+  final double angle;
+  final double radius;
+
+  const _SatelliteIcon({
+    required this.icon,
+    required this.angle,
+    required this.radius,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final offset = Offset(math.cos(angle) * radius, math.sin(angle) * radius);
+    return Transform.translate(
+      offset: offset,
+      child: Container(
+        width: 30,
+        height: 30,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.15),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Icon(icon, size: 15, color: AppColors.primary),
+      ),
+    );
+  }
+}
+
+class _DashedRingPainter extends CustomPainter {
+  final Color color;
+  const _DashedRingPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2
+      ..strokeCap = StrokeCap.round;
+    final radius = size.width / 2 - 1;
+    final center = Offset(size.width / 2, size.height / 2);
+    const dashCount = 24;
+    const dashFraction = 0.6; // fraction of each segment that is "on"
+    for (var i = 0; i < dashCount; i++) {
+      final startAngle = (2 * math.pi / dashCount) * i;
+      const sweep = (2 * math.pi / dashCount) * dashFraction;
+      canvas.drawArc(
+        Rect.fromCircle(center: center, radius: radius),
+        startAngle,
+        sweep,
+        false,
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DashedRingPainter oldDelegate) =>
+      oldDelegate.color != color;
 }
 
 class _ProgressStep extends StatelessWidget {
@@ -465,7 +624,7 @@ class _ProgressStep extends StatelessWidget {
                 Text(
                   label,
                   style: TextStyle(
-                    fontFamily: 'Poppins',
+                    fontFamily: 'Inter',
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
                     color: isDone ? AppColors.success : AppColors.textPrimary,
@@ -475,7 +634,7 @@ class _ProgressStep extends StatelessWidget {
                 Text(
                   sublabel,
                   style: const TextStyle(
-                    fontFamily: 'Poppins',
+                    fontFamily: 'Inter',
                     fontSize: 11,
                     color: AppColors.textHint,
                   ),

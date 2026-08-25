@@ -1,11 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
-/// UI-only status vocabulary for this module's mock data — intentionally
-/// close to (but not wired against) the ambulance status set already used
-/// elsewhere in the platform's Cloud Functions (`accepted/assigned/
-/// in_progress/arrived/completed/rejected/cancelled`), so a future backend
-/// pass can map onto it without a UI rework.
+/// Status vocabulary for the real `ambulance_requests` documents, kept
+/// intentionally close to the platform's Cloud Functions status set
+/// (`accepted/assigned/in_progress/arrived/completed/rejected/cancelled`)
+/// used for patient-facing notifications.
 enum AmbulanceRequestStatus { pending, accepted, enRoute, arrived, completed, cancelled }
 
 extension AmbulanceRequestStatusX on AmbulanceRequestStatus {

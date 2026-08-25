@@ -96,7 +96,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
                           IconButton(
                             icon: const Icon(Icons.arrow_back_ios_new_rounded,
                                 color: Colors.white),
-                            onPressed: () => context.pop(),
+                            onPressed: () => context.safeBack(),
                           ),
                           const Spacer(),
                           IconButton(
@@ -137,7 +137,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
                                           w.isNotEmpty ? w[0].toUpperCase() : '')
                                       .join(),
                                   style: const TextStyle(
-                                    fontFamily: 'Poppins',
+                                    fontFamily: 'Inter',
                                     fontSize: 28,
                                     fontWeight: FontWeight.w800,
                                     color: Colors.white,
@@ -152,7 +152,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
                       Text(
                         name,
                         style: const TextStyle(
-                          fontFamily: 'Poppins',
+                          fontFamily: 'Inter',
                           fontSize: 18,
                           fontWeight: FontWeight.w700,
                           color: Colors.white,
@@ -184,11 +184,11 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
                         indicatorColor: Colors.white,
                         indicatorWeight: 3,
                         labelStyle: const TextStyle(
-                            fontFamily: 'Poppins',
+                            fontFamily: 'Inter',
                             fontSize: 13,
                             fontWeight: FontWeight.w600),
                         unselectedLabelStyle: const TextStyle(
-                            fontFamily: 'Poppins',
+                            fontFamily: 'Inter',
                             fontSize: 13,
                             fontWeight: FontWeight.w400),
                         tabs: const [
@@ -243,7 +243,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16)),
                         textStyle: const TextStyle(
-                          fontFamily: 'Poppins',
+                          fontFamily: 'Inter',
                           fontWeight: FontWeight.w600,
                           fontSize: 14,
                         ),
@@ -351,7 +351,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
                   child: Text(
                     relation.isNotEmpty ? relation : 'Member',
                     style: const TextStyle(
-                      fontFamily: 'Poppins',
+                      fontFamily: 'Inter',
                       fontSize: 10,
                       fontWeight: FontWeight.w600,
                       color: AppColors.primary,
@@ -395,7 +395,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
                     Text(
                       'No Vitals Recorded',
                       style: TextStyle(
-                        fontFamily: 'Poppins',
+                        fontFamily: 'Inter',
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
                         color: AppColors.primary,
@@ -405,7 +405,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
                     Text(
                       'Vitals will appear here once the patient submits them through the MedNU app.',
                       style: TextStyle(
-                        fontFamily: 'Poppins',
+                        fontFamily: 'Inter',
                         fontSize: 11,
                         color: AppColors.textSecondary,
                         height: 1.5,
@@ -443,10 +443,10 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
         });
 
         if (docs.isEmpty) {
-          return const _EmptyState(
+          return const AppEmptyState(
             icon: Icons.history_rounded,
             title: 'No History Yet',
-            subtitle: 'Consultations with this patient will appear here.',
+            message: 'Consultations with this patient will appear here.',
           );
         }
 
@@ -522,7 +522,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
                           ? '—'
                           : status[0].toUpperCase() + status.substring(1),
                       style: TextStyle(
-                        fontFamily: 'Poppins',
+                        fontFamily: 'Inter',
                         fontSize: 10,
                         fontWeight: FontWeight.w700,
                         color: statusColor,
@@ -556,10 +556,19 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
         final docs = snap.data?.docs ?? [];
 
         if (docs.isEmpty) {
-          return const _EmptyState(
+          return AppEmptyState(
             icon: Icons.receipt_long_outlined,
             title: 'No Prescriptions',
-            subtitle: 'Prescriptions you write for this patient will appear here.',
+            message: 'Prescriptions you write for this patient will appear here.',
+            actionLabel: 'Write Prescription',
+            onAction: () => context.push(
+              AppRoutes.prescription,
+              extra: {
+                'patientId': widget.patientId,
+                'patientName': widget.patientName,
+                'allowOffline': true,
+              },
+            ),
           );
         }
 
@@ -665,7 +674,7 @@ class _HeaderChip extends StatelessWidget {
           Text(
             label,
             style: const TextStyle(
-              fontFamily: 'Poppins',
+              fontFamily: 'Inter',
               fontSize: 11,
               fontWeight: FontWeight.w500,
               color: Colors.white,
@@ -698,7 +707,7 @@ class _SectionTitle extends StatelessWidget {
           Text(
             title,
             style: const TextStyle(
-              fontFamily: 'Poppins',
+              fontFamily: 'Inter',
               fontSize: 14,
               fontWeight: FontWeight.w700,
               color: AppColors.textPrimary,
@@ -736,13 +745,13 @@ class _SummaryTile extends StatelessWidget {
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(label,
                   style: const TextStyle(
-                    fontFamily: 'Poppins',
+                    fontFamily: 'Inter',
                     fontSize: 10,
                     color: AppColors.textSecondary,
                   )),
               Text(value,
                   style: const TextStyle(
-                    fontFamily: 'Poppins',
+                    fontFamily: 'Inter',
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
                     color: AppColors.textPrimary,
@@ -753,54 +762,3 @@ class _SummaryTile extends StatelessWidget {
       );
 }
 
-class _EmptyState extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  const _EmptyState(
-      {required this.icon, required this.title, required this.subtitle});
-
-  @override
-  Widget build(BuildContext context) => SizedBox.expand(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Container(
-                width: 76,
-                height: 76,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      AppColors.primary.withValues(alpha: 0.1),
-                      AppColors.secondary.withValues(alpha: 0.05),
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(icon, size: 36, color: AppColors.primary.withValues(alpha: 0.5)),
-              ),
-              const SizedBox(height: 18),
-              Text(title,
-                  style: const TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textSecondary,
-                  )),
-              const SizedBox(height: 8),
-              Text(subtitle,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 12,
-                    color: AppColors.textHint,
-                    height: 1.6,
-                  )),
-            ]),
-          ),
-        ),
-      );
-}

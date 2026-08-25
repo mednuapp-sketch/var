@@ -42,8 +42,7 @@ class LabEarningsScreen extends ConsumerWidget {
                 colors: const [Color(0xFF2E7D32), Color(0xFF1B5E20)],
               ),
               const SizedBox(height: 20),
-              const Text('Transaction History', style: AppTextStyles.h4),
-              const SizedBox(height: 10),
+              const SectionHeader(title: 'Transaction History'),
               ...summary.transactions.map((t) => PremiumCard(
                     margin: const EdgeInsets.only(bottom: 10),
                     child: Row(

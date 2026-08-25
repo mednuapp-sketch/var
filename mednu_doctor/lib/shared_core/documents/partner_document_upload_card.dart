@@ -28,12 +28,21 @@ class PartnerDocumentsSection extends StatelessWidget {
   final Map<String, dynamic> documents;
   final Map<String, dynamic> documentVerification;
 
+  /// True once this profile's `status == 'active'`. Verification documents
+  /// are only ever submitted once, up front, during registration — an
+  /// approved partner can still view what they submitted, but replacing or
+  /// removing it would silently invalidate an approval admin already
+  /// granted against the original files, so those actions disappear once
+  /// locked (`firestore.rules` backs this up server-side too).
+  final bool locked;
+
   const PartnerDocumentsSection({
     super.key,
     required this.role,
     required this.uid,
     required this.documents,
     required this.documentVerification,
+    this.locked = false,
   });
 
   @override
@@ -74,7 +83,7 @@ class PartnerDocumentsSection extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           const Text(
-            'Uploaded documents are reviewed by the MedNu team. '
+            'Uploaded documents are reviewed by the MedNU team. '
             'Only an admin can mark a document verified.',
             style: AppTextStyles.caption,
           ),
@@ -96,6 +105,7 @@ class PartnerDocumentsSection extends StatelessWidget {
                       uid: uid,
                       type: type,
                       meta: meta,
+                      locked: locked,
                       verification: PartnerDocumentVerification.fromMap(
                         documentVerification[type.key],
                         hasDocument: meta != null,
@@ -125,6 +135,7 @@ class PartnerDocumentUploadCard extends StatefulWidget {
   final PartnerDocumentType type;
   final PartnerDocumentMeta? meta;
   final PartnerDocumentVerification verification;
+  final bool locked;
 
   const PartnerDocumentUploadCard({
     super.key,
@@ -133,6 +144,7 @@ class PartnerDocumentUploadCard extends StatefulWidget {
     required this.type,
     required this.meta,
     required this.verification,
+    this.locked = false,
   });
 
   @override
@@ -455,6 +467,8 @@ class _PartnerDocumentUploadCardState extends State<PartnerDocumentUploadCard> {
             _buildError()
           else if (meta != null)
             _buildUploaded(meta)
+          else if (widget.locked)
+            _buildLockedEmpty()
           else
             _buildEmpty(),
           if (widget.verification.status == PartnerDocumentStatus.rejected &&
@@ -573,6 +587,26 @@ class _PartnerDocumentUploadCardState extends State<PartnerDocumentUploadCard> {
     );
   }
 
+  Widget _buildLockedEmpty() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: const Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.lock_outline_rounded,
+              color: AppColors.textHint, size: 26),
+          SizedBox(height: 6),
+          Text('Not submitted', style: AppTextStyles.labelMedium),
+        ],
+      ),
+    );
+  }
+
   Widget _buildUploaded(PartnerDocumentMeta meta) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -615,17 +649,19 @@ class _PartnerDocumentUploadCardState extends State<PartnerDocumentUploadCard> {
               icon: const Icon(Icons.visibility_outlined, size: 16),
               label: const Text('View'),
             ),
-            TextButton.icon(
-              onPressed: _replace,
-              icon: const Icon(Icons.swap_horiz_rounded, size: 16),
-              label: const Text('Replace'),
-            ),
-            TextButton.icon(
-              onPressed: _remove,
-              style: TextButton.styleFrom(foregroundColor: AppColors.error),
-              icon: const Icon(Icons.delete_outline_rounded, size: 16),
-              label: const Text('Remove'),
-            ),
+            if (!widget.locked) ...[
+              TextButton.icon(
+                onPressed: _replace,
+                icon: const Icon(Icons.swap_horiz_rounded, size: 16),
+                label: const Text('Replace'),
+              ),
+              TextButton.icon(
+                onPressed: _remove,
+                style: TextButton.styleFrom(foregroundColor: AppColors.error),
+                icon: const Icon(Icons.delete_outline_rounded, size: 16),
+                label: const Text('Remove'),
+              ),
+            ],
           ],
         ),
       ],

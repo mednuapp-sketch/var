@@ -134,23 +134,53 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
     setState(() => _saving = true);
     try {
       // 1 ── Base identity document, shared by every role.
-      await FirebaseFirestore.instance.collection('doctors').doc(uid).set({
-        'uid': uid,
-        'name': _accountName,
-        'phone': _accountPhone.isNotEmpty
-            ? _accountPhone
-            : FirebaseAuth.instance.currentUser?.phoneNumber ?? '',
-        'status': 'pending',
-        'roles': [_role.firestoreValue],
-        'createdAt': FieldValue.serverTimestamp(),
-      });
+      //
+      // Two distinct callers reach this screen: OTP verification for a
+      // brand-new account (no `doctors/{uid}` doc yet — write it fresh),
+      // and an already-registered account adding a second service from
+      // the role switcher sheet (a doc already exists — only append the
+      // new role, never overwrite the existing name/phone/status/roles).
+      final doctorRef = FirebaseFirestore.instance.collection('doctors').doc(uid);
+      final existingSnap = await doctorRef.get();
+
+      if (existingSnap.exists) {
+        await doctorRef.update({
+          'roles': FieldValue.arrayUnion([_role.firestoreValue]),
+        });
+      } else {
+        await doctorRef.set({
+          'uid': uid,
+          'name': _accountName,
+          'phone': _accountPhone.isNotEmpty
+              ? _accountPhone
+              : FirebaseAuth.instance.currentUser?.phoneNumber ?? '',
+          'status': 'pending',
+          'roles': [_role.firestoreValue],
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
 
       // 2 ── Role-specific operational profile.
       await _createRoleProfile(uid);
 
       if (!mounted) return;
-      context.go(AppRoutes.verificationPending);
-    } catch (e) {
+      if (existingSnap.exists) {
+        // Adding a role to a working account — that account's own flow
+        // keeps working exactly as before; only the new role is pending
+        // review. Return to wherever this was opened from instead of the
+        // brand-new-account waiting screen.
+        FeedbackService.showSuccess(
+          context,
+          '${_role.label} application submitted — it will appear once approved.',
+        );
+        if (Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
+        }
+      } else {
+        context.go(AppRoutes.verificationPending);
+      }
+    } catch (e, st) {
+      debugPrint('[PartnerRoleRegister] submit failed for role=${_role.firestoreValue}: $e\n$st');
       if (!mounted) return;
       FeedbackService.showError(
         context,
@@ -222,7 +252,19 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
               headerIcon: _role.icon,
               title: '${_role.label} Registration',
               subtitle: 'A few details before our team reviews your account',
-              onBack: () => context.go(AppRoutes.partnerRoleSelect),
+              onBack: () {
+                // Reached either via go_router (brand-new account, from
+                // AppRoutes.partnerRoleSelect) or via a pushed Navigator
+                // route (adding a service to an existing account, from the
+                // role switcher sheet) — prefer a plain pop when there's a
+                // local route to pop back to, so "add a service" doesn't
+                // escape into the main router stack.
+                if (Navigator.of(context).canPop()) {
+                  Navigator.of(context).pop();
+                } else {
+                  context.go(AppRoutes.partnerRoleSelect);
+                }
+              },
             ),
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
@@ -237,7 +279,7 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
                     onTap: _saving ? null : _submit,
                   ),
                   const SizedBox(height: 10),
-                  const Center(
+                  Center(
                     child: Text(
                       'Your application will be reviewed by our admin team.\n'
                       'You will be notified once approved.',
@@ -270,7 +312,7 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
               maxLines: 2),
           const SizedBox(height: 14),
           _field(_phoneCtrl, 'Contact Phone', Icons.call_outlined,
-              keyboardType: TextInputType.phone),
+              keyboardType: TextInputType.phone, locked: true),
           const SizedBox(height: 14),
           _field(_emailCtrl, 'Email Address', Icons.mail_outline_rounded,
               keyboardType: TextInputType.emailAddress),
@@ -285,7 +327,7 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
               maxLines: 2),
           const SizedBox(height: 14),
           _field(_phoneCtrl, 'Contact Phone', Icons.call_outlined,
-              keyboardType: TextInputType.phone),
+              keyboardType: TextInputType.phone, locked: true),
           const SizedBox(height: 14),
           _field(_emailCtrl, 'Email Address', Icons.mail_outline_rounded,
               keyboardType: TextInputType.emailAddress),
@@ -294,9 +336,9 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
             contentPadding: EdgeInsets.zero,
             value: _deliveryAvailable,
             onChanged: (v) => setState(() => _deliveryAvailable = v),
-            title: const Text('Home delivery available',
+            title: Text('Home delivery available',
                 style: AppTextStyles.labelLarge),
-            subtitle: const Text(
+            subtitle: Text(
               'Turn off if patients must collect orders in store.',
               style: AppTextStyles.caption,
             ),
@@ -351,17 +393,30 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
     int maxLines = 1,
     TextInputType? keyboardType,
     bool required = true,
+    bool locked = false,
   }) {
     return TextFormField(
       controller: ctrl,
       maxLines: maxLines,
       keyboardType: keyboardType,
+      readOnly: locked,
+      enabled: !locked,
       validator: required
           ? (v) => (v == null || v.trim().isEmpty) ? 'Required' : null
           : null,
       decoration: InputDecoration(
         labelText: label,
         prefixIcon: Icon(icon, color: AppColors.textSecondary),
+        // A phone number typed here would be an arbitrary, unverified
+        // string that could collide with another account's number — the
+        // OTP-verified number on this Firebase Auth session is the only
+        // one Firestore rules and the rest of this app ever treat as this
+        // account's real phone, so this field mirrors it read-only rather
+        // than accepting free text.
+        suffixIcon: locked
+            ? const Icon(Icons.verified_rounded, color: AppColors.success, size: 18)
+            : null,
+        helperText: locked ? 'Verified via OTP — cannot be changed' : null,
       ),
     );
   }
