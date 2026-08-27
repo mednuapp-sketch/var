@@ -204,13 +204,31 @@ class _IncomingRequestScreenState extends State<IncomingRequestScreen>
     // Set status to 'ongoing' so the patient's OutgoingCallScreen knows
     // the doctor has accepted and is about to join Agora.
     // DoctorVideoCallScreen will update to 'active' once Agora is joined.
-    await FirebaseFirestore.instance
-        .collection('consultations')
-        .doc(_consultationId!)
-        .update({
-      'status': 'ongoing',
-      'ringingAt': FieldValue.serverTimestamp(),
-    });
+    try {
+      await FirebaseFirestore.instance
+          .collection('consultations')
+          .doc(_consultationId!)
+          .update({
+        'status': 'ongoing',
+        'ringingAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      // Roll back the accepted latch so the doctor isn't stranded on this
+      // screen with no way to accept, decline, or retry after a transient
+      // network failure.
+      if (mounted) {
+        ProviderScope.containerOf(context, listen: false)
+            .read(criticalOperationInProgressProvider.notifier)
+            .state = false;
+        setState(() => _accepted = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text(
+                  'Could not accept the call — check your connection and try again.')),
+        );
+      }
+      return;
+    }
     if (!mounted) return;
     context.push(AppRoutes.videoCall, extra: {
       'consultationId': _consultationId!,
@@ -224,26 +242,31 @@ class _IncomingRequestScreenState extends State<IncomingRequestScreen>
     HapticFeedback.mediumImpact();
     await CallNotificationService.cancelAll();
     if (_consultationId != null) {
+      // Best-effort — the doctor is leaving this screen regardless; a
+      // failed status write just means the patient's countdown times the
+      // call out on its own instead of seeing "declined" immediately.
       await FirebaseFirestore.instance
           .collection('consultations')
           .doc(_consultationId!)
           .update({
         'status': 'declined',
         'declinedAt': FieldValue.serverTimestamp(),
-      });
+      }).catchError((_) {});
     }
     _safeClose();
   }
 
   Future<void> _markMissed() async {
     if (_consultationId == null || _accepted) return;
+    // Best-effort cleanup write — swallow so a network blip during the
+    // auto-timeout doesn't surface as an unhandled exception.
     await FirebaseFirestore.instance
         .collection('consultations')
         .doc(_consultationId!)
         .update({
       'status': 'missed',
       'missedAt': FieldValue.serverTimestamp(),
-    });
+    }).catchError((_) {});
   }
 
   /// Leaves this screen safely.

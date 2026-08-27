@@ -30,7 +30,7 @@
     }
   },
   "hosting": {
-    "site": "mednu-admin",
+    "site": "mednu-healthcare-app",
     "public": "mednu-admin",
     "ignore": [
       "firebase.json",

@@ -165,7 +165,7 @@ class _AddFamilyMemberSheetState extends State<_AddFamilyMemberSheet> {
     // Capture these before the async gap so they work even if context unmounts
     final nav = Navigator.of(context);
     final messenger = ScaffoldMessenger.of(context);
-    messenger.clearSnackBars();
+    messenger.hideCurrentSnackBar();
     messenger.showSnackBar(SnackBar(
       content: Row(children: [
         const SizedBox(width: 18, height: 18,
@@ -197,7 +197,7 @@ class _AddFamilyMemberSheetState extends State<_AddFamilyMemberSheet> {
       } else {
         await widget.ref.read(authProvider.notifier).addFamilyMember(member);
       }
-      messenger.clearSnackBars();
+      messenger.hideCurrentSnackBar();
       if (mounted) nav.pop();
       // fire-and-forget — logging must not block the UI
       OperationLogger.logSuccess(
@@ -209,7 +209,7 @@ class _AddFamilyMemberSheetState extends State<_AddFamilyMemberSheet> {
         action: isEditing ? OpAction.familyMemberUpdated : OpAction.familyMemberAdded,
         errorDetails: e.toString(),
       );
-      messenger.clearSnackBars();
+      messenger.hideCurrentSnackBar();
       if (mounted) {
         FeedbackService.showError(context, 'Failed to save family member. Try again.');
       }

@@ -1,11 +1,8 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/router/app_router.dart';
-import '../../../core/services/booking_service.dart';
 import '../../../core/services/feedback_service.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../models/cart_item.dart';
@@ -32,119 +29,96 @@ class _CartScreenState extends ConsumerState<CartScreen> {
 
     setState(() => _checkingOut = true);
 
-    CheckoutDetails? details;
-    bool? paid;
+    // capturePayment/captureCartPayment (functions/index.js) create every
+    // booking doc themselves once the charge is verified — nothing here
+    // writes to Firestore before or after. Medicine items are bundled into
+    // one `orders` item (matching the previous single combined order); every
+    // other item becomes its own `service_requests` item, in the same shape
+    // BookingService.createRequest used to write by hand.
+    Map<String, dynamic>? result;
     try {
-      details = await CheckoutDetailsSheet.show(context, themeColor: AppColors.primary);
+      final details = await CheckoutDetailsSheet.show(context, themeColor: AppColors.primary);
       if (details == null || !mounted) return;
+      final d = details;
 
-      final total = ref.read(cartTotalProvider);
-      paid = await context.push<bool>(
+      final medicineItems = items.where((i) => i.type == 'medicine').toList();
+      final serviceItems = items.where((i) => i.type != 'medicine').toList();
+
+      final cartItems = <Map<String, dynamic>>[
+        for (final item in serviceItems)
+          {
+            'serviceType': item.type,
+            'bookingCollection': 'service_requests',
+            'amount': item.totalAmount,
+            'bookingData': {
+              'type': item.type,
+              'serviceName': item.serviceName,
+              'patientName': d.name,
+              'patientPhone': d.phone,
+              'address': d.address,
+              'preferredDate': d.date,
+              'preferredTime': d.time,
+              'notes': d.notes,
+              'serviceDetails': item.serviceDetails,
+              'amount': item.totalAmount,
+              'status': 'pending',
+              'assignedTo': null,
+            },
+          },
+        if (medicineItems.isNotEmpty)
+          {
+            'serviceType': 'medicine',
+            'bookingCollection': 'orders',
+            'amount': medicineItems.fold<int>(0, (s, i) => s + i.totalAmount),
+            'bookingData': {
+              'items': medicineItems
+                  .map((i) => {
+                        'id': i.serviceDetails['id'],
+                        'name': i.serviceDetails['name'] ?? i.serviceName,
+                        'brand': i.serviceDetails['brand'],
+                        'price': i.unitAmount,
+                        'count': i.quantity,
+                      })
+                  .toList(),
+              'total': medicineItems.fold<int>(0, (s, i) => s + i.totalAmount),
+              'status': 'confirmed',
+              'deliveryAddress': d.address,
+              'deliveryName': d.name,
+              'deliveryPhone': d.phone,
+            },
+          },
+      ];
+
+      result = await context.push<Map<String, dynamic>>(
         AppRoutes.payment,
-        extra: {'amount': total.toString(), 'description': 'MedNU Cart (${items.length} item${items.length == 1 ? '' : 's'})'},
+        extra: {
+          'amount': cartItems.fold<int>(0, (s, it) => s + (it['amount'] as int)).toString(),
+          'description': 'MedNU Cart (${items.length} item${items.length == 1 ? '' : 's'})',
+          'cartItems': cartItems,
+        },
       );
-      if (!mounted || paid != true) return;
     } finally {
       // Every abandon path above (cancelled sheet, cancelled/failed payment,
-      // disposed screen) has to release the button again; only the write
-      // phase below keeps it held until it finishes.
-      if (mounted && paid != true) setState(() => _checkingOut = false);
+      // disposed screen) has to release the button again.
+      if (mounted && result?['payments'] == null) setState(() => _checkingOut = false);
     }
 
-    FeedbackService.showLoading(context, 'Placing your order...');
+    if (!mounted || result?['payments'] == null) return;
 
-    final d = details;
-    final failed = <CartItem>[];
-    final placed = <CartItem>[];
-    final medicineItems = items.where((i) => i.type == 'medicine').toList();
-    final serviceItems = items.where((i) => i.type != 'medicine').toList();
-
-    for (final item in serviceItems) {
-      try {
-        await BookingService.createRequest(
-          type: item.type,
-          serviceName: item.serviceName,
-          patientName: d.name,
-          patientPhone: d.phone,
-          address: d.address,
-          preferredDate: d.date,
-          preferredTime: d.time,
-          notes: d.notes,
-          serviceDetails: item.serviceDetails,
-          amount: item.totalAmount,
-        );
-        placed.add(item);
-      } catch (_) {
-        failed.add(item);
-      }
-    }
-
-    String? placedMedicineOrderId;
-    if (medicineItems.isNotEmpty) {
-      try {
-        final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
-        // A missing uid means the order can never be written — treat it as a
-        // failure rather than silently dropping the medicines the patient
-        // has already paid for.
-        if (uid.isEmpty) throw Exception('Not authenticated');
-        final orderId = 'ORD-${DateTime.now().millisecondsSinceEpoch.toString().substring(5)}';
-        await FirebaseFirestore.instance.collection('orders').doc(orderId).set({
-          'orderId': orderId,
-          'patientId': uid,
-          'items': medicineItems
-              .map((i) => {
-                    'id': i.serviceDetails['id'],
-                    'name': i.serviceDetails['name'] ?? i.serviceName,
-                    'brand': i.serviceDetails['brand'],
-                    'price': i.unitAmount,
-                    'count': i.quantity,
-                  })
-              .toList(),
-          'total': medicineItems.fold<int>(0, (s, i) => s + i.totalAmount),
-          'status': 'confirmed',
-          'deliveryAddress': d.address,
-          'deliveryName': d.name,
-          'deliveryPhone': d.phone,
-          'createdAt': FieldValue.serverTimestamp(),
-        });
-        placedMedicineOrderId = orderId;
-        placed.addAll(medicineItems);
-      } catch (_) {
-        failed.addAll(medicineItems);
-      }
-    }
-
-    if (!mounted) return;
-    FeedbackService.dismiss(context);
+    final payments = (result!['payments'] as List).cast<Map>();
+    ref.read(cartProvider.notifier).clear();
     setState(() => _checkingOut = false);
+    FeedbackService.showSuccess(context, 'Order placed successfully!');
 
-    if (failed.isEmpty) {
-      ref.read(cartProvider.notifier).clear();
-      FeedbackService.showSuccess(context, 'Order placed successfully!');
-      // A placed medicine order can need a prescription — take the patient
-      // straight to where they can upload one rather than the general
-      // services tracker. Every other booking type keeps the existing
-      // behavior unchanged.
-      if (placedMedicineOrderId != null) {
-        context.push(AppRoutes.orderDetail, extra: {'orderId': placedMedicineOrderId});
-      } else {
-        context.go(AppRoutes.myServices);
-      }
+    // A placed medicine order can need a prescription — take the patient
+    // straight to where they can upload one rather than the general
+    // services tracker. Every other booking type keeps the existing
+    // behavior unchanged.
+    final medicinePayment = payments.cast<Map<String, dynamic>>().where((p) => p['serviceType'] == 'medicine');
+    if (medicinePayment.isNotEmpty) {
+      context.push(AppRoutes.orderDetail, extra: {'orderId': medicinePayment.first['bookingId']});
     } else {
-      // Payment has already been taken for the whole cart at this point, so
-      // only the items that actually got a booking/order record may leave the
-      // cart. The failed ones stay so the patient can retry them without
-      // re-adding anything — the previous version removed the *failed* items,
-      // which silently lost paid-for items and contradicted the message.
-      for (final p in placed) {
-        ref.read(cartProvider.notifier).removeItem(p.id);
-      }
-      FeedbackService.showError(
-        context,
-        'Your payment went through, but ${failed.length} item${failed.length == 1 ? '' : 's'} could not be booked. '
-        'They are still in your cart. Please contact support before retrying — checking out again will charge you a second time.',
-        duration: const Duration(seconds: 8),
-      );
+      context.go(AppRoutes.myServices);
     }
   }
 

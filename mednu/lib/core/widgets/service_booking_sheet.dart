@@ -628,17 +628,64 @@ class _ServiceBookingSheetState extends ConsumerState<ServiceBookingSheet> {
       return;
     }
 
+    final locationData = (_useManualEntry && _addrConfirmed && _selectedAddrMap.isNotEmpty)
+        ? _selectedAddrMap
+        : _useManualEntry
+            ? {'formattedAddress': finalAddr}
+            : _selectedAddrMap.isNotEmpty
+                ? _selectedAddrMap
+                : {'formattedAddress': finalAddr};
+    final bookingData = {
+      'type': widget.type,
+      'serviceName': widget.serviceName,
+      'patientName': _nameCtrl.text.trim(),
+      'patientPhone': _phoneCtrl.text.trim(),
+      'address': finalAddr,
+      'preferredDate': _date,
+      'preferredTime': _time,
+      'notes': _notesCtrl.text.trim(),
+      'serviceDetails': {
+        ...widget.serviceDetails,
+        'locationData': locationData,
+      },
+      'amount': widget.amount,
+      'status': 'pending',
+      'assignedTo': null,
+    };
+
     // ── Payment gate ──────────────────────────────────────
+    // capturePayment (functions/index.js) creates the service_requests doc
+    // itself once the charge is verified — see PaymentScreen. A $0 service
+    // has no payment concept at all, so it still goes straight to
+    // BookingService.createRequest, unchanged.
     if (widget.amount > 0) {
       final desc = widget.paymentDescription.isNotEmpty
           ? widget.paymentDescription
           : 'Booking: ${widget.serviceName}';
-      final paid = await context.push<bool>(
-        AppRoutes.payment,
-        extra: {'amount': widget.amount.toString(), 'description': desc},
-      );
-      if (!mounted) return;
-      if (paid != true) return;
+      setState(() => _busy = true);
+      Map<String, dynamic>? result;
+      try {
+        result = await context.push<Map<String, dynamic>>(
+          AppRoutes.payment,
+          extra: {
+            'amount': widget.amount.toString(),
+            'description': desc,
+            'serviceType': widget.type,
+            'bookingCollection': 'service_requests',
+            'bookingData': bookingData,
+          },
+        );
+      } finally {
+        if (mounted && result?['bookingId'] == null) setState(() => _busy = false);
+      }
+      if (!mounted || result?['bookingId'] == null) return;
+
+      FeedbackService.dismiss(context);
+      setState(() { _busy = false; _done = true; });
+      Future.delayed(const Duration(milliseconds: 1200), () {
+        if (mounted) maybeShowRatingSheet(context, themeColor: widget.themeColor);
+      });
+      return;
     }
     // ─────────────────────────────────────────────────────
 
@@ -646,14 +693,6 @@ class _ServiceBookingSheetState extends ConsumerState<ServiceBookingSheet> {
     FeedbackService.showLoading(context, 'Booking ${widget.serviceName}...');
 
     try {
-      final locationData = (_useManualEntry && _addrConfirmed && _selectedAddrMap.isNotEmpty)
-          ? _selectedAddrMap
-          : _useManualEntry
-              ? {'formattedAddress': finalAddr}
-              : _selectedAddrMap.isNotEmpty
-                  ? _selectedAddrMap
-                  : {'formattedAddress': finalAddr};
-
       await BookingService.createRequest(
         type: widget.type,
         serviceName: widget.serviceName,

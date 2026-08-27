@@ -5,6 +5,8 @@ class LabProfile {
   final String name;
   final String licenseNumber;
   final String address;
+  final double? latitude;
+  final double? longitude;
   final String phone;
   final String email;
   final List<String> servicesOffered;
@@ -25,6 +27,8 @@ class LabProfile {
     required this.name,
     required this.licenseNumber,
     required this.address,
+    this.latitude,
+    this.longitude,
     required this.phone,
     required this.email,
     required this.servicesOffered,
@@ -44,6 +48,8 @@ class LabProfile {
       name: (d['name'] as String?) ?? '',
       licenseNumber: (d['licenseNumber'] as String?) ?? '',
       address: (d['address'] as String?) ?? '',
+      latitude: (d['latitude'] as num?)?.toDouble(),
+      longitude: (d['longitude'] as num?)?.toDouble(),
       phone: (d['phone'] as String?) ?? '',
       email: (d['email'] as String?) ?? '',
       servicesOffered: ((d['servicesOffered'] as List?) ?? const [])

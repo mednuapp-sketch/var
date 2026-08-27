@@ -15,9 +15,10 @@ const firebaseConfig = {
 
 // Initialize Firebase
 firebase.initializeApp(firebaseConfig);
-const db      = firebase.firestore();
-const auth    = firebase.auth();
-const storage = firebase.storage();
+const db        = firebase.firestore();
+const auth      = firebase.auth();
+const storage   = firebase.storage();
+const functions = firebase.functions(); // Payment Distribution & Settlement Engine callables
 
 // ============================================
 //  HOW TO GET THESE VALUES:

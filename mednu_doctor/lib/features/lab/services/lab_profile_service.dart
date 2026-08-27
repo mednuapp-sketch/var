@@ -35,6 +35,8 @@ class LabProfileService {
     required String phone,
     String email = '',
     List<String> servicesOffered = const [],
+    double? latitude,
+    double? longitude,
   }) async {
     String? fcmToken;
     try {
@@ -46,6 +48,8 @@ class LabProfileService {
       'name': name,
       'licenseNumber': licenseNumber,
       'address': address,
+      if (latitude != null) 'latitude': latitude,
+      if (longitude != null) 'longitude': longitude,
       'phone': phone,
       'email': email,
       'servicesOffered': servicesOffered,

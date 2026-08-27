@@ -110,17 +110,24 @@ class _DoctorVideoCallScreenState extends State<DoctorVideoCallScreen>
   }
 
   Future<void> _initAgora() async {
-    await _agora.initialize();
-    if (!mounted) return;
-    setState(() => _engineReady = true);
-    // Start foreground service + cache the Flutter engine so Android does not
-    // kill the process (or Dart VM) if the doctor swipes from recents mid-call.
-    await ActiveCallService.start(
-      callId: widget.consultationId,
-      callerName: widget.patientName,
-    );
-    ActiveCallService.setEndCallFromNotificationHandler(() => _doEndCall());
-    await _agora.joinChannel(widget.consultationId);
+    try {
+      await _agora.initialize();
+      if (!mounted) return;
+      setState(() => _engineReady = true);
+      // Start foreground service + cache the Flutter engine so Android does not
+      // kill the process (or Dart VM) if the doctor swipes from recents mid-call.
+      await ActiveCallService.start(
+        callId: widget.consultationId,
+        callerName: widget.patientName,
+      );
+      ActiveCallService.setEndCallFromNotificationHandler(() => _doEndCall());
+      await _agora.joinChannel(widget.consultationId);
+    } catch (e) {
+      debugPrint('[DoctorVideoCall] Agora init failed: $e');
+      if (!mounted) return;
+      setState(() => _agoraError = 'Could not start the video call. Please try again.');
+      return;
+    }
     // Signal the patient app to join by setting status to 'active'.
     // The patient's Firestore listener watches for this exact status change.
     try {

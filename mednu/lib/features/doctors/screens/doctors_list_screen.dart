@@ -8,6 +8,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:dio/dio.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
+import '../../../core/constants/therapy_specialties.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../../home/providers/location_provider.dart';
 import '../../home/providers/home_nav_provider.dart';
@@ -94,6 +95,7 @@ class _DoctorsListScreenState extends ConsumerState<DoctorsListScreen>
   Timer? _searchDebounce;
   _FilterState _filters = const _FilterState();
   late TabController _tabController;
+  final ScrollController _specialtyScrollController = ScrollController();
 
   static const _specialties = [
     'All', 'Available Now', 'General', 'Cardiology', 'Endocrinology',
@@ -105,12 +107,36 @@ class _DoctorsListScreenState extends ConsumerState<DoctorsListScreen>
 
   // Shown instead of _specialties when browsing therapists only.
   static const _therapistSpecialties = [
-    'All', 'Available Now', 'Psychiatry', 'Psychology', 'Counselling',
-    'Pediatric Psychiatry',
+    'All', 'Available Now', ...kTherapySpecialties,
   ];
 
   List<String> get _activeSpecialties =>
       _therapistsOnly ? _therapistSpecialties : _specialties;
+
+  // Selected specialty is pulled to the front of the chip row; everything
+  // else keeps its original relative order. Falls back to the normal order
+  // when 'All' is selected or the selection isn't in the current list.
+  List<String> get _displaySpecialties {
+    final base = _activeSpecialties;
+    if (_selectedSpecialty == 'All' || !base.contains(_selectedSpecialty)) {
+      return base;
+    }
+    return [
+      _selectedSpecialty,
+      ...base.where((s) => s != _selectedSpecialty),
+    ];
+  }
+
+  void _selectSpecialty(String specialty) {
+    setState(() => _selectedSpecialty = specialty);
+    if (_specialtyScrollController.hasClients) {
+      _specialtyScrollController.animateTo(
+        0,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOut,
+      );
+    }
+  }
 
   @override
   void initState() {
@@ -144,6 +170,7 @@ class _DoctorsListScreenState extends ConsumerState<DoctorsListScreen>
   void dispose() {
     _searchDebounce?.cancel();
     _tabController.dispose();
+    _specialtyScrollController.dispose();
     super.dispose();
   }
 
@@ -451,23 +478,25 @@ class _DoctorsListScreenState extends ConsumerState<DoctorsListScreen>
         SizedBox(
           height: 36,
           child: ListView.builder(
+            controller: _specialtyScrollController,
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: _activeSpecialties.length,
+            itemCount: _displaySpecialties.length,
             itemBuilder: (_, i) {
-              final chip = _activeSpecialties[i];
+              final chip = _displaySpecialties[i];
               final isAvailableNow = chip == 'Available Now';
               final selected = isAvailableNow
                   ? _filters.availableNow
                   : _selectedSpecialty == chip;
               final isNotAll = chip != 'All' && !isAvailableNow;
               return GestureDetector(
+                key: ValueKey(chip),
                 onTap: () {
                   if (isAvailableNow) {
                     setState(() => _filters = _filters.copyWith(
                         availableNow: !_filters.availableNow));
                   } else {
-                    setState(() => _selectedSpecialty = chip);
+                    _selectSpecialty(chip);
                   }
                 },
                 child: AnimatedContainer(
@@ -514,7 +543,7 @@ class _DoctorsListScreenState extends ConsumerState<DoctorsListScreen>
                         if (selected && isNotAll) ...[
                           const SizedBox(width: 5),
                           GestureDetector(
-                            onTap: () => setState(() => _selectedSpecialty = 'All'),
+                            onTap: () => _selectSpecialty('All'),
                             child: const Icon(
                               Icons.close_rounded,
                               size: 14,
@@ -706,12 +735,13 @@ class _DoctorListView extends StatelessWidget {
         .collection('doctors')
         .where('status', isEqualTo: 'active');
 
-    if (therapistsOnly) {
-      q = q.where('type', isEqualTo: 'therapist');
-    }
-
     if (specialty != 'All') {
+      // A specific chip is always drawn from the active specialty list, so
+      // when browsing therapists only it's already scoped to a therapy
+      // specialty — no need to also apply the broader whereIn below.
       q = q.where('specialty', isEqualTo: specialty);
+    } else if (therapistsOnly) {
+      q = q.where('specialty', whereIn: kTherapySpecialties);
     }
 
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
@@ -925,10 +955,6 @@ class _DoctorCard extends StatelessWidget {
     final name = data['name'] as String? ?? 'Doctor';
     final specialty = data['specialty'] as String? ?? '';
     final qual = data['qualifications'] as String? ?? '';
-    final ratingNum = (data['rating'] as num?)?.toDouble() ?? 0;
-    final totalReviews = (data['totalReviews'] as num?)?.toInt() ?? 0;
-    final hasRating = ratingNum > 0 && totalReviews > 0;
-    final rating = hasRating ? ratingNum.toStringAsFixed(1) : '–';
     final feeRaw = data['fee'];
     final fee = feeRaw is int
         ? feeRaw
@@ -1116,14 +1142,6 @@ class _DoctorCard extends StatelessWidget {
                       Wrap(
                         spacing: 12,
                         children: [
-                          if (hasRating) ...[
-                            _statChip(
-                              context,
-                              icon: Icons.star_rounded,
-                              label: '$rating ($totalReviews)',
-                              color: const Color(0xFFF9A825),
-                            ),
-                          ],
                           _statChip(
                             context,
                             icon: Icons.currency_rupee_rounded,

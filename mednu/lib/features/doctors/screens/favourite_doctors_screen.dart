@@ -240,7 +240,6 @@ class _DoctorCard extends StatelessWidget {
     final d = doc.data();
     final name      = d['doctorName']  as String? ?? 'Doctor';
     final specialty = d['specialty']   as String? ?? '';
-    final rating    = (d['rating']     as num?)?.toDouble() ?? 0.0;
     final fee       = (d['fee']        as num?)?.toInt() ?? 0;
     final doctorId  = d['doctorId']    as String? ?? doc.id;
 
@@ -332,20 +331,6 @@ class _DoctorCard extends StatelessWidget {
                   ],
                   SizedBox(height: R.p(context, 6)),
                   Row(children: [
-                    if (rating > 0) ...[
-                      const Icon(Icons.star_rounded, color: Color(0xFFFFA000), size: 14),
-                      SizedBox(width: R.p(context, 3)),
-                      Text(
-                        rating.toStringAsFixed(1),
-                        style: const TextStyle(
-                          fontFamily: 'Poppins',
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFFFFA000),
-                        ),
-                      ),
-                      SizedBox(width: R.p(context, 10)),
-                    ],
                     if (fee > 0)
                       Container(
                         padding: EdgeInsets.symmetric(horizontal: R.p(context, 8), vertical: R.p(context, 2)),

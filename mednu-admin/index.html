@@ -14,6 +14,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-functions-compat.js"></script>
   <!-- Google Maps JS SDK — for map previews and location embedding in admin -->
   <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBh_sDZlUDbE-u-c_4-sWsT1gxvfTYqoco&libraries=places" async defer></script>
 </head>
@@ -91,6 +92,22 @@
         <i class="ti ti-wallet nav-icon" aria-hidden="true"></i> Wallet
         <span class="nav-badge nav-badge-red" id="nav-wallet-count" style="display:none;">0</span>
       </div>
+      <div class="nav-section-label">Payments &amp; Settlements</div>
+      <div class="nav-item" data-tab="settlements" data-title="Settlement Dashboard">
+        <i class="ti ti-cash nav-icon" aria-hidden="true"></i> Settlements
+      </div>
+      <div class="nav-item" data-tab="commission-rules" data-title="Commission Rules">
+        <i class="ti ti-percentage nav-icon" aria-hidden="true"></i> Commission Rules
+      </div>
+      <div class="nav-item" data-tab="coupons" data-title="Coupons">
+        <i class="ti ti-ticket nav-icon" aria-hidden="true"></i> Coupons
+      </div>
+      <div class="nav-item" data-tab="campaigns" data-title="Campaigns">
+        <i class="ti ti-rocket nav-icon" aria-hidden="true"></i> Campaigns
+      </div>
+      <div class="nav-item" data-tab="refunds" data-title="Refunds">
+        <i class="ti ti-receipt-refund nav-icon" aria-hidden="true"></i> Refunds
+      </div>
       <div class="nav-section-label">Marketing</div>
       <div class="nav-item" data-tab="banners" data-title="Promotional Banners">
         <i class="ti ti-speakerphone nav-icon" aria-hidden="true"></i> Banners
@@ -108,11 +125,13 @@
         <i class="ti ti-ambulance nav-icon" aria-hidden="true"></i> Ambulances
         <span class="nav-badge nav-badge-green" id="nav-ambulance-count" style="display:none;">0</span>
       </div>
+      <!-- Maternity section hidden, restore when asked
       <div class="nav-section-label">Maternity</div>
       <div class="nav-item" data-tab="maternity" data-title="Maternity Care Management">
         <i class="ti ti-heart nav-icon" aria-hidden="true"></i> Maternity
         <span class="nav-badge nav-badge-red" id="nav-maternity-alerts" style="display:none;">0</span>
       </div>
+      -->
       <div class="nav-section-label">Quality</div>
       <div class="nav-item" data-tab="quality-analytics" data-title="Weekly Quality Analytics">
         <i class="ti ti-chart-area-line nav-icon" aria-hidden="true"></i> Quality Analytics
@@ -809,6 +828,42 @@
               <thead><tr><th>Payment ID</th><th>Patient</th><th>Doctor</th><th>Amount</th><th>Status</th><th>Date</th></tr></thead>
               <tbody id="payments-tbody"><tr><td colspan="6" class="loading">Loading transactions...</td></tr></tbody>
             </table>
+          </div>
+        </div>
+
+        <!-- Settlement engine analytics: Coupon usage / AOV / Commission by service / Top providers / Refund rate -->
+        <div class="grid-2" style="margin-top:16px;">
+          <div class="card">
+            <div class="card-header"><span class="card-title">Coupon Usage — Redemptions per Coupon</span></div>
+            <div class="chart-container" style="height:220px;">
+              <canvas id="coupon-usage-chart" role="img" aria-label="Bar chart of coupon redemptions">Redemptions per coupon code.</canvas>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><span class="card-title">Average Order Value — Last 6 Months</span></div>
+            <div class="chart-container" style="height:220px;">
+              <canvas id="aov-chart" role="img" aria-label="Line chart of average order value">Average paid amount per month.</canvas>
+            </div>
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header"><span class="card-title">Commission Earned by Service</span></div>
+            <div class="chart-container" style="height:220px;">
+              <canvas id="commission-by-service-chart" role="img" aria-label="Pie chart of commission by service type">Commission earned grouped by service type.</canvas>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><span class="card-title">Top 10 Providers by Earnings</span></div>
+            <div class="chart-container" style="height:220px;">
+              <canvas id="top-providers-chart" role="img" aria-label="Horizontal bar chart of top providers">Top providers by settled earnings.</canvas>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">Refund Rate — Last 6 Months</span></div>
+          <div class="chart-container" style="height:220px;">
+            <canvas id="refund-rate-chart" role="img" aria-label="Line chart of refund rate">Refunds as a percentage of payments per month.</canvas>
           </div>
         </div>
       </div>
@@ -3485,6 +3540,398 @@
         </div>
       </div>
 
+      <!-- ===== SETTLEMENT DASHBOARD TAB ===== -->
+      <div id="tab-settlements" class="tab-section">
+
+        <!-- Live stat tiles (onSnapshot-backed, see initSettlementDashboardListeners) -->
+        <div class="metrics-grid" style="margin-bottom:16px;" id="settlement-stats">
+          <div class="metric-card">
+            <div class="metric-icon" style="background:#e8f0fe;color:#1a73e8;"><i class="ti ti-cash"></i></div>
+            <div class="metric-info">
+              <div class="metric-value" id="stl-total-revenue">—</div>
+              <div class="metric-label">Total Revenue</div>
+            </div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-icon" style="background:#e6f4ea;color:#1e8e3e;"><i class="ti ti-percentage"></i></div>
+            <div class="metric-info">
+              <div class="metric-value" id="stl-commission">—</div>
+              <div class="metric-label">Commission Earned</div>
+            </div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-icon" style="background:#fef7e0;color:#f29900;"><i class="ti ti-clock-dollar"></i></div>
+            <div class="metric-info">
+              <div class="metric-value" id="stl-pending">—</div>
+              <div class="metric-label">Pending Settlement</div>
+            </div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-icon" style="background:#f3e8fd;color:#6a1b9a;"><i class="ti ti-rosette-discount-check"></i></div>
+            <div class="metric-info">
+              <div class="metric-value" id="stl-paid">—</div>
+              <div class="metric-label">Paid Settlement</div>
+            </div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-icon" style="background:#fce4ec;color:#c2185b;"><i class="ti ti-discount-2"></i></div>
+            <div class="metric-info">
+              <div class="metric-value" id="stl-coupon-cost">—</div>
+              <div class="metric-label">Coupon Cost</div>
+            </div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-icon" style="background:#fce8e6;color:#d93025;"><i class="ti ti-receipt-refund"></i></div>
+            <div class="metric-info">
+              <div class="metric-value" id="stl-refunds">—</div>
+              <div class="metric-label">Refunds</div>
+            </div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-icon" style="background:#ffebee;color:#c62828;"><i class="ti ti-alert-triangle"></i></div>
+            <div class="metric-info">
+              <div class="metric-value" id="stl-failed">—</div>
+              <div class="metric-label">Failed Payments</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Settlement automation -->
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-header"><span class="card-title">Settlement Automation</span></div>
+          <div style="display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;padding-top:4px;">
+            <div class="form-group" style="margin:0;min-width:220px;">
+              <label class="form-label">Settlement Frequency</label>
+              <select id="settlement-frequency" class="filter-select" style="width:100%;" onchange="saveSettlementFrequency()">
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
+                <option value="manual">Manual only</option>
+              </select>
+            </div>
+            <button class="btn-publish" onclick="runManualSettlementBatchNow()" id="run-settlement-batch-btn">
+              <i class="ti ti-player-play"></i> Run Settlement Batch Now
+            </button>
+            <button class="btn btn-outline" onclick="exportSettlementsCsv()" style="margin-left:auto;">
+              <i class="ti ti-download"></i> Export CSV
+            </button>
+          </div>
+        </div>
+
+        <!-- Provider settlements table -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Provider Settlements</span>
+            <button class="btn btn-outline" id="bulk-approve-settlements-btn" onclick="bulkApproveSelectedSettlements()" disabled>
+              <i class="ti ti-checks"></i> Approve Selected (<span id="settlement-selected-count">0</span>)
+            </button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:32px;"><input type="checkbox" id="settlement-select-all" onchange="toggleSelectAllSettlements(this.checked)" /></th>
+                  <th>Provider</th>
+                  <th>Earnings</th>
+                  <th>Commission</th>
+                  <th>Payable</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="settlements-tbody"><tr><td colspan="7" class="loading">Loading settlements...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== COMMISSION RULES TAB ===== -->
+      <div id="tab-commission-rules" class="tab-section">
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-header">
+            <span class="card-title" id="commission-form-title">Commission Rule — select a service below to edit</span>
+            <button class="btn btn-outline" id="cancel-commission-btn" style="display:none;" onclick="cancelCommissionRuleEditor()">
+              <i class="ti ti-x"></i> Cancel
+            </button>
+          </div>
+          <div id="commission-editor" style="display:none;">
+            <input type="hidden" id="commission-service-type" />
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+              <div class="form-group" style="margin:0;">
+                <label class="form-label">Rule Type</label>
+                <select id="commission-type" class="filter-select" style="width:100%;" onchange="commissionTypeChanged()">
+                  <option value="percentage">Percentage</option>
+                  <option value="fixed">Fixed Amount</option>
+                  <option value="hybrid">Hybrid (% + Fixed)</option>
+                </select>
+              </div>
+              <div class="form-group" style="margin:0;" id="commission-percentage-group">
+                <label class="form-label">Percentage (%)</label>
+                <input id="commission-percentage" type="number" min="0" max="100" step="0.01" class="form-input" placeholder="e.g. 15" />
+              </div>
+              <div class="form-group" style="margin:0;" id="commission-fixed-group">
+                <label class="form-label">Fixed Amount (₹)</label>
+                <input id="commission-fixed" type="number" min="0" step="0.01" class="form-input" placeholder="e.g. 50" />
+              </div>
+            </div>
+
+            <!-- Provider overrides -->
+            <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:12px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="toggleOverridesPanel()">
+                <span class="form-label" style="margin:0;">Provider Overrides <span id="commission-overrides-count" class="form-hint"></span></span>
+                <i class="ti ti-chevron-down" id="commission-overrides-chevron"></i>
+              </div>
+              <div id="commission-overrides-panel" style="display:none;margin-top:10px;">
+                <div id="commission-overrides-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px;"></div>
+                <div style="display:grid;grid-template-columns:1.5fr 1fr 1fr auto;gap:8px;align-items:end;">
+                  <div class="form-group" style="margin:0;">
+                    <label class="form-label">Provider ID</label>
+                    <input id="override-provider-id" type="text" class="form-input" placeholder="Provider document ID" />
+                  </div>
+                  <div class="form-group" style="margin:0;">
+                    <label class="form-label">Type</label>
+                    <select id="override-type" class="filter-select" style="width:100%;">
+                      <option value="percentage">Percentage</option>
+                      <option value="fixed">Fixed</option>
+                    </select>
+                  </div>
+                  <div class="form-group" style="margin:0;">
+                    <label class="form-label">Value</label>
+                    <input id="override-value" type="number" min="0" step="0.01" class="form-input" placeholder="Value" />
+                  </div>
+                  <button class="btn btn-outline" onclick="addCommissionOverride()" style="height:38px;"><i class="ti ti-plus"></i> Add</button>
+                </div>
+              </div>
+            </div>
+
+            <div style="margin-top:16px;text-align:right;">
+              <button id="save-commission-btn" class="btn-publish" onclick="saveCommissionRule()">
+                <i class="ti ti-device-floppy"></i> Save Rule
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><span class="card-title">Service Commission Rules</span></div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Service Type</th><th>Rule Type</th><th>Value</th><th>Provider Overrides</th><th>Last Updated</th><th>Actions</th></tr></thead>
+              <tbody id="commission-rules-tbody"><tr><td colspan="6" class="loading">Loading commission rules...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== COUPONS TAB ===== -->
+      <div id="tab-coupons" class="tab-section">
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-header">
+            <span class="card-title" id="coupon-form-title">Create New Coupon</span>
+            <button class="btn btn-outline" id="cancel-coupon-btn" style="display:none;" onclick="cancelCouponEdit()">
+              <i class="ti ti-x"></i> Cancel
+            </button>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+            <div class="form-group" style="margin:0;">
+              <label class="form-label">Coupon Code *</label>
+              <input id="coupon-code" type="text" class="form-input" placeholder="e.g. WELCOME50" maxlength="30" style="text-transform:uppercase;" />
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label class="form-label">Title *</label>
+              <input id="coupon-title" type="text" class="form-input" placeholder="e.g. Welcome Offer" maxlength="80" />
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label class="form-label">Discount Type *</label>
+              <select id="coupon-discount-type" class="filter-select" style="width:100%;" onchange="couponDiscountTypeChanged()">
+                <option value="flat">Flat Amount</option>
+                <option value="percentage">Percentage</option>
+                <option value="free_consultation">Free Consultation</option>
+                <option value="free_delivery">Free Delivery</option>
+                <option value="cashback">Cashback</option>
+                <option value="referral">Referral</option>
+              </select>
+            </div>
+            <div class="form-group" style="margin:0;" id="coupon-discount-value-group">
+              <label class="form-label">Discount Value *</label>
+              <input id="coupon-discount-value" type="number" min="0" step="0.01" class="form-input" placeholder="e.g. 50" />
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label class="form-label">Max Discount <span class="form-hint">(optional)</span></label>
+              <input id="coupon-max-discount" type="number" min="0" step="0.01" class="form-input" placeholder="Cap for % discounts" />
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label class="form-label">Min Order Amount</label>
+              <input id="coupon-min-order" type="number" min="0" step="0.01" class="form-input" placeholder="0" />
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label class="form-label">Start Date <span class="form-hint">(optional)</span></label>
+              <input id="coupon-start-date" type="date" class="form-input" />
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label class="form-label">End Date <span class="form-hint">(optional)</span></label>
+              <input id="coupon-end-date" type="date" class="form-input" />
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label class="form-label">Usage Limit <span class="form-hint">(0 = unlimited)</span></label>
+              <input id="coupon-usage-limit" type="number" min="0" step="1" class="form-input" placeholder="0" />
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label class="form-label">Per-User Limit <span class="form-hint">(0 = unlimited)</span></label>
+              <input id="coupon-per-user-limit" type="number" min="0" step="1" class="form-input" placeholder="0" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Description <span class="form-hint">(optional)</span></label>
+            <input id="coupon-description" type="text" class="form-input" placeholder="Short description shown to patients" maxlength="140" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Applicable Services <span class="form-hint">(none selected = all services)</span></label>
+            <div id="coupon-services-checks" style="display:flex;flex-wrap:wrap;gap:14px;"></div>
+          </div>
+          <div class="banner-form-footer">
+            <label class="toggle-label">
+              <input type="checkbox" id="coupon-active" checked />
+              <span class="toggle-switch"></span>
+              <span class="toggle-text">Active</span>
+            </label>
+            <button id="save-coupon-btn" class="btn-publish" onclick="saveCoupon()">
+              <i class="ti ti-device-floppy"></i> Create Coupon
+            </button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><span class="card-title">All Coupons</span></div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Code</th><th>Title</th><th>Discount</th><th>Usage</th><th>Validity</th><th>Services</th><th>Active</th><th>Actions</th></tr>
+              </thead>
+              <tbody id="coupons-tbody"><tr><td colspan="8" class="loading">Loading coupons...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== CAMPAIGNS TAB ===== -->
+      <div id="tab-campaigns" class="tab-section">
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-header">
+            <span class="card-title" id="campaign-form-title">Create New Campaign</span>
+            <button class="btn btn-outline" id="cancel-campaign-btn" style="display:none;" onclick="cancelCampaignEdit()">
+              <i class="ti ti-x"></i> Cancel
+            </button>
+          </div>
+
+          <div class="banner-upload-zone" id="campaign-upload-zone" onclick="document.getElementById('campaign-file-input').click()" role="button" tabindex="0" aria-label="Click to upload campaign banner image">
+            <div class="banner-upload-placeholder" id="campaign-upload-placeholder">
+              <i class="ti ti-photo-plus"></i>
+              <p>Click to upload campaign banner</p>
+              <small>JPG, PNG, WebP · Max 5 MB · Recommended 1200 × 628 px</small>
+            </div>
+            <img id="campaign-preview-img" style="display:none;" alt="Campaign banner preview" />
+            <button type="button" id="campaign-remove-img" class="banner-remove-img-btn" style="display:none;" onclick="removeCampaignImage(event)" title="Remove image">
+              <i class="ti ti-x"></i>
+            </button>
+          </div>
+          <input type="file" id="campaign-file-input" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none;" onchange="previewCampaignImage(event)" />
+
+          <div class="banner-form-grid">
+            <div class="form-group">
+              <label class="form-label">Campaign Name *</label>
+              <input id="campaign-name" type="text" class="form-input" placeholder="e.g. Diwali Health Drive" maxlength="80" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Description <span class="form-hint">(optional)</span></label>
+              <input id="campaign-desc" type="text" class="form-input" placeholder="Short description" maxlength="140" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Start Date <span class="form-hint">(optional)</span></label>
+              <input id="campaign-start-date" type="datetime-local" class="form-input" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">End Date <span class="form-hint">(optional)</span></label>
+              <input id="campaign-end-date" type="datetime-local" class="form-input" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Linked Coupon <span class="form-hint">(optional)</span></label>
+              <select id="campaign-linked-coupon" class="filter-select" style="width:100%;">
+                <option value="">None</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Eligible Services <span class="form-hint">(none selected = all services)</span></label>
+            <div id="campaign-services-checks" style="display:flex;flex-wrap:wrap;gap:14px;"></div>
+          </div>
+
+          <div class="banner-form-footer">
+            <div style="display:flex;gap:20px;flex-wrap:wrap;">
+              <label class="toggle-label">
+                <input type="checkbox" id="campaign-active" checked />
+                <span class="toggle-switch"></span>
+                <span class="toggle-text">Active</span>
+              </label>
+              <label class="toggle-label">
+                <input type="checkbox" id="campaign-auto-activate" />
+                <span class="toggle-switch"></span>
+                <span class="toggle-text">Auto-activate on start date</span>
+              </label>
+              <label class="toggle-label">
+                <input type="checkbox" id="campaign-countdown" />
+                <span class="toggle-switch"></span>
+                <span class="toggle-text">Show countdown</span>
+              </label>
+            </div>
+            <div id="campaign-upload-progress" style="display:none;align-items:center;gap:8px;font-size:12px;color:var(--text-muted);">
+              <div class="upload-spinner"></div> Uploading image…
+            </div>
+            <button id="publish-campaign-btn" class="btn-publish" onclick="publishCampaign()">
+              <i class="ti ti-upload"></i> Publish Campaign
+            </button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><span class="card-title">Campaign History</span></div>
+          <div id="campaigns-list"><div class="loading">Loading campaigns…</div></div>
+        </div>
+      </div>
+
+      <!-- ===== REFUNDS TAB ===== -->
+      <div id="tab-refunds" class="tab-section">
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-header"><span class="card-title">Issue Refund</span></div>
+          <div style="display:grid;grid-template-columns:2fr auto;gap:12px;align-items:end;">
+            <div class="form-group" style="margin:0;">
+              <label class="form-label">Payment ID</label>
+              <input id="refund-payment-id" type="text" class="form-input" placeholder="e.g. the payments/{paymentId} document ID" />
+            </div>
+            <button class="btn btn-outline" onclick="lookupRefundPayment()" style="height:38px;"><i class="ti ti-search"></i> Look Up</button>
+          </div>
+          <div id="refund-lookup-result" style="display:none;margin-top:12px;padding:12px;background:#f8fafc;border-radius:10px;font-size:13px;"></div>
+          <div class="form-group" style="margin-top:12px;">
+            <label class="form-label">Reason</label>
+            <textarea id="refund-reason" class="form-input" rows="3" placeholder="Reason for the refund"></textarea>
+          </div>
+          <button class="btn-publish" id="issue-refund-btn" onclick="submitRefund()" disabled>
+            <i class="ti ti-receipt-refund"></i> Issue Refund
+          </button>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><span class="card-title">Refund History</span></div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Payment ID</th><th>Provider</th><th>Patient</th><th>Amount</th><th>Reason</th><th>Status</th><th>Date</th></tr></thead>
+              <tbody id="refunds-tbody"><tr><td colspan="7" class="loading">Loading refunds...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
     </div><!-- /content -->
   </div><!-- /main -->
 </div><!-- /app -->
@@ -3562,7 +4009,7 @@
   </div>
 </div>
 
-<script src="js/firebase-config.js?v=20260525"></script>
-<script src="js/app.js?v=20260527"></script>
+<script src="js/firebase-config.js?v=20260826a"></script>
+<script src="js/app.js?v=20260826a"></script>
 </body>
 </html>

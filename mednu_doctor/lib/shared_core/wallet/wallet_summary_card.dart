@@ -8,11 +8,11 @@ import 'currency_formatter.dart';
 import 'wallet_providers.dart';
 
 /// Compact wallet balance card for the dashboard. Reads from
-/// [walletSummaryProvider] (currently backed by the same
-/// `appointments.fee` aggregation the earnings screen already uses — see
-/// `wallet_repository.dart`) so this never touches or duplicates the
-/// earnings screen's own calculation, it's a second, smaller view over the
-/// same numbers.
+/// [walletSummaryProvider] — role-aware (see `wallet_providers.dart`):
+/// doctor/lab/pharmacy/ambulance/caregiver get real, live settlement-engine
+/// figures (`provider_wallets`/`wallet_ledger`, functions/index.js), other
+/// roles keep their own aggregation. Needs no changes when that backing
+/// changes since it only ever reads the shared [WalletSummary] shape.
 class SharedWalletSummaryCard extends ConsumerWidget {
   final VoidCallback? onTap;
   const SharedWalletSummaryCard({super.key, this.onTap});

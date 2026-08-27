@@ -1,4 +1,7 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_colors.dart';
@@ -6,32 +9,47 @@ import '../../../core/constants/app_spacing.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/utils/r.dart';
+import '../../home/providers/location_provider.dart';
 
-class PharmacyScreen extends StatefulWidget {
+class PharmacyScreen extends ConsumerStatefulWidget {
   const PharmacyScreen({super.key});
 
   @override
-  State<PharmacyScreen> createState() => _PharmacyScreenState();
+  ConsumerState<PharmacyScreen> createState() => _PharmacyScreenState();
 }
 
-class _PharmacyScreenState extends State<PharmacyScreen> {
+class _PharmacyScreenState extends ConsumerState<PharmacyScreen> {
   String _search = '';
+
+  /// Maps one `pharmacy_profiles/{uid}` doc into the shape `_PharmacyCard`
+  /// renders. Only real, registered data is ever shown here — no fabricated
+  /// opening hours or "Open now" status, since pharmacies never submit that
+  /// at registration; delivery availability and stocked categories are the
+  /// real signals collected instead.
+  Map<String, Object?> _toCard(QueryDocumentSnapshot<Map<String, dynamic>> doc, double? myLat, double? myLng) {
+    final d = doc.data();
+    final lat = (d['latitude'] as num?)?.toDouble();
+    final lng = (d['longitude'] as num?)?.toDouble();
+    double? distanceKm;
+    if (myLat != null && myLng != null && lat != null && lng != null) {
+      distanceKm = Geolocator.distanceBetween(myLat, myLng, lat, lng) / 1000;
+    }
+    return {
+      'id': doc.id,
+      'name': (d['name'] as String?) ?? 'Pharmacy',
+      'address': (d['address'] as String?) ?? '',
+      'phone': (d['phone'] as String?) ?? '',
+      'rating': ((d['rating'] as num?) ?? 0).toDouble(),
+      'totalReviews': (d['totalReviews'] as int?) ?? 0,
+      'deliveryAvailable': (d['deliveryAvailable'] as bool?) ?? false,
+      'categories': ((d['categoriesOffered'] as List?) ?? const []).whereType<String>().toList(),
+      'distanceKm': distanceKm,
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
-    final pharmacies = [
-      {'name': 'Apollo Pharmacy', 'location': 'Jubilee Hills', 'distance': '0.8 km', 'open': true, 'rating': 4.8, 'timing': 'Open 24/7', 'phone': '18004255', 'query': 'Apollo Pharmacy Jubilee Hills Hyderabad'},
-      {'name': 'MedPlus', 'location': 'Banjara Hills', 'distance': '1.2 km', 'open': true, 'rating': 4.6, 'timing': 'Open till 10 PM', 'phone': '18001022097', 'query': 'MedPlus Banjara Hills Hyderabad'},
-      {'name': 'Wellness Forever', 'location': 'Madhapur', 'distance': '2.1 km', 'open': false, 'rating': 4.5, 'timing': 'Opens at 8 AM', 'phone': '18002667736', 'query': 'Wellness Forever Madhapur Hyderabad'},
-      {'name': 'Netmeds Store', 'location': 'HITEC City', 'distance': '3.0 km', 'open': true, 'rating': 4.7, 'timing': 'Open till 11 PM', 'phone': '18001232345', 'query': 'Netmeds HITEC City Hyderabad'},
-    ];
-
-    final filtered = _search.isEmpty
-        ? pharmacies
-        : pharmacies.where((p) =>
-            (p['name'] as String).toLowerCase().contains(_search.toLowerCase()) ||
-            (p['location'] as String).toLowerCase().contains(_search.toLowerCase()),
-          ).toList();
+    final myLocation = ref.watch(locationProvider);
 
     final categories = [
       {'name': 'Tablets', 'icon': Icons.medication_rounded, 'color': const Color(0xFF1565C0)},
@@ -203,26 +221,64 @@ class _PharmacyScreenState extends State<PharmacyScreen> {
                 ),
                 SizedBox(height: R.h(context, 16)),
 
-                // ── Nearby Pharmacies ────────────────────────────────────────
-                Padding(
-                  padding: EdgeInsets.fromLTRB(R.p(context, 16), 0, R.p(context, 16), R.p(context, 12)),
-                  child: Text(
-                    _search.isEmpty ? 'Nearby Pharmacies' : '${filtered.length} result${filtered.length == 1 ? '' : 's'} for "$_search"',
-                    style: AppTextStyles.h4,
-                  ),
+                // ── Nearby Pharmacies (live, from approved registrations) ────
+                StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                  stream: FirebaseFirestore.instance
+                      .collection('pharmacy_profiles')
+                      .where('status', isEqualTo: 'active')
+                      .snapshots(),
+                  builder: (context, snap) {
+                    final all = (snap.data?.docs ?? const [])
+                        .map((d) => _toCard(d, myLocation.lat, myLocation.lng))
+                        .toList();
+                    all.sort((a, b) {
+                      final da = a['distanceKm'] as double?;
+                      final db = b['distanceKm'] as double?;
+                      if (da == null || db == null) return 0;
+                      return da.compareTo(db);
+                    });
+                    final filtered = _search.isEmpty
+                        ? all
+                        : all.where((p) =>
+                            (p['name'] as String).toLowerCase().contains(_search.toLowerCase()) ||
+                            (p['address'] as String).toLowerCase().contains(_search.toLowerCase()),
+                          ).toList();
+
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: EdgeInsets.fromLTRB(R.p(context, 16), 0, R.p(context, 16), R.p(context, 12)),
+                          child: Text(
+                            _search.isEmpty ? 'Nearby Pharmacies' : '${filtered.length} result${filtered.length == 1 ? '' : 's'} for "$_search"',
+                            style: AppTextStyles.h4,
+                          ),
+                        ),
+                        if (!snap.hasData)
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 40),
+                            child: Center(child: CircularProgressIndicator()),
+                          )
+                        else if (filtered.isEmpty)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 40),
+                            child: Column(children: [
+                              Icon(Icons.local_pharmacy_outlined, size: 48, color: context.appTextHint),
+                              const SizedBox(height: 12),
+                              Text(
+                                _search.isEmpty
+                                    ? 'No registered pharmacies nearby yet'
+                                    : 'No pharmacy found for "$_search"',
+                                style: AppTextStyles.bodyMedium.copyWith(color: context.appTextHint),
+                              ),
+                            ]),
+                          )
+                        else
+                          ...filtered.map((p) => _PharmacyCard(pharmacy: p)),
+                      ],
+                    );
+                  },
                 ),
-                if (filtered.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 40),
-                    child: Column(children: [
-                      Icon(Icons.search_off_rounded, size: 48, color: context.appTextHint),
-                      const SizedBox(height: 12),
-                      Text('No pharmacy found for "$_search"',
-                          style: AppTextStyles.bodyMedium.copyWith(color: context.appTextHint)),
-                    ]),
-                  )
-                else
-                  ...filtered.map((p) => _PharmacyCard(pharmacy: p)),
                 SizedBox(height: R.h(context, 40)),
               ],
             ),
@@ -234,14 +290,17 @@ class _PharmacyScreenState extends State<PharmacyScreen> {
 }
 
 class _PharmacyCard extends StatelessWidget {
-  final Map<String, Object> pharmacy;
+  final Map<String, Object?> pharmacy;
   const _PharmacyCard({required this.pharmacy});
 
   @override
   Widget build(BuildContext context) {
     final p = pharmacy;
-    final isOpen = p['open'] as bool;
-    final statusColor = isOpen ? AppColors.accent : Colors.grey;
+    final deliveryAvailable = p['deliveryAvailable'] as bool;
+    final statusColor = deliveryAvailable ? AppColors.accent : Colors.grey;
+    final totalReviews = p['totalReviews'] as int;
+    final distanceKm = p['distanceKm'] as double?;
+    final categories = (p['categories'] as List).cast<String>();
 
     return Container(
       margin: EdgeInsets.fromLTRB(R.p(context, 16), 0, R.p(context, 16), R.p(context, 12)),
@@ -274,19 +333,24 @@ class _PharmacyCard extends StatelessWidget {
                   children: [
                     Text(p['name'] as String, style: AppTextStyles.labelLarge, maxLines: 1, overflow: TextOverflow.ellipsis),
                     SizedBox(height: R.h(context, 2)),
-                    Text(p['location'] as String, style: AppTextStyles.bodySmall),
+                    Text(p['address'] as String, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTextStyles.bodySmall),
                     SizedBox(height: R.h(context, 4)),
                     Row(
                       children: [
                         Icon(Icons.star_rounded, size: R.w(context, 13), color: Colors.amber),
                         SizedBox(width: R.p(context, 3)),
-                        Text('${p['rating']}', style: AppTextStyles.labelSmall),
-                        SizedBox(width: R.p(context, 8)),
-                        Icon(Icons.location_on_outlined, size: R.w(context, 13), color: context.appTextHint),
-                        SizedBox(width: R.p(context, 3)),
-                        Flexible(
-                          child: Text(p['distance'] as String, style: AppTextStyles.labelSmall, overflow: TextOverflow.ellipsis),
+                        Text(
+                          totalReviews > 0 ? '${p['rating']}' : 'New',
+                          style: AppTextStyles.labelSmall,
                         ),
+                        if (distanceKm != null) ...[
+                          SizedBox(width: R.p(context, 8)),
+                          Icon(Icons.location_on_outlined, size: R.w(context, 13), color: context.appTextHint),
+                          SizedBox(width: R.p(context, 3)),
+                          Flexible(
+                            child: Text('${distanceKm.toStringAsFixed(1)} km', style: AppTextStyles.labelSmall, overflow: TextOverflow.ellipsis),
+                          ),
+                        ],
                       ],
                     ),
                   ],
@@ -300,7 +364,7 @@ class _PharmacyCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(R.r(context, 8)),
                 ),
                 child: Text(
-                  isOpen ? 'Open' : 'Closed',
+                  deliveryAvailable ? 'Delivers' : 'Pickup only',
                   style: TextStyle(
                     fontFamily: 'Poppins',
                     fontSize: R.sp(context, 11),
@@ -312,11 +376,15 @@ class _PharmacyCard extends StatelessWidget {
             ],
           ),
 
-          SizedBox(height: R.h(context, 8)),
-          Text(
-            p['timing'] as String,
-            style: AppTextStyles.bodySmall.copyWith(color: statusColor),
-          ),
+          if (categories.isNotEmpty) ...[
+            SizedBox(height: R.h(context, 8)),
+            Text(
+              categories.join(' · '),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTextStyles.bodySmall.copyWith(color: context.appTextSecondary),
+            ),
+          ],
           SizedBox(height: R.h(context, 10)),
 
           // ── Action buttons ──────────────────────────────────────
@@ -339,7 +407,7 @@ class _PharmacyCard extends StatelessWidget {
                   label: const Text('Navigate'),
                   onPressed: () => launchUrl(
                     Uri.parse(
-                      'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(p['query'] as String)}',
+                      'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(p['address'] as String)}',
                     ),
                     mode: LaunchMode.externalApplication,
                   ),

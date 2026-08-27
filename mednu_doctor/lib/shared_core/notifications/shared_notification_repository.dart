@@ -21,6 +21,9 @@ class SharedNotificationRepository {
       case AppRole.pharmacy:
       case AppRole.lab:
       case AppRole.caregiver:
+      case AppRole.physiotherapist:
+      case AppRole.counsellor:
+      case AppRole.nutritionist:
       case AppRole.admin:
         // Backed by dedicated {role}_notifications collections once each
         // role's feature module ships. Until then, an empty stream is the

@@ -12,8 +12,6 @@ import '../../../core/router/app_router.dart';
 import '../../../core/utils/r.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../data/doctors_data.dart';
-import '../models/doctor_review.dart';
-import '../services/review_service.dart';
 
 const _kDefaultSlots = [
   '09:00 AM', '10:00 AM', '11:00 AM', '12:00 PM',
@@ -203,7 +201,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
     if (doc == null) return;
     final text = '👨‍⚕️ ${doc.name}\n'
         '${doc.spec} • ${doc.qual}\n'
-        '⭐ ${doc.rating} rating • ${doc.exp}+ years experience\n'
+        '${doc.exp}+ years experience\n'
         '💊 Consultation fee: ₹${doc.fee}\n\n'
         'Book an appointment on MedNU — your trusted healthcare partner.\n'
         'Download: https://play.google.com/store/apps/details?id=com.mednu.app';
@@ -389,78 +387,48 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
     }
 
     // ── Open PaymentScreen — the slot is free, now collect payment ───────────
-    // PaymentScreen pops with `true` only after Razorpay verifies the payment
-    // server-side (HMAC-SHA256 via Cloud Function). We write to Firestore only
-    // after that confirmation so we never create a booking without a real payment.
+    // PaymentScreen pops with the newly-created appointment/payment ids only
+    // after capturePayment verifies the charge server-side (HMAC-SHA256) and
+    // creates the appointment doc itself — see functions/index.js. Nothing
+    // here writes to Firestore directly, so a booking can never exist without
+    // a real, server-verified payment behind it.
     if (!mounted) return;
-    final paid = await context.push<bool>(
+    final result = await context.push<Map<String, dynamic>>(
       AppRoutes.payment,
       extra: {
         'amount':      amount.toString(),
         'description': 'Appointment with Dr. ${doc.name} · $slot ($duration min) · ${DateFormat('d MMM').format(_dates[_selectedDateIndex])}',
+        'serviceType': _consultationType == 'Video' ? 'video_consultation' : 'consultation',
+        'bookingCollection': 'appointments',
+        'bookingData': {
+          'doctorId':         widget.doctorId,
+          'doctorName':       doc.name,
+          'doctorSpecialty':  doc.spec,
+          'patientName':      patientName,
+          'date':             dateKey,
+          'time':             slot,
+          'consultationType': _consultationType,
+          'duration':         duration,
+          'fee':              amount,
+          'status':           'booked',
+        },
       },
     );
 
-    if (paid != true || !mounted) return;
+    if (result?['bookingId'] == null || !mounted) return;
 
-    // ── Payment verified — write appointment + payment record ────────────────
-    setState(() => _booking = true);
-    try {
-      final apptRef = db.collection('appointments').doc();
-      final payRef  = db.collection('payments').doc();
-      final now     = Timestamp.now();
-
-      final batch = db.batch();
-      batch.set(apptRef, {
-        'doctorId':          widget.doctorId,
-        'doctorName':        doc.name,
-        'doctorSpecialty':   doc.spec,
-        'patientId':         uid,
-        'patientName':       patientName,
-        'date':              dateKey,
-        'time':              slot,
-        'consultationType':  _consultationType,
-        'duration':          duration,
-        'fee':               amount,
-        'status':            'booked',
-        'createdAt':         now,
-        'updatedAt':         now,
-      });
-      batch.set(payRef, {
-        'userId':        uid,
-        'doctorId':      widget.doctorId,
-        'appointmentId': apptRef.id,
-        'amount':        amount,
-        'type':          'appointment',
-        'status':        'paid',
-        'gateway':       'razorpay',
-        'createdAt':     now,
-      });
-      await batch.commit();
-
-      if (mounted) {
-        final bookedSlot = slot;
-        final bookedDate = _dates[_selectedDateIndex];
-        setState(() { _selectedSlot = null; _booking = false; });
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(
-            'Appointment confirmed for ${DateFormat('d MMM').format(bookedDate)} at $bookedSlot',
-          ),
-          backgroundColor: const Color(0xFF2E7D32),
-          behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 4),
-        ));
-        _showBookingConfirmation(doc, bookedSlot, bookedDate);
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _booking = false);
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Payment received but booking failed. Please contact support.'),
-          backgroundColor: AppColors.error, behavior: SnackBarBehavior.floating,
-        ));
-      }
-    }
+    final bookedSlot = slot;
+    final bookedDate = _dates[_selectedDateIndex];
+    setState(() { _selectedSlot = null; _booking = false; });
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(
+        'Appointment confirmed for ${DateFormat('d MMM').format(bookedDate)} at $bookedSlot',
+      ),
+      backgroundColor: const Color(0xFF2E7D32),
+      behavior: SnackBarBehavior.floating,
+      duration: const Duration(seconds: 4),
+    ));
+    _showBookingConfirmation(doc, bookedSlot, bookedDate);
   }
 
   void _showBookingConfirmation(DocData doc, String slot, DateTime date) {
@@ -571,7 +539,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                 // ── Quick Trust Stats ───────────────────
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-                  child: _TrustStatsRow(doc: doc, doctorId: widget.doctorId),
+                  child: _TrustStatsRow(doc: doc),
                 ),
                 const SizedBox(height: 24),
 
@@ -602,13 +570,6 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                     padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
                     child: _buildLanguages(),
                   ),
-
-                // ── Patient Reviews ───────────────────────
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: _ReviewsSection(doctorId: widget.doctorId),
-                ),
-                const SizedBox(height: 28),
 
                 // ── Divider before booking section ────────
                 Container(
@@ -806,11 +767,6 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                         spacing: 8, runSpacing: 6,
                         alignment: WrapAlignment.center,
                         children: [
-                          _HeaderChip(
-                            icon: Icons.star_rounded,
-                            label: doc.rating > 0 ? doc.rating.toStringAsFixed(1) : 'New',
-                            color: Colors.amber,
-                          ),
                           _HeaderChip(
                             icon: Icons.work_rounded,
                             label: doc.exp > 0 ? '${doc.exp}+ yrs' : 'Resident',
@@ -1570,39 +1526,24 @@ class _PremiumSectionTitle extends StatelessWidget {
 // ── Trust stats row ───────────────────────────────────────
 class _TrustStatsRow extends StatelessWidget {
   final DocData doc;
-  final String doctorId;
-  const _TrustStatsRow({required this.doc, required this.doctorId});
+  const _TrustStatsRow({required this.doc});
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<DoctorRatingSummary>(
-      stream: ReviewService.ratingSummaryStream(doctorId),
-      builder: (context, snap) {
-        final summary = snap.data;
-        final hasRating = summary != null && summary.totalReviews > 0;
-        final displayRating = hasRating ? summary.averageRating.toStringAsFixed(1) : (doc.rating > 0 ? doc.rating.toStringAsFixed(1) : '—');
-        final reviewCount = hasRating ? '${summary.totalReviews}' : (doc.reviews > 0 ? '${doc.reviews}' : '—');
-
-        return Container(
-          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 8),
-          decoration: BoxDecoration(
-            color: context.appSurface,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(color: Colors.black.withValues(alpha:0.06), blurRadius: 20, offset: const Offset(0, 4)),
-            ],
-          ),
-          child: Row(children: [
-            Expanded(child: _StatCell(displayRating, 'Rating', Icons.star_rounded, const Color(0xFFF59E0B))),
-            _vDivider(),
-            Expanded(child: _StatCell(doc.exp > 0 ? '${doc.exp}+ yrs' : 'New', 'Experience', Icons.work_history_rounded, AppColors.primary)),
-            _vDivider(),
-            Expanded(child: _StatCell(reviewCount, 'Reviews', Icons.people_alt_rounded, const Color(0xFF10B981))),
-            _vDivider(),
-            Expanded(child: _StatCell(doc.fee > 0 ? '₹${doc.fee}' : 'Free', 'Consult Fee', Icons.currency_rupee_rounded, const Color(0xFF8B5CF6))),
-          ]),
-        );
-      },
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 8),
+      decoration: BoxDecoration(
+        color: context.appSurface,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha:0.06), blurRadius: 20, offset: const Offset(0, 4)),
+        ],
+      ),
+      child: Row(children: [
+        Expanded(child: _StatCell(doc.exp > 0 ? '${doc.exp}+ yrs' : 'New', 'Experience', Icons.work_history_rounded, AppColors.primary)),
+        _vDivider(),
+        Expanded(child: _StatCell(doc.fee > 0 ? '₹${doc.fee}' : 'Free', 'Consult Fee', Icons.currency_rupee_rounded, const Color(0xFF8B5CF6))),
+      ]),
     );
   }
 }
@@ -1802,329 +1743,4 @@ class _LegendDot extends StatelessWidget {
       fontFamily: 'Poppins', fontSize: 11, color: Color(0xFF6B7280), fontWeight: FontWeight.w500,
     )),
   ]);
-}
-
-// ──────────────────────────────────────────────────────────
-// REVIEWS SECTION
-// ──────────────────────────────────────────────────────────
-class _ReviewsSection extends StatefulWidget {
-  final String doctorId;
-  const _ReviewsSection({required this.doctorId});
-
-  @override
-  State<_ReviewsSection> createState() => _ReviewsSectionState();
-}
-
-class _ReviewsSectionState extends State<_ReviewsSection> {
-  bool _showReviews = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final doctorId = widget.doctorId;
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      StreamBuilder<DoctorRatingSummary>(
-        stream: ReviewService.ratingSummaryStream(doctorId),
-        builder: (context, snap) {
-          final summary = snap.data;
-          final avg = summary?.averageRating ?? 0.0;
-          final total = summary?.totalReviews ?? 0;
-          final dist = summary?.ratingDistribution ?? {1: 0, 2: 0, 3: 0, 4: 0, 5: 0};
-
-          return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              _PremiumSectionTitle('Patient Reviews', Icons.star_rounded, Colors.amber.shade700),
-              const Spacer(),
-              if (total > 0)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: AppColors.accent.withValues(alpha:0.1),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: AppColors.accent.withValues(alpha:0.2)),
-                  ),
-                  child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    const Icon(Icons.verified_rounded, size: 12, color: AppColors.accent),
-                    const SizedBox(width: 4),
-                    Text('$total verified', style: AppTextStyles.caption.copyWith(
-                        color: AppColors.accent, fontWeight: FontWeight.w700)),
-                  ]),
-                ),
-            ]),
-            const SizedBox(height: 14),
-            if (total > 0) ...[
-              Container(
-                padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(
-                  color: context.appSurface,
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [BoxShadow(color: Colors.amber.withValues(alpha:0.1), blurRadius: 16, offset: const Offset(0, 4))],
-                ),
-                child: Row(children: [
-                  Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                    Text(avg.toStringAsFixed(1), style: const TextStyle(
-                        fontFamily: 'Poppins', fontSize: 48, fontWeight: FontWeight.w800,
-                        color: AppColors.primary, height: 1.0)),
-                    const SizedBox(height: 4),
-                    Row(mainAxisSize: MainAxisSize.min,
-                      children: List.generate(5, (i) => Icon(
-                        i < avg.floor() ? Icons.star_rounded
-                            : (i < avg && avg % 1 >= 0.5) ? Icons.star_half_rounded
-                            : Icons.star_outline_rounded,
-                        size: 15, color: Colors.amber,
-                      )),
-                    ),
-                    const SizedBox(height: 4),
-                    Text('out of 5', style: AppTextStyles.caption.copyWith(color: context.appTextHint)),
-                  ]),
-                  const SizedBox(width: 20),
-                  Container(width: 1, height: 70, color: context.appDivider),
-                  const SizedBox(width: 20),
-                  Expanded(child: Column(
-                    children: [5, 4, 3, 2, 1].map((star) {
-                      final count = dist[star] ?? 0;
-                      final fraction = total > 0 ? count / total : 0.0;
-                      final barColor = star >= 4 ? const Color(0xFF2E7D32)
-                          : star == 3 ? Colors.amber : AppColors.error;
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 6),
-                        child: Row(children: [
-                          Text('$star', style: AppTextStyles.caption.copyWith(color: context.appTextHint)),
-                          const SizedBox(width: 3),
-                          const Icon(Icons.star_rounded, size: 10, color: Colors.amber),
-                          const SizedBox(width: 6),
-                          Expanded(child: ClipRRect(
-                            borderRadius: BorderRadius.circular(4),
-                            child: LinearProgressIndicator(
-                              value: fraction, minHeight: 6,
-                              backgroundColor: context.appDivider,
-                              valueColor: AlwaysStoppedAnimation<Color>(barColor),
-                            ),
-                          )),
-                          const SizedBox(width: 6),
-                          SizedBox(width: 20,
-                              child: Text('$count', style: AppTextStyles.caption.copyWith(color: context.appTextHint))),
-                        ]),
-                      );
-                    }).toList(),
-                  )),
-                ]),
-              ),
-              const SizedBox(height: 16),
-              if (!_showReviews)
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: () => setState(() => _showReviews = true),
-                    icon: const Icon(Icons.rate_review_outlined, size: 18),
-                    label: const Text('View Reviews'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.primary,
-                      side: BorderSide(color: AppColors.primary.withValues(alpha:0.4)),
-                      padding: const EdgeInsets.symmetric(vertical: 13),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    ),
-                  ),
-                ),
-            ],
-            if (total == 0)
-              Container(
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  color: Colors.white, borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: context.appBorder),
-                ),
-                child: Column(children: [
-                  Container(width: 56, height: 56,
-                    decoration: BoxDecoration(
-                      color: Colors.amber.withValues(alpha:0.1), shape: BoxShape.circle),
-                    child: const Icon(Icons.rate_review_outlined, size: 28, color: Colors.amber)),
-                  const SizedBox(height: 12),
-                  Text('No Reviews Yet', style: AppTextStyles.labelLarge.copyWith(color: context.appTextSecondary)),
-                  const SizedBox(height: 4),
-                  Text('Be the first to review after your consultation',
-                      style: AppTextStyles.caption.copyWith(color: context.appTextHint),
-                      textAlign: TextAlign.center),
-                ]),
-              ),
-          ]);
-        },
-      ),
-      if (_showReviews)
-      StreamBuilder<List<DoctorReview>>(
-        stream: ReviewService.reviewsStream(doctorId, limit: 5),
-        builder: (context, snap) {
-          if (snap.connectionState == ConnectionState.waiting) {
-            return const Column(children: [
-              _ReviewCardSkeleton(), _ReviewCardSkeleton(), _ReviewCardSkeleton(),
-            ]);
-          }
-          final reviews = snap.data ?? [];
-          if (reviews.isEmpty) {
-            return Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: Colors.white, borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: context.appBorder),
-              ),
-              child: Column(children: [
-                Container(width: 56, height: 56,
-                  decoration: BoxDecoration(
-                    color: Colors.amber.withValues(alpha:0.1), shape: BoxShape.circle),
-                  child: const Icon(Icons.rate_review_outlined, size: 28, color: Colors.amber)),
-                const SizedBox(height: 12),
-                Text('No Reviews Yet', style: AppTextStyles.labelLarge.copyWith(color: context.appTextSecondary)),
-                const SizedBox(height: 4),
-                Text('Be the first to review after your consultation',
-                    style: AppTextStyles.caption.copyWith(color: context.appTextHint),
-                    textAlign: TextAlign.center),
-              ]),
-            );
-          }
-          return Column(children: reviews.map((r) => _ReviewCard(review: r)).toList());
-        },
-      ),
-    ]);
-  }
-}
-
-class _ReviewCard extends StatelessWidget {
-  final DoctorReview review;
-  const _ReviewCard({required this.review});
-
-  @override
-  Widget build(BuildContext context) {
-    final timeAgo = _timeAgo(review.createdAt);
-    final initial = review.patientName.isNotEmpty ? review.patientName[0].toUpperCase() : 'P';
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: context.appSurface,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:0.05), blurRadius: 12, offset: const Offset(0, 4))],
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Container(
-            width: 42, height: 42,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [AppColors.primary.withValues(alpha:0.8), AppColors.secondary.withValues(alpha:0.8)],
-                begin: Alignment.topLeft, end: Alignment.bottomRight,
-              ),
-              shape: BoxShape.circle,
-            ),
-            child: Center(child: Text(initial, style: const TextStyle(
-                fontFamily: 'Poppins', fontSize: 17, fontWeight: FontWeight.w800, color: Colors.white))),
-          ),
-          const SizedBox(width: 12),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              Flexible(child: Text(review.patientName, style: AppTextStyles.labelLarge.copyWith(color: context.appTextPrimary))),
-              const SizedBox(width: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                decoration: BoxDecoration(
-                  color: AppColors.accent.withValues(alpha:0.1), borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: AppColors.accent.withValues(alpha:0.2)),
-                ),
-                child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(Icons.verified_rounded, size: 10, color: AppColors.accent),
-                  SizedBox(width: 3),
-                  Text('Verified', style: TextStyle(
-                      fontFamily: 'Poppins', fontSize: 9, fontWeight: FontWeight.w700, color: AppColors.accent)),
-                ]),
-              ),
-            ]),
-            const SizedBox(height: 2),
-            Text(timeAgo, style: AppTextStyles.caption.copyWith(color: context.appTextHint)),
-          ])),
-          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Row(mainAxisSize: MainAxisSize.min,
-              children: List.generate(5, (i) => Icon(
-                i < review.rating ? Icons.star_rounded : Icons.star_outline_rounded,
-                size: 14, color: Colors.amber,
-              )),
-            ),
-            const SizedBox(height: 4),
-            Text(review.rating.toStringAsFixed(1), style: const TextStyle(
-                fontFamily: 'Poppins', fontSize: 12, fontWeight: FontWeight.w700, color: Colors.amber)),
-          ]),
-        ]),
-        if (review.reviewText.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: context.appBackground, borderRadius: BorderRadius.circular(10),
-            ),
-            child: Text(review.reviewText, style: TextStyle(
-                fontFamily: 'Poppins', fontSize: 12.5, color: context.appTextSecondary, height: 1.6)),
-          ),
-        ],
-        const SizedBox(height: 10),
-        Row(children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha:0.07),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: AppColors.primary.withValues(alpha:0.15)),
-            ),
-            child: Text(review.consultationType, style: AppTextStyles.caption.copyWith(
-                color: AppColors.primary, fontWeight: FontWeight.w600)),
-          ),
-        ]),
-      ]),
-    );
-  }
-
-  String _timeAgo(DateTime dt) {
-    final diff = DateTime.now().difference(dt);
-    if (diff.inDays >= 30) {
-      final months = (diff.inDays / 30).floor();
-      return '$months month${months > 1 ? 's' : ''} ago';
-    }
-    if (diff.inDays >= 1) return '${diff.inDays} day${diff.inDays > 1 ? 's' : ''} ago';
-    if (diff.inHours >= 1) return '${diff.inHours}h ago';
-    if (diff.inMinutes >= 1) return '${diff.inMinutes}m ago';
-    return 'Just now';
-  }
-}
-
-class _ReviewCardSkeleton extends StatelessWidget {
-  const _ReviewCardSkeleton();
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: context.appSurface,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: const [BoxShadow(color: Color(0x0D000000), blurRadius: 12, offset: Offset(0, 4))],
-      ),
-      child: const AppShimmer(
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            SkeletonCircle(size: 42),
-            SizedBox(width: 12),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              SkeletonBox(width: 140, height: 13, radius: 4),
-              SizedBox(height: 5),
-              SkeletonBox(width: 100, height: 11, radius: 4),
-            ])),
-            SkeletonBox(width: 60, height: 20, radius: 6),
-          ]),
-          SizedBox(height: 12),
-          SkeletonBox(width: double.infinity, height: 11, radius: 4),
-          SizedBox(height: 5),
-          SkeletonBox(width: double.infinity, height: 11, radius: 4),
-          SizedBox(height: 5),
-          SkeletonBox(width: 200, height: 11, radius: 4),
-        ]),
-      ),
-    );
-  }
 }

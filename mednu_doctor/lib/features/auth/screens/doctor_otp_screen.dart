@@ -108,82 +108,95 @@ class _DoctorOtpScreenState extends State<DoctorOtpScreen> {
               icon: const Icon(Icons.arrow_back_ios_new_rounded),
               onPressed: () => context.safeBack())),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              const SizedBox(height: 20),
-              Container(
-                  width: 80,
-                  height: 80,
-                  decoration: const BoxDecoration(
-                      gradient: AppColors.primaryGradient,
-                      shape: BoxShape.circle),
-                  child: const Icon(Icons.sms_rounded,
-                      color: Colors.white, size: 40)),
-              const SizedBox(height: 24),
-              const Text('OTP Verification', style: AppTextStyles.h3),
-              const SizedBox(height: 8),
-              Text('Enter the 6-digit OTP sent to\n${widget.phone}',
-                  textAlign: TextAlign.center,
-                  style: AppTextStyles.bodyMedium),
-              const SizedBox(height: 32),
-              Pinput(
-                controller: _otpController,
-                length: 6,
-                defaultPinTheme: defaultPinTheme,
-                focusedPinTheme: defaultPinTheme.copyWith(
-                    decoration: defaultPinTheme.decoration!.copyWith(
-                        border: Border.all(
-                            color: AppColors.primary, width: 2))),
-                onCompleted: (pin) => _verifyOTP(pin),
-              ),
-              if (_error != null) ...[
-                const SizedBox(height: 12),
-                Text(_error!,
-                    textAlign: TextAlign.center,
-                    style: AppTextStyles.bodySmall.copyWith(color: AppColors.error)),
-              ],
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _isVerifying
-                      ? null
-                      : () => _verifyOTP(_otpController.text),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16)),
-                    textStyle: AppTextStyles.button.copyWith(fontWeight: FontWeight.w600),
-                  ),
-                  child: _isVerifying
-                      ? const SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(
-                              color: Colors.white, strokeWidth: 2.5))
-                      : const Text('Verify & Continue'),
+        child: LayoutBuilder(
+          builder: (context, constraints) => SingleChildScrollView(
+            physics: const ClampingScrollPhysics(),
+            padding: const EdgeInsets.all(24),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                  minHeight: constraints.maxHeight -
+                      MediaQuery.of(context).padding.top),
+              child: IntrinsicHeight(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    const SizedBox(height: 20),
+                    Container(
+                        width: 80,
+                        height: 80,
+                        decoration: const BoxDecoration(
+                            gradient: AppColors.primaryGradient,
+                            shape: BoxShape.circle),
+                        child: const Icon(Icons.sms_rounded,
+                            color: Colors.white, size: 40)),
+                    const SizedBox(height: 24),
+                    const Text('OTP Verification', style: AppTextStyles.h3),
+                    const SizedBox(height: 8),
+                    Text('Enter the 6-digit OTP sent to\n${widget.phone}',
+                        textAlign: TextAlign.center,
+                        style: AppTextStyles.bodyMedium),
+                    const SizedBox(height: 32),
+                    Pinput(
+                      controller: _otpController,
+                      length: 6,
+                      defaultPinTheme: defaultPinTheme,
+                      focusedPinTheme: defaultPinTheme.copyWith(
+                          decoration: defaultPinTheme.decoration!.copyWith(
+                              border: Border.all(
+                                  color: AppColors.primary, width: 2))),
+                      onCompleted: (pin) => _verifyOTP(pin),
+                    ),
+                    if (_error != null) ...[
+                      const SizedBox(height: 12),
+                      Text(_error!,
+                          textAlign: TextAlign.center,
+                          style: AppTextStyles.bodySmall
+                              .copyWith(color: AppColors.error)),
+                    ],
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: _isVerifying
+                            ? null
+                            : () => _verifyOTP(_otpController.text),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16)),
+                          textStyle: AppTextStyles.button
+                              .copyWith(fontWeight: FontWeight.w600),
+                        ),
+                        child: _isVerifying
+                            ? const SizedBox(
+                                width: 22,
+                                height: 22,
+                                child: CircularProgressIndicator(
+                                    color: Colors.white, strokeWidth: 2.5))
+                            : const Text('Verify & Continue'),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _isResending
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : _resendSeconds > 0
+                            ? Text('Resend OTP in $_resendSeconds seconds',
+                                style: AppTextStyles.bodySmall)
+                            : TextButton(
+                                onPressed: _resendOTP,
+                                child: const Text('Resend OTP'),
+                              ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 16),
-              _isResending
-                  ? const SizedBox(
-                      width: 20, height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : _resendSeconds > 0
-                      ? Text('Resend OTP in $_resendSeconds seconds',
-                          style: AppTextStyles.bodySmall)
-                      : TextButton(
-                          onPressed: _resendOTP,
-                          child: const Text('Resend OTP'),
-                        ),
-            ],
+            ),
           ),
         ),
       ),

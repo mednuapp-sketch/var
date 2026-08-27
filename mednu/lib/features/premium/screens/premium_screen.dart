@@ -17,7 +17,7 @@ class PremiumScreen extends StatefulWidget {
 class _PremiumScreenState extends State<PremiumScreen>
     with SingleTickerProviderStateMixin {
   String _selectedPlan = 'yearly';
-  bool _loading = false;
+  final bool _loading = false;
   late final AnimationController _shimmerCtrl;
 
   // ── Plan data ────────────────────────────────────────────
@@ -170,28 +170,30 @@ class _PremiumScreenState extends State<PremiumScreen>
     super.dispose();
   }
 
-  void _subscribe() async {
-    setState(() => _loading = true);
-    await Future.delayed(const Duration(seconds: 2));
-    if (!mounted) return;
-    setState(() => _loading = false);
+  // MedNU Premium subscriptions are not wired to a payment gateway yet —
+  // this intentionally does not call Razorpay or write any entitlement.
+  // Tapping the CTA tells the user honestly that it isn't live rather than
+  // faking a successful purchase.
+  void _subscribe() {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: const Row(
           children: [
-            Icon(Icons.workspace_premium_rounded, color: Colors.black),
+            Icon(Icons.info_outline_rounded, color: Colors.white),
             SizedBox(width: 10),
-            Text(
-              'Welcome to MedNU Premium!',
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                fontWeight: FontWeight.w700,
-                color: Colors.black,
+            Expanded(
+              child: Text(
+                'MedNU Premium is launching soon — check back shortly!',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
               ),
             ),
           ],
         ),
-        backgroundColor: const Color(0xFFFFD700),
+        backgroundColor: const Color(0xFF2E7D32),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         margin: const EdgeInsets.all(16),
@@ -392,7 +394,7 @@ class _PremiumScreenState extends State<PremiumScreen>
                             size: 12, color: context.appTextHint),
                         const SizedBox(width: 5),
                         Text(
-                          '100% Secure · Powered by Razorpay · SSL Encrypted',
+                          'Coming soon · No payment required yet',
                           style: TextStyle(
                             fontFamily: 'Poppins',
                             fontSize: 10,

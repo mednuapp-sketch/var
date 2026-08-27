@@ -60,7 +60,13 @@ class AmbulanceVehicleProfileScreen extends ConsumerWidget {
               TextField(
                 controller: driverPhone,
                 keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(labelText: 'Driver phone'),
+                readOnly: true,
+                enabled: false,
+                decoration: const InputDecoration(
+                  labelText: 'Driver phone',
+                  suffixIcon: Icon(Icons.verified_rounded, color: AppColors.success, size: 18),
+                  helperText: 'Verified via OTP — cannot be changed',
+                ),
               ),
               TextField(controller: driverLicense, decoration: const InputDecoration(labelText: 'Driver license')),
               TextField(

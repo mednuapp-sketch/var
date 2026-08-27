@@ -1,17 +1,20 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
+import '../../../core/constants/payment_config.dart';
 import '../../wallet/wallet_provider.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Constants
 // ─────────────────────────────────────────────────────────────────────────────
 
-const _kRazorpayKeyId = 'rzp_test_T1Z9EVjv8paYQ2';
 const _kGreen = Color(0xFF2E7D32);
 const _kBlue = Color(0xFF1565C0);
 const _kPurple = Color(0xFF6A1B9A);
@@ -24,11 +27,39 @@ class PaymentScreen extends ConsumerStatefulWidget {
   final String amount;
   final String description;
 
+  /// Single-booking mode (most callers): passed straight through to the
+  /// `capturePayment` Cloud Function, which creates the booking doc itself
+  /// once the charge is verified — see functions/index.js.
+  /// `bookingCollection` is which collection to create it in
+  /// (`appointments`, `service_requests`, `orders`, ...); `bookingData` is
+  /// written verbatim as that doc's fields (patientId/paymentId/status are
+  /// added server-side, don't include them here). Required unless [cartItems]
+  /// is set.
+  final String? serviceType;
+  final String? bookingCollection;
+  final Map<String, dynamic>? bookingData;
+
+  /// Cart mode (cart_screen.dart): one charge funding several different
+  /// bookings at once. Each entry is shaped like `{ serviceType,
+  /// bookingCollection, bookingData, amount }` — [amount]/[serviceType]/
+  /// [bookingCollection]/[bookingData] above are ignored when this is set,
+  /// and `captureCartPayment` is called instead of `capturePayment`. The
+  /// displayed total is the sum of each item's `amount`.
+  final List<Map<String, dynamic>>? cartItems;
+
   const PaymentScreen({
     super.key,
     this.amount = '520',
     this.description = 'Consultation with MedNU',
-  });
+    this.serviceType,
+    this.bookingCollection,
+    this.bookingData,
+    this.cartItems,
+  }) : assert(
+         cartItems != null ||
+             (serviceType != null && bookingCollection != null && bookingData != null),
+         'Either cartItems, or serviceType + bookingCollection + bookingData, is required.',
+       );
 
   @override
   ConsumerState<PaymentScreen> createState() => _PaymentScreenState();
@@ -45,9 +76,15 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen>
   bool _isProcessing = false;
   bool _showPromoField = false;
   bool _promoApplied = false;
+  bool _promoValidating = false;
   String _promoCode = '';
   int _promoDiscount = 0;
   String? _pendingOrderId;
+
+  // Stable for this screen instance's lifetime — reused across retries of
+  // the same payment attempt so a flaky-network retry can never double-book
+  // or double-charge (capturePayment dedupes on this exact string).
+  final String _idempotencyKey = DateTime.now().microsecondsSinceEpoch.toString();
 
   final _upiController = TextEditingController();
   final _promoController = TextEditingController();
@@ -88,7 +125,9 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen>
     return b.maybeWhen(data: (v) => v.toInt(), orElse: () => 0);
   }
 
-  int get _totalAmount => int.tryParse(widget.amount) ?? 0;
+  int get _totalAmount => widget.cartItems != null
+      ? widget.cartItems!.fold<int>(0, (s, it) => s + (num.tryParse(it['amount'].toString())?.round() ?? 0))
+      : int.tryParse(widget.amount) ?? 0;
   int get _afterPromo => (_totalAmount - _promoDiscount).clamp(0, _totalAmount);
   int get _mednuMoneyDeduction =>
       _useMednuMoney ? _afterPromo.clamp(0, _mednuMoneyBalance) : 0;
@@ -122,6 +161,101 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen>
     super.dispose();
   }
 
+  // ── Capture (single-booking or cart mode) ──────────────
+  // Calls `capturePayment` (single booking) or `captureCartPayment` (this
+  // screen was opened with [cartItems]) — same verification/coupon contract
+  // either way, see functions/index.js.
+  Future<Map<String, dynamic>> _capture({
+    required String paymentMethod,
+    required int walletPortionAmount,
+    String? razorpayOrderId,
+    String? razorpayPaymentId,
+    String? razorpaySignature,
+    String? idempotencyKey,
+  }) async {
+    final isCart = widget.cartItems != null;
+    final payload = <String, dynamic>{
+      if (_promoApplied) 'couponCode': _promoCode,
+      'paymentMethod': paymentMethod,
+      'walletPortionAmount': walletPortionAmount,
+      if (razorpayOrderId != null) 'razorpay_order_id': razorpayOrderId,
+      if (razorpayPaymentId != null) 'razorpay_payment_id': razorpayPaymentId,
+      if (razorpaySignature != null) 'razorpay_signature': razorpaySignature,
+      if (idempotencyKey != null) 'idempotencyKey': idempotencyKey,
+    };
+    if (isCart) {
+      payload['items'] = widget.cartItems;
+    } else {
+      payload['serviceType'] = widget.serviceType;
+      payload['bookingCollection'] = widget.bookingCollection;
+      payload['bookingData'] = widget.bookingData;
+      payload['originalAmount'] = _totalAmount;
+    }
+    final result = await FirebaseFunctions.instance
+        .httpsCallable(isCart ? 'captureCartPayment' : 'capturePayment')
+        .call(payload);
+    return ((result.data as Map?) ?? const {}).cast<String, dynamic>();
+  }
+
+  // ── Debug-only test skip ────────────────────────────────
+  // kDebugMode is compiled out of release/profile builds entirely — this
+  // whole path (and the button that triggers it) is unreachable in anything
+  // that ships to a real user or an app store. Writes the booking doc(s)
+  // directly, deliberately WITHOUT a paymentId, so the settlement engine
+  // (which only acts on payments a paymentId points to) never sees these —
+  // no fake payments/wallet_ledger/commission entries, nothing for the real
+  // Settlement Dashboard to pick up.
+  Future<void> _skipPaymentForTesting() async {
+    if (_isProcessing) return;
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) {
+      _showError('Sign in to continue.');
+      return;
+    }
+    setState(() => _isProcessing = true);
+    try {
+      final db = FirebaseFirestore.instance;
+      if (widget.cartItems != null) {
+        final payments = <Map<String, dynamic>>[];
+        for (final item in widget.cartItems!) {
+          final ref = db.collection(item['bookingCollection'] as String).doc();
+          await ref.set({
+            ...(item['bookingData'] as Map).cast<String, dynamic>(),
+            'patientId': uid,
+            'paymentStatus': 'test_mode_skipped',
+            'createdAt': FieldValue.serverTimestamp(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+          payments.add({
+            'bookingId': ref.id,
+            'bookingCollection': item['bookingCollection'],
+            'serviceType': item['serviceType'],
+            'paidAmount': item['amount'],
+          });
+        }
+        if (!mounted) return;
+        setState(() => _isProcessing = false);
+        _showSuccessSheet('TEST-$_idempotencyKey', cartPayments: payments);
+      } else {
+        final ref = db.collection(widget.bookingCollection!).doc();
+        await ref.set({
+          ...widget.bookingData!,
+          'patientId': uid,
+          'paymentStatus': 'test_mode_skipped',
+          'createdAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+        if (!mounted) return;
+        setState(() => _isProcessing = false);
+        _showSuccessSheet('TEST-$_idempotencyKey', bookingId: ref.id);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isProcessing = false);
+      _showError('Test skip failed: $e');
+    }
+  }
+
   // ── Razorpay handlers ──────────────────────────────────
   void _onSuccess(PaymentSuccessResponse response) async {
     if (!mounted) return;
@@ -129,40 +263,47 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen>
     final orderId = response.orderId ?? _pendingOrderId ?? '';
     final signature = response.signature ?? '';
 
-    // The card/UPI leg has already been charged, so a failed in-app debit
-    // can't undo anything — record it best-effort and carry on.
-    await _applyBalanceDeductions();
-    if (!mounted) return;
-
-    if (orderId.isEmpty || signature.isEmpty) {
+    if (orderId.isEmpty || signature.isEmpty || paymentId.isEmpty) {
       setState(() => _isProcessing = false);
-      _showSuccessSheet(
-        paymentId.isNotEmpty
-            ? paymentId
-            : 'WALLET-${DateTime.now().millisecondsSinceEpoch}',
-      );
+      _showError('Payment could not be verified. Please contact support.');
       return;
     }
 
+    // The gateway leg has already been charged, so a failed in-app debit
+    // can't undo it — record it best-effort, and if it genuinely failed,
+    // tell capturePayment nothing was actually covered from the wallet
+    // (rather than claiming an amount that never moved) so its own
+    // gateway-order cross-check can catch the shortfall instead of silently
+    // under-recording what was collected.
+    final intendedWalletPortion = _mednuMoneyDeduction + _walletDeduction;
+    final balanceError = await _applyBalanceDeductions();
+    if (!mounted) return;
+    final walletPortion = balanceError == null ? intendedWalletPortion : 0;
+
     try {
-      final result = await FirebaseFunctions.instance
-          .httpsCallable('verifyRazorpayPayment')
-          .call({
-        'razorpay_order_id': orderId,
-        'razorpay_payment_id': paymentId,
-        'razorpay_signature': signature,
-      });
+      final data = await _capture(
+        paymentMethod: 'razorpay',
+        walletPortionAmount: walletPortion,
+        razorpayOrderId: orderId,
+        razorpayPaymentId: paymentId,
+        razorpaySignature: signature,
+      );
       if (!mounted) return;
       setState(() => _isProcessing = false);
-      if ((result.data as Map?)?['verified'] == true) {
-        _showSuccessSheet(paymentId);
-      } else {
-        _showError('Payment could not be verified. Please contact support.');
-      }
+      _showSuccessSheet(
+        paymentId,
+        bookingId: data['bookingId'] as String?,
+        capturedPaymentId: data['paymentId'] as String?,
+        cartPayments: (data['payments'] as List?)?.cast<Map>().map((m) => m.cast<String, dynamic>()).toList(),
+      );
+    } on FirebaseFunctionsException catch (e) {
+      if (!mounted) return;
+      setState(() => _isProcessing = false);
+      _showError(e.message ?? 'Payment could not be recorded. Contact support with ID: $paymentId');
     } catch (e) {
       if (!mounted) return;
       setState(() => _isProcessing = false);
-      _showError('Verification failed. Contact support with ID: $paymentId');
+      _showError('Payment could not be recorded. Contact support with ID: $paymentId');
     }
   }
 
@@ -238,14 +379,38 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen>
     // in-app debit is the *only* thing that moves money here. It must
     // succeed before we report success, or the patient gets a free order.
     if (_amountAfterWallet <= 0) {
+      final walletPortion = _afterPromo;
       final error = await _applyBalanceDeductions();
       if (!mounted) return;
-      setState(() => _isProcessing = false);
       if (error != null) {
+        setState(() => _isProcessing = false);
         _showError(error);
         return;
       }
-      _showSuccessSheet('WALLET-${DateTime.now().millisecondsSinceEpoch}');
+
+      try {
+        final data = await _capture(
+          paymentMethod: 'already_settled',
+          walletPortionAmount: walletPortion,
+          idempotencyKey: _idempotencyKey,
+        );
+        if (!mounted) return;
+        setState(() => _isProcessing = false);
+        _showSuccessSheet(
+          'WALLET-$_idempotencyKey',
+          bookingId: data['bookingId'] as String?,
+          capturedPaymentId: data['paymentId'] as String?,
+          cartPayments: (data['payments'] as List?)?.cast<Map>().map((m) => m.cast<String, dynamic>()).toList(),
+        );
+      } on FirebaseFunctionsException catch (e) {
+        if (!mounted) return;
+        setState(() => _isProcessing = false);
+        _showError(e.message ?? 'Could not complete payment. Please try again.');
+      } catch (e) {
+        if (!mounted) return;
+        setState(() => _isProcessing = false);
+        _showError('Could not complete payment. Please try again.');
+      }
       return;
     }
 
@@ -277,7 +442,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen>
     }
 
     final options = <String, dynamic>{
-      'key': _kRazorpayKeyId,
+      'key': kRazorpayKeyId,
       'order_id': orderId,
       'amount': _amountAfterWallet * 100,
       'name': 'MedNU Healthcare',
@@ -299,26 +464,42 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen>
   }
 
   // ── Promo code ─────────────────────────────────────────
-  void _applyPromo() {
+  // Server-validated via the `validateCoupon` callable (functions/index.js) —
+  // the discount shown here is a live preview only; capturePayment
+  // re-validates and re-computes it independently at the moment of payment,
+  // so a coupon that expires or hits its usage limit between the preview
+  // and the actual charge is caught there, not trusted from this call.
+  Future<void> _applyPromo() async {
     final code = _promoController.text.trim().toUpperCase();
-    if (code == 'MEDNU100') {
+    if (code.isEmpty || _promoValidating) return;
+    setState(() => _promoValidating = true);
+    try {
+      final result = await FirebaseFunctions.instance
+          .httpsCallable('validateCoupon')
+          .call({
+        'couponCode': code,
+        'serviceType': widget.serviceType,
+        'orderAmount': _totalAmount,
+      });
+      if (!mounted) return;
+      final data = (result.data as Map?) ?? const {};
+      final discount = ((data['discount'] as num?) ?? 0).round();
       setState(() {
         _promoApplied = true;
         _promoCode = code;
-        _promoDiscount = 100;
+        _promoDiscount = discount;
         _showPromoField = false;
+        _promoValidating = false;
       });
-      _showSnackBar('Promo applied! ₹100 discount added.', _kGreen);
-    } else if (code == 'FIRST50') {
-      setState(() {
-        _promoApplied = true;
-        _promoCode = code;
-        _promoDiscount = 50;
-        _showPromoField = false;
-      });
-      _showSnackBar('Promo applied! ₹50 discount added.', _kGreen);
-    } else {
-      _showSnackBar('Invalid promo code. Please try again.', AppColors.error);
+      _showSnackBar('Coupon applied! ₹$discount discount added.', _kGreen);
+    } on FirebaseFunctionsException catch (e) {
+      if (!mounted) return;
+      setState(() => _promoValidating = false);
+      _showSnackBar(e.message ?? 'Invalid coupon code.', AppColors.error);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _promoValidating = false);
+      _showSnackBar('Could not validate coupon. Please try again.', AppColors.error);
     }
   }
 
@@ -841,23 +1022,30 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen>
                       SizedBox(
                         height: 52,
                         child: ElevatedButton(
-                          onPressed: _applyPromo,
+                          onPressed: _promoValidating ? null : _applyPromo,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.primary,
                             foregroundColor: Colors.white,
+                            disabledBackgroundColor: AppColors.primary.withValues(alpha: 0.5),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 18),
                           ),
-                          child: const Text(
-                            'Apply',
-                            style: TextStyle(
-                              fontFamily: 'Poppins',
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
+                          child: _promoValidating
+                              ? const SizedBox(
+                                  width: 18, height: 18,
+                                  child: CircularProgressIndicator(
+                                      color: Colors.white, strokeWidth: 2),
+                                )
+                              : const Text(
+                                  'Apply',
+                                  style: TextStyle(
+                                    fontFamily: 'Poppins',
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
                         ),
                       ),
                     ],
@@ -1097,49 +1285,83 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen>
           ),
         ],
       ),
-      child: SizedBox(
-        height: 54,
-        child: ElevatedButton(
-          onPressed: _isProcessing ? null : _openRazorpay,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.primary,
-            foregroundColor: Colors.white,
-            disabledBackgroundColor: AppColors.primary.withValues(alpha: 0.5),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            elevation: 0,
-          ),
-          child: _isProcessing
-              ? const SizedBox(
-                  width: 22, height: 22,
-                  child: CircularProgressIndicator(
-                    color: Colors.white, strokeWidth: 2.5),
-                )
-              : Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.lock_rounded, size: 16),
-                    const SizedBox(width: 8),
-                    Text(
-                      _amountAfterWallet <= 0
-                          ? 'Complete with Wallet'
-                          : 'Pay ₹$_amountAfterWallet',
-                      style: const TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ],
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            height: 54,
+            child: ElevatedButton(
+              onPressed: _isProcessing ? null : _openRazorpay,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                disabledBackgroundColor: AppColors.primary.withValues(alpha: 0.5),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
                 ),
-        ),
+                elevation: 0,
+              ),
+              child: _isProcessing
+                  ? const SizedBox(
+                      width: 22, height: 22,
+                      child: CircularProgressIndicator(
+                        color: Colors.white, strokeWidth: 2.5),
+                    )
+                  : Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.lock_rounded, size: 16),
+                        const SizedBox(width: 8),
+                        Text(
+                          _amountAfterWallet <= 0
+                              ? 'Complete with Wallet'
+                              : 'Pay ₹$_amountAfterWallet',
+                          style: const TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
+          ),
+          // Debug-only — kDebugMode is compiled out entirely in release
+          // builds, so this button and everything behind it is physically
+          // absent from anything that could reach a real user or app store.
+          if (kDebugMode) ...[
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 44,
+              child: OutlinedButton(
+                onPressed: _isProcessing ? null : _skipPaymentForTesting,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.warning,
+                  side: BorderSide(color: AppColors.warning.withValues(alpha: 0.5)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+                child: const Text(
+                  '🧪 Skip Payment (Test Mode — Debug Builds Only)',
+                  style: TextStyle(fontFamily: 'Poppins', fontSize: 12, fontWeight: FontWeight.w700),
+                ),
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
 
   // ── Success Sheet ──────────────────────────────────────
-  void _showSuccessSheet(String paymentId) {
+  // Pops with the newly-created booking/payment ids (capturePayment creates
+  // the booking doc itself — see PaymentScreen's class doc) so the caller can
+  // navigate straight to it instead of re-deriving it from a local write.
+  void _showSuccessSheet(
+    String paymentId, {
+    String? bookingId,
+    String? capturedPaymentId,
+    List<Map<String, dynamic>>? cartPayments,
+  }) {
     FocusScope.of(context).unfocus();
     showModalBottomSheet(
       context: context,
@@ -1153,7 +1375,13 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen>
         onDone: () => Navigator.pop(sheetContext),
       ),
     ).then((_) {
-      if (mounted) context.pop(true);
+      if (mounted) {
+        context.pop({
+          'bookingId': bookingId,
+          'paymentId': capturedPaymentId ?? paymentId,
+          if (cartPayments != null) 'payments': cartPayments,
+        });
+      }
     });
   }
 }

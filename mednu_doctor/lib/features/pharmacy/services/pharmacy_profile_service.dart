@@ -33,6 +33,9 @@ class PharmacyProfileService {
     required String phone,
     String email = '',
     bool deliveryAvailable = true,
+    List<String> categoriesOffered = const [],
+    double? latitude,
+    double? longitude,
   }) async {
     String? fcmToken;
     try {
@@ -44,9 +47,12 @@ class PharmacyProfileService {
       'name': name,
       'licenseNumber': licenseNumber,
       'address': address,
+      if (latitude != null) 'latitude': latitude,
+      if (longitude != null) 'longitude': longitude,
       'phone': phone,
       'email': email,
       'deliveryAvailable': deliveryAvailable,
+      'categoriesOffered': categoriesOffered,
       'isVerified': false,
       'status': 'pending',
       'photoUrl': '',

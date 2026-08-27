@@ -9,7 +9,6 @@ import '../../../core/router/app_router.dart';
 import '../services/doctor_auth_service.dart';
 import '../../../shared_core/models/app_role.dart';
 import '../../../shared_core/navigation/role_menu.dart';
-import '../../../shared_core/documents/partner_document_upload_card.dart';
 
 class VerificationPendingScreen extends StatefulWidget {
   const VerificationPendingScreen({super.key});
@@ -24,19 +23,6 @@ class _VerificationPendingScreenState extends State<VerificationPendingScreen>
   String _status = 'pending';
   bool _loading = true;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _statusSub;
-
-  // Populated alongside `_status` so the "Under Review" state can also show
-  // the document-upload section for non-Doctor roles — without this, a Lab/
-  // Pharmacy/Ambulance/Caregiver partner has no route that ever reaches
-  // `PartnerDocumentsSection` while pending (it only lives on each role's
-  // Profile screen, which the router blocks until `status == 'active'`), so
-  // they could never actually submit the documents this screen is asking
-  // for. Doctor keeps working exactly as before: `PartnerDocumentType.forRole
-  // ('doctor')` is empty, so the section renders nothing for that role.
-  String _uid = '';
-  AppRole _role = AppRole.doctor;
-  Map<String, dynamic> _documents = const {};
-  Map<String, dynamic> _documentVerification = const {};
 
   late AnimationController _pulseCtrl;
   late Animation<double> _pulse;
@@ -74,7 +60,6 @@ class _VerificationPendingScreenState extends State<VerificationPendingScreen>
       if (mounted) setState(() => _loading = false);
       return;
     }
-    _uid = uid;
 
     // A non-doctor role's approval is recorded on its own `{role}_profiles`
     // doc (that's what Admin's partner-approval flow actually writes) — the
@@ -95,7 +80,6 @@ class _VerificationPendingScreenState extends State<VerificationPendingScreen>
     } catch (_) {
       // Fall back to watching `doctors/{uid}` (existing behavior) below.
     }
-    _role = role;
 
     final statusDocRef = role == AppRole.doctor
         ? FirebaseFirestore.instance.collection('doctors').doc(uid)
@@ -121,13 +105,6 @@ class _VerificationPendingScreenState extends State<VerificationPendingScreen>
         }
         setState(() {
           _status = status;
-          _documents =
-              (snap.data()?['documents'] as Map?)?.cast<String, dynamic>() ??
-              const {};
-          _documentVerification =
-              (snap.data()?['documentVerification'] as Map?)
-                  ?.cast<String, dynamic>() ??
-              const {};
           _loading = false;
         });
       },
@@ -316,18 +293,6 @@ class _VerificationPendingScreenState extends State<VerificationPendingScreen>
 
                           if (!isSuspended) ...[
                             const SizedBox(height: 20),
-
-                            // Required verification documents — this is the whole
-                            // reason the account is stuck here, so it comes before
-                            // the progress checklist. Self-hides for Doctor (no
-                            // docTypes are defined for that role).
-                            PartnerDocumentsSection(
-                              role: _role.firestoreValue,
-                              uid: _uid,
-                              documents: _documents,
-                              documentVerification: _documentVerification,
-                            ),
-                            const SizedBox(height: 16),
 
                             // Progress steps
                             Container(

@@ -103,7 +103,7 @@ class _TrackStep {
 
 class OrderTrackingScreen extends StatefulWidget {
   /// Shape: {orderId, serviceType, serviceName, bookingDate,
-  ///         status, estimatedTime, provider: {name, photo, rating, contact},
+  ///         status, estimatedTime, provider: {name, photo, contact},
   ///         items, total}
   final Map<String, dynamic>? orderData;
   const OrderTrackingScreen({super.key, this.orderData});
@@ -125,7 +125,6 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
   late String _estimatedTime;
   late String _providerName;
   late String _providerPhoto;
-  late double _providerRating;
   late String _providerContact;
   late List<Map<String, dynamic>> _orderItems;
   late int _subtotal;
@@ -227,7 +226,6 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
     final provider = (d['provider'] as Map?)?.cast<String, dynamic>() ?? {};
     _providerName = provider['name'] as String? ?? 'Dr. Anjali Sharma';
     _providerPhoto = provider['photo'] as String? ?? '';
-    _providerRating = (provider['rating'] as num?)?.toDouble() ?? 4.8;
     _providerContact = provider['contact'] as String? ?? '+91 98765 43210';
 
     final rawItems = d['items'] as List?;
@@ -885,22 +883,6 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
                     SizedBox(height: R.h(context, 3)),
                     Row(
                       children: [
-                        Icon(Icons.star_rounded,
-                            size: R.w(context, 14), color: Colors.amber),
-                        SizedBox(width: R.w(context, 3)),
-                        Text(
-                          '$_providerRating',
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: context.appTextPrimary,
-                          ),
-                        ),
-                        SizedBox(width: R.w(context, 6)),
-                        Text('·',
-                            style: TextStyle(color: context.appTextHint)),
-                        SizedBox(width: R.w(context, 6)),
                         Flexible(
                           child: Text(_providerContact,
                               style: const TextStyle(

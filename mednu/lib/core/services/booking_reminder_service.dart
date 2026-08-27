@@ -159,6 +159,16 @@ class BookingReminderService {
           title: 'Nutrition Session in $timeLabel',
           body:  'Your session with $provider starts in $timeLabel.',
         );
+      case BookingSource.medicineOrder:
+        // Unreachable in practice: UnifiedBooking.fromOrder leaves date/time
+        // empty (a medicine order has no scheduled slot to remind about), so
+        // _parseBookingTime always returns null for it and syncReminders
+        // skips the booking before _buildMessage is ever called. Case kept
+        // only for exhaustiveness.
+        return (
+          title: 'Medicine Order Update',
+          body:  'Your medicine order has an update.',
+        );
     }
   }
 }

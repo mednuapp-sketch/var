@@ -5,9 +5,12 @@ class PharmacyProfile {
   final String name;
   final String licenseNumber;
   final String address;
+  final double? latitude;
+  final double? longitude;
   final String phone;
   final String email;
   final bool deliveryAvailable;
+  final List<String> categoriesOffered;
   final bool isVerified;
   final String status; // 'pending' | 'active'
   final String photoUrl;
@@ -25,9 +28,12 @@ class PharmacyProfile {
     required this.name,
     required this.licenseNumber,
     required this.address,
+    this.latitude,
+    this.longitude,
     required this.phone,
     required this.email,
     required this.deliveryAvailable,
+    this.categoriesOffered = const [],
     required this.isVerified,
     required this.status,
     required this.photoUrl,
@@ -44,9 +50,14 @@ class PharmacyProfile {
       name: (d['name'] as String?) ?? '',
       licenseNumber: (d['licenseNumber'] as String?) ?? '',
       address: (d['address'] as String?) ?? '',
+      latitude: (d['latitude'] as num?)?.toDouble(),
+      longitude: (d['longitude'] as num?)?.toDouble(),
       phone: (d['phone'] as String?) ?? '',
       email: (d['email'] as String?) ?? '',
       deliveryAvailable: (d['deliveryAvailable'] as bool?) ?? true,
+      categoriesOffered: ((d['categoriesOffered'] as List?) ?? const [])
+          .whereType<String>()
+          .toList(),
       isVerified: (d['isVerified'] as bool?) ?? false,
       status: (d['status'] as String?) ?? 'pending',
       photoUrl: (d['photoUrl'] as String?) ?? '',
@@ -59,3 +70,19 @@ class PharmacyProfile {
     );
   }
 }
+
+/// Common medicine/product category catalog offered for onboarding
+/// checklist selection. Purely a UI convenience list — a pharmacy can still
+/// fulfil any order regardless of what it selected here.
+const kPharmacyCategoryCatalog = <String>[
+  'Prescription Medicines',
+  'OTC Medicines',
+  'Ayurvedic & Herbal',
+  'Homeopathy',
+  'Baby & Mother Care',
+  'Surgical & First Aid',
+  'Health Devices',
+  'Skin & Personal Care',
+  'Nutrition & Supplements',
+  'Diabetic Care',
+];

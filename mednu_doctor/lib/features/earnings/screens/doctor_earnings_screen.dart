@@ -411,22 +411,6 @@ class _EarningsBody extends StatelessWidget {
                       icon: Icons.check_circle_outline_rounded,
                       color: AppColors.success,
                     ),
-                    const SizedBox(width: 10),
-                    StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-                      stream: DoctorAuthService.profileStream(uid),
-                      builder: (ctx, ps) {
-                        final rating =
-                            (ps.data?.data()?['rating'] as num?)
-                                ?.toStringAsFixed(1) ??
-                            '–';
-                        return _QuickStatCard(
-                          label: 'Rating',
-                          value: '$rating ⭐',
-                          icon: Icons.star_rounded,
-                          color: AppColors.warning,
-                        );
-                      },
-                    ),
                   ]),
                 ),
                 const SizedBox(height: 22),
@@ -524,7 +508,7 @@ class _EarningsBody extends StatelessWidget {
                 // ── Wallet Section ─────────────────────────────────────────
                 FadeInSlide(
                   delay: const Duration(milliseconds: 220),
-                  child: _WalletSection(uid: uid, pendingEarnings: monthE),
+                  child: _WalletSection(uid: uid),
                 ),
                 const SizedBox(height: 22),
 
@@ -566,91 +550,100 @@ class _EarningsBody extends StatelessWidget {
 // Wallet Section
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Real-time — sourced from `provider_wallets/{uid}`, the same doc the admin
+// Settlement Dashboard reads, kept in sync by the Payment Distribution &
+// Settlement Engine (functions/index.js). Payouts are admin-initiated (the
+// admin approves a settlement batch and transfers funds outside the app,
+// then marks it paid) rather than doctor-requested — see `settlement_config`
+// for the schedule — so this no longer offers a fake "Request Withdrawal"
+// action; it shows the real balances and the next scheduled payout instead.
 class _WalletSection extends StatelessWidget {
   final String uid;
-  final num pendingEarnings;
 
-  const _WalletSection({required this.uid, required this.pendingEarnings});
+  const _WalletSection({required this.uid});
 
   @override
   Widget build(BuildContext context) {
-    final pending = pendingEarnings;
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance.collection('provider_wallets').doc(uid).snapshots(),
+      builder: (context, snap) {
+        final d = snap.data?.data();
+        final available = (d?['availableBalance'] as num?) ?? 0;
+        final pending = (d?['pendingEarnings'] as num?) ?? 0;
+        final paidThisMonth = (d?['paidThisMonth'] as num?) ?? 0;
 
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [AppColors.primary, AppColors.secondary],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.25),
-            blurRadius: 14,
-            offset: const Offset(0, 5),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(children: [
-            Icon(Icons.account_balance_wallet_rounded,
-                color: Colors.white, size: 20),
-            SizedBox(width: 8),
-            Text(
-              'Wallet & Payouts',
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-                color: Colors.white,
-              ),
+        return Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [AppColors.primary, AppColors.secondary],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             ),
-          ]),
-          const SizedBox(height: 16),
-          Row(children: [
-            _WalletStat('₹${_formatAmount(pending)}', 'This Month',
-                Icons.pending_rounded),
-            _walletDivider(),
-            const _WalletStat('Coming soon', 'Wallet Balance',
-                Icons.savings_rounded),
-            _walletDivider(),
-            const _WalletStat('Coming soon', 'Withdrawn', Icons.south_rounded),
-          ]),
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: pending > 0
-                  ? () => _showWithdrawDialog(context, pending)
-                  : null,
-              icon: const Icon(Icons.send_rounded, size: 16),
-              label: Text(
-                pending > 0
-                    ? 'Request Withdrawal  ₹${_formatAmount(pending)}'
-                    : 'No Pending Payout',
-                style: const TextStyle(
-                  fontFamily: 'Inter',
-                  fontWeight: FontWeight.w600,
-                  fontSize: 13,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primary.withValues(alpha: 0.25),
+                blurRadius: 14,
+                offset: const Offset(0, 5),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Row(children: [
+                Icon(Icons.account_balance_wallet_rounded,
+                    color: Colors.white, size: 20),
+                SizedBox(width: 8),
+                Text(
+                  'Wallet & Payouts',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                ),
+              ]),
+              const SizedBox(height: 16),
+              Row(children: [
+                _WalletStat('₹${_formatAmount(available)}', 'Available',
+                    Icons.savings_rounded),
+                _walletDivider(),
+                _WalletStat('₹${_formatAmount(pending)}', 'Pending Settlement',
+                    Icons.pending_rounded),
+                _walletDivider(),
+                _WalletStat('₹${_formatAmount(paidThisMonth)}', 'Paid This Month',
+                    Icons.south_rounded),
+              ]),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () => _showPayoutScheduleDialog(context),
+                  icon: const Icon(Icons.schedule_rounded, size: 16, color: Colors.white),
+                  label: const Text(
+                    'Settlement Schedule',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                      color: Colors.white,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Colors.white54),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
                 ),
               ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: AppColors.primary,
-                disabledBackgroundColor: Colors.white30,
-                disabledForegroundColor: Colors.white60,
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-              ),
-            ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -661,41 +654,37 @@ class _WalletSection extends StatelessWidget {
         margin: const EdgeInsets.symmetric(horizontal: 10),
       );
 
-  void _showWithdrawDialog(BuildContext context, num amount) {
+  void _showPayoutScheduleDialog(BuildContext context) {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Request Withdrawal', style: AppTextStyles.h4),
-        content: Text(
-          'Submit a withdrawal request for ₹${_formatAmount(amount)}?\n\nProcessing takes 3–5 business days.',
-          style: AppTextStyles.bodyMedium,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                      'Withdrawal of ₹${_formatAmount(amount)} requested. Processing in 3–5 business days.'),
-                  behavior: SnackBarBehavior.floating,
-                  backgroundColor: AppColors.success,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10)),
-                ),
-              );
-            },
-            style:
-                ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
-            child:
-                const Text('Confirm', style: TextStyle(color: Colors.white)),
-          ),
-        ],
+      builder: (ctx) => FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+        future: FirebaseFirestore.instance.collection('settlement_config').doc('global').get(),
+        builder: (ctx, cfgSnap) {
+          final frequency = cfgSnap.data?.data()?['frequency'] as String? ?? 'daily';
+          final scheduleText = switch (frequency) {
+            'daily' => 'Pending earnings are batched for settlement every day.',
+            'weekly' => 'Pending earnings are batched for settlement once a week.',
+            'monthly' => 'Pending earnings are batched for settlement once a month.',
+            _ => 'Settlements are batched manually by the MedNU finance team.',
+          };
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: const Text('Settlement Schedule', style: AppTextStyles.h4),
+            content: Text(
+              '$scheduleText\n\nOnce a batch is approved, MedNU transfers the funds to your '
+              'registered account and marks it paid — you\'ll get a notification when that happens. '
+              'There\'s no need to request a payout.',
+              style: AppTextStyles.bodyMedium,
+            ),
+            actions: [
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx),
+                style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+                child: const Text('Got it', style: TextStyle(color: Colors.white)),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

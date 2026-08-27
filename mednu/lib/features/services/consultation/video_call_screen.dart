@@ -136,18 +136,24 @@ class _VideoCallScreenState extends State<VideoCallScreen>
   }
 
   Future<void> _initAgora() async {
-    await _agora.initialize();
-    if (!mounted) return;
-    setState(() => _engineReady = true);
-    // Start the foreground service + cache the Flutter engine so Android does
-    // not kill the process (or the Dart VM) if the user swipes from recents.
-    await ActiveCallService.start(
-      callId: widget.callId,
-      callerName: widget.doctorName ?? 'Doctor',
-    );
-    // Handle "End Call" tapped in the persistent notification while in background.
-    ActiveCallService.setEndCallFromNotificationHandler(() => _doEndCall());
-    _watchConsultation();
+    try {
+      await _agora.initialize();
+      if (!mounted) return;
+      setState(() => _engineReady = true);
+      // Start the foreground service + cache the Flutter engine so Android does
+      // not kill the process (or the Dart VM) if the user swipes from recents.
+      await ActiveCallService.start(
+        callId: widget.callId,
+        callerName: widget.doctorName ?? 'Doctor',
+      );
+      // Handle "End Call" tapped in the persistent notification while in background.
+      ActiveCallService.setEndCallFromNotificationHandler(() => _doEndCall());
+      _watchConsultation();
+    } catch (e) {
+      debugPrint('[VideoCall] Agora init failed: $e');
+      if (!mounted) return;
+      setState(() => _agoraError = 'Could not start the video call. Please try again.');
+    }
   }
 
   void _watchConsultation() {

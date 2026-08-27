@@ -7,7 +7,7 @@ import '../../core/constants/app_colors.dart';
 /// no `roles` field, so every reader in this layer treats a missing/absent
 /// value as `[AppRole.doctor]` rather than throwing. No existing document
 /// needs to be migrated for the app to keep working exactly as before.
-enum AppRole { doctor, ambulance, pharmacy, lab, caregiver, admin }
+enum AppRole { doctor, ambulance, pharmacy, lab, caregiver, physiotherapist, counsellor, nutritionist, admin }
 
 extension AppRoleX on AppRole {
   /// Value stored in Firestore (`roles` / `activeRole` fields). Kept
@@ -25,6 +25,12 @@ extension AppRoleX on AppRole {
         return 'lab';
       case AppRole.caregiver:
         return 'caregiver';
+      case AppRole.physiotherapist:
+        return 'physiotherapist';
+      case AppRole.counsellor:
+        return 'counsellor';
+      case AppRole.nutritionist:
+        return 'nutritionist';
       case AppRole.admin:
         return 'admin';
     }
@@ -42,6 +48,12 @@ extension AppRoleX on AppRole {
         return 'Lab & Diagnostics';
       case AppRole.caregiver:
         return 'Caregiver';
+      case AppRole.physiotherapist:
+        return 'Physiotherapist';
+      case AppRole.counsellor:
+        return 'Counsellor';
+      case AppRole.nutritionist:
+        return 'Nutritionist';
       case AppRole.admin:
         return 'Admin';
     }
@@ -62,6 +74,12 @@ extension AppRoleX on AppRole {
         return 'Run tests & share reports';
       case AppRole.caregiver:
         return 'Home care & assistance';
+      case AppRole.physiotherapist:
+        return 'Rehab & physiotherapy sessions';
+      case AppRole.counsellor:
+        return 'Mental health & counselling';
+      case AppRole.nutritionist:
+        return 'Diet & nutrition consultations';
       case AppRole.admin:
         return 'Manage platform operations';
     }
@@ -79,6 +97,12 @@ extension AppRoleX on AppRole {
         return Icons.biotech_rounded;
       case AppRole.caregiver:
         return Icons.volunteer_activism_rounded;
+      case AppRole.physiotherapist:
+        return Icons.accessibility_new_rounded;
+      case AppRole.counsellor:
+        return Icons.psychology_rounded;
+      case AppRole.nutritionist:
+        return Icons.restaurant_menu_rounded;
       case AppRole.admin:
         return Icons.admin_panel_settings_rounded;
     }
@@ -96,6 +120,12 @@ extension AppRoleX on AppRole {
         return const Color(0xFF1565C0);
       case AppRole.caregiver:
         return const Color(0xFF6A1B9A);
+      case AppRole.physiotherapist:
+        return const Color(0xFF00838F);
+      case AppRole.counsellor:
+        return const Color(0xFF5E35B1);
+      case AppRole.nutritionist:
+        return const Color(0xFF2E7D32);
       case AppRole.admin:
         return const Color(0xFF37474F);
     }
@@ -113,6 +143,12 @@ extension AppRoleX on AppRole {
         return AppRole.lab;
       case 'caregiver':
         return AppRole.caregiver;
+      case 'physiotherapist':
+        return AppRole.physiotherapist;
+      case 'counsellor':
+        return AppRole.counsellor;
+      case 'nutritionist':
+        return AppRole.nutritionist;
       case 'admin':
         return AppRole.admin;
       default:

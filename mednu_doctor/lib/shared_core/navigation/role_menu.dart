@@ -192,6 +192,87 @@ List<NavItem> buildMenuForRole(AppRole role) {
           route: AppRoutes.caregiverProfile,
         ),
       ];
+    case AppRole.physiotherapist:
+      return const [
+        NavItem(
+          label: 'Dashboard',
+          icon: Icons.space_dashboard_outlined,
+          activeIcon: Icons.space_dashboard_rounded,
+          route: AppRoutes.physioDashboard,
+        ),
+        NavItem(
+          label: 'Sessions',
+          icon: Icons.event_note_outlined,
+          activeIcon: Icons.event_note_rounded,
+          route: AppRoutes.physioSessions,
+        ),
+        NavItem(
+          label: 'Earnings',
+          icon: Icons.account_balance_wallet_outlined,
+          activeIcon: Icons.account_balance_wallet_rounded,
+          route: AppRoutes.physioEarnings,
+        ),
+        NavItem(
+          label: 'Profile',
+          icon: Icons.person_outline_rounded,
+          activeIcon: Icons.person_rounded,
+          route: AppRoutes.physioProfile,
+        ),
+      ];
+    case AppRole.counsellor:
+      return const [
+        NavItem(
+          label: 'Dashboard',
+          icon: Icons.space_dashboard_outlined,
+          activeIcon: Icons.space_dashboard_rounded,
+          route: AppRoutes.counsellingDashboard,
+        ),
+        NavItem(
+          label: 'Sessions',
+          icon: Icons.event_note_outlined,
+          activeIcon: Icons.event_note_rounded,
+          route: AppRoutes.counsellingSessions,
+        ),
+        NavItem(
+          label: 'Earnings',
+          icon: Icons.account_balance_wallet_outlined,
+          activeIcon: Icons.account_balance_wallet_rounded,
+          route: AppRoutes.counsellingEarnings,
+        ),
+        NavItem(
+          label: 'Profile',
+          icon: Icons.person_outline_rounded,
+          activeIcon: Icons.person_rounded,
+          route: AppRoutes.counsellingProfile,
+        ),
+      ];
+    case AppRole.nutritionist:
+      return const [
+        NavItem(
+          label: 'Dashboard',
+          icon: Icons.space_dashboard_outlined,
+          activeIcon: Icons.space_dashboard_rounded,
+          route: AppRoutes.nutritionDashboard,
+        ),
+        NavItem(
+          label: 'Appointments',
+          icon: Icons.event_note_outlined,
+          activeIcon: Icons.event_note_rounded,
+          route: AppRoutes.nutritionAppointments,
+        ),
+        NavItem(
+          label: 'Earnings',
+          icon: Icons.account_balance_wallet_outlined,
+          activeIcon: Icons.account_balance_wallet_rounded,
+          route: AppRoutes.nutritionEarnings,
+        ),
+        NavItem(
+          label: 'Profile',
+          icon: Icons.person_outline_rounded,
+          activeIcon: Icons.person_rounded,
+          route: AppRoutes.nutritionProfile,
+        ),
+      ];
     case AppRole.admin:
       // No feature module exists yet for this role — the app shell should
       // hide role-switching to it (or show a "coming soon" state) rather

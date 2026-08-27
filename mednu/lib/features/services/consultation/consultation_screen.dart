@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
 import '../../../core/constants/app_text_styles.dart';
+import '../../../core/constants/therapy_specialties.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/utils/r.dart';
 import '../../../core/widgets/ux_widgets.dart';
@@ -88,7 +89,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
         .collection('doctors')
         .where('status', isEqualTo: 'active');
     if (widget.therapistsOnly) {
-      doctorsQuery = doctorsQuery.where('type', isEqualTo: 'therapist');
+      doctorsQuery = doctorsQuery.where('specialty', whereIn: kTherapySpecialties);
     }
     _doctorSub = doctorsQuery
         .limit(150)
@@ -122,7 +123,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
         .where('status', isEqualTo: 'active')
         .where('isOnline', isEqualTo: true);
     if (widget.therapistsOnly) {
-      onlineQuery = onlineQuery.where('type', isEqualTo: 'therapist');
+      onlineQuery = onlineQuery.where('specialty', whereIn: kTherapySpecialties);
     }
     _onlineDoctorSub = onlineQuery
         .limit(50)
@@ -170,7 +171,6 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
       'name': d['name'] as String? ?? 'Doctor',
       'specialty': specialty,
       'photoUrl': d['photoUrl'] as String? ?? '',
-      'rating': (d['rating'] as num?)?.toDouble() ?? 0.0,
       'fee': '₹${d['fee'] ?? '0'}',
       'available': isOnline,
       'wait': waitLabel,
@@ -1234,10 +1234,6 @@ class _QuickConnectCard extends StatelessWidget {
                 const SizedBox(height: 6),
                 Row(
                   children: [
-                    const Icon(Icons.star_rounded, size: 13, color: Colors.amber),
-                    const SizedBox(width: 3),
-                    Text('${doctor['rating']}', style: AppTextStyles.labelSmall),
-                    const SizedBox(width: 10),
                     // Estimated wait time badge
                     Flexible(
                       child: Container(
@@ -1513,11 +1509,8 @@ class _DoctorCard extends StatelessWidget {
                   Text(doctor['specialty'], style: AppTextStyles.bodySmall),
                   const SizedBox(height: 8),
                   Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      const Icon(Icons.star_rounded, size: 14, color: Colors.amber),
-                      const SizedBox(width: 3),
-                      Text('${doctor['rating']}', style: AppTextStyles.labelSmall),
-                      const Spacer(),
                       Text(doctor['fee'],
                           style: AppTextStyles.labelLarge.copyWith(color: AppColors.primary)),
                     ],
@@ -1598,9 +1591,6 @@ class _BookingConfirmSheetState extends State<_BookingConfirmSheet> {
       final totalFee = consultFee + 20;
 
       final db = FirebaseFirestore.instance;
-      final apptRef = db.collection('appointments').doc();
-      final payRef  = db.collection('payments').doc();
-      final now = Timestamp.now();
 
       // Resolve patient name from Firestore (phone-auth users have no displayName)
       String patientName = user?.displayName ?? user?.phoneNumber ?? 'Patient';
@@ -1610,34 +1600,41 @@ class _BookingConfirmSheetState extends State<_BookingConfirmSheet> {
         if (fsName.isNotEmpty) patientName = fsName;
       } catch (_) {}
 
-      final batch = db.batch();
-      batch.set(apptRef, {
-        'doctorId': widget.doctor['uid'] ?? '',
-        'doctorName': widget.doctor['name'],
-        'doctorSpecialty': widget.doctor['specialty'],
-        'patientId': uid,
-        'patientName': patientName,
-        'date': widget.date,
-        'time': widget.time,
-        'consultationType': widget.type,
-        'fee': totalFee,
-        'status': 'booked',
-        'chiefComplaint': _chiefComplaintCtrl.text.trim(),
-        'createdAt': now,
-        'updatedAt': now,
-      });
-      batch.set(payRef, {
-        'userId': uid,
-        'doctorId': widget.doctor['uid'] ?? '',
-        'appointmentId': apptRef.id,
-        'amount': totalFee,
-        'type': 'appointment',
-        'status': 'paid',
-        'createdAt': Timestamp.now(),
-      });
-      await batch.commit();
+      if (!mounted) return;
+      // ── Open PaymentScreen — this used to write the appointment + a
+      // 'status: paid' payment doc directly, with no gateway call at all
+      // (a phantom-paid booking anyone could trigger for free). It now goes
+      // through the same capturePayment path as every other booking type:
+      // the appointment doc is only created after a real, server-verified
+      // charge — see PaymentScreen/functions/index.js.
+      final result = await context.push<Map<String, dynamic>>(
+        AppRoutes.payment,
+        extra: {
+          'amount': totalFee.toString(),
+          'description': 'Consultation with ${widget.doctor['name'] ?? 'Doctor'} · ${widget.time} · ${widget.type}',
+          'serviceType': widget.type.toLowerCase() == 'video' ? 'video_consultation' : 'consultation',
+          'bookingCollection': 'appointments',
+          'bookingData': {
+            'doctorId': widget.doctor['uid'] ?? '',
+            'doctorName': widget.doctor['name'],
+            'doctorSpecialty': widget.doctor['specialty'],
+            'patientName': patientName,
+            'date': widget.date,
+            'time': widget.time,
+            'consultationType': widget.type,
+            'fee': totalFee,
+            'status': 'booked',
+            'chiefComplaint': _chiefComplaintCtrl.text.trim(),
+          },
+        },
+      );
 
       if (!mounted) return;
+      if (result?['bookingId'] == null) {
+        setState(() => _isLoading = false);
+        return;
+      }
+
       // Capture messenger and router BEFORE Navigator.pop() — after pop the
       // sheet's context is deactivated and ScaffoldMessenger.of() would throw,
       // which would be silently caught and shown as a booking failure.

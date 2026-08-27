@@ -944,7 +944,6 @@ class _DoctorCard extends StatelessWidget {
     final spec = doc['specialty'] as String? ?? doc['speciality'] as String? ?? '';
     final qual = doc['qualifications'] as String? ?? '';
     final isOnline = doc['isOnline'] as bool? ?? false;
-    final rating = (doc['rating'] as num?)?.toDouble() ?? 0.0;
     final fee = doc['fee'] as int?;
     final exp = doc['experience'] as int?;
     final initial = name.isNotEmpty ? name[0] : 'D';
@@ -1025,18 +1024,6 @@ class _DoctorCard extends StatelessWidget {
                   const SizedBox(height: 6),
                   Row(
                     children: [
-                      if (rating > 0) ...[
-                        const Icon(Icons.star_rounded,
-                            size: 12, color: Colors.amber),
-                        const SizedBox(width: 3),
-                        Text(
-                          rating.toStringAsFixed(1),
-                          style: AppTextStyles.labelSmall.copyWith(
-                            color: isDark ? Colors.white70 : context.appTextPrimary,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                      ],
                       if (exp != null) ...[
                         Text(
                           '$exp yrs exp',

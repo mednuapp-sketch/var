@@ -22,6 +22,7 @@ class MyServicesService {
       _consultationsStream(uid),
       _serviceRequestsStream(uid),
       _nutritionStream(uid),
+      _ordersStream(uid),
     ]);
   }
 
@@ -41,6 +42,8 @@ class MyServicesService {
           return UnifiedBooking.fromServiceRequest(d, snap.id);
         case BookingSource.nutrition:
           return UnifiedBooking.fromNutrition(d, snap.id);
+        case BookingSource.medicineOrder:
+          return UnifiedBooking.fromOrder(d, snap.id);
       }
     });
   }
@@ -155,6 +158,22 @@ class MyServicesService {
             .toList());
   }
 
+  /// Medicine orders from the cart-checkout `orders` collection (previously
+  /// only surfaced via the separate `orders` feature's own screens — see
+  /// mednu/lib/features/orders/ — never folded into this unified stream).
+  static Stream<List<UnifiedBooking>> _ordersStream(String uid) {
+    return _db
+        .collection('orders')
+        .where('patientId', isEqualTo: uid)
+        .orderBy('createdAt', descending: true)
+        .limit(_historyLimit)
+        .snapshots()
+        .handleError((e) => debugPrint('MyServicesService: orders stream error: $e'))
+        .map((s) => s.docs
+            .map((d) => UnifiedBooking.fromOrder(d.data(), d.id))
+            .toList());
+  }
+
   // ── Stream merger ───────────────────────────────────────────────────────────
 
   static Stream<List<UnifiedBooking>> _mergeStreams(
@@ -216,6 +235,7 @@ class MyServicesService {
       case BookingSource.consultation:   return 'consultations';
       case BookingSource.serviceRequest: return 'service_requests';
       case BookingSource.nutrition:      return 'nutrition_appointments';
+      case BookingSource.medicineOrder:  return 'orders';
     }
   }
 }

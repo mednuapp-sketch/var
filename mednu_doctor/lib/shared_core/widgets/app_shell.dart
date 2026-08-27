@@ -127,6 +127,12 @@ String _profileRouteForRole(AppRole role) {
       return AppRoutes.ambulanceVehicleProfile;
     case AppRole.caregiver:
       return AppRoutes.caregiverProfile;
+    case AppRole.physiotherapist:
+      return AppRoutes.physioProfile;
+    case AppRole.counsellor:
+      return AppRoutes.counsellingProfile;
+    case AppRole.nutritionist:
+      return AppRoutes.nutritionProfile;
     case AppRole.admin:
       return AppRoutes.editProfile;
   }

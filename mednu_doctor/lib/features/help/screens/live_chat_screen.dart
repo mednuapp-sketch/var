@@ -39,28 +39,38 @@ class _LiveChatScreenState extends State<LiveChatScreen> {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
     _uid = uid;
-    final data = await DoctorAuthService.getProfile(uid);
-    _doctorName = data?['name'] as String? ?? 'Doctor';
+    try {
+      final data = await DoctorAuthService.getProfile(uid);
+      _doctorName = data?['name'] as String? ?? 'Doctor';
 
-    // Ensure chat doc exists
-    final chatRef = FirebaseFirestore.instance.collection('support_chats').doc(uid);
-    final snap = await chatRef.get();
-    if (!snap.exists) {
-      await chatRef.set({
-        'doctorId':      uid,
-        'doctorName':    _doctorName,
-        'status':        'open',
-        'lastMessage':   'Chat started',
-        'lastMessageAt': FieldValue.serverTimestamp(),
-        'unreadByAdmin': 0,
-        'unreadByDoctor': 0,
-        'createdAt':     FieldValue.serverTimestamp(),
-        'doctorTyping':  false,
-        'adminTyping':   false,
-      });
-    } else {
-      // Reset unread for doctor on open
-      await chatRef.update({'unreadByDoctor': 0});
+      // Ensure chat doc exists
+      final chatRef = FirebaseFirestore.instance.collection('support_chats').doc(uid);
+      final snap = await chatRef.get();
+      if (!snap.exists) {
+        await chatRef.set({
+          'doctorId':      uid,
+          'doctorName':    _doctorName,
+          'status':        'open',
+          'lastMessage':   'Chat started',
+          'lastMessageAt': FieldValue.serverTimestamp(),
+          'unreadByAdmin': 0,
+          'unreadByDoctor': 0,
+          'createdAt':     FieldValue.serverTimestamp(),
+          'doctorTyping':  false,
+          'adminTyping':   false,
+        });
+      } else {
+        // Reset unread for doctor on open
+        await chatRef.update({'unreadByDoctor': 0});
+      }
+    } catch (e) {
+      if (!mounted) return;
+      _doctorName ??= 'Doctor';
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text(
+                'Could not connect to support chat — check your connection and try again.')),
+      );
     }
   }
 

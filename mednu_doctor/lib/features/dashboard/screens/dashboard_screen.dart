@@ -446,7 +446,9 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
           child: Column(
             children: [
               // Online/Offline toggle
-              Container(
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeInOut,
                 margin: EdgeInsets.all(R.p(context, 16)),
                 padding: EdgeInsets.all(R.p(context, 18)),
                 decoration: BoxDecoration(
@@ -685,269 +687,11 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                   );
                 },
               ),
-              // Feedback quick-access card
-              _FeedbackSummaryCard(uid: DoctorAuthService.currentUid),
-              const SizedBox(height: 12),
-              // Reviews quick-access card
-              _ReviewsSummaryCard(uid: DoctorAuthService.currentUid),
               const SizedBox(height: 80),
             ],
           ),
         ),
       ],
-    );
-  }
-}
-
-// ── FEEDBACK SUMMARY CARD ────────────────────────────────────────────────────
-class _FeedbackSummaryCard extends StatelessWidget {
-  final String? uid;
-  const _FeedbackSummaryCard({required this.uid});
-
-  @override
-  Widget build(BuildContext context) {
-    if (uid == null) return const SizedBox();
-
-    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
-          .collection('feedbacks')
-          .where('doctorId', isEqualTo: uid)
-          .orderBy('createdAt', descending: true)
-          .limit(3)
-          .snapshots(),
-      builder: (context, snap) {
-        final docs = snap.data?.docs ?? [];
-        final allRatings = docs
-            .map((d) => (d.data()['rating'] as int?) ?? 0)
-            .where((r) => r > 0)
-            .toList();
-        final avg = allRatings.isEmpty
-            ? null
-            : allRatings.reduce((a, b) => a + b) / allRatings.length;
-
-        return GestureDetector(
-          onTap: () => context.push(AppRoutes.feedback),
-          child: Container(
-            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: AppColors.divider),
-            ),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [
-                Container(
-                  width: 38, height: 38,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFF8E1),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(Icons.reviews_rounded, color: Color(0xFFFFA000), size: 20),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    const Text('Patient Feedback', style: AppTextStyles.labelLarge),
-                    if (avg != null)
-                      Text(
-                        'Avg rating: ${avg.toStringAsFixed(1)} ⭐  •  ${docs.length} recent',
-                        style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
-                      )
-                    else
-                      Text('No feedback yet', style: AppTextStyles.caption.copyWith(color: AppColors.textHint)),
-                  ]),
-                ),
-                const Icon(Icons.chevron_right_rounded, color: AppColors.textHint),
-              ]),
-              if (docs.isNotEmpty) ...[
-                const SizedBox(height: 10),
-                const Divider(height: 1),
-                const SizedBox(height: 10),
-                ...docs.map((d) {
-                  final data = d.data();
-                  final name    = data['patientName'] as String? ?? 'Patient';
-                  final rating  = data['rating']      as int?    ?? 0;
-                  final feeling = data['feeling']      as String? ?? '';
-                  final comment = data['comment']      as String? ?? '';
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Row(children: [
-                      if (rating > 0) ...[
-                        ...List.generate(rating, (_) => const Icon(Icons.star_rounded, color: Color(0xFFFFA000), size: 12)),
-                        ...List.generate(5 - rating, (_) => const Icon(Icons.star_outline_rounded, color: AppColors.textHint, size: 12)),
-                        const SizedBox(width: 6),
-                      ],
-                      Expanded(
-                        child: Text(
-                          comment.isNotEmpty ? '"$comment"' : feeling,
-                          maxLines: 1, overflow: TextOverflow.ellipsis,
-                          style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        name,
-                        style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.w600),
-                      ),
-                    ]),
-                  );
-                }),
-              ],
-            ]),
-          ),
-        );
-      },
-    );
-  }
-}
-
-// ── REVIEWS SUMMARY CARD ─────────────────────────────────────────────────────
-class _ReviewsSummaryCard extends StatelessWidget {
-  final String? uid;
-  const _ReviewsSummaryCard({required this.uid});
-
-  @override
-  Widget build(BuildContext context) {
-    if (uid == null) return const SizedBox();
-
-    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
-          .collection('doctor_rating_summary')
-          .doc(uid)
-          .snapshots(),
-      builder: (context, summarySnap) {
-        final sData = summarySnap.data?.data();
-        final avg = (sData?['averageRating'] as num?)?.toDouble();
-        final total = (sData?['totalReviews'] as num?)?.toInt() ?? 0;
-
-        return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-          stream: FirebaseFirestore.instance
-              .collection('doctor_reviews')
-              .where('doctorId', isEqualTo: uid)
-              .where('isFlagged', isEqualTo: false)
-              .orderBy('createdAt', descending: true)
-              .limit(2)
-              .snapshots(),
-          builder: (context, reviewsSnap) {
-            final recent = reviewsSnap.data?.docs ?? [];
-
-            return GestureDetector(
-              onTap: () => context.push(AppRoutes.reviews),
-              child: Container(
-                margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: AppColors.divider),
-                ),
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                  Row(children: [
-                    Container(
-                      width: 38,
-                      height: 38,
-                      decoration: BoxDecoration(
-                        color: Colors.amber.withValues(alpha:0.12),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(Icons.star_rounded,
-                          color: Colors.amber, size: 20),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                        const Text('Patient Reviews',
-                            style: AppTextStyles.labelLarge),
-                        avg != null && total > 0
-                            ? Text(
-                                '${avg.toStringAsFixed(1)} ⭐  •  $total verified review${total != 1 ? 's' : ''}',
-                                style: AppTextStyles.caption
-                                    .copyWith(color: AppColors.textSecondary),
-                              )
-                            : Text('No reviews yet',
-                                style: AppTextStyles.caption
-                                    .copyWith(color: AppColors.textHint)),
-                      ]),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: AppColors.accent.withValues(alpha:0.1),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Row(mainAxisSize: MainAxisSize.min, children: [
-                        const Icon(Icons.verified_rounded,
-                            size: 10, color: AppColors.accent),
-                        const SizedBox(width: 3),
-                        Text('Verified',
-                            style: AppTextStyles.caption
-                                .copyWith(color: AppColors.accentText)),
-                      ]),
-                    ),
-                    const SizedBox(width: 4),
-                    const Icon(Icons.chevron_right_rounded,
-                        color: AppColors.textHint),
-                  ]),
-                  if (recent.isNotEmpty) ...[
-                    const SizedBox(height: 10),
-                    const Divider(height: 1),
-                    const SizedBox(height: 10),
-                    ...recent.map((doc) {
-                      final d = doc.data();
-                      final name =
-                          d['patientName'] as String? ?? 'Patient';
-                      final rating =
-                          (d['rating'] as num?)?.toDouble() ?? 0;
-                      final text =
-                          d['reviewText'] as String? ?? '';
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 6),
-                        child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                          Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: List.generate(
-                                  5,
-                                  (i) => Icon(
-                                        i < rating
-                                            ? Icons.star_rounded
-                                            : Icons.star_outline_rounded,
-                                        size: 11,
-                                        color: Colors.amber,
-                                      ))),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                              Text(name,
-                                  style: AppTextStyles.caption.copyWith(
-                                      fontWeight: FontWeight.w600)),
-                              if (text.isNotEmpty)
-                                Text(text,
-                                    style: AppTextStyles.caption.copyWith(
-                                        color: AppColors.textSecondary),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis),
-                            ]),
-                          ),
-                        ]),
-                      );
-                    }),
-                  ],
-                ]),
-              ),
-            );
-          },
-        );
-      },
     );
   }
 }
@@ -966,8 +710,6 @@ class _RealStatsRow extends StatelessWidget {
           const _StatCard('Today\'s Earnings', '₹0', Icons.currency_rupee_rounded, Color(0xFF1565C0)),
           SizedBox(width: R.p(context, 10)),
           const _StatCard('Consultations', '0', Icons.video_call_rounded, AppColors.secondary),
-          SizedBox(width: R.p(context, 10)),
-          const _StatCard('Rating', '–', Icons.star_rounded, Color(0xFFF57F17)),
         ]),
       );
     }
@@ -985,37 +727,13 @@ class _RealStatsRow extends StatelessWidget {
         final totalEarnings = docs.fold<num>(0, (acc, d) => acc + ((d.data()['fee'] as num?) ?? 0));
         final consultations = docs.length;
 
-        return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-          stream: FirebaseFirestore.instance
-              .collection('doctor_rating_summary')
-              .doc(uid)
-              .snapshots(),
-          builder: (context, ratingSnap) {
-            final rData = ratingSnap.data?.data();
-            final avg = (rData?['averageRating'] as num?)?.toDouble();
-            final total = (rData?['totalReviews'] as num?)?.toInt() ?? 0;
-            final ratingLabel = avg != null && total > 0
-                ? '${avg.toStringAsFixed(1)} ⭐'
-                : '–';
-            return Padding(
-              padding: EdgeInsets.symmetric(horizontal: R.p(context, 16)),
-              child: Row(children: [
-                _StatCard('Today\'s Earnings', '₹${NumberFormat('#,##0').format(totalEarnings)}', Icons.currency_rupee_rounded, const Color(0xFF1565C0)),
-                SizedBox(width: R.p(context, 10)),
-                _StatCard('Consultations', '$consultations', Icons.video_call_rounded, AppColors.secondary),
-                SizedBox(width: R.p(context, 10)),
-                GestureDetector(
-                  onTap: () => context.push(AppRoutes.reviews),
-                  child: _StatCard(
-                    total > 0 ? '$total Reviews' : 'Rating',
-                    ratingLabel,
-                    Icons.star_rounded,
-                    const Color(0xFFF57F17),
-                  ),
-                ),
-              ]),
-            );
-          },
+        return Padding(
+          padding: EdgeInsets.symmetric(horizontal: R.p(context, 16)),
+          child: Row(children: [
+            _StatCard('Today\'s Earnings', '₹${NumberFormat('#,##0').format(totalEarnings)}', Icons.currency_rupee_rounded, const Color(0xFF1565C0)),
+            SizedBox(width: R.p(context, 10)),
+            _StatCard('Consultations', '$consultations', Icons.video_call_rounded, AppColors.secondary),
+          ]),
         );
       },
     );
@@ -2114,14 +1832,6 @@ class _EarningsTab extends StatelessWidget {
                       : '–',
                   Icons.check_circle_rounded,
                   AppColors.success,
-                ),
-                const SizedBox(width: 12),
-                StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-                  stream: DoctorAuthService.profileStream(uid),
-                  builder: (context, profileSnap) {
-                    final rating = (profileSnap.data?.data()?['rating'] as num?)?.toStringAsFixed(1) ?? '–';
-                    return _QuickEarnCard('Patient Rating', '$rating ⭐', Icons.star_rounded, const Color(0xFFF57F17));
-                  },
                 ),
               ]),
               const SizedBox(height: 20),

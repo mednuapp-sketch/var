@@ -967,7 +967,9 @@ class _AmbulanceScreenState extends ConsumerState<AmbulanceScreen> {
 
   Widget _buildSuccess() {
     final bottom = MediaQuery.of(context).padding.bottom;
-    return SafeArea(
+    return Scaffold(
+      backgroundColor: context.appBackground,
+      body: SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: SingleChildScrollView(
@@ -1049,6 +1051,7 @@ class _AmbulanceScreenState extends ConsumerState<AmbulanceScreen> {
             ],
           ),
         ),
+      ),
       ),
     );
   }

@@ -104,131 +104,165 @@ class TermsOfServiceScreen extends StatelessWidget {
             // ── Terms sections ────────────────────────────────────
             const _TermsSection(
               number: 1,
-              title: 'Acceptance of Terms',
-              body: 'By downloading, installing, or using the MedNU application ("App"), you '
-                  'agree to be legally bound by these Terms of Service ("Terms"). If you do not '
-                  'agree to these Terms, do not use the App.\n\n'
-                  'These Terms constitute a legally binding agreement between you and MedNU '
-                  'Healthcare Services Private Limited ("Company", "we", "us", "our").',
+              title: 'About MedNU',
+              body: 'MedNU is a technology platform that connects patients with independent '
+                  'doctors, diagnostic centres, pharmacies, and other healthcare service '
+                  'providers. MedNU does not provide medical treatment, diagnosis, '
+                  'prescriptions, or healthcare services directly.',
             ),
 
             const _TermsSection(
               number: 2,
-              title: 'Description of Services',
-              body: 'MedNU provides a digital healthcare facilitation platform that includes:\n\n'
-                  '• Telemedicine — video and chat consultations with licensed doctors\n'
-                  '• Appointment booking with hospitals and independent practitioners\n'
-                  '• Health tracking — vitals, water intake, period tracker, and more\n'
-                  '• Prescription management and digital health records\n'
-                  '• Emergency service coordination and ambulance assistance\n\n'
-                  'MedNU acts as an intermediary and is not itself a healthcare provider. All '
-                  'medical services are rendered by independent, licensed professionals.',
+              title: 'Eligibility',
+              body: 'You must be at least 18 years old to register and use the Platform. If '
+                  'registering a minor, the parent or legal guardian shall be responsible for '
+                  'the minor\'s use of the Platform.',
             ),
 
             const _TermsSection(
               number: 3,
-              title: 'User Accounts & Responsibilities',
-              body: 'To access MedNU you must:\n\n'
-                  '• Be at least 18 years of age (or have parental consent)\n'
-                  '• Provide accurate, complete, and up-to-date registration information\n'
-                  '• Maintain the confidentiality of your account credentials and MPIN\n'
-                  '• Immediately notify us of any unauthorised use of your account\n\n'
-                  'You agree not to:\n\n'
-                  '• Use the App for any unlawful purpose\n'
-                  '• Upload false, misleading, or harmful content\n'
-                  '• Attempt to circumvent the App\'s security features\n'
-                  '• Harass, abuse, or threaten healthcare providers or staff',
+              title: 'User Responsibility',
+              body: 'You agree to:\n\n'
+                  '• Provide accurate and complete information.\n'
+                  '• Maintain confidentiality of your login credentials and OTPs.\n'
+                  '• Use the Platform only for lawful purposes.\n'
+                  '• Provide correct medical history, reports, and health information.\n\n'
+                  'You shall be solely responsible for any consequences arising from incorrect '
+                  'or incomplete information provided by you.',
             ),
 
             const _TermsSection(
               number: 4,
-              title: 'Medical Disclaimer',
-              body: 'MedNU is NOT a substitute for professional medical advice, diagnosis, or '
-                  'treatment. The App facilitates access to licensed healthcare providers but '
-                  'does not itself provide medical care.\n\n'
-                  'In a medical emergency, seek immediate help from your nearest hospital '
-                  'or emergency services. Do not rely on this App '
-                  'as a primary response to any life-threatening situation.\n\n'
-                  'Always follow the advice of your qualified healthcare provider. Never '
-                  'disregard professional medical advice or delay seeking it because of '
-                  'something you read or did in MedNU.',
+              title: 'Telemedicine Consent',
+              body: 'By booking an online consultation, you consent to receive healthcare '
+                  'services through video, audio, or chat as permitted under applicable laws '
+                  'and Telemedicine Practice Guidelines.\n\n'
+                  'You understand that online consultations have limitations and may require '
+                  'physical examination or further testing.',
             ),
 
             const _TermsSection(
               number: 5,
-              title: 'Payment Terms & Refunds',
-              body: 'All payments are processed securely via Razorpay. By making a payment '
-                  'you agree to Razorpay\'s Terms of Service.\n\n'
-                  'Refund Policy:\n'
-                  '• Cancelled appointments (>24 hours notice) — full refund within 5–7 business days\n'
-                  '• Cancelled appointments (<24 hours notice) — 50% refund\n'
-                  '• Completed consultations — non-refundable\n'
-                  '• Technical failures attributable to MedNU — full refund\n\n'
-                  'Wallet credits are non-transferable and expire after 12 months of account inactivity.',
+              title: 'Diagnostics and Pharmacy Services',
+              body: 'Diagnostic tests and pharmacy services are provided by independent '
+                  'partner laboratories and pharmacies. MedNU is not responsible for the '
+                  'accuracy of test results, medicine availability, treatment outcomes, or '
+                  'delays caused by such partners.',
             ),
 
             const _TermsSection(
               number: 6,
-              title: 'Cancellation Policy',
-              body: 'You may cancel a booked appointment free of charge up to 24 hours '
-                  'before the scheduled time. Cancellations made within 24 hours of the '
-                  'appointment will be eligible for a 50% refund only.\n\n'
-                  'Doctors and healthcare providers retain the right to cancel appointments '
-                  'in exceptional circumstances. In such cases, a full refund will be issued '
-                  'automatically within 3 business days.',
+              title: 'Fees and Payments',
+              body: 'All applicable charges will be displayed before booking or purchase. '
+                  'Payments are processed through secure third-party payment gateways.\n\n'
+                  'Refunds and cancellations shall be governed by the applicable Refund and '
+                  'Cancellation Policy.',
             ),
 
             const _TermsSection(
               number: 7,
-              title: 'Intellectual Property',
-              body: 'All content, design, trademarks, logos, source code, and intellectual '
-                  'property within MedNU belong to MedNU Healthcare Services Private Limited '
-                  'or its licensors.\n\n'
-                  'You may not reproduce, distribute, modify, or create derivative works '
-                  'from any part of the App without our prior written permission. Unauthorised '
-                  'use may result in account termination and legal action.',
+              title: 'Privacy and Health Data',
+              body: 'Your personal and health information will be collected, stored, '
+                  'processed, and shared with relevant healthcare providers, laboratories, '
+                  'and pharmacies solely for providing requested services and in accordance '
+                  'with applicable laws and our Privacy Policy.',
             ),
 
             const _TermsSection(
               number: 8,
-              title: 'Limitation of Liability',
-              body: 'To the maximum extent permitted by applicable law, MedNU shall not be '
-                  'liable for any indirect, incidental, special, consequential, or punitive '
-                  'damages — including loss of profits, data, goodwill, or health outcomes — '
-                  'arising out of or in connection with:\n\n'
-                  '• Your use of or reliance on the App or its content\n'
-                  '• Actions or advice of any healthcare provider on the platform\n'
-                  '• Delays, errors, or outages in the technology infrastructure\n'
-                  '• Unauthorised access to or alteration of your data',
+              title: 'Emergency Disclaimer',
+              body: 'MedNU is not an emergency medical service.\n\n'
+                  'For any medical emergency or life-threatening condition, immediately '
+                  'contact emergency services or visit the nearest hospital.',
             ),
 
             const _TermsSection(
               number: 9,
-              title: 'Privacy',
-              body: 'Your use of MedNU is also governed by our Privacy Policy, which is '
-                  'incorporated into these Terms by reference. Please review it to understand '
-                  'our data collection, use, and protection practices.\n\n'
-                  'By using the App, you consent to the collection and use of your information '
-                  'as described in the Privacy Policy.',
+              title: 'Limitation of Liability',
+              body: 'MedNU acts only as a facilitator platform.\n\n'
+                  'To the maximum extent permitted by law, MedNU shall not be liable for:\n\n'
+                  '• Medical advice, diagnosis, treatment, prescriptions, or healthcare '
+                  'outcomes.\n'
+                  '• Acts, omissions, negligence, or misconduct of doctors, laboratories, '
+                  'pharmacies, or other service providers.\n'
+                  '• Indirect, incidental, consequential, or special damages arising from use '
+                  'of the Platform.',
             ),
 
             const _TermsSection(
               number: 10,
-              title: 'Governing Law',
-              body: 'These Terms shall be governed by and construed in accordance with the '
-                  'laws of India. Any disputes arising under or in connection with these Terms '
-                  'shall be subject to the exclusive jurisdiction of the courts in Bengaluru, '
-                  'Karnataka, India.',
+              title: 'Suspension of Account',
+              body: 'MedNU reserves the right to suspend or terminate any account found to be '
+                  'violating these Terms, providing false information, or misusing the '
+                  'Platform.',
             ),
 
             const _TermsSection(
               number: 11,
-              title: 'Contact Information',
-              body: 'For questions, concerns, or notices regarding these Terms:\n\n'
-                  'MedNU Healthcare Services Private Limited\n'
-                  'Email: legal@mednu.in\n'
-                  'India',
+              title: 'Intellectual Property',
+              body: 'All trademarks, logos, software, content, and intellectual property '
+                  'associated with MedNU remain the exclusive property of MedNU and may not '
+                  'be copied or used without prior written permission.',
+            ),
+
+            const _TermsSection(
+              number: 12,
+              title: 'Governing Law',
+              body: 'These Terms shall be governed by the laws of India and subject to the '
+                  'exclusive jurisdiction of the courts at Visakhapatnam, Andhra Pradesh.',
+            ),
+
+            const _TermsSection(
+              number: 13,
+              title: 'Consent',
+              body: 'By clicking "I Accept", registering an account, or using the Platform, '
+                  'you confirm that:\n\n'
+                  '• You have read and understood these Terms.\n'
+                  '• You voluntarily agree to be legally bound by them.\n'
+                  '• You consent to electronic communications and electronic records.\n'
+                  '• You understand the nature and limitations of telemedicine and online '
+                  'healthcare services.\n'
+                  '• You agree to the collection and processing of your personal and health '
+                  'information for providing services through the Platform.',
               isLast: true,
+            ),
+
+            const SizedBox(height: 16),
+
+            // ── Final acceptance statement ─────────────────────────
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+              decoration: BoxDecoration(
+                color: context.appPrimarySoft,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: context.appPrimary.withValues(alpha: 0.25),
+                ),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.verified_rounded,
+                    color: context.appPrimary,
+                    size: 22,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'I HAVE READ, UNDERSTOOD, AND AGREE TO THESE TERMS AND CONDITIONS.',
+                      style: TextStyle(fontFamily: 'Poppins',
+                        color: context.appTextPrimary,
+                        fontSize: 13,
+                        height: 1.6,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.2,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
 
             const SizedBox(height: 32),

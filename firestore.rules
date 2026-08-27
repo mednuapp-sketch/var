@@ -27,28 +27,61 @@ service cloud.firestore {
         exists(/databases/$(database)/documents/doctors/$(request.auth.uid));
     }
 
-    // Check if user has a Lab & Diagnostics partner profile
+    // Check if user has an approved Lab & Diagnostics partner profile.
+    // Requires `status == 'active'`, not mere existence of the profile doc —
+    // every call site below is "may this account see/claim an UNCLAIMED
+    // booking", and an admin-unapproved ('pending') registration must not
+    // be able to touch real patient bookings just because it self-created a
+    // profile doc (the `create` rule lets any authenticated user do that;
+    // approval is what's supposed to gate real access).
     function isLabPartner() {
       return isAuth() &&
-        exists(/databases/$(database)/documents/lab_profiles/$(request.auth.uid));
+        exists(/databases/$(database)/documents/lab_profiles/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/lab_profiles/$(request.auth.uid)).data.status == 'active';
     }
 
-    // Check if user has a Pharmacy & Medical Equipment partner profile
+    // Check if user has an approved Pharmacy & Medical Equipment partner
+    // profile. See isLabPartner() above for why `status == 'active'` is
+    // required rather than mere existence.
     function isPharmacyPartner() {
       return isAuth() &&
-        exists(/databases/$(database)/documents/pharmacy_profiles/$(request.auth.uid));
+        exists(/databases/$(database)/documents/pharmacy_profiles/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/pharmacy_profiles/$(request.auth.uid)).data.status == 'active';
     }
 
-    // Check if user has an Ambulance partner profile
+    // Check if user has an approved Ambulance partner profile. See
+    // isLabPartner() above for why `status == 'active'` is required rather
+    // than mere existence.
     function isAmbulancePartner() {
       return isAuth() &&
-        exists(/databases/$(database)/documents/ambulance_profiles/$(request.auth.uid));
+        exists(/databases/$(database)/documents/ambulance_profiles/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/ambulance_profiles/$(request.auth.uid)).data.status == 'active';
     }
 
-    // Check if user has a Caregiver partner profile
+    // Check if user has an approved Caregiver partner profile. See
+    // isLabPartner() above for why `status == 'active'` is required rather
+    // than mere existence.
     function isCaregiverPartner() {
       return isAuth() &&
-        exists(/databases/$(database)/documents/caregiver_profiles/$(request.auth.uid));
+        exists(/databases/$(database)/documents/caregiver_profiles/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/caregiver_profiles/$(request.auth.uid)).data.status == 'active';
+    }
+
+    // Check if user has an approved Physiotherapy partner profile — same
+    // active-status gate as isLabPartner() and friends above.
+    function isPhysiotherapistPartner() {
+      return isAuth() &&
+        exists(/databases/$(database)/documents/physiotherapist_profiles/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/physiotherapist_profiles/$(request.auth.uid)).data.status == 'active';
+    }
+
+    // Check if user has a Counselling partner profile. See
+    // isPhysiotherapistPartner() above for why this checks `status ==
+    // 'active'` rather than mere existence.
+    function isCounsellorPartner() {
+      return isAuth() &&
+        exists(/databases/$(database)/documents/counsellor_profiles/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/counsellor_profiles/$(request.auth.uid)).data.status == 'active';
     }
 
     // Validate that a write doesn't modify protected fields
@@ -120,10 +153,48 @@ service cloud.firestore {
       // (Admin SDK bypasses rules), exactly like the *_transactions ledgers. No
       // client — owner or otherwise — may write them, which closes the review
       // forgery path where any signed-in user could set an arbitrary rating.
-      allow create: if isOwner(doctorId) || isAdmin();
-      allow update: if (isOwner(doctorId) &&
-                         doesNotModify(['status', 'rating', 'totalReviews', 'totalConsultations', 'reviewCount', 'earnings', 'verificationStatus'])) ||
-                       isAdmin();
+      // A self-registering account (isOwner path) must start 'pending' —
+      // without this, any authenticated user could `set()` their own
+      // doctors/{uid} with `status: 'active'` and appear as an approved,
+      // publicly bookable doctor with zero admin review (the read rule
+      // above gates public visibility on `status` alone). Also blocks
+      // self-writing 'admin' into `roles`: real admin status is decided
+      // solely by the separate, client-unwritable `admins` collection
+      // (see isAdmin()), so this doesn't grant any actual Firestore
+      // privilege today — but `roles` is also what the app's own UI role
+      // engine reads (shared_core/models/app_role.dart), so leaving this
+      // open would let an account label/route itself as "Admin" in-app and
+      // become a live landmine the moment any admin feature module starts
+      // trusting that role for something real. rating/totalReviews/
+      // totalConsultations are pinned to their zero defaults too, for the
+      // same reason as the *_profiles collections below: the update rule
+      // already blocks the owner from changing them later, so a fake value
+      // set at creation would otherwise survive forever, including past
+      // legitimate admin approval to 'active' (i.e. becoming a publicly
+      // visible fake rating). Both real registration flows
+      // (DoctorAuthService.registerDoctor, PartnerRoleRegisterScreen)
+      // already always write status: 'pending', ratings at 0, and never
+      // write 'admin' into roles, so this matches existing behaviour
+      // rather than changing it.
+      allow create: if isAdmin() ||
+                       (isOwner(doctorId) &&
+                        request.resource.data.status == 'pending' &&
+                        (!('roles' in request.resource.data) ||
+                         !('admin' in request.resource.data.roles)) &&
+                        (!('rating' in request.resource.data) || request.resource.data.rating == 0) &&
+                        (!('totalReviews' in request.resource.data) || request.resource.data.totalReviews == 0) &&
+                        (!('totalConsultations' in request.resource.data) || request.resource.data.totalConsultations == 0));
+      // `roles` is deliberately NOT in the protected-fields list above — an
+      // owner legitimately updates it via arrayUnion when adding a second
+      // partner service (see PartnerRoleRegisterScreen). But it must never
+      // be updatable to a value containing 'admin' by anyone but an actual
+      // admin, or the same escalation the create rule closes above would
+      // still be reachable via update on an already-existing account.
+      allow update: if isAdmin() ||
+                       (isOwner(doctorId) &&
+                        doesNotModify(['status', 'rating', 'totalReviews', 'totalConsultations', 'reviewCount', 'earnings', 'verificationStatus']) &&
+                        (!('roles' in request.resource.data) ||
+                         !('admin' in request.resource.data.roles)));
       allow delete: if isAdmin();
 
       // Doctor reviews subcollection
@@ -416,7 +487,13 @@ service cloud.firestore {
       allow read: if isAuth() && (
         isOwner(labId) || isAdmin() || resource.data.status == 'active'
       );
-      allow create: if isOwner(labId);
+      // Fixed to 'pending'/false so a self-registering lab can't set either
+      // to its "verified" value in the very same write that creates the
+      // document — which would make isLabPartner()'s active-status check
+      // above meaningless.
+      allow create: if isOwner(labId) &&
+                       request.resource.data.status == 'pending' &&
+                       request.resource.data.isVerified == false;
       // A lab can update its own profile but not self-approve/self-verify
       // or inflate its own rating. Verification documents are submitted
       // once, up front, during registration — once admin has approved the
@@ -442,7 +519,12 @@ service cloud.firestore {
         isAdmin() ||
         // Already-owning lab: any workflow-field update, but only along a
         // valid status transition and never touching the immutable core.
+        // `labId` itself is pinned here (not just listed in the immutable
+        // fields, which only covers patient/booking fields) — otherwise an
+        // owning lab could reassign a claimed booking to an arbitrary UID
+        // mid-transition, bypassing the claim-from-null branch below.
         (resource.data.labId == request.auth.uid &&
+          request.resource.data.labId == resource.data.labId &&
           doesNotModify(_diagnosticBookingImmutableFields()) &&
           _validLabTransition(resource.data.status, request.resource.data.status)) ||
         // Claiming an unclaimed booking: labId must move from null to the
@@ -513,7 +595,11 @@ service cloud.firestore {
       allow read: if isAuth() && (
         isOwner(pharmacyId) || isAdmin() || resource.data.status == 'active'
       );
-      allow create: if isOwner(pharmacyId);
+      // See lab_profiles' create rule above for why status/isVerified are
+      // fixed here rather than left to the client.
+      allow create: if isOwner(pharmacyId) &&
+                       request.resource.data.status == 'pending' &&
+                       request.resource.data.isVerified == false;
       // See lab_profiles' update rule above for why `documents` locks once
       // `status == 'active'`.
       allow update: if (isOwner(pharmacyId) &&
@@ -542,7 +628,11 @@ service cloud.firestore {
       );
       allow update: if isAuth() && (
         isAdmin() ||
+        // `pharmacyId` is pinned here (see diagnostic_bookings' equivalent
+        // branch for why) so an owning pharmacy can't reassign a claimed
+        // order to an arbitrary UID mid-transition.
         (resource.data.pharmacyId == request.auth.uid &&
+          request.resource.data.pharmacyId == resource.data.pharmacyId &&
           doesNotModify(_pharmacyOrderImmutableFields()) &&
           _validPharmacyTransition(resource.data.status, request.resource.data.status)) ||
         // Claiming an unclaimed order: pharmacyId moves from null to the
@@ -607,7 +697,11 @@ service cloud.firestore {
       allow read: if isAuth() && (
         isOwner(ambulanceId) || isAdmin() || resource.data.status == 'active'
       );
-      allow create: if isOwner(ambulanceId);
+      // See lab_profiles' create rule above for why status/isVerified are
+      // fixed here rather than left to the client.
+      allow create: if isOwner(ambulanceId) &&
+                       request.resource.data.status == 'pending' &&
+                       request.resource.data.isVerified == false;
       // A partner can update its own profile but not self-approve/self-verify
       // or inflate its own rating/trip count. See lab_profiles' update rule
       // above for why `documents` locks once `status == 'active'`.
@@ -628,8 +722,12 @@ service cloud.firestore {
       allow update: if isAuth() && (
         isAdmin() ||
         // Already-owning partner: workflow updates along a valid transition
-        // only, never touching the immutable core.
+        // only, never touching the immutable core. `ambulanceId` is pinned
+        // here (see diagnostic_bookings' equivalent branch for why) so an
+        // owning partner can't reassign a claimed request to an arbitrary
+        // UID mid-transition.
         (resource.data.ambulanceId == request.auth.uid &&
+          request.resource.data.ambulanceId == resource.data.ambulanceId &&
           doesNotModify(_ambulanceRequestImmutableFields()) &&
           _validAmbulanceTransition(resource.data.status, request.resource.data.status)) ||
         // Claiming an unclaimed request: ambulanceId moves from null to the
@@ -690,7 +788,11 @@ service cloud.firestore {
       allow read: if isAuth() && (
         isOwner(caregiverId) || isAdmin() || resource.data.status == 'active'
       );
-      allow create: if isOwner(caregiverId);
+      // See lab_profiles' create rule above for why status/isVerified are
+      // fixed here rather than left to the client.
+      allow create: if isOwner(caregiverId) &&
+                       request.resource.data.status == 'pending' &&
+                       request.resource.data.isVerified == false;
       // See lab_profiles' update rule above for why `documents` locks once
       // `status == 'active'`.
       allow update: if (isOwner(caregiverId) &&
@@ -709,7 +811,11 @@ service cloud.firestore {
       );
       allow update: if isAuth() && (
         isAdmin() ||
+        // `caregiverId` is pinned here (see diagnostic_bookings' equivalent
+        // branch for why) so an owning caregiver can't reassign a claimed
+        // visit to an arbitrary UID mid-transition.
         (resource.data.caregiverId == request.auth.uid &&
+          request.resource.data.caregiverId == resource.data.caregiverId &&
           doesNotModify(_caregiverVisitImmutableFields()) &&
           _validCaregiverTransition(resource.data.status, request.resource.data.status)) ||
         // Claiming an unclaimed visit: caregiverId moves from null to the
@@ -760,6 +866,139 @@ service cloud.firestore {
       // Immutable ledger — written only by the Cloud Function mirror on the
       // completed edge.
       allow write: if false;
+    }
+
+    // ── Physiotherapy & Counselling partner modules ──────────────────────────
+    // Additive collections only — `service_requests` is never written by
+    // either client; a Cloud Function mirrors between it and
+    // `physio_sessions`/`counselling_sessions`. See functions/index.js.
+    // Single-practitioner services (unlike Lab/Pharmacy): claiming a session
+    // is a single write, exactly like Ambulance — providerId moves from null
+    // to the caller and status moves from 'pending' to 'accepted' or
+    // 'cancelled' (decline) in the same write, never claim-and-complete.
+
+    function _sessionImmutableFields() {
+      return [
+        'sourceRequestId', 'type', 'patientId', 'patientName', 'patientPhone',
+        'address', 'preferredDate', 'preferredTime', 'notes', 'price',
+        'amount', 'sessionTitle', 'createdAt'
+      ];
+    }
+
+    // Shared by physio_sessions and counselling_sessions — same shape as
+    // Ambulance's _validAmbulanceTransition.
+    function _validSessionTransition(before, after) {
+      let allowed = {
+        'pending':  ['accepted', 'cancelled'],
+        'accepted': ['in_progress', 'cancelled'],
+        'in_progress': ['completed'],
+      };
+      return before == after || (before in allowed && after in allowed[before]);
+    }
+
+    match /physio_sessions/{sessionId} {
+      allow read: if isAuth() && (
+        resource.data.patientId == request.auth.uid ||
+        resource.data.physiotherapistId == request.auth.uid ||
+        (resource.data.physiotherapistId == null && isPhysiotherapistPartner()) ||
+        isAdmin()
+      );
+      allow update: if isAuth() && (
+        isAdmin() ||
+        // Already-owning provider: workflow updates along a valid transition
+        // only. `physiotherapistId` itself is pinned here (not just listed in
+        // _sessionImmutableFields, which only covers patient/booking fields)
+        // — otherwise an owning provider could reassign a claimed session to
+        // an arbitrary UID mid-transition, bypassing the claim-from-null path
+        // below entirely and forging who a patient-visible session mirrors
+        // back to service_requests as `assignedTo`.
+        (resource.data.physiotherapistId == request.auth.uid &&
+          request.resource.data.physiotherapistId == resource.data.physiotherapistId &&
+          doesNotModify(_sessionImmutableFields()) &&
+          _validSessionTransition(resource.data.status, request.resource.data.status)) ||
+        // Claiming an unclaimed session: physiotherapistId moves from null to
+        // the caller, and the resulting status can only be 'accepted' (claim)
+        // or 'cancelled' (declining a session nobody had taken yet).
+        (resource.data.physiotherapistId == null && isPhysiotherapistPartner() &&
+          request.resource.data.physiotherapistId == request.auth.uid &&
+          doesNotModify(_sessionImmutableFields()) &&
+          request.resource.data.status in ['accepted', 'cancelled'])
+      );
+      // Created only by the Cloud Function mirror (Admin SDK bypasses rules).
+      allow create, delete: if isAdmin();
+    }
+
+    match /physio_transactions/{txId} {
+      allow read: if isAuth() && (resource.data.physiotherapistId == request.auth.uid || isAdmin());
+      // Immutable ledger — written only by the Cloud Function mirror on the
+      // completed edge.
+      allow write: if false;
+    }
+
+    match /physiotherapist_profiles/{physiotherapistId} {
+      allow read: if isAuth() && (
+        isOwner(physiotherapistId) || isAdmin() || resource.data.status == 'active'
+      );
+      // Unlike the older partner-profile collections (whose `create` rule
+      // has no field restriction at all), this requires a brand-new profile
+      // to start in 'pending' — otherwise a self-registering user could set
+      // `status: 'active'` in the very same write that creates the document,
+      // making isPhysiotherapistPartner()'s active-status check meaningless.
+      allow create: if isOwner(physiotherapistId) &&
+                       request.resource.data.status == 'pending' &&
+                       request.resource.data.isVerified == false;
+      // See lab_profiles' update rule above for why `documents` locks once
+      // `status == 'active'`.
+      allow update: if (isOwner(physiotherapistId) &&
+                         doesNotModify(['status', 'isVerified', 'rating', 'totalReviews', 'totalSessions', 'documentVerification']) &&
+                         (resource.data.status != 'active' || doesNotModify(['documents']))) ||
+                       isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /counselling_sessions/{sessionId} {
+      allow read: if isAuth() && (
+        resource.data.patientId == request.auth.uid ||
+        resource.data.counsellorId == request.auth.uid ||
+        (resource.data.counsellorId == null && isCounsellorPartner()) ||
+        isAdmin()
+      );
+      allow update: if isAuth() && (
+        isAdmin() ||
+        // See physio_sessions' equivalent branch above for why
+        // `counsellorId` is pinned here, not just listed in the immutable
+        // fields helper.
+        (resource.data.counsellorId == request.auth.uid &&
+          request.resource.data.counsellorId == resource.data.counsellorId &&
+          doesNotModify(_sessionImmutableFields()) &&
+          _validSessionTransition(resource.data.status, request.resource.data.status)) ||
+        (resource.data.counsellorId == null && isCounsellorPartner() &&
+          request.resource.data.counsellorId == request.auth.uid &&
+          doesNotModify(_sessionImmutableFields()) &&
+          request.resource.data.status in ['accepted', 'cancelled'])
+      );
+      allow create, delete: if isAdmin();
+    }
+
+    match /counselling_transactions/{txId} {
+      allow read: if isAuth() && (resource.data.counsellorId == request.auth.uid || isAdmin());
+      allow write: if false;
+    }
+
+    match /counsellor_profiles/{counsellorId} {
+      allow read: if isAuth() && (
+        isOwner(counsellorId) || isAdmin() || resource.data.status == 'active'
+      );
+      // See physiotherapist_profiles' create rule above for why `status`/`isVerified`
+      // can't be self-set to their "verified" values at creation.
+      allow create: if isOwner(counsellorId) &&
+                       request.resource.data.status == 'pending' &&
+                       request.resource.data.isVerified == false;
+      allow update: if (isOwner(counsellorId) &&
+                         doesNotModify(['status', 'isVerified', 'rating', 'totalReviews', 'totalSessions', 'documentVerification']) &&
+                         (resource.data.status != 'active' || doesNotModify(['documents']))) ||
+                       isAdmin();
+      allow delete: if isAdmin();
     }
 
     // ── Booking support chat ───────────────────────────────────────────────────
@@ -857,13 +1096,89 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
-    // ── Payments (written on booking, read by admin) ──────────────────────────
+    // ── Payments — the unified escrow ledger (Payment Distribution & ──────────
+    // Settlement Engine, functions/index.js). Written exclusively by
+    // capturePayment/issueRefund/the settlement functions via the Admin SDK,
+    // which bypasses these rules entirely — so `allow write: if false` here
+    // is absolute, not just "admin console only". A client was previously
+    // able to `create` one of these directly (matching only on `userId`),
+    // which is what made the consultation_screen.dart phantom-paid booking
+    // possible; that hole is closed by removing client create entirely.
     match /payments/{paymentId} {
       allow read: if isAuth() && (
-        resource.data.userId == request.auth.uid || isAdmin()
+        resource.data.patientId == request.auth.uid ||
+        resource.data.providerId == request.auth.uid ||
+        isAdmin()
       );
-      allow create: if isAuth() && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if isAdmin();
+      allow write: if false;
+    }
+
+    // ── Commission rules — admin-configured, read by capturePayment ───────────
+    match /commission_rules/{serviceType} {
+      allow read: if isAuth();
+      allow write: if false; // setCommissionRule (Admin SDK) only
+    }
+
+    // ── Coupons ─────────────────────────────────────────────────────────────
+    match /coupons/{couponCode} {
+      allow read: if isAuth();
+      allow write: if false; // createCoupon/updateCoupon/toggleCoupon/deactivateCoupon only
+
+      match /redemptions/{userId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow write: if false; // capturePayment (Admin SDK) only
+      }
+    }
+
+    // ── Festival campaigns — simple admin CRUD, same pattern as banners ───────
+    match /campaigns/{campaignId} {
+      allow read: if true; // public — patient home banner carousel
+      allow write: if isAdmin();
+    }
+
+    // ── Settlements — batched provider payouts ────────────────────────────────
+    match /settlements/{settlementId} {
+      allow read: if isAuth() && (
+        resource.data.providerId == request.auth.uid || isAdmin()
+      );
+      allow write: if false; // approveSettlement/holdSettlement/markSettlementPaid/etc only
+    }
+
+    // ── Settlement frequency config (daily/weekly/monthly/manual) ─────────────
+    match /settlement_config/{docId} {
+      allow read: if isAuth();
+      allow write: if isAdmin();
+    }
+
+    // ── Provider wallets — real-time balance doc, one per provider, any ────────
+    // vertical (doctor/lab/pharmacy/ambulance/caregiver share this collection)
+    match /provider_wallets/{providerId} {
+      allow read: if isOwner(providerId) || isAdmin();
+      allow write: if false; // settlement engine (Admin SDK) only
+    }
+
+    // ── Provider-side notification center — mirrors patient_notifications ─────
+    match /provider_notifications/{providerId}/items/{itemId} {
+      allow read: if isOwner(providerId) || isAdmin();
+      allow update: if isOwner(providerId) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead']);
+      allow create, delete: if false;
+    }
+
+    // ── Refunds ─────────────────────────────────────────────────────────────
+    match /refunds/{refundId} {
+      allow read: if isAuth() && (
+        resource.data.patientId == request.auth.uid ||
+        resource.data.providerId == request.auth.uid ||
+        isAdmin()
+      );
+      allow write: if false; // issueRefund (Admin SDK) only
+    }
+
+    // ── Audit logs — every admin financial action, immutable ──────────────────
+    match /audit_logs/{logId} {
+      allow read: if isAdmin();
+      allow write: if false;
     }
 
     // ── Favourite doctors subcollection ───────────────────────────────────────
@@ -873,14 +1188,28 @@ service cloud.firestore {
 
     // ── Nutrition appointments ────────────────────────────────────────────────
     match /nutrition_appointments/{apptId} {
+      // The nutritionist is chosen by the patient at booking time (like a
+      // doctor appointment, unlike the claim-from-a-pool pattern every other
+      // partner module uses) — `nutritionistId` is already set on create, so
+      // the assigned nutritionist just needs read/limited-update access to
+      // their own appointments. There is no separate `nutrition_profiles`
+      // partner-onboarding flow: `nutritionists/{uid}` stays admin-curated
+      // (see below), and the Partner app's Nutrition module is only usable
+      // by an account an admin has already granted the role + catalogue
+      // entry to.
       allow read: if isAuth() && (
-        resource.data.userId == request.auth.uid || isAdmin()
+        resource.data.userId == request.auth.uid ||
+        resource.data.nutritionistId == request.auth.uid ||
+        isAdmin()
       );
       allow create: if isAuth() && request.resource.data.userId == request.auth.uid;
       allow update: if isAuth() && (
         (resource.data.userId == request.auth.uid &&
           request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly(['status', 'updatedAt'])) ||
+        (resource.data.nutritionistId == request.auth.uid &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['status', 'updatedAt', 'providerNotes'])) ||
         isAdmin()
       );
       allow delete: if isAdmin();

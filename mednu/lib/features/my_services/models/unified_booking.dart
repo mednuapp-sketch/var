@@ -5,6 +5,7 @@ enum BookingSource {
   consultation,
   serviceRequest,
   nutrition,
+  medicineOrder,
 }
 
 enum BookingStatus {
@@ -20,6 +21,9 @@ enum BookingStatus {
   completed,
   cancelled,
   rescheduled,
+  verified,
+  packed,
+  outForDelivery,
 }
 
 extension BookingStatusX on BookingStatus {
@@ -37,6 +41,9 @@ extension BookingStatusX on BookingStatus {
       case BookingStatus.completed:           return 'Completed';
       case BookingStatus.cancelled:           return 'Cancelled';
       case BookingStatus.rescheduled:         return 'Rescheduled';
+      case BookingStatus.verified:            return 'Verified';
+      case BookingStatus.packed:              return 'Packed';
+      case BookingStatus.outForDelivery:      return 'Out for Delivery';
     }
   }
 }
@@ -109,6 +116,9 @@ class UnifiedBooking {
       case 'started':             return BookingStatus.inProgress;
       case 'consultation_started':return BookingStatus.consultationStarted;
       case 'sample_collected':    return BookingStatus.sampleCollected;
+      case 'verified':            return BookingStatus.verified;
+      case 'packed':              return BookingStatus.packed;
+      case 'out_for_delivery':    return BookingStatus.outForDelivery;
       case 'delivered':           return BookingStatus.delivered;
       case 'completed':           return BookingStatus.completed;
       case 'cancelled':
@@ -216,6 +226,51 @@ class UnifiedBooking {
     );
   }
 
+  /// From the `orders` collection (mednu/lib/features/cart/screens/
+  /// cart_screen.dart's medicine checkout) — the one booking source that
+  /// isn't itself a request/appointment, so `date`/`time` are derived from
+  /// `createdAt` rather than a patient-picked slot, and `providerName` is
+  /// left null (the pharmacy isn't identified to the patient by name today).
+  factory UnifiedBooking.fromOrder(Map<String, dynamic> d, String id) {
+    final items = (d['items'] as List?) ?? const [];
+    String? firstItemName;
+    if (items.isNotEmpty && items.first is Map) {
+      firstItemName = (items.first as Map)['name'] as String?;
+    }
+    final createdAt = _tsToDate(d['createdAt']);
+    return UnifiedBooking(
+      id: id,
+      source: BookingSource.medicineOrder,
+      serviceType: 'Pharmacy Delivery',
+      serviceName: firstItemName ?? 'Medicine Order',
+      date: createdAt != null
+          ? '${createdAt.day}/${createdAt.month}/${createdAt.year}'
+          : '',
+      time: '',
+      status: _parseStatus(d['status'] as String?),
+      address: d['deliveryAddress'] as String?,
+      amount: (d['total'] as num?)?.toDouble(),
+      rawData: d,
+      createdAt: createdAt,
+      updatedAt: _tsToDate(d['updatedAt']),
+    );
+  }
+
+  /// True only for a medicine order still waiting on a prescription
+  /// decision — driven by the same boolean fields `OrderModel.
+  /// needsPrescriptionDecision` already uses, not by a status string:
+  /// `prescription_required` is a `pharmacy_orders`-only status that never
+  /// lands on `orders.status` (see functions/index.js's pharmacy module).
+  bool get needsPrescriptionDecision =>
+      source == BookingSource.medicineOrder &&
+      rawData['prescriptionUrl'] != null &&
+      rawData['prescriptionVerified'] == null;
+
+  /// True for a medicine order whose uploaded prescription was rejected.
+  bool get prescriptionWasRejected =>
+      source == BookingSource.medicineOrder &&
+      rawData['prescriptionVerified'] == false;
+
   // ── Helpers ────────────────────────────────────────────────────────────────
 
   static String _serviceTypeLabel(String type) {
@@ -286,8 +341,11 @@ class UnifiedBooking {
       case BookingStatus.pending:
       case BookingStatus.requested:           return 0;
       case BookingStatus.confirmed:
-      case BookingStatus.rescheduled:         return 1;
-      case BookingStatus.assigned:            return 2;
+      case BookingStatus.rescheduled:
+      case BookingStatus.verified:
+      case BookingStatus.packed:              return 1;
+      case BookingStatus.assigned:
+      case BookingStatus.outForDelivery:      return 2;
       case BookingStatus.onTheWay:
       case BookingStatus.inProgress:
       case BookingStatus.consultationStarted: return 3;
@@ -352,6 +410,16 @@ class UnifiedBooking {
           {'title': 'Request Confirmed', 'desc': 'Service provider confirmed your request'},
           {'title': 'Service Started', 'desc': 'Service is currently in progress'},
           {'title': 'Service Completed', 'desc': 'Your service has been completed'},
+        ];
+      case BookingSource.medicineOrder:
+        // Same copy as the serviceRequest 'medicine'/'medicine_delivery'
+        // branch above, for consistency — 'verified'/'packed' both read as
+        // still-preparing (step 1) until 'out_for_delivery' advances it.
+        return [
+          {'title': 'Order Placed', 'desc': 'Medicine order submitted'},
+          {'title': 'Order Confirmed', 'desc': 'Pharmacy has confirmed your order'},
+          {'title': 'Out for Delivery', 'desc': 'Delivery partner is on the way'},
+          {'title': 'Delivered', 'desc': 'Order delivered to your doorstep'},
         ];
     }
   }

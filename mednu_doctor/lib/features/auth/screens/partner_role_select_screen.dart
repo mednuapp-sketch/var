@@ -33,12 +33,19 @@ class PartnerRoleSelectScreen extends StatelessWidget {
   bool get _isAddingToExistingAccount => existingRoles.isNotEmpty;
 
   /// The self-registerable roles, in the order they are offered.
+  /// [AppRole.nutritionist] is deliberately absent, same reasoning as
+  /// [AppRole.admin]: `nutritionists/{uid}` is an admin-curated catalogue
+  /// the patient app books directly from, so that role is never
+  /// self-registerable here — an admin grants it alongside the catalogue
+  /// entry. See firestore.rules' Phase A scope note for the full reasoning.
   static const _allSelectableRoles = <AppRole>[
     AppRole.doctor,
     AppRole.lab,
     AppRole.pharmacy,
     AppRole.ambulance,
     AppRole.caregiver,
+    AppRole.physiotherapist,
+    AppRole.counsellor,
   ];
 
   List<AppRole> get _offeredRoles => _isAddingToExistingAccount
@@ -60,7 +67,12 @@ class PartnerRoleSelectScreen extends StatelessWidget {
         builder: (_) => PartnerRoleRegisterScreen(role: role),
       ));
     } else {
-      context.go(AppRoutes.partnerRoleRegister, extra: role);
+      // The role travels via the URL path itself (not `extra`) — see the
+      // route's own builder in app_router.dart for why: `extra` doesn't
+      // survive Android reclaiming this Activity while the registration
+      // form's document-upload step has an external app (camera/gallery/
+      // file picker) in the foreground.
+      context.go('${AppRoutes.partnerRoleRegister}/${role.firestoreValue}');
     }
   }
 

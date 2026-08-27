@@ -3582,16 +3582,34 @@ function initOverviewRealtime() {
   // Doctors count — realtime
   _overviewUnsubscribes.push(
     db.collection('doctors').onSnapshot(snap => {
+      // Non-Doctor partners (Lab/Pharmacy/Ambulance/Caregiver) also write a
+      // sparse doctors/{uid} base-identity doc — see
+      // partner_role_register_screen.dart, which explicitly documents this
+      // as "the universal base identity document every role in this app
+      // shares". Without this filter, every partner registration was
+      // counted, listed, and notified here as if it were a doctor — a Lab
+      // signup showed up as "New Doctor Registration" and sat forever in
+      // the Pending Doctors widget (its real approval lives on
+      // lab_profiles/{uid}, which "Approve" here never touches). A doc
+      // reads as an actual doctor iff `roles` is absent/empty (legacy
+      // doctor-only accounts predating the `roles` field) or explicitly
+      // contains 'doctor' — mirrors AppRoleX.listFrom's own default.
+      const isDoctorDoc = (d) => {
+        const roles = Array.isArray(d.roles) ? d.roles : null;
+        return !roles || roles.length === 0 || roles.includes('doctor');
+      };
+      const doctorDocs = snap.docs.filter(d => isDoctorDoc(d.data()));
+
       const el = document.getElementById('stat-doctors');
-      if (el) { el.textContent = snap.size.toLocaleString(); el.classList.add('stat-updated'); setTimeout(() => el.classList.remove('stat-updated'), 500); }
+      if (el) { el.textContent = doctorDocs.length.toLocaleString(); el.classList.add('stat-updated'); setTimeout(() => el.classList.remove('stat-updated'), 500); }
       // Pending list
-      const pendingDocs = snap.docs.filter(d => { const s = d.data().status; return !s || s === 'pending'; }).slice(0, 5);
+      const pendingDocs = doctorDocs.filter(d => { const s = d.data().status; return !s || s === 'pending'; }).slice(0, 5);
       renderPendingList(pendingDocs);
       // Notify new doctors
       snap.docChanges().forEach(change => {
         if (change.type === 'added') {
           const d = change.doc.data();
-          if (!d.status || d.status === 'pending') {
+          if (isDoctorDoc(d) && (!d.status || d.status === 'pending')) {
             addSystemNotif('doctor_reg', { id: change.doc.id, name: d.name || 'New doctor', specialty: d.specialty || d.specialisation || d.specialization || '' });
           }
         }
@@ -7718,7 +7736,20 @@ function _setPartnerStatus(role, id, status, btn, successMsg) {
   });
 }
 
-function approvePartner(role, id, btn)  { _setPartnerStatus(role, id, 'active', btn, PARTNER_ROLES[role].label + ' approved'); }
+function approvePartner(role, id, btn) {
+  const cfg  = PARTNER_ROLES[role];
+  const p    = _partnerData[role].find(x => x.id === id);
+  const docs = (p && p.documents) || {};
+  const vers = (p && p.documentVerification) || {};
+  const slots = Object.keys(cfg.docSlots);
+  const allVerified = slots.length > 0 &&
+    slots.every(k => _partnerDocStatus(docs[k] || null, vers[k] || null) === 'verified');
+  if (!allVerified) {
+    showToast('Verify every required document before approving.');
+    return;
+  }
+  _setPartnerStatus(role, id, 'active', btn, cfg.label + ' approved');
+}
 function activatePartner(role, id, btn) { _setPartnerStatus(role, id, 'active', btn, PARTNER_ROLES[role].label + ' activated'); }
 
 function deactivatePartner(role, id, btn) {
@@ -8030,7 +8061,10 @@ function showPartnerModal(role, id) {
   // `documentVerification.{docType}` is written here (admin) only.
   const docs = p.documents || {};
   const vers = p.documentVerification || {};
-  const docHtml = Object.entries(cfg.docSlots).map(([key, label]) => {
+  // Captured alongside the rendered HTML (not recomputed) so the Approve
+  // gate below reads the exact same per-slot status the admin sees in this
+  // modal — every required slot must be individually marked Verified.
+  const docEntries = Object.entries(cfg.docSlots).map(([key, label]) => {
     const doc  = docs[key] || null;
     const ver  = vers[key] || null;
     const stat = _partnerDocStatus(doc, ver);
@@ -8038,7 +8072,7 @@ function showPartnerModal(role, id) {
     const isPdf = doc && doc.contentType === 'application/pdf';
     const reason = stat === 'rejected' && ver && ver.reason ? ver.reason : '';
 
-    return `<div class="partner-doc-item">
+    const html = `<div class="partner-doc-item">
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;">
         <span style="font-size:12px;font-weight:700;color:var(--text-secondary);">${escHtml(label)}</span>
         <span class="${chip.cls}">${escHtml(chip.label)}</span>
@@ -8060,7 +8094,10 @@ function showPartnerModal(role, id) {
         </div>`
       : '<span style="font-size:12px;color:#aaa;font-style:italic;">Not uploaded yet</span>'}
     </div>`;
-  }).join('');
+    return { stat, html };
+  });
+  const docHtml = docEntries.map(e => e.html).join('');
+  const allDocsVerified = docEntries.length > 0 && docEntries.every(e => e.stat === 'verified');
 
   let fields;
   if (role === 'ambulance') {
@@ -8097,6 +8134,7 @@ function showPartnerModal(role, id) {
       ['Email',          p.email || '—'],
       ['Address',        p.address || '—'],
       ['Delivery',       p.deliveryAvailable ? 'Available' : 'Not available'],
+      ['Categories',     (p.categoriesOffered || []).join(', ') || '—'],
       ['Verified',       p.isVerified ? 'Yes' : 'No'],
     ];
   }
@@ -8106,7 +8144,7 @@ function showPartnerModal(role, id) {
   fields.push(['Registered', p.createdAt ? formatDate(p.createdAt) : '—']);
 
   const actionRow = st === 'pending'
-    ? `<button onclick="approvePartner('${role}','${pid}', this)" style="flex:1;min-width:140px;padding:12px;background:#2e7d32;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;">Approve</button>
+    ? `<button onclick="approvePartner('${role}','${pid}', this)" ${allDocsVerified ? '' : 'disabled title="Verify every required document above before approving"'} style="flex:1;min-width:140px;padding:12px;background:${allDocsVerified ? '#2e7d32' : '#bdbdbd'};color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:${allDocsVerified ? 'pointer' : 'not-allowed'};">${allDocsVerified ? 'Approve' : 'Approve (verify docs first)'}</button>
        <button onclick="rejectPartner('${role}','${pid}', this)" style="flex:1;min-width:140px;padding:12px;background:#c62828;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;">Reject</button>`
     : st === 'active'
       ? `<button onclick="deactivatePartner('${role}','${pid}', this)" style="flex:1;min-width:140px;padding:12px;background:#c62828;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;">Deactivate Partner</button>`
@@ -8313,4 +8351,1227 @@ window.switchTab = function (tab, title) {
   if (tab === 'caregiver-partners') loadPartnerEarnings('caregiver');
   if (tab === 'pharmacy-partners')  loadPartnerEarnings('pharmacy');
   if (tab === 'lab-partners')       loadPartnerEarnings('lab');
+};
+
+// ============================================================================
+//   PAYMENT DISTRIBUTION & SETTLEMENT ENGINE — ADMIN UI
+//   Commission Rules · Coupons · Campaigns · Settlement Dashboard · Refunds
+//   Plus: Revenue tab analytics charts (coupon usage, AOV, commission by
+//   service, top providers, refund rate).
+//
+//   Every Cloud Function callable throws HttpsError on failure — always
+//   surfaced via showToast(err.message), matching the rest of this file.
+//   commission_rules / coupons / settlements / refunds / payments are
+//   read-only from this client (writes go through the callables below);
+//   campaigns and settlement_config are simple admin CRUD written directly
+//   with `db`, exactly like the existing Banners section.
+// ============================================================================
+
+const SETTLEMENT_SERVICE_TYPES = ['consultation', 'video_consultation', 'diagnostics', 'medicine', 'pharmacy', 'ambulance', 'caregiver'];
+const SERVICE_TYPE_LABELS = {
+  consultation: 'Consultation',
+  video_consultation: 'Video Consultation',
+  diagnostics: 'Diagnostics',
+  medicine: 'Medicine',
+  pharmacy: 'Pharmacy',
+  ambulance: 'Ambulance',
+  caregiver: 'Caregiver',
+};
+function serviceTypeLabel(s) { return SERVICE_TYPE_LABELS[s] || s || '—'; }
+
+function renderServiceCheckboxes(containerId, selected) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  const sel = new Set(selected || []);
+  el.innerHTML = SETTLEMENT_SERVICE_TYPES.map(s => `
+    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12.5px;color:var(--text-secondary);">
+      <input type="checkbox" class="${containerId}-item" value="${s}" ${sel.has(s) ? 'checked' : ''} />
+      <span>${escHtml(serviceTypeLabel(s))}</span>
+    </label>`).join('');
+}
+function getCheckedServices(containerId) {
+  return Array.from(document.querySelectorAll(`.${containerId}-item:checked`)).map(el => el.value);
+}
+
+// Small inline colored badge — mirrors the ad-hoc badge pattern already used
+// throughout this file (see _renderActiveCalls / _renderMissedCalls) rather
+// than adding new CSS classes.
+function inlineBadge(text, bg, fg) {
+  return `<span style="background:${bg};color:${fg};padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700;white-space:nowrap;">${escHtml(text)}</span>`;
+}
+
+function isoDateOnly(val) {
+  const d = val && val.toDate ? val.toDate() : new Date(val);
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+// Providers may be doctors, labs, pharmacies, ambulances, or caregivers —
+// each keeps its profile in its own collection. Mirrors the exact candidate
+// list and lookup order used by _sendProviderNotification() in
+// functions/index.js so admin-side name resolution matches how the backend
+// already looks providers up (falls back to the raw providerId if no
+// document is found in any of them — not over-engineered further).
+let _providerNameCache = {};
+async function resolveProviderName(providerId) {
+  if (!providerId) return '—';
+  if (_providerNameCache[providerId]) return _providerNameCache[providerId];
+  const candidates = ['doctors', 'lab_profiles', 'pharmacy_profiles', 'ambulance_partners', 'caregivers'];
+  for (const col of candidates) {
+    try {
+      const snap = await db.collection(col).doc(providerId).get();
+      if (snap.exists) {
+        const d = snap.data();
+        const name = d.name || d.driverName || d.businessName || d.title || providerId;
+        _providerNameCache[providerId] = name;
+        return name;
+      }
+    } catch (_) { /* ignore and try next collection */ }
+  }
+  _providerNameCache[providerId] = providerId;
+  return providerId;
+}
+
+// ============================================
+//   COMMISSION RULES
+// ============================================
+let allCommissionRules = {}; // keyed by serviceType
+let _commissionOverridesDraft = {};
+
+async function loadCommissionRules() {
+  try {
+    const snap = await db.collection('commission_rules').get();
+    allCommissionRules = {};
+    snap.forEach(doc => { allCommissionRules[doc.id] = doc.data(); });
+    renderCommissionRulesTable();
+  } catch (err) {
+    console.error('Commission rules load error:', err);
+    const tbody = document.getElementById('commission-rules-tbody');
+    if (tbody) tbody.innerHTML = `<tr><td colspan="6" class="loading">Failed to load: ${escHtml(err.message)}</td></tr>`;
+  }
+}
+
+function renderCommissionRulesTable() {
+  const tbody = document.getElementById('commission-rules-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = SETTLEMENT_SERVICE_TYPES.map(st => {
+    const rule = allCommissionRules[st];
+    let valueLabel = '<span style="color:var(--text-muted);">Not configured</span>';
+    let typeBadge = '—';
+    if (rule) {
+      typeBadge = inlineBadge(rule.type, '#F5E6F0', '#522546');
+      if (rule.type === 'percentage') valueLabel = `${rule.percentage || 0}%`;
+      else if (rule.type === 'fixed') valueLabel = `₹${rule.fixedAmount || 0}`;
+      else if (rule.type === 'hybrid') valueLabel = `${rule.percentage || 0}% + ₹${rule.fixedAmount || 0}`;
+    }
+    const overrideCount = rule && rule.providerOverrides ? Object.keys(rule.providerOverrides).length : 0;
+    const updated = rule && rule.updatedAt ? formatDate(rule.updatedAt) : '—';
+    return `<tr>
+      <td>${escHtml(serviceTypeLabel(st))}</td>
+      <td>${typeBadge}</td>
+      <td>${valueLabel}</td>
+      <td>${overrideCount > 0 ? overrideCount + ' override(s)' : '—'}</td>
+      <td>${escHtml(updated)}</td>
+      <td><button class="btn btn-outline" onclick="editCommissionRule('${st}')"><i class="ti ti-edit"></i> Edit</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function editCommissionRule(serviceType) {
+  const rule = allCommissionRules[serviceType] || { type: 'percentage', percentage: 0, fixedAmount: 0, providerOverrides: {} };
+  document.getElementById('commission-service-type').value = serviceType;
+  document.getElementById('commission-type').value = rule.type || 'percentage';
+  document.getElementById('commission-percentage').value = rule.percentage || '';
+  document.getElementById('commission-fixed').value = rule.fixedAmount || '';
+  _commissionOverridesDraft = { ...(rule.providerOverrides || {}) };
+  renderCommissionOverridesDraft();
+  document.getElementById('commission-form-title').textContent = 'Editing: ' + serviceTypeLabel(serviceType);
+  document.getElementById('cancel-commission-btn').style.display = 'inline-flex';
+  document.getElementById('commission-editor').style.display = 'block';
+  commissionTypeChanged();
+  document.getElementById('tab-commission-rules').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function cancelCommissionRuleEditor() {
+  document.getElementById('commission-editor').style.display = 'none';
+  document.getElementById('cancel-commission-btn').style.display = 'none';
+  document.getElementById('commission-form-title').textContent = 'Commission Rule — select a service below to edit';
+  _commissionOverridesDraft = {};
+}
+
+function commissionTypeChanged() {
+  const type = document.getElementById('commission-type').value;
+  document.getElementById('commission-percentage-group').style.display = (type === 'percentage' || type === 'hybrid') ? 'block' : 'none';
+  document.getElementById('commission-fixed-group').style.display = (type === 'fixed' || type === 'hybrid') ? 'block' : 'none';
+}
+
+function toggleOverridesPanel() {
+  const panel = document.getElementById('commission-overrides-panel');
+  const chevron = document.getElementById('commission-overrides-chevron');
+  const show = panel.style.display === 'none';
+  panel.style.display = show ? 'block' : 'none';
+  if (chevron) chevron.style.transform = show ? 'rotate(180deg)' : 'rotate(0deg)';
+}
+
+function renderCommissionOverridesDraft() {
+  const list = document.getElementById('commission-overrides-list');
+  const count = document.getElementById('commission-overrides-count');
+  const keys = Object.keys(_commissionOverridesDraft);
+  if (count) count.textContent = keys.length ? `(${keys.length})` : '';
+  if (!list) return;
+  if (!keys.length) {
+    list.innerHTML = '<div style="font-size:12px;color:var(--text-muted);">No provider-specific overrides.</div>';
+    return;
+  }
+  list.innerHTML = keys.map(pid => {
+    const o = _commissionOverridesDraft[pid];
+    const valLabel = o.type === 'fixed' ? `₹${o.fixedAmount || 0}` : `${o.percentage || 0}%`;
+    return `<div style="display:flex;align-items:center;gap:8px;font-size:12.5px;background:#f8fafc;padding:6px 10px;border-radius:8px;">
+      <span style="flex:1;font-family:monospace;">${escHtml(pid)}</span>
+      <span>${escHtml(o.type)} · ${valLabel}</span>
+      <button class="btn btn-reject" style="padding:3px 8px;" onclick="removeCommissionOverride('${escHtml(pid)}')" title="Remove override"><i class="ti ti-x"></i></button>
+    </div>`;
+  }).join('');
+}
+
+function addCommissionOverride() {
+  const pidInput = document.getElementById('override-provider-id');
+  const pid = pidInput.value.trim();
+  const type = document.getElementById('override-type').value;
+  const value = parseFloat(document.getElementById('override-value').value);
+  if (!pid) { showToast('Enter a provider ID first'); return; }
+  if (isNaN(value) || value < 0) { showToast('Enter a valid override value'); return; }
+  _commissionOverridesDraft[pid] = type === 'fixed' ? { type, fixedAmount: value } : { type, percentage: value };
+  pidInput.value = '';
+  document.getElementById('override-value').value = '';
+  renderCommissionOverridesDraft();
+}
+
+function removeCommissionOverride(pid) {
+  delete _commissionOverridesDraft[pid];
+  renderCommissionOverridesDraft();
+}
+
+async function saveCommissionRule() {
+  const serviceType = document.getElementById('commission-service-type').value;
+  const type = document.getElementById('commission-type').value;
+  const percentage = parseFloat(document.getElementById('commission-percentage').value) || 0;
+  const fixedAmount = parseFloat(document.getElementById('commission-fixed').value) || 0;
+  const btn = document.getElementById('save-commission-btn');
+  btn.disabled = true;
+  try {
+    await functions.httpsCallable('setCommissionRule')({
+      serviceType, type, percentage, fixedAmount, providerOverrides: _commissionOverridesDraft,
+    });
+    showToast('Commission rule saved ✓');
+    cancelCommissionRuleEditor();
+    loadCommissionRules();
+  } catch (err) {
+    showToast('Save failed: ' + err.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ============================================
+//   COUPONS
+// ============================================
+let allCoupons = [];
+let _editingCouponCode = null;
+
+async function loadCoupons() {
+  try {
+    const snap = await db.collection('coupons').orderBy('createdAt', 'desc').get();
+    allCoupons = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    renderCouponsList(allCoupons);
+    populateCampaignCouponDropdown();
+  } catch (err) {
+    console.error('Coupons load error:', err);
+    const tbody = document.getElementById('coupons-tbody');
+    if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="loading">Failed to load: ${escHtml(err.message)}</td></tr>`;
+  }
+}
+
+function couponDiscountValueSummary(c) {
+  if (c.discountType === 'free_consultation') return 'Free Consultation';
+  if (c.discountType === 'free_delivery') return 'Free Delivery';
+  if (c.discountType === 'cashback') return 'Cashback' + (c.discountValue ? ` ₹${c.discountValue}` : '');
+  if (c.discountType === 'referral') return 'Referral Reward';
+  if (c.discountType === 'percentage') return `${c.discountValue || 0}%` + (c.maxDiscount ? ` (max ₹${c.maxDiscount})` : '');
+  return `₹${c.discountValue || 0}`; // flat
+}
+
+function renderCouponsList(coupons) {
+  const tbody = document.getElementById('coupons-tbody');
+  if (!tbody) return;
+  if (!coupons.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No coupons yet — create one above.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = coupons.map(c => {
+    const validity = (c.startDate || c.endDate)
+      ? `${c.startDate ? formatDate(c.startDate) : 'Anytime'} → ${c.endDate ? formatDate(c.endDate) : 'No end'}`
+      : 'No date restriction';
+    const services = (c.applicableServices && c.applicableServices.length)
+      ? c.applicableServices.map(s => `<span style="display:inline-block;background:#F5E6F0;color:var(--primary);padding:2px 7px;border-radius:8px;font-size:10.5px;margin:1px;">${escHtml(serviceTypeLabel(s))}</span>`).join('')
+      : '<span style="color:var(--text-muted);font-size:11px;">All services</span>';
+    const usage = `${c.usedCount || 0}${c.usageLimit ? ' / ' + c.usageLimit : ''}`;
+    return `<tr>
+      <td style="font-family:monospace;font-weight:700;">${escHtml(c.code)}</td>
+      <td>${escHtml(c.title || '')}</td>
+      <td>${escHtml(couponDiscountValueSummary(c))}</td>
+      <td>${escHtml(usage)}</td>
+      <td style="font-size:12px;">${escHtml(validity)}</td>
+      <td style="max-width:180px;">${services}</td>
+      <td>
+        <label class="toggle-label" title="${c.active ? 'Click to deactivate' : 'Click to activate'}">
+          <input type="checkbox" ${c.active ? 'checked' : ''} onchange="toggleCouponActive('${escHtml(c.code)}', this.checked)" />
+          <span class="toggle-switch"></span>
+        </label>
+      </td>
+      <td style="white-space:nowrap;">
+        <button class="btn btn-outline" onclick="editCoupon('${escHtml(c.code)}')" title="Edit coupon"><i class="ti ti-edit"></i></button>
+        <button class="btn btn-reject" onclick="deactivateCouponConfirm('${escHtml(c.code)}')" title="Deactivate coupon (soft delete — preserves redemption history)"><i class="ti ti-ban"></i></button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function couponDiscountTypeChanged() {
+  const type = document.getElementById('coupon-discount-type').value;
+  const needsValue = !['free_consultation', 'cashback', 'referral'].includes(type);
+  document.getElementById('coupon-discount-value-group').style.display = needsValue ? 'block' : 'none';
+}
+
+function editCoupon(code) {
+  const c = allCoupons.find(x => x.code === code);
+  if (!c) return;
+  _editingCouponCode = code;
+  document.getElementById('coupon-code').value = c.code;
+  document.getElementById('coupon-code').disabled = true;
+  document.getElementById('coupon-title').value = c.title || '';
+  document.getElementById('coupon-description').value = c.description || '';
+  document.getElementById('coupon-discount-type').value = c.discountType;
+  document.getElementById('coupon-discount-value').value = c.discountValue || '';
+  document.getElementById('coupon-max-discount').value = c.maxDiscount != null ? c.maxDiscount : '';
+  document.getElementById('coupon-min-order').value = c.minOrderAmount || '';
+  document.getElementById('coupon-start-date').value = c.startDate ? isoDateOnly(c.startDate) : '';
+  document.getElementById('coupon-end-date').value = c.endDate ? isoDateOnly(c.endDate) : '';
+  document.getElementById('coupon-usage-limit').value = c.usageLimit || '';
+  document.getElementById('coupon-per-user-limit').value = c.perUserLimit || '';
+  document.getElementById('coupon-active').checked = !!c.active;
+  renderServiceCheckboxes('coupon-services-checks', c.applicableServices || []);
+  couponDiscountTypeChanged();
+  document.getElementById('coupon-form-title').textContent = 'Edit Coupon: ' + c.code;
+  document.getElementById('save-coupon-btn').innerHTML = '<i class="ti ti-device-floppy"></i> Save Changes';
+  document.getElementById('cancel-coupon-btn').style.display = 'inline-flex';
+  document.getElementById('tab-coupons').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function cancelCouponEdit() { resetCouponForm(); }
+
+function resetCouponForm() {
+  _editingCouponCode = null;
+  document.getElementById('coupon-code').value = '';
+  document.getElementById('coupon-code').disabled = false;
+  document.getElementById('coupon-title').value = '';
+  document.getElementById('coupon-description').value = '';
+  document.getElementById('coupon-discount-type').value = 'flat';
+  document.getElementById('coupon-discount-value').value = '';
+  document.getElementById('coupon-max-discount').value = '';
+  document.getElementById('coupon-min-order').value = '';
+  document.getElementById('coupon-start-date').value = '';
+  document.getElementById('coupon-end-date').value = '';
+  document.getElementById('coupon-usage-limit').value = '';
+  document.getElementById('coupon-per-user-limit').value = '';
+  document.getElementById('coupon-active').checked = true;
+  renderServiceCheckboxes('coupon-services-checks', []);
+  couponDiscountTypeChanged();
+  document.getElementById('coupon-form-title').textContent = 'Create New Coupon';
+  document.getElementById('save-coupon-btn').innerHTML = '<i class="ti ti-device-floppy"></i> Create Coupon';
+  document.getElementById('cancel-coupon-btn').style.display = 'none';
+}
+
+async function saveCoupon() {
+  const code = document.getElementById('coupon-code').value.trim().toUpperCase();
+  const title = document.getElementById('coupon-title').value.trim();
+  if (!code || !title) { showToast('Coupon code and title are required'); return; }
+  const payload = {
+    code,
+    title,
+    description: document.getElementById('coupon-description').value.trim(),
+    discountType: document.getElementById('coupon-discount-type').value,
+    discountValue: parseFloat(document.getElementById('coupon-discount-value').value) || 0,
+    maxDiscount: document.getElementById('coupon-max-discount').value ? parseFloat(document.getElementById('coupon-max-discount').value) : null,
+    minOrderAmount: parseFloat(document.getElementById('coupon-min-order').value) || 0,
+    startDate: document.getElementById('coupon-start-date').value || null,
+    endDate: document.getElementById('coupon-end-date').value || null,
+    applicableServices: getCheckedServices('coupon-services-checks'),
+    usageLimit: parseInt(document.getElementById('coupon-usage-limit').value, 10) || 0,
+    perUserLimit: parseInt(document.getElementById('coupon-per-user-limit').value, 10) || 0,
+    active: document.getElementById('coupon-active').checked,
+  };
+  const btn = document.getElementById('save-coupon-btn');
+  btn.disabled = true;
+  try {
+    if (_editingCouponCode) {
+      await functions.httpsCallable('updateCoupon')(payload);
+      showToast('Coupon updated ✓');
+    } else {
+      await functions.httpsCallable('createCoupon')(payload);
+      showToast('Coupon created ✓');
+    }
+    resetCouponForm();
+    loadCoupons();
+  } catch (err) {
+    showToast('Save failed: ' + err.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function toggleCouponActive(code, active) {
+  try {
+    await functions.httpsCallable('toggleCoupon')({ code, active });
+    const c = allCoupons.find(x => x.code === code);
+    if (c) c.active = active;
+    showToast(active ? 'Coupon activated ✓' : 'Coupon deactivated');
+    loadCoupons();
+  } catch (err) {
+    showToast('Update failed: ' + err.message);
+    loadCoupons();
+  }
+}
+
+async function deactivateCouponConfirm(code) {
+  if (!confirm(`Deactivate coupon ${code}? This preserves its redemption history — it cannot be permanently deleted.`)) return;
+  try {
+    await functions.httpsCallable('deactivateCoupon')({ code });
+    showToast('Coupon deactivated');
+    loadCoupons();
+  } catch (err) {
+    showToast('Deactivate failed: ' + err.message);
+  }
+}
+
+// ============================================
+//   CAMPAIGNS  (direct Firestore CRUD — structurally a clone of Banners)
+// ============================================
+let allCampaigns = [];
+let _editingCampaignId = null;
+
+async function loadCampaigns() {
+  try {
+    const snap = await db.collection('campaigns').orderBy('createdAt', 'desc').get();
+    allCampaigns = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    renderCampaignsList(allCampaigns);
+  } catch (err) {
+    console.error('Campaigns load error:', err);
+    const el = document.getElementById('campaigns-list');
+    if (el) el.innerHTML = `<div class="empty-state">Failed to load: ${escHtml(err.message)}</div>`;
+  }
+}
+
+function isCampaignActive(c, now = new Date()) {
+  if (!c.active) return false;
+  if (c.startDate && c.startDate.toDate && c.startDate.toDate() > now) return false;
+  if (c.endDate && c.endDate.toDate && c.endDate.toDate() < now) return false;
+  return true;
+}
+
+function getCampaignStatusBadge(c) {
+  const now = new Date();
+  if (!c.active) return '<span class="pill pill-suspended">Disabled</span>';
+  if (c.startDate && c.startDate.toDate && c.startDate.toDate() > now) return '<span class="pill pill-scheduled">Scheduled</span>';
+  if (c.endDate && c.endDate.toDate && c.endDate.toDate() < now) return '<span class="pill pill-expired">Expired</span>';
+  return '<span class="pill pill-active">Active</span>';
+}
+
+function populateCampaignCouponDropdown() {
+  const sel = document.getElementById('campaign-linked-coupon');
+  if (!sel) return;
+  const current = sel.value;
+  sel.innerHTML = '<option value="">None</option>' + allCoupons.map(c =>
+    `<option value="${escHtml(c.code)}">${escHtml(c.code)} — ${escHtml(c.title || '')}</option>`
+  ).join('');
+  sel.value = current || '';
+}
+
+function renderCampaignsList(campaigns) {
+  const el = document.getElementById('campaigns-list');
+  if (!el) return;
+  if (!campaigns.length) {
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon"><i class="ti ti-rocket"></i></div><p>No campaigns yet — create one above.</p></div>';
+    return;
+  }
+  el.innerHTML = campaigns.map(c => {
+    const name = c.name ? escHtml(c.name) : '<em style="color:var(--text-muted)">Untitled Campaign</em>';
+    const startStr = c.startDate ? formatDate(c.startDate) : null;
+    const endStr = c.endDate ? formatDate(c.endDate) : null;
+    const dateRange = (startStr || endStr) ? `${startStr || 'Anytime'} → ${endStr || 'No end date'}` : 'No date restriction';
+    const thumb = c.bannerImageUrl
+      ? `<img class="banner-thumb" src="${escHtml(c.bannerImageUrl)}" alt="${escHtml(c.name || 'Campaign')}" loading="lazy" />`
+      : '<div class="banner-thumb-placeholder"><i class="ti ti-photo"></i></div>';
+    const couponChip = c.linkedCouponId ? `<span class="banner-cta-chip">Coupon: ${escHtml(c.linkedCouponId)}</span>` : '';
+    return `
+    <div class="banner-card" id="campaign-card-${c.id}">
+      ${thumb}
+      <div class="banner-info">
+        <div class="banner-name">${name}</div>
+        <div class="banner-meta">${dateRange}</div>
+        ${couponChip}
+        <div style="margin-top:6px;">${getCampaignStatusBadge(c)}</div>
+      </div>
+      <div class="banner-actions">
+        <label class="toggle-label" title="${c.active ? 'Click to disable' : 'Click to enable'}">
+          <input type="checkbox" ${c.active ? 'checked' : ''} onchange="toggleCampaignActive('${c.id}', this.checked)" />
+          <span class="toggle-switch"></span>
+        </label>
+        <button class="btn btn-outline" onclick="editCampaign('${c.id}')" title="Edit campaign"><i class="ti ti-edit"></i></button>
+        <button class="btn btn-reject" onclick="deleteCampaign('${c.id}', '${escHtml(c.storagePath || '')}', this)" title="Delete campaign"><i class="ti ti-trash"></i></button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function toggleCampaignActive(id, active) {
+  try {
+    await db.collection('campaigns').doc(id).update({ active, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+    const c = allCampaigns.find(x => x.id === id);
+    if (c) c.active = active;
+    showToast(active ? 'Campaign enabled ✓' : 'Campaign disabled');
+    renderCampaignsList(allCampaigns);
+  } catch (err) {
+    showToast('Update failed: ' + err.message);
+  }
+}
+
+async function deleteCampaign(id, storagePath, btn) {
+  if (!confirm('Delete this campaign? This cannot be undone.')) return;
+  btn.disabled = true;
+  try {
+    await db.collection('campaigns').doc(id).delete();
+    if (storagePath) { try { await storage.ref(storagePath).delete(); } catch (_) {} } // non-fatal
+    showToast('Campaign deleted');
+    allCampaigns = allCampaigns.filter(c => c.id !== id);
+    renderCampaignsList(allCampaigns);
+  } catch (err) {
+    btn.disabled = false;
+    showToast('Delete failed: ' + err.message);
+  }
+}
+
+function editCampaign(id) {
+  const c = allCampaigns.find(x => x.id === id);
+  if (!c) return;
+  _editingCampaignId = id;
+  document.getElementById('campaign-name').value = c.name || '';
+  document.getElementById('campaign-desc').value = c.description || '';
+  document.getElementById('campaign-active').checked = !!c.active;
+  document.getElementById('campaign-auto-activate').checked = !!c.autoActivate;
+  document.getElementById('campaign-countdown').checked = !!c.countdownEnabled;
+  document.getElementById('campaign-start-date').value = (c.startDate && c.startDate.toDate) ? toLocalDatetimeString(c.startDate.toDate()) : '';
+  document.getElementById('campaign-end-date').value = (c.endDate && c.endDate.toDate) ? toLocalDatetimeString(c.endDate.toDate()) : '';
+  populateCampaignCouponDropdown();
+  document.getElementById('campaign-linked-coupon').value = c.linkedCouponId || '';
+  renderServiceCheckboxes('campaign-services-checks', c.eligibleServices || []);
+  if (c.bannerImageUrl) {
+    const img = document.getElementById('campaign-preview-img');
+    img.src = c.bannerImageUrl;
+    img.style.display = 'block';
+    document.getElementById('campaign-upload-placeholder').style.display = 'none';
+    document.getElementById('campaign-remove-img').style.display = 'flex';
+  }
+  document.getElementById('campaign-form-title').textContent = 'Edit Campaign';
+  document.getElementById('publish-campaign-btn').innerHTML = '<i class="ti ti-device-floppy"></i> Save Changes';
+  document.getElementById('cancel-campaign-btn').style.display = 'inline-flex';
+  document.getElementById('tab-campaigns').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function cancelCampaignEdit() { resetCampaignForm(); }
+
+function resetCampaignForm() {
+  _editingCampaignId = null;
+  document.getElementById('campaign-name').value = '';
+  document.getElementById('campaign-desc').value = '';
+  document.getElementById('campaign-start-date').value = '';
+  document.getElementById('campaign-end-date').value = '';
+  document.getElementById('campaign-active').checked = true;
+  document.getElementById('campaign-auto-activate').checked = false;
+  document.getElementById('campaign-countdown').checked = false;
+  document.getElementById('campaign-file-input').value = '';
+  document.getElementById('campaign-preview-img').style.display = 'none';
+  document.getElementById('campaign-upload-placeholder').style.display = 'block';
+  document.getElementById('campaign-remove-img').style.display = 'none';
+  populateCampaignCouponDropdown();
+  document.getElementById('campaign-linked-coupon').value = '';
+  renderServiceCheckboxes('campaign-services-checks', []);
+  document.getElementById('campaign-form-title').textContent = 'Create New Campaign';
+  document.getElementById('publish-campaign-btn').innerHTML = '<i class="ti ti-upload"></i> Publish Campaign';
+  document.getElementById('cancel-campaign-btn').style.display = 'none';
+}
+
+function previewCampaignImage(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+    showToast('Invalid file type. Please upload JPEG, PNG, WebP, or GIF.');
+    event.target.value = '';
+    return;
+  }
+  if (file.size > MAX_BANNER_SIZE_MB * 1024 * 1024) {
+    showToast(`Image too large — max ${MAX_BANNER_SIZE_MB} MB`);
+    event.target.value = '';
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = e => {
+    const img = document.getElementById('campaign-preview-img');
+    img.src = e.target.result;
+    img.style.display = 'block';
+    document.getElementById('campaign-upload-placeholder').style.display = 'none';
+    document.getElementById('campaign-remove-img').style.display = 'flex';
+  };
+  reader.readAsDataURL(file);
+}
+
+function removeCampaignImage(e) {
+  e.stopPropagation();
+  document.getElementById('campaign-file-input').value = '';
+  const img = document.getElementById('campaign-preview-img');
+  img.src = '';
+  img.style.display = 'none';
+  document.getElementById('campaign-upload-placeholder').style.display = 'block';
+  document.getElementById('campaign-remove-img').style.display = 'none';
+}
+
+async function publishCampaign() {
+  const name = document.getElementById('campaign-name').value.trim();
+  const desc = document.getElementById('campaign-desc').value.trim();
+  const active = document.getElementById('campaign-active').checked;
+  const autoActivate = document.getElementById('campaign-auto-activate').checked;
+  const countdownEnabled = document.getElementById('campaign-countdown').checked;
+  const startVal = document.getElementById('campaign-start-date').value;
+  const endVal = document.getElementById('campaign-end-date').value;
+  const linkedCouponId = document.getElementById('campaign-linked-coupon').value || null;
+  const eligibleServices = getCheckedServices('campaign-services-checks');
+  const fileInput = document.getElementById('campaign-file-input');
+  const file = fileInput.files[0];
+
+  if (!name) { showToast('Campaign name is required'); return; }
+  if (startVal && endVal && new Date(startVal) >= new Date(endVal)) {
+    showToast('End date must be after start date');
+    return;
+  }
+
+  const publishBtn = document.getElementById('publish-campaign-btn');
+  const progressEl = document.getElementById('campaign-upload-progress');
+  publishBtn.disabled = true;
+
+  let bannerImageUrl = '';
+  let storagePath = '';
+  if (_editingCampaignId && !file) {
+    const existing = allCampaigns.find(c => c.id === _editingCampaignId);
+    bannerImageUrl = existing?.bannerImageUrl || '';
+    storagePath = existing?.storagePath || '';
+  }
+
+  if (file) {
+    progressEl.style.display = 'flex';
+    publishBtn.style.display = 'none';
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    storagePath = `campaign_banners/${Date.now()}_${safeName}`;
+    const fileRef = storage.ref(storagePath);
+    const task = fileRef.put(file, { contentType: file.type });
+    try {
+      await new Promise((resolve, reject) => task.on('state_changed', null, reject, resolve));
+      bannerImageUrl = await fileRef.getDownloadURL();
+    } catch (err) {
+      showToast('Upload failed: ' + err.message);
+      progressEl.style.display = 'none';
+      publishBtn.style.display = 'inline-flex';
+      publishBtn.disabled = false;
+      return;
+    }
+    progressEl.style.display = 'none';
+    publishBtn.style.display = 'inline-flex';
+  }
+
+  const data = {
+    name, description: desc || null, bannerImageUrl, storagePath,
+    startDate: startVal ? firebase.firestore.Timestamp.fromDate(new Date(startVal)) : null,
+    endDate: endVal ? firebase.firestore.Timestamp.fromDate(new Date(endVal)) : null,
+    autoActivate, eligibleServices, linkedCouponId, countdownEnabled, active,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    createdBy: auth.currentUser?.email || 'admin',
+  };
+
+  try {
+    if (_editingCampaignId) {
+      await db.collection('campaigns').doc(_editingCampaignId).update(data);
+      showToast('Campaign updated ✓');
+    } else {
+      data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+      await db.collection('campaigns').add(data);
+      showToast('Campaign published ✓');
+    }
+    resetCampaignForm();
+    loadCampaigns();
+  } catch (err) {
+    showToast('Save failed: ' + err.message);
+  } finally {
+    publishBtn.disabled = false;
+  }
+}
+
+// ============================================
+//   SETTLEMENT DASHBOARD
+//   Live stat tiles via onSnapshot — required to be "real-time, glitch-free"
+//   (matches the loadBannersRealtime() pattern already used in this file).
+// ============================================
+let allPaymentsForSettlement = [];
+let allSettlements = [];
+let allRefundsForSettlement = [];
+let _selectedSettlementIds = new Set();
+let _paymentsSettlementListener = null;
+let _settlementsListener = null;
+let _refundsSettlementListener = null;
+
+function initSettlementDashboardListeners() {
+  if (_paymentsSettlementListener) _paymentsSettlementListener();
+  if (_settlementsListener) _settlementsListener();
+  if (_refundsSettlementListener) _refundsSettlementListener();
+
+  _paymentsSettlementListener = db.collection('payments').onSnapshot(snap => {
+    allPaymentsForSettlement = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    updateSettlementStatTiles();
+    renderSettlementsTable(); // Earnings/Commission per provider are derived from payments too
+  }, err => console.error('settlements payments listener', err));
+
+  _settlementsListener = db.collection('settlements').orderBy('createdAt', 'desc').onSnapshot(async snap => {
+    allSettlements = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    // Pre-resolve provider names for everything currently loaded so the
+    // table renders names directly instead of flickering from providerId.
+    const uniqueIds = [...new Set(allSettlements.map(s => s.providerId).filter(Boolean))];
+    await Promise.all(uniqueIds.map(resolveProviderName));
+    updateSettlementStatTiles();
+    renderSettlementsTable();
+  }, err => console.error('settlements listener', err));
+
+  _refundsSettlementListener = db.collection('refunds').onSnapshot(snap => {
+    allRefundsForSettlement = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    updateSettlementStatTiles();
+  }, err => console.error('settlements refunds listener', err));
+
+  loadSettlementFrequency();
+}
+
+function updateSettlementStatTiles() {
+  const payments = allPaymentsForSettlement;
+  const completed = payments.filter(p => p.status === 'completed');
+  const totalRevenue = completed.reduce((s, p) => s + (Number(p.paidAmount) || 0), 0);
+  // Gated to completed payments, same as Total Revenue — a refunded payment's
+  // commission was already reversed via a commission_reversal ledger entry
+  // in issueRefund(), so counting it here again would overstate what's
+  // actually been earned.
+  const commissionEarned = completed.reduce((s, p) => s + (Number(p.commission) || 0), 0);
+  const pendingSettlement = payments.filter(p => ['pending', 'eligible'].includes(p.settlementStatus)).reduce((s, p) => s + (Number(p.providerAmount) || 0), 0);
+  const couponCost = payments.filter(p => Number(p.discount) > 0).reduce((s, p) => s + (Number(p.discount) || 0), 0);
+  const failedCount = payments.filter(p => p.status === 'failed').length;
+  const paidSettlement = allSettlements.filter(s => s.status === 'paid').reduce((s, x) => s + (Number(x.totalAmount) || 0), 0);
+  const refundsTotal = allRefundsForSettlement.reduce((s, r) => s + (Number(r.amount) || 0), 0);
+
+  setText('stl-total-revenue', formatCurrency(totalRevenue));
+  setText('stl-commission', formatCurrency(commissionEarned));
+  setText('stl-pending', formatCurrency(pendingSettlement));
+  setText('stl-paid', formatCurrency(paidSettlement));
+  setText('stl-coupon-cost', formatCurrency(couponCost));
+  setText('stl-refunds', formatCurrency(refundsTotal));
+  setText('stl-failed', failedCount);
+}
+
+function computeSettlementBreakdown(settlement) {
+  const paymentIds = new Set(settlement.paymentIds || []);
+  const related = allPaymentsForSettlement.filter(p => paymentIds.has(p.id));
+  const commission = related.reduce((s, p) => s + (Number(p.commission) || 0), 0);
+  const payable = Number(settlement.totalAmount) || 0;
+  return { earnings: payable + commission, commission, payable };
+}
+
+function settlementStatusBadge(status) {
+  const map = {
+    pending: ['#fff8e1', '#f57f17', 'Pending'],
+    approved: ['#e3f2fd', '#1565c0', 'Approved'],
+    held: ['#ffebee', '#c62828', 'Held'],
+    paid: ['#e8f5e9', '#1e8e3e', 'Paid'],
+  };
+  const [bg, fg, label] = map[status] || ['#f3f4f6', '#6b7280', status || '—'];
+  return inlineBadge(label, bg, fg);
+}
+
+function renderSettlementsTable() {
+  const tbody = document.getElementById('settlements-tbody');
+  if (!tbody) return;
+  if (!allSettlements.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No settlements yet — run a settlement batch to create some.</td></tr>';
+    updateBulkApproveButton();
+    return;
+  }
+  tbody.innerHTML = allSettlements.map(s => {
+    const { earnings, commission, payable } = computeSettlementBreakdown(s);
+    const providerName = _providerNameCache[s.providerId] || s.providerId || '—';
+    const selectable = ['pending', 'held'].includes(s.status);
+    const checked = _selectedSettlementIds.has(s.id) ? 'checked' : '';
+    let actions = `<button class="btn btn-outline" onclick="toggleSettlementDetails('${s.id}')" title="View payment IDs"><i class="ti ti-eye"></i></button>`;
+    if (selectable) {
+      actions += ` <button class="btn btn-outline" onclick="approveSettlementRow('${s.id}')" title="Approve"><i class="ti ti-check"></i></button>`;
+    }
+    if (s.status === 'pending') {
+      actions += ` <button class="btn btn-reject" onclick="holdSettlementRow('${s.id}')" title="Hold"><i class="ti ti-player-pause"></i></button>`;
+    }
+    if (s.status === 'approved') {
+      actions += ` <button class="btn-publish" style="padding:6px 12px;font-size:12px;" onclick="markSettlementPaidRow('${s.id}')" title="Mark Paid"><i class="ti ti-cash"></i> Mark Paid</button>`;
+    }
+    return `<tr>
+      <td><input type="checkbox" ${selectable ? '' : 'disabled'} ${checked} onchange="toggleSettlementSelect('${s.id}', this.checked)" /></td>
+      <td>${escHtml(providerName)}<div style="font-size:10px;color:var(--text-muted);font-family:monospace;">${escHtml(s.providerId || '')}</div></td>
+      <td>${formatCurrency(earnings)}</td>
+      <td>${formatCurrency(commission)}</td>
+      <td>${formatCurrency(payable)}</td>
+      <td>${settlementStatusBadge(s.status)}</td>
+      <td style="white-space:nowrap;">${actions}</td>
+    </tr>
+    <tr id="settlement-details-${s.id}" style="display:none;">
+      <td></td>
+      <td colspan="6" style="background:#f8fafc;font-size:12px;padding:10px 14px;">
+        <strong>Payment IDs (${(s.paymentIds || []).length}):</strong>
+        <div style="font-family:monospace;word-break:break-all;margin-top:4px;color:var(--text-secondary);">${(s.paymentIds || []).map(escHtml).join(', ') || '—'}</div>
+        ${s.holdReason ? `<div style="margin-top:6px;color:var(--danger);"><strong>Hold reason:</strong> ${escHtml(s.holdReason)}</div>` : ''}
+        ${s.payoutReference ? `<div style="margin-top:6px;"><strong>Payout reference:</strong> ${escHtml(s.payoutReference)}</div>` : ''}
+      </td>
+    </tr>`;
+  }).join('');
+  updateBulkApproveButton();
+}
+
+function toggleSettlementDetails(id) {
+  const row = document.getElementById('settlement-details-' + id);
+  if (row) row.style.display = row.style.display === 'none' ? 'table-row' : 'none';
+}
+
+function toggleSettlementSelect(id, checked) {
+  if (checked) _selectedSettlementIds.add(id); else _selectedSettlementIds.delete(id);
+  updateBulkApproveButton();
+}
+
+function toggleSelectAllSettlements(checked) {
+  _selectedSettlementIds.clear();
+  if (checked) {
+    allSettlements.filter(s => ['pending', 'held'].includes(s.status)).forEach(s => _selectedSettlementIds.add(s.id));
+  }
+  renderSettlementsTable();
+}
+
+function updateBulkApproveButton() {
+  const btn = document.getElementById('bulk-approve-settlements-btn');
+  const countEl = document.getElementById('settlement-selected-count');
+  if (countEl) countEl.textContent = _selectedSettlementIds.size;
+  if (btn) btn.disabled = _selectedSettlementIds.size === 0;
+}
+
+async function approveSettlementRow(id) {
+  try {
+    await functions.httpsCallable('approveSettlement')({ settlementId: id });
+    showToast('Settlement approved ✓');
+  } catch (err) {
+    showToast('Approve failed: ' + err.message);
+  }
+}
+
+async function holdSettlementRow(id) {
+  const reason = prompt('Reason for holding this settlement:');
+  if (reason == null) return;
+  try {
+    await functions.httpsCallable('holdSettlement')({ settlementId: id, reason });
+    showToast('Settlement held');
+  } catch (err) {
+    showToast('Hold failed: ' + err.message);
+  }
+}
+
+async function markSettlementPaidRow(id) {
+  const payoutReference = prompt('Payout reference (optional — NEFT/UPI ref no.):');
+  if (payoutReference === null) return; // user cancelled
+  try {
+    await functions.httpsCallable('markSettlementPaid')({ settlementId: id, payoutReference: payoutReference || null });
+    showToast('Settlement marked paid ✓');
+  } catch (err) {
+    showToast('Mark paid failed: ' + err.message);
+  }
+}
+
+async function bulkApproveSelectedSettlements() {
+  if (!_selectedSettlementIds.size) return;
+  const ids = Array.from(_selectedSettlementIds);
+  try {
+    const res = await functions.httpsCallable('bulkApproveSettlements')({ settlementIds: ids });
+    const results = res.data?.results || [];
+    const succeeded = results.filter(r => r.success).length;
+    showToast(`${succeeded}/${ids.length} settlement(s) approved`);
+    _selectedSettlementIds.clear();
+    updateBulkApproveButton();
+  } catch (err) {
+    showToast('Bulk approve failed: ' + err.message);
+  }
+}
+
+async function runManualSettlementBatchNow() {
+  const btn = document.getElementById('run-settlement-batch-btn');
+  btn.disabled = true;
+  try {
+    const res = await functions.httpsCallable('runManualSettlementBatch')({});
+    const created = res.data?.batchesCreated ?? 0;
+    showToast(`Settlement batch run complete — ${created} settlement(s) created`);
+  } catch (err) {
+    showToast('Batch run failed: ' + err.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function loadSettlementFrequency() {
+  try {
+    const snap = await db.collection('settlement_config').doc('global').get();
+    const sel = document.getElementById('settlement-frequency');
+    if (sel) sel.value = (snap.exists && snap.get('frequency')) || 'daily';
+  } catch (err) {
+    console.error('settlement_config load error', err);
+  }
+}
+
+async function saveSettlementFrequency() {
+  const frequency = document.getElementById('settlement-frequency').value;
+  try {
+    await db.collection('settlement_config').doc('global').set({
+      frequency, updatedBy: auth.currentUser?.email || 'admin',
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    showToast('Settlement frequency updated ✓');
+  } catch (err) {
+    showToast('Update failed: ' + err.message);
+  }
+}
+
+function exportSettlementsCsv() {
+  if (!allSettlements.length) { showToast('No settlements to export'); return; }
+  const header = ['Settlement ID', 'Provider ID', 'Provider Name', 'Earnings', 'Commission', 'Payable', 'Status', 'Created At'];
+  const rows = allSettlements.map(s => {
+    const { earnings, commission, payable } = computeSettlementBreakdown(s);
+    const providerName = _providerNameCache[s.providerId] || s.providerId || '';
+    const created = s.createdAt && s.createdAt.toDate ? s.createdAt.toDate().toISOString() : '';
+    return [s.id, s.providerId || '', providerName, earnings.toFixed(2), commission.toFixed(2), payable.toFixed(2), s.status || '', created];
+  });
+  const csvEscape = v => `"${String(v).replace(/"/g, '""')}"`;
+  const csv = [header, ...rows].map(row => row.map(csvEscape).join(',')).join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `settlements_${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// ============================================
+//   REFUNDS
+// ============================================
+let allRefunds = [];
+let _refundLookupPayment = null;
+
+async function loadRefunds() {
+  try {
+    const snap = await db.collection('refunds').orderBy('createdAt', 'desc').get();
+    allRefunds = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const uniqueProviderIds = [...new Set(allRefunds.map(r => r.providerId).filter(Boolean))];
+    await Promise.all(uniqueProviderIds.map(resolveProviderName));
+    renderRefundsList(allRefunds);
+  } catch (err) {
+    console.error('Refunds load error:', err);
+    const tbody = document.getElementById('refunds-tbody');
+    if (tbody) tbody.innerHTML = `<tr><td colspan="7" class="loading">Failed to load: ${escHtml(err.message)}</td></tr>`;
+  }
+}
+
+function refundStatusBadge(status) {
+  if (status === 'recovery_pending') return inlineBadge('⚠ Recovery Needed', '#fff3e0', '#e65100');
+  return inlineBadge('Completed', '#e8f5e9', '#1e8e3e');
+}
+
+function renderRefundsList(refunds) {
+  const tbody = document.getElementById('refunds-tbody');
+  if (!tbody) return;
+  if (!refunds.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No refunds issued yet.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = refunds.map(r => {
+    const providerName = r.providerId ? (_providerNameCache[r.providerId] || r.providerId) : '—';
+    return `<tr>
+      <td style="font-family:monospace;font-size:11px;">${escHtml(r.paymentId || '')}</td>
+      <td>${escHtml(providerName)}</td>
+      <td style="font-family:monospace;font-size:11px;">${escHtml(r.patientId || '—')}</td>
+      <td>${formatCurrency(Number(r.amount) || 0)}</td>
+      <td style="max-width:220px;">${escHtml(r.reason || '—')}</td>
+      <td>${refundStatusBadge(r.status)}</td>
+      <td>${formatDate(r.createdAt)}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function lookupRefundPayment() {
+  const paymentId = document.getElementById('refund-payment-id').value.trim();
+  const resultEl = document.getElementById('refund-lookup-result');
+  const issueBtn = document.getElementById('issue-refund-btn');
+  _refundLookupPayment = null;
+  issueBtn.disabled = true;
+  if (!paymentId) { showToast('Enter a payment ID first'); return; }
+  try {
+    const snap = await db.collection('payments').doc(paymentId).get();
+    if (!snap.exists) {
+      resultEl.style.display = 'block';
+      resultEl.innerHTML = `<span style="color:var(--danger);">No payment found with ID "${escHtml(paymentId)}".</span>`;
+      return;
+    }
+    const p = snap.data();
+    if (p.status === 'refunded') {
+      resultEl.style.display = 'block';
+      resultEl.innerHTML = `<span style="color:var(--danger);">This payment was already refunded.</span>`;
+      return;
+    }
+    _refundLookupPayment = { id: paymentId, ...p };
+    resultEl.style.display = 'block';
+    resultEl.innerHTML = `
+      <div><strong>Paid Amount:</strong> ${formatCurrency(Number(p.paidAmount) || 0)}</div>
+      <div><strong>Service:</strong> ${escHtml(serviceTypeLabel(p.serviceType || '—'))}</div>
+      <div><strong>Status:</strong> ${escHtml(p.status || '—')} / Settlement: ${escHtml(p.settlementStatus || '—')}</div>
+      ${p.settlementStatus === 'paid' ? '<div style="color:var(--warning);margin-top:4px;"><i class="ti ti-alert-triangle"></i> Provider already settled — this will create a recovery-pending refund.</div>' : ''}
+    `;
+    issueBtn.disabled = false;
+  } catch (err) {
+    resultEl.style.display = 'block';
+    resultEl.innerHTML = `<span style="color:var(--danger);">Lookup failed: ${escHtml(err.message)}</span>`;
+  }
+}
+
+async function submitRefund() {
+  if (!_refundLookupPayment) { showToast('Look up a payment first'); return; }
+  const reason = document.getElementById('refund-reason').value.trim();
+  const btn = document.getElementById('issue-refund-btn');
+  btn.disabled = true;
+  try {
+    const res = await functions.httpsCallable('issueRefund')({ paymentId: _refundLookupPayment.id, reason });
+    const status = res.data?.status;
+    showToast(status === 'recovery_pending'
+      ? 'Refund issued — recovery needed from provider on next settlement'
+      : 'Refund issued ✓');
+    document.getElementById('refund-payment-id').value = '';
+    document.getElementById('refund-reason').value = '';
+    document.getElementById('refund-lookup-result').style.display = 'none';
+    _refundLookupPayment = null;
+    loadRefunds();
+  } catch (err) {
+    showToast('Refund failed: ' + err.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ============================================
+//   REVENUE TAB — SETTLEMENT ENGINE ANALYTICS
+//   (Coupon Usage · AOV · Commission by Service · Top Providers · Refund Rate)
+//   One-time historical query on dashboard load, same convention as the
+//   existing buildRevenueChart()/buildMedicinesChart() etc. above.
+// ============================================
+async function buildSettlementAnalyticsCharts() {
+  let payments = [], refunds = [];
+  try {
+    const [paySnap, refSnap] = await Promise.all([
+      db.collection('payments').get(),
+      db.collection('refunds').get(),
+    ]);
+    payments = paySnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    refunds = refSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch (err) {
+    console.error('Settlement analytics load error:', err);
+    return;
+  }
+  buildCouponUsageChart(payments);
+  buildAovChart(payments);
+  buildCommissionByServiceChart(payments);
+  await buildTopProvidersChart(payments);
+  buildRefundRateChart(payments, refunds);
+}
+
+function buildCouponUsageChart(payments) {
+  const ctx = document.getElementById('coupon-usage-chart');
+  if (!ctx) return;
+  const counts = {};
+  payments.forEach(p => { if (p.couponCode) counts[p.couponCode] = (counts[p.couponCode] || 0) + 1; });
+  const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 10);
+  if (window._couponUsageChart) window._couponUsageChart.destroy();
+  window._couponUsageChart = new Chart(ctx, {
+    type: 'bar',
+    data: { labels: entries.map(([code]) => code), datasets: [{ label: 'Redemptions', data: entries.map(([, c]) => c), backgroundColor: '#633058', borderRadius: 6 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { x: { grid: { display: false } }, y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: 'rgba(0,0,0,0.05)' } } },
+    },
+  });
+}
+
+function buildAovChart(payments) {
+  const ctx = document.getElementById('aov-chart');
+  if (!ctx) return;
+  const months = getLast6Months();
+  const data = months.map(m => {
+    const start = new Date(m.year, m.month, 1);
+    const end = new Date(m.year, m.month + 1, 1);
+    const inMonth = payments.filter(p => {
+      if (p.status !== 'completed') return false;
+      const d = p.createdAt?.toDate ? p.createdAt.toDate() : new Date(p.createdAt || 0);
+      return d >= start && d < end;
+    });
+    if (!inMonth.length) return 0;
+    return inMonth.reduce((s, p) => s + (Number(p.paidAmount) || 0), 0) / inMonth.length;
+  });
+  if (window._aovChart) window._aovChart.destroy();
+  window._aovChart = new Chart(ctx, {
+    type: 'line',
+    data: { labels: months.map(m => m.label), datasets: [{ label: 'Avg Order Value', data, borderColor: '#F9943B', backgroundColor: 'rgba(249,148,59,0.12)', fill: true, tension: 0.4, pointRadius: 4, pointBackgroundColor: '#F9943B' }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ' ₹' + ctx.parsed.y.toFixed(0) } } },
+      scales: { x: { grid: { display: false } }, y: { ticks: { callback: v => '₹' + formatShort(v) }, grid: { color: 'rgba(0,0,0,0.05)' } } },
+    },
+  });
+}
+
+function buildCommissionByServiceChart(payments) {
+  const ctx = document.getElementById('commission-by-service-chart');
+  if (!ctx) return;
+  const totals = {};
+  payments.filter(p => p.status === 'completed').forEach(p => {
+    const st = p.serviceType || 'other';
+    totals[st] = (totals[st] || 0) + (Number(p.commission) || 0);
+  });
+  const labels = Object.keys(totals);
+  const colors = ['#522546', '#633058', '#F9943B', '#1e8e3e', '#1565c0', '#f57f17', '#c62828'];
+  if (window._commByServiceChart) window._commByServiceChart.destroy();
+  window._commByServiceChart = new Chart(ctx, {
+    type: 'pie',
+    data: {
+      labels: labels.map(serviceTypeLabel),
+      datasets: [{ data: labels.map(l => totals[l]), backgroundColor: labels.map((_, i) => colors[i % colors.length]) }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'right', labels: { font: { size: 11 }, boxWidth: 10 } },
+        tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ₹${ctx.parsed.toLocaleString('en-IN')}` } },
+      },
+    },
+  });
+}
+
+async function buildTopProvidersChart(payments) {
+  const ctx = document.getElementById('top-providers-chart');
+  if (!ctx) return;
+  const totals = {};
+  payments.forEach(p => {
+    if (!p.providerId) return;
+    totals[p.providerId] = (totals[p.providerId] || 0) + (Number(p.providerAmount) || 0);
+  });
+  const top = Object.entries(totals).sort((a, b) => b[1] - a[1]).slice(0, 10);
+  const names = await Promise.all(top.map(([pid]) => resolveProviderName(pid)));
+  if (window._topProvidersChart) window._topProvidersChart.destroy();
+  window._topProvidersChart = new Chart(ctx, {
+    type: 'bar',
+    data: { labels: names, datasets: [{ label: 'Earnings', data: top.map(([, v]) => v), backgroundColor: '#522546', borderRadius: 6 }] },
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ' ₹' + ctx.parsed.x.toLocaleString('en-IN') } } },
+      scales: { x: { grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { callback: v => '₹' + formatShort(v) } }, y: { grid: { display: false }, ticks: { font: { size: 11 } } } },
+    },
+  });
+}
+
+function buildRefundRateChart(payments, refunds) {
+  const ctx = document.getElementById('refund-rate-chart');
+  if (!ctx) return;
+  const months = getLast6Months();
+  const data = months.map(m => {
+    const start = new Date(m.year, m.month, 1);
+    const end = new Date(m.year, m.month + 1, 1);
+    const inMonthPayments = payments.filter(p => {
+      const d = p.createdAt?.toDate ? p.createdAt.toDate() : new Date(p.createdAt || 0);
+      return d >= start && d < end;
+    });
+    const inMonthRefunds = refunds.filter(r => {
+      const d = r.createdAt?.toDate ? r.createdAt.toDate() : new Date(r.createdAt || 0);
+      return d >= start && d < end;
+    });
+    if (!inMonthPayments.length) return 0;
+    return Number(((inMonthRefunds.length / inMonthPayments.length) * 100).toFixed(1));
+  });
+  if (window._refundRateChart) window._refundRateChart.destroy();
+  window._refundRateChart = new Chart(ctx, {
+    type: 'line',
+    data: { labels: months.map(m => m.label), datasets: [{ label: 'Refund Rate %', data, borderColor: '#C62828', backgroundColor: 'rgba(198,40,40,0.1)', fill: true, tension: 0.4, pointRadius: 4, pointBackgroundColor: '#C62828' }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ' ' + ctx.parsed.y + '%' } } },
+      scales: { x: { grid: { display: false } }, y: { ticks: { callback: v => v + '%' }, grid: { color: 'rgba(0,0,0,0.05)' } } },
+    },
+  });
+}
+
+// ============================================
+//   TAB WIRING — Payment Distribution & Settlement Engine
+//   Wraps switchTab()/initDashboard() the same way the Partner Accounts
+//   section above does (see "Wire-up: start listeners on dashboard init,
+//   load earnings on tab open") instead of editing their bodies directly —
+//   zero risk to any of the 31 existing tabs.
+// ============================================
+let _commissionRulesInited = false;
+let _couponsInited = false;
+let _campaignsInited = false;
+let _settlementsInited = false;
+let _refundsInited = false;
+
+const _prevSwitchTab_settlementEngine = window.switchTab;
+window.switchTab = function (tab, title) {
+  if (_prevSwitchTab_settlementEngine) _prevSwitchTab_settlementEngine(tab, title);
+  if (tab === 'commission-rules' && !_commissionRulesInited) { _commissionRulesInited = true; loadCommissionRules(); }
+  if (tab === 'coupons' && !_couponsInited) { _couponsInited = true; loadCoupons(); }
+  if (tab === 'campaigns' && !_campaignsInited) {
+    _campaignsInited = true;
+    if (!_couponsInited) { _couponsInited = true; loadCoupons(); } else { populateCampaignCouponDropdown(); }
+    loadCampaigns();
+  }
+  if (tab === 'settlements' && !_settlementsInited) { _settlementsInited = true; initSettlementDashboardListeners(); }
+  if (tab === 'refunds' && !_refundsInited) { _refundsInited = true; loadRefunds(); }
+};
+
+const _prevInitDashboard_settlementEngine = window.initDashboard;
+window.initDashboard = function () {
+  if (_prevInitDashboard_settlementEngine) _prevInitDashboard_settlementEngine();
+  // Populate the applicable/eligible-services checkbox groups up front so
+  // they're ready no matter which tab the admin opens first.
+  renderServiceCheckboxes('coupon-services-checks', []);
+  renderServiceCheckboxes('campaign-services-checks', []);
+  couponDiscountTypeChanged();
+  buildSettlementAnalyticsCharts();
 };

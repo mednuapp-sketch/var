@@ -11,7 +11,7 @@
       "android": {
         "default": {
           "projectId": "mednu-healthcare-app",
-          "appId": "1:1056867138858:android:b16d2368d9e4032645b253",
+          "appId": "1:1056867138858:android:14bc94e3d737fe7d45b253",
           "fileOutput": "android/app/google-services.json"
         }
       },
@@ -19,7 +19,7 @@
         "lib/firebase_options.dart": {
           "projectId": "mednu-healthcare-app",
           "configurations": {
-            "android": "1:1056867138858:android:b16d2368d9e4032645b253",
+            "android": "1:1056867138858:android:14bc94e3d737fe7d45b253",
             "ios": "1:1056867138858:ios:069a23eb3e74c71645b253",
             "macos": "1:1056867138858:ios:069a23eb3e74c71645b253",
             "web": "1:1056867138858:web:2a2aa821fa4ab4f545b253",

@@ -26,12 +26,10 @@ import '../../features/notifications/screens/doctor_notifications_screen.dart';
 import '../../features/earnings/screens/doctor_earnings_screen.dart';
 import '../../features/settings/screens/settings_screen.dart';
 import '../../features/help/screens/help_support_screen.dart';
-import '../../features/feedback/screens/patient_feedback_screen.dart';
 import '../../features/pregnancy/screens/pregnancy_patients_screen.dart';
 import '../../features/pregnancy/screens/pregnancy_patient_detail_screen.dart';
 import '../../features/pregnancy/screens/maternity_prescription_screen.dart';
 import '../../features/profile/screens/specialization_change_request_screen.dart';
-import '../../features/reviews/screens/doctor_reviews_screen.dart';
 import '../../features/help/screens/live_chat_screen.dart';
 import '../../features/help/screens/report_problem_screen.dart';
 import '../../features/consultations/screens/doctor_outgoing_call_screen.dart';
@@ -72,6 +70,21 @@ import '../../features/caregiver/screens/caregiver_completion_summary_screen.dar
 import '../../features/caregiver/screens/caregiver_earnings_screen.dart';
 import '../../features/caregiver/screens/caregiver_profile_screen.dart';
 import '../../features/caregiver/screens/caregiver_settings_screen.dart';
+import '../../features/physiotherapy/screens/physio_dashboard_screen.dart';
+import '../../features/physiotherapy/screens/physio_sessions_screen.dart';
+import '../../features/physiotherapy/screens/physio_session_detail_screen.dart';
+import '../../features/physiotherapy/screens/physio_earnings_screen.dart';
+import '../../features/physiotherapy/screens/physio_profile_screen.dart';
+import '../../features/counselling/screens/counselling_dashboard_screen.dart';
+import '../../features/counselling/screens/counselling_sessions_screen.dart';
+import '../../features/counselling/screens/counselling_session_detail_screen.dart';
+import '../../features/counselling/screens/counselling_earnings_screen.dart';
+import '../../features/counselling/screens/counselling_profile_screen.dart';
+import '../../features/nutrition/screens/nutrition_dashboard_screen.dart';
+import '../../features/nutrition/screens/nutrition_appointments_screen.dart';
+import '../../features/nutrition/screens/nutrition_appointment_detail_screen.dart';
+import '../../features/nutrition/screens/nutrition_earnings_screen.dart';
+import '../../features/nutrition/screens/nutrition_profile_screen.dart';
 
 /// Bridges Firebase's auth stream into a [Listenable] so GoRouter's
 /// [refreshListenable] re-evaluates the redirect on every auth state change.
@@ -162,6 +175,24 @@ class _AuthChangeNotifier extends ChangeNotifier {
         return;
       }
 
+      // Nutritionist has no self-registration flow and no `nutritionist_
+      // profiles` collection — the account is fully admin-provisioned (role
+      // grant + the pre-existing `nutritionists/{uid}` catalogue entry both
+      // set up by an admin in one action, not by this app). Treating the
+      // role profile as always-present/active skips both the onboarding gate
+      // and the pending-review gate below, which would otherwise wait on a
+      // collection this role deliberately never writes to.
+      if (role == AppRole.nutritionist) {
+        roleProfileExists = true;
+        status = 'active';
+        _roleProfileSub?.cancel();
+        _roleProfileSub = null;
+        _roleProfileUid = null;
+        _markReady();
+        notifyListeners();
+        return;
+      }
+
       final collection = '${role.firestoreValue}_profiles';
       if (_roleProfileUid != user.uid || _roleProfileCollection != collection) {
         _roleProfileUid = user.uid;
@@ -219,12 +250,10 @@ class AppRoutes {
   static const helpSupport              = '/help-support';
   static const liveChat                 = '/live-chat';
   static const reportProblem            = '/report-problem';
-  static const feedback                 = '/feedback';
   static const pregnancyPatients        = '/pregnancy-patients';
   static const pregnancyPatientDetail   = '/pregnancy-patient-detail';
   static const maternityPrescription    = '/maternity-prescription';
   static const specChangeRequest        = '/spec-change-request';
-  static const reviews                  = '/reviews';
   static const outgoingCall             = '/outgoing-call';
 
   // ── Lab & Diagnostics partner module ─────────────────────────────────────
@@ -271,6 +300,27 @@ class AppRoutes {
   static const caregiverEarnings          = '/caregiver/earnings';
   static const caregiverProfile           = '/caregiver/profile';
   static const caregiverSettings          = '/caregiver/settings';
+
+  // ── Physiotherapy partner module (Firestore-backed) ──────────────────────
+  static const physioDashboard       = '/physio/dashboard';
+  static const physioSessions        = '/physio/sessions';
+  static const physioSessionDetail   = '/physio/session-detail';
+  static const physioEarnings        = '/physio/earnings';
+  static const physioProfile         = '/physio/profile';
+
+  // ── Counselling partner module (Firestore-backed) ────────────────────────
+  static const counsellingDashboard     = '/counselling/dashboard';
+  static const counsellingSessions      = '/counselling/sessions';
+  static const counsellingSessionDetail = '/counselling/session-detail';
+  static const counsellingEarnings      = '/counselling/earnings';
+  static const counsellingProfile       = '/counselling/profile';
+
+  // ── Nutrition partner module (admin-provisioned, no onboarding step) ─────
+  static const nutritionDashboard           = '/nutrition/dashboard';
+  static const nutritionAppointments        = '/nutrition/appointments';
+  static const nutritionAppointmentDetail   = '/nutrition/appointment-detail';
+  static const nutritionEarnings            = '/nutrition/earnings';
+  static const nutritionProfile             = '/nutrition/profile';
 }
 
 // Routes that unauthenticated users may visit.
@@ -304,7 +354,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
       if (!_authChangeNotifier.profileExists) {
         // Brand-new authenticated session with no base identity doc yet.
-        return loc == AppRoutes.partnerRoleSelect || loc == AppRoutes.partnerRoleRegister
+        // partnerRoleRegister now carries its role as a URL segment
+        // (.../lab, .../pharmacy, ...), so this checks the prefix rather
+        // than an exact match — see that route's own builder for why.
+        return loc == AppRoutes.partnerRoleSelect ||
+                loc.startsWith(AppRoutes.partnerRoleRegister)
             ? null
             : AppRoutes.partnerRoleSelect;
       }
@@ -324,13 +378,19 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         // -submit. Treating it as reachable here (same as the pending-
         // review screen already is below) stops that in-flight submission
         // from being yanked over to the onboarding recovery screen.
-        if (loc == AppRoutes.partnerRoleRegister) return null;
+        if (loc.startsWith(AppRoutes.partnerRoleRegister)) return null;
         if (role == AppRole.lab) {
           return loc == AppRoutes.labOnboarding ? null : AppRoutes.labOnboarding;
         }
         if (role == AppRole.pharmacy) {
           return loc == AppRoutes.pharmacyOnboarding ? null : AppRoutes.pharmacyOnboarding;
         }
+        // Physiotherapist/Counsellor have no dedicated onboarding-recovery
+        // screen — same as Ambulance/Caregiver, whose profile is written in
+        // one shot by PartnerRoleRegisterScreen's initial submit. A rare
+        // partial failure there (doctors/{uid} written, profile doc not)
+        // falls through to the pending-review screen below, same as those
+        // two roles already do.
         return loc == AppRoutes.verificationPending ? null : AppRoutes.verificationPending;
       }
 
@@ -341,10 +401,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       // until admin flips status to 'active'. No other route in the app is
       // reachable until then.
       if (_authChangeNotifier.status != 'active') {
+        if (loc.startsWith(AppRoutes.partnerRoleRegister)) return null;
         const alwaysReachableWhilePending = {
           AppRoutes.verificationPending,
           AppRoutes.partnerRoleSelect,
-          AppRoutes.partnerRoleRegister,
           AppRoutes.labOnboarding,
           AppRoutes.pharmacyOnboarding,
         };
@@ -380,12 +440,20 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(path: AppRoutes.partnerRoleSelect,   builder: (c, s) => const PartnerRoleSelectScreen()),
       GoRoute(
-        path: AppRoutes.partnerRoleRegister,
+        path: '${AppRoutes.partnerRoleRegister}/:role',
         builder: (c, s) {
-          // Falls back to Doctor registration if the role is missing —
-          // this route is only ever reached with a non-Doctor role.
-          final role = s.extra as AppRole?;
-          if (role == null || role == AppRole.doctor || role == AppRole.admin) {
+          // The role travels as a URL path segment, not `extra` — `extra`
+          // lives only in memory, and this form's own document-upload step
+          // hands off to an external app (camera/gallery/file picker),
+          // which can get the Activity reclaimed by Android under memory
+          // pressure. GoRouter then restores this route from the URL alone
+          // on resume; a bare `s.extra as AppRole?` came back null in that
+          // case and silently fell through to Doctor registration with no
+          // error — a real bug this fixes. `fromFirestoreValue` already
+          // defaults an unrecognised/missing value to AppRole.doctor, which
+          // correctly hits the same Doctor-registration fallback below.
+          final role = AppRoleX.fromFirestoreValue(s.pathParameters['role']);
+          if (role == AppRole.doctor || role == AppRole.admin) {
             return const DoctorRegisterScreen();
           }
           return PartnerRoleRegisterScreen(role: role);
@@ -437,8 +505,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: AppRoutes.helpSupport,       builder: (c, s) => const HelpSupportScreen()),
       GoRoute(path: AppRoutes.liveChat,          builder: (c, s) => const LiveChatScreen()),
       GoRoute(path: AppRoutes.reportProblem,     builder: (c, s) => const ReportProblemScreen()),
-      GoRoute(path: AppRoutes.feedback,          builder: (c, s) => const PatientFeedbackScreen()),
-      GoRoute(path: AppRoutes.reviews,           builder: (c, s) => const DoctorReviewsScreen()),
       GoRoute(path: AppRoutes.specChangeRequest, builder: (c, s) => const SpecializationChangeRequestScreen()),
       GoRoute(
         path: AppRoutes.outgoingCall,
@@ -583,6 +649,45 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: AppRoutes.caregiverEarnings, pageBuilder: (c, s) => const NoTransitionPage(child: CaregiverEarningsScreen())),
       GoRoute(path: AppRoutes.caregiverProfile,  pageBuilder: (c, s) => const NoTransitionPage(child: CaregiverProfileScreen())),
       GoRoute(path: AppRoutes.caregiverSettings, builder: (c, s) => const CaregiverSettingsScreen()),
+
+      // ── Physiotherapy partner module ──────────────────────────────────────
+      GoRoute(path: AppRoutes.physioDashboard, pageBuilder: (c, s) => const NoTransitionPage(child: PhysioDashboardScreen())),
+      GoRoute(path: AppRoutes.physioSessions,  pageBuilder: (c, s) => const NoTransitionPage(child: PhysioSessionsScreen())),
+      GoRoute(
+        path: AppRoutes.physioSessionDetail,
+        builder: (c, s) {
+          final extra = s.extra as Map<String, dynamic>?;
+          return PhysioSessionDetailScreen(sessionId: extra?['sessionId'] as String? ?? '');
+        },
+      ),
+      GoRoute(path: AppRoutes.physioEarnings, pageBuilder: (c, s) => const NoTransitionPage(child: PhysioEarningsScreen())),
+      GoRoute(path: AppRoutes.physioProfile,  pageBuilder: (c, s) => const NoTransitionPage(child: PhysioProfileScreen())),
+
+      // ── Counselling partner module ────────────────────────────────────────
+      GoRoute(path: AppRoutes.counsellingDashboard, pageBuilder: (c, s) => const NoTransitionPage(child: CounsellingDashboardScreen())),
+      GoRoute(path: AppRoutes.counsellingSessions,  pageBuilder: (c, s) => const NoTransitionPage(child: CounsellingSessionsScreen())),
+      GoRoute(
+        path: AppRoutes.counsellingSessionDetail,
+        builder: (c, s) {
+          final extra = s.extra as Map<String, dynamic>?;
+          return CounsellingSessionDetailScreen(sessionId: extra?['sessionId'] as String? ?? '');
+        },
+      ),
+      GoRoute(path: AppRoutes.counsellingEarnings, pageBuilder: (c, s) => const NoTransitionPage(child: CounsellingEarningsScreen())),
+      GoRoute(path: AppRoutes.counsellingProfile,  pageBuilder: (c, s) => const NoTransitionPage(child: CounsellingProfileScreen())),
+
+      // ── Nutrition partner module ──────────────────────────────────────────
+      GoRoute(path: AppRoutes.nutritionDashboard,    pageBuilder: (c, s) => const NoTransitionPage(child: NutritionDashboardScreen())),
+      GoRoute(path: AppRoutes.nutritionAppointments, pageBuilder: (c, s) => const NoTransitionPage(child: NutritionAppointmentsScreen())),
+      GoRoute(
+        path: AppRoutes.nutritionAppointmentDetail,
+        builder: (c, s) {
+          final extra = s.extra as Map<String, dynamic>?;
+          return NutritionAppointmentDetailScreen(appointmentId: extra?['appointmentId'] as String? ?? '');
+        },
+      ),
+      GoRoute(path: AppRoutes.nutritionEarnings, pageBuilder: (c, s) => const NoTransitionPage(child: NutritionEarningsScreen())),
+      GoRoute(path: AppRoutes.nutritionProfile,  pageBuilder: (c, s) => const NoTransitionPage(child: NutritionProfileScreen())),
     ],
   );
 });

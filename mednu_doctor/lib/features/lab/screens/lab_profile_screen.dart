@@ -7,6 +7,8 @@ import '../../../core/services/feedback_service.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../../../shared_core/shared_core.dart';
+import '../../location/models/precise_address.dart';
+import '../../location/screens/map_location_picker_screen.dart';
 import '../providers/lab_providers.dart';
 import '../services/lab_profile_service.dart';
 
@@ -22,7 +24,23 @@ class _LabProfileScreenState extends ConsumerState<LabProfileScreen> {
   bool _saving = false;
   final _nameCtrl = TextEditingController();
   final _addressCtrl = TextEditingController();
+  double? _addressLat;
+  double? _addressLng;
   final _phoneCtrl = TextEditingController();
+
+  Future<void> _pickAddress() async {
+    final result = await Navigator.of(context).push<PreciseAddress>(
+      MaterialPageRoute(
+        builder: (_) => MapLocationPickerScreen(initialLat: _addressLat, initialLng: _addressLng),
+      ),
+    );
+    if (result == null) return;
+    setState(() {
+      _addressCtrl.text = result.formatted;
+      _addressLat = result.lat;
+      _addressLng = result.lng;
+    });
+  }
 
   Future<void> _save() async {
     final nameError = Validators.name(_nameCtrl.text, label: 'Lab name');
@@ -42,6 +60,8 @@ class _LabProfileScreenState extends ConsumerState<LabProfileScreen> {
       await LabProfileService.updateProfile(uid, {
         'name': _nameCtrl.text.trim(),
         'address': _addressCtrl.text.trim(),
+        if (_addressLat != null) 'latitude': _addressLat,
+        if (_addressLng != null) 'longitude': _addressLng,
         'phone': _phoneCtrl.text.trim(),
       });
       if (!mounted) return;
@@ -83,6 +103,8 @@ class _LabProfileScreenState extends ConsumerState<LabProfileScreen> {
           if (!_editing) {
             _nameCtrl.text = profile.name;
             _addressCtrl.text = profile.address;
+            _addressLat = profile.latitude;
+            _addressLng = profile.longitude;
             _phoneCtrl.text = profile.phone;
           }
 
@@ -106,9 +128,9 @@ class _LabProfileScreenState extends ConsumerState<LabProfileScreen> {
                     const Divider(height: 24, color: AppColors.divider),
                     _readOnlyField('License Number', profile.licenseNumber, Icons.badge_outlined),
                     const Divider(height: 24, color: AppColors.divider),
-                    _editableField('Phone', _phoneCtrl, Icons.call_outlined),
+                    _editableField('Phone', _phoneCtrl, Icons.call_outlined, locked: true),
                     const Divider(height: 24, color: AppColors.divider),
-                    _editableField('Address', _addressCtrl, Icons.location_on_outlined),
+                    _addressField(),
                   ],
                 ),
               ),
@@ -153,7 +175,7 @@ class _LabProfileScreenState extends ConsumerState<LabProfileScreen> {
     );
   }
 
-  Widget _editableField(String label, TextEditingController ctrl, IconData icon) {
+  Widget _editableField(String label, TextEditingController ctrl, IconData icon, {bool locked = false}) {
     return Row(
       children: [
         Icon(icon, size: 18, color: AppColors.textSecondary),
@@ -162,13 +184,57 @@ class _LabProfileScreenState extends ConsumerState<LabProfileScreen> {
           child: _editing
               ? TextField(
                   controller: ctrl,
-                  decoration: InputDecoration(labelText: label, isDense: true),
+                  readOnly: locked,
+                  enabled: !locked,
+                  decoration: InputDecoration(
+                    labelText: label,
+                    isDense: true,
+                    suffixIcon: locked
+                        ? const Icon(Icons.verified_rounded, color: AppColors.success, size: 18)
+                        : null,
+                    helperText: locked ? 'Verified via OTP — cannot be changed' : null,
+                  ),
                 )
               : Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(label, style: AppTextStyles.caption),
                     Text(ctrl.text.isEmpty ? '—' : ctrl.text, style: AppTextStyles.bodyLarge),
+                  ],
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _addressField() {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Icon(Icons.location_on_outlined, size: 18, color: AppColors.textSecondary),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _editing
+              ? InkWell(
+                  onTap: _pickAddress,
+                  child: InputDecorator(
+                    decoration: const InputDecoration(
+                      labelText: 'Address',
+                      isDense: true,
+                      suffixIcon: Icon(Icons.map_outlined, color: AppColors.primary, size: 20),
+                    ),
+                    child: Text(
+                      _addressCtrl.text.isEmpty ? 'Select on map' : _addressCtrl.text,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Address', style: AppTextStyles.caption),
+                    Text(_addressCtrl.text.isEmpty ? '—' : _addressCtrl.text, style: AppTextStyles.bodyLarge),
                   ],
                 ),
         ),

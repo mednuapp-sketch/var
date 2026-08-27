@@ -51,7 +51,7 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyBTt8cnzrKMOxMJpAnFgTiZxJSaqxE3aj8',
-    appId: '1:1056867138858:android:b16d2368d9e4032645b253',
+    appId: '1:1056867138858:android:14bc94e3d737fe7d45b253',
     messagingSenderId: '1056867138858',
     projectId: 'mednu-healthcare-app',
     storageBucket: 'mednu-healthcare-app.firebasestorage.app',

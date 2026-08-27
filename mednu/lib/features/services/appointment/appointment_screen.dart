@@ -763,15 +763,24 @@ class _AppointmentScreenState extends State<AppointmentScreen>
     );
     if (confirm == true) {
       if (!mounted) return;
-      await FirebaseFirestore.instance
-          .collection('appointments')
-          .doc(docId)
-          .update({
-            'status': 'cancelled',
-            'updatedAt': FieldValue.serverTimestamp(),
-          });
-      // Slot availability is derived from appointments where status == 'booked';
-      // cancelled appointments are automatically excluded from that query.
+      try {
+        await FirebaseFirestore.instance
+            .collection('appointments')
+            .doc(docId)
+            .update({
+              'status': 'cancelled',
+              'updatedAt': FieldValue.serverTimestamp(),
+            });
+        // Slot availability is derived from appointments where status == 'booked';
+        // cancelled appointments are automatically excluded from that query.
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text(
+                  'Could not cancel the appointment — check your connection and try again.')),
+        );
+      }
     }
   }
 }

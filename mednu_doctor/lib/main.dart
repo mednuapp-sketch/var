@@ -29,6 +29,9 @@ import 'features/lab/providers/lab_providers.dart';
 import 'features/pharmacy/providers/pharmacy_providers.dart';
 import 'features/ambulance/providers/ambulance_providers.dart';
 import 'features/caregiver/providers/caregiver_providers.dart';
+import 'features/physiotherapy/providers/physio_providers.dart';
+import 'features/counselling/providers/counselling_providers.dart';
+import 'features/nutrition/providers/nutrition_providers.dart';
 
 // ── Background FCM handler ────────────────────────────────────────────────────
 // Runs in a separate Dart isolate when the app is terminated/backgrounded.
@@ -154,6 +157,12 @@ void main() {
     ));
 
     runApp(const ProviderScope(child: MedNUDoctorApp()));
+
+    // Deferred to after the first frame so the notification-permission
+    // system dialog never blocks the initial render on cold start.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      FcmService.requestPermissionAndRegisterToken();
+    });
   }, (error, stack) {
     FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
   });
@@ -439,6 +448,17 @@ class _MedNUDoctorAppState extends ConsumerState<MedNUDoctorApp>
         case AppRole.caregiver:
           ref.invalidate(availableCaregiverVisitsProvider);
           ref.invalidate(myCaregiverVisitsProvider);
+          break;
+        case AppRole.physiotherapist:
+          ref.invalidate(availablePhysioSessionsProvider);
+          ref.invalidate(myPhysioSessionsProvider);
+          break;
+        case AppRole.counsellor:
+          ref.invalidate(availableCounsellingSessionsProvider);
+          ref.invalidate(myCounsellingSessionsProvider);
+          break;
+        case AppRole.nutritionist:
+          ref.invalidate(myNutritionAppointmentsProvider);
           break;
         case AppRole.doctor:
         case AppRole.admin:

@@ -19,11 +19,54 @@ class FcmService {
   static StreamSubscription<String>? _tokenRefreshSub;
   static StreamSubscription<User?>? _authSub;
 
-  /// Call once from [main] after Firebase is initialized.
+  /// Call once from [main] after Firebase is initialized. Deliberately does
+  /// NOT request notification permission — awaiting that system dialog
+  /// before runApp() blocks the first frame, leaving a blank window until
+  /// the user answers. Message listeners are safe to register immediately;
+  /// permission is requested separately via [requestPermissionAndRegisterToken]
+  /// after the first frame (see main.dart), matching the patient app's pattern.
   static Future<void> init() async {
     final messaging = FirebaseMessaging.instance;
 
-    // Request permission (required on iOS; shows dialog on Android 13+).
+    // Foreground messages: FCM delivers data payloads silently when the app
+    // is open, so we show a local call notification ourselves.
+    FirebaseMessaging.onMessage.listen((message) {
+      final type = message.data['type'];
+      if (type == 'incoming_consultation') {
+        CallNotificationService.showIncomingCall(
+          patientName: message.data['patientName'] ?? 'Patient',
+          complaint: message.data['complaint'] ?? '',
+        );
+      } else if (type == 'emergency_doctor_request') {
+        CallNotificationService.showEmergencyAlert(
+          patientName: message.data['patientName'] ?? 'Patient',
+          requestId: message.data['requestId'] ?? '',
+        );
+      } else if (type == 'partner_approved') {
+        CallNotificationService.showGenericNotification(
+          title: message.notification?.title ?? 'Application Approved',
+          body: message.notification?.body ??
+              'Your MedNU partner account is verified — you can start receiving bookings now.',
+          type: type,
+        );
+      }
+    });
+
+    // Background tap: the user tapped the FCM notification while the app
+    // was backgrounded. The Firestore listener in main.dart will pick up
+    // the pending consultation and route automatically — no extra work needed.
+    FirebaseMessaging.onMessageOpenedApp.listen((_) {});
+
+    // Terminated tap: same as above; the listener re-connects on startup.
+    await messaging.getInitialMessage();
+  }
+
+  /// Requests notification permission and registers the FCM token. Call this
+  /// from a post-first-frame callback (see main.dart) so the system
+  /// permission dialog never blocks the initial render.
+  static Future<void> requestPermissionAndRegisterToken() async {
+    final messaging = FirebaseMessaging.instance;
+
     final settings = await messaging.requestPermission(
       alert: true,
       badge: true,
@@ -43,7 +86,7 @@ class FcmService {
       return;
     }
 
-    // Save token when the user is already signed in at startup.
+    // Save token when the user is already signed in.
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid != null) {
       final token = await messaging.getToken();
@@ -64,31 +107,6 @@ class FcmService {
       final uid2 = FirebaseAuth.instance.currentUser?.uid;
       if (uid2 != null) await _saveToken(uid2, newToken);
     });
-
-    // Foreground messages: FCM delivers data payloads silently when the app
-    // is open, so we show a local call notification ourselves.
-    FirebaseMessaging.onMessage.listen((message) {
-      final type = message.data['type'];
-      if (type == 'incoming_consultation') {
-        CallNotificationService.showIncomingCall(
-          patientName: message.data['patientName'] ?? 'Patient',
-          complaint: message.data['complaint'] ?? '',
-        );
-      } else if (type == 'emergency_doctor_request') {
-        CallNotificationService.showEmergencyAlert(
-          patientName: message.data['patientName'] ?? 'Patient',
-          requestId: message.data['requestId'] ?? '',
-        );
-      }
-    });
-
-    // Background tap: the user tapped the FCM notification while the app
-    // was backgrounded. The Firestore listener in main.dart will pick up
-    // the pending consultation and route automatically — no extra work needed.
-    FirebaseMessaging.onMessageOpenedApp.listen((_) {});
-
-    // Terminated tap: same as above; the listener re-connects on startup.
-    await messaging.getInitialMessage();
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
@@ -105,6 +123,38 @@ class FcmService {
       // Do NOT create the doc here; a premature partial doc causes the
       // subsequent saveProfile() set(merge:true) to be treated as an update,
       // which is blocked by Firestore rules because it sets the 'status' field.
+    }
+    await _saveTokenToRoleProfiles(uid, token);
+  }
+
+  /// Also keeps the token fresh on every non-Doctor role profile this
+  /// account holds (`lab_profiles`, `pharmacy_profiles`, etc.) — the
+  /// Cloud Function that pushes a "your application was approved"
+  /// notification reads `fcmToken` straight off that document, not
+  /// `doctors/{uid}`, so a token rotated after registration would
+  /// otherwise go stale there and the push would silently fail to deliver.
+  static Future<void> _saveTokenToRoleProfiles(String uid, String token) async {
+    try {
+      final doctorSnap =
+          await FirebaseFirestore.instance.collection('doctors').doc(uid).get();
+      final roles =
+          (doctorSnap.data()?['roles'] as List?)?.cast<String>() ?? const [];
+      for (final role in roles) {
+        if (role == 'doctor') continue;
+        try {
+          await FirebaseFirestore.instance
+              .collection('${role}_profiles')
+              .doc(uid)
+              .update({'fcmToken': token});
+        } catch (_) {
+          // Role profile doesn't exist yet (registration in progress) —
+          // createProfile() already writes the token at creation time.
+        }
+      }
+    } catch (_) {
+      // Couldn't read roles (offline, doc missing) — safe to skip; the
+      // token captured at registration still covers most of the pending
+      // window.
     }
   }
 }

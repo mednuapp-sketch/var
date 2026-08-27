@@ -13,8 +13,6 @@
     <!-- ── Camera & Media ── -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
-    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
 
@@ -25,10 +23,6 @@
     <!-- ── Contacts (SOS emergency contacts) ── -->
     <uses-permission android:name="android.permission.READ_CONTACTS" />
 
-    <!-- ── Bluetooth (medical device pairing — optional feature) ── -->
-    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
-    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-
     <!-- ── Biometrics ── -->
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <uses-permission android:name="android.permission.USE_FINGERPRINT" />
@@ -38,10 +32,6 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
-    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
-    <!-- USE_EXACT_ALARM: auto-granted on Android 13+ (API 33+) without user prompt.
-         Covers medicine reminders, appointment alerts, and period/water tracker alarms. -->
-    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
 
     <!-- Battery optimization exemption — keeps the FCM listener alive on
          aggressive OEM battery managers (MIUI, ColorOS, FuntouchOS, OneUI)
@@ -50,7 +40,6 @@
 
     <!-- ── Foreground service (for incoming + active consultation calls) ── -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <!-- Camera foreground service type required for active video call service (Android 10+) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />

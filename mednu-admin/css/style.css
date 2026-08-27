@@ -7,8 +7,9 @@
   --primary-bg: #FAF4F8;
   --primary-dark: #3A1A32;
   --primary-mid: #7B3A6B;
-  --secondary: #8B3A6B;
+  --secondary: #633058;
   --secondary-light: #F9EBF5;
+  --accent: #F9943B;
   --success: #1E8E3E;
   --success-light: #E8F5E9;
   --warning: #F57F17;
@@ -17,7 +18,7 @@
   --danger-light: #FFEBEE;
   --info: #1565C0;
   --info-light: #E3F2FD;
-  --bg: #F2EDF5;
+  --bg: #F7F4F8;
   --sidebar-bg: #0E0710;
   --sidebar-text: #9E879A;
   --sidebar-active: #ffffff;

@@ -55,6 +55,8 @@ import '../../features/health/screens/post_consultation_screen.dart';
 import '../../features/health/screens/prescription_viewer_screen.dart';
 import '../../features/tracking/screens/order_tracking_screen.dart';
 import '../../features/payment/screens/payment_screen.dart';
+import '../../features/payment/screens/payment_history_screen.dart';
+import '../../features/payment/screens/invoice_screen.dart';
 import '../../features/referral/screens/referral_screen.dart';
 import '../../features/pregnancy/screens/pregnancy_dashboard_screen.dart';
 import '../../features/pregnancy/screens/pregnancy_onboarding_screen.dart';
@@ -135,6 +137,8 @@ class AppRoutes {
   static const prescriptionViewer = '/prescription';
   static const orderTracking      = '/order-tracking';
   static const payment            = '/payment';
+  static const paymentHistory     = '/payment/history';
+  static const invoice            = '/payment/invoice';
   static const referral           = '/referral';
   static const specialities       = '/specialities';
 
@@ -311,10 +315,20 @@ GoRoute(path: AppRoutes.prescriptionViewer, builder: (c, s) => PrescriptionViewe
 GoRoute(path: AppRoutes.orderTracking,      builder: (c, s) => OrderTrackingScreen(orderData: s.extra as Map<String, dynamic>?)),
 GoRoute(path: AppRoutes.payment, builder: (c, s) {
   final extra = s.extra as Map<String, dynamic>?;
+  final cartItemsRaw = extra?['cartItems'] as List?;
   return PaymentScreen(
     amount:      extra?['amount']?.toString()      ?? '520',
     description: extra?['description'] as String? ?? 'Consultation with MedNU',
+    serviceType: cartItemsRaw == null ? (extra?['serviceType'] as String? ?? 'consultation') : null,
+    bookingCollection: cartItemsRaw == null ? (extra?['bookingCollection'] as String? ?? 'service_requests') : null,
+    bookingData: cartItemsRaw == null ? ((extra?['bookingData'] as Map?) ?? const {}).cast<String, dynamic>() : null,
+    cartItems: cartItemsRaw?.map((e) => (e as Map).cast<String, dynamic>()).toList(),
   );
+}),
+GoRoute(path: AppRoutes.paymentHistory, builder: (c, s) => const PaymentHistoryScreen()),
+GoRoute(path: AppRoutes.invoice, builder: (c, s) {
+  final extra = s.extra as Map<String, dynamic>?;
+  return InvoiceScreen(paymentId: extra?['paymentId'] as String? ?? '');
 }),
 GoRoute(path: AppRoutes.referral,           builder: (c, s) => const ReferralScreen()),
       // Location

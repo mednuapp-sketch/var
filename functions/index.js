@@ -838,6 +838,15 @@ exports.onEmergencyDoctorRequest = onDocumentCreated(
     } catch (_) {}
 
     // Fetch ALL active doctors that have an FCM token.
+    //
+    // The `doctors` collection is shared by every partner role (doctor,
+    // ambulance, pharmacy, lab, caregiver) in the mednu_doctor app — a
+    // partner's `roles` array says which. Firestore can't express "array-
+    // contains 'doctor' OR roles field missing" as a single query, and a
+    // missing/empty `roles` field must still count as a doctor (legacy
+    // accounts predate the field — see AppRoleX.listFrom's same fallback
+    // on the client), so the role check happens in-memory after the fetch
+    // rather than as a query-level filter.
     const doctorsSnap = await db.collection("doctors")
       .where("status", "==", "active")
       .get();
@@ -845,7 +854,11 @@ exports.onEmergencyDoctorRequest = onDocumentCreated(
     const tokens = [];
     const doctorIds = [];
     doctorsSnap.forEach((doc) => {
-      const token = doc.data().fcmToken;
+      const data = doc.data();
+      const roles = Array.isArray(data.roles) && data.roles.length > 0 ? data.roles : ["doctor"];
+      if (!roles.includes("doctor")) return;
+
+      const token = data.fcmToken;
       if (token) {
         tokens.push(token);
         doctorIds.push(doc.id);
@@ -2577,6 +2590,1477 @@ exports.verifyMpinAndIssueToken = onCall(async (request) => {
   return { customToken };
 });
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// PAYMENT DISTRIBUTION & SETTLEMENT ENGINE
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// One engine, used by every service type (consultation, video_consultation,
+// diagnostics/lab_tests, pharmacy/medicine, ambulance, caregiver, and any
+// future service). Money never moves directly from a patient to a provider:
+//
+//   Patient pays (Razorpay or in-app wallet)
+//     -> capturePayment (server-authoritative: verifies the charge, applies
+//        a coupon, computes commission, writes ONE immutable `payments` doc
+//        + the matching `wallet_ledger` entries, all in one transaction)
+//     -> booking is completed by the provider (each vertical's own
+//        status-change trigger already existed before this section; each
+//        now also calls _transitionPaymentToEligible once, on the same
+//        pending->completed edge it already detects)
+//     -> admin batches eligible payments into a `settlements` doc and
+//        approves it (approveSettlement / bulkApproveSettlements)
+//     -> admin marks it paid after transferring funds outside the app
+//        (markSettlementPaid) -> provider_wallets updated, ledger entry
+//        written, provider notified.
+//
+// Design notes that matter if you're extending this later:
+//  - A specific provider is often NOT known at payment time (ambulance/lab/
+//    caregiver are marketplace-matched; a patient's payment can land before
+//    any partner has claimed the job). commission/providerAmount computed at
+//    capture time are therefore PROVISIONAL, using the service's default
+//    commission rule with no per-provider override. They are FINALIZED in
+//    _transitionPaymentToEligible, which always runs at completion time —
+//    by definition, the provider who did the work is known by then, however
+//    early or late the initial assignment happened. A `commission_adjustment`
+//    ledger entry captures the (usually zero) delta between the two.
+//  - Coupon discount is treated as pure marketing spend: commission and the
+//    provider's payout are computed from what the patient actually paid
+//    (paidAmount), not the pre-discount price, matching the spec's own
+//    "ProviderAmount = FinalPaidAmount − MedNuCommission" formula and its
+//    "commission calculated on final payable amount" note. The one
+//    exception is a `free_consultation` coupon: the provider is paid as if
+//    the original price had been paid in full (commissionBase =
+//    originalAmount even though paidAmount is 0) and the entire amount MedNu
+//    fronts is booked as a Coupon Expense — otherwise providers would have
+//    no incentive to honour a "free visit" campaign they didn't agree to.
+//  - Every money-mutating write here goes through db.runTransaction with a
+//    deterministic, existence-checked document id (via _ledgerId, same
+//    helper the wallet functions above already use), so retries — whether
+//    from a flaky client, an at-least-once Firestore trigger redelivery, or
+//    a genuine double-tap — can never double-credit or double-debit.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const _COMMISSION_TYPES = ["percentage", "fixed", "hybrid"];
+const _COUPON_DISCOUNT_TYPES = ["flat", "percentage", "free_consultation", "free_delivery", "cashback", "referral"];
+const _LARGE_PAYMENT_ALERT_THRESHOLD = 20000; // ₹20,000 — tune as needed from settlement_config later.
+
+// Where to find the assigned provider's id on each vertical's own booking
+// doc, keyed by the `serviceType` the patient app already uses when it
+// writes `service_requests`/`appointments`/`orders`. Extend this map — not
+// the functions below — when a new service type is added.
+const _PROVIDER_FIELD_BY_SERVICE = {
+  consultation: "doctorId",
+  video_consultation: "doctorId",
+  diagnostics: "labId",
+  lab_tests: "labId",
+  medicine: "pharmacyId",
+  pharmacy: "pharmacyId",
+  ambulance: "ambulanceId",
+  caregiver: "caregiverId",
+  nursing: "caregiverId",
+  home_care: "caregiverId",
+};
+
+function _round2(n) {
+  return Math.round((Number(n) || 0) * 100) / 100;
+}
+
+function _logSettlement(level, event, data) {
+  console.log(JSON.stringify({ level, module: "settlement", event, ...data }));
+}
+
+async function _assertAdmin(db, uid) {
+  if (!uid) throw new HttpsError("unauthenticated", "Sign in to continue.");
+  const snap = await db.collection("admins").doc(uid).get();
+  if (!snap.exists) throw new HttpsError("permission-denied", "Admin access required.");
+  return snap;
+}
+
+// Every admin action that touches money or coupon/commission config writes
+// one of these. Read-only for everyone but admins (see firestore.rules) —
+// nothing else in the app ever writes to this collection.
+function _auditLogDoc({ actorId, action, targetType, targetId, before, after }) {
+  return {
+    actorId, action, targetType, targetId,
+    before: before === undefined ? null : before,
+    after: after === undefined ? null : after,
+    createdAt: FieldValue.serverTimestamp(),
+  };
+}
+
+// ── Provider-side notification helper ─────────────────────────────────────────
+// Mirrors _sendPatientNotification's shape/dedup/never-throw contract for the
+// provider side, which previously had no shared equivalent (doctor/broadcast
+// paths each inlined their own messaging().send() calls).
+async function _sendProviderNotification(db, messaging, providerId, opts) {
+  const { title, body, type, serviceType = "general", bookingId = "", extraData = {} } = opts;
+  if (!providerId || !title || !body || !type) return;
+
+  if (bookingId) {
+    const dedupKey = `${type}_${bookingId}`;
+    const cutoff = Timestamp.fromDate(new Date(Date.now() - 30_000));
+    try {
+      const dup = await db.collection("provider_notifications").doc(providerId)
+        .collection("items").where("dedupKey", "==", dedupKey).where("createdAt", ">=", cutoff).limit(1).get();
+      if (!dup.empty) return;
+    } catch (_) {}
+  }
+
+  const deliverAt = Timestamp.fromDate(new Date(Date.now() - 90_000));
+  const notifDoc = {
+    type, title, body, serviceType, bookingId,
+    createdAt: FieldValue.serverTimestamp(), deliverAt, isRead: false, data: extraData,
+    expiresAt: Timestamp.fromDate(new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)),
+  };
+  if (bookingId) notifDoc.dedupKey = `${type}_${bookingId}`;
+
+  try {
+    await db.collection("provider_notifications").doc(providerId).collection("items").add(notifDoc);
+  } catch (err) {
+    console.error(`Failed to write provider notification for ${providerId}:`, err);
+    return;
+  }
+
+  let fcmToken = null;
+  try {
+    // Providers may be doctors, labs, pharmacies, ambulances, or caregivers —
+    // each keeps its profile in its own collection. Cheap enough to probe in
+    // order since this only runs on real settlement/earnings events.
+    const candidates = ["doctors", "lab_profiles", "pharmacy_profiles", "ambulance_profiles", "caregiver_profiles"];
+    for (const col of candidates) {
+      const snap = await db.collection(col).doc(providerId).get();
+      if (snap.exists && snap.get("fcmToken")) { fcmToken = snap.get("fcmToken"); break; }
+    }
+  } catch (_) {}
+  if (!fcmToken) return;
+
+  try {
+    await messaging.send({
+      token: fcmToken,
+      notification: { title, body },
+      data: Object.fromEntries(
+        Object.entries({ type, serviceType, bookingId, ...extraData }).map(([k, v]) => [k, String(v)])
+      ),
+      android: { priority: "high" },
+      apns: { payload: { aps: { sound: "default" } } },
+    });
+  } catch (err) {
+    console.error(`FCM send failed for provider ${providerId}:`, err.message);
+  }
+}
+
+// ── Admin alert helper ────────────────────────────────────────────────────────
+// Writes to the existing `admin_alerts` collection and pushes FCM to every
+// admin with a registered token. Never throws — an alert failing to send
+// must never fail the financial operation that triggered it.
+async function _sendAdminAlert(db, messaging, opts) {
+  const { title, body, type, extraData = {} } = opts;
+  try {
+    await db.collection("admin_alerts").add({
+      title, body, type, data: extraData, isRead: false, createdAt: FieldValue.serverTimestamp(),
+    });
+  } catch (err) {
+    console.error("Failed to write admin_alerts doc:", err.message);
+  }
+  try {
+    const tokensSnap = await db.collection("admins").get();
+    const tokens = tokensSnap.docs.map((d) => d.get("fcmToken")).filter(Boolean);
+    if (tokens.length) {
+      await messaging.sendEachForMulticast({ tokens, notification: { title, body }, data: { type } });
+    }
+  } catch (err) {
+    console.error("Failed to push admin alert:", err.message);
+  }
+}
+
+// ── Commission engine ─────────────────────────────────────────────────────────
+//
+// `ruleSnap` must already have been read via tx.get(...) by the caller —
+// this function does no I/O so it can be used on either side of a
+// transaction's read/write boundary.
+function _computeCommissionFromRule(ruleSnap, providerId, amount) {
+  const base = _round2(Math.max(0, amount));
+  if (base <= 0) return { commission: 0, providerAmount: 0 };
+  if (!ruleSnap || !ruleSnap.exists) {
+    // No admin-configured rule yet for this service — default to 0% rather
+    // than guessing. Logged loudly elsewhere so it gets noticed.
+    return { commission: 0, providerAmount: base };
+  }
+  const rule = ruleSnap.data() || {};
+  const override = providerId && rule.providerOverrides ? rule.providerOverrides[providerId] : null;
+  const type = (override && override.type) || rule.type;
+  const percentage = Number((override && override.percentage) ?? rule.percentage ?? 0);
+  const fixedAmount = Number((override && override.fixedAmount) ?? rule.fixedAmount ?? 0);
+
+  let commission = 0;
+  if (type === "percentage") {
+    commission = base * (percentage / 100);
+  } else if (type === "fixed") {
+    commission = fixedAmount;
+  } else if (type === "hybrid") {
+    commission = fixedAmount + base * (percentage / 100);
+  }
+  commission = Math.max(0, Math.min(_round2(commission), base));
+  return { commission, providerAmount: _round2(base - commission) };
+}
+
+// ── Coupon engine ─────────────────────────────────────────────────────────────
+//
+// Pure function — `couponSnap`/`redemptionSnap` must already be tx.get()'d
+// by the caller. Throws HttpsError on any validation failure so the caller
+// can surface it directly to the patient.
+function _applyCoupon({ couponSnap, redemptionSnap, serviceType, orderAmount, now }) {
+  if (!couponSnap || !couponSnap.exists) {
+    throw new HttpsError("not-found", "This coupon code doesn't exist.");
+  }
+  const c = couponSnap.data();
+  if (c.active === false) {
+    throw new HttpsError("failed-precondition", "This coupon is no longer active.");
+  }
+  const start = c.startDate?.toDate?.();
+  const end = c.endDate?.toDate?.();
+  if (start && now < start) throw new HttpsError("failed-precondition", "This coupon isn't live yet.");
+  if (end && now > end) throw new HttpsError("failed-precondition", "This coupon has expired.");
+
+  // serviceType is normally one string; captureCartPayment passes an array
+  // (a cart can mix service types under one coupon) — every item must be
+  // covered, or the coupon is rejected for the whole cart rather than
+  // partially applied.
+  const applicable = Array.isArray(c.applicableServices) ? c.applicableServices : [];
+  const requestedTypes = Array.isArray(serviceType) ? serviceType : [serviceType];
+  if (applicable.length > 0 && !requestedTypes.every((st) => applicable.includes(st))) {
+    throw new HttpsError("failed-precondition", "This coupon isn't valid for all items in your cart.");
+  }
+  const minOrder = Number(c.minOrderAmount) || 0;
+  if (orderAmount < minOrder) {
+    throw new HttpsError("failed-precondition", `Minimum order of ₹${minOrder} required for this coupon.`);
+  }
+  const usageLimit = Number(c.usageLimit) || 0;
+  if (usageLimit > 0 && (Number(c.usedCount) || 0) >= usageLimit) {
+    throw new HttpsError("failed-precondition", "This coupon has reached its usage limit.");
+  }
+  const perUserLimit = Number(c.perUserLimit) || 0;
+  const userCount = redemptionSnap && redemptionSnap.exists ? Number(redemptionSnap.get("count")) || 0 : 0;
+  if (perUserLimit > 0 && userCount >= perUserLimit) {
+    throw new HttpsError("failed-precondition", "You've already used this coupon the maximum number of times.");
+  }
+
+  const discountType = c.discountType;
+  if (!_COUPON_DISCOUNT_TYPES.includes(discountType)) {
+    throw new HttpsError("internal", "This coupon is misconfigured. Contact support.");
+  }
+
+  const maxDiscount = Number(c.maxDiscount) || Infinity;
+  let discount = 0;
+  let isFreeConsultation = false;
+
+  if (discountType === "flat" || discountType === "free_delivery") {
+    discount = Math.min(Number(c.discountValue) || 0, maxDiscount, orderAmount);
+  } else if (discountType === "percentage") {
+    discount = Math.min(orderAmount * ((Number(c.discountValue) || 0) / 100), maxDiscount);
+  } else if (discountType === "free_consultation") {
+    discount = orderAmount;
+    isFreeConsultation = true;
+  } else if (discountType === "cashback" || discountType === "referral") {
+    // These credit the patient's wallet AFTER payment rather than reducing
+    // the amount due now — handled by the existing referral/cashback wallet
+    // flow (grantReferralReward above), not here. No discount at capture time.
+    discount = 0;
+  }
+
+  discount = _round2(Math.max(0, discount));
+  return { discount, isFreeConsultation, discountType };
+}
+
+// ── Unified payment capture ───────────────────────────────────────────────────
+//
+// Replaces every screen's own hand-rolled "write a payments/booking doc after
+// Razorpay succeeds" logic (previously duplicated across doctor_profile_
+// screen.dart, cart_screen.dart, and service_booking_sheet.dart — and, as a
+// server-verified-nothing phantom-paid bug, consultation_screen.dart) with
+// one server-authoritative call. Every existing call site already follows a
+// "pay first, then write the booking doc" flow (PaymentScreen opens before
+// any booking doc exists), so this function CREATES the booking doc itself —
+// atomically, together with the payments doc and its ledger entries — rather
+// than requiring one to already exist. `bookingCollection` names which
+// collection to create it in (`service_requests`, `appointments`, `orders`,
+// etc.); `bookingData` is written verbatim as that doc's fields, exactly as
+// each caller already builds it today.
+//
+// `walletPortionAmount` exists because the app's existing wallet/MedNU Money
+// balances can cover PART of a payment even when the rest goes through
+// Razorpay (see PaymentScreen._applyBalanceDeductions, which already debits
+// that portion — atomically, server-side — before this function is ever
+// called). This function never re-debits that portion; for paymentMethod
+// 'razorpay' it only verifies the remaining gateway leg was actually charged
+// the right amount (cross-checked against the server-recorded Razorpay
+// order), and for 'already_settled' (the whole amount was wallet-covered,
+// no gateway leg at all) it just records what already happened. The exact
+// wallet debit amount is trusted from the client at that point because the
+// debit itself already went through a separate, server-authoritative,
+// balance-bounded call — the exposure this leaves is a possible small
+// misstatement of commission/settlement math on the wallet-covered slice,
+// not the ability to fabricate money; closing that fully would mean passing
+// a ledger reference through and is left for a future hardening pass.
+//
+// Request data: {
+//   serviceType, bookingCollection, bookingData: {...},
+//   originalAmount, couponCode?,
+//   paymentMethod: 'razorpay' | 'wallet' | 'already_settled',
+//   walletPortionAmount?, // portion already debited from wallet/MedNU Money
+//   // paymentMethod === 'razorpay':
+//   razorpay_order_id?, razorpay_payment_id?, razorpay_signature?,
+//   // paymentMethod === 'wallet' | 'already_settled':
+//   idempotencyKey?,
+// }
+// Response: { paymentId, bookingId, ...payment fields } — a second call with
+// the same Razorpay payment id (or the same idempotencyKey) returns the same
+// result, including the same bookingId, without moving any money or
+// creating a second booking.
+exports.capturePayment = onCall({ enforceAppCheck: true }, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Sign in to continue.");
+
+  const {
+    serviceType, bookingCollection, bookingData,
+    originalAmount: rawOriginal, couponCode,
+    paymentMethod,
+    walletPortionAmount: rawWalletPortion,
+    razorpay_order_id, razorpay_payment_id, razorpay_signature,
+    idempotencyKey,
+  } = request.data || {};
+
+  if (typeof serviceType !== "string" || !serviceType.trim()) {
+    throw new HttpsError("invalid-argument", "serviceType is required.");
+  }
+  if (typeof bookingCollection !== "string" || !bookingCollection.trim()) {
+    throw new HttpsError("invalid-argument", "bookingCollection is required.");
+  }
+  if (!bookingData || typeof bookingData !== "object" || Array.isArray(bookingData)) {
+    throw new HttpsError("invalid-argument", "bookingData is required.");
+  }
+  const originalAmount = _assertWalletAmount(rawOriginal);
+  if (!["razorpay", "wallet", "already_settled"].includes(paymentMethod)) {
+    throw new HttpsError("invalid-argument", "Unknown payment method.");
+  }
+  let walletPortionAmount = 0;
+  if (rawWalletPortion !== undefined) {
+    if (typeof rawWalletPortion !== "number" || !isFinite(rawWalletPortion) || rawWalletPortion < 0) {
+      throw new HttpsError("invalid-argument", "walletPortionAmount must be a non-negative number.");
+    }
+    walletPortionAmount = _round2(rawWalletPortion);
+  }
+
+  const db = getFirestore();
+  const messaging = getMessaging();
+
+  let paymentIdSource;
+  let razorpayOrderRef = null;
+  if (paymentMethod === "razorpay") {
+    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+      throw new HttpsError("invalid-argument", "Missing Razorpay verification fields.");
+    }
+    const body = `${razorpay_order_id}|${razorpay_payment_id}`;
+    const expected = crypto.createHmac("sha256", process.env.RAZORPAY_KEY_SECRET).update(body).digest("hex");
+    if (expected !== razorpay_signature) {
+      _logSettlement("WARNING", "capture_signature_mismatch", { uid, orderId: razorpay_order_id });
+      throw new HttpsError("unauthenticated", "Payment signature verification failed.");
+    }
+    paymentIdSource = `razorpay:${razorpay_payment_id}`;
+    razorpayOrderRef = db.collection("razorpay_orders").doc(razorpay_order_id);
+  } else {
+    // 'wallet' (this function performs the debit) and 'already_settled' (the
+    // debit already happened elsewhere) both need a client-supplied
+    // idempotency key for the same replay-safety reason the razorpay path
+    // gets for free from razorpay_payment_id.
+    if (typeof idempotencyKey !== "string" || !idempotencyKey.trim() || idempotencyKey.length > 200) {
+      throw new HttpsError("invalid-argument", "idempotencyKey is required.");
+    }
+    paymentIdSource = `${paymentMethod}:${uid}:${idempotencyKey.trim()}`;
+  }
+
+  const paymentId = _ledgerId(paymentIdSource);
+  const paymentRef = db.collection("payments").doc(paymentId);
+  const bookingRef = db.collection(bookingCollection).doc();
+  const userRef = db.collection("users").doc(uid);
+  const couponId = typeof couponCode === "string" && couponCode.trim() ? couponCode.trim().toUpperCase() : null;
+  const couponRef = couponId ? db.collection("coupons").doc(couponId) : null;
+  const redemptionRef = couponRef ? couponRef.collection("redemptions").doc(uid) : null;
+  const commissionRuleRef = db.collection("commission_rules").doc(serviceType);
+
+  let outcome;
+  try {
+    outcome = await db.runTransaction(async (tx) => {
+      // ── Reads ────────────────────────────────────────────────────────────
+      const existingPayment = await tx.get(paymentRef);
+      if (existingPayment.exists) {
+        return { alreadyCaptured: true, payment: existingPayment.data() };
+      }
+      const couponSnap = couponRef ? await tx.get(couponRef) : null;
+      const redemptionSnap = redemptionRef ? await tx.get(redemptionRef) : null;
+      const userSnap = paymentMethod === "wallet" ? await tx.get(userRef) : null;
+      const ruleSnap = await tx.get(commissionRuleRef);
+      const orderSnap = razorpayOrderRef ? await tx.get(razorpayOrderRef) : null;
+
+      // ── Coupon ───────────────────────────────────────────────────────────
+      let discount = 0;
+      let isFreeConsultation = false;
+      if (couponRef) {
+        const applied = _applyCoupon({
+          couponSnap, redemptionSnap, serviceType, orderAmount: originalAmount, now: new Date(),
+        });
+        discount = applied.discount;
+        isFreeConsultation = applied.isFreeConsultation;
+      }
+      const paidAmount = _round2(Math.max(0, originalAmount - discount));
+
+      if (walletPortionAmount > paidAmount + 0.01) {
+        throw new HttpsError("invalid-argument", "walletPortionAmount cannot exceed the payable amount.");
+      }
+
+      if (paymentMethod === "wallet") {
+        const balance = _walletBalanceOf(userSnap, "walletBalance");
+        if (balance < paidAmount) throw new HttpsError("failed-precondition", "Insufficient wallet balance.");
+      } else if (paymentMethod === "already_settled") {
+        if (Math.abs(walletPortionAmount - paidAmount) > 0.01) {
+          throw new HttpsError("failed-precondition",
+            "walletPortionAmount must equal the full payable amount for already_settled payments.");
+        }
+      } else {
+        // razorpay — cross-check the gateway leg's server-recorded order
+        // amount against what this call claims was charged there (paidAmount
+        // minus whatever the wallet already covered). Without this a client
+        // could apply a coupon or claim a large walletPortionAmount while
+        // paying the gateway only a token amount, and still have the full
+        // paidAmount recorded.
+        const gatewayAmount = _round2(paidAmount - walletPortionAmount);
+        if (!orderSnap || !orderSnap.exists) {
+          throw new HttpsError("failed-precondition", "Payment order not found. Contact support.");
+        }
+        const orderedAmount = _round2(Number(orderSnap.get("amountPaise") || 0) / 100);
+        if (Math.abs(orderedAmount - gatewayAmount) > 0.01) {
+          _logSettlement("WARNING", "capture_amount_mismatch", {
+            uid, orderedAmount, gatewayAmount, paidAmount, walletPortionAmount,
+          });
+          throw new HttpsError("failed-precondition", "Payment amount does not match the order. Contact support.");
+        }
+      }
+
+      // ── Commission (provisional if no provider is assigned yet) ────────────
+      const providerId = bookingData[_PROVIDER_FIELD_BY_SERVICE[serviceType]] || bookingData.providerId || null;
+      const commissionBase = isFreeConsultation ? originalAmount : paidAmount;
+      const { commission, providerAmount } = _computeCommissionFromRule(ruleSnap, providerId, commissionBase);
+
+      // ── Writes ───────────────────────────────────────────────────────────
+      if (paymentMethod === "wallet") {
+        const balance = _walletBalanceOf(userSnap, "walletBalance");
+        const balanceAfter = _round2(balance - paidAmount);
+        tx.set(userRef, { walletBalance: balanceAfter }, { merge: true });
+        tx.set(userRef.collection("transactions").doc(), _legacyTxDoc({
+          title: "Booking Payment", amount: paidAmount, type: "debit",
+          category: "booking_payment", walletType: "main",
+        }));
+      }
+      if (razorpayOrderRef) {
+        tx.update(razorpayOrderRef, {
+          status: "consumed", paymentId: razorpay_payment_id, consumedAt: FieldValue.serverTimestamp(),
+        });
+      }
+
+      tx.set(bookingRef, {
+        ...bookingData,
+        patientId: uid,
+        paymentId,
+        paymentStatus: "paid",
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+
+      const paymentDoc = {
+        paymentId, patientId: uid, providerId, serviceType,
+        bookingRef: { collection: bookingCollection, id: bookingRef.id },
+        originalAmount, discount, couponCode: couponId,
+        paidAmount, walletPortionAmount, commissionBase, commission, providerAmount,
+        commissionFinal: !!providerId,
+        paymentMethod,
+        razorpayPaymentId: paymentMethod === "razorpay" ? razorpay_payment_id : null,
+        status: "completed",
+        settlementStatus: "pending",
+        settlementId: null,
+        createdAt: FieldValue.serverTimestamp(),
+        completedAt: FieldValue.serverTimestamp(),
+      };
+      tx.set(paymentRef, paymentDoc);
+
+      // Ledger — mirrors the spec's worked example: Payment Received /
+      // Coupon Expense / Commission Reserved, written together as one batch.
+      tx.set(db.collection("wallet_ledger").doc(), _ledgerDoc({
+        uid, walletType: "platform", type: "credit", amount: paidAmount,
+        category: "payment_received", title: "Payment Received",
+        description: serviceType, source: `payment:${paymentId}:received`, balanceAfter: null,
+      }));
+      if (discount > 0) {
+        tx.set(db.collection("wallet_ledger").doc(), _ledgerDoc({
+          uid: "platform", walletType: "platform", type: "debit", amount: discount,
+          category: "coupon_expense", title: "Coupon Expense",
+          description: couponId, source: `payment:${paymentId}:coupon`, balanceAfter: null,
+        }));
+      }
+      tx.set(db.collection("wallet_ledger").doc(), _ledgerDoc({
+        uid: "platform", walletType: "platform", type: "credit", amount: commission,
+        category: "commission_reserved", title: "Commission Reserved",
+        description: serviceType, source: `payment:${paymentId}:commission`, balanceAfter: null,
+      }));
+
+      if (couponRef) {
+        tx.set(couponRef, { usedCount: FieldValue.increment(1) }, { merge: true });
+        tx.set(redemptionRef, {
+          count: FieldValue.increment(1), lastRedeemedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+      }
+
+      return { alreadyCaptured: false, payment: paymentDoc, bookingId: bookingRef.id };
+    });
+  } catch (err) {
+    if (err instanceof HttpsError) throw err;
+    _logSettlement("ERROR", "capture_payment_failed", { uid, serviceType, error: err.message });
+    _sendAdminAlert(db, messaging, {
+      title: "Failed Payment", body: `capturePayment failed for ${serviceType}: ${err.message}`,
+      type: "failed_payment", extraData: { uid, serviceType },
+    }).catch(() => {});
+    throw new HttpsError("internal", "Payment could not be recorded. Contact support before retrying.");
+  }
+
+  const bookingId = outcome.payment.bookingRef?.id || outcome.bookingId;
+  _logSettlement("INFO", outcome.alreadyCaptured ? "capture_payment_replay" : "capture_payment_success", {
+    paymentId, uid, serviceType, bookingId, paidAmount: outcome.payment.paidAmount,
+  });
+
+  if (!outcome.alreadyCaptured) {
+    _sendPatientNotification(db, messaging, uid, {
+      title: "Payment Successful",
+      body: `₹${outcome.payment.paidAmount.toFixed(0)} paid successfully.`,
+      type: "payment_successful", serviceType, bookingId,
+    }).catch(() => {});
+    if (outcome.payment.couponCode) {
+      _sendPatientNotification(db, messaging, uid, {
+        title: "Coupon Applied",
+        body: `${outcome.payment.couponCode} saved you ₹${outcome.payment.discount.toFixed(0)}.`,
+        type: "coupon_applied", serviceType, bookingId,
+      }).catch(() => {});
+    }
+    if (outcome.payment.paidAmount >= _LARGE_PAYMENT_ALERT_THRESHOLD) {
+      _sendAdminAlert(db, messaging, {
+        title: "Large Payment Alert",
+        body: `₹${outcome.payment.paidAmount.toFixed(0)} payment captured for ${serviceType}.`,
+        type: "large_payment", extraData: { paymentId },
+      }).catch(() => {});
+    }
+  }
+
+  return { paymentId, bookingId, ...outcome.payment };
+});
+
+// ── Validate a coupon without paying (live discount preview in the app) ──────
+exports.validateCoupon = onCall({ enforceAppCheck: true }, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Sign in to continue.");
+  const { couponCode, serviceType, orderAmount: rawAmount } = request.data || {};
+  if (typeof couponCode !== "string" || !couponCode.trim()) {
+    throw new HttpsError("invalid-argument", "A coupon code is required.");
+  }
+  const orderAmount = _assertWalletAmount(rawAmount);
+  const db = getFirestore();
+  const couponId = couponCode.trim().toUpperCase();
+  const couponRef = db.collection("coupons").doc(couponId);
+  const redemptionRef = couponRef.collection("redemptions").doc(uid);
+
+  const [couponSnap, redemptionSnap] = await Promise.all([couponRef.get(), redemptionRef.get()]);
+  const applied = _applyCoupon({ couponSnap, redemptionSnap, serviceType, orderAmount, now: new Date() });
+  return {
+    valid: true,
+    discount: applied.discount,
+    payable: _round2(Math.max(0, orderAmount - applied.discount)),
+    title: couponSnap.get("title") || couponId,
+    discountType: applied.discountType,
+  };
+});
+
+// ── Cart checkout: one charge funding multiple bookings ───────────────────────
+//
+// cart_screen.dart lets a patient check out several different service items
+// (and/or a bundled medicine order) in a single Razorpay charge. capturePayment
+// above assumes one payment funds exactly one booking, which doesn't fit —
+// this is the multi-item sibling: same verification/coupon/commission
+// machinery, but it creates N booking docs and N `payments` docs (one per
+// item, each independently valid to every downstream consumer — the
+// settlement engine, refunds, the admin dashboard — which never need to know
+// a "cart" was involved) in a single atomic transaction funded by one charge.
+// A coupon applied to a cart is validated against every item's serviceType
+// at once and its discount is prorated across items by each item's share of
+// the cart total, so per-item commission still lands on the right number.
+//
+// Request data: {
+//   items: [{ serviceType, bookingCollection, bookingData, amount }, ...],
+//   couponCode?, paymentMethod: 'razorpay' | 'wallet' | 'already_settled',
+//   walletPortionAmount?,
+//   razorpay_order_id?, razorpay_payment_id?, razorpay_signature?,
+//   idempotencyKey?,
+// }
+// Response: { payments: [{ paymentId, bookingId, bookingCollection,
+//   serviceType, paidAmount }, ...] } — replaying the same razorpay payment
+// id / idempotencyKey returns the same set without moving money twice.
+exports.captureCartPayment = onCall({ enforceAppCheck: true }, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Sign in to continue.");
+
+  const {
+    items,
+    couponCode,
+    paymentMethod,
+    walletPortionAmount: rawWalletPortion,
+    razorpay_order_id, razorpay_payment_id, razorpay_signature,
+    idempotencyKey,
+  } = request.data || {};
+
+  if (!Array.isArray(items) || !items.length) {
+    throw new HttpsError("invalid-argument", "At least one cart item is required.");
+  }
+  if (items.length > 50) {
+    throw new HttpsError("invalid-argument", "Too many items in one checkout.");
+  }
+  const normalizedItems = items.map((it, i) => {
+    if (!it || typeof it.serviceType !== "string" || !it.serviceType.trim()) {
+      throw new HttpsError("invalid-argument", `Item ${i}: serviceType is required.`);
+    }
+    if (typeof it.bookingCollection !== "string" || !it.bookingCollection.trim()) {
+      throw new HttpsError("invalid-argument", `Item ${i}: bookingCollection is required.`);
+    }
+    if (!it.bookingData || typeof it.bookingData !== "object" || Array.isArray(it.bookingData)) {
+      throw new HttpsError("invalid-argument", `Item ${i}: bookingData is required.`);
+    }
+    return {
+      serviceType: it.serviceType.trim(),
+      bookingCollection: it.bookingCollection.trim(),
+      bookingData: it.bookingData,
+      amount: _assertWalletAmount(it.amount),
+    };
+  });
+  const originalAmount = _round2(normalizedItems.reduce((s, it) => s + it.amount, 0));
+  if (!["razorpay", "wallet", "already_settled"].includes(paymentMethod)) {
+    throw new HttpsError("invalid-argument", "Unknown payment method.");
+  }
+  let walletPortionAmount = 0;
+  if (rawWalletPortion !== undefined) {
+    if (typeof rawWalletPortion !== "number" || !isFinite(rawWalletPortion) || rawWalletPortion < 0) {
+      throw new HttpsError("invalid-argument", "walletPortionAmount must be a non-negative number.");
+    }
+    walletPortionAmount = _round2(rawWalletPortion);
+  }
+
+  const db = getFirestore();
+  const messaging = getMessaging();
+
+  let paymentIdSource;
+  let razorpayOrderRef = null;
+  if (paymentMethod === "razorpay") {
+    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+      throw new HttpsError("invalid-argument", "Missing Razorpay verification fields.");
+    }
+    const body = `${razorpay_order_id}|${razorpay_payment_id}`;
+    const expected = crypto.createHmac("sha256", process.env.RAZORPAY_KEY_SECRET).update(body).digest("hex");
+    if (expected !== razorpay_signature) {
+      _logSettlement("WARNING", "cart_capture_signature_mismatch", { uid, orderId: razorpay_order_id });
+      throw new HttpsError("unauthenticated", "Payment signature verification failed.");
+    }
+    paymentIdSource = `razorpay:${razorpay_payment_id}`;
+    razorpayOrderRef = db.collection("razorpay_orders").doc(razorpay_order_id);
+  } else {
+    if (typeof idempotencyKey !== "string" || !idempotencyKey.trim() || idempotencyKey.length > 200) {
+      throw new HttpsError("invalid-argument", "idempotencyKey is required.");
+    }
+    paymentIdSource = `${paymentMethod}:${uid}:${idempotencyKey.trim()}`;
+  }
+
+  const cartId = _ledgerId(paymentIdSource);
+  const couponId = typeof couponCode === "string" && couponCode.trim() ? couponCode.trim().toUpperCase() : null;
+  const couponRef = couponId ? db.collection("coupons").doc(couponId) : null;
+  const redemptionRef = couponRef ? couponRef.collection("redemptions").doc(uid) : null;
+  const userRef = db.collection("users").doc(uid);
+
+  // One paymentId per item, all derived from the same cart id. They're all
+  // written in the same transaction, so the first one existing is proof the
+  // whole cart already ran — that alone is enough for the idempotency check.
+  const itemRefs = normalizedItems.map((it, i) => {
+    const paymentId = _ledgerId(`${cartId}:${i}`);
+    return {
+      ...it, paymentId,
+      paymentRef: db.collection("payments").doc(paymentId),
+      bookingRef: db.collection(it.bookingCollection).doc(),
+      ruleRef: db.collection("commission_rules").doc(it.serviceType),
+    };
+  });
+
+  let outcome;
+  try {
+    outcome = await db.runTransaction(async (tx) => {
+      // ── Reads ────────────────────────────────────────────────────────────
+      const firstExisting = await tx.get(itemRefs[0].paymentRef);
+      if (firstExisting.exists) {
+        const allSnaps = await Promise.all(itemRefs.map((it) => tx.get(it.paymentRef)));
+        return { alreadyCaptured: true, payments: allSnaps.map((s) => s.data()) };
+      }
+      const couponSnap = couponRef ? await tx.get(couponRef) : null;
+      const redemptionSnap = redemptionRef ? await tx.get(redemptionRef) : null;
+      const userSnap = paymentMethod === "wallet" ? await tx.get(userRef) : null;
+      const orderSnap = razorpayOrderRef ? await tx.get(razorpayOrderRef) : null;
+      const ruleSnaps = await Promise.all(itemRefs.map((it) => tx.get(it.ruleRef)));
+
+      // ── Coupon — applied once against the cart total; the discount is
+      // prorated across items by each item's share of that total so
+      // per-item commission still lands on the right number ────────────────
+      let discount = 0;
+      if (couponRef) {
+        const applied = _applyCoupon({
+          couponSnap, redemptionSnap,
+          serviceType: normalizedItems.map((it) => it.serviceType),
+          orderAmount: originalAmount, now: new Date(),
+        });
+        discount = applied.discount;
+      }
+      const paidAmount = _round2(Math.max(0, originalAmount - discount));
+
+      if (walletPortionAmount > paidAmount + 0.01) {
+        throw new HttpsError("invalid-argument", "walletPortionAmount cannot exceed the payable amount.");
+      }
+
+      if (paymentMethod === "wallet") {
+        const balance = _walletBalanceOf(userSnap, "walletBalance");
+        if (balance < paidAmount) throw new HttpsError("failed-precondition", "Insufficient wallet balance.");
+      } else if (paymentMethod === "already_settled") {
+        if (Math.abs(walletPortionAmount - paidAmount) > 0.01) {
+          throw new HttpsError("failed-precondition",
+            "walletPortionAmount must equal the full payable amount for already_settled payments.");
+        }
+      } else {
+        const gatewayAmount = _round2(paidAmount - walletPortionAmount);
+        if (!orderSnap || !orderSnap.exists) {
+          throw new HttpsError("failed-precondition", "Payment order not found. Contact support.");
+        }
+        const orderedAmount = _round2(Number(orderSnap.get("amountPaise") || 0) / 100);
+        if (Math.abs(orderedAmount - gatewayAmount) > 0.01) {
+          _logSettlement("WARNING", "cart_capture_amount_mismatch", {
+            uid, orderedAmount, gatewayAmount, paidAmount, walletPortionAmount,
+          });
+          throw new HttpsError("failed-precondition", "Payment amount does not match the order. Contact support.");
+        }
+      }
+
+      // ── Writes ───────────────────────────────────────────────────────────
+      if (paymentMethod === "wallet") {
+        const balance = _walletBalanceOf(userSnap, "walletBalance");
+        const balanceAfter = _round2(balance - paidAmount);
+        tx.set(userRef, { walletBalance: balanceAfter }, { merge: true });
+        tx.set(userRef.collection("transactions").doc(), _legacyTxDoc({
+          title: "Cart Payment", amount: paidAmount, type: "debit",
+          category: "booking_payment", walletType: "main",
+        }));
+      }
+      if (razorpayOrderRef) {
+        tx.update(razorpayOrderRef, {
+          status: "consumed", paymentId: razorpay_payment_id, consumedAt: FieldValue.serverTimestamp(),
+        });
+      }
+
+      const payments = [];
+      itemRefs.forEach((it, i) => {
+        const itemShare = originalAmount > 0 ? it.amount / originalAmount : 0;
+        const itemDiscount = _round2(discount * itemShare);
+        const itemPaid = _round2(Math.max(0, it.amount - itemDiscount));
+        const providerId =
+          it.bookingData[_PROVIDER_FIELD_BY_SERVICE[it.serviceType]] || it.bookingData.providerId || null;
+        const { commission, providerAmount } = _computeCommissionFromRule(ruleSnaps[i], providerId, itemPaid);
+
+        tx.set(it.bookingRef, {
+          ...it.bookingData,
+          patientId: uid,
+          paymentId: it.paymentId,
+          paymentStatus: "paid",
+          createdAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        const paymentDoc = {
+          paymentId: it.paymentId, patientId: uid, providerId, serviceType: it.serviceType,
+          bookingRef: { collection: it.bookingCollection, id: it.bookingRef.id },
+          cartId, originalAmount: it.amount, discount: itemDiscount, couponCode: couponId,
+          paidAmount: itemPaid, commissionBase: itemPaid, commission, providerAmount,
+          commissionFinal: !!providerId,
+          paymentMethod,
+          razorpayPaymentId: paymentMethod === "razorpay" ? razorpay_payment_id : null,
+          status: "completed", settlementStatus: "pending", settlementId: null,
+          createdAt: FieldValue.serverTimestamp(), completedAt: FieldValue.serverTimestamp(),
+        };
+        tx.set(it.paymentRef, paymentDoc);
+        payments.push(paymentDoc);
+
+        tx.set(db.collection("wallet_ledger").doc(), _ledgerDoc({
+          uid, walletType: "platform", type: "credit", amount: itemPaid,
+          category: "payment_received", title: "Payment Received",
+          description: it.serviceType, source: `payment:${it.paymentId}:received`, balanceAfter: null,
+        }));
+        if (itemDiscount > 0) {
+          tx.set(db.collection("wallet_ledger").doc(), _ledgerDoc({
+            uid: "platform", walletType: "platform", type: "debit", amount: itemDiscount,
+            category: "coupon_expense", title: "Coupon Expense",
+            description: couponId, source: `payment:${it.paymentId}:coupon`, balanceAfter: null,
+          }));
+        }
+        tx.set(db.collection("wallet_ledger").doc(), _ledgerDoc({
+          uid: "platform", walletType: "platform", type: "credit", amount: commission,
+          category: "commission_reserved", title: "Commission Reserved",
+          description: it.serviceType, source: `payment:${it.paymentId}:commission`, balanceAfter: null,
+        }));
+      });
+
+      if (couponRef) {
+        tx.set(couponRef, { usedCount: FieldValue.increment(1) }, { merge: true });
+        tx.set(redemptionRef, {
+          count: FieldValue.increment(1), lastRedeemedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+      }
+
+      return { alreadyCaptured: false, payments };
+    });
+  } catch (err) {
+    if (err instanceof HttpsError) throw err;
+    _logSettlement("ERROR", "cart_capture_payment_failed", { uid, error: err.message });
+    _sendAdminAlert(db, messaging, {
+      title: "Failed Payment", body: `captureCartPayment failed: ${err.message}`,
+      type: "failed_payment", extraData: { uid },
+    }).catch(() => {});
+    throw new HttpsError("internal", "Payment could not be recorded. Contact support before retrying.");
+  }
+
+  _logSettlement("INFO", outcome.alreadyCaptured ? "cart_capture_replay" : "cart_capture_success", {
+    uid, itemCount: outcome.payments.length,
+  });
+
+  if (!outcome.alreadyCaptured) {
+    const total = _round2(outcome.payments.reduce((s, p) => s + p.paidAmount, 0));
+    _sendPatientNotification(db, messaging, uid, {
+      title: "Payment Successful",
+      body: `₹${total.toFixed(0)} paid successfully for ${outcome.payments.length} item${outcome.payments.length === 1 ? "" : "s"}.`,
+      type: "payment_successful",
+    }).catch(() => {});
+    if (outcome.payments[0]?.couponCode) {
+      _sendPatientNotification(db, messaging, uid, {
+        title: "Coupon Applied",
+        body: `${outcome.payments[0].couponCode} applied to your order.`,
+        type: "coupon_applied",
+      }).catch(() => {});
+    }
+    if (total >= _LARGE_PAYMENT_ALERT_THRESHOLD) {
+      _sendAdminAlert(db, messaging, {
+        title: "Large Payment Alert",
+        body: `₹${total.toFixed(0)} cart payment captured (${outcome.payments.length} items).`,
+        type: "large_payment", extraData: { uid },
+      }).catch(() => {});
+    }
+  }
+
+  return {
+    payments: outcome.payments.map((p) => ({
+      paymentId: p.paymentId,
+      bookingId: p.bookingRef.id,
+      bookingCollection: p.bookingRef.collection,
+      serviceType: p.serviceType,
+      paidAmount: p.paidAmount,
+    })),
+  };
+});
+
+// ── Transition a payment into the settlement queue ────────────────────────────
+//
+// Called once by every vertical's own completion trigger, on the same
+// "not-yet-completed -> completed" edge that trigger already detects for its
+// own idempotency-guarded ledger write. Deliberately its OWN transaction,
+// run AFTER the caller's existing ledger-credit transaction resolves rather
+// than nested inside it — interleaving this function's reads into the
+// middle of that transaction would violate Firestore's "all reads before
+// all writes" rule. Safe to call unconditionally on every invocation of the
+// caller's trigger, including redeliveries: it no-ops unless
+// payments/{id}.settlementStatus is still "pending".
+async function _transitionPaymentToEligible(db, { sourceCollection, sourceId, providerId, serviceType }) {
+  if (!sourceCollection || !sourceId || !providerId) return;
+  try {
+    await db.runTransaction(async (tx) => {
+      const sourceRef = db.collection(sourceCollection).doc(sourceId);
+      const sourceSnap = await tx.get(sourceRef);
+      const paymentId = sourceSnap.exists ? sourceSnap.get("paymentId") : null;
+      if (!paymentId) return;
+
+      const paymentRef = db.collection("payments").doc(paymentId);
+      const paymentSnap = await tx.get(paymentRef);
+      if (!paymentSnap.exists || paymentSnap.get("settlementStatus") !== "pending") return;
+      const payment = paymentSnap.data();
+
+      const ruleSnap = await tx.get(db.collection("commission_rules").doc(serviceType));
+      const walletRef = db.collection("provider_wallets").doc(providerId);
+      const walletSnap = await tx.get(walletRef);
+
+      const commissionBase = Number(payment.commissionBase) || 0;
+      const { commission, providerAmount } = _computeCommissionFromRule(ruleSnap, providerId, commissionBase);
+      const adjustment = _round2(providerAmount - (Number(payment.providerAmount) || 0));
+
+      tx.update(paymentRef, {
+        providerId, commission, providerAmount, commissionFinal: true,
+        settlementStatus: "eligible", eligibleAt: FieldValue.serverTimestamp(),
+      });
+
+      if (adjustment !== 0) {
+        tx.set(db.collection("wallet_ledger").doc(), _ledgerDoc({
+          uid: "platform", walletType: "platform",
+          type: adjustment > 0 ? "debit" : "credit", amount: Math.abs(adjustment),
+          category: "commission_adjustment", title: "Commission Adjustment",
+          description: `Finalized on provider assignment for payment ${paymentId}`,
+          source: `payment:${paymentId}:adjustment`, balanceAfter: null,
+        }));
+      }
+
+      const pendingBefore = walletSnap.exists ? Number(walletSnap.get("pendingEarnings")) || 0 : 0;
+      tx.set(walletRef, {
+        providerId, serviceType,
+        pendingEarnings: _round2(pendingBefore + providerAmount),
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+
+      tx.set(db.collection("wallet_ledger").doc(), _ledgerDoc({
+        uid: providerId, walletType: "provider", type: "credit", amount: providerAmount,
+        category: "settlement_pending", title: "Earnings Pending Settlement",
+        description: serviceType, source: `payment:${paymentId}:eligible`, balanceAfter: null,
+      }));
+    });
+
+    _sendProviderNotification(db, getMessaging(), providerId, {
+      title: "New Earnings", body: "A completed booking is now pending settlement.",
+      type: "new_earnings", serviceType,
+    }).catch(() => {});
+  } catch (err) {
+    _logSettlement("ERROR", "transition_payment_failed", { sourceCollection, sourceId, providerId, error: err.message });
+    throw err;
+  }
+}
+
+// ── Doctor vertical parity ────────────────────────────────────────────────────
+//
+// The other 4 verticals (lab/pharmacy/ambulance/caregiver) already had their
+// own completion -> ledger-credit triggers before this section existed;
+// doctor never did (earnings were aggregated client-side from
+// `appointments.fee`). This brings doctor onto the same engine as everyone
+// else. A separate export (not merged into the existing
+// exports.onAppointmentStatusChange notification trigger above) — Cloud
+// Functions v2 allows multiple independent triggers on the same document
+// path, and keeping this one separate means the working notification
+// trigger is never touched.
+exports.onAppointmentSettlement = onDocumentUpdated(
+  "appointments/{appointmentId}",
+  async (event) => {
+    const before = event.data.before.data();
+    const after = event.data.after.data();
+    if (before.status === after.status) return;
+    if (after.status !== "completed" || !after.doctorId) return;
+
+    await _transitionPaymentToEligible(getFirestore(), {
+      sourceCollection: "appointments",
+      sourceId: event.params.appointmentId,
+      providerId: after.doctorId,
+      serviceType: after.consultationType === "video" ? "video_consultation" : "consultation",
+    });
+  }
+);
+
+// ── Admin: Commission rules ───────────────────────────────────────────────────
+//
+// Request data: { serviceType, type: 'percentage'|'fixed'|'hybrid',
+//                  percentage?, fixedAmount?, providerOverrides? }
+exports.setCommissionRule = onCall({ enforceAppCheck: true }, async (request) => {
+  const uid = request.auth?.uid;
+  const db = getFirestore();
+  await _assertAdmin(db, uid);
+
+  const { serviceType, type, percentage, fixedAmount, providerOverrides } = request.data || {};
+  if (typeof serviceType !== "string" || !serviceType.trim()) {
+    throw new HttpsError("invalid-argument", "serviceType is required.");
+  }
+  if (!_COMMISSION_TYPES.includes(type)) {
+    throw new HttpsError("invalid-argument", "type must be percentage, fixed, or hybrid.");
+  }
+  const ruleRef = db.collection("commission_rules").doc(serviceType.trim());
+  const before = (await ruleRef.get()).data() || null;
+  const after = {
+    serviceType: serviceType.trim(), type,
+    percentage: Number(percentage) || 0,
+    fixedAmount: Number(fixedAmount) || 0,
+    providerOverrides: providerOverrides && typeof providerOverrides === "object" ? providerOverrides : {},
+    updatedBy: uid, updatedAt: FieldValue.serverTimestamp(),
+  };
+  await ruleRef.set(after);
+  await db.collection("audit_logs").add(_auditLogDoc({
+    actorId: uid, action: "setCommissionRule", targetType: "commission_rules", targetId: serviceType, before, after,
+  }));
+  return { success: true };
+});
+
+// ── Admin: Coupons ────────────────────────────────────────────────────────────
+function _validateCouponPayload(data) {
+  const {
+    code, title, description = "", discountType, discountValue,
+    maxDiscount = null, minOrderAmount = 0, startDate, endDate,
+    applicableServices = [], usageLimit = 0, perUserLimit = 0, active = true,
+  } = data || {};
+  if (typeof code !== "string" || !code.trim()) throw new HttpsError("invalid-argument", "A coupon code is required.");
+  if (typeof title !== "string" || !title.trim()) throw new HttpsError("invalid-argument", "A title is required.");
+  if (!_COUPON_DISCOUNT_TYPES.includes(discountType)) {
+    throw new HttpsError("invalid-argument", "Invalid discountType.");
+  }
+  const needsValue = !["free_consultation", "cashback", "referral"].includes(discountType);
+  if (needsValue && (typeof discountValue !== "number" || discountValue <= 0)) {
+    throw new HttpsError("invalid-argument", "discountValue must be a positive number.");
+  }
+  return {
+    code: code.trim().toUpperCase(), title: title.trim(), description,
+    discountType, discountValue: Number(discountValue) || 0,
+    maxDiscount: maxDiscount == null ? null : Number(maxDiscount),
+    minOrderAmount: Number(minOrderAmount) || 0,
+    startDate: startDate ? Timestamp.fromDate(new Date(startDate)) : null,
+    endDate: endDate ? Timestamp.fromDate(new Date(endDate)) : null,
+    applicableServices: Array.isArray(applicableServices) ? applicableServices : [],
+    usageLimit: Number(usageLimit) || 0,
+    perUserLimit: Number(perUserLimit) || 0,
+    active: !!active,
+  };
+}
+
+exports.createCoupon = onCall({ enforceAppCheck: true }, async (request) => {
+  const uid = request.auth?.uid;
+  const db = getFirestore();
+  await _assertAdmin(db, uid);
+  const payload = _validateCouponPayload(request.data);
+  const ref = db.collection("coupons").doc(payload.code);
+  const existing = await ref.get();
+  if (existing.exists) throw new HttpsError("already-exists", "A coupon with this code already exists.");
+  const doc = { ...payload, usedCount: 0, createdBy: uid, createdAt: FieldValue.serverTimestamp() };
+  await ref.set(doc);
+  await db.collection("audit_logs").add(_auditLogDoc({
+    actorId: uid, action: "createCoupon", targetType: "coupons", targetId: payload.code, before: null, after: doc,
+  }));
+  return { success: true, code: payload.code };
+});
+
+exports.updateCoupon = onCall({ enforceAppCheck: true }, async (request) => {
+  const uid = request.auth?.uid;
+  const db = getFirestore();
+  await _assertAdmin(db, uid);
+  const { code } = request.data || {};
+  if (typeof code !== "string" || !code.trim()) throw new HttpsError("invalid-argument", "code is required.");
+  const payload = _validateCouponPayload({ ...request.data, code });
+  const ref = db.collection("coupons").doc(payload.code);
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError("not-found", "Coupon not found.");
+  const before = snap.data();
+  const after = { ...payload, usedCount: before.usedCount || 0, updatedBy: uid, updatedAt: FieldValue.serverTimestamp() };
+  await ref.set(after, { merge: true });
+  await db.collection("audit_logs").add(_auditLogDoc({
+    actorId: uid, action: "updateCoupon", targetType: "coupons", targetId: payload.code, before, after,
+  }));
+  return { success: true };
+});
+
+exports.toggleCoupon = onCall({ enforceAppCheck: true }, async (request) => {
+  const uid = request.auth?.uid;
+  const db = getFirestore();
+  await _assertAdmin(db, uid);
+  const { code, active } = request.data || {};
+  if (typeof code !== "string" || !code.trim()) throw new HttpsError("invalid-argument", "code is required.");
+  const ref = db.collection("coupons").doc(code.trim().toUpperCase());
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError("not-found", "Coupon not found.");
+  await ref.update({ active: !!active, updatedBy: uid, updatedAt: FieldValue.serverTimestamp() });
+  await db.collection("audit_logs").add(_auditLogDoc({
+    actorId: uid, action: "toggleCoupon", targetType: "coupons", targetId: ref.id,
+    before: { active: snap.get("active") }, after: { active: !!active },
+  }));
+  return { success: true };
+});
+
+// Soft-delete only — a hard delete would orphan coupon_redemptions history
+// and make past `payments.couponCode` references unresolvable.
+exports.deactivateCoupon = onCall({ enforceAppCheck: true }, async (request) => {
+  const uid = request.auth?.uid;
+  const db = getFirestore();
+  await _assertAdmin(db, uid);
+  const { code } = request.data || {};
+  if (typeof code !== "string" || !code.trim()) throw new HttpsError("invalid-argument", "code is required.");
+  const ref = db.collection("coupons").doc(code.trim().toUpperCase());
+  await ref.update({ active: false, deactivatedBy: uid, deactivatedAt: FieldValue.serverTimestamp() });
+  await db.collection("audit_logs").add(_auditLogDoc({
+    actorId: uid, action: "deactivateCoupon", targetType: "coupons", targetId: ref.id, before: null, after: { active: false },
+  }));
+  return { success: true };
+});
+
+// ── Admin: Settlement engine ──────────────────────────────────────────────────
+//
+// `settlements` batches N eligible `payments` docs for one provider. Moving
+// a payment from "eligible" into a settlement (and later to "paid") always
+// goes through these functions — the admin panel never writes settlement
+// status directly, so every transition is audit-logged and provider_wallets
+// stays in sync with reality.
+async function _createSettlementForProvider(db, tx, { providerId, paymentDocs }) {
+  const totalAmount = _round2(paymentDocs.reduce((sum, p) => sum + (Number(p.providerAmount) || 0), 0));
+  const settlementRef = db.collection("settlements").doc();
+  const settlement = {
+    providerId,
+    paymentIds: paymentDocs.map((p) => p.id),
+    totalAmount,
+    status: "pending", // awaiting admin review — see approveSettlement
+    createdAt: FieldValue.serverTimestamp(),
+  };
+  tx.set(settlementRef, settlement);
+  paymentDocs.forEach((p) => {
+    tx.update(db.collection("payments").doc(p.id), { settlementStatus: "pending_review", settlementId: settlementRef.id });
+  });
+  return { id: settlementRef.id, ...settlement };
+}
+
+async function _runSettlementQueueOnce(db) {
+  const eligibleSnap = await db.collection("payments").where("settlementStatus", "==", "eligible").limit(500).get();
+  if (eligibleSnap.empty) return [];
+
+  const byProvider = new Map();
+  eligibleSnap.docs.forEach((d) => {
+    const providerId = d.get("providerId");
+    if (!providerId) return;
+    if (!byProvider.has(providerId)) byProvider.set(providerId, []);
+    byProvider.get(providerId).push({ id: d.id, ...d.data() });
+  });
+
+  const created = [];
+  for (const [providerId, paymentDocs] of byProvider) {
+    try {
+      const settlement = await db.runTransaction(async (tx) => {
+        // Re-check each payment is still eligible inside the transaction —
+        // a concurrent refund or an earlier partial batch run could have
+        // already moved one out from under us.
+        const fresh = [];
+        for (const p of paymentDocs) {
+          const snap = await tx.get(db.collection("payments").doc(p.id));
+          if (snap.exists && snap.get("settlementStatus") === "eligible") fresh.push({ id: p.id, ...snap.data() });
+        }
+        if (!fresh.length) return null;
+        return _createSettlementForProvider(db, tx, { providerId, paymentDocs: fresh });
+      });
+      if (settlement) created.push(settlement);
+    } catch (err) {
+      _logSettlement("ERROR", "settlement_batch_failed", { providerId, error: err.message });
+      _sendAdminAlert(db, getMessaging(), {
+        title: "Settlement Failure", body: `Batching failed for provider ${providerId}: ${err.message}`,
+        type: "settlement_failure", extraData: { providerId },
+      }).catch(() => {});
+    }
+  }
+  return created;
+}
+
+// Runs on the admin-configured schedule (settlement_config/global.frequency).
+// "Manual" frequency skips the scheduled run entirely — admins use
+// runManualSettlementBatch instead, which calls the exact same batching
+// logic so both paths behave identically.
+exports.runSettlementQueue = onSchedule({ schedule: "every 24 hours", timeZone: "UTC" }, async () => {
+  const db = getFirestore();
+  const configSnap = await db.collection("settlement_config").doc("global").get();
+  const frequency = configSnap.exists ? configSnap.get("frequency") : "daily";
+  if (frequency === "manual") {
+    _logSettlement("INFO", "settlement_queue_skipped_manual_mode", {});
+    return;
+  }
+  const created = await _runSettlementQueueOnce(db);
+  _logSettlement("INFO", "settlement_queue_run", { frequency, batchesCreated: created.length });
+});
+
+exports.runManualSettlementBatch = onCall({ enforceAppCheck: true }, async (request) => {
+  const uid = request.auth?.uid;
+  const db = getFirestore();
+  await _assertAdmin(db, uid);
+  const created = await _runSettlementQueueOnce(db);
+  await db.collection("audit_logs").add(_auditLogDoc({
+    actorId: uid, action: "runManualSettlementBatch", targetType: "settlements", targetId: null,
+    before: null, after: { batchesCreated: created.length },
+  }));
+  return { success: true, batchesCreated: created.length };
+});
+
+exports.approveSettlement = onCall({ enforceAppCheck: true }, async (request) => {
+  const uid = request.auth?.uid;
+  const db = getFirestore();
+  await _assertAdmin(db, uid);
+  const { settlementId } = request.data || {};
+  if (typeof settlementId !== "string" || !settlementId.trim()) {
+    throw new HttpsError("invalid-argument", "settlementId is required.");
+  }
+  const ref = db.collection("settlements").doc(settlementId);
+  const before = (await ref.get()).data();
+  if (!before) throw new HttpsError("not-found", "Settlement not found.");
+  if (!["pending", "held"].includes(before.status)) {
+    throw new HttpsError("failed-precondition", `Cannot approve a settlement in status "${before.status}".`);
+  }
+  await ref.update({
+    status: "approved", approvedBy: uid, approvedAt: FieldValue.serverTimestamp(), holdReason: FieldValue.delete(),
+  });
+  await db.collection("audit_logs").add(_auditLogDoc({
+    actorId: uid, action: "approveSettlement", targetType: "settlements", targetId: settlementId,
+    before: { status: before.status }, after: { status: "approved" },
+  }));
+  _sendProviderNotification(db, getMessaging(), before.providerId, {
+    title: "Settlement Approved",
+    body: `Your settlement of ₹${before.totalAmount.toFixed(0)} has been approved for payout.`,
+    type: "settlement_approved",
+  }).catch(() => {});
+  return { success: true };
+});
+
+exports.bulkApproveSettlements = onCall({ enforceAppCheck: true }, async (request) => {
+  const uid = request.auth?.uid;
+  const db = getFirestore();
+  await _assertAdmin(db, uid);
+  const { settlementIds } = request.data || {};
+  if (!Array.isArray(settlementIds) || !settlementIds.length) {
+    throw new HttpsError("invalid-argument", "settlementIds must be a non-empty array.");
+  }
+  const results = [];
+  for (const id of settlementIds) {
+    try {
+      const ref = db.collection("settlements").doc(id);
+      const snap = await ref.get();
+      if (!snap.exists || !["pending", "held"].includes(snap.get("status"))) {
+        results.push({ id, success: false });
+        continue;
+      }
+      await ref.update({
+        status: "approved", approvedBy: uid, approvedAt: FieldValue.serverTimestamp(), holdReason: FieldValue.delete(),
+      });
+      results.push({ id, success: true });
+    } catch (err) {
+      results.push({ id, success: false, error: err.message });
+    }
+  }
+  await db.collection("audit_logs").add(_auditLogDoc({
+    actorId: uid, action: "bulkApproveSettlements", targetType: "settlements", targetId: null,
+    before: null, after: { count: results.filter((r) => r.success).length },
+  }));
+  return { results };
+});
+
+exports.holdSettlement = onCall({ enforceAppCheck: true }, async (request) => {
+  const uid = request.auth?.uid;
+  const db = getFirestore();
+  await _assertAdmin(db, uid);
+  const { settlementId, reason } = request.data || {};
+  if (typeof settlementId !== "string" || !settlementId.trim()) {
+    throw new HttpsError("invalid-argument", "settlementId is required.");
+  }
+  const ref = db.collection("settlements").doc(settlementId);
+  const before = (await ref.get()).data();
+  if (!before) throw new HttpsError("not-found", "Settlement not found.");
+  await ref.update({ status: "held", holdReason: reason || "No reason given", heldBy: uid, heldAt: FieldValue.serverTimestamp() });
+  await db.collection("audit_logs").add(_auditLogDoc({
+    actorId: uid, action: "holdSettlement", targetType: "settlements", targetId: settlementId,
+    before: { status: before.status }, after: { status: "held", reason },
+  }));
+  return { success: true };
+});
+
+// Admin has transferred the money outside the app (NEFT/UPI) and is
+// recording that here. Writes the final `Provider Settlement` ledger entry
+// and moves the amount from pendingEarnings to paidThisMonth.
+exports.markSettlementPaid = onCall({ enforceAppCheck: true }, async (request) => {
+  const uid = request.auth?.uid;
+  const db = getFirestore();
+  await _assertAdmin(db, uid);
+  const { settlementId, payoutReference } = request.data || {};
+  if (typeof settlementId !== "string" || !settlementId.trim()) {
+    throw new HttpsError("invalid-argument", "settlementId is required.");
+  }
+  const settlementRef = db.collection("settlements").doc(settlementId);
+
+  let result;
+  try {
+    result = await db.runTransaction(async (tx) => {
+      const settlementSnap = await tx.get(settlementRef);
+      if (!settlementSnap.exists) throw new HttpsError("not-found", "Settlement not found.");
+      const settlement = settlementSnap.data();
+      if (settlement.status === "paid") return { alreadyPaid: true, settlement };
+      if (settlement.status !== "approved") {
+        throw new HttpsError("failed-precondition", `Settlement must be approved before it can be marked paid (currently "${settlement.status}").`);
+      }
+
+      const walletRef = db.collection("provider_wallets").doc(settlement.providerId);
+      const walletSnap = await tx.get(walletRef);
+      const pendingBefore = walletSnap.exists ? Number(walletSnap.get("pendingEarnings")) || 0 : 0;
+      const paidBefore = walletSnap.exists ? Number(walletSnap.get("paidThisMonth")) || 0 : 0;
+
+      tx.update(settlementRef, {
+        status: "paid", paidBy: uid, paidAt: FieldValue.serverTimestamp(),
+        payoutReference: payoutReference || null, payoutMethod: "manual",
+      });
+      settlement.paymentIds.forEach((pid) => {
+        tx.update(db.collection("payments").doc(pid), { settlementStatus: "paid" });
+      });
+      tx.set(walletRef, {
+        providerId: settlement.providerId,
+        pendingEarnings: _round2(Math.max(0, pendingBefore - settlement.totalAmount)),
+        paidThisMonth: _round2(paidBefore + settlement.totalAmount),
+        availableBalance: _round2(paidBefore + settlement.totalAmount),
+        lastPaidAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+      tx.set(db.collection("wallet_ledger").doc(), _ledgerDoc({
+        uid: settlement.providerId, walletType: "provider", type: "debit", amount: settlement.totalAmount,
+        category: "provider_settlement", title: "Provider Settlement",
+        description: payoutReference || settlementId, source: `settlement:${settlementId}:paid`, balanceAfter: null,
+      }));
+
+      return { alreadyPaid: false, settlement };
+    });
+  } catch (err) {
+    if (err instanceof HttpsError) throw err;
+    _logSettlement("ERROR", "mark_settlement_paid_failed", { settlementId, error: err.message });
+    _sendAdminAlert(getFirestore(), getMessaging(), {
+      title: "Settlement Failure", body: `markSettlementPaid failed for ${settlementId}: ${err.message}`,
+      type: "settlement_failure", extraData: { settlementId },
+    }).catch(() => {});
+    throw new HttpsError("internal", "Could not mark this settlement paid. Contact support.");
+  }
+
+  if (!result.alreadyPaid) {
+    await db.collection("audit_logs").add(_auditLogDoc({
+      actorId: uid, action: "markSettlementPaid", targetType: "settlements", targetId: settlementId,
+      before: { status: "approved" }, after: { status: "paid", payoutReference },
+    }));
+    _sendProviderNotification(db, getMessaging(), result.settlement.providerId, {
+      title: "Money Sent",
+      body: `₹${result.settlement.totalAmount.toFixed(0)} has been settled to your account.`,
+      type: "money_sent",
+    }).catch(() => {});
+  }
+  return { success: true };
+});
+
+// ── Refund engine ──────────────────────────────────────────────────────────────
+//
+// Two paths, matching the spec exactly:
+//  - Payment not yet settled to the provider: refund the patient immediately
+//    and reverse the ledger — nothing has left the platform yet.
+//  - Payment already settled ('paid'): the patient is STILL refunded
+//    immediately (they shouldn't wait on a recovery process), but a
+//    'recovery_pending' refund record + admin_alerts doc flag it for the
+//    admin to recover from the provider directly or their next settlement.
+exports.issueRefund = onCall({ enforceAppCheck: true }, async (request) => {
+  const uid = request.auth?.uid;
+  const db = getFirestore();
+  await _assertAdmin(db, uid);
+  const { paymentId, reason } = request.data || {};
+  if (typeof paymentId !== "string" || !paymentId.trim()) {
+    throw new HttpsError("invalid-argument", "paymentId is required.");
+  }
+
+  const paymentRef = db.collection("payments").doc(paymentId);
+  const paymentSnap = await paymentRef.get();
+  if (!paymentSnap.exists) throw new HttpsError("not-found", "Payment not found.");
+  const payment = paymentSnap.data();
+  if (payment.status === "refunded") {
+    throw new HttpsError("failed-precondition", "This payment has already been refunded.");
+  }
+
+  // Reverse the gateway charge (or credit the wallet back) BEFORE touching
+  // Firestore — a failed reversal must not leave a refund doc claiming money
+  // moved when it didn't.
+  if (payment.paymentMethod === "razorpay" && payment.razorpayPaymentId && payment.paidAmount > 0) {
+    const razorpay = new Razorpay({ key_id: process.env.RAZORPAY_KEY_ID, key_secret: process.env.RAZORPAY_KEY_SECRET });
+    try {
+      await razorpay.payments.refund(payment.razorpayPaymentId, { amount: Math.round(payment.paidAmount * 100) });
+    } catch (err) {
+      _logSettlement("ERROR", "razorpay_refund_failed", { paymentId, error: err.message });
+      throw new HttpsError("internal", "Refund could not be processed by the payment gateway.");
+    }
+  }
+
+  const wasSettled = payment.settlementStatus === "paid";
+  const refundStatus = wasSettled ? "recovery_pending" : "completed";
+  const refundRef = db.collection("refunds").doc();
+
+  await db.runTransaction(async (tx) => {
+    let userSnap = null;
+    if (payment.paymentMethod === "wallet" && payment.paidAmount > 0) {
+      userSnap = await tx.get(db.collection("users").doc(payment.patientId));
+    }
+
+    if (userSnap) {
+      const userRef = db.collection("users").doc(payment.patientId);
+      const balanceAfter = _round2(_walletBalanceOf(userSnap, "walletBalance") + payment.paidAmount);
+      tx.set(userRef, { walletBalance: balanceAfter }, { merge: true });
+      tx.set(userRef.collection("transactions").doc(), _legacyTxDoc({
+        title: "Refund", amount: payment.paidAmount, type: "credit", category: "refund", walletType: "main",
+      }));
+    }
+
+    tx.set(refundRef, {
+      paymentId, patientId: payment.patientId, providerId: payment.providerId || null,
+      amount: payment.paidAmount, reason: reason || "Not specified",
+      status: refundStatus, initiatedBy: uid, createdAt: FieldValue.serverTimestamp(),
+      completedAt: refundStatus === "completed" ? FieldValue.serverTimestamp() : null,
+    });
+    tx.update(paymentRef, { status: "refunded", settlementStatus: wasSettled ? "paid" : "failed" });
+
+    if (payment.paidAmount > 0) {
+      tx.set(db.collection("wallet_ledger").doc(), _ledgerDoc({
+        uid: "platform", walletType: "platform", type: "debit", amount: payment.paidAmount,
+        category: "refund", title: "Refund Issued",
+        description: reason || null, source: `payment:${paymentId}:refund`, balanceAfter: null,
+      }));
+    }
+    if (!wasSettled && payment.commission > 0) {
+      tx.set(db.collection("wallet_ledger").doc(), _ledgerDoc({
+        uid: "platform", walletType: "platform", type: "debit", amount: payment.commission,
+        category: "commission_reversal", title: "Commission Reversed",
+        source: `payment:${paymentId}:commission_reversal`, balanceAfter: null,
+      }));
+    }
+  });
+
+  await db.collection("audit_logs").add(_auditLogDoc({
+    actorId: uid, action: "issueRefund", targetType: "payments", targetId: paymentId,
+    before: { status: payment.status }, after: { status: "refunded", refundStatus },
+  }));
+
+  const messaging = getMessaging();
+  _sendPatientNotification(db, messaging, payment.patientId, {
+    title: "Refund Processed",
+    body: `₹${payment.paidAmount.toFixed(0)} has been refunded to you.`,
+    type: "refund_processed", bookingId: payment.bookingRef?.id || "",
+  }).catch(() => {});
+
+  if (wasSettled) {
+    _sendAdminAlert(db, messaging, {
+      title: "Refund Recovery Needed",
+      body: `Payment ${paymentId} was refunded after the provider was already settled — recover ₹${(payment.providerAmount || 0).toFixed(0)} from their next payout.`,
+      type: "refund_recovery_pending", extraData: { paymentId, providerId: payment.providerId || "" },
+    }).catch(() => {});
+  }
+
+  return { success: true, refundId: refundRef.id, status: refundStatus };
+});
+
 // ══════════════════════════════════════════════════════════════════════════
 // ── Lab & Diagnostics module ────────────────────────────────────────────────
 //
@@ -2815,6 +4299,16 @@ exports.onDiagnosticBookingStatusChange = onDocumentUpdated(
       });
       _logLab("INFO", credited ? "lab_ledger_credited" : "lab_ledger_credit_skipped_duplicate", {
         bookingId, labId: after.labId, amount: after.amount ?? after.price ?? 0,
+      });
+
+      // Settlement engine bridge — see PAYMENT DISTRIBUTION & SETTLEMENT
+      // ENGINE above. No-ops if this booking's payments doc was already
+      // transitioned (or was never paid through capturePayment at all).
+      await _transitionPaymentToEligible(db, {
+        sourceCollection: "service_requests",
+        sourceId: after.sourceRequestId || bookingId,
+        providerId: after.labId,
+        serviceType: "diagnostics",
       });
     }
 
@@ -3483,6 +4977,13 @@ exports.onPharmacyOrderStatusChange = onDocumentUpdated(
     }
 
     if (statusChanged && after.status === "delivered" && before.status !== "delivered" && after.pharmacyId) {
+      await _transitionPaymentToEligible(db, {
+        sourceCollection: after.sourceCollection || "service_requests",
+        sourceId: after.sourceId || after.sourceRequestId || orderId,
+        providerId: after.pharmacyId,
+        serviceType: isMedicine ? "medicine" : "pharmacy",
+      });
+
       const ledgerRef = db.collection("pharmacy_transactions").doc(orderId);
       const credited = await db.runTransaction(async (tx) => {
         const existingTx = await tx.get(ledgerRef);
@@ -3890,6 +5391,13 @@ exports.onAmbulanceRequestStatusChange = onDocumentUpdated(
       _logAmbulance("INFO", written ? "ambulance_trip_and_ledger_written" : "ambulance_completion_skipped_duplicate", {
         requestId, ambulanceId: after.ambulanceId, amount: fare, durationMinutes,
       });
+
+      await _transitionPaymentToEligible(db, {
+        sourceCollection: "service_requests",
+        sourceId: after.sourceRequestId || requestId,
+        providerId: after.ambulanceId,
+        serviceType: "ambulance",
+      });
     }
 
     if (mirrorError) throw mirrorError;
@@ -4174,6 +5682,13 @@ exports.onCaregiverVisitStatusChange = onDocumentUpdated(
       _logCaregiver("INFO", credited ? "caregiver_ledger_credited" : "caregiver_ledger_credit_skipped_duplicate", {
         visitId, caregiverId: after.caregiverId, amount: after.fare ?? 0,
       });
+
+      await _transitionPaymentToEligible(db, {
+        sourceCollection: "service_requests",
+        sourceId: after.sourceRequestId || visitId,
+        providerId: after.caregiverId,
+        serviceType: "caregiver",
+      });
     }
 
     if (mirrorError) throw mirrorError;
@@ -4203,6 +5718,414 @@ exports.cleanupStaleCaregiverVisits = onSchedule({ schedule: "every 60 minutes",
   const { updated, skipped } = await _expireStaleDocs(staleSnap.docs, { status: "missed", updatedAt: FieldValue.serverTimestamp() });
   _logCaregiver("INFO", "stale_cleanup_missed", { count: updated, skippedConcurrentlyModified: skipped });
 });
+
+// ══════════════════════════════════════════════════════════════════════════
+// ── Physiotherapy & Counselling modules ─────────────────────────────────────
+//
+// Same mirror shape as Lab/Ambulance/Caregiver above, once per module. Both
+// service types reach `service_requests` through the CART checkout path
+// (mednu/lib/features/cart/screens/cart_screen.dart -> BookingService.
+// createRequest), with the literal `type` values 'physiotherapy' and
+// 'counselling' — confirmed at mednu/lib/features/services/physiotherapy/
+// physio_screen.dart and the shared ServiceBookingSheet's direct-book path.
+// (Counselling's "Talk Now" / "Book a Therapist" entry points route into the
+// existing doctor/consultation flow instead and are already tracked there —
+// only bookings that actually land in `service_requests` need this mirror.)
+//
+// Each is a single-practitioner service (no separate "assign a staff member"
+// step the way Lab/Pharmacy have), so claiming a session is a single step
+// exactly like Ambulance: providerId moves from null to the caller AND
+// status moves from 'pending' to 'accepted' (or 'cancelled', to decline) in
+// the same write. 'rejected' stays defined in onServiceRequestStatusChange's
+// notification maps but is unreachable here, same as Ambulance's own
+// 'rejected' key today — declining an unclaimed session is expressed as a
+// cancel, not a distinct status.
+//
+//   service_requests[physiotherapy] create -> physio_sessions (create)
+//   service_requests[counselling]   create -> counselling_sessions (create)
+//   service_requests  (patient cancels)    -> <module>_sessions (status only)
+//   <module>_sessions (partner updates)    -> service_requests (status only)
+//                                           -> <module>_transactions (once,
+//                                              completed)
+// ══════════════════════════════════════════════════════════════════════════
+
+const _PHYSIO_STALE_PENDING_HOURS = 24;
+const _COUNSELLING_STALE_PENDING_HOURS = 24;
+
+// Provider-side status -> the exact service_requests status vocabulary
+// already consumed by onServiceRequestStatusChange's `physiotherapy`/
+// `counselling` maps (accepted, in_progress, completed, cancelled).
+// 'expired' (see the stale-cleanup schedules below) reads to the patient
+// exactly like a cancellation, same as every other module's stale cleanup.
+const _PHYSIO_TO_SERVICE_REQUEST_STATUS = {
+  accepted:    "accepted",
+  in_progress: "in_progress",
+  completed:   "completed",
+  cancelled:   "cancelled",
+  expired:     "cancelled",
+};
+const _COUNSELLING_TO_SERVICE_REQUEST_STATUS = { ..._PHYSIO_TO_SERVICE_REQUEST_STATUS };
+
+function _logPhysio(severity, event, data = {}) {
+  const payload = { severity, module: "physiotherapy", event, ...data };
+  if (severity === "ERROR" || severity === "WARNING") console.error(JSON.stringify(payload));
+  else console.log(JSON.stringify(payload));
+}
+function _logCounselling(severity, event, data = {}) {
+  const payload = { severity, module: "counselling", event, ...data };
+  if (severity === "ERROR" || severity === "WARNING") console.error(JSON.stringify(payload));
+  else console.log(JSON.stringify(payload));
+}
+
+// Builds the mirrored session doc from a service_requests doc. Identical
+// shape for both modules; only the provider-id field name differs, which the
+// caller passes in.
+function _buildSessionDoc(data, providerIdField) {
+  const details = data.serviceDetails || {};
+  return {
+    sourceRequestId: null, // overwritten by the caller with the real requestId
+    type: data.type,
+    sessionTitle: details.title || details.sessionType || data.serviceName || "Session",
+    price: details.price ?? data.amount ?? 0,
+    amount: data.amount ?? details.price ?? 0,
+    patientId: data.patientId,
+    patientName: data.patientName || "Patient",
+    patientPhone: data.patientPhone || "",
+    address: data.address || "",
+    preferredDate: data.preferredDate || "",
+    preferredTime: data.preferredTime || "",
+    notes: data.notes || "",
+    [providerIdField]: null,
+    status: "pending",
+    createdAt: data.createdAt || FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+}
+
+// ── 1) Mirror new physiotherapy service_requests into physio_sessions ──────
+exports.onPhysioServiceRequestCreated = onDocumentCreated(
+  "service_requests/{requestId}",
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+    const data = snap.data();
+    if (data.type !== "physiotherapy") return;
+
+    const db = getFirestore();
+    const requestId = event.params.requestId;
+    const sessionRef = db.collection("physio_sessions").doc(requestId);
+
+    const existing = await sessionRef.get();
+    if (existing.exists) {
+      _logPhysio("INFO", "service_request_create_skipped_existing", { requestId });
+      return;
+    }
+
+    await sessionRef.set({
+      ..._buildSessionDoc(data, "physiotherapistId"),
+      sourceRequestId: requestId,
+    });
+    _logPhysio("INFO", "physio_session_created", { requestId });
+  }
+);
+
+// ── 2) Mirror a patient-initiated cancellation onto physio_sessions ────────
+exports.onPhysioServiceRequestCancelled = onDocumentUpdated(
+  "service_requests/{requestId}",
+  async (event) => {
+    const before = event.data.before.data();
+    const after  = event.data.after.data();
+    if (after.type !== "physiotherapy") return;
+    if (before.status === after.status) return;
+    if (after.status !== "cancelled") return;
+
+    const db = getFirestore();
+    const requestId = event.params.requestId;
+    const sessionRef = db.collection("physio_sessions").doc(requestId);
+
+    await db.runTransaction(async (tx) => {
+      const sessionSnap = await tx.get(sessionRef);
+      if (!sessionSnap.exists) return;
+      const currentStatus = sessionSnap.data().status;
+      if (["completed", "cancelled", "expired"].includes(currentStatus)) {
+        _logPhysio("INFO", "cancel_mirror_skipped_terminal", { requestId, currentStatus });
+        return;
+      }
+      tx.update(sessionRef, { status: "cancelled", updatedAt: FieldValue.serverTimestamp() });
+    });
+    _logPhysio("INFO", "physio_session_cancelled_by_patient", { requestId });
+  }
+);
+
+// ── 3) Mirror physiotherapist-side session updates back onto service_requests ──
+// Also credits the immutable physio_transactions ledger exactly once, on the
+// ->completed edge (deterministic ID + transactional existence check, same
+// double-credit proofing as every other module's ledger).
+exports.onPhysioSessionStatusChange = onDocumentUpdated(
+  "physio_sessions/{sessionId}",
+  async (event) => {
+    const before = event.data.before.data();
+    const after  = event.data.after.data();
+    const sessionId = event.params.sessionId;
+    const db = getFirestore();
+
+    const statusChanged = before.status !== after.status;
+    const claimChanged = before.physiotherapistId !== after.physiotherapistId;
+
+    let mirrorError = null;
+
+    if (statusChanged || claimChanged) {
+      const update = { updatedAt: FieldValue.serverTimestamp() };
+
+      const mappedStatus = _PHYSIO_TO_SERVICE_REQUEST_STATUS[after.status];
+      if (statusChanged && mappedStatus) update.status = mappedStatus;
+      if (claimChanged && after.physiotherapistId) update.assignedTo = after.physiotherapistId;
+
+      if (Object.keys(update).length > 1) {
+        const serviceRequestRef = db.collection("service_requests").doc(after.sourceRequestId || sessionId);
+        const current = await serviceRequestRef.get();
+        const currentData = current.exists ? current.data() : null;
+
+        const alreadyApplied = !!currentData &&
+          (!update.status || currentData.status === update.status) &&
+          (!update.assignedTo || currentData.assignedTo === update.assignedTo);
+
+        if (!currentData) {
+          _logPhysio("WARNING", "mirror_target_missing", { sessionId });
+        } else if (alreadyApplied) {
+          _logPhysio("INFO", "mirror_skipped_already_applied", { sessionId });
+        } else {
+          await serviceRequestRef.update(update).then(
+            () => _logPhysio("INFO", "mirrored_to_service_request", { sessionId, fields: Object.keys(update) }),
+            (err) => {
+              _logPhysio("ERROR", "mirror_to_service_request_failed", { sessionId, error: err.message });
+              mirrorError = err;
+            },
+          );
+        }
+      }
+    }
+
+    if (statusChanged && after.status === "completed" && before.status !== "completed" && after.physiotherapistId) {
+      const ledgerRef = db.collection("physio_transactions").doc(sessionId);
+      const credited = await db.runTransaction(async (tx) => {
+        const existingTx = await tx.get(ledgerRef);
+        if (existingTx.exists) return false;
+        tx.set(ledgerRef, {
+          physiotherapistId: after.physiotherapistId,
+          sessionId,
+          type: "earning",
+          amount: after.amount ?? 0,
+          status: "credited",
+          patientName: after.patientName || "Patient",
+          createdAt: FieldValue.serverTimestamp(),
+        });
+        return true;
+      });
+      _logPhysio("INFO", credited ? "physio_ledger_credited" : "physio_ledger_credit_skipped_duplicate", {
+        sessionId, physiotherapistId: after.physiotherapistId, amount: after.amount ?? 0,
+      });
+
+      await _transitionPaymentToEligible(db, {
+        sourceCollection: "service_requests",
+        sourceId: after.sourceRequestId || sessionId,
+        providerId: after.physiotherapistId,
+        serviceType: "physiotherapy",
+      });
+    }
+
+    if (mirrorError) throw mirrorError;
+  }
+);
+
+// ── 4) Stale pending-session cleanup ────────────────────────────────────────
+exports.cleanupStalePhysioSessions = onSchedule({ schedule: "every 60 minutes", timeZone: "UTC" }, async () => {
+  const db = getFirestore();
+  const cutoff = Timestamp.fromDate(new Date(Date.now() - _PHYSIO_STALE_PENDING_HOURS * 60 * 60 * 1000));
+
+  const staleSnap = await db.collection("physio_sessions")
+    .where("status", "==", "pending")
+    .where("createdAt", "<", cutoff)
+    .limit(200)
+    .get();
+
+  if (staleSnap.empty) {
+    _logPhysio("INFO", "stale_cleanup_none_found");
+    return;
+  }
+
+  const { updated, skipped } = await _expireStaleDocs(staleSnap.docs, { status: "expired", updatedAt: FieldValue.serverTimestamp() });
+  _logPhysio("INFO", "stale_cleanup_expired", { count: updated, skippedConcurrentlyModified: skipped });
+});
+
+// ── 1) Mirror new counselling service_requests into counselling_sessions ───
+exports.onCounsellingServiceRequestCreated = onDocumentCreated(
+  "service_requests/{requestId}",
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+    const data = snap.data();
+    if (data.type !== "counselling") return;
+
+    const db = getFirestore();
+    const requestId = event.params.requestId;
+    const sessionRef = db.collection("counselling_sessions").doc(requestId);
+
+    const existing = await sessionRef.get();
+    if (existing.exists) {
+      _logCounselling("INFO", "service_request_create_skipped_existing", { requestId });
+      return;
+    }
+
+    await sessionRef.set({
+      ..._buildSessionDoc(data, "counsellorId"),
+      sourceRequestId: requestId,
+    });
+    _logCounselling("INFO", "counselling_session_created", { requestId });
+  }
+);
+
+// ── 2) Mirror a patient-initiated cancellation onto counselling_sessions ───
+exports.onCounsellingServiceRequestCancelled = onDocumentUpdated(
+  "service_requests/{requestId}",
+  async (event) => {
+    const before = event.data.before.data();
+    const after  = event.data.after.data();
+    if (after.type !== "counselling") return;
+    if (before.status === after.status) return;
+    if (after.status !== "cancelled") return;
+
+    const db = getFirestore();
+    const requestId = event.params.requestId;
+    const sessionRef = db.collection("counselling_sessions").doc(requestId);
+
+    await db.runTransaction(async (tx) => {
+      const sessionSnap = await tx.get(sessionRef);
+      if (!sessionSnap.exists) return;
+      const currentStatus = sessionSnap.data().status;
+      if (["completed", "cancelled", "expired"].includes(currentStatus)) {
+        _logCounselling("INFO", "cancel_mirror_skipped_terminal", { requestId, currentStatus });
+        return;
+      }
+      tx.update(sessionRef, { status: "cancelled", updatedAt: FieldValue.serverTimestamp() });
+    });
+    _logCounselling("INFO", "counselling_session_cancelled_by_patient", { requestId });
+  }
+);
+
+// ── 3) Mirror counsellor-side session updates back onto service_requests ───
+// Also credits the immutable counselling_transactions ledger exactly once,
+// on the ->completed edge.
+exports.onCounsellingSessionStatusChange = onDocumentUpdated(
+  "counselling_sessions/{sessionId}",
+  async (event) => {
+    const before = event.data.before.data();
+    const after  = event.data.after.data();
+    const sessionId = event.params.sessionId;
+    const db = getFirestore();
+
+    const statusChanged = before.status !== after.status;
+    const claimChanged = before.counsellorId !== after.counsellorId;
+
+    let mirrorError = null;
+
+    if (statusChanged || claimChanged) {
+      const update = { updatedAt: FieldValue.serverTimestamp() };
+
+      const mappedStatus = _COUNSELLING_TO_SERVICE_REQUEST_STATUS[after.status];
+      if (statusChanged && mappedStatus) update.status = mappedStatus;
+      if (claimChanged && after.counsellorId) update.assignedTo = after.counsellorId;
+
+      if (Object.keys(update).length > 1) {
+        const serviceRequestRef = db.collection("service_requests").doc(after.sourceRequestId || sessionId);
+        const current = await serviceRequestRef.get();
+        const currentData = current.exists ? current.data() : null;
+
+        const alreadyApplied = !!currentData &&
+          (!update.status || currentData.status === update.status) &&
+          (!update.assignedTo || currentData.assignedTo === update.assignedTo);
+
+        if (!currentData) {
+          _logCounselling("WARNING", "mirror_target_missing", { sessionId });
+        } else if (alreadyApplied) {
+          _logCounselling("INFO", "mirror_skipped_already_applied", { sessionId });
+        } else {
+          await serviceRequestRef.update(update).then(
+            () => _logCounselling("INFO", "mirrored_to_service_request", { sessionId, fields: Object.keys(update) }),
+            (err) => {
+              _logCounselling("ERROR", "mirror_to_service_request_failed", { sessionId, error: err.message });
+              mirrorError = err;
+            },
+          );
+        }
+      }
+    }
+
+    if (statusChanged && after.status === "completed" && before.status !== "completed" && after.counsellorId) {
+      const ledgerRef = db.collection("counselling_transactions").doc(sessionId);
+      const credited = await db.runTransaction(async (tx) => {
+        const existingTx = await tx.get(ledgerRef);
+        if (existingTx.exists) return false;
+        tx.set(ledgerRef, {
+          counsellorId: after.counsellorId,
+          sessionId,
+          type: "earning",
+          amount: after.amount ?? 0,
+          status: "credited",
+          patientName: after.patientName || "Patient",
+          createdAt: FieldValue.serverTimestamp(),
+        });
+        return true;
+      });
+      _logCounselling("INFO", credited ? "counselling_ledger_credited" : "counselling_ledger_credit_skipped_duplicate", {
+        sessionId, counsellorId: after.counsellorId, amount: after.amount ?? 0,
+      });
+
+      await _transitionPaymentToEligible(db, {
+        sourceCollection: "service_requests",
+        sourceId: after.sourceRequestId || sessionId,
+        providerId: after.counsellorId,
+        serviceType: "counselling",
+      });
+    }
+
+    if (mirrorError) throw mirrorError;
+  }
+);
+
+// ── 4) Stale pending-session cleanup ────────────────────────────────────────
+exports.cleanupStaleCounsellingSessions = onSchedule({ schedule: "every 60 minutes", timeZone: "UTC" }, async () => {
+  const db = getFirestore();
+  const cutoff = Timestamp.fromDate(new Date(Date.now() - _COUNSELLING_STALE_PENDING_HOURS * 60 * 60 * 1000));
+
+  const staleSnap = await db.collection("counselling_sessions")
+    .where("status", "==", "pending")
+    .where("createdAt", "<", cutoff)
+    .limit(200)
+    .get();
+
+  if (staleSnap.empty) {
+    _logCounselling("INFO", "stale_cleanup_none_found");
+    return;
+  }
+
+  const { updated, skipped } = await _expireStaleDocs(staleSnap.docs, { status: "expired", updatedAt: FieldValue.serverTimestamp() });
+  _logCounselling("INFO", "stale_cleanup_expired", { count: updated, skippedConcurrentlyModified: skipped });
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+// ── Nutrition partner access ─────────────────────────────────────────────────
+//
+// Unlike every module above, Nutrition needs NO mirror: the patient app
+// writes `nutrition_appointments` directly (mednu/lib/features/services/
+// nutrition/services/nutrition_service.dart) with `nutritionistId` already
+// set at booking time — the patient picks a specific nutritionist up front,
+// same pre-assignment model as a doctor appointment. The Partner app reads/
+// writes that collection directly; nothing to mirror or trigger here. (The
+// corresponding firestore.rules gap — nutritionists had no read/update
+// access to their own appointments at all — is closed in firestore.rules,
+// not here.)
+// ══════════════════════════════════════════════════════════════════════════
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // ── Server-driven reminders (water / period / booking / appointment) ───────────
@@ -4386,4 +6309,85 @@ exports.sendDueWaterReminders = onSchedule({ schedule: "every 15 minutes", timeZ
     sent++;
   }));
   console.log(`sendDueWaterReminders: sent ${sent}`);
+});
+
+// ── Partner Application Approved ─────────────────────────────────────────────
+//
+// Fires when an admin flips a Lab/Pharmacy/Ambulance/Caregiver profile's
+// `status` to 'active' in the admin panel. Pushes a notification straight to
+// the partner's device using the `fcmToken` already on the document —
+// VerificationPendingScreen's "we'll notify you" promise had nothing behind
+// it until this.
+async function _notifyPartnerApproved(messaging, role, uid, before, after) {
+  if (before.status === after.status) return;
+  if (after.status !== "active") return;
+
+  const fcmToken = after.fcmToken;
+  if (!fcmToken) {
+    console.log(`No fcmToken on ${role}_profiles/${uid} — approval push skipped`);
+    return;
+  }
+
+  const title = "Application Approved";
+  const body = "Your MedNU partner account is verified — you can start receiving bookings now.";
+
+  try {
+    await messaging.send({
+      token: fcmToken,
+      data: { type: "partner_approved", role },
+      android: {
+        priority: "high",
+        notification: {
+          // Not mednu_doctor's default channel (there isn't one registered
+          // client-side) — "incoming_call" is the one channel that actually
+          // exists on the device (created by CallNotificationService.init(),
+          // and set as the AndroidManifest fallback too), and is also what
+          // showGenericNotification() uses for this same message type when
+          // the app is foregrounded — keeping both paths on one channel.
+          channelId: "incoming_call",
+          title,
+          body,
+          sound: "default",
+          defaultVibrateTimings: true,
+        },
+      },
+      apns: {
+        headers: { "apns-priority": "5" },
+        payload: {
+          aps: { alert: { title, body }, sound: "default", badge: 1 },
+        },
+      },
+    });
+    console.log(`Approval push sent → ${role} partner ${uid}`);
+  } catch (err) {
+    console.error(`Approval push failed for ${role} partner ${uid}:`, err.message);
+  }
+}
+
+exports.onLabProfileApproved = onDocumentUpdated("lab_profiles/{uid}", async (event) => {
+  await _notifyPartnerApproved(
+    getMessaging(), "lab", event.params.uid,
+    event.data.before.data(), event.data.after.data(),
+  );
+});
+
+exports.onPharmacyProfileApproved = onDocumentUpdated("pharmacy_profiles/{uid}", async (event) => {
+  await _notifyPartnerApproved(
+    getMessaging(), "pharmacy", event.params.uid,
+    event.data.before.data(), event.data.after.data(),
+  );
+});
+
+exports.onAmbulanceProfileApproved = onDocumentUpdated("ambulance_profiles/{uid}", async (event) => {
+  await _notifyPartnerApproved(
+    getMessaging(), "ambulance", event.params.uid,
+    event.data.before.data(), event.data.after.data(),
+  );
+});
+
+exports.onCaregiverProfileApproved = onDocumentUpdated("caregiver_profiles/{uid}", async (event) => {
+  await _notifyPartnerApproved(
+    getMessaging(), "caregiver", event.params.uid,
+    event.data.before.data(), event.data.after.data(),
+  );
 });

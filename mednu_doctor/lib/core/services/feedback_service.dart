@@ -16,8 +16,10 @@ class FeedbackService {
     bool dismissible = true,
   }) {
     if (!context.mounted) return;
+    // hideCurrentSnackBar (animated exit) instead of clearSnackBars (instant
+    // removal) so back-to-back show() calls don't hard-cut into each other.
     ScaffoldMessenger.of(context)
-      ..clearSnackBars()
+      ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
           content: Row(
@@ -95,7 +97,11 @@ class FeedbackService {
 
   static void dismiss(BuildContext context) {
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).clearSnackBars();
+    // hideCurrentSnackBar animates the bar out before the next show() call
+    // animates its replacement in. clearSnackBars() removes instantly with
+    // no exit animation, which reads as a hard flash/blink when a show()
+    // call follows immediately after (e.g. loading -> success/info).
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
   }
 
   static Future<bool> confirm(

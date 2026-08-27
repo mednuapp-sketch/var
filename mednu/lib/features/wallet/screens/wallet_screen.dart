@@ -9,16 +9,14 @@ import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:mednu/core/constants/app_colors.dart';
 import 'package:mednu/core/constants/app_text_styles.dart';
+import 'package:mednu/core/constants/payment_config.dart';
+import 'package:mednu/core/router/app_router.dart';
 import 'package:mednu/core/utils/r.dart';
 import 'package:mednu/core/widgets/ux_widgets.dart';
 import 'package:mednu/features/referral/referral_provider.dart';
 import 'package:mednu/features/referral/referral_service.dart';
 import 'package:mednu/features/wallet/wallet_provider.dart';
 import 'package:mednu/features/wallet/wallet_service.dart';
-
-// Razorpay publishable key (safe to ship — the secret lives only in Cloud
-// Functions config, which is what actually verifies every payment).
-const _kRazorpayKeyId = 'rzp_test_T1Z9EVjv8paYQ2';
 
 // ── Category display helpers ──────────────────────────────
 extension _TxCategory on WalletTransaction {
@@ -113,6 +111,10 @@ class WalletScreen extends ConsumerWidget {
                     onAddMoney: () => _showAddMoneySheet(context, ref),
                     onTransfer: () => _showTransferSheet(context, ref),
                     onStatement: () => _showStatementSheet(context, ref),
+                  ),
+                  SizedBox(height: R.h(context, 12)),
+                  _PaymentHistoryButton(
+                    onTap: () => context.push(AppRoutes.paymentHistory),
                   ),
                   SizedBox(height: R.h(context, 14)),
 
@@ -924,6 +926,52 @@ class _ActionButton extends StatelessWidget {
   }
 }
 
+class _PaymentHistoryButton extends StatelessWidget {
+  final VoidCallback onTap;
+  const _PaymentHistoryButton({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: context.appSurface,
+      borderRadius: BorderRadius.circular(R.r(context, 16)),
+      elevation: 0,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(R.r(context, 16)),
+        child: Container(
+          padding: EdgeInsets.symmetric(
+              horizontal: R.p(context, 14), vertical: R.p(context, 14)),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(R.r(context, 16)),
+            border: Border.all(color: context.appBorder),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: R.w(context, 38), height: R.h(context, 38),
+                decoration: const BoxDecoration(
+                  gradient: AppColors.primaryGradient,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.history_rounded,
+                    color: Colors.white, size: R.w(context, 18)),
+              ),
+              SizedBox(width: R.w(context, 12)),
+              Expanded(
+                child: Text('Payment History',
+                    style: AppTextStyles.labelLarge
+                        .copyWith(color: context.appTextPrimary)),
+              ),
+              Icon(Icons.chevron_right_rounded, color: context.appTextHint),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 // ── Transaction Card ──────────────────────────────────────
 class _TransactionCard extends StatelessWidget {
   final WalletTransaction tx;
@@ -1126,7 +1174,7 @@ class _AddMoneySheetState extends ConsumerState<_AddMoneySheet> {
       _pendingOrderId = order.orderId;
       _pendingAmount = amount;
       _razorpay.open({
-        'key': _kRazorpayKeyId,
+        'key': kRazorpayKeyId,
         'order_id': order.orderId,
         'amount': order.amountPaise,
         'name': 'MedNU Healthcare',

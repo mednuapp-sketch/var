@@ -727,8 +727,10 @@ _StatusMeta _resolveStatusInfo(BookingStatus status) {
       );
     case BookingStatus.confirmed:
     case BookingStatus.rescheduled:
+    case BookingStatus.verified:
       return _StatusMeta(status.label, AppColors.primary, Icons.check_rounded);
     case BookingStatus.assigned:
+    case BookingStatus.packed:
       return _StatusMeta(
         status.label,
         Colors.blue.shade700,
@@ -737,6 +739,7 @@ _StatusMeta _resolveStatusInfo(BookingStatus status) {
     case BookingStatus.onTheWay:
     case BookingStatus.inProgress:
     case BookingStatus.consultationStarted:
+    case BookingStatus.outForDelivery:
       return _StatusMeta(
         status.label,
         AppColors.accent,

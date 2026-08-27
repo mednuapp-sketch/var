@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
@@ -140,27 +139,6 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen>
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    // Logo
-                                    Container(
-                                      width: 64,
-                                      height: 64,
-                                      decoration: BoxDecoration(
-                                        color: Colors.white.withValues(alpha: 0.2),
-                                        borderRadius: BorderRadius.circular(18),
-                                        border: Border.all(
-                                            color: Colors.white.withValues(alpha: 0.3)),
-                                      ),
-                                      padding: const EdgeInsets.all(16),
-                                      child: SvgPicture.asset(
-                                        'assets/icons/med-nu-icon-stethoscope.svg',
-                                        fit: BoxFit.contain,
-                                        colorFilter: const ColorFilter.mode(
-                                          Colors.white,
-                                          BlendMode.srcIn,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 20),
                                     Text(
                                       'MedNU',
                                       style: AppTextStyles.display
@@ -218,16 +196,24 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen>
           ),
 
           // ── Form ──────────────────────────────────────────────────────────
-          Positioned.fill(
+          // Bounded to the area below the hero (top: size.height * 0.4, same
+          // as the curved white card above) so this scrollview's own
+          // viewport clips its content there. A Positioned.fill + spacer
+          // here would let the form scroll up over the fixed hero whenever
+          // it's taller than the space below it — see doctor_login_screen.dart.
+          Positioned(
+            top: size.height * 0.4,
+            left: 0,
+            right: 0,
+            bottom: 0,
             child: SafeArea(
+              top: false,
               child: SingleChildScrollView(
                 padding: EdgeInsets.only(
+                  top: size.height * 0.04,
                   bottom: MediaQuery.of(context).viewInsets.bottom,
                 ),
-                child: Column(
-                  children: [
-                    SizedBox(height: size.height * 0.44),
-                    FadeTransition(
+                child: FadeTransition(
                       opacity: _fadeIn,
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
@@ -459,8 +445,6 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen>
                         ),
                       ),
                     ),
-                  ],
-                ),
               ),
             ),
           ),

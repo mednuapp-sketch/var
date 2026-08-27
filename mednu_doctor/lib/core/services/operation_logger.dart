@@ -29,8 +29,6 @@ enum DoctorOpAction {
   patientViewed,
   // Earnings
   earningsViewed,
-  // Reviews
-  reviewResponded,
 }
 
 class OperationLogger {

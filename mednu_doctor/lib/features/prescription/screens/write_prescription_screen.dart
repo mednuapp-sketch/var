@@ -197,16 +197,25 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
   Future<void> _loadDoctorInfo() async {
     final uid = DoctorAuthService.currentUid;
     if (uid == null) return;
-    final data = await DoctorAuthService.getProfile(uid);
-    if (!mounted) return;
-    setState(() {
-      _doctorName        = data?['name']               as String?;
-      _doctorSpecialty   = data?['specialty']          as String?;
-      _doctorRegNo       = data?['registrationNumber'] as String?;
-      _doctorHospital    = data?['clinicName']         as String?
-          ?? data?['hospitalName']                     as String?;
-      _doctorSignatureUrl = data?['signatureUrl']      as String?;
-    });
+    try {
+      final data = await DoctorAuthService.getProfile(uid);
+      if (!mounted) return;
+      setState(() {
+        _doctorName        = data?['name']               as String?;
+        _doctorSpecialty   = data?['specialty']          as String?;
+        _doctorRegNo       = data?['registrationNumber'] as String?;
+        _doctorHospital    = data?['clinicName']         as String?
+            ?? data?['hospitalName']                     as String?;
+        _doctorSignatureUrl = data?['signatureUrl']      as String?;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text(
+                'Could not load your doctor profile — check your connection and try again.')),
+      );
+    }
   }
 
   Future<void> _loadPatientInfo() async {

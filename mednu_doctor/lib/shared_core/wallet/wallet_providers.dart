@@ -5,21 +5,29 @@ import '../providers/role_providers.dart';
 import 'wallet_models.dart';
 import 'wallet_repository.dart';
 
-/// Role-aware: each role gets its own ledger-backed (or, for Doctor today,
-/// aggregation-backed) implementation of the same [WalletRepository]
-/// interface, so every wallet UI widget stays role-agnostic.
+/// Role-aware: each role gets its own implementation of the same
+/// [WalletRepository] interface, so every wallet UI widget stays
+/// role-agnostic. Doctor/lab/pharmacy/ambulance/caregiver are on the real
+/// Payment Distribution & Settlement Engine (functions/index.js) via
+/// [SettlementWalletRepository] — physiotherapist/counsellor/nutritionist
+/// aren't wired into that engine yet (no commission_rules/settlement
+/// support for those service types) and keep their existing
+/// aggregation/ledger-read repositories until they are.
 final walletRepositoryProvider = Provider<WalletRepository>((ref) {
   final role = ref.watch(roleEngineProvider).activeRole;
   switch (role) {
-    case AppRole.lab:
-      return LabTransactionWalletRepository();
-    case AppRole.pharmacy:
-      return PharmacyTransactionWalletRepository();
-    case AppRole.ambulance:
-      return AmbulanceTransactionWalletRepository();
-    case AppRole.caregiver:
-      return CaregiverTransactionWalletRepository();
     case AppRole.doctor:
+    case AppRole.lab:
+    case AppRole.pharmacy:
+    case AppRole.ambulance:
+    case AppRole.caregiver:
+      return SettlementWalletRepository();
+    case AppRole.physiotherapist:
+      return PhysioTransactionWalletRepository();
+    case AppRole.counsellor:
+      return CounsellingTransactionWalletRepository();
+    case AppRole.nutritionist:
+      return NutritionAppointmentWalletRepository();
     case AppRole.admin:
       return DoctorAppointmentWalletRepository();
   }

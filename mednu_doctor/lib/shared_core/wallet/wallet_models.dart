@@ -24,11 +24,20 @@ class WalletSummary {
   final String currency;
   final List<WalletTransaction> transactions;
 
+  /// Settlement-engine fields (see functions/index.js) — 0/null for the
+  /// aggregation-backed repositories that don't have a real settlement
+  /// concept yet (doctor pre-parity, physiotherapist, counsellor,
+  /// nutritionist).
+  final num paidThisMonth;
+  final DateTime? nextPayoutDate;
+
   const WalletSummary({
     required this.balance,
     required this.pendingAmount,
     required this.currency,
     required this.transactions,
+    this.paidThisMonth = 0,
+    this.nextPayoutDate,
   });
 
   factory WalletSummary.empty() => const WalletSummary(

@@ -9,6 +9,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_rating_bar/flutter_rating_bar.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
+import '../../../core/router/app_router.dart';
 import '../../../core/services/feedback_service.dart';
 import '../../../core/utils/op_slip_service.dart';
 import '../../../core/utils/r.dart';
@@ -86,6 +87,10 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildStatusCard(context, live),
+                    if (live.needsPrescriptionDecision || live.prescriptionWasRejected) ...[
+                      SizedBox(height: R.h(context, 16)),
+                      _buildPrescriptionBanner(context, live),
+                    ],
                     SizedBox(height: R.h(context, 16)),
                     _buildTimeline(context, live),
                     SizedBox(height: R.h(context, 16)),
@@ -351,6 +356,93 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
     );
   }
 
+  // ── Prescription banner (medicine orders only) ────────────────────────────────
+  //
+  // Driven by the same boolean fields OrderModel.needsPrescriptionDecision/
+  // prescriptionWasRejected already use (see UnifiedBooking.fromOrder) — not
+  // by a status string, since 'prescription_required' never lands on
+  // `orders.status` (it's a `pharmacy_orders`-only value).
+
+  Widget _buildPrescriptionBanner(BuildContext context, UnifiedBooking live) {
+    final rejected = live.prescriptionWasRejected;
+    final color = rejected ? AppColors.error : AppColors.warning;
+    final title = rejected ? 'Prescription Rejected' : 'Prescription Required';
+    final message = rejected
+        ? (live.rawData['prescriptionRejectedReason'] as String?)?.trim().isNotEmpty == true
+            ? live.rawData['prescriptionRejectedReason'] as String
+            : 'The pharmacy could not verify your prescription. Please upload a valid one to continue.'
+        : 'Upload a valid prescription so the pharmacy can verify and pack your order.';
+
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(R.p(context, 14)),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(R.r(context, 14)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.receipt_long_rounded, color: color, size: R.w(context, 20)),
+          SizedBox(width: R.w(context, 10)),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: color,
+                  ),
+                ),
+                SizedBox(height: R.h(context, 3)),
+                Text(
+                  message,
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 11.5,
+                    height: 1.4,
+                    color: context.appTextSecondary,
+                  ),
+                ),
+                SizedBox(height: R.h(context, 10)),
+                SizedBox(
+                  height: R.h(context, 34),
+                  child: OutlinedButton(
+                    onPressed: () => context.push(
+                      AppRoutes.orderDetail,
+                      extra: {'orderId': live.id},
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: color,
+                      side: BorderSide(color: color),
+                      padding: EdgeInsets.symmetric(horizontal: R.p(context, 14)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(R.r(context, 10)),
+                      ),
+                    ),
+                    child: Text(
+                      rejected ? 'Upload New Prescription' : 'Upload Prescription',
+                      style: const TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ── Timeline ─────────────────────────────────────────────────────────────────
 
   Widget _buildTimeline(BuildContext context, UnifiedBooking live) {
@@ -457,22 +549,6 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
                           color: context.appTextSecondary,
                         ),
                       ),
-                    const SizedBox(height: 4),
-                    // Static 4-star rating display
-                    Row(
-                      children: List.generate(
-                        5,
-                        (i) => Icon(
-                          i < 4
-                              ? Icons.star_rounded
-                              : Icons.star_border_rounded,
-                          size: 14,
-                          color: i < 4
-                              ? const Color(0xFFF57F17)
-                              : context.appTextHint,
-                        ),
-                      ),
-                    ),
                     if (live.providerPhone != null) ...[
                       const SizedBox(height: 4),
                       Row(
@@ -1050,10 +1126,13 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
       case BookingStatus.requested:
         return (const Color(0xFFFF6F00), const Color(0xFFE65100));
       case BookingStatus.confirmed:
+      case BookingStatus.verified:
         return (const Color(0xFF1565C0), const Color(0xFF0D47A1));
       case BookingStatus.assigned:
+      case BookingStatus.packed:
         return (const Color(0xFF6A1B9A), const Color(0xFF3D1D36));
       case BookingStatus.onTheWay:
+      case BookingStatus.outForDelivery:
         return (const Color(0xFF00695C), const Color(0xFF004D40));
       case BookingStatus.inProgress:
       case BookingStatus.consultationStarted:
@@ -1076,9 +1155,14 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
         return Icons.hourglass_empty_rounded;
       case BookingStatus.confirmed:
         return Icons.check_circle_outline_rounded;
+      case BookingStatus.verified:
+        return Icons.verified_rounded;
       case BookingStatus.assigned:
         return Icons.person_pin_circle_rounded;
+      case BookingStatus.packed:
+        return Icons.inventory_2_rounded;
       case BookingStatus.onTheWay:
+      case BookingStatus.outForDelivery:
         return Icons.directions_run_rounded;
       case BookingStatus.inProgress:
       case BookingStatus.consultationStarted:
@@ -1103,10 +1187,16 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
         return 'Waiting for provider confirmation';
       case BookingStatus.confirmed:
         return 'Your booking has been confirmed';
+      case BookingStatus.verified:
+        return 'Your order has been verified by the pharmacy';
       case BookingStatus.assigned:
         return 'A provider has been assigned to you';
+      case BookingStatus.packed:
+        return 'Your order has been packed';
       case BookingStatus.onTheWay:
         return 'Provider is on the way to you';
+      case BookingStatus.outForDelivery:
+        return 'Your order is out for delivery';
       case BookingStatus.inProgress:
         return 'Service is currently in progress';
       case BookingStatus.consultationStarted:
@@ -1614,6 +1704,11 @@ class _ServiceInfo {
               gradient: AppColors.primaryGradient,
             );
         }
+      case BookingSource.medicineOrder:
+        return const _ServiceInfo(
+          icon: Icons.local_pharmacy_rounded,
+          gradient: AppColors.medicineGrad,
+        );
     }
   }
 }

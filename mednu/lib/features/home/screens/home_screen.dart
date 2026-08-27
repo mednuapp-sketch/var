@@ -788,7 +788,7 @@ class _FindDoctorList extends StatelessWidget {
       stream: FirebaseFirestore.instance
           .collection('doctors')
           .where('status', isEqualTo: 'active')
-          .orderBy('rating', descending: true)
+          .orderBy('createdAt', descending: true)
           .limit(50)
           .snapshots(),
       builder: (context, snap) {
@@ -855,8 +855,6 @@ class _DoctorCard extends StatelessWidget {
     final name = data['name'] as String? ?? 'Doctor';
     final spec = data['specialty'] as String? ?? '';
     final qual = data['qualifications'] as String? ?? '';
-    final rating = (data['rating'] as num?)?.toStringAsFixed(1) ?? '–';
-    final reviews = data['totalConsultations']?.toString() ?? '0';
     final exp = data['experience'] as String? ?? '';
     final fee = data['fee']?.toString() ?? '–';
     final isOnline = data['isOnline'] as bool? ?? false;
@@ -922,28 +920,18 @@ class _DoctorCard extends StatelessWidget {
                   style: AppTextStyles.bodySmall,
                   overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    const Icon(Icons.star_rounded,
-                        color: Color(0xFFF57F17), size: 14),
-                    const SizedBox(width: 3),
-                    Text(rating,
-                        style: AppTextStyles.caption.copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: context.appTextPrimary)),
-                    Text(' ($reviews)',
-                        style: AppTextStyles.caption),
-                    if (exp.isNotEmpty) ...[
-                      const SizedBox(width: 8),
+                if (exp.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
                       Icon(Icons.work_outline_rounded,
                           size: 12, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4)),
                       const SizedBox(width: 3),
                       Text(exp.contains('yr') ? exp : '$exp yrs',
                           style: AppTextStyles.caption),
                     ],
-                  ],
-                ),
+                  ),
+                ],
                 const SizedBox(height: 4),
                 Row(
                   children: [
