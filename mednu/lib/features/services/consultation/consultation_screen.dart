@@ -750,7 +750,8 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
           // In-Person location note
           if (_selectedType == 'In-Person')
             Padding(
-              padding: EdgeInsets.symmetric(horizontal: R.p(context, 20)),
+              padding: EdgeInsets.fromLTRB(
+                  R.p(context, 20), R.p(context, 14), R.p(context, 20), 0),
               child: GestureDetector(
                 onTap: () => context.push('/doctors?mode=inperson'),
                 child: Container(

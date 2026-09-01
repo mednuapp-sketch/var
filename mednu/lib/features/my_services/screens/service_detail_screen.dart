@@ -940,6 +940,17 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
           ],
           const SizedBox(height: 10),
         ],
+        if (live.isActive &&
+            (live.rawData['type'] as String? ?? '').toLowerCase() == 'ambulance' &&
+            live.rawData['assignedTo'] != null) ...[
+          _ActionButton(
+            icon: Icons.map_rounded,
+            label: 'Track Ambulance Live',
+            color: AppColors.error,
+            onTap: () => context.push(AppRoutes.ambulanceLiveTracking, extra: {'requestId': live.id}),
+          ),
+          const SizedBox(height: 10),
+        ],
         if (live.isActive || live.isCompleted)
           _ActionButton(
             icon: Icons.headset_mic_rounded,

@@ -58,6 +58,29 @@ class _DiagnosticsScreenState extends ConsumerState<DiagnosticsScreen> {
     FeedbackService.showSuccess(context, '${test['name']} added to cart');
   }
 
+  /// Same as [_book], but for a test pulled from a specific lab's own
+  /// catalogue (`lab_tests_catalogue`) rather than the admin-curated
+  /// `services` list. Carrying `sourceLabId`/`sourceTestId` through in
+  /// `serviceDetails` is what lets `onDiagnosticServiceRequestCreated`
+  /// (functions/index.js) route the resulting booking straight to that lab
+  /// instead of dropping it into the shared unclaimed queue.
+  void _bookFromLab(Map<String, dynamic> test) {
+    ref.read(cartProvider.notifier).addItem(
+          type: 'diagnostics',
+          serviceName: test['name'] as String,
+          themeColor: _themeColor,
+          unitAmount: (test['price'] as num?)?.toInt() ?? 0,
+          serviceDetails: {
+            'testName': test['name'],
+            'price': test['price'],
+            'reportTime': test['duration'],
+            'sourceLabId': test['sourceLabId'],
+            'sourceTestId': test['sourceTestId'],
+          },
+        );
+    FeedbackService.showSuccess(context, '${test['name']} added to cart');
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -140,6 +163,8 @@ class _DiagnosticsScreenState extends ConsumerState<DiagnosticsScreen> {
                       ),
                     ),
                   ),
+                  // ── Real tests from registered, approved labs ─────────────
+                  _LabCatalogueTests(onBook: _bookFromLab),
                   // ── Popular tests ─────────────────────────────────────────
                   _PopularTestsRow(onBook: _book),
                   const SizedBox(height: 8),
@@ -275,6 +300,112 @@ class _DiagnosticsScreenState extends ConsumerState<DiagnosticsScreen> {
           })),
         ),
     ]);
+  }
+}
+
+// ── Tests from registered labs (real catalogue, not admin-curated) ──────────
+//
+// Sourced from `lab_tests_catalogue` — the patient-facing mirror of each
+// active lab's own test catalogue (see `onLabTestInventoryWrite`,
+// functions/index.js). Booking one of these routes the request straight to
+// the lab that listed it, unlike the generic `services`-backed list below.
+
+class _LabCatalogueTests extends StatelessWidget {
+  final void Function(Map<String, dynamic>) onBook;
+  const _LabCatalogueTests({required this.onBook});
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('lab_tests_catalogue')
+          .where('isActive', isEqualTo: true)
+          .limit(30)
+          .snapshots(),
+      builder: (context, snap) {
+        final docs = snap.data?.docs ?? const [];
+        // Don't render the section at all while empty/loading — this is an
+        // additive list on top of the admin-curated one below, so an empty
+        // state here would just be visual noise, not useful information.
+        if (docs.isEmpty) return const SizedBox.shrink();
+
+        final tests = docs.map((d) {
+          final data = d.data() as Map<String, dynamic>;
+          return {
+            'name': (data['name'] as String? ?? '').trim(),
+            'price': (data['price'] as num?)?.toInt() ?? 0,
+            'duration': (data['duration'] as String? ?? '').trim(),
+            'labName': (data['labName'] as String? ?? '').trim(),
+            'sourceLabId': data['sourceLabId'],
+            'sourceTestId': data['sourceTestId'],
+          };
+        }).toList();
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 4, 16, 10),
+              child: Text('Tests from Labs Near You', style: AppTextStyles.h4),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Column(
+                children: tests.map((t) {
+                  final duration = t['duration'] as String;
+                  final labName = t['labName'] as String;
+                  final subtitle = [
+                    if (labName.isNotEmpty) labName,
+                    if (duration.isNotEmpty) 'Reports in $duration',
+                  ].join(' • ');
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: context.appSurface,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: context.appBorder),
+                    ),
+                    child: Row(children: [
+                      Container(
+                        width: 46, height: 46,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0097A7).withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(Icons.biotech_rounded, color: Color(0xFF0097A7), size: 24),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text(t['name'] as String, style: AppTextStyles.labelLarge),
+                        if (subtitle.isNotEmpty)
+                          Text(subtitle, style: AppTextStyles.bodySmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+                      ])),
+                      Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                        Text('₹${t['price']}', style: AppTextStyles.labelLarge.copyWith(color: const Color(0xFF0097A7))),
+                        const SizedBox(height: 4),
+                        GestureDetector(
+                          onTap: () => onBook(t),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(colors: [Color(0xFF0097A7), Color(0xFF26C6DA)]),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Text('Add to Cart', style: TextStyle(fontFamily: 'Poppins', fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white)),
+                          ),
+                        ),
+                      ]),
+                    ]),
+                  );
+                }).toList(),
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+        );
+      },
+    );
   }
 }
 

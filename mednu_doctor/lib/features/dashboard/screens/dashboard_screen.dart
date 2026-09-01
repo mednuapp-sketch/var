@@ -192,8 +192,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
         }
       }
     } else {
+      // Mirrors the online branch's guard: without this, the switch stays a
+      // live GestureDetector for the whole async offline transition, so a
+      // re-tap mid-transition races a fresh "going online" flow against this
+      // one still in flight — both writing conflicting state concurrently.
+      setState(() => _locationTogglingInProgress = true);
       FeedbackService.showLoading(context, 'Going offline...');
       await _setOfflineImmediate();
+      if (mounted) setState(() => _locationTogglingInProgress = false);
       await OperationLogger.logSuccess(
         action: DoctorOpAction.wentOffline,
         message: 'Doctor went offline',
@@ -475,27 +481,42 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                           style: AppTextStyles.onPrimaryBody.copyWith(fontSize: R.sp(context, 11)),
                         ),
                         SizedBox(height: R.h(context, 8)),
-                        if (widget.isOnline) ...[
-                          Container(
-                            padding: EdgeInsets.symmetric(horizontal: R.p(context, 10), vertical: R.p(context, 4)),
-                            decoration: BoxDecoration(color: Colors.white.withValues(alpha:0.2), borderRadius: BorderRadius.circular(R.r(context, 10))),
-                            child: Row(mainAxisSize: MainAxisSize.min, children: [
-                              Container(width: R.w(context, 6), height: R.w(context, 6), decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle)),
-                              SizedBox(width: R.p(context, 6)),
-                              Flexible(child: Text('Waiting for requests...', style: AppTextStyles.caption.copyWith(fontSize: R.sp(context, 11), color: Colors.white))),
-                            ]),
-                          ),
-                          SizedBox(height: R.h(context, 6)),
-                          Container(
-                            padding: EdgeInsets.symmetric(horizontal: R.p(context, 10), vertical: R.p(context, 4)),
-                            decoration: BoxDecoration(color: Colors.white.withValues(alpha:0.15), borderRadius: BorderRadius.circular(R.r(context, 10))),
-                            child: Row(mainAxisSize: MainAxisSize.min, children: [
-                              Icon(Icons.my_location_rounded, size: R.w(context, 12), color: Colors.white),
-                              SizedBox(width: R.p(context, 5)),
-                              Flexible(child: Text('GPS Active • Visible within 10 km', style: AppTextStyles.caption.copyWith(fontSize: R.sp(context, 10), color: Colors.white))),
-                            ]),
-                          ),
-                        ],
+                        // AnimatedSize (not a bare conditional spread) so these
+                        // badges appearing/disappearing on toggle smoothly
+                        // resizes the card instead of popping its height —
+                        // that abrupt jump was reading as a flicker.
+                        AnimatedSize(
+                          duration: const Duration(milliseconds: 300),
+                          curve: Curves.easeInOut,
+                          alignment: Alignment.topLeft,
+                          child: !widget.isOnline
+                              ? const SizedBox(width: double.infinity)
+                              : Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Container(
+                                      padding: EdgeInsets.symmetric(horizontal: R.p(context, 10), vertical: R.p(context, 4)),
+                                      decoration: BoxDecoration(color: Colors.white.withValues(alpha:0.2), borderRadius: BorderRadius.circular(R.r(context, 10))),
+                                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                                        Container(width: R.w(context, 6), height: R.w(context, 6), decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle)),
+                                        SizedBox(width: R.p(context, 6)),
+                                        Flexible(child: Text('Waiting for requests...', style: AppTextStyles.caption.copyWith(fontSize: R.sp(context, 11), color: Colors.white))),
+                                      ]),
+                                    ),
+                                    SizedBox(height: R.h(context, 6)),
+                                    Container(
+                                      padding: EdgeInsets.symmetric(horizontal: R.p(context, 10), vertical: R.p(context, 4)),
+                                      decoration: BoxDecoration(color: Colors.white.withValues(alpha:0.15), borderRadius: BorderRadius.circular(R.r(context, 10))),
+                                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                                        Icon(Icons.my_location_rounded, size: R.w(context, 12), color: Colors.white),
+                                        SizedBox(width: R.p(context, 5)),
+                                        Flexible(child: Text('GPS Active • Visible within 10 km', style: AppTextStyles.caption.copyWith(fontSize: R.sp(context, 10), color: Colors.white))),
+                                      ]),
+                                    ),
+                                  ],
+                                ),
+                        ),
                       ]),
                     ),
                     SizedBox(width: R.p(context, 12)),
@@ -641,6 +662,7 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                       final patientId = d['patientId'] as String? ?? '';
                       final time = d['time'] as String? ?? '';
                       final type = d['consultationType'] as String? ?? 'Video';
+                      final rxId = d['rxId'] as String?;
                       final dateStr = d['date'] as String? ?? '';
                       String displayDate = dateStr;
                       try {
@@ -675,10 +697,19 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                               Text(patientName, style: AppTextStyles.labelLarge),
                               Text('$displayDate • $time', style: AppTextStyles.bodySmall),
                             ])),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(color: AppColors.primary.withValues(alpha:0.1), borderRadius: BorderRadius.circular(8)),
-                              child: Text(type, style: AppTextStyles.caption.copyWith(color: AppColors.primary, fontWeight: FontWeight.w700)),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(color: AppColors.primary.withValues(alpha:0.1), borderRadius: BorderRadius.circular(8)),
+                                  child: Text(type, style: AppTextStyles.caption.copyWith(color: AppColors.primary, fontWeight: FontWeight.w700)),
+                                ),
+                                if (type == 'In-Person' && rxId != null && rxId.isNotEmpty) ...[
+                                  const SizedBox(height: 4),
+                                  Text(rxId, style: AppTextStyles.caption.copyWith(color: AppColors.textHint, fontSize: 10)),
+                                ],
+                              ],
                             ),
                           ]),
                         ),

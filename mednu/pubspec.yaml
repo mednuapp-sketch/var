@@ -1,7 +1,7 @@
 name: mednu
 description: MedNU - Your Family Healthcare Partner by MedNU Healthcare Services Private Limited
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.0.2+6
 
 environment:
   sdk: '>=3.12.0 <4.0.0'

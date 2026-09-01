@@ -4598,7 +4598,7 @@ function renderAppointmentsTable(list) {
     const status = a.status || 'pending';
     const pillCls = { pending:'pending', confirmed:'confirmed', completed:'completed', cancelled:'suspended', no_show:'no_show' }[status] || 'pending';
     const patColor = randomAvatarColor(a.patientName);
-    const typeBadge = a.type === 'video'
+    const typeBadge = a.consultationType === 'Video'
       ? '<span class="pill" style="background:#e3f2fd;color:#1565c0;"> Video</span>'
       : '<span class="pill" style="background:#e8f5e9;color:#2e7d32;"> In-Person</span>';
     const slot = [a.date, a.time].filter(Boolean).join(' &middot; ') || '—';
@@ -4688,11 +4688,15 @@ function viewApptDetail(id) {
         <div style="font-size:13px;color:#888;margin-top:2px;">${escHtml(a.patientPhone||'')}</div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
-        ${[['Doctor', a.doctorName||'—'], ['Speciality', a.doctorSpeciality||'—'], ['Date', a.date||'—'], ['Time', a.time||'—'], ['Type', capitalize(a.type||'in_person')], ['Status', capitalize(status)]].map(([l,v])=>`
+        ${(() => {
+          const rows = [['Doctor', a.doctorName||'—'], ['Speciality', a.doctorSpeciality||'—'], ['Date', a.date||'—'], ['Time', a.time||'—'], ['Type', a.consultationType || 'In-Person'], ['Status', capitalize(status)]];
+          if (a.rxId) rows.push(['Rx / OP No.', a.rxId]);
+          return rows.map(([l,v])=>`
           <div style="padding:10px;background:#f9f9f9;border-radius:10px;">
             <div style="font-size:11px;color:#aaa;font-weight:600;">${escHtml(l.toUpperCase())}</div>
             <div style="font-size:14px;font-weight:600;margin-top:2px;">${escHtml(v)}</div>
-          </div>`).join('')}
+          </div>`).join('');
+        })()}
       </div>
       ${a.notes ? `<div style="padding:12px;background:#fffde7;border-radius:10px;margin-bottom:16px;"><div style="font-size:11px;font-weight:600;color:#f9a825;margin-bottom:4px;">NOTES</div><div style="font-size:13px;">${escHtml(a.notes)}</div></div>` : ''}
       <div style="display:flex;gap:8px;flex-wrap:wrap;">

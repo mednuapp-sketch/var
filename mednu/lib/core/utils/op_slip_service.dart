@@ -114,6 +114,7 @@ class OpSlipService {
           'patientName': appointmentData['patientName'],
           'consultationType': type,
           'appointmentId': appointmentId,
+          'rxId': appointmentData['rxId'],
           if (slot != null) 'createdAt': Timestamp.fromDate(slot),
         },
       );

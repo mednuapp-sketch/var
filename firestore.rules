@@ -506,6 +506,15 @@ service cloud.firestore {
                          (resource.data.status != 'active' || doesNotModify(['documents']))) ||
                        isAdmin();
       allow delete: if isAdmin();
+
+      // A lab manages its own test catalogue; nobody else reads this
+      // subcollection directly — a Cloud Function mirrors each test's public
+      // fields into `lab_tests_catalogue` (Admin SDK, bypasses these rules)
+      // while this lab's status is 'active'. See pharmacy_profiles'
+      // `inventory` subcollection above for the identical pattern.
+      match /tests/{testId} {
+        allow read, write: if isOwner(labId) || isAdmin();
+      }
     }
 
     match /diagnostic_bookings/{bookingId} {
@@ -1192,11 +1201,10 @@ service cloud.firestore {
       // doctor appointment, unlike the claim-from-a-pool pattern every other
       // partner module uses) — `nutritionistId` is already set on create, so
       // the assigned nutritionist just needs read/limited-update access to
-      // their own appointments. There is no separate `nutrition_profiles`
-      // partner-onboarding flow: `nutritionists/{uid}` stays admin-curated
-      // (see below), and the Partner app's Nutrition module is only usable
-      // by an account an admin has already granted the role + catalogue
-      // entry to.
+      // their own appointments. Nutritionist registration itself now goes
+      // through `nutritionist_profiles` (see below) exactly like every other
+      // role — this block only ever concerned appointment access, which
+      // never depended on how the nutritionist account was provisioned.
       allow read: if isAuth() && (
         resource.data.userId == request.auth.uid ||
         resource.data.nutritionistId == request.auth.uid ||
@@ -1244,10 +1252,33 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // ── Nutritionists (admin-managed, public read) ────────────────────────────
+    // ── Nutritionists (public read; mirrored from nutritionist_profiles) ─────
+    // Written only by `onNutritionistProfileWriteForVisibility`'s Cloud
+    // Function mirror (Admin SDK, bypasses these rules), same as
+    // `caregivers`/`medicines_catalogue`/`lab_tests_catalogue`.
     match /nutritionists/{nutritionistId} {
       allow read: if isAuth();
       allow write: if isAdmin();
+    }
+
+    // A nutritionist manages their own private profile; approval is what
+    // makes them show up in `nutritionists` above (see
+    // onNutritionistProfileWriteForVisibility, functions/index.js). Same
+    // shape as caregiver_profiles.
+    match /nutritionist_profiles/{nutritionistId} {
+      allow read: if isAuth() && (
+        isOwner(nutritionistId) || isAdmin() || resource.data.status == 'active'
+      );
+      // See lab_profiles' create rule (above) for why status/isVerified are
+      // fixed here rather than left to the client.
+      allow create: if isOwner(nutritionistId) &&
+                       request.resource.data.status == 'pending' &&
+                       request.resource.data.isVerified == false;
+      allow update: if (isOwner(nutritionistId) &&
+                         doesNotModify(['status', 'isVerified', 'rating', 'reviewCount', 'documentVerification']) &&
+                         (resource.data.status != 'active' || doesNotModify(['documents']))) ||
+                       isAdmin();
+      allow delete: if isAdmin();
     }
 
     // ── Pregnancy profiles ────────────────────────────────────────────────────
@@ -1385,6 +1416,13 @@ service cloud.firestore {
 
     // ── Medicine catalogue (admin-managed, public read for patients) ─────────
     match /medicines_catalogue/{medicineId} {
+      allow read:  if isAuth();
+      allow write: if isAdmin();
+    }
+
+    // Mirror of every active lab's test catalogue — see lab_profiles'
+    // `tests` subcollection and `onLabTestInventoryWrite` (functions/index.js).
+    match /lab_tests_catalogue/{testId} {
       allow read:  if isAuth();
       allow write: if isAdmin();
     }

@@ -97,11 +97,23 @@ class AmbulanceRequest {
   final String patientName;
   final String patientPhone;
   final String pickupAddress;
+  final double? pickupLat;
+  final double? pickupLng;
   final String dropAddress;
   final double distanceKm;
   final int etaMinutes;
   final num fare;
   final DateTime requestedAt;
+
+  /// Set at creation when the nearest-driver match (functions/index.js,
+  /// `onAmbulanceServiceRequestCreated`) pinned this request to a specific
+  /// online driver — distinct from a partner claiming an unclaimed
+  /// (`ambulanceId == null`) request from the open pool. Whether this
+  /// request is already "mine to accept" vs "mine because I claimed it"
+  /// looks identical once accepted, but matters for which accept action the
+  /// detail screen offers while still `pending` — see
+  /// AmbulanceRequestService.acceptAssigned.
+  final String? ambulanceId;
 
   const AmbulanceRequest({
     required this.id,
@@ -110,11 +122,14 @@ class AmbulanceRequest {
     required this.patientName,
     required this.patientPhone,
     required this.pickupAddress,
+    this.pickupLat,
+    this.pickupLng,
     required this.dropAddress,
     required this.distanceKm,
     required this.etaMinutes,
     required this.fare,
     required this.requestedAt,
+    this.ambulanceId,
   });
 
   /// Parses an `ambulance_requests` document. Unknown/missing enum strings
@@ -131,6 +146,8 @@ class AmbulanceRequest {
       patientName: d['patientName'] as String? ?? 'Patient',
       patientPhone: d['patientPhone'] as String? ?? '',
       pickupAddress: d['pickupAddress'] as String? ?? '',
+      pickupLat: (d['pickupLat'] as num?)?.toDouble(),
+      pickupLng: (d['pickupLng'] as num?)?.toDouble(),
       dropAddress: d['dropAddress'] as String? ?? '',
       distanceKm: ((d['distanceKm'] as num?) ?? 0).toDouble(),
       etaMinutes: ((d['etaMinutes'] as num?) ?? 0).toInt(),
@@ -138,6 +155,7 @@ class AmbulanceRequest {
       requestedAt: (d['requestedAt'] as Timestamp?)?.toDate() ??
           (d['createdAt'] as Timestamp?)?.toDate() ??
           DateTime.now(),
+      ambulanceId: d['ambulanceId'] as String?,
     );
   }
 
@@ -162,10 +180,13 @@ class AmbulanceRequest {
         patientName: patientName,
         patientPhone: patientPhone,
         pickupAddress: pickupAddress,
+        pickupLat: pickupLat,
+        pickupLng: pickupLng,
         dropAddress: dropAddress,
         distanceKm: distanceKm,
         etaMinutes: etaMinutes,
         fare: fare,
         requestedAt: requestedAt,
+        ambulanceId: ambulanceId,
       );
 }

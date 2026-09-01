@@ -82,7 +82,7 @@ class _CaregiversScreenState extends ConsumerState<CaregiversScreen> {
   Map<String, dynamic> _shiftOption(String key) =>
       _shiftOptions.firstWhere((s) => s['key'] == key);
 
-  Map<String, dynamic> _normalize(Map<String, dynamic> raw, int idx) {
+  Map<String, dynamic> _normalize(Map<String, dynamic> raw, String id, int idx) {
     // ratePerDay is the base rate for an 8-hour shift (morning/evening/night).
     final rateNum    = (raw['ratePerDay']  as num?)?.toInt() ?? 0;
     final rateHour   = (raw['ratePerHour'] as num?)?.toInt() ?? (rateNum > 0 ? (rateNum ~/ 8) : 0);
@@ -90,6 +90,7 @@ class _CaregiversScreenState extends ConsumerState<CaregiversScreen> {
     final type       = raw['type'] as String? ?? 'Caregiver';
     final isVerified = raw['isVerified'] as bool? ?? false;
     return {
+      'id':         id,
       'name':       raw['name']       as String? ?? 'Caregiver',
       'exp':        raw['experience'] as String? ?? raw['exp'] as String? ?? '',
       'rating':     (raw['rating']    as num?)?.toDouble() ?? 0.0,
@@ -133,6 +134,7 @@ class _CaregiversScreenState extends ConsumerState<CaregiversScreen> {
           themeColor: c['color'] as Color,
           unitAmount: amount,
           serviceDetails: {
+            'sourceCaregiverId': c['id'],
             'caregiverName':  c['name'],
             'specialty':      c['specialty'],
             'experience':     c['exp'],
@@ -287,6 +289,7 @@ class _CaregiversScreenState extends ConsumerState<CaregiversScreen> {
                 .entries
                 .map((e) => _normalize(
                       Map<String, dynamic>.from(e.value.data() as Map),
+                      e.value.id,
                       e.key,
                     ))
                 .toList();

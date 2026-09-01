@@ -217,6 +217,12 @@ class _PrimaryActionState extends ConsumerState<_PrimaryAction> {
 
     switch (request.status) {
       case AmbulanceRequestStatus.pending:
+        // Nearest-driver matching pins some requests to a specific partner
+        // at creation (`request.ambulanceId` already set) — there's nothing
+        // to claim in that case, so it needs a different transition than an
+        // unclaimed pool request does. See AmbulanceRequestService.acceptAssigned.
+        final currentUid = AmbulanceProfileService.currentUid;
+        final isAssignedToMe = request.ambulanceId != null && request.ambulanceId == currentUid;
         return GradientButton(
           label: 'Accept Request',
           icon: Icons.check_rounded,
@@ -224,7 +230,9 @@ class _PrimaryActionState extends ConsumerState<_PrimaryAction> {
           onTap: _busy
               ? null
               : () => _run(
-                    (uid) => AmbulanceRequestService.accept(request.id, uid),
+                    (uid) => isAssignedToMe
+                        ? AmbulanceRequestService.acceptAssigned(request.id, uid)
+                        : AmbulanceRequestService.accept(request.id, uid),
                     successMessage: 'Request accepted',
                   ),
         );

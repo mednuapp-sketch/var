@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_text_styles.dart';
 import '../../core/router/app_router.dart';
+import '../../core/utils/r.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -17,48 +19,63 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
 
-  final List<_OnboardData> _pages = [
-    const _OnboardData(
-      title: 'MedNU\nAlways With You',
-      subtitle: 'Connect with doctors, hospitals, and health services for your entire family — anytime, anywhere.',
-      gradient: LinearGradient(
-        colors: [Color(0xFF522546), Color(0xFF633058)],
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-      ),
-      icon: Icons.medical_services_rounded,
+  static const List<_OnboardData> _pages = [
+    _OnboardData(
       badge: 'Always With You',
-      showBrand: true,
-    ),
-    const _OnboardData(
-      title: 'Find Specialist\nDoctors Near You',
-      subtitle: 'Book appointments, consult online or in-person, track your family health — all in one app.',
+      title: 'Always With\nYou',
+      subtitle:
+          'Connect with doctors, hospitals, and health services for your entire family — anytime, anywhere.',
       gradient: LinearGradient(
-        colors: [Color(0xFF633058), Color(0xFF3D1D36)],
+        colors: [AppColors.primary, AppColors.secondary],
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
       ),
-      icon: Icons.people_alt_rounded,
+      illustrationAsset: 'assets/icons/onboarding-care.svg',
+    ),
+    _OnboardData(
       badge: 'Family Healthcare',
-    ),
-    const _OnboardData(
-      title: 'Get Online\nConsultation',
-      subtitle: 'Connect with verified doctors via video call. Get prescriptions, follow-ups, and health tips instantly.',
+      title: 'Find Specialist\nDoctors Near You',
+      subtitle:
+          'Book appointments, consult online or in-person, track your family health — all in one app.',
       gradient: LinearGradient(
-        colors: [Color(0xFF33172C), Color(0xFF522546)],
+        colors: [AppColors.secondary, AppColors.secondaryDark],
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
       ),
-      icon: Icons.video_call_rounded,
+      illustrationAsset: 'assets/icons/onboarding-doctor-pin.svg',
+    ),
+    _OnboardData(
       badge: 'Online Consultation',
+      title: 'Get Online\nConsultation',
+      subtitle:
+          'Connect with verified doctors via video call. Get prescriptions, follow-ups, and health tips instantly.',
+      gradient: LinearGradient(
+        colors: [AppColors.primaryDark, AppColors.primary],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ),
+      illustrationAsset: 'assets/icons/onboarding-video-call.svg',
     ),
   ];
+
+  bool get _isLastPage => _currentPage == _pages.length - 1;
 
   Future<void> _done() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('onboarded', true);
     if (!mounted) return;
     context.go(AppRoutes.login);
+  }
+
+  void _next() {
+    if (_isLastPage) {
+      _done();
+    } else {
+      _pageController.nextPage(
+        duration: const Duration(milliseconds: 420),
+        curve: Curves.easeOutCubic,
+      );
+    }
   }
 
   @override
@@ -69,100 +86,154 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final topInset = MediaQuery.of(context).padding.top;
+
     return Scaffold(
       backgroundColor: context.appBackground,
-      body: Column(
+      body: Stack(
         children: [
-          // ── Page view ───────────────────────────────
-          Expanded(
-            flex: 7,
-            child: PageView.builder(
-              controller: _pageController,
-              itemCount: _pages.length,
-              onPageChanged: (i) => setState(() => _currentPage = i),
-              itemBuilder: (_, i) => _OnboardPage(data: _pages[i]),
-            ),
+          Column(
+            children: [
+              Expanded(
+                flex: 6,
+                child: PageView.builder(
+                  controller: _pageController,
+                  itemCount: _pages.length,
+                  onPageChanged: (i) => setState(() => _currentPage = i),
+                  itemBuilder: (_, i) => _OnboardPage(
+                    data: _pages[i],
+                    step: i + 1,
+                    totalSteps: _pages.length,
+                  ),
+                ),
+              ),
+
+              // ── Persistent bottom controls ─────────────
+              Container(
+                width: double.infinity,
+                padding: EdgeInsets.fromLTRB(
+                  R.p(context, 28),
+                  R.p(context, 18),
+                  R.p(context, 28),
+                  MediaQuery.of(context).padding.bottom + R.p(context, 24),
+                ),
+                decoration: BoxDecoration(color: context.appSurface),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SmoothPageIndicator(
+                      controller: _pageController,
+                      count: _pages.length,
+                      effect: ExpandingDotsEffect(
+                        activeDotColor: context.appPrimary,
+                        dotColor: context.appPrimary.withValues(alpha: 0.18),
+                        dotHeight: R.h(context, 7),
+                        dotWidth: R.w(context, 7),
+                        expansionFactor: 4,
+                        spacing: R.p(context, 6),
+                      ),
+                    ),
+                    SizedBox(height: R.p(context, 24)),
+                    SizedBox(
+                      width: double.infinity,
+                      height: R.h(context, 56),
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: AppColors.primaryGradient,
+                          borderRadius: BorderRadius.circular(R.r(context, 16)),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.primary.withValues(alpha: 0.35),
+                              blurRadius: 16,
+                              offset: const Offset(0, 8),
+                            ),
+                          ],
+                        ),
+                        child: ElevatedButton(
+                          onPressed: _next,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.transparent,
+                            shadowColor: Colors.transparent,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(R.r(context, 16)),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                _isLastPage ? 'Get Started' : 'Next',
+                                style: AppTextStyles.button.copyWith(
+                                  fontSize: R.sp(context, 15),
+                                ),
+                              ),
+                              SizedBox(width: R.p(context, 8)),
+                              Icon(
+                                Icons.arrow_forward_rounded,
+                                color: Colors.white,
+                                size: R.w(context, 18),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
 
-          // ── Bottom controls ─────────────────────────
-          Container(
-            padding: EdgeInsets.fromLTRB(
-                28, 20, 28, MediaQuery.of(context).padding.bottom + 28),
-            child: Column(
+          // ── Persistent top brand + skip row ─────────────
+          Positioned(
+            top: topInset + R.p(context, 14),
+            left: R.p(context, 20),
+            right: R.p(context, 20),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                // Dot indicator
-                SmoothPageIndicator(
-                  controller: _pageController,
-                  count: _pages.length,
-                  effect: ExpandingDotsEffect(
-                    activeDotColor: AppColors.primary,
-                    dotColor: AppColors.primary.withValues(alpha:0.2),
-                    dotHeight: 8,
-                    dotWidth: 8,
-                    expansionFactor: 4,
-                    spacing: 6,
-                  ),
-                ),
-                const SizedBox(height: 28),
-
-                // Next / Get Started button (gradient)
-                SizedBox(
-                  width: double.infinity,
-                  height: 54,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF522546), Color(0xFF633058)],
-                        begin: Alignment.centerLeft,
-                        end: Alignment.centerRight,
+                Row(
+                  children: [
+                    Icon(Icons.local_hospital_rounded,
+                        color: Colors.white, size: R.w(context, 18)),
+                    SizedBox(width: R.p(context, 6)),
+                    Text(
+                      'MedNU',
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: R.sp(context, 15),
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                        letterSpacing: 0.4,
                       ),
-                      borderRadius: BorderRadius.circular(14),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.primary.withValues(alpha:0.35),
-                          blurRadius: 14,
-                          offset: const Offset(0, 6),
-                        ),
-                      ],
                     ),
-                    child: ElevatedButton(
-                      onPressed: () {
-                        if (_currentPage < _pages.length - 1) {
-                          _pageController.nextPage(
-                            duration: const Duration(milliseconds: 400),
-                            curve: Curves.easeInOut,
-                          );
-                        } else {
-                          _done();
-                        }
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.transparent,
-                        shadowColor: Colors.transparent,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
+                  ],
+                ),
+                AnimatedOpacity(
+                  duration: const Duration(milliseconds: 250),
+                  opacity: _isLastPage ? 0 : 1,
+                  child: IgnorePointer(
+                    ignoring: _isLastPage,
+                    child: TextButton(
+                      onPressed: _done,
+                      style: TextButton.styleFrom(
+                        backgroundColor: Colors.white.withValues(alpha: 0.16),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: R.p(context, 16),
+                          vertical: R.p(context, 8),
                         ),
+                        shape: const StadiumBorder(),
                       ),
                       child: Text(
-                        _currentPage < _pages.length - 1 ? 'Next' : 'Get Started',
-                        style: AppTextStyles.button,
+                        'Skip',
+                        style: AppTextStyles.labelLarge.copyWith(
+                          color: Colors.white,
+                          fontSize: R.sp(context, 13),
+                        ),
                       ),
                     ),
                   ),
                 ),
-                const SizedBox(height: 12),
-
-                // Skip
-                if (_currentPage < _pages.length - 1)
-                  TextButton(
-                    onPressed: _done,
-                    child: Text(
-                      'Skip for now',
-                      style: AppTextStyles.labelLarge.copyWith(
-                        color: context.appTextSecondary,
-                      ),
-                    ),
-                  ),
               ],
             ),
           ),
@@ -174,13 +245,19 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
 class _OnboardPage extends StatelessWidget {
   final _OnboardData data;
-  const _OnboardPage({required this.data});
+  final int step;
+  final int totalSteps;
+
+  const _OnboardPage({
+    required this.data,
+    required this.step,
+    required this.totalSteps,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        // Illustration area
         Expanded(
           child: Container(
             width: double.infinity,
@@ -188,168 +265,52 @@ class _OnboardPage extends StatelessWidget {
             child: SafeArea(
               bottom: false,
               child: Stack(
+                fit: StackFit.expand,
                 children: [
-                  // Decorative circles
+                  // Soft glow orbs — replaces the flat translucent circles
                   Positioned(
-                    top: -30,
-                    right: -30,
-                    child: Container(
-                      width: 150,
-                      height: 150,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.white.withValues(alpha:0.06),
-                      ),
-                    ),
+                    top: -60,
+                    right: -50,
+                    child: _GlowOrb(size: R.w(context, 220)),
                   ),
                   Positioned(
-                    bottom: 20,
-                    left: -40,
-                    child: Container(
-                      width: 120,
-                      height: 120,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.white.withValues(alpha:0.05),
-                      ),
-                    ),
+                    bottom: R.h(context, 10),
+                    left: -R.w(context, 70),
+                    child: _GlowOrb(size: R.w(context, 160)),
                   ),
-                  Positioned(
-                    bottom: -20,
-                    right: 40,
-                    child: Container(
-                      width: 80,
-                      height: 80,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.white.withValues(alpha:0.04),
-                      ),
-                    ),
-                  ),
-                  Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      // Brand header — only on first card
-                      if (data.showBrand) ...[
-                        const Text(
-                          'MedNU',
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 42,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.white,
-                            letterSpacing: 1.2,
-                            height: 1.1,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              width: 28,
-                              height: 1.5,
-                              color: Colors.white.withValues(alpha: 0.55),
-                            ),
-                            const SizedBox(width: 8),
-                            const Text(
-                              'Always With You',
-                              style: TextStyle(
-                                fontFamily: 'Poppins',
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                                color: Colors.white,
-                                letterSpacing: 2.0,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Container(
-                              width: 28,
-                              height: 1.5,
-                              color: Colors.white.withValues(alpha: 0.55),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 28),
-                      ] else ...[
-                        // Badge for other pages
+
+                  Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
                         Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 7),
+                          padding: EdgeInsets.symmetric(
+                            horizontal: R.p(context, 16),
+                            vertical: R.p(context, 7),
+                          ),
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.2),
-                            borderRadius: BorderRadius.circular(20),
+                            color: Colors.white.withValues(alpha: 0.16),
+                            borderRadius: BorderRadius.circular(R.r(context, 20)),
                             border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.25),
+                              color: Colors.white.withValues(alpha: 0.28),
                             ),
                           ),
                           child: Text(
                             data.badge,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontFamily: 'Poppins',
-                              fontSize: 12,
+                              fontSize: R.sp(context, 12),
                               color: Colors.white,
                               fontWeight: FontWeight.w600,
                               letterSpacing: 0.3,
                             ),
                           ),
                         ),
-                        const SizedBox(height: 32),
+                        SizedBox(height: R.p(context, 30)),
+                        _GlassIconBadge(asset: data.illustrationAsset),
                       ],
-                      // Illustration container
-                      Container(
-                        width: 200,
-                        height: 200,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha:0.12),
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha:0.15),
-                            width: 1.5,
-                          ),
-                        ),
-                        child: Center(
-                          child: Container(
-                            width: 140,
-                            height: 140,
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha:0.18),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(
-                              data.icon,
-                              size: 76,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
-                      ),
-                      // Badge below icon on first card
-                      if (data.showBrand) ...[
-                        const SizedBox(height: 20),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 7),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.2),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.25),
-                            ),
-                          ),
-                          child: Text(
-                            data.badge,
-                            style: const TextStyle(
-                              fontFamily: 'Poppins',
-                              fontSize: 12,
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 0.3,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
+                    ),
                   ),
                 ],
               ),
@@ -357,17 +318,57 @@ class _OnboardPage extends StatelessWidget {
           ),
         ),
 
-        // Text content
-        Padding(
-          padding: const EdgeInsets.fromLTRB(28, 28, 28, 0),
+        // ── Lifted content sheet ─────────────────────────
+        Container(
+          width: double.infinity,
+          padding: EdgeInsets.fromLTRB(
+            R.p(context, 28),
+            R.p(context, 26),
+            R.p(context, 28),
+            R.p(context, 4),
+          ),
+          decoration: BoxDecoration(
+            color: context.appSurface,
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(R.r(context, 32)),
+              topRight: Radius.circular(R.r(context, 32)),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.08),
+                blurRadius: 20,
+                offset: const Offset(0, -6),
+              ),
+            ],
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Text(data.title, style: AppTextStyles.h1),
-              const SizedBox(height: 12),
+              Text(
+                'STEP 0$step OF $totalSteps',
+                style: AppTextStyles.labelMedium.copyWith(
+                  color: context.appPrimary,
+                  fontSize: R.sp(context, 11),
+                  letterSpacing: 1.4,
+                ),
+              ),
+              SizedBox(height: R.p(context, 10)),
+              Text(
+                data.title,
+                style: AppTextStyles.h1.copyWith(
+                  fontSize: R.sp(context, 26),
+                  color: context.appTextPrimary,
+                ),
+              ),
+              SizedBox(height: R.p(context, 10)),
               Text(
                 data.subtitle,
-                style: AppTextStyles.bodyMedium.copyWith(height: 1.6),
+                style: AppTextStyles.bodyMedium.copyWith(
+                  fontSize: R.sp(context, 14),
+                  height: 1.6,
+                  color: context.appTextSecondary,
+                ),
               ),
             ],
           ),
@@ -377,20 +378,96 @@ class _OnboardPage extends StatelessWidget {
   }
 }
 
+class _GlowOrb extends StatelessWidget {
+  final double size;
+  const _GlowOrb({required this.size});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: RadialGradient(
+          colors: [
+            Colors.white.withValues(alpha: 0.14),
+            Colors.white.withValues(alpha: 0.0),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _GlassIconBadge extends StatelessWidget {
+  final String asset;
+  const _GlassIconBadge({required this.asset});
+
+  @override
+  Widget build(BuildContext context) {
+    final outer = R.w(context, 176);
+    final inner = R.w(context, 108);
+
+    return Container(
+      width: outer,
+      height: outer,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          colors: [
+            Colors.white.withValues(alpha: 0.22),
+            Colors.white.withValues(alpha: 0.06),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.32), width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.18),
+            blurRadius: 30,
+            offset: const Offset(0, 16),
+          ),
+        ],
+      ),
+      child: Center(
+        child: Container(
+          width: inner,
+          height: inner,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.white.withValues(alpha: 0.16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.white.withValues(alpha: 0.22),
+                blurRadius: 24,
+                spreadRadius: -6,
+              ),
+            ],
+          ),
+          child: Padding(
+            padding: EdgeInsets.all(R.p(context, 14)),
+            child: SvgPicture.asset(asset),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _OnboardData {
+  final String badge;
   final String title;
   final String subtitle;
   final LinearGradient gradient;
-  final IconData icon;
-  final String badge;
-  final bool showBrand;
+  final String illustrationAsset;
 
   const _OnboardData({
+    required this.badge,
     required this.title,
     required this.subtitle,
     required this.gradient,
-    required this.icon,
-    required this.badge,
-    this.showBrand = false,
+    required this.illustrationAsset,
   });
 }

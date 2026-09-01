@@ -58,11 +58,13 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     return;
   }
 
-  // All other types: show a local notification for any remaining
-  // data-only FCM messages that don't carry an android.notification payload.
+  // All other types: only manually show a local notification for truly
+  // data-only messages. Messages that already carry a top-level
+  // `notification` payload are auto-displayed by the OS in background/
+  // killed state; calling this again here would double-post the same alert.
   final title = message.notification?.title ?? message.data['title'] as String? ?? '';
   final body  = message.notification?.body  ?? message.data['body']  as String? ?? '';
-  if (title.isNotEmpty || body.isNotEmpty) {
+  if (message.notification == null && (title.isNotEmpty || body.isNotEmpty)) {
     await CallNotificationService.showGenericNotification(title: title, body: body, type: type);
   }
 }
@@ -497,7 +499,7 @@ class _MedNUDoctorAppState extends ConsumerState<MedNUDoctorApp>
           child: Stack(
             children: [
               child ?? const SizedBox.expand(),
-              const ActiveSessionBridge(),
+              ActiveSessionBridge(router: router),
               if (_isLocked)
                 LockScreen(
                   onAuthStarted: () => _isAuthenticating = true,

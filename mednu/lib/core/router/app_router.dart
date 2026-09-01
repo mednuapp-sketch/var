@@ -17,6 +17,7 @@ import '../../features/services/emergency/emergency_screen.dart';
 import '../../features/services/emergency/manage_contacts_screen.dart';
 import '../../features/services/medicine_delivery/medicine_screen.dart';
 import '../../features/services/ambulance/ambulance_screen.dart';
+import '../../features/services/ambulance/ambulance_live_tracking_screen.dart';
 import '../../features/services/diagnostics/diagnostics_screen.dart';
 import '../../features/services/lab_tests/lab_tests_screen.dart';
 import '../../features/services/caregivers/caregivers_screen.dart';
@@ -104,6 +105,7 @@ class AppRoutes {
   static const diagnostics        = '/diagnostics';
   static const labTests           = '/lab-tests';
   static const ambulance          = '/ambulance';
+  static const ambulanceLiveTracking = '/ambulance/live-tracking';
   static const caregivers         = '/caregivers';
   static const careAssistant      = '/care-assistant';
   static const physio             = '/physio';
@@ -256,6 +258,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         return MedicineScreen(prescriptionMedicines: rxMeds);
       }),
       GoRoute(path: AppRoutes.ambulance,          builder: (c, s) => const AmbulanceScreen()),
+      GoRoute(
+        path: AppRoutes.ambulanceLiveTracking,
+        builder: (c, s) {
+          final extra = s.extra as Map<String, dynamic>?;
+          return AmbulanceLiveTrackingScreen(requestId: extra?['requestId'] as String? ?? '');
+        },
+      ),
       GoRoute(path: AppRoutes.diagnostics,        builder: (c, s) => const DiagnosticsScreen()),
       GoRoute(path: AppRoutes.labTests,           builder: (c, s) => const LabTestsScreen()),
       GoRoute(path: AppRoutes.caregivers,         builder: (c, s) => const CaregiversScreen()),
@@ -275,7 +284,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: AppRoutes.appointment,        builder: (c, s) => const AppointmentScreen()),
       GoRoute(path: AppRoutes.doctors,            builder: (c, s) => DoctorsListScreen(initialSpecialty: s.uri.queryParameters['specialty'], initialMode: s.uri.queryParameters['mode'], initialType: s.uri.queryParameters['type'], initialDuration: int.tryParse(s.uri.queryParameters['duration'] ?? ''))),
       GoRoute(path: AppRoutes.specialities,       builder: (c, s) => const SpecialitiesScreen()),
-      GoRoute(path: AppRoutes.doctorProfile,      builder: (c, s) => DoctorProfileScreen(doctorId: s.pathParameters['id'] ?? '', initialDuration: int.tryParse(s.uri.queryParameters['duration'] ?? ''), rescheduleAppointmentId: s.uri.queryParameters['rescheduleId'], rescheduleType: s.uri.queryParameters['rescheduleType'])),
+      GoRoute(path: AppRoutes.doctorProfile,      builder: (c, s) => DoctorProfileScreen(doctorId: s.pathParameters['id'] ?? '', initialDuration: int.tryParse(s.uri.queryParameters['duration'] ?? ''), initialMode: s.uri.queryParameters['mode'], rescheduleAppointmentId: s.uri.queryParameters['rescheduleId'], rescheduleType: s.uri.queryParameters['rescheduleType'])),
       GoRoute(path: AppRoutes.hospitals,          builder: (c, s) => HospitalsScreen(initialQuery: s.uri.queryParameters['q'])),
       GoRoute(path: AppRoutes.pharmacy,           builder: (c, s) => const PharmacyScreen()),
       GoRoute(path: AppRoutes.records, builder: (c, s) {

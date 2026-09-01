@@ -5,8 +5,10 @@ import 'package:intl/intl.dart';
 import '../models/diagnostic_booking.dart';
 import '../models/diagnostic_report.dart';
 import '../models/lab_profile.dart';
+import '../models/lab_test_item.dart';
 import '../services/lab_booking_service.dart';
 import '../services/lab_profile_service.dart';
+import '../services/lab_test_inventory_service.dart';
 
 // ── Profile ──────────────────────────────────────────────────────────────
 
@@ -111,6 +113,15 @@ final sampleCollectionQueueProvider =
       ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
     return queue;
   });
+});
+
+// ── Test catalogue ──────────────────────────────────────────────────────
+
+final labTestInventoryProvider = StreamProvider.autoDispose<List<LabTestItem>>((ref) {
+  final uid = LabProfileService.currentUid;
+  if (uid == null) return Stream.value(const []);
+  return LabTestInventoryService.stream(uid)
+      .map((snap) => snap.docs.map(LabTestItem.fromDoc).toList());
 });
 
 // ── Reports history ────────────────────────────────────────────────────

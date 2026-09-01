@@ -36,6 +36,9 @@ int _feeForDuration(int baseFee, int minutes) =>
 class DoctorProfileScreen extends StatefulWidget {
   final String doctorId;
   final int? initialDuration;
+  // 'video' | 'inperson' — carried from the Find Doctors tab the patient
+  // booked from, so the consultation type here matches what they chose.
+  final String? initialMode;
   // When set, this screen is rescheduling an existing appointment rather than
   // creating a new one: booking is locked to this doctor, no payment is
   // collected, and confirming just moves the existing appointment's slot.
@@ -45,6 +48,7 @@ class DoctorProfileScreen extends StatefulWidget {
     super.key,
     required this.doctorId,
     this.initialDuration,
+    this.initialMode,
     this.rescheduleAppointmentId,
     this.rescheduleType,
   });
@@ -88,6 +92,8 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
         : 30;
     if (_isRescheduling && _kConsultMeta.containsKey(widget.rescheduleType)) {
       _consultationType = widget.rescheduleType!;
+    } else if (widget.initialMode == 'inperson') {
+      _consultationType = 'In-Person';
     }
     _subscribeDoctor();
     _subscribeFavouriteState();
@@ -809,7 +815,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
         const SizedBox(height: 14),
         staticGrid(
           crossAxisCount: 2,
-          aspectRatio: 2.5,
+          aspectRatio: 2.15,
           children: _supportedModes.map((t) {
             final meta = _kConsultMeta[t] ?? _kConsultMeta['Video']!;
             final sel = _consultationType == t;
@@ -833,35 +839,41 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                     : [const BoxShadow(color: Color(0x08000000), blurRadius: 8, offset: Offset(0, 2))],
                 ),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   child: Row(children: [
                     Container(
-                      width: 34, height: 34,
+                      width: 32, height: 32,
                       decoration: BoxDecoration(
                         color: sel ? Colors.white.withValues(alpha:0.2) : color.withValues(alpha:0.1),
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: Icon(iconData, color: sel ? Colors.white : color, size: 18),
+                      child: Icon(iconData, color: sel ? Colors.white : color, size: 17),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Text(label, style: TextStyle(
+                        Text(label, maxLines: 1, style: TextStyle(
                           fontFamily: 'Poppins', fontSize: 12, fontWeight: FontWeight.w700,
                           color: sel ? Colors.white : const Color(0xFF1F2937),
+                          height: 1.2,
                         ), overflow: TextOverflow.ellipsis),
-                        Text(meta['desc'] as String, style: TextStyle(
+                        const SizedBox(height: 3),
+                        Text(meta['desc'] as String, maxLines: 1, style: TextStyle(
                           fontFamily: 'Poppins', fontSize: 10, fontWeight: FontWeight.w400,
                           color: sel ? Colors.white70 : const Color(0xFF9CA3AF),
+                          height: 1.2,
                         ), overflow: TextOverflow.ellipsis),
                       ],
                     ),
                     ),
-                    if (sel)
+                    if (sel) ...[
+                      const SizedBox(width: 4),
                       const Icon(Icons.check_circle_rounded, color: Colors.white, size: 16),
+                    ],
                   ]),
                 ),
               ),

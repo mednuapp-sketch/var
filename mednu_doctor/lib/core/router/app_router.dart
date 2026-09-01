@@ -36,6 +36,7 @@ import '../../features/consultations/screens/doctor_outgoing_call_screen.dart';
 import '../../features/lab/screens/lab_onboarding_screen.dart';
 import '../../features/lab/screens/lab_dashboard_screen.dart';
 import '../../features/lab/screens/lab_bookings_screen.dart';
+import '../../features/lab/screens/lab_test_inventory_screen.dart';
 import '../../features/lab/screens/lab_booking_detail_screen.dart';
 import '../../features/lab/screens/lab_sample_collection_screen.dart';
 import '../../features/lab/screens/lab_reports_screen.dart';
@@ -150,6 +151,20 @@ class _AuthChangeNotifier extends ChangeNotifier {
         .doc(user.uid)
         .snapshots()
         .listen((snap) {
+      // This document also receives frequent writes unrelated to routing —
+      // PresenceService's online heartbeat (isOnline/acceptingConsultations/
+      // lastHeartbeat, every 60s while online) and location pushes. Since
+      // this notifier drives GoRouter's refreshListenable, notifying on
+      // every one of those snapshots re-runs the full redirect and rebuilds
+      // the route tree — which was resetting DashboardScreen's local
+      // _isOnline toggle state and flashing the screen on every heartbeat.
+      // Only notify when a value the redirect logic actually reads changes.
+      final wasReady = ready;
+      final prevProfileExists = profileExists;
+      final prevRole = role;
+      final prevRoleProfileExists = roleProfileExists;
+      final prevStatus = status;
+
       profileExists = snap.exists;
       role = AppRoleX.listFrom(snap.data()?['roles']).first;
 
@@ -160,7 +175,13 @@ class _AuthChangeNotifier extends ChangeNotifier {
         _roleProfileSub = null;
         _roleProfileUid = null;
         _markReady();
-        notifyListeners();
+        if (!wasReady ||
+            profileExists != prevProfileExists ||
+            role != prevRole ||
+            roleProfileExists != prevRoleProfileExists ||
+            status != prevStatus) {
+          notifyListeners();
+        }
         return;
       }
 
@@ -171,25 +192,13 @@ class _AuthChangeNotifier extends ChangeNotifier {
         _roleProfileSub = null;
         _roleProfileUid = null;
         _markReady();
-        notifyListeners();
-        return;
-      }
-
-      // Nutritionist has no self-registration flow and no `nutritionist_
-      // profiles` collection — the account is fully admin-provisioned (role
-      // grant + the pre-existing `nutritionists/{uid}` catalogue entry both
-      // set up by an admin in one action, not by this app). Treating the
-      // role profile as always-present/active skips both the onboarding gate
-      // and the pending-review gate below, which would otherwise wait on a
-      // collection this role deliberately never writes to.
-      if (role == AppRole.nutritionist) {
-        roleProfileExists = true;
-        status = 'active';
-        _roleProfileSub?.cancel();
-        _roleProfileSub = null;
-        _roleProfileUid = null;
-        _markReady();
-        notifyListeners();
+        if (!wasReady ||
+            profileExists != prevProfileExists ||
+            role != prevRole ||
+            roleProfileExists != prevRoleProfileExists ||
+            status != prevStatus) {
+          notifyListeners();
+        }
         return;
       }
 
@@ -260,6 +269,7 @@ class AppRoutes {
   static const labOnboarding       = '/lab/onboarding';
   static const labDashboard        = '/lab/dashboard';
   static const labBookings         = '/lab/bookings';
+  static const labTestInventory    = '/lab/tests';
   static const labBookingDetail    = '/lab/booking-detail';
   static const labSampleCollection = '/lab/sample-collection';
   static const labReports          = '/lab/reports';
@@ -357,7 +367,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         // partnerRoleRegister now carries its role as a URL segment
         // (.../lab, .../pharmacy, ...), so this checks the prefix rather
         // than an exact match — see that route's own builder for why.
+        // AppRoutes.register is Doctor's own destination from this same
+        // screen (see PartnerRoleSelectScreen._onRoleTap) and must stay
+        // reachable here too.
         return loc == AppRoutes.partnerRoleSelect ||
+                loc == AppRoutes.register ||
                 loc.startsWith(AppRoutes.partnerRoleRegister)
             ? null
             : AppRoutes.partnerRoleSelect;
@@ -552,6 +566,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       // separate routes).
       GoRoute(path: AppRoutes.labDashboard,        pageBuilder: (c, s) => const NoTransitionPage(child: LabDashboardScreen())),
       GoRoute(path: AppRoutes.labBookings,         pageBuilder: (c, s) => const NoTransitionPage(child: LabBookingsScreen())),
+      GoRoute(path: AppRoutes.labTestInventory,    pageBuilder: (c, s) => const NoTransitionPage(child: LabTestInventoryScreen())),
       GoRoute(
         path: AppRoutes.labBookingDetail,
         builder: (c, s) {

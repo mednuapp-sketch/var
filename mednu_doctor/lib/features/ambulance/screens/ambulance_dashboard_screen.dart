@@ -4,23 +4,117 @@ import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/services/ambulance_presence_service.dart';
+import '../../../core/services/feedback_service.dart';
 import '../../../core/utils/r.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../../../shared_core/shared_core.dart';
 import '../models/ambulance_request.dart';
 import '../providers/ambulance_providers.dart';
+import '../services/ambulance_location_service.dart';
+import '../services/ambulance_profile_service.dart';
 import '../widgets/status_pulse.dart';
 
 /// Ambulance home — a hero online/offline toggle (mirrors the Doctor
 /// dashboard's own online card, since dispatch availability is the same
 /// core concept), a live stats grid, and a preview of incoming requests.
-/// All data comes from the mock providers — no Firestore yet.
-class AmbulanceDashboardScreen extends ConsumerWidget {
+/// Going online starts both AmbulancePresenceService (the `isOnline` bit)
+/// and AmbulanceLocationService (the live GPS fix nearest-driver matching
+/// reads) together — mirroring exactly how the Doctor dashboard wires
+/// PresenceService + DoctorLocationService.
+class AmbulanceDashboardScreen extends ConsumerStatefulWidget {
   const AmbulanceDashboardScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final online = ref.watch(ambulanceOnlineProvider);
+  ConsumerState<AmbulanceDashboardScreen> createState() => _AmbulanceDashboardScreenState();
+}
+
+class _AmbulanceDashboardScreenState extends ConsumerState<AmbulanceDashboardScreen> {
+  bool _togglingInProgress = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final uid = AmbulanceProfileService.currentUid;
+    if (uid != null) AmbulancePresenceService.instance.init(uid);
+  }
+
+  @override
+  void dispose() {
+    AmbulanceLocationService.stopTracking();
+    AmbulancePresenceService.instance.setOnline(false);
+    AmbulancePresenceService.instance.dispose();
+    super.dispose();
+  }
+
+  void _handleLocationDisabled() {
+    AmbulanceLocationService.stopTracking();
+    AmbulancePresenceService.instance.setOnline(false);
+    if (mounted) {
+      FeedbackService.show(
+        context,
+        'Location turned off — you\'ve been set OFFLINE.',
+        type: FeedbackType.error,
+        duration: const Duration(seconds: 8),
+      );
+    }
+  }
+
+  Future<void> _toggleOnline(bool value) async {
+    if (_togglingInProgress) return;
+    final uid = AmbulanceProfileService.currentUid;
+    if (uid == null) return;
+
+    if (!value) {
+      await AmbulanceLocationService.stopTracking();
+      await AmbulancePresenceService.instance.setOnline(false);
+      return;
+    }
+
+    setState(() => _togglingInProgress = true);
+    FeedbackService.showLoading(context, 'Going online...');
+
+    final serviceEnabled = await AmbulanceLocationService.isServiceEnabled();
+    if (!mounted) return;
+    if (!serviceEnabled) {
+      FeedbackService.dismiss(context);
+      setState(() => _togglingInProgress = false);
+      FeedbackService.showError(context, 'Turn on device location to go online.');
+      return;
+    }
+
+    final hasPermission = await AmbulanceLocationService.checkAndRequestPermission();
+    if (!mounted) return;
+    if (!hasPermission) {
+      FeedbackService.dismiss(context);
+      setState(() => _togglingInProgress = false);
+      FeedbackService.showError(context, 'Location permission is needed to receive nearby requests.');
+      return;
+    }
+
+    try {
+      await AmbulancePresenceService.instance.setOnline(true);
+      await AmbulanceLocationService.startTracking(
+        uid: uid,
+        onLocationDisabled: _handleLocationDisabled,
+      );
+      // Immediate fix so this driver is matchable right away, rather than
+      // waiting for the position stream's first 30 m movement.
+      await AmbulanceLocationService.pushCurrentPosition(uid);
+      if (mounted) FeedbackService.dismiss(context);
+    } catch (_) {
+      if (mounted) {
+        FeedbackService.dismiss(context);
+        FeedbackService.showError(context, 'Could not go online. Please try again.');
+      }
+    } finally {
+      if (mounted) setState(() => _togglingInProgress = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final online = ref.watch(ambulanceOnlineProvider).valueOrNull ?? false;
     final metrics = ref.watch(ambulanceDashboardMetricsProvider);
     final pending = ref.watch(pendingRequestsProvider);
     final active = ref.watch(activeRequestProvider);
@@ -31,7 +125,7 @@ class AmbulanceDashboardScreen extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
         children: [
-          _OnlineHeroCard(online: online),
+          _OnlineHeroCard(online: online, onChanged: _togglingInProgress ? null : _toggleOnline),
           const SizedBox(height: 20),
           if (active != null) ...[
             _ActiveTripBanner(request: active),
@@ -88,12 +182,13 @@ class AmbulanceDashboardScreen extends ConsumerWidget {
   }
 }
 
-class _OnlineHeroCard extends ConsumerWidget {
+class _OnlineHeroCard extends StatelessWidget {
   final bool online;
-  const _OnlineHeroCard({required this.online});
+  final ValueChanged<bool>? onChanged;
+  const _OnlineHeroCard({required this.online, required this.onChanged});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     return Container(
       padding: EdgeInsets.all(R.p(context, 20)),
       decoration: BoxDecoration(
@@ -131,7 +226,7 @@ class _OnlineHeroCard extends ConsumerWidget {
           ),
           Switch.adaptive(
             value: online,
-            onChanged: (v) => ref.read(ambulanceOnlineProvider.notifier).state = v,
+            onChanged: onChanged,
             activeThumbColor: Colors.white,
             activeTrackColor: Colors.white38,
           ),

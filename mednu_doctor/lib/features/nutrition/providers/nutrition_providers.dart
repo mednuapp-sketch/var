@@ -1,7 +1,8 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/nutrition_appointment.dart';
+import '../models/nutritionist_profile.dart';
 import '../services/nutrition_appointment_service.dart';
+import '../services/nutritionist_profile_service.dart';
 
 final myNutritionAppointmentsProvider =
     StreamProvider.autoDispose<List<NutritionAppointment>>((ref) {
@@ -51,22 +52,21 @@ final nutritionAppointmentDocProvider =
       .map((snap) => snap.exists ? NutritionAppointment.fromFirestore(snap) : null);
 });
 
-// ── Profile (read-only) ────────────────────────────────────────────────────
+// ── Profile ──────────────────────────────────────────────────────────────
 //
-// `nutritionists/{uid}` is an admin-curated catalogue the patient app reads
-// from directly (see mednu/lib/features/services/nutrition/services/
-// nutrition_service.dart) — this module only ever reads it, it never writes
-// (see firestore.rules and the Phase A scope note in functions/index.js).
+// `nutritionist_profiles/{uid}` is this partner's own, private, editable
+// profile — a Cloud Function mirrors it into the public `nutritionists/{uid}`
+// catalogue entry the patient app reads (see
+// `onNutritionistProfileWriteForVisibility`, functions/index.js) once
+// `status == 'active'`. This module never reads/writes `nutritionists`
+// directly, same as every other partner module keeps its own operational
+// data separate from what patients see.
 
-final nutritionistCatalogueDocProvider =
-    StreamProvider.autoDispose<Map<String, dynamic>?>((ref) {
-  final uid = NutritionAppointmentService.currentUid;
-  if (uid == null) return Stream.value(null);
-  return FirebaseFirestore.instance
-      .collection('nutritionists')
-      .doc(uid)
-      .snapshots()
-      .map((snap) => snap.data());
+final nutritionistProfileProvider = StreamProvider.autoDispose<NutritionistProfile>((ref) {
+  final uid = NutritionistProfileService.currentUid;
+  if (uid == null) return Stream.value(NutritionistProfile.empty());
+  return NutritionistProfileService.profileStream(uid)
+      .map((snap) => snap.exists ? NutritionistProfile.fromFirestore(snap) : NutritionistProfile.empty());
 });
 
 // ── Earnings ─────────────────────────────────────────────────────────────

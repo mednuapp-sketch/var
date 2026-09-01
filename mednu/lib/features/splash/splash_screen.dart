@@ -7,7 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/router/app_router.dart';
-import '../legal/screens/medical_disclaimer_screen.dart';
+import '../legal/screens/terms_acceptance_screen.dart';
 
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
@@ -73,19 +73,19 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     await Future.delayed(const Duration(milliseconds: 1500));
     if (!mounted) return;
     final prefs = await SharedPreferences.getInstance();
-    final accepted = prefs.getBool('disclaimer_accepted') ?? false;
+    final accepted = prefs.getBool('terms_accepted') ?? false;
     if (!mounted) return;
-    if (!accepted) { await _showDisclaimer(prefs); return; }
+    if (!accepted) { await _showTermsAcceptance(prefs); return; }
     await _go();
   }
 
-  Future<void> _showDisclaimer(SharedPreferences prefs) async {
+  Future<void> _showTermsAcceptance(SharedPreferences prefs) async {
     if (!mounted) return;
     await Navigator.of(context).push(MaterialPageRoute(
       fullscreenDialog: true,
-      builder: (_) => const MedicalDisclaimerScreen(),
+      builder: (_) => const TermsAcceptanceScreen(),
     ));
-    await prefs.setBool('disclaimer_accepted', true);
+    await prefs.setBool('terms_accepted', true);
     await _go();
   }
 

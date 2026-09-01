@@ -46,6 +46,7 @@ class PartnerRoleSelectScreen extends StatelessWidget {
     AppRole.caregiver,
     AppRole.physiotherapist,
     AppRole.counsellor,
+    AppRole.nutritionist,
   ];
 
   List<AppRole> get _offeredRoles => _isAddingToExistingAccount

@@ -292,7 +292,7 @@ class _MedNUAppState extends ConsumerState<MedNUApp>
           child: Stack(
             children: [
               OfflineBanner(child: child ?? const SizedBox.expand()),
-              const ActiveSessionBridge(),
+              ActiveSessionBridge(router: router),
               if (_isLocked)
                 LockScreen(
                   onAuthStarted: () => _isAuthenticating = true,

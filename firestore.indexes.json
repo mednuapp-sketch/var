@@ -33,6 +33,14 @@
       ]
     },
     {
+      "collectionGroup": "ambulance_profiles",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status",   "order": "ASCENDING" },
+        { "fieldPath": "isOnline", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "prescriptions",
       "queryScope": "COLLECTION",
       "fields": [

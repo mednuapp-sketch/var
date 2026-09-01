@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -109,43 +110,73 @@ class _BookNutritionAppointmentScreenState
       return;
     }
 
-    if (_fee > 0) {
-      final paid = await context.push<bool>(
-        AppRoutes.payment,
-        extra: {
-          'amount': _fee.toInt().toString(),
-          'description': 'Nutrition Consultation with $_nutritionistName',
-        },
-      );
+    // A ₹0 nutritionist consultation has no payment concept at all — book
+    // directly, same as every other free-of-charge service in the app.
+    if (_fee <= 0) {
+      final success =
+          await ref.read(nutritionBookingProvider.notifier).bookAppointment(
+                nutritionistId: _nutritionistId,
+                nutritionistName: _nutritionistName,
+                nutritionistSpecialization: _specialization,
+                consultationType: _consultationType,
+                date: _dateKey,
+                timeSlot: _selectedSlot!,
+                notes: _notesCtrl.text.trim(),
+                fee: _fee,
+                healthGoal: _healthGoal,
+              );
       if (!mounted) return;
-      if (paid != true) return;
+      if (success) {
+        _showSuccessDialog();
+      } else {
+        final error = ref.read(nutritionBookingProvider).error;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(error ?? 'Booking failed. Try again.'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
     }
 
-    final success =
-        await ref.read(nutritionBookingProvider.notifier).bookAppointment(
-              nutritionistId: _nutritionistId,
-              nutritionistName: _nutritionistName,
-              nutritionistSpecialization: _specialization,
-              consultationType: _consultationType,
-              date: _dateKey,
-              timeSlot: _selectedSlot!,
-              notes: _notesCtrl.text.trim(),
-              fee: _fee,
-              healthGoal: _healthGoal,
-            );
-
+    // ── Payment gate ──────────────────────────────────────
+    // capturePayment (functions/index.js) — or, while kRequirePayment is
+    // false, PaymentScreen's own no-payment path — creates the
+    // nutrition_appointments doc itself. `userId` must be set explicitly
+    // here (not just the auto-added `patientId`) because every other
+    // nutrition query/rule keys off `userId`, not `patientId`.
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    final user = FirebaseAuth.instance.currentUser!;
+    final result = await context.push<Map<String, dynamic>>(
+      AppRoutes.payment,
+      extra: {
+        'amount': _fee.toInt().toString(),
+        'description': 'Nutrition Consultation with $_nutritionistName',
+        'serviceType': 'nutrition',
+        'bookingCollection': 'nutrition_appointments',
+        'bookingData': {
+          'userId': uid,
+          'userName': user.displayName ?? 'Patient',
+          'userPhone': user.phoneNumber ?? '',
+          'nutritionistId': _nutritionistId,
+          'nutritionistName': _nutritionistName,
+          'nutritionistSpecialization': _specialization,
+          'consultationType': _consultationType,
+          'date': _dateKey,
+          'timeSlot': _selectedSlot,
+          'status': 'pending',
+          'notes': _notesCtrl.text.trim(),
+          'fee': _fee,
+          'healthGoal': _healthGoal,
+        },
+      },
+    );
     if (!mounted) return;
-    if (success) {
+    if (result?['bookingId'] != null) {
       _showSuccessDialog();
-    } else {
-      final error = ref.read(nutritionBookingProvider).error;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(error ?? 'Booking failed. Try again.'),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
     }
   }
 

@@ -13,8 +13,10 @@ final scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  await FcmService.init(onForegroundMessage: _showPushBanner);
   runApp(const ProviderScope(child: MednuWebApp()));
+  FcmService.init(onForegroundMessage: _showPushBanner).catchError((Object e) {
+    debugPrint('[FCM] init failed: $e');
+  });
 }
 
 void _showPushBanner(RemoteMessage message) {
