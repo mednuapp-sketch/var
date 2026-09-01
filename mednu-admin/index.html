@@ -132,6 +132,11 @@
         <span class="nav-badge nav-badge-red" id="nav-maternity-alerts" style="display:none;">0</span>
       </div>
       -->
+      <div class="nav-section-label">Health Education</div>
+      <div class="nav-item" data-tab="health-articles" data-title="Health Education Articles">
+        <i class="ti ti-books nav-icon" aria-hidden="true"></i> Health Articles
+        <span class="nav-badge nav-badge-green" id="nav-health-articles-count" style="display:none;">0</span>
+      </div>
       <div class="nav-section-label">Quality</div>
       <div class="nav-item" data-tab="quality-analytics" data-title="Weekly Quality Analytics">
         <i class="ti ti-chart-area-line nav-icon" aria-hidden="true"></i> Quality Analytics
@@ -432,6 +437,11 @@
             <i class="ti ti-support sec-metric-icon" style="color:#e65100;"></i>
             <div class="sec-metric-val" id="sec-care-assistants">—</div>
             <div class="sec-metric-label">Care Assistants Listed</div>
+          </div>
+          <div class="sec-metric">
+            <i class="ti ti-books sec-metric-icon" style="color:#3f51b5;"></i>
+            <div class="sec-metric-val" id="sec-health-articles">—</div>
+            <div class="sec-metric-label">Health Articles Published</div>
           </div>
         </div>
 
@@ -1625,6 +1635,100 @@
             </select>
           </div>
           <div id="ambulances-list"><div class="loading">Loading ambulance services…</div></div>
+        </div>
+      </div>
+
+      <!-- ===== HEALTH EDUCATION ARTICLES TAB ===== -->
+      <div id="tab-health-articles" class="tab-section">
+
+        <!-- Add / Edit Article -->
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-header">
+            <span class="card-title" id="health-article-form-title">Add Health Article</span>
+            <button class="btn btn-outline" id="cancel-health-article-btn" style="display:none;" onclick="cancelHealthArticleEdit()">
+              <i class="ti ti-x"></i> Cancel
+            </button>
+          </div>
+          <div class="banner-form-grid">
+            <div class="form-group">
+              <label class="form-label">Article Title <span style="color:var(--danger)">*</span></label>
+              <input id="ha-title" type="text" class="form-input" placeholder="e.g. Complete Guide to Heart Health in 2025" maxlength="150" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Category <span style="color:var(--danger)">*</span></label>
+              <select id="ha-category" class="form-input">
+                <option value="Heart Health">Heart Health</option>
+                <option value="Diabetes">Diabetes</option>
+                <option value="Pregnancy">Pregnancy</option>
+                <option value="Nutrition">Nutrition</option>
+                <option value="Mental Health">Mental Health</option>
+                <option value="Fitness">Fitness</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Author <span style="color:var(--danger)">*</span></label>
+              <input id="ha-author" type="text" class="form-input" placeholder="e.g. Dr. Priya Mehta" maxlength="100" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Read Time</label>
+              <input id="ha-readtime" type="text" class="form-input" placeholder="e.g. 5 min read" maxlength="30" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Cover Image URL <span class="form-hint">(optional)</span></label>
+              <input id="ha-image" type="url" class="form-input" placeholder="https://…" />
+            </div>
+            <div class="form-group" style="grid-column: 1 / -1;">
+              <label class="form-label">Short Summary <span class="form-hint">(shown on the article card, max 160 chars)</span></label>
+              <input id="ha-summary" type="text" class="form-input" placeholder="Discover the latest health trends and science-backed tips…" maxlength="160" />
+            </div>
+            <div class="form-group" style="grid-column: 1 / -1;">
+              <label class="form-label">Article Content <span class="form-hint">(leave blank to let AI draft it the first time a patient opens the article)</span></label>
+              <textarea id="ha-content" class="form-input" rows="6" placeholder="Write the full article body shown to patients…" style="resize:vertical;"></textarea>
+            </div>
+          </div>
+          <div class="banner-form-footer">
+            <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:center;flex:1;">
+              <label class="toggle-label">
+                <input type="checkbox" id="ha-featured" />
+                <span class="toggle-switch"></span>
+                <span class="toggle-text">Feature on Health Education home</span>
+              </label>
+              <label class="toggle-label">
+                <input type="checkbox" id="ha-enabled" checked />
+                <span class="toggle-switch"></span>
+                <span class="toggle-text">Visible in app</span>
+              </label>
+            </div>
+            <button id="save-health-article-btn" class="btn-publish" onclick="saveHealthArticle()">
+              <i class="ti ti-device-floppy"></i> Save Article
+            </button>
+          </div>
+        </div>
+
+        <!-- Articles List -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">All Health Articles</span>
+            <div style="display:flex;gap:8px;">
+              <input id="health-article-search" type="text" class="search-input" placeholder="Search articles..." oninput="filterHealthArticles()" />
+              <select id="health-article-category-filter" class="filter-select" onchange="filterHealthArticles()">
+                <option value="all">All categories</option>
+                <option value="Heart Health">Heart Health</option>
+                <option value="Diabetes">Diabetes</option>
+                <option value="Pregnancy">Pregnancy</option>
+                <option value="Nutrition">Nutrition</option>
+                <option value="Mental Health">Mental Health</option>
+                <option value="Fitness">Fitness</option>
+              </select>
+              <select id="health-article-status-filter" class="filter-select" onchange="filterHealthArticles()">
+                <option value="all">All</option>
+                <option value="featured">Featured</option>
+                <option value="enabled">Visible</option>
+                <option value="disabled">Hidden</option>
+              </select>
+            </div>
+          </div>
+          <div id="health-articles-list"><div class="loading">Loading health articles…</div></div>
         </div>
       </div>
 

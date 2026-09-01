@@ -4,6 +4,7 @@ import '../models/nutrition_appointment_model.dart';
 import '../models/meal_log_model.dart';
 import '../models/nutrition_goal_model.dart';
 import '../models/diet_plan_model.dart';
+import '../models/bmi_log_model.dart';
 import '../services/nutrition_service.dart';
 
 // ── Diet Plans ─────────────────────────────────────────
@@ -189,3 +190,44 @@ class MealLoggingNotifier extends StateNotifier<AsyncValue<void>> {
 final mealLoggingProvider =
     StateNotifierProvider.autoDispose<MealLoggingNotifier, AsyncValue<void>>(
         (ref) => MealLoggingNotifier());
+
+// ── BMI Tracking ────────────────────────────────────────
+
+final bmiLogsProvider =
+    StreamProvider.autoDispose<List<BmiLogModel>>((ref) {
+  return NutritionService.bmiLogsStream();
+});
+
+class BmiSaveNotifier extends StateNotifier<AsyncValue<void>> {
+  BmiSaveNotifier() : super(const AsyncData(null));
+
+  Future<bool> save({
+    required double heightCm,
+    required double weightKg,
+    required int age,
+    required String gender,
+    required double bmi,
+    required String category,
+  }) async {
+    state = const AsyncLoading();
+    try {
+      await NutritionService.saveBmiLog(
+        heightCm: heightCm,
+        weightKg: weightKg,
+        age: age,
+        gender: gender,
+        bmi: bmi,
+        category: category,
+      );
+      state = const AsyncData(null);
+      return true;
+    } catch (e) {
+      state = AsyncError(e, StackTrace.current);
+      return false;
+    }
+  }
+}
+
+final bmiSaveProvider =
+    StateNotifierProvider.autoDispose<BmiSaveNotifier, AsyncValue<void>>(
+        (ref) => BmiSaveNotifier());

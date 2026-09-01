@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pinput/pinput.dart';
+import '../../../core/constants/app_colors.dart';
 import '../../../core/router/app_router.dart';
 import '../providers/auth_provider.dart';
 
@@ -198,11 +199,11 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
     final focusedTheme = defaultTheme.copyWith(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFF7b2d6e), width: 2),
+        border: Border.all(color: AppColors.primary, width: 2),
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF7b2d6e).withValues(alpha: 0.15),
+            color: AppColors.primary.withValues(alpha: 0.15),
             blurRadius: 10,
             offset: const Offset(0, 3),
           ),
@@ -213,25 +214,20 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
     final submittedTheme = defaultTheme.copyWith(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFF7b2d6e).withValues(alpha: 0.5), width: 1.5),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.5), width: 1.5),
         color: const Color(0xFFF0E8FA),
       ),
     );
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0D0520),
+      backgroundColor: AppColors.darkBase,
       body: Stack(
         children: [
           // ── Background ───────────────────────────────────────────────────
-          Positioned.fill(
+          const Positioned.fill(
             child: DecoratedBox(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [Color(0xFF0D0520), Color(0xFF3B0F50), Color(0xFF7b2d6e)],
-                  stops: [0.0, 0.5, 1.0],
-                ),
+              decoration: BoxDecoration(
+                gradient: AppColors.heroBannerGradient,
               ),
             ),
           ),
@@ -305,7 +301,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
                                 BoxShadow(
                                   color: (_verified
                                           ? const Color(0xFF4CAF50)
-                                          : const Color(0xFFF2A8D8))
+                                          : AppColors.primaryBright)
                                       .withValues(
                                           alpha: 0.15 + _pulseCtrl.value * 0.12),
                                   blurRadius: 30,
@@ -319,7 +315,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
                                   : Icons.lock_open_rounded,
                               color: _verified
                                   ? const Color(0xFF4CAF50)
-                                  : const Color(0xFFF2A8D8),
+                                  : AppColors.primaryBright,
                               size: 44,
                             ),
                           ),
@@ -398,7 +394,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
                         borderRadius: const BorderRadius.vertical(top: Radius.circular(36)),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFF7b2d6e).withValues(alpha: 0.15),
+                            color: AppColors.primary.withValues(alpha: 0.15),
                             blurRadius: 40,
                             offset: const Offset(0, -8),
                           ),
@@ -441,9 +437,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(16),
                               gradient: !_isLoading && !_verified
-                                  ? const LinearGradient(
-                                      colors: [Color(0xFFA36BAC), Color(0xFF7b2d6e)],
-                                    )
+                                  ? AppColors.primaryGradient
                                   : _verified
                                       ? const LinearGradient(
                                           colors: [Color(0xFF388E3C), Color(0xFF4CAF50)],
@@ -455,7 +449,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
                                 BoxShadow(
                                   color: (_verified
                                           ? const Color(0xFF4CAF50)
-                                          : const Color(0xFF7b2d6e))
+                                          : AppColors.primary)
                                       .withValues(alpha: 0.35),
                                   blurRadius: 14,
                                   offset: const Offset(0, 5),
@@ -533,12 +527,12 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
                                     : const Text(
                                         'Resend',
                                         style: TextStyle(
-                                          color: Color(0xFF7b2d6e),
+                                          color: AppColors.primary,
                                           fontSize: 13,
                                           fontFamily: 'Poppins',
                                           fontWeight: FontWeight.w700,
                                           decoration: TextDecoration.underline,
-                                          decorationColor: Color(0xFF7b2d6e),
+                                          decorationColor: AppColors.primary,
                                         ),
                                       ),
                               ),

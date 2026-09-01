@@ -1238,6 +1238,13 @@ service cloud.firestore {
       );
     }
 
+    // ── BMI tracking (per-user readings) ──────────────────────────────────────
+    match /bmi_logs/{logId} {
+      allow read: if isAuth() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isAuth() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAuth() && resource.data.userId == request.auth.uid;
+    }
+
     // ── Diet plans (admin-managed, public read) ───────────────────────────────
     match /diet_plans/{planId} {
       allow read: if isAuth();

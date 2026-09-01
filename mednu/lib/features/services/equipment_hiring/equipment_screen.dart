@@ -253,7 +253,7 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen> with SingleTi
                                 const Text('Medical Equipment',
                                     maxLines: 1, overflow: TextOverflow.ellipsis,
                                     style: AppTextStyles.onPrimaryH2),
-                                const Text('Rent or Buy Quality Medical Equipment',
+                                const Text('Rent or buy medical equipment online',
                                     maxLines: 1, overflow: TextOverflow.ellipsis,
                                     style: AppTextStyles.onPrimaryBody),
                               ],

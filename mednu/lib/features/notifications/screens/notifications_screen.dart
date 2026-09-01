@@ -420,7 +420,7 @@ class _HeaderBackground extends StatelessWidget {
                             Text(
                               unreadCount > 0
                                   ? '$unreadCount unread notification${unreadCount == 1 ? '' : 's'}'
-                                  : 'All caught up',
+                                  : 'Stay updated',
                               style: const TextStyle(
                                 fontFamily: 'Poppins',
                                 fontSize: 13,

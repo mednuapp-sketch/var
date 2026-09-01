@@ -187,6 +187,11 @@ class _HomeBodyState extends ConsumerState<_HomeBody>
   @override
   Widget build(BuildContext context) {
     final locState = ref.watch(locationProvider);
+    final uid = ref.watch(authProvider).user?.uid ?? '';
+    final walletBalance = uid.isNotEmpty
+        ? ((ref.watch(userDocProvider(uid)).valueOrNull?['walletBalance'] ?? 0.0)
+            as num)
+        : 0.0;
     return SafeArea(
       child: CustomScrollView(
         slivers: [
@@ -247,6 +252,31 @@ class _HomeBodyState extends ConsumerState<_HomeBody>
                             ],
                           ),
                         ),
+                      ),
+                      Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          IconButton(
+                            icon: Icon(Icons.account_balance_wallet_outlined,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurface),
+                            onPressed: () => context.push(AppRoutes.wallet),
+                          ),
+                          if (walletBalance > 0)
+                            Positioned(
+                              top: 8,
+                              right: 8,
+                              child: Container(
+                                width: 8,
+                                height: 8,
+                                decoration: const BoxDecoration(
+                                  color: AppColors.primary,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                       CartBadgeAction(
                         color: Theme.of(context).colorScheme.onSurface,

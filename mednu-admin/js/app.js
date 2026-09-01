@@ -3155,6 +3155,221 @@ async function deleteAmbulance(id, btn) {
 }
 
 // ============================================
+//   HEALTH EDUCATION ARTICLES
+// ============================================
+let allHealthArticles = [];
+let _editingHealthArticleId = null;
+let _healthArticlesListener = null;
+
+const HEALTH_ARTICLE_CATEGORY_ICONS = {
+  'Heart Health': { icon: 'ti-heart', color: '#522546' },
+  'Diabetes': { icon: 'ti-droplet', color: '#b71c1c' },
+  'Pregnancy': { icon: 'ti-baby-carriage', color: '#a36bac' },
+  'Nutrition': { icon: 'ti-salad', color: '#2e7d32' },
+  'Mental Health': { icon: 'ti-brain', color: '#633058' },
+  'Fitness': { icon: 'ti-barbell', color: '#1565c0' },
+};
+
+function loadHealthArticles() {
+  if (_healthArticlesListener) _healthArticlesListener();
+  _healthArticlesListener = db.collection('health_articles')
+    .orderBy('createdAt', 'desc')
+    .onSnapshot(snap => {
+      allHealthArticles = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      filterHealthArticles();
+      const enabledCount = allHealthArticles.filter(a => a.isEnabled).length;
+      const badge = document.getElementById('nav-health-articles-count');
+      if (badge) {
+        if (enabledCount > 0) { badge.textContent = enabledCount; badge.style.display = 'inline'; }
+        else badge.style.display = 'none';
+      }
+      setText('sec-health-articles', enabledCount);
+    }, err => console.error('Health articles load error:', err));
+}
+
+function filterHealthArticles() {
+  const q        = (document.getElementById('health-article-search')?.value || '').toLowerCase();
+  const category = document.getElementById('health-article-category-filter')?.value || 'all';
+  const status   = document.getElementById('health-article-status-filter')?.value || 'all';
+  let filtered = allHealthArticles;
+  if (q) filtered = filtered.filter(a =>
+    (a.title || '').toLowerCase().includes(q) ||
+    (a.author || '').toLowerCase().includes(q)
+  );
+  if (category !== 'all') filtered = filtered.filter(a => a.category === category);
+  if (status === 'featured')   filtered = filtered.filter(a => a.isFeatured);
+  else if (status === 'enabled')  filtered = filtered.filter(a => a.isEnabled);
+  else if (status === 'disabled') filtered = filtered.filter(a => !a.isEnabled);
+  renderHealthArticlesList(filtered);
+}
+
+function renderHealthArticlesList(articles) {
+  const el = document.getElementById('health-articles-list');
+  if (!el) return;
+  if (!articles.length) {
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon"><i class="ti ti-books"></i></div><p>No health articles added yet</p></div>';
+    return;
+  }
+  el.innerHTML = articles.map(a => {
+    const meta = HEALTH_ARTICLE_CATEGORY_ICONS[a.category] || { icon: 'ti-article', color: '#3f51b5' };
+    const thumb = a.imageUrl
+      ? `<img class="banner-thumb" src="${escHtml(a.imageUrl)}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
+         <div class="banner-thumb-placeholder" style="display:none;background:${meta.color}18;color:${meta.color};font-size:26px;"><i class="ti ${meta.icon}"></i></div>`
+      : `<div class="banner-thumb-placeholder" style="background:${meta.color}18;color:${meta.color};font-size:26px;"><i class="ti ${meta.icon}"></i></div>`;
+    return `
+    <div class="banner-card" id="health-article-card-${a.id}">
+      ${thumb}
+      <div class="banner-info">
+        <div class="banner-name">${escHtml(a.title || '—')}</div>
+        <div class="banner-meta">${escHtml(a.author || '—')}${a.readTime ? ' · ' + escHtml(a.readTime) : ''}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">
+          <span class="pill" style="background:${meta.color}18;color:${meta.color};border:1px solid ${meta.color}44;">${escHtml(a.category || '—')}</span>
+          ${a.isFeatured ? '<span class="pill pill-active"><i class="ti ti-star" style="font-size:11px;"></i> Featured</span>' : ''}
+          ${a.isEnabled ? '' : '<span class="pill pill-suspended">Hidden</span>'}
+        </div>
+      </div>
+      <div class="banner-actions">
+        <button class="btn btn-outline" onclick="toggleHealthArticleFeatured('${a.id}', ${!a.isFeatured})" title="${a.isFeatured ? 'Unfeature' : 'Feature this article'}">
+          <i class="ti ti-star${a.isFeatured ? '-filled' : ''}"></i>
+        </button>
+        <label class="toggle-label" title="${a.isEnabled ? 'Click to hide' : 'Click to show'}">
+          <input type="checkbox" ${a.isEnabled ? 'checked' : ''} onchange="toggleHealthArticleVisibility('${a.id}', this.checked)" />
+          <span class="toggle-switch"></span>
+        </label>
+        <button class="btn btn-outline" onclick="editHealthArticle('${a.id}')" title="Edit">
+          <i class="ti ti-edit"></i>
+        </button>
+        <button class="btn btn-reject" onclick="deleteHealthArticle('${a.id}', this)" title="Delete">
+          <i class="ti ti-trash"></i>
+        </button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function saveHealthArticle() {
+  const title    = document.getElementById('ha-title')?.value.trim();
+  const category = document.getElementById('ha-category')?.value;
+  const author   = document.getElementById('ha-author')?.value.trim();
+  const readTime = document.getElementById('ha-readtime')?.value.trim();
+  const imageUrl = document.getElementById('ha-image')?.value.trim();
+  const summary  = document.getElementById('ha-summary')?.value.trim();
+  const content  = document.getElementById('ha-content')?.value.trim();
+  const isFeatured = document.getElementById('ha-featured')?.checked || false;
+  const isEnabled   = document.getElementById('ha-enabled')?.checked !== false;
+
+  if (!title || !category || !author) {
+    showToast('Title, category and author are required');
+    return;
+  }
+
+  const btn = document.getElementById('save-health-article-btn');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+
+  const data = {
+    title, category, author,
+    readTime: readTime || '',
+    imageUrl: imageUrl || '',
+    summary:  summary  || '',
+    content:  content  || '',
+    isFeatured,
+    isEnabled,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+  };
+
+  try {
+    if (_editingHealthArticleId) {
+      await db.collection('health_articles').doc(_editingHealthArticleId).update(data);
+      showToast('Article updated âœ“');
+    } else {
+      data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+      data.views = 0;
+      await db.collection('health_articles').add(data);
+      showToast('Article added âœ“');
+    }
+    cancelHealthArticleEdit();
+  } catch (err) {
+    showToast('Save failed: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="ti ti-device-floppy"></i> Save Article';
+  }
+}
+
+function editHealthArticle(id) {
+  const a = allHealthArticles.find(x => x.id === id);
+  if (!a) return;
+  _editingHealthArticleId = id;
+  document.getElementById('ha-title').value    = a.title    || '';
+  document.getElementById('ha-category').value = a.category || 'Heart Health';
+  document.getElementById('ha-author').value   = a.author   || '';
+  document.getElementById('ha-readtime').value = a.readTime || '';
+  document.getElementById('ha-image').value    = a.imageUrl || '';
+  document.getElementById('ha-summary').value  = a.summary  || '';
+  document.getElementById('ha-content').value  = a.content  || '';
+  document.getElementById('ha-featured').checked = a.isFeatured || false;
+  document.getElementById('ha-enabled').checked  = a.isEnabled  !== false;
+  document.getElementById('health-article-form-title').textContent = 'Edit Health Article';
+  document.getElementById('save-health-article-btn').innerHTML = '<i class="ti ti-device-floppy"></i> Save Changes';
+  document.getElementById('cancel-health-article-btn').style.display = 'inline-flex';
+  document.getElementById('tab-health-articles').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function cancelHealthArticleEdit() {
+  _editingHealthArticleId = null;
+  ['ha-title','ha-author','ha-readtime','ha-image','ha-summary','ha-content'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  const catEl = document.getElementById('ha-category');
+  if (catEl) catEl.value = 'Heart Health';
+  const featEl = document.getElementById('ha-featured');
+  if (featEl) featEl.checked = false;
+  const enEl = document.getElementById('ha-enabled');
+  if (enEl) enEl.checked = true;
+  document.getElementById('health-article-form-title').textContent = 'Add Health Article';
+  document.getElementById('save-health-article-btn').innerHTML = '<i class="ti ti-device-floppy"></i> Save Article';
+  document.getElementById('cancel-health-article-btn').style.display = 'none';
+}
+
+async function toggleHealthArticleVisibility(id, enabled) {
+  try {
+    await db.collection('health_articles').doc(id).update({
+      isEnabled: enabled,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    showToast(enabled ? 'Article shown in app âœ“' : 'Article hidden from app');
+  } catch (err) {
+    showToast('Update failed: ' + err.message);
+  }
+}
+
+async function toggleHealthArticleFeatured(id, featured) {
+  try {
+    await db.collection('health_articles').doc(id).update({
+      isFeatured: featured,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    showToast(featured ? 'Article featured âœ“' : 'Article unfeatured');
+  } catch (err) {
+    showToast('Update failed: ' + err.message);
+  }
+}
+
+async function deleteHealthArticle(id, btn) {
+  if (!confirm('Delete this health article? This cannot be undone.')) return;
+  btn.disabled = true;
+  try {
+    await db.collection('health_articles').doc(id).delete();
+    showToast('Article deleted');
+  } catch (err) {
+    btn.disabled = false;
+    showToast('Delete failed: ' + err.message);
+  }
+}
+
+// ============================================
 //   REFERRALS  (realtime, with fraud controls)
 // ============================================
 
@@ -3976,6 +4191,7 @@ function initDashboard() {
   loadBannersRealtime();
   loadHospitals();
   loadAmbulances();
+  loadHealthArticles();
   initReferralSettingsListener();
   initReferralsListener();
   loadFeedbacksRealtime();

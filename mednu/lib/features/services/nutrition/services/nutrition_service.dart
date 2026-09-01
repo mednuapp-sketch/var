@@ -5,6 +5,7 @@ import '../models/nutrition_appointment_model.dart';
 import '../models/meal_log_model.dart';
 import '../models/nutrition_goal_model.dart';
 import '../models/diet_plan_model.dart';
+import '../models/bmi_log_model.dart';
 
 class NutritionService {
   static final _db = FirebaseFirestore.instance;
@@ -244,6 +245,60 @@ class NutritionService {
         'updatedAt': FieldValue.serverTimestamp(),
       });
     }
+  }
+
+  // ── BMI Tracking ────────────────────────────────────────
+
+  static Stream<List<BmiLogModel>> bmiLogsStream({int limit = 60}) {
+    final uid = _uid;
+    if (uid == null) return Stream.value([]);
+    return _db
+        .collection('bmi_logs')
+        .where('userId', isEqualTo: uid)
+        .orderBy('loggedAt', descending: true)
+        .limit(limit)
+        .snapshots()
+        .map((s) => s.docs.map((d) => BmiLogModel.fromFirestore(d)).toList());
+  }
+
+  static Future<void> saveBmiLog({
+    required double heightCm,
+    required double weightKg,
+    required int age,
+    required String gender,
+    required double bmi,
+    required String category,
+  }) async {
+    final uid = _uid;
+    if (uid == null) throw Exception('Not authenticated');
+    final key = _todayKey();
+    final data = {
+      'userId': uid,
+      'heightCm': heightCm,
+      'weightKg': weightKg,
+      'age': age,
+      'gender': gender,
+      'bmi': bmi,
+      'category': category,
+      'dateKey': key,
+      'loggedAt': FieldValue.serverTimestamp(),
+    };
+    // Upsert by day — one BMI reading represents that day's measurement
+    final existing = await _db
+        .collection('bmi_logs')
+        .where('userId', isEqualTo: uid)
+        .where('dateKey', isEqualTo: key)
+        .limit(1)
+        .get();
+    if (existing.docs.isNotEmpty) {
+      await existing.docs.first.reference.set(data);
+    } else {
+      await _db.collection('bmi_logs').add(data);
+    }
+  }
+
+  static Future<void> deleteBmiLog(String logId) async {
+    await _db.collection('bmi_logs').doc(logId).delete();
   }
 
   // ── Diet Plans (admin-managed) ────────────────────────

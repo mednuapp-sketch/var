@@ -1019,7 +1019,7 @@ class _ServiceGridState extends State<ServiceGrid> {
 
   static final _services = [
     const _Service('Emergency',   Icons.emergency_rounded,         AppColors.emergencyGrad,   AppRoutes.emergency,     null,      'Immediate 24/7 help for medical emergencies',  'Call Now'),
-    const _Service('Consultation', Icons.video_call_rounded,       AppColors.consultGrad,     AppRoutes.consultation,  null,      'Book with top specialists',  'Book Now'),
+    const _Service('Consultation', Icons.video_call_rounded,       AppColors.consultGrad,     AppRoutes.consultation,  null,      'Consult Our Top Specialists',  'Book Now'),
     const _Service('Pharmacy',    Icons.medication_liquid_rounded, AppColors.medicineGrad,    AppRoutes.medicine,      null,      'Order medicines to be delivered to your doorstep',    'Order Now'),
     const _Service('Pregnancy',   Icons.pregnant_woman_rounded,    AppColors.pregnancyGrad,   AppRoutes.pregnancy,     'NEW',     'Track your pregnancy journey week by week',      'Track Now'),
     const _Service('Diagnostics', Icons.science_rounded,           AppColors.diagnosticGrad,  AppRoutes.diagnostics,   null,      'X-Ray, MRI, CT, ECG & imaging scans',        'Book Test'),

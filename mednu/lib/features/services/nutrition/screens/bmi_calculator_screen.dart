@@ -1,18 +1,15 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_text_styles.dart';
+import '../models/bmi_log_model.dart';
+import '../providers/nutrition_provider.dart';
 
 // ─── BMI data ─────────────────────────────────────────────────────────────────
-
-class _BmiRecord {
-  final DateTime date;
-  final double bmi;
-  const _BmiRecord(this.date, this.bmi);
-}
 
 const _kTips = {
   'Underweight': [
@@ -56,16 +53,18 @@ const _kRanges = [
   _BmiRange('Obese',       Color(0xFFB71C1C), 30, 50),
 ];
 
+const _kPediatricCategory = 'Ask your doctor';
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
-class BmiCalculatorScreen extends StatefulWidget {
+class BmiCalculatorScreen extends ConsumerStatefulWidget {
   const BmiCalculatorScreen({super.key});
 
   @override
-  State<BmiCalculatorScreen> createState() => _BmiCalculatorScreenState();
+  ConsumerState<BmiCalculatorScreen> createState() => _BmiCalculatorScreenState();
 }
 
-class _BmiCalculatorScreenState extends State<BmiCalculatorScreen>
+class _BmiCalculatorScreenState extends ConsumerState<BmiCalculatorScreen>
     with SingleTickerProviderStateMixin {
   // Inputs
   double _heightCm = 165;
@@ -78,14 +77,7 @@ class _BmiCalculatorScreenState extends State<BmiCalculatorScreen>
   double? _bmi;
   String _category = '';
   bool _calculated = false;
-
-  // History (in-session mock data for chart)
-  final List<_BmiRecord> _history = [
-    _BmiRecord(DateTime.now().subtract(const Duration(days: 120)), 27.4),
-    _BmiRecord(DateTime.now().subtract(const Duration(days: 90)),  26.8),
-    _BmiRecord(DateTime.now().subtract(const Duration(days: 60)),  26.1),
-    _BmiRecord(DateTime.now().subtract(const Duration(days: 30)),  25.3),
-  ];
+  bool _saving = false;
 
   late AnimationController _resultAnim;
   late Animation<double> _resultFade;
@@ -98,6 +90,7 @@ class _BmiCalculatorScreenState extends State<BmiCalculatorScreen>
     _resultFade = CurvedAnimation(parent: _resultAnim, curve: Curves.easeOut);
     _resultSlide = Tween<Offset>(begin: const Offset(0, 0.15), end: Offset.zero)
         .animate(CurvedAnimation(parent: _resultAnim, curve: Curves.easeOut));
+    WidgetsBinding.instance.addPostFrameCallback((_) => _prefillFromLastLog());
   }
 
   @override
@@ -106,28 +99,82 @@ class _BmiCalculatorScreenState extends State<BmiCalculatorScreen>
     super.dispose();
   }
 
-  double get _heightForCalc => _useImperial ? _heightCm : _heightCm; // always stored in cm
+  // Load the most recent saved reading (if any) so returning users see their
+  // last measurement and trend immediately instead of a blank default state.
+  Future<void> _prefillFromLastLog() async {
+    try {
+      final logs = await ref.read(bmiLogsProvider.future);
+      if (!mounted || logs.isEmpty) return;
+      final last = logs.first;
+      setState(() {
+        _heightCm = last.heightCm.clamp(100, 220);
+        _weightKg = last.weightKg.clamp(30, 200);
+        _age = last.age.clamp(10, 100);
+        _gender = last.gender;
+        _bmi = last.bmi;
+        _category = last.category;
+        _calculated = true;
+      });
+      _resultAnim.forward(from: 0);
+    } catch (_) {
+      // Offline or not signed in yet — keep the default starting values.
+    }
+  }
+
+  bool get _isPediatric => _age < 18;
+  bool get _isSenior => _age >= 65;
+
+  double get _heightForCalc => _heightCm; // always stored in cm
   double get _weightForCalc => _weightKg; // always stored in kg
 
   void _calculate() {
     HapticFeedback.mediumImpact();
     final hm = _heightForCalc / 100;
     final bmi = _weightForCalc / (hm * hm);
-    String cat = 'Normal';
-    for (final r in _kRanges) {
-      if (bmi >= r.min && bmi < r.max) { cat = r.label; break; }
+
+    String cat;
+    if (_isPediatric) {
+      // Fixed adult cut-offs (18.5 / 25 / 30) are not valid for growing
+      // bodies — paediatric BMI is read against age- and sex-specific
+      // percentile charts, so we deliberately don't classify it here.
+      cat = _kPediatricCategory;
+    } else {
+      cat = 'Normal';
+      for (final r in _kRanges) {
+        if (bmi >= r.min && bmi < r.max) { cat = r.label; break; }
+      }
     }
+
     setState(() {
       _bmi = bmi;
       _category = cat;
       _calculated = true;
     });
     _resultAnim.forward(from: 0);
-    // Add to history
-    _history.add(_BmiRecord(DateTime.now(), bmi));
+    _persist(bmi, cat);
+  }
+
+  Future<void> _persist(double bmi, String cat) async {
+    setState(() => _saving = true);
+    final ok = await ref.read(bmiSaveProvider.notifier).save(
+          heightCm: _heightCm,
+          weightKg: _weightKg,
+          age: _age,
+          gender: _gender,
+          bmi: bmi,
+          category: cat,
+        );
+    if (!mounted) return;
+    setState(() => _saving = false);
+    if (!ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Result shown, but could not sync to your history. Check your connection.')),
+      );
+    }
   }
 
   Color get _categoryColor {
+    if (_isPediatric) return const Color(0xFF00838F);
     for (final r in _kRanges) {
       if (r.label == _category) return r.color;
     }
@@ -136,6 +183,70 @@ class _BmiCalculatorScreenState extends State<BmiCalculatorScreen>
 
   double get _idealWeightMin => 18.5 * (_heightCm / 100) * (_heightCm / 100);
   double get _idealWeightMax => 24.9 * (_heightCm / 100) * (_heightCm / 100);
+
+  // Devine formula — the standard clinical estimate of ideal body weight,
+  // the one place gender actually changes the numbers shown.
+  double get _idealBodyWeightDevine {
+    final totalInches = _heightCm / 2.54;
+    final over60 = math.max(0, totalInches - 60);
+    final base = _gender == 'male' ? 50.0 : 45.5;
+    return base + 2.3 * over60;
+  }
+
+  // Precise numeric entry — sliders alone make it hard to land on an exact
+  // value, so tapping the number opens a keyboard-driven alternative.
+  Future<void> _editNumber({
+    required String title,
+    required double initial,
+    required double min,
+    required double max,
+    required String suffix,
+    required ValueChanged<double> onSaved,
+    bool isInt = false,
+  }) async {
+    final ctrl = TextEditingController(
+      text: isInt ? initial.round().toString() : initial.toStringAsFixed(1),
+    );
+    final result = await showDialog<double>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Enter $title', style: AppTextStyles.h4),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          keyboardType: TextInputType.numberWithOptions(decimal: !isInt),
+          style: const TextStyle(fontFamily: 'Poppins', fontSize: 20, fontWeight: FontWeight.w700),
+          decoration: InputDecoration(
+            suffixText: suffix,
+            helperText: 'Range: ${min.toStringAsFixed(0)}–${max.toStringAsFixed(0)} $suffix',
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () {
+              final v = double.tryParse(ctrl.text);
+              if (v == null) return;
+              Navigator.pop(ctx, v.clamp(min, max));
+            },
+            child: const Text('Set'),
+          ),
+        ],
+      ),
+    );
+    if (result != null) onSaved(result);
+  }
+
+  void _editAge() => _editNumber(
+        title: 'Age',
+        initial: _age.toDouble(),
+        min: 10,
+        max: 100,
+        suffix: 'yrs',
+        isInt: true,
+        onSaved: (v) => setState(() => _age = v.round()),
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -156,18 +267,22 @@ class _BmiCalculatorScreenState extends State<BmiCalculatorScreen>
           // Imperial / Metric toggle
           Padding(
             padding: const EdgeInsets.only(right: 12),
-            child: GestureDetector(
-              onTap: () => setState(() => _useImperial = !_useImperial),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  _useImperial ? 'ft/lbs' : 'cm/kg',
-                  style: const TextStyle(fontFamily: 'Poppins', fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.primary),
+            child: Semantics(
+              button: true,
+              label: _useImperial ? 'Switch to metric units' : 'Switch to imperial units',
+              child: GestureDetector(
+                onTap: () => setState(() => _useImperial = !_useImperial),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    _useImperial ? 'Imperial' : 'Metric',
+                    style: const TextStyle(fontFamily: 'Poppins', fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.primary),
+                  ),
                 ),
               ),
             ),
@@ -181,16 +296,17 @@ class _BmiCalculatorScreenState extends State<BmiCalculatorScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // What BMI is / isn't — sets expectations up front
+            const _BmiLimitationsNote(),
+            const SizedBox(height: 16),
+
             // Gender Selector
             _GenderSelector(selected: _gender, onSelect: (g) => setState(() => _gender = g)),
             const SizedBox(height: 16),
 
-            // Height
+            // Height — slider for coarse adjustment, input box for an exact value
             _SliderCard(
               label: 'Height',
-              displayValue: _useImperial
-                  ? '${(_heightCm / 30.48).floor()}\' ${((_heightCm / 2.54) % 12).round()}"'
-                  : '${_heightCm.toStringAsFixed(0)} cm',
               value: _heightCm,
               min: 100,
               max: 220,
@@ -198,15 +314,19 @@ class _BmiCalculatorScreenState extends State<BmiCalculatorScreen>
               minLabel: _useImperial ? '3\'3"' : '100 cm',
               maxLabel: _useImperial ? '7\'2"' : '220 cm',
               onChanged: (v) => setState(() => _heightCm = v),
+              editValue: _useImperial ? _heightCm / 2.54 : _heightCm,
+              editMin: _useImperial ? 100 / 2.54 : 100,
+              editMax: _useImperial ? 220 / 2.54 : 220,
+              editSuffix: _useImperial ? 'in' : 'cm',
+              onEditCommitted: (v) => setState(
+                () => _heightCm = (_useImperial ? v * 2.54 : v).clamp(100, 220),
+              ),
             ),
             const SizedBox(height: 12),
 
-            // Weight
+            // Weight — slider for coarse adjustment, input box for an exact value
             _SliderCard(
               label: 'Weight',
-              displayValue: _useImperial
-                  ? '${(_weightKg * 2.205).toStringAsFixed(1)} lbs'
-                  : '${_weightKg.toStringAsFixed(1)} kg',
               value: _weightKg,
               min: 30,
               max: 200,
@@ -214,6 +334,13 @@ class _BmiCalculatorScreenState extends State<BmiCalculatorScreen>
               minLabel: _useImperial ? '66 lbs' : '30 kg',
               maxLabel: _useImperial ? '441 lbs' : '200 kg',
               onChanged: (v) => setState(() => _weightKg = v),
+              editValue: _useImperial ? _weightKg * 2.205 : _weightKg,
+              editMin: _useImperial ? 30 * 2.205 : 30,
+              editMax: _useImperial ? 200 * 2.205 : 200,
+              editSuffix: _useImperial ? 'lbs' : 'kg',
+              onEditCommitted: (v) => setState(
+                () => _weightKg = (_useImperial ? v / 2.205 : v).clamp(30, 200),
+              ),
             ),
             const SizedBox(height: 12),
 
@@ -222,6 +349,7 @@ class _BmiCalculatorScreenState extends State<BmiCalculatorScreen>
               age: _age,
               onMinus: () => setState(() { if (_age > 10) _age--; }),
               onPlus: () => setState(() { if (_age < 100) _age++; }),
+              onTapNumber: _editAge,
             ),
             const SizedBox(height: 20),
 
@@ -231,7 +359,12 @@ class _BmiCalculatorScreenState extends State<BmiCalculatorScreen>
               height: 52,
               child: ElevatedButton.icon(
                 onPressed: _calculate,
-                icon: const Icon(Icons.calculate_rounded, color: Colors.white),
+                icon: _saving
+                    ? const SizedBox(
+                        width: 18, height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Icon(Icons.calculate_rounded, color: Colors.white),
                 label: const Text(
                   'Calculate BMI',
                   style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 16, color: Colors.white),
@@ -254,28 +387,32 @@ class _BmiCalculatorScreenState extends State<BmiCalculatorScreen>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Big BMI result card with gauge
-                      _BmiResultCard(
-                        bmi: _bmi!,
-                        category: _category,
-                        categoryColor: _categoryColor,
-                        idealMin: _idealWeightMin,
-                        idealMax: _idealWeightMax,
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Scale bar
-                      _BmiScaleBar(bmi: _bmi!),
-                      const SizedBox(height: 16),
-
-                      // History chart
-                      if (_history.length >= 2) ...[
-                        _BmiHistoryChart(history: _history),
+                      if (_isPediatric)
+                        _PediatricResultCard(bmi: _bmi!, age: _age)
+                      else ...[
+                        // Big BMI result card with gauge
+                        _BmiResultCard(
+                          bmi: _bmi!,
+                          category: _category,
+                          categoryColor: _categoryColor,
+                          idealMin: _idealWeightMin,
+                          idealMax: _idealWeightMax,
+                          idealBodyWeightDevine: _idealBodyWeightDevine,
+                          showSeniorNote: _isSenior,
+                        ),
                         const SizedBox(height: 16),
-                      ],
 
-                      // Health tips
-                      _HealthTipsCard(category: _category, color: _categoryColor),
+                        // Scale bar
+                        _BmiScaleBar(bmi: _bmi!),
+                        const SizedBox(height: 16),
+
+                        // Health tips
+                        _HealthTipsCard(category: _category, color: _categoryColor),
+                      ],
+                      const SizedBox(height: 16),
+
+                      // History chart — real, persisted readings
+                      _BmiHistorySection(currentAge: _age),
                     ],
                   ),
                 ),
@@ -287,6 +424,40 @@ class _BmiCalculatorScreenState extends State<BmiCalculatorScreen>
       ),
     );
   }
+}
+
+// ─── BMI Limitations Note ─────────────────────────────────────────────────────
+
+class _BmiLimitationsNote extends StatelessWidget {
+  const _BmiLimitationsNote();
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    label: 'About BMI: BMI is a general screening indicator. It does not account for '
+        'muscle mass, bone density or body composition. Use it as a starting point, not a diagnosis.',
+    child: Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.15)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.info_outline_rounded, size: 16, color: AppColors.primary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'BMI is a general screening indicator — it doesn\'t account for muscle mass, '
+              'bone density or body composition. Use it as a starting point, not a diagnosis.',
+              style: AppTextStyles.bodySmall.copyWith(color: context.appTextSecondary, height: 1.4),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
 // ─── Gender Selector ──────────────────────────────────────────────────────────
@@ -327,25 +498,30 @@ class _GenderCard extends StatelessWidget {
   const _GenderCard({required this.icon, required this.label, required this.isSelected, required this.color, required this.onTap});
 
   @override
-  Widget build(BuildContext context) => GestureDetector(
-    onTap: onTap,
-    child: AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      padding: const EdgeInsets.symmetric(vertical: 18),
-      decoration: BoxDecoration(
-        color: isSelected ? color : context.appSurface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: isSelected ? color : context.appBorder, width: isSelected ? 2 : 1),
-        boxShadow: isSelected
-            ? [BoxShadow(color: color.withValues(alpha: 0.25), blurRadius: 12, offset: const Offset(0, 4))]
-            : [],
-      ),
-      child: Column(
-        children: [
-          Icon(icon, color: isSelected ? Colors.white : color, size: 32),
-          const SizedBox(height: 6),
-          Text(label, style: TextStyle(fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w700, color: isSelected ? Colors.white : color)),
-        ],
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    selected: isSelected,
+    label: '$label, ${isSelected ? 'selected' : 'not selected'}',
+    child: GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(vertical: 18),
+        decoration: BoxDecoration(
+          color: isSelected ? color : context.appSurface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: isSelected ? color : context.appBorder, width: isSelected ? 2 : 1),
+          boxShadow: isSelected
+              ? [BoxShadow(color: color.withValues(alpha: 0.25), blurRadius: 12, offset: const Offset(0, 4))]
+              : [],
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: isSelected ? Colors.white : color, size: 32),
+            const SizedBox(height: 6),
+            Text(label, style: TextStyle(fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w700, color: isSelected ? Colors.white : color)),
+          ],
+        ),
       ),
     ),
   );
@@ -353,19 +529,26 @@ class _GenderCard extends StatelessWidget {
 
 // ─── Slider Card ──────────────────────────────────────────────────────────────
 
-class _SliderCard extends StatelessWidget {
+class _SliderCard extends StatefulWidget {
   final String label;
-  final String displayValue;
-  final double value;
-  final double min;
-  final double max;
+  final double value; // canonical unit (cm / kg) — drives the slider
+  final double min;   // canonical unit
+  final double max;   // canonical unit
   final Color color;
   final String minLabel;
   final String maxLabel;
-  final ValueChanged<double> onChanged;
+  final ValueChanged<double> onChanged; // canonical unit, fired on drag
+
+  // The manual-entry box operates in whatever unit is currently displayed
+  // (metric or imperial), independent of the slider's canonical cm/kg range.
+  final double editValue;
+  final double editMin;
+  final double editMax;
+  final String editSuffix;
+  final ValueChanged<double> onEditCommitted;
+
   const _SliderCard({
     required this.label,
-    required this.displayValue,
     required this.value,
     required this.min,
     required this.max,
@@ -373,7 +556,62 @@ class _SliderCard extends StatelessWidget {
     required this.minLabel,
     required this.maxLabel,
     required this.onChanged,
+    required this.editValue,
+    required this.editMin,
+    required this.editMax,
+    required this.editSuffix,
+    required this.onEditCommitted,
   });
+
+  @override
+  State<_SliderCard> createState() => _SliderCardState();
+}
+
+class _SliderCardState extends State<_SliderCard> {
+  late final TextEditingController _ctrl;
+  final _focusNode = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = TextEditingController(text: _format(widget.editValue));
+    _focusNode.addListener(_onFocusChange);
+  }
+
+  String _format(double v) => v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
+
+  void _onFocusChange() {
+    if (!_focusNode.hasFocus) _commit();
+  }
+
+  void _commit() {
+    final parsed = double.tryParse(_ctrl.text);
+    if (parsed == null) {
+      _ctrl.text = _format(widget.editValue);
+      return;
+    }
+    final clamped = parsed.clamp(widget.editMin, widget.editMax);
+    _ctrl.text = _format(clamped);
+    if (clamped != widget.editValue) widget.onEditCommitted(clamped);
+  }
+
+  @override
+  void didUpdateWidget(covariant _SliderCard old) {
+    super.didUpdateWidget(old);
+    // Keep the box in sync with slider drags and unit-toggle conversions,
+    // but never fight the user while they're actively typing in it.
+    if (!_focusNode.hasFocus && widget.editValue != old.editValue) {
+      _ctrl.text = _format(widget.editValue);
+    }
+  }
+
+  @override
+  void dispose() {
+    _focusNode.removeListener(_onFocusChange);
+    _focusNode.dispose();
+    _ctrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) => Container(
@@ -387,32 +625,74 @@ class _SliderCard extends StatelessWidget {
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Text(label, style: AppTextStyles.labelLarge.copyWith(color: context.appTextSecondary)),
-            Text(
-              displayValue,
-              style: TextStyle(fontFamily: 'Poppins', fontSize: 22, fontWeight: FontWeight.w800, color: color),
+            Text(widget.label, style: AppTextStyles.labelLarge.copyWith(color: context.appTextSecondary)),
+            Semantics(
+              textField: true,
+              label: '${widget.label} in ${widget.editSuffix}',
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  SizedBox(
+                    width: 56,
+                    child: TextField(
+                      controller: _ctrl,
+                      focusNode: _focusNode,
+                      textAlign: TextAlign.right,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) => _focusNode.unfocus(),
+                      style: TextStyle(fontFamily: 'Poppins', fontSize: 20, fontWeight: FontWeight.w800, color: widget.color),
+                      decoration: const InputDecoration(
+                        isDense: true,
+                        contentPadding: EdgeInsets.zero,
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 3),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 3),
+                    child: Text(widget.editSuffix, style: TextStyle(fontFamily: 'Poppins', fontSize: 12, fontWeight: FontWeight.w600, color: widget.color.withValues(alpha: 0.7))),
+                  ),
+                  const SizedBox(width: 4),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Icon(Icons.edit_rounded, size: 13, color: widget.color.withValues(alpha: 0.5)),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
         SliderTheme(
           data: SliderTheme.of(context).copyWith(
-            activeTrackColor: color,
-            thumbColor: color,
-            inactiveTrackColor: color.withValues(alpha: 0.14),
-            overlayColor: color.withValues(alpha: 0.1),
+            activeTrackColor: widget.color,
+            thumbColor: widget.color,
+            inactiveTrackColor: widget.color.withValues(alpha: 0.14),
+            overlayColor: widget.color.withValues(alpha: 0.1),
             trackHeight: 6,
             thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 9),
           ),
-          child: Slider(value: value, min: min, max: max, divisions: ((max - min) * 2).toInt(), onChanged: onChanged),
+          child: Slider(
+            value: widget.value.clamp(widget.min, widget.max),
+            min: widget.min,
+            max: widget.max,
+            divisions: ((widget.max - widget.min) * 2).toInt(),
+            onChanged: widget.onChanged,
+          ),
         ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(minLabel, style: AppTextStyles.bodySmall.copyWith(color: context.appTextHint)),
-              Text(maxLabel, style: AppTextStyles.bodySmall.copyWith(color: context.appTextHint)),
+              Text(widget.minLabel, style: AppTextStyles.bodySmall.copyWith(color: context.appTextHint)),
+              Text(widget.maxLabel, style: AppTextStyles.bodySmall.copyWith(color: context.appTextHint)),
             ],
           ),
         ),
@@ -427,7 +707,8 @@ class _AgeStepperCard extends StatelessWidget {
   final int age;
   final VoidCallback onMinus;
   final VoidCallback onPlus;
-  const _AgeStepperCard({required this.age, required this.onMinus, required this.onPlus});
+  final VoidCallback? onTapNumber;
+  const _AgeStepperCard({required this.age, required this.onMinus, required this.onPlus, this.onTapNumber});
 
   @override
   Widget build(BuildContext context) => Container(
@@ -441,19 +722,26 @@ class _AgeStepperCard extends StatelessWidget {
       children: [
         Text('Age', style: AppTextStyles.labelLarge.copyWith(color: context.appTextSecondary)),
         const Spacer(),
-        _AgeBtn(icon: Icons.remove_rounded, onTap: onMinus, color: const Color(0xFFE65100)),
-        const SizedBox(width: 20),
-        RichText(
-          text: TextSpan(
-            text: '$age',
-            style: const TextStyle(fontFamily: 'Poppins', fontSize: 28, fontWeight: FontWeight.w900, color: Color(0xFFE65100)),
-            children: [
-              TextSpan(text: ' yrs', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: context.appTextSecondary)),
-            ],
+        _AgeBtn(icon: Icons.remove_rounded, onTap: onMinus, color: const Color(0xFFE65100), semanticLabel: 'Decrease age'),
+        const SizedBox(width: 16),
+        Semantics(
+          button: onTapNumber != null,
+          label: 'Age, $age years. ${onTapNumber != null ? 'Double tap to enter an exact age.' : ''}',
+          child: GestureDetector(
+            onTap: onTapNumber,
+            child: RichText(
+              text: TextSpan(
+                text: '$age',
+                style: const TextStyle(fontFamily: 'Poppins', fontSize: 28, fontWeight: FontWeight.w900, color: Color(0xFFE65100)),
+                children: [
+                  TextSpan(text: ' yrs', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: context.appTextSecondary)),
+                ],
+              ),
+            ),
           ),
         ),
-        const SizedBox(width: 20),
-        _AgeBtn(icon: Icons.add_rounded, onTap: onPlus, color: const Color(0xFFE65100)),
+        const SizedBox(width: 16),
+        _AgeBtn(icon: Icons.add_rounded, onTap: onPlus, color: const Color(0xFFE65100), semanticLabel: 'Increase age'),
       ],
     ),
   );
@@ -463,20 +751,26 @@ class _AgeBtn extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
   final Color color;
-  const _AgeBtn({required this.icon, required this.onTap, required this.color});
+  final String semanticLabel;
+  const _AgeBtn({required this.icon, required this.onTap, required this.color, required this.semanticLabel});
 
   @override
-  Widget build(BuildContext context) => GestureDetector(
-    onTap: () { HapticFeedback.selectionClick(); onTap(); },
-    child: Container(
-      width: 38,
-      height: 38,
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        shape: BoxShape.circle,
-        border: Border.all(color: color.withValues(alpha: 0.25)),
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    label: semanticLabel,
+    child: GestureDetector(
+      onTap: () { HapticFeedback.selectionClick(); onTap(); },
+      child: Container(
+        width: 44,
+        height: 44,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          shape: BoxShape.circle,
+          border: Border.all(color: color.withValues(alpha: 0.25)),
+        ),
+        child: Icon(icon, color: color, size: 20),
       ),
-      child: Icon(icon, color: color, size: 20),
     ),
   );
 }
@@ -489,7 +783,17 @@ class _BmiResultCard extends StatelessWidget {
   final Color categoryColor;
   final double idealMin;
   final double idealMax;
-  const _BmiResultCard({required this.bmi, required this.category, required this.categoryColor, required this.idealMin, required this.idealMax});
+  final double idealBodyWeightDevine;
+  final bool showSeniorNote;
+  const _BmiResultCard({
+    required this.bmi,
+    required this.category,
+    required this.categoryColor,
+    required this.idealMin,
+    required this.idealMax,
+    required this.idealBodyWeightDevine,
+    required this.showSeniorNote,
+  });
 
   @override
   Widget build(BuildContext context) => Container(
@@ -511,40 +815,43 @@ class _BmiResultCard extends StatelessWidget {
         // baseline, since the marker lives on the arc rather than at the
         // center), so it reads as one instrument instead of an arc plus a
         // separate number stacked underneath.
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final gaugeWidth = constraints.maxWidth;
-            final gaugeHeight = gaugeWidth / 2 + 16;
-            return SizedBox(
-              height: gaugeHeight,
-              width: double.infinity,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  CustomPaint(size: Size(gaugeWidth, gaugeHeight), painter: _GaugePainter(bmi: bmi)),
-                  Positioned(
-                    top: gaugeHeight * 0.4,
-                    left: 0,
-                    right: 0,
-                    child: Column(
-                      children: [
-                        Text(
-                          bmi.toStringAsFixed(1),
-                          textAlign: TextAlign.center,
-                          style: TextStyle(fontFamily: 'Poppins', fontSize: 40, fontWeight: FontWeight.w900, color: categoryColor, height: 1),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'kg/m²',
-                          style: AppTextStyles.bodySmall.copyWith(color: context.appTextHint),
-                        ),
-                      ],
+        Semantics(
+          label: 'Your BMI is ${bmi.toStringAsFixed(1)} kilograms per square metre, category $category',
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final gaugeWidth = constraints.maxWidth;
+              final gaugeHeight = gaugeWidth / 2 + 16;
+              return SizedBox(
+                height: gaugeHeight,
+                width: double.infinity,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    CustomPaint(size: Size(gaugeWidth, gaugeHeight), painter: _GaugePainter(bmi: bmi)),
+                    Positioned(
+                      top: gaugeHeight * 0.4,
+                      left: 0,
+                      right: 0,
+                      child: Column(
+                        children: [
+                          Text(
+                            bmi.toStringAsFixed(1),
+                            textAlign: TextAlign.center,
+                            style: TextStyle(fontFamily: 'Poppins', fontSize: 40, fontWeight: FontWeight.w900, color: categoryColor, height: 1),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'kg/m²',
+                            style: AppTextStyles.bodySmall.copyWith(color: context.appTextHint),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            );
-          },
+                  ],
+                ),
+              );
+            },
+          ),
         ),
         const SizedBox(height: 16),
 
@@ -561,29 +868,114 @@ class _BmiResultCard extends StatelessWidget {
 
         // Ideal weight info
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
             color: context.appBackground,
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+          child: Column(
             children: [
-              Icon(Icons.info_outline_rounded, size: 15, color: context.appTextSecondary),
-              const SizedBox(width: 8),
-              Flexible(
-                child: Text(
-                  'Ideal weight for your height: ${idealMin.toStringAsFixed(1)} – ${idealMax.toStringAsFixed(1)} kg',
-                  style: AppTextStyles.bodySmall.copyWith(color: context.appTextSecondary),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.info_outline_rounded, size: 15, color: context.appTextSecondary),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      'Ideal weight for your height: ${idealMin.toStringAsFixed(1)} – ${idealMax.toStringAsFixed(1)} kg',
+                      style: AppTextStyles.bodySmall.copyWith(color: context.appTextSecondary),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Ideal body weight (Devine formula): ${idealBodyWeightDevine.toStringAsFixed(1)} kg',
+                style: AppTextStyles.bodySmall.copyWith(color: context.appTextHint),
+                textAlign: TextAlign.center,
+              ),
+              if (showSeniorNote) ...[
+                const SizedBox(height: 6),
+                Text(
+                  'For adults 65+, a slightly higher BMI is sometimes considered healthy — ask your doctor for a target suited to you.',
+                  style: AppTextStyles.bodySmall.copyWith(color: context.appTextHint, height: 1.3),
                   textAlign: TextAlign.center,
                 ),
-              ),
+              ],
             ],
           ),
         ),
       ],
     ),
   );
+}
+
+// ─── Pediatric Result Card ─────────────────────────────────────────────────────
+
+class _PediatricResultCard extends StatelessWidget {
+  final double bmi;
+  final int age;
+  const _PediatricResultCard({required this.bmi, required this.age});
+
+  @override
+  Widget build(BuildContext context) {
+    const color = Color(0xFF00838F);
+    return Semantics(
+      label: 'Your BMI is ${bmi.toStringAsFixed(1)} kilograms per square metre. '
+          'Standard adult BMI categories do not apply under age 18 — talk to a pediatrician.',
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: context.appSurface,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [BoxShadow(color: color.withValues(alpha: 0.15), blurRadius: 20, offset: const Offset(0, 6))],
+          border: Border.all(color: color.withValues(alpha: 0.25), width: 1.5),
+        ),
+        child: Column(
+          children: [
+            Text('Your BMI', style: AppTextStyles.labelMedium.copyWith(color: context.appTextSecondary)),
+            const SizedBox(height: 12),
+            Text(
+              bmi.toStringAsFixed(1),
+              style: const TextStyle(fontFamily: 'Poppins', fontSize: 40, fontWeight: FontWeight.w900, color: color, height: 1),
+            ),
+            Text('kg/m²', style: AppTextStyles.bodySmall.copyWith(color: context.appTextHint)),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(20)),
+              child: const Text(
+                'Ask your doctor',
+                style: TextStyle(fontFamily: 'Poppins', fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(color: context.appBackground, borderRadius: BorderRadius.circular(12)),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.child_care_rounded, size: 16, color: context.appTextSecondary),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'At age $age, BMI is read against age- and sex-specific growth-chart '
+                      'percentiles rather than the fixed adult ranges (18.5 / 25 / 30) used above. '
+                      'This number is accurate, but only a pediatrician can tell you what it means.',
+                      style: AppTextStyles.bodySmall.copyWith(color: context.appTextSecondary, height: 1.4),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 // ─── Gauge Painter ────────────────────────────────────────────────────────────
@@ -741,17 +1133,69 @@ class _BmiScaleBar extends StatelessWidget {
   }
 }
 
-// ─── BMI History Chart ────────────────────────────────────────────────────────
+// ─── BMI History Section (Firestore-backed) ───────────────────────────────────
+
+class _BmiHistorySection extends ConsumerWidget {
+  final int currentAge;
+  const _BmiHistorySection({required this.currentAge});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final historyAsync = ref.watch(bmiLogsProvider);
+    return historyAsync.when(
+      loading: () => Container(
+        height: 140,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: context.appSurface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: context.appBorder),
+        ),
+        child: const CircularProgressIndicator(strokeWidth: 2),
+      ),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (logs) {
+        if (logs.length < 2) {
+          return Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: context.appSurface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: context.appBorder),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.show_chart_rounded, color: context.appTextHint, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    logs.isEmpty
+                        ? 'Your BMI trend will appear here after you calculate on a couple of different days.'
+                        : 'One reading saved so far — calculate again on another day to start your trend line.',
+                    style: AppTextStyles.bodySmall.copyWith(color: context.appTextSecondary, height: 1.4),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+        return _BmiHistoryChart(history: logs);
+      },
+    );
+  }
+}
 
 class _BmiHistoryChart extends StatelessWidget {
-  final List<_BmiRecord> history;
+  final List<BmiLogModel> history;
   const _BmiHistoryChart({required this.history});
 
   @override
   Widget build(BuildContext context) {
-    final spots = history.asMap().entries.map((e) => FlSpot(e.key.toDouble(), e.value.bmi)).toList();
-    final minY = (history.map((r) => r.bmi).reduce(math.min) - 2).floorToDouble().clamp(10.0, 40.0);
-    final maxY = (history.map((r) => r.bmi).reduce(math.max) + 2).ceilToDouble().clamp(14.0, 50.0);
+    // Provider returns newest-first; the chart reads oldest-to-newest left to right.
+    final ordered = history.reversed.toList();
+    final spots = ordered.asMap().entries.map((e) => FlSpot(e.key.toDouble(), e.value.bmi)).toList();
+    final minY = (ordered.map((r) => r.bmi).reduce(math.min) - 2).floorToDouble().clamp(10.0, 40.0);
+    final maxY = (ordered.map((r) => r.bmi).reduce(math.max) + 2).ceilToDouble().clamp(14.0, 50.0);
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -763,10 +1207,13 @@ class _BmiHistoryChart extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(children: [
-            Icon(Icons.show_chart_rounded, color: AppColors.primary, size: 18),
-            SizedBox(width: 8),
-            Text('BMI History', style: AppTextStyles.h4),
+          Row(children: [
+            const Icon(Icons.show_chart_rounded, color: AppColors.primary, size: 18),
+            const SizedBox(width: 8),
+            const Text('BMI History', style: AppTextStyles.h4),
+            const Spacer(),
+            Text('${ordered.length} ${ordered.length == 1 ? 'entry' : 'entries'}',
+                style: AppTextStyles.bodySmall.copyWith(color: context.appTextHint)),
           ]),
           const SizedBox(height: 16),
           SizedBox(
@@ -797,8 +1244,8 @@ class _BmiHistoryChart extends StatelessWidget {
                       reservedSize: 24,
                       getTitlesWidget: (v, _) {
                         final idx = v.toInt();
-                        if (idx >= 0 && idx < history.length) {
-                          final d = history[idx].date;
+                        if (idx >= 0 && idx < ordered.length) {
+                          final d = ordered[idx].loggedAt;
                           return Text('${d.day}/${d.month}', style: AppTextStyles.bodySmall.copyWith(color: context.appTextHint));
                         }
                         return const SizedBox.shrink();
@@ -807,6 +1254,19 @@ class _BmiHistoryChart extends StatelessWidget {
                   ),
                   topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                   rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                ),
+                lineTouchData: LineTouchData(
+                  touchTooltipData: LineTouchTooltipData(
+                    getTooltipItems: (touchedSpots) => touchedSpots.map((s) {
+                      final idx = s.x.toInt();
+                      if (idx < 0 || idx >= ordered.length) return null;
+                      final d = ordered[idx].loggedAt;
+                      return LineTooltipItem(
+                        '${d.day}/${d.month}\n${s.y.toStringAsFixed(1)} kg/m²',
+                        const TextStyle(fontFamily: 'Poppins', color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+                      );
+                    }).toList(),
+                  ),
                 ),
                 lineBarsData: [
                   LineChartBarData(
@@ -851,6 +1311,7 @@ class _HealthTipsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tips = _kTips[category] ?? [];
+    if (tips.isEmpty) return const SizedBox.shrink();
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(

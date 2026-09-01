@@ -1,11 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import 'package:mednu/core/constants/app_colors.dart';
 import 'package:mednu/core/constants/app_text_styles.dart';
 import 'package:mednu/core/widgets/ux_widgets.dart';
 import '../../../core/constants/app_spacing.dart';
 import '../../../core/utils/r.dart';
 import '../services/ai_tips_service.dart';
+import '../services/health_article_service.dart';
 
 // ── Article data model ────────────────────────────────────────────────────────
 
@@ -19,6 +23,9 @@ class _Article {
   final Color color;
   final String views;
   final String date;
+  final String summary;
+  final String content;
+  final String imageUrl;
   final bool isFeatured;
   final bool isBookmarked;
 
@@ -32,6 +39,9 @@ class _Article {
     required this.color,
     required this.views,
     required this.date,
+    required this.summary,
+    required this.content,
+    required this.imageUrl,
     this.isFeatured = false,
     this.isBookmarked = false,
   });
@@ -46,9 +56,18 @@ class _Article {
         color: color,
         views: views,
         date: date,
+        summary: summary,
+        content: content,
+        imageUrl: imageUrl,
         isFeatured: isFeatured,
         isBookmarked: isBookmarked ?? this.isBookmarked,
       );
+}
+
+String _formatViewCount(int n) {
+  if (n >= 1000000) return '${(n / 1000000).toStringAsFixed(1)}M';
+  if (n >= 1000) return '${(n / 1000).toStringAsFixed(1)}K';
+  return '$n';
 }
 
 // ── Category config ───────────────────────────────────────────────────────────
@@ -88,135 +107,50 @@ class _EducationScreenState extends State<EducationScreen> {
     _CategoryConfig(name: 'Fitness', icon: Icons.fitness_center_rounded, color: Color(0xFF1565C0)),
   ];
 
-  late List<_Article> _articles;
+  List<_Article> _articles = [];
+  final Set<String> _bookmarkedIds = {};
+  StreamSubscription<List<HealthArticle>>? _articlesSub;
 
   @override
   void initState() {
     super.initState();
-    _articles = _buildArticles();
-    _simulateLoading();
+    _articlesSub = HealthArticleService.stream().listen((data) {
+      if (!mounted) return;
+      setState(() {
+        _articles = data.map(_toViewModel).toList();
+        _isLoading = false;
+      });
+    }, onError: (_) {
+      if (mounted) setState(() => _isLoading = false);
+    });
   }
 
-  List<_Article> _buildArticles() => [
-        const _Article(
-          id: 'a1',
-          title: 'Complete Guide to Heart Health in 2025',
-          category: 'Heart Health',
-          readTime: '8 min read',
-          author: 'Dr. Priya Mehta',
-          icon: Icons.favorite_rounded,
-          color: Color(0xFF522546),
-          views: '32.1K',
-          date: 'Jun 20',
-          isFeatured: true,
-        ),
-        const _Article(
-          id: 'a2',
-          title: 'How to Manage Diabetes with Diet',
-          category: 'Diabetes',
-          readTime: '5 min read',
-          author: 'Dr. Arjun Reddy',
-          icon: Icons.bloodtype_rounded,
-          color: Color(0xFFB71C1C),
-          views: '12.4K',
-          date: 'Jun 18',
-        ),
-        const _Article(
-          id: 'a3',
-          title: '10 Signs of Vitamin Deficiency',
-          category: 'Nutrition',
-          readTime: '4 min read',
-          author: 'Dr. Sunita Rao',
-          icon: Icons.restaurant_rounded,
-          color: Color(0xFF2E7D32),
-          views: '8.2K',
-          date: 'Jun 15',
-          isBookmarked: true,
-        ),
-        const _Article(
-          id: 'a4',
-          title: 'Managing Stress in Modern Life',
-          category: 'Mental Health',
-          readTime: '6 min read',
-          author: 'Dr. Ananya Singh',
-          icon: Icons.psychology_rounded,
-          color: Color(0xFF633058),
-          views: '15.1K',
-          date: 'Jun 12',
-        ),
-        const _Article(
-          id: 'a5',
-          title: 'Pregnancy: What to Expect Week by Week',
-          category: 'Pregnancy',
-          readTime: '9 min read',
-          author: 'Dr. Kavitha Nair',
-          icon: Icons.pregnant_woman_rounded,
-          color: Color(0xFFA36BAC),
-          views: '20.3K',
-          date: 'Jun 10',
-          isBookmarked: true,
-        ),
-        const _Article(
-          id: 'a6',
-          title: 'Understanding Blood Pressure',
-          category: 'Heart Health',
-          readTime: '3 min read',
-          author: 'Dr. Vikram Shah',
-          icon: Icons.monitor_heart_rounded,
-          color: Color(0xFFB71C1C),
-          views: '11.2K',
-          date: 'Jun 8',
-        ),
-        const _Article(
-          id: 'a7',
-          title: 'Benefits of Walking 30 Minutes Daily',
-          category: 'Fitness',
-          readTime: '3 min read',
-          author: 'Dr. Ravi Kumar',
-          icon: Icons.directions_walk_rounded,
-          color: Color(0xFF1565C0),
-          views: '18.9K',
-          date: 'Jun 5',
-        ),
-        const _Article(
-          id: 'a8',
-          title: 'Best Foods for Mental Wellness',
-          category: 'Mental Health',
-          readTime: '5 min read',
-          author: 'Dr. Ananya Singh',
-          icon: Icons.spa_rounded,
-          color: Color(0xFF633058),
-          views: '9.7K',
-          date: 'Jun 3',
-        ),
-        const _Article(
-          id: 'a9',
-          title: 'Diabetic-Friendly Meal Planning',
-          category: 'Diabetes',
-          readTime: '7 min read',
-          author: 'Dr. Arjun Reddy',
-          icon: Icons.restaurant_menu_rounded,
-          color: Color(0xFFB71C1C),
-          views: '14.5K',
-          date: 'May 30',
-          isBookmarked: true,
-        ),
-        const _Article(
-          id: 'a10',
-          title: 'Yoga for Beginners: A Complete Guide',
-          category: 'Fitness',
-          readTime: '6 min read',
-          author: 'Dr. Ravi Kumar',
-          icon: Icons.self_improvement_rounded,
-          color: Color(0xFF1565C0),
-          views: '22.0K',
-          date: 'May 28',
-        ),
-      ];
+  _CategoryConfig _configFor(String category) {
+    for (final c in _categoryConfigs) {
+      if (c.name == category) return c;
+    }
+    return const _CategoryConfig(
+        name: 'Other', icon: Icons.article_rounded, color: _accentIndigo);
+  }
 
-  Future<void> _simulateLoading() async {
-    await Future.delayed(const Duration(milliseconds: 1000));
-    if (mounted) setState(() => _isLoading = false);
+  _Article _toViewModel(HealthArticle a) {
+    final cfg = _configFor(a.category);
+    return _Article(
+      id: a.id,
+      title: a.title,
+      category: a.category,
+      readTime: a.readTime.isNotEmpty ? a.readTime : '5 min read',
+      author: a.author,
+      icon: cfg.icon,
+      color: cfg.color,
+      views: _formatViewCount(a.views),
+      date: a.createdAt != null ? DateFormat('MMM d').format(a.createdAt!) : '',
+      summary: a.summary,
+      content: a.content,
+      imageUrl: a.imageUrl,
+      isFeatured: a.isFeatured,
+      isBookmarked: _bookmarkedIds.contains(a.id),
+    );
   }
 
   List<_Article> get _featured =>
@@ -245,16 +179,22 @@ class _EducationScreenState extends State<EducationScreen> {
 
   void _toggleBookmark(String id) {
     setState(() {
+      if (_bookmarkedIds.contains(id)) {
+        _bookmarkedIds.remove(id);
+      } else {
+        _bookmarkedIds.add(id);
+      }
       final idx = _articles.indexWhere((a) => a.id == id);
       if (idx != -1) {
         _articles[idx] =
-            _articles[idx].copyWith(isBookmarked: !_articles[idx].isBookmarked);
+            _articles[idx].copyWith(isBookmarked: _bookmarkedIds.contains(id));
       }
     });
   }
 
   @override
   void dispose() {
+    _articlesSub?.cancel();
     _searchCtrl.dispose();
     super.dispose();
   }
@@ -501,7 +441,8 @@ class _EducationScreenState extends State<EducationScreen> {
                       else ...[
                         // Featured hero card
                         if (_searchQuery.isEmpty &&
-                            _selectedCategory == 'All') ...[
+                            _selectedCategory == 'All' &&
+                            _featured.isNotEmpty) ...[
                           Padding(
                             padding: EdgeInsets.fromLTRB(R.p(context, 16), 0,
                                 R.p(context, 16), R.p(context, 16)),
@@ -554,10 +495,14 @@ class _EducationScreenState extends State<EducationScreen> {
                         if (_filtered.isEmpty)
                           Padding(
                             padding: EdgeInsets.only(top: R.p(context, 8)),
-                            child: const AppEmptyState(
+                            child: AppEmptyState(
                               icon: Icons.article_outlined,
-                              title: 'No Articles Found',
-                              message: 'No articles in this category yet.',
+                              title: _articles.isEmpty
+                                  ? 'No Health Articles Yet'
+                                  : 'No Articles Found',
+                              message: _articles.isEmpty
+                                  ? 'Check back soon for health tips and articles.'
+                                  : 'No articles in this category yet.',
                               iconColor: _accentIndigo,
                             ),
                           )
@@ -631,6 +576,7 @@ class _EducationScreenState extends State<EducationScreen> {
   }
 
   void _openArticle(BuildContext context, _Article article) {
+    HealthArticleService.incrementViews(article.id);
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -815,7 +761,11 @@ class _FeaturedCard extends StatelessWidget {
                   ),
                   SizedBox(height: R.h(context, 6)),
                   Text(
-                    'Discover the latest health trends and science-backed tips for a longer, healthier life.',
+                    article.summary.isNotEmpty
+                        ? article.summary
+                        : 'Discover the latest health trends and science-backed tips for a longer, healthier life.',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontFamily: 'Poppins',
                       fontSize: 12,
@@ -922,38 +872,21 @@ class _ArticleCard extends StatelessWidget {
         ),
         child: Row(
           children: [
-            // Thumbnail with colored box
-            Container(
-              width: 72, height: 88,
-              decoration: BoxDecoration(
-                color: article.color.withValues(alpha: 0.12),
-                borderRadius: const BorderRadius.horizontal(
-                  left: Radius.circular(18),
-                ),
+            // Thumbnail with colored box (or cover image when provided)
+            ClipRRect(
+              borderRadius: const BorderRadius.horizontal(
+                left: Radius.circular(18),
               ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(article.icon, color: article.color, size: 30),
-                  SizedBox(height: R.h(context, 4)),
-                  Container(
-                    padding: EdgeInsets.symmetric(
-                        horizontal: R.p(context, 4), vertical: R.p(context, 2)),
-                    decoration: BoxDecoration(
-                      color: article.color.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(R.r(context, 4)),
-                    ),
-                    child: Text(
-                      article.category.split(' ').first,
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 8,
-                        fontWeight: FontWeight.w700,
-                        color: article.color,
-                      ),
-                    ),
-                  ),
-                ],
+              child: SizedBox(
+                width: 72,
+                height: 88,
+                child: article.imageUrl.isNotEmpty
+                    ? Image.network(
+                        article.imageUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => _thumbFallback(context),
+                      )
+                    : _thumbFallback(context),
               ),
             ),
 
@@ -1043,6 +976,36 @@ class _ArticleCard extends StatelessWidget {
       ),
     );
   }
+
+  Widget _thumbFallback(BuildContext context) {
+    return Container(
+      color: article.color.withValues(alpha: 0.12),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(article.icon, color: article.color, size: 30),
+          SizedBox(height: R.h(context, 4)),
+          Container(
+            padding: EdgeInsets.symmetric(
+                horizontal: R.p(context, 4), vertical: R.p(context, 2)),
+            decoration: BoxDecoration(
+              color: article.color.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(R.r(context, 4)),
+            ),
+            child: Text(
+              article.category.split(' ').first,
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 8,
+                fontWeight: FontWeight.w700,
+                color: article.color,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 // ── Article Detail Sheet ──────────────────────────────────────────────────────
@@ -1067,6 +1030,10 @@ class _ArticleSheetState extends State<_ArticleSheet> {
   }
 
   Future<void> _loadContent() async {
+    if (widget.article.content.isNotEmpty) {
+      setState(() { _content = widget.article.content; _loading = false; });
+      return;
+    }
     try {
       final content = await widget.aiService.askQuestion(
         'Write a detailed, practical health article (about 250 words) on the topic: '
@@ -1078,6 +1045,25 @@ class _ArticleSheetState extends State<_ArticleSheet> {
     } catch (_) {
       if (mounted) setState(() { _content = null; _loading = false; });
     }
+  }
+
+  Widget _heroFallback(Color color) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [color.withValues(alpha: 0.15), color.withValues(alpha: 0.05)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Icon(widget.article.icon, size: 72, color: color.withValues(alpha: 0.25)),
+          Icon(widget.article.icon, size: 52, color: color),
+        ],
+      ),
+    );
   }
 
   @override
@@ -1146,26 +1132,18 @@ class _ArticleSheetState extends State<_ArticleSheet> {
                     R.p(context, 20), R.p(context, 32)),
                 children: [
                   // Hero area
-                  Container(
-                    height: 160,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          color.withValues(alpha: 0.15),
-                          color.withValues(alpha: 0.05),
-                        ],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(R.r(context, 18)),
-                    ),
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        Icon(widget.article.icon,
-                            size: 72, color: color.withValues(alpha: 0.25)),
-                        Icon(widget.article.icon, size: 52, color: color),
-                      ],
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(R.r(context, 18)),
+                    child: SizedBox(
+                      height: 160,
+                      width: double.infinity,
+                      child: widget.article.imageUrl.isNotEmpty
+                          ? Image.network(
+                              widget.article.imageUrl,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => _heroFallback(color),
+                            )
+                          : _heroFallback(color),
                     ),
                   ),
                   SizedBox(height: R.h(context, 16)),

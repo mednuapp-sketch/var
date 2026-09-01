@@ -146,7 +146,7 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen>
                                     ),
                                     const SizedBox(height: 6),
                                     Text(
-                                      'Your Personal Health Companion',
+                                      'Always with You',
                                       style: AppTextStyles.onPrimaryBody
                                           .copyWith(fontWeight: FontWeight.w500),
                                     ),

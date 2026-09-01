@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/constants/app_colors.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/services/image_upload_service.dart';
 import '../../referral/referral_service.dart';
@@ -102,7 +103,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Icon(Icons.camera_alt_rounded,
-                    color: Color(0xFF7b2d6e)),
+                    color: AppColors.primary),
               ),
               title: const Text('Camera',
                   style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
@@ -118,7 +119,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Icon(Icons.photo_library_rounded,
-                    color: Color(0xFF7b2d6e)),
+                    color: AppColors.primary),
               ),
               title: const Text('Gallery',
                   style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
@@ -167,7 +168,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
       builder: (ctx, child) => Theme(
         data: Theme.of(ctx).copyWith(
           colorScheme: const ColorScheme.light(
-            primary: Color(0xFF7b2d6e),
+            primary: AppColors.primary,
             onPrimary: Colors.white,
           ),
         ),
@@ -245,19 +246,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0D0520),
+      backgroundColor: AppColors.darkBase,
       body: Stack(
         children: [
           // ── Gradient background ─────────────────────────────────────────
-          Positioned.fill(
+          const Positioned.fill(
             child: DecoratedBox(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [Color(0xFF0D0520), Color(0xFF3B0F50), Color(0xFF7b2d6e)],
-                  stops: [0.0, 0.5, 1.0],
-                ),
+              decoration: BoxDecoration(
+                gradient: AppColors.heroBannerGradient,
               ),
             ),
           ),
@@ -323,7 +319,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                           shape: BoxShape.circle,
                           gradient: _profileImage == null
                               ? const LinearGradient(
-                                  colors: [Color(0xFFA36BAC), Color(0xFF7b2d6e)],
+                                  colors: [AppColors.primary, AppColors.secondary],
                                   begin: Alignment.topLeft,
                                   end: Alignment.bottomRight,
                                 )
@@ -350,7 +346,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                             color: Colors.white,
                           ),
                           child: const Icon(Icons.camera_alt_rounded,
-                              size: 17, color: Color(0xFF7b2d6e)),
+                              size: 17, color: AppColors.primary),
                         ),
                       ),
                     ],
@@ -383,7 +379,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                           // ── Verified phone ────────────────────────────
                           if (widget.phone.isNotEmpty) ...[
                             _sectionLabel('Mobile Number'),
-                            const SizedBox(height: 8),
+                            const SizedBox(height: 6),
                             _VerifiedPhone(phone: widget.phone),
                             const SizedBox(height: 20),
                           ],
@@ -518,7 +514,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                                         width: 18, height: 18,
                                         child: CircularProgressIndicator(
                                             strokeWidth: 2,
-                                            color: Color(0xFF7b2d6e)),
+                                            color: AppColors.primary),
                                       ))
                                   : _codeResult != null
                                       ? Icon(
@@ -566,7 +562,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                                 borderRadius: BorderRadius.circular(12),
                                 border: Border.all(
                                   color: _termsAccepted
-                                      ? const Color(0xFF7b2d6e).withValues(alpha: 0.5)
+                                      ? AppColors.primary.withValues(alpha: 0.5)
                                       : const Color(0xFFE0E0E0),
                                 ),
                               ),
@@ -579,12 +575,12 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                                     margin: const EdgeInsets.only(top: 1),
                                     decoration: BoxDecoration(
                                       color: _termsAccepted
-                                          ? const Color(0xFF7b2d6e)
+                                          ? AppColors.primary
                                           : Colors.transparent,
                                       borderRadius: BorderRadius.circular(6),
                                       border: Border.all(
                                         color: _termsAccepted
-                                            ? const Color(0xFF7b2d6e)
+                                            ? AppColors.primary
                                             : const Color(0xFFBBBBBB),
                                         width: 1.5,
                                       ),
@@ -621,7 +617,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                                 Text('Uploading photo ${(_uploadProgress * 100).toInt()}%',
                                     style: const TextStyle(
                                       fontSize: 12, fontFamily: 'Poppins',
-                                      color: Color(0xFF7b2d6e),
+                                      color: AppColors.primary,
                                     )),
                                 const SizedBox(height: 4),
                                 ClipRRect(
@@ -630,7 +626,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                                     value: _uploadProgress,
                                     backgroundColor: const Color(0xFFF0E8FA),
                                     valueColor: const AlwaysStoppedAnimation(
-                                        Color(0xFF7b2d6e)),
+                                        AppColors.primary),
                                     minHeight: 5,
                                   ),
                                 ),
@@ -644,12 +640,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                             height: 56,
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(16),
-                              gradient: const LinearGradient(
-                                colors: [Color(0xFFA36BAC), Color(0xFF7b2d6e)],
-                              ),
+                              gradient: AppColors.primaryGradient,
                               boxShadow: [
                                 BoxShadow(
-                                  color: const Color(0xFF7b2d6e).withValues(alpha: 0.35),
+                                  color: AppColors.primary.withValues(alpha: 0.35),
                                   blurRadius: 14,
                                   offset: const Offset(0, 5),
                                 ),
@@ -722,20 +716,20 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
     hintText: hint,
     hintStyle: const TextStyle(
         color: Color(0xFFBBBBBB), fontFamily: 'Poppins', fontSize: 14),
-    prefixIcon: Icon(icon, color: const Color(0xFF7b2d6e), size: 20),
+    prefixIcon: Icon(icon, color: AppColors.primary, size: 20),
     filled: true,
     fillColor: const Color(0xFFF8F4FF),
     border: OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide(color: const Color(0xFF7b2d6e).withValues(alpha: 0.2)),
+      borderSide: BorderSide(color: AppColors.primary.withValues(alpha: 0.2)),
     ),
     enabledBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide(color: const Color(0xFF7b2d6e).withValues(alpha: 0.2)),
+      borderSide: BorderSide(color: AppColors.primary.withValues(alpha: 0.2)),
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
-      borderSide: const BorderSide(color: Color(0xFF7b2d6e), width: 1.5),
+      borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
     ),
     errorBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
@@ -765,7 +759,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
             fontSize: 14, color: Color(0xFF1A0A2E), fontFamily: 'Poppins'),
         decoration: _inputDeco(prefix, hint).copyWith(
           suffixIcon: suffix != null
-              ? Icon(suffix, color: const Color(0xFF7b2d6e), size: 18)
+              ? Icon(suffix, color: AppColors.primary, size: 18)
               : null,
         ),
         validator: validator,
@@ -788,7 +782,7 @@ class _SectionHeader extends StatelessWidget {
           color: const Color(0xFFF0E8FA),
           borderRadius: BorderRadius.circular(8),
         ),
-        child: Icon(icon, size: 16, color: const Color(0xFF7b2d6e)),
+        child: Icon(icon, size: 16, color: AppColors.primary),
       ),
       const SizedBox(width: 10),
       Text(label,
@@ -874,17 +868,17 @@ class _GenderChip extends StatelessWidget {
       height: 48,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: selected ? const Color(0xFF7b2d6e) : const Color(0xFFF8F4FF),
+        color: selected ? AppColors.primary : const Color(0xFFF8F4FF),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: selected
-              ? const Color(0xFF7b2d6e)
-              : const Color(0xFF7b2d6e).withValues(alpha: 0.2),
+              ? AppColors.primary
+              : AppColors.primary.withValues(alpha: 0.2),
         ),
         boxShadow: selected
             ? [
                 BoxShadow(
-                  color: const Color(0xFF7b2d6e).withValues(alpha: 0.25),
+                  color: AppColors.primary.withValues(alpha: 0.25),
                   blurRadius: 8,
                   offset: const Offset(0, 3),
                 ),
@@ -896,11 +890,11 @@ class _GenderChip extends StatelessWidget {
         children: [
           Icon(icon,
               size: 16,
-              color: selected ? Colors.white : const Color(0xFF7b2d6e)),
+              color: selected ? Colors.white : AppColors.primary),
           const SizedBox(width: 5),
           Text(label,
               style: TextStyle(
-                color: selected ? Colors.white : const Color(0xFF7b2d6e),
+                color: selected ? Colors.white : AppColors.primary,
                 fontWeight: FontWeight.w600,
                 fontFamily: 'Poppins',
                 fontSize: 13,
@@ -929,17 +923,17 @@ class _BloodGroupPicker extends StatelessWidget {
           width: 60, height: 44,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: isSelected ? const Color(0xFF7b2d6e) : const Color(0xFFF8F4FF),
+            color: isSelected ? AppColors.primary : const Color(0xFFF8F4FF),
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
               color: isSelected
-                  ? const Color(0xFF7b2d6e)
-                  : const Color(0xFF7b2d6e).withValues(alpha: 0.2),
+                  ? AppColors.primary
+                  : AppColors.primary.withValues(alpha: 0.2),
             ),
             boxShadow: isSelected
                 ? [
                     BoxShadow(
-                      color: const Color(0xFF7b2d6e).withValues(alpha: 0.25),
+                      color: AppColors.primary.withValues(alpha: 0.25),
                       blurRadius: 6,
                       offset: const Offset(0, 2),
                     ),
@@ -948,7 +942,7 @@ class _BloodGroupPicker extends StatelessWidget {
           ),
           child: Text(bg,
               style: TextStyle(
-                color: isSelected ? Colors.white : const Color(0xFF7b2d6e),
+                color: isSelected ? Colors.white : AppColors.primary,
                 fontWeight: FontWeight.w700,
                 fontFamily: 'Poppins',
                 fontSize: 13,
