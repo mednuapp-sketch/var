@@ -102,6 +102,18 @@ class AmbulanceRequestService {
         buildUpdate: (d) => {'ambulanceId': ambulanceId, 'status': 'accepted'},
       );
 
+  /// A request the nearest-driver match already pinned to this partner
+  /// (`ambulanceId` set at creation — see
+  /// `onAmbulanceServiceRequestCreated`'s matching logic) arrives with
+  /// nothing to claim. Unlike [accept], `ambulanceId` must stay unchanged for
+  /// this write to pass firestore.rules' "already-owning partner" branch.
+  static Future<void> acceptAssigned(String requestId, String ambulanceId) => _transitionRequest(
+        requestId,
+        precondition: (d) => d['ambulanceId'] == ambulanceId && d['status'] == 'pending',
+        conflictMessage: 'This request is no longer awaiting your response.',
+        buildUpdate: (d) => {'status': 'accepted'},
+      );
+
   /// Declining a request nobody has claimed yet. Stamps `ambulanceId` so the
   /// owning-partner update rule keeps applying to the resulting doc, exactly
   /// like `LabBookingService.rejectBooking` does.

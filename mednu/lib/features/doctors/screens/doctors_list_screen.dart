@@ -964,7 +964,13 @@ class _DoctorCard extends StatelessWidget {
     final hospital = data['hospital'] as String? ??
         data['hospitalAffiliation'] as String? ?? '';
     final isVerified = data['verified'] as bool? ?? true;
-    final profilePath = duration != null ? '/doctors/$docId?duration=$duration' : '/doctors/$docId';
+    final profileParams = <String, String>{
+      if (duration != null) 'duration': '$duration',
+      if (isInPerson) 'mode': 'inperson',
+    };
+    final profilePath = profileParams.isEmpty
+        ? '/doctors/$docId'
+        : '/doctors/$docId?${Uri(queryParameters: profileParams).query}';
 
     return TapScale(
       onTap: () => context.push(profilePath),

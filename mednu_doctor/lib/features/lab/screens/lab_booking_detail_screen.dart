@@ -252,6 +252,11 @@ class _LabBookingDetailScreenState extends ConsumerState<LabBookingDetailScreen>
 
     switch (booking.status) {
       case DiagnosticBookingStatus.pending:
+        // A booking made from this lab's own test catalogue arrives already
+        // pinned (`labId == uid`) — there's nothing to claim, so it needs a
+        // different transition than an unclaimed pool booking (`labId ==
+        // null`) does. See LabBookingService.acceptAssignedBooking.
+        final isAssignedToMe = booking.labId == uid;
         return [
           Row(
             children: [
@@ -265,10 +270,12 @@ class _LabBookingDetailScreenState extends ConsumerState<LabBookingDetailScreen>
               const SizedBox(width: 12),
               Expanded(
                 child: GradientButton(
-                  label: 'Accept Booking',
+                  label: isAssignedToMe ? 'Accept' : 'Accept Booking',
                   isLoading: _busy,
                   onTap: () => _run(
-                    () => LabBookingService.acceptBooking(booking.id, uid),
+                    () => isAssignedToMe
+                        ? LabBookingService.acceptAssignedBooking(booking.id, uid)
+                        : LabBookingService.acceptBooking(booking.id, uid),
                     successMessage: 'Booking accepted',
                   ),
                 ),

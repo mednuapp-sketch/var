@@ -43,10 +43,12 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     return;
   }
 
-  // All other types: show a local heads-up notification so the user is
-  // alerted even when the FCM message has no top-level notification payload
-  // (e.g. data-only messages from Cloud Functions or admin broadcasts).
-  if (title.isNotEmpty || body.isNotEmpty) {
+  // All other types: only manually show a local heads-up notification for
+  // truly data-only messages. Messages that already carry a top-level
+  // `notification` payload (the vast majority — see functions/index.js
+  // _sendPatientNotification) are auto-displayed by the OS in background/
+  // killed state; calling show() again here would double-post the same alert.
+  if (message.notification == null && (title.isNotEmpty || body.isNotEmpty)) {
     await _localNotifications.initialize(
       const InitializationSettings(
         android: AndroidInitializationSettings('@mipmap/ic_launcher'),
@@ -214,7 +216,7 @@ const _preLandingRoutes = <String>{
 /// to be mounted *and* the app to have left the pre-landing routes, then
 /// navigates once. It reduces — it does not eliminate — the drop rate: if
 /// the window elapses (very slow device, or the user is sitting on the
-/// medical-disclaimer / MPIN screen) the link is dropped, but now with an
+/// terms-acceptance / MPIN screen) the link is dropped, but now with an
 /// explicit warning so the failure mode is observable in Crashlytics rather
 /// than silent.
 Future<void> _navigateOnLaunchNotification(Map<String, dynamic> data) async {

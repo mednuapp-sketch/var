@@ -69,6 +69,12 @@ List<NavItem> buildMenuForRole(AppRole role) {
           route: AppRoutes.labSampleCollection,
         ),
         NavItem(
+          label: 'Tests',
+          icon: Icons.biotech_outlined,
+          activeIcon: Icons.biotech_rounded,
+          route: AppRoutes.labTestInventory,
+        ),
+        NavItem(
           label: 'Reports',
           icon: Icons.description_outlined,
           activeIcon: Icons.description_rounded,

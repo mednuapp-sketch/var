@@ -1,4 +1,5 @@
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -11,7 +12,10 @@ class AgoraCallService {
   bool isJoined = false;
   int? remoteUid;
 
-  _QualityTier _currentTier = _QualityTier.medium;
+  // Starts at high, not medium — the adaptive logic below only ever steps
+  // this down in response to actual measured network quality, so starting
+  // conservative just made every call blurrier than the network required.
+  _QualityTier _currentTier = _QualityTier.high;
   bool _isAudioOnlyMode = false;
   bool _userVideoMuted = false;
 
@@ -49,7 +53,7 @@ class AgoraCallService {
 
     await _configureAudio();
     await _engine!.enableVideo();
-    await _applyVideoConfig(_QualityTier.medium);
+    await _applyVideoConfig(_QualityTier.high);
 
     // Dual-stream: let the remote peer request high or low quality as needed
     await _engine!.enableDualStreamMode(enabled: true);
@@ -93,9 +97,15 @@ class AgoraCallService {
           );
         }
       },
-      onTokenPrivilegeWillExpire: (connection, token) {
-        // Fetch new token from server and call _engine!.renewToken(newToken)
-        // when token-based authentication is enabled in production.
+      onTokenPrivilegeWillExpire: (connection, token) async {
+        final channelId = connection.channelId;
+        if (channelId == null || _engine == null) return;
+        try {
+          final newToken = await _fetchToken(channelId);
+          await _engine!.renewToken(newToken);
+        } catch (e) {
+          debugPrint('[Agora Doctor] Token renewal failed: $e');
+        }
       },
     ));
   }
@@ -184,11 +194,23 @@ class AgoraCallService {
     }
   }
 
+  /// Calls the `generateAgoraToken` Cloud Function, which also authorizes
+  /// the request server-side (only the doctor/patient on this consultation
+  /// may obtain a token for its channel).
+  Future<String> _fetchToken(String channelId) async {
+    final result = await FirebaseFunctions.instance
+        .httpsCallable('generateAgoraToken')
+        .call({'channelName': channelId});
+    return result.data['token'] as String;
+  }
+
   Future<void> joinChannel(String channelId) async {
+    if (isJoined || _engine == null) return;
+    final token = await _fetchToken(channelId);
     if (isJoined || _engine == null) return;
     isJoined = true;
     await _engine!.joinChannel(
-      token: '',
+      token: token,
       channelId: channelId,
       uid: 0,
       options: const ChannelMediaOptions(
@@ -226,6 +248,6 @@ class AgoraCallService {
     isJoined = false;
     _isAudioOnlyMode = false;
     _userVideoMuted = false;
-    _currentTier = _QualityTier.medium;
+    _currentTier = _QualityTier.high;
   }
 }

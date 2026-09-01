@@ -5,11 +5,18 @@ import '../models/vehicle_profile.dart';
 import '../services/ambulance_profile_service.dart';
 import '../services/ambulance_request_service.dart';
 
-/// True while the ambulance partner is marked online/available. Local,
-/// session-only state — availability is not persisted to the profile doc
-/// (nothing server-side consumes it yet, and inventing a field for it would
-/// mean a schema change this module isn't allowed to make).
-final ambulanceOnlineProvider = StateProvider<bool>((ref) => true);
+/// True while the ambulance partner is marked online/available. Backed by
+/// `ambulance_profiles/{uid}.isOnline` — written by AmbulancePresenceService
+/// and read by `_findNearestOnlineAmbulance` (functions/index.js) to decide
+/// who's a candidate for a new request. Defaults to false: an ambulance that
+/// has never toggled online (or whose profile hasn't loaded yet) must never
+/// read as available to dispatch.
+final ambulanceOnlineProvider = StreamProvider.autoDispose<bool>((ref) {
+  final uid = AmbulanceProfileService.currentUid;
+  if (uid == null) return Stream.value(false);
+  return AmbulanceProfileService.profileStream(uid)
+      .map((snap) => snap.data()?['isOnline'] as bool? ?? false);
+});
 
 // ── Raw realtime sources ─────────────────────────────────────────────────
 //

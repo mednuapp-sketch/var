@@ -33,7 +33,13 @@ final walletRepositoryProvider = Provider<WalletRepository>((ref) {
   }
 });
 
-final walletSummaryProvider = StreamProvider.autoDispose<WalletSummary>((ref) {
+// Not autoDispose: this is watched by a widget (SharedWalletSummaryCard) that
+// sits under screens with their own frequent setState calls (e.g. the
+// dashboard's online/offline toggle) — a brief tree perturbation from an
+// unrelated ancestor rebuild was enough to drop this provider's last
+// listener, autoDispose it, and restart the stream from `loading` on the
+// very next rebuild, flashing the wallet card back to its loading state.
+final walletSummaryProvider = StreamProvider<WalletSummary>((ref) {
   final uid = DoctorAuthService.currentUid;
   if (uid == null) return Stream.value(WalletSummary.empty());
   return ref.watch(walletRepositoryProvider).streamSummary(uid);
@@ -43,6 +49,6 @@ final walletSummaryProvider = StreamProvider.autoDispose<WalletSummary>((ref) {
 /// list (e.g. a "recent activity" section) without re-deriving loading/error
 /// handling themselves.
 final walletTransactionsProvider =
-    Provider.autoDispose<AsyncValue<List<WalletTransaction>>>((ref) {
+    Provider<AsyncValue<List<WalletTransaction>>>((ref) {
   return ref.watch(walletSummaryProvider).whenData((s) => s.transactions);
 });

@@ -68,12 +68,16 @@ android {
     }
 
     // Strip unused Agora RTC extension modules (beauty/segmentation/spatial
-    // audio/lip-sync/content-inspect/AV1/ffmpeg). None of these are invoked
+    // audio/lip-sync/content-inspect/AV1). None of these are invoked
     // by AgoraCallService (core video/audio calling only), so they're dead
     // weight that otherwise adds ~125-130MB to the APK across all ABIs.
     // libvideo_enc.so/libvideo_dec.so are intentionally NOT excluded — they
     // may be used as a software codec fallback on devices without hardware
     // H.264 support, unlike the named "_extension" modules above.
+    // libagora-ffmpeg.so is NOT excluded either: despite the name, it's a
+    // hard runtime dependency of libagora-rtc-sdk.so itself (dlopen'd on
+    // engine init, not gated behind any feature), so stripping it crashes
+    // the app with UnsatisfiedLinkError the moment a call is joined.
     packaging {
         jniLibs {
             excludes += setOf(
@@ -84,8 +88,7 @@ android {
                 "**/libagora_segmentation_extension.so",
                 "**/libagora_content_inspect_extension.so",
                 "**/libagora_audio_beauty_extension.so",
-                "**/libagora_video_av1_encoder_extension.so",
-                "**/libagora-ffmpeg.so"
+                "**/libagora_video_av1_encoder_extension.so"
             )
         }
     }

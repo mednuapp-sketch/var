@@ -115,6 +115,19 @@ class LabBookingService {
         buildUpdate: (d) => {'labId': labId, 'status': 'accepted'},
       );
 
+  /// A booking made directly from this lab's own test catalogue arrives
+  /// already pinned to it (`labId` set at creation — see
+  /// `onDiagnosticServiceRequestCreated`'s `sourceLabId` handling), so there
+  /// is nothing to claim. Unlike [acceptBooking], `labId` is already correct
+  /// and must stay unchanged for this write to pass firestore.rules'
+  /// "already-owning lab" branch.
+  static Future<void> acceptAssignedBooking(String bookingId, String labId) => _transitionBooking(
+        bookingId,
+        precondition: (d) => d['labId'] == labId && d['status'] == 'pending',
+        conflictMessage: 'This booking is no longer awaiting acceptance.',
+        buildUpdate: (d) => {'status': 'accepted'},
+      );
+
   static Future<void> rejectBooking(String bookingId, String labId) => _transitionBooking(
         bookingId,
         // A lab claiming-then-rejecting still needs labId set so the rule

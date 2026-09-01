@@ -10,6 +10,7 @@ const { getMessaging } = require("firebase-admin/messaging");
 const { getAuth } = require("firebase-admin/auth");
 const Razorpay = require("razorpay");
 const crypto = require("crypto");
+const { RtcTokenBuilder, RtcRole } = require("agora-token");
 
 initializeApp();
 
@@ -2871,6 +2872,20 @@ function _applyCoupon({ couponSnap, redemptionSnap, serviceType, orderAmount, no
   return { discount, isFreeConsultation, discountType };
 }
 
+// ── OP/Rx reference number generator ──────────────────────────────────────────
+// Mirrors the format the doctor app's write_prescription_screen.dart already
+// uses for prescriptions ('MN-YYYYMMDD-XXXXXX') so an in-person appointment
+// gets a real, unique reference the moment it's booked instead of the client
+// falling back to a static 'RX-0000' placeholder before any prescription
+// exists.
+const _RX_ID_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+function _generateOpRxId() {
+  const now = new Date();
+  const date = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
+  const suffix = Array.from({ length: 6 }, () => _RX_ID_CHARS[crypto.randomInt(_RX_ID_CHARS.length)]).join("");
+  return `MN-${date}-${suffix}`;
+}
+
 // ── Unified payment capture ───────────────────────────────────────────────────
 //
 // Replaces every screen's own hand-rolled "write a payments/booking doc after
@@ -3066,8 +3081,12 @@ exports.capturePayment = onCall({ enforceAppCheck: true }, async (request) => {
         });
       }
 
+      const isInPersonAppointment =
+        bookingCollection === "appointments" && bookingData.consultationType === "In-Person";
+
       tx.set(bookingRef, {
         ...bookingData,
+        ...(isInPersonAppointment ? { rxId: _generateOpRxId() } : {}),
         patientId: uid,
         paymentId,
         paymentStatus: "paid",
@@ -3550,6 +3569,57 @@ async function _transitionPaymentToEligible(db, { sourceCollection, sourceId, pr
     throw err;
   }
 }
+
+// ── New Appointment Alert ─────────────────────────────────────────────────────
+//
+// `appointments` was the only booking collection with no onCreate trigger
+// (compare onDiagnosticServiceRequestCreated etc.) — doctors got no alert at
+// all when a new video/in-person appointment was booked. Writes into
+// doctor_notifications/{doctorId}/items, the exact collection/schema
+// NotificationService.streamForDoctor already reads (mednu_doctor
+// notification_service.dart), plus an FCM push mirroring onNewConsultation's
+// token lookup above so the doctor is alerted even with the app closed.
+exports.onAppointmentCreated = onDocumentCreated(
+  "appointments/{appointmentId}",
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+    const data = snap.data();
+    const doctorId = data.doctorId;
+    if (!doctorId) return;
+
+    const db = getFirestore();
+    const appointmentId = event.params.appointmentId;
+    const isInPerson = data.consultationType === "In-Person";
+    const slot = [data.date, data.time].filter(Boolean).join(" ");
+    const title = "New Appointment Booked";
+    const body = `${data.patientName || "A patient"} booked ${isInPerson ? "an in-person" : "a video"} appointment${slot ? ` for ${slot}` : ""}.`;
+
+    await db.collection("doctor_notifications").doc(doctorId).collection("items").add({
+      type: "appointment",
+      title, body,
+      createdAt: FieldValue.serverTimestamp(),
+      deliverAt: FieldValue.serverTimestamp(),
+      isRead: false,
+      payload: { appointmentId, consultationType: data.consultationType || "Video", rxId: data.rxId || null },
+    }).catch((err) => console.error("Failed to write doctor_notifications:", err.message));
+
+    const doctorDoc = await db.collection("doctors").doc(doctorId).get();
+    const fcmToken = doctorDoc.exists ? doctorDoc.data().fcmToken : null;
+    if (!fcmToken) return;
+    try {
+      await getMessaging().send({
+        token: fcmToken,
+        notification: { title, body },
+        data: { type: "new_appointment", appointmentId, doctorId },
+        android: { priority: "high" },
+        apns: { payload: { aps: { sound: "default" } } },
+      });
+    } catch (err) {
+      console.error("FCM send failed for new appointment:", err.message);
+    }
+  }
+);
 
 // ── Doctor vertical parity ────────────────────────────────────────────────────
 //
@@ -4145,6 +4215,24 @@ exports.onDiagnosticServiceRequestCreated = onDocumentCreated(
       return;
     }
 
+    // A booking made from a specific lab's own test catalogue (see the Lab
+    // Test Catalogue block below) carries that lab's id in serviceDetails —
+    // pin it directly instead of dropping into the unclaimed pool, but only
+    // if that lab is still active; a lab that got suspended between the
+    // patient browsing and checking out falls back to the pool rather than
+    // silently losing the booking.
+    let pinnedLabId = null;
+    if (details.sourceLabId) {
+      const labSnap = await db.collection("lab_profiles").doc(details.sourceLabId).get();
+      if (labSnap.exists && labSnap.data().status === "active") {
+        pinnedLabId = details.sourceLabId;
+      } else {
+        _logLab("WARNING", "source_lab_inactive_falling_back_to_pool", {
+          requestId, sourceLabId: details.sourceLabId,
+        });
+      }
+    }
+
     await bookingRef.set({
       sourceRequestId: requestId,
       type: data.type,
@@ -4158,7 +4246,7 @@ exports.onDiagnosticServiceRequestCreated = onDocumentCreated(
       preferredDate: data.preferredDate || "",
       preferredTime: data.preferredTime || "",
       notes: data.notes || "",
-      labId: null,
+      labId: pinnedLabId,
       status: "pending",
       technicianId: null,
       technicianName: null,
@@ -4368,6 +4456,105 @@ exports.cleanupStaleDiagnosticBookings = onSchedule({ schedule: "every 60 minute
   const { updated, skipped } = await _expireStaleDocs(staleSnap.docs, { status: "expired", updatedAt: FieldValue.serverTimestamp() });
   _logLab("INFO", "stale_cleanup_expired", { count: updated, skippedConcurrentlyModified: skipped });
 });
+
+// ── 5) Lab test catalogue mirror ─────────────────────────────────────────────
+// Same shape as Pharmacy's inventory -> medicines_catalogue mirror below: a
+// lab's own tests, private at `lab_profiles/{labId}/tests`, get copied into
+// the public `lab_tests_catalogue` only while that lab is `active`. This is
+// what lets a patient browse and book a SPECIFIC lab's test directly (see
+// `sourceLabId` handling in onDiagnosticServiceRequestCreated above) instead
+// of only ever seeing the admin-curated, lab-agnostic `services` catalogue.
+function _labTestCatalogueRef(db, labId, testId) {
+  return db.collection("lab_tests_catalogue").doc(`ltinv_${labId}_${testId}`);
+}
+
+function _labTestCatalogueDoc(item, labId, testId, labName) {
+  return {
+    name: item.name || "",
+    category: item.category || "",
+    price: item.price ?? 0,
+    duration: item.duration || "",
+    homeCollectionAvailable: item.homeCollectionAvailable === true,
+    isActive: item.isAvailable === true,
+    sourceLabId: labId,
+    sourceTestId: testId,
+    labName: labName || "",
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+}
+
+exports.onLabTestInventoryWrite = onDocumentWritten(
+  "lab_profiles/{labId}/tests/{testId}",
+  async (event) => {
+    const { labId, testId } = event.params;
+    const db = getFirestore();
+    const catalogueRef = _labTestCatalogueRef(db, labId, testId);
+
+    const after = event.data.after;
+    if (!after.exists) {
+      await catalogueRef.delete().catch(() => {});
+      _logLab("INFO", "test_mirror_deleted", { labId, testId });
+      return;
+    }
+
+    const labSnap = await db.collection("lab_profiles").doc(labId).get();
+    const labData = labSnap.exists ? labSnap.data() : null;
+
+    if (!labData || labData.status !== "active") {
+      // Pending/suspended labs keep their private test list but stay out of
+      // the patient catalogue until (re)approved — the status-change sweep
+      // below catches every existing test on that transition.
+      await catalogueRef.delete().catch(() => {});
+      return;
+    }
+
+    const item = after.data();
+    await catalogueRef.set(
+      _labTestCatalogueDoc(item, labId, testId, labData.name),
+      { merge: true },
+    );
+    _logLab("INFO", "test_mirror_synced", { labId, testId, isActive: item.isAvailable === true });
+  }
+);
+
+// When a lab's verification status flips, sweep every test it already has
+// in/out of the patient catalogue — otherwise a test added while `pending`
+// (or hidden after being suspended) would only reappear the next time the
+// lab happened to edit that specific test again.
+exports.onLabProfileStatusChangeForTests = onDocumentUpdated(
+  "lab_profiles/{labId}",
+  async (event) => {
+    const before = event.data.before.data();
+    const after = event.data.after.data();
+    if (before.status === after.status) return;
+
+    const labId = event.params.labId;
+    const db = getFirestore();
+    const becameActive = after.status === "active";
+
+    const testsSnap = await db
+      .collection("lab_profiles").doc(labId).collection("tests")
+      .get();
+    if (testsSnap.empty) return;
+
+    const batchSize = 400; // Firestore batch write limit is 500.
+    for (let i = 0; i < testsSnap.docs.length; i += batchSize) {
+      const batch = db.batch();
+      for (const doc of testsSnap.docs.slice(i, i + batchSize)) {
+        const ref = _labTestCatalogueRef(db, labId, doc.id);
+        if (becameActive) {
+          batch.set(ref, _labTestCatalogueDoc(doc.data(), labId, doc.id, after.name), { merge: true });
+        } else {
+          batch.delete(ref);
+        }
+      }
+      await batch.commit();
+    }
+    _logLab("INFO", becameActive ? "test_bulk_synced" : "test_bulk_hidden", {
+      labId, count: testsSnap.size,
+    });
+  }
+);
 
 // ── 4b) Past-due appointment cleanup ─────────────────────────────────────────
 // A confirmed appointment whose scheduled date+time has passed with nobody
@@ -5201,6 +5388,55 @@ function _logAmbulance(severity, event, data = {}) {
   }
 }
 
+// Great-circle distance in km — used to pick the nearest online ambulance to
+// a pickup point. Deliberately not a Firestore geo-range query: the online
+// set is small enough (real-world concurrent online ambulances per city) that
+// fetching it and comparing in-process is simpler and avoids maintaining a
+// geohash index just for this.
+function _haversineKm(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// An ambulance beyond this is not a real candidate to dispatch, no matter how
+// few are online — better to fall into the open pool (any active partner can
+// still claim it, e.g. one that just went online without a location fix yet)
+// than to auto-assign a unit 80 km away from a genuine emergency.
+const _AMBULANCE_MAX_MATCH_RADIUS_KM = 25;
+
+// Finds the nearest online, active ambulance to (lat, lng), or null if none
+// is online/located/within radius. `excludeIds` lets the stale-assignment
+// reassignment sweep below skip a driver who already timed out on this
+// request once.
+async function _findNearestOnlineAmbulance(db, lat, lng, excludeIds = []) {
+  if (typeof lat !== "number" || typeof lng !== "number") return null;
+
+  const snap = await db.collection("ambulance_profiles")
+    .where("status", "==", "active")
+    .where("isOnline", "==", true)
+    .limit(200) // bounded — see comment on _haversineKm above.
+    .get();
+
+  let best = null;
+  let bestDistance = Infinity;
+  for (const doc of snap.docs) {
+    if (excludeIds.includes(doc.id)) continue;
+    const loc = doc.data().location; // GeoPoint, written by AmbulanceLocationService
+    if (!loc) continue;
+    const distance = _haversineKm(lat, lng, loc.latitude, loc.longitude);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = doc.id;
+    }
+  }
+  return bestDistance <= _AMBULANCE_MAX_MATCH_RADIUS_KM ? best : null;
+}
+
 // ── 1) Mirror new ambulance service_requests into ambulance_requests ────────
 exports.onAmbulanceServiceRequestCreated = onDocumentCreated(
   "service_requests/{requestId}",
@@ -5225,6 +5461,16 @@ exports.onAmbulanceServiceRequestCreated = onDocumentCreated(
       return;
     }
 
+    // Nearest-driver matching: the patient's pickup fix (see PreciseAddress.
+    // toBookingMap() in the Flutter app) travels through as
+    // serviceDetails.locationData.{lat,lng}. Pin the request straight to the
+    // nearest online ambulance instead of dropping it in the open pool — a
+    // stale-assignment sweep (reassignStaleAmbulanceAssignments) un-pins it
+    // back to the pool if that driver doesn't respond in time.
+    const pickupLat = details.locationData?.lat;
+    const pickupLng = details.locationData?.lng;
+    const matchedAmbulanceId = await _findNearestOnlineAmbulance(db, pickupLat, pickupLng);
+
     await requestRef.set({
       sourceRequestId: requestId,
       type: "ambulance",
@@ -5233,17 +5479,97 @@ exports.onAmbulanceServiceRequestCreated = onDocumentCreated(
       patientName: data.patientName || "Patient",
       patientPhone: data.patientPhone || "",
       pickupAddress: data.address || "",
+      pickupLat: pickupLat ?? null,
+      pickupLng: pickupLng ?? null,
       dropAddress: details.dropAddress || "",
       distanceKm: details.distanceKm ?? 0,
       etaMinutes: details.etaMinutes ?? 0,
       fare: data.amount ?? details.fare ?? 0,
       emergencyType: _ambulanceEmergencyType(details.ambulanceType),
-      ambulanceId: null,
+      ambulanceId: matchedAmbulanceId,
+      matchAttempts: matchedAmbulanceId ? [matchedAmbulanceId] : [],
       requestedAt: data.createdAt || FieldValue.serverTimestamp(),
       createdAt: data.createdAt || FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     });
-    _logAmbulance("INFO", "ambulance_request_created", { requestId });
+
+    // `onAmbulanceRequestStatusChange` (the onDocumentUpdated mirror below)
+    // is what normally copies `ambulanceId` onto `service_requests` as
+    // `assignedTo` — but it only fires on later UPDATES to `ambulance_requests`,
+    // never on this initial create. Without this, a request matched here
+    // would never expose which ambulance to live-track until some later
+    // event (e.g. a stale reassignment) happened to touch `ambulanceId`
+    // again. Mirrored directly here instead so the patient app can find the
+    // right `ambulance_profiles/{assignedTo}` doc to stream from the moment
+    // the match happens, not only after the driver accepts.
+    if (matchedAmbulanceId) {
+      await db.collection("service_requests").doc(requestId).update({
+        assignedTo: matchedAmbulanceId,
+      }).catch((err) => {
+        _logAmbulance("WARNING", "initial_assignedTo_mirror_failed", { requestId, error: err.message });
+      });
+    }
+
+    _logAmbulance("INFO", "ambulance_request_created", { requestId, matchedAmbulanceId });
+  }
+);
+
+// ── 1b) Reassign a matched-but-unanswered request ────────────────────────────
+// A request pinned to the nearest driver above still needs that driver to
+// actually tap Accept. If they don't within the timeout — asleep, busy,
+// phone face-down — the patient must not be stuck waiting on one driver
+// forever. Runs every minute (an emergency queue can't wait an hour like
+// Lab/Pharmacy's stale cleanup does): tries the next-nearest online driver,
+// excluding everyone already tried on this request, and only falls back to
+// the fully-open pool once no more online candidates exist.
+const _AMBULANCE_MATCH_TIMEOUT_SECONDS = 45;
+
+exports.reassignStaleAmbulanceAssignments = onSchedule(
+  { schedule: "every 1 minutes", timeZone: "UTC" },
+  async () => {
+    const db = getFirestore();
+    const cutoff = Timestamp.fromDate(new Date(Date.now() - _AMBULANCE_MATCH_TIMEOUT_SECONDS * 1000));
+
+    // Single-field equality filter only (auto-indexed by Firestore) — the
+    // `ambulanceId != null` and staleness checks happen in-process below,
+    // deliberately avoiding a `!=` query, which would need its own composite
+    // index and has awkward interactions with the other filters here.
+    const pendingSnap = await db.collection("ambulance_requests")
+      .where("status", "==", "pending")
+      .limit(200)
+      .get();
+
+    if (pendingSnap.empty) return;
+
+    let reassigned = 0;
+    let openedToPool = 0;
+    let skipped = 0;
+
+    for (const doc of pendingSnap.docs) {
+      const data = doc.data();
+      if (!data.ambulanceId) continue; // already open-pool — nothing to reassign.
+      const updatedAt = data.updatedAt?.toDate?.() ?? data.createdAt?.toDate?.() ?? new Date(0);
+      if (updatedAt > cutoff.toDate()) continue; // matched recently — not stale yet.
+
+      const tried = Array.isArray(data.matchAttempts) ? data.matchAttempts : [];
+      const next = await _findNearestOnlineAmbulance(db, data.pickupLat, data.pickupLng, tried);
+
+      try {
+        await doc.ref.update(
+          {
+            ambulanceId: next,
+            matchAttempts: next ? [...tried, next] : tried,
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          { lastUpdateTime: doc.updateTime }, // same lost-update guard as _expireStaleDocs.
+        );
+        if (next) reassigned++; else openedToPool++;
+      } catch {
+        skipped++; // driver acted on it between the query and this write — leave it alone.
+      }
+    }
+
+    _logAmbulance("INFO", "stale_assignment_sweep", { reassigned, openedToPool, skippedConcurrentlyModified: skipped });
   }
 );
 
@@ -5540,6 +5866,23 @@ exports.onCaregiverServiceRequestCreated = onDocumentCreated(
       ? Math.round(shiftHours * 60)
       : 60;
 
+    // A visit booked from a specific caregiver's own profile card (see
+    // caregivers_screen.dart's `sourceCaregiverId`) pins straight to them
+    // instead of dropping into the unclaimed pool — same reasoning as Lab's
+    // `sourceLabId` handling. Falls back to the pool if that caregiver is no
+    // longer active by the time the patient checks out.
+    let pinnedCaregiverId = null;
+    if (details.sourceCaregiverId) {
+      const caregiverSnap = await db.collection("caregiver_profiles").doc(details.sourceCaregiverId).get();
+      if (caregiverSnap.exists && caregiverSnap.data().status === "active") {
+        pinnedCaregiverId = details.sourceCaregiverId;
+      } else {
+        _logCaregiver("WARNING", "source_caregiver_inactive_falling_back_to_pool", {
+          requestId, sourceCaregiverId: details.sourceCaregiverId,
+        });
+      }
+    }
+
     const batch = db.batch();
     batch.set(visitRef, {
       sourceRequestId: requestId,
@@ -5554,7 +5897,7 @@ exports.onCaregiverServiceRequestCreated = onDocumentCreated(
       durationMinutes,
       fare: data.amount ?? 0,
       photoUrls: [],
-      caregiverId: null,
+      caregiverId: pinnedCaregiverId,
       createdAt: data.createdAt || FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     });
@@ -5571,6 +5914,20 @@ exports.onCaregiverServiceRequestCreated = onDocumentCreated(
     });
 
     await batch.commit();
+
+    // Same gap as Ambulance's initial match: `onCaregiverVisitStatusChange`
+    // (the onDocumentUpdated mirror below) only fires on later UPDATES to
+    // caregiver_visits, never on this create — so a caregiver pinned here
+    // would never show up as `assignedTo` on the patient's own
+    // `service_requests` doc without this direct write.
+    if (pinnedCaregiverId) {
+      await db.collection("service_requests").doc(requestId).update({
+        assignedTo: pinnedCaregiverId,
+      }).catch((err) => {
+        _logCaregiver("WARNING", "initial_assignedTo_mirror_failed", { requestId, error: err.message });
+      });
+    }
+
     _logCaregiver("INFO", "caregiver_visit_created", { requestId, sourceType: data.type });
   }
 );
@@ -5718,6 +6075,74 @@ exports.cleanupStaleCaregiverVisits = onSchedule({ schedule: "every 60 minutes",
   const { updated, skipped } = await _expireStaleDocs(staleSnap.docs, { status: "missed", updatedAt: FieldValue.serverTimestamp() });
   _logCaregiver("INFO", "stale_cleanup_missed", { count: updated, skippedConcurrentlyModified: skipped });
 });
+
+// ── Profile visibility mirror ────────────────────────────────────────────────
+// `caregivers_screen.dart` (mednu) browses a top-level `caregivers` collection
+// that, before this, nothing ever wrote — approval only sent a push
+// notification. Mirrors `caregiver_profiles/{uid}` into `caregivers/{uid}`
+// (same doc id, 1:1 — no subcollection involved, unlike Lab/Pharmacy's
+// per-item inventory) whenever it's active, so a real registered-and-approved
+// caregiver actually shows up to patients, and disappears again if suspended.
+//
+// Field mapping is lossy in one direction: `caregiver_profiles` has no
+// `gender`/`location` fields at all (never collected at registration), so
+// those are left blank — the patient screen already renders gracefully
+// without them, and nothing here fabricates a value data doesn't support.
+// `type` (Nurse/Maid/...) is approximated from the first entry in
+// `specialties` for the same reason — there's no dedicated role field.
+function _caregiverListingDoc(profile, existingCreatedAt) {
+  const specialties = Array.isArray(profile.specialties) ? profile.specialties : [];
+  const hourlyRate = profile.hourlyRate ?? 0;
+  return {
+    name: profile.name || "Caregiver",
+    photoUrl: profile.photoUrl || "",
+    type: specialties.length > 0 ? specialties[0] : "Caregiver",
+    specialty: specialties.length > 0 ? specialties.join(", ") : "Home Care",
+    experience: `${profile.experienceYears ?? 0} yrs`,
+    ratePerDay: Math.round(hourlyRate * 8),
+    ratePerHour: hourlyRate,
+    ratePer12Hr: Math.round(hourlyRate * 12),
+    rating: profile.rating ?? 0,
+    isVerified: profile.documentsVerified === true,
+    isActive: true,
+    createdAt: existingCreatedAt || FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+}
+
+exports.onCaregiverProfileWriteForVisibility = onDocumentWritten(
+  "caregiver_profiles/{caregiverId}",
+  async (event) => {
+    const caregiverId = event.params.caregiverId;
+    const db = getFirestore();
+    const listingRef = db.collection("caregivers").doc(caregiverId);
+
+    const after = event.data.after;
+    if (!after.exists) {
+      await listingRef.delete().catch(() => {});
+      _logCaregiver("INFO", "listing_mirror_deleted", { caregiverId });
+      return;
+    }
+
+    const profile = after.data();
+    if (profile.status !== "active") {
+      // Pending/suspended caregivers stay out of the patient list until
+      // (re)approved. `caregivers.isActive` is redundant with the doc simply
+      // not existing, but keeping the field lets the patient query stay a
+      // plain `where('isActive', '==', true)` if this ever needs to become a
+      // sweep-based mirror (subcollection-style) instead of 1:1 later.
+      await listingRef.delete().catch(() => {});
+      return;
+    }
+
+    const existing = await listingRef.get();
+    await listingRef.set(
+      _caregiverListingDoc(profile, existing.exists ? existing.data().createdAt : null),
+      { merge: true },
+    );
+    _logCaregiver("INFO", "listing_mirror_synced", { caregiverId });
+  }
+);
 
 // ══════════════════════════════════════════════════════════════════════════
 // ── Physiotherapy & Counselling modules ─────────────────────────────────────
@@ -6116,15 +6541,77 @@ exports.cleanupStaleCounsellingSessions = onSchedule({ schedule: "every 60 minut
 // ══════════════════════════════════════════════════════════════════════════
 // ── Nutrition partner access ─────────────────────────────────────────────────
 //
-// Unlike every module above, Nutrition needs NO mirror: the patient app
-// writes `nutrition_appointments` directly (mednu/lib/features/services/
-// nutrition/services/nutrition_service.dart) with `nutritionistId` already
-// set at booking time — the patient picks a specific nutritionist up front,
-// same pre-assignment model as a doctor appointment. The Partner app reads/
-// writes that collection directly; nothing to mirror or trigger here. (The
-// corresponding firestore.rules gap — nutritionists had no read/update
-// access to their own appointments at all — is closed in firestore.rules,
-// not here.)
+// Booking itself still needs no mirror: the patient app writes
+// `nutrition_appointments` directly (mednu/lib/features/services/nutrition/
+// services/nutrition_service.dart) with `nutritionistId` already set at
+// booking time — the patient picks a specific nutritionist up front, same
+// pre-assignment model as a doctor appointment. The Partner app reads/writes
+// that collection directly; nothing to mirror or trigger there.
+//
+// What DOES need a mirror now: registration. Nutritionist used to be fully
+// admin-provisioned (no `nutritionist_profiles` collection existed at all —
+// an admin hand-created both the role grant and the `nutritionists/{uid}`
+// catalogue entry). Nutritionist is now a normal self-serve role like Lab/
+// Pharmacy/Caregiver: register -> `nutritionist_profiles/{uid}` (status
+// 'pending') -> admin approves -> this mirror publishes it into the
+// patient-facing `nutritionists/{uid}` catalogue. Same 1:1-doc mirror shape
+// as `onCaregiverProfileWriteForVisibility` (no subcollection involved).
+function _nutritionistListingDoc(profile, existingCreatedAt) {
+  return {
+    name: profile.name || "Nutritionist",
+    qualification: profile.qualification || "",
+    specialization: profile.specialization || "",
+    experienceYears: profile.experienceYears ?? 0,
+    bio: profile.bio || "",
+    consultationFee: profile.consultationFee ?? 0,
+    city: profile.city || "",
+    rating: profile.rating ?? 0,
+    reviewCount: profile.reviewCount ?? 0,
+    isAvailable: true,
+    isOnlineAvailable: true,
+    isInPersonAvailable: false,
+    languages: [],
+    expertiseAreas: [],
+    availableDays: [],
+    slots: {},
+    createdAt: existingCreatedAt || FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+}
+
+exports.onNutritionistProfileWriteForVisibility = onDocumentWritten(
+  "nutritionist_profiles/{nutritionistId}",
+  async (event) => {
+    const nutritionistId = event.params.nutritionistId;
+    const db = getFirestore();
+    const listingRef = db.collection("nutritionists").doc(nutritionistId);
+
+    const after = event.data.after;
+    if (!after.exists) {
+      await listingRef.delete().catch(() => {});
+      return;
+    }
+
+    const profile = after.data();
+    if (profile.status !== "active") {
+      await listingRef.delete().catch(() => {});
+      return;
+    }
+
+    const existing = await listingRef.get();
+    await listingRef.set(
+      _nutritionistListingDoc(profile, existing.exists ? existing.data().createdAt : null),
+      { merge: true },
+    );
+  }
+);
+
+exports.onNutritionistProfileApproved = onDocumentUpdated("nutritionist_profiles/{uid}", async (event) => {
+  await _notifyPartnerApproved(
+    getMessaging(), "nutritionist", event.params.uid,
+    event.data.before.data(), event.data.after.data(),
+  );
+});
 // ══════════════════════════════════════════════════════════════════════════
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -6390,4 +6877,56 @@ exports.onCaregiverProfileApproved = onDocumentUpdated("caregiver_profiles/{uid}
     getMessaging(), "caregiver", event.params.uid,
     event.data.before.data(), event.data.after.data(),
   );
+});
+
+// ── Agora RTC token ───────────────────────────────────────────────────────
+// The App ID is public (embedded in both client apps' AgoraCallService); the
+// App Certificate is the actual secret that must never leave the server, so
+// it's read from AGORA_APP_CERTIFICATE at runtime — set it the same way
+// RAZORPAY_KEY_SECRET is already configured for this project.
+const AGORA_APP_ID = "b0143ffdfef74f399a420c7cd73c9e8b";
+
+exports.generateAgoraToken = onCall({ secrets: ["AGORA_APP_CERTIFICATE"] }, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Sign in to continue.");
+
+  const { channelName } = request.data || {};
+  if (typeof channelName !== "string" || !channelName.trim()) {
+    throw new HttpsError("invalid-argument", "channelName is required.");
+  }
+  const consultationId = channelName.trim();
+
+  // Both apps use the consultation's own Firestore doc id as the Agora
+  // channel name, so this doubles as the join authorization check — only
+  // the doctor or patient actually on this consultation may obtain a token
+  // for it. Without this, any signed-in user who learned/guessed a
+  // consultationId could join someone else's call.
+  const db = getFirestore();
+  const consultSnap = await db.collection("consultations").doc(consultationId).get();
+  if (!consultSnap.exists) {
+    throw new HttpsError("not-found", "Consultation not found.");
+  }
+  const consult = consultSnap.data();
+  if (consult.doctorId !== uid && consult.patientId !== uid) {
+    throw new HttpsError("permission-denied", "You are not a participant in this consultation.");
+  }
+
+  const appCertificate = process.env.AGORA_APP_CERTIFICATE;
+  if (!appCertificate) {
+    throw new HttpsError("failed-precondition", "Video calling is not configured.");
+  }
+
+  // Both apps join with uid: 0 (Agora auto-assigns an internal numeric uid),
+  // so the token must be issued for uid 0 too — a token bound to any other
+  // uid is rejected by Agora at join time.
+  const expirationInSeconds = 3600;
+  const currentTs = Math.floor(Date.now() / 1000);
+  const privilegeExpiredTs = currentTs + expirationInSeconds;
+
+  const token = RtcTokenBuilder.buildTokenWithUid(
+    AGORA_APP_ID, appCertificate, consultationId, 0,
+    RtcRole.PUBLISHER, privilegeExpiredTs, privilegeExpiredTs,
+  );
+
+  return { token, expiresAt: privilegeExpiredTs };
 });

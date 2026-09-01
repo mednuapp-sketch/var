@@ -20,6 +20,7 @@ import '../../caregiver/services/caregiver_profile_service.dart';
 import '../../counselling/services/counselling_profile_service.dart';
 import '../../lab/models/lab_profile.dart';
 import '../../lab/services/lab_profile_service.dart';
+import '../../nutrition/services/nutritionist_profile_service.dart';
 import '../../pharmacy/models/pharmacy_profile.dart';
 import '../../pharmacy/services/pharmacy_profile_service.dart';
 import '../../physiotherapy/services/physio_profile_service.dart';
@@ -299,12 +300,18 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
           hourlyRate: num.tryParse(_hourlyRateCtrl.text.trim()) ?? 0,
         );
       case AppRole.nutritionist:
+        return NutritionistProfileService.createProfile(
+          uid: uid,
+          name: _nameCtrl.text.trim(),
+          qualification: _certificationsCtrl.text.trim(),
+          specialization: _specialtiesCtrl.text.trim(),
+          consultationFee: num.tryParse(_hourlyRateCtrl.text.trim()) ?? 0,
+        );
       case AppRole.doctor:
       case AppRole.admin:
-        // Unreachable: the role-select screen never routes these here (see
-        // PartnerRoleSelectScreen._allSelectableRoles — Nutritionist is
-        // deliberately excluded from self-registration), and the router
-        // falls back to Doctor registration for AppRole.doctor.
+        // Unreachable: the role-select screen never routes AppRole.doctor
+        // here, and the router falls back to Doctor registration for it.
+        // AppRole.admin has no self-registration path at all.
         return Future.value();
     }
   }
@@ -527,6 +534,21 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
               keyboardType: TextInputType.number),
         ];
       case AppRole.nutritionist:
+        return [
+          _field(_nameCtrl, 'Full Name', Icons.person_outline),
+          const SizedBox(height: 14),
+          _field(_certificationsCtrl, 'Qualifications (e.g. RD, MSc Nutrition)',
+              Icons.workspace_premium_outlined,
+              maxLines: 2, required: false),
+          const SizedBox(height: 14),
+          _field(_specialtiesCtrl, 'Specialization (e.g. Weight Management)',
+              Icons.restaurant_menu_outlined,
+              maxLines: 2, required: false),
+          const SizedBox(height: 14),
+          _field(_hourlyRateCtrl, 'Consultation Fee (₹)',
+              Icons.currency_rupee_rounded,
+              keyboardType: TextInputType.number),
+        ];
       case AppRole.doctor:
       case AppRole.admin:
         return const [];

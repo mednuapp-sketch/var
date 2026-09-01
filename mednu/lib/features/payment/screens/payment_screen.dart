@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -18,6 +19,24 @@ import '../../wallet/wallet_provider.dart';
 const _kGreen = Color(0xFF2E7D32);
 const _kBlue = Color(0xFF1565C0);
 const _kPurple = Color(0xFF6A1B9A);
+
+/// Mirrors `_generateOpRxId` in functions/index.js and `_generateRxId` in
+/// the doctor app's write_prescription_screen.dart — same 'MN-YYYYMMDD-
+/// XXXXXX' format. Needed here too because `_confirmWithoutPayment` below
+/// writes the booking doc directly from the client (whenever
+/// kRequirePayment is false) instead of going through the capturePayment
+/// Cloud Function where the server-side generator normally runs.
+String _generateOpRxId() {
+  final now = DateTime.now();
+  final date = '${now.year}'
+      '${now.month.toString().padLeft(2, '0')}'
+      '${now.day.toString().padLeft(2, '0')}';
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  final rng = Random.secure();
+  final suffix =
+      List.generate(6, (_) => chars[rng.nextInt(chars.length)]).join();
+  return 'MN-$date-$suffix';
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  PaymentScreen
@@ -197,15 +216,18 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen>
     return ((result.data as Map?) ?? const {}).cast<String, dynamic>();
   }
 
-  // ── Debug-only test skip ────────────────────────────────
-  // kDebugMode is compiled out of release/profile builds entirely — this
-  // whole path (and the button that triggers it) is unreachable in anything
-  // that ships to a real user or an app store. Writes the booking doc(s)
-  // directly, deliberately WITHOUT a paymentId, so the settlement engine
-  // (which only acts on payments a paymentId points to) never sees these —
-  // no fake payments/wallet_ledger/commission entries, nothing for the real
-  // Settlement Dashboard to pick up.
-  Future<void> _skipPaymentForTesting() async {
+  // ── Booking without a real charge ───────────────────────
+  // Used unconditionally whenever `kRequirePayment` is false (see
+  // payment_config.dart), and also wired to the debug-only "Skip Payment"
+  // button so QA can still bypass a live gateway once `kRequirePayment` is
+  // flipped back on. Writes the booking doc(s) directly, deliberately
+  // WITHOUT a paymentId, so the settlement engine (which only acts on
+  // payments a paymentId points to) never sees these — no fake
+  // payments/wallet_ledger/commission entries, nothing for the real
+  // Settlement Dashboard to pick up. The doc shape otherwise matches exactly
+  // what `capturePayment` writes server-side (functions/index.js), so it
+  // reflects in MedNU Doctor/Service the same way a paid booking would.
+  Future<void> _confirmWithoutPayment() async {
     if (_isProcessing) return;
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) {
@@ -218,11 +240,15 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen>
       if (widget.cartItems != null) {
         final payments = <Map<String, dynamic>>[];
         for (final item in widget.cartItems!) {
+          final itemBookingData = (item['bookingData'] as Map).cast<String, dynamic>();
+          final isInPersonAppointment = item['bookingCollection'] == 'appointments' &&
+              itemBookingData['consultationType'] == 'In-Person';
           final ref = db.collection(item['bookingCollection'] as String).doc();
           await ref.set({
-            ...(item['bookingData'] as Map).cast<String, dynamic>(),
+            ...itemBookingData,
+            if (isInPersonAppointment) 'rxId': _generateOpRxId(),
             'patientId': uid,
-            'paymentStatus': 'test_mode_skipped',
+            'paymentStatus': 'not_required',
             'createdAt': FieldValue.serverTimestamp(),
             'updatedAt': FieldValue.serverTimestamp(),
           });
@@ -235,24 +261,27 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen>
         }
         if (!mounted) return;
         setState(() => _isProcessing = false);
-        _showSuccessSheet('TEST-$_idempotencyKey', cartPayments: payments);
+        _showSuccessSheet('NOPAY-$_idempotencyKey', cartPayments: payments);
       } else {
+        final isInPersonAppointment = widget.bookingCollection == 'appointments' &&
+            widget.bookingData!['consultationType'] == 'In-Person';
         final ref = db.collection(widget.bookingCollection!).doc();
         await ref.set({
           ...widget.bookingData!,
+          if (isInPersonAppointment) 'rxId': _generateOpRxId(),
           'patientId': uid,
-          'paymentStatus': 'test_mode_skipped',
+          'paymentStatus': 'not_required',
           'createdAt': FieldValue.serverTimestamp(),
           'updatedAt': FieldValue.serverTimestamp(),
         });
         if (!mounted) return;
         setState(() => _isProcessing = false);
-        _showSuccessSheet('TEST-$_idempotencyKey', bookingId: ref.id);
+        _showSuccessSheet('NOPAY-$_idempotencyKey', bookingId: ref.id);
       }
     } catch (e) {
       if (!mounted) return;
       setState(() => _isProcessing = false);
-      _showError('Test skip failed: $e');
+      _showError('Could not confirm booking: $e');
     }
   }
 
@@ -551,46 +580,50 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen>
               children: [
                 _buildOrderSummary(),
                 const SizedBox(height: 16),
-                if (_mednuMoneyBalance > 0) ...[
-                  _buildBalanceToggle(
-                    label: 'MedNU Money',
-                    subLabel:
-                        'Available: ₹$_mednuMoneyBalance  •  Bookings only',
-                    icon: Icons.stars_rounded,
-                    iconColor: Colors.amber,
-                    gradient: const LinearGradient(
-                      colors: [_kPurple, Color(0xFFAB47BC)],
+                if (!kRequirePayment) ...[
+                  _buildNoPaymentNote(),
+                ] else ...[
+                  if (_mednuMoneyBalance > 0) ...[
+                    _buildBalanceToggle(
+                      label: 'MedNU Money',
+                      subLabel:
+                          'Available: ₹$_mednuMoneyBalance  •  Bookings only',
+                      icon: Icons.stars_rounded,
+                      iconColor: Colors.amber,
+                      gradient: const LinearGradient(
+                        colors: [_kPurple, Color(0xFFAB47BC)],
+                      ),
+                      active: _useMednuMoney,
+                      activeColor: _kPurple,
+                      onChanged: (v) => setState(() => _useMednuMoney = v),
                     ),
-                    active: _useMednuMoney,
-                    activeColor: _kPurple,
-                    onChanged: (v) => setState(() => _useMednuMoney = v),
+                    const SizedBox(height: 12),
+                  ],
+                  _buildBalanceToggle(
+                    label: 'MedNU Wallet',
+                    subLabel: 'Available: ₹$_walletBalance',
+                    icon: Icons.account_balance_wallet_rounded,
+                    iconColor: Colors.white,
+                    gradient: AppColors.primaryGradient,
+                    active: _useWallet,
+                    activeColor: AppColors.primary,
+                    onChanged: (v) => setState(() => _useWallet = v),
                   ),
+                  const SizedBox(height: 16),
+                  _buildPromoSection(),
+                  const SizedBox(height: 20),
+                  const Text('Payment Method', style: AppTextStyles.h4),
                   const SizedBox(height: 12),
+                  ..._paymentMethods.map(_buildMethodTile),
+                  if (_selectedMethod == 'upi') ...[
+                    const SizedBox(height: 10),
+                    _buildUpiInput(),
+                  ],
+                  const SizedBox(height: 12),
+                  _buildSecurityNote(),
+                  const SizedBox(height: 20),
+                  _buildSecureFooter(),
                 ],
-                _buildBalanceToggle(
-                  label: 'MedNU Wallet',
-                  subLabel: 'Available: ₹$_walletBalance',
-                  icon: Icons.account_balance_wallet_rounded,
-                  iconColor: Colors.white,
-                  gradient: AppColors.primaryGradient,
-                  active: _useWallet,
-                  activeColor: AppColors.primary,
-                  onChanged: (v) => setState(() => _useWallet = v),
-                ),
-                const SizedBox(height: 16),
-                _buildPromoSection(),
-                const SizedBox(height: 20),
-                const Text('Payment Method', style: AppTextStyles.h4),
-                const SizedBox(height: 12),
-                ..._paymentMethods.map(_buildMethodTile),
-                if (_selectedMethod == 'upi') ...[
-                  const SizedBox(height: 10),
-                  _buildUpiInput(),
-                ],
-                const SizedBox(height: 12),
-                _buildSecurityNote(),
-                const SizedBox(height: 20),
-                _buildSecureFooter(),
               ],
             ),
           ),
@@ -1201,6 +1234,57 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen>
     );
   }
 
+  // ── No-payment-required note ────────────────────────────
+  Widget _buildNoPaymentNote() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: _kGreen.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _kGreen.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 38, height: 38,
+            decoration: BoxDecoration(
+              color: _kGreen.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.verified_rounded, color: _kGreen, size: 18),
+          ),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'No payment required right now',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: _kGreen,
+                  ),
+                ),
+                SizedBox(height: 3),
+                Text(
+                  'Confirm to complete your booking instantly.',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 10,
+                    color: Color(0xFF374151),
+                    height: 1.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ── Security Note ──────────────────────────────────────
   Widget _buildSecurityNote() {
     return Container(
@@ -1291,7 +1375,9 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen>
           SizedBox(
             height: 54,
             child: ElevatedButton(
-              onPressed: _isProcessing ? null : _openRazorpay,
+              onPressed: _isProcessing
+                  ? null
+                  : (kRequirePayment ? _openRazorpay : _confirmWithoutPayment),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
@@ -1310,12 +1396,17 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen>
                   : Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.lock_rounded, size: 16),
+                        const Icon(
+                          kRequirePayment ? Icons.lock_rounded : Icons.check_circle_rounded,
+                          size: 16,
+                        ),
                         const SizedBox(width: 8),
                         Text(
-                          _amountAfterWallet <= 0
-                              ? 'Complete with Wallet'
-                              : 'Pay ₹$_amountAfterWallet',
+                          !kRequirePayment
+                              ? 'Confirm Booking'
+                              : (_amountAfterWallet <= 0
+                                  ? 'Complete with Wallet'
+                                  : 'Pay ₹$_amountAfterWallet'),
                           style: const TextStyle(
                             fontFamily: 'Poppins',
                             fontSize: 16,
@@ -1326,15 +1417,17 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen>
                     ),
             ),
           ),
-          // Debug-only — kDebugMode is compiled out entirely in release
-          // builds, so this button and everything behind it is physically
-          // absent from anything that could reach a real user or app store.
-          if (kDebugMode) ...[
+          // Debug-only shortcut for QA once kRequirePayment is flipped back
+          // on — kDebugMode is compiled out entirely in release builds, so
+          // this button is physically absent from anything shipped to a real
+          // user or app store. When kRequirePayment is already false the
+          // main button above does the same thing, so this stays hidden.
+          if (kRequirePayment && kDebugMode) ...[
             const SizedBox(height: 8),
             SizedBox(
               height: 44,
               child: OutlinedButton(
-                onPressed: _isProcessing ? null : _skipPaymentForTesting,
+                onPressed: _isProcessing ? null : _confirmWithoutPayment,
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.warning,
                   side: BorderSide(color: AppColors.warning.withValues(alpha: 0.5)),
@@ -1551,7 +1644,7 @@ class _SuccessSheetState extends State<_SuccessSheet>
             child: Column(
               children: [
                 Text(
-                  'Payment Successful!',
+                  kRequirePayment ? 'Payment Successful!' : 'Booking Confirmed!',
                   style: TextStyle(
                     fontFamily: 'Poppins',
                     fontSize: 22,
@@ -1561,7 +1654,9 @@ class _SuccessSheetState extends State<_SuccessSheet>
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  '₹${widget.amount} paid successfully',
+                  kRequirePayment
+                      ? '₹${widget.amount} paid successfully'
+                      : 'Your booking is confirmed',
                   style: TextStyle(
                     fontFamily: 'Poppins',
                     fontSize: 14,

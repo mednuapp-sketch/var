@@ -113,7 +113,16 @@ class UnifiedBooking {
       case 'assigned':            return BookingStatus.assigned;
       case 'on_the_way':          return BookingStatus.onTheWay;
       case 'in_progress':
-      case 'started':             return BookingStatus.inProgress;
+      case 'started':
+      // 'arrived' (ambulance-specific — the driver has reached the pickup
+      // point but the trip isn't complete yet) has no dedicated enum value:
+      // adding one would require a case in every exhaustive switch over
+      // BookingStatus across this app (9 switches, 5 files). Mapping it to
+      // inProgress is a pre-existing-bug fix, not a regression — without
+      // this case it silently fell through to the `default: pending`
+      // branch below, showing "Pending" to a patient whose ambulance had
+      // already arrived.
+      case 'arrived':             return BookingStatus.inProgress;
       case 'consultation_started':return BookingStatus.consultationStarted;
       case 'sample_collected':    return BookingStatus.sampleCollected;
       case 'verified':            return BookingStatus.verified;

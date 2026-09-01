@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../constants/app_colors.dart';
@@ -17,7 +18,9 @@ import '../router/app_router.dart';
 /// the dashboard) that already own the real join/accept logic, so it can't
 /// diverge from or duplicate that behaviour.
 class ActiveSessionBridge extends ConsumerStatefulWidget {
-  const ActiveSessionBridge({super.key});
+  final GoRouter router;
+
+  const ActiveSessionBridge({super.key, required this.router});
 
   @override
   ConsumerState<ActiveSessionBridge> createState() =>
@@ -71,7 +74,20 @@ class _ActiveSessionBridgeState extends ConsumerState<ActiveSessionBridge>
     _ticker = Timer.periodic(const Duration(seconds: 20), (_) {
       if (mounted) setState(() {});
     });
+    // This overlay lives outside the routed page tree (see the class doc),
+    // so it can't read the current route via GoRouterState.of(context) —
+    // listen to the router directly instead, needed to hide the "Call in
+    // progress" card while the doctor is already looking at that exact call.
+    widget.router.routerDelegate.addListener(_onRouteChanged);
   }
+
+  void _onRouteChanged() {
+    if (mounted) setState(() {});
+  }
+
+  bool get _onVideoCallScreen => widget.router.routerDelegate.currentConfiguration.uri
+      .toString()
+      .startsWith(AppRoutes.videoCall);
 
   void _onAuthChanged(User? user) {
     _liveSub?.cancel();
@@ -185,6 +201,7 @@ class _ActiveSessionBridgeState extends ConsumerState<ActiveSessionBridge>
 
   @override
   void dispose() {
+    widget.router.routerDelegate.removeListener(_onRouteChanged);
     _authSub?.cancel();
     _liveSub?.cancel();
     _apptSub?.cancel();
@@ -196,7 +213,11 @@ class _ActiveSessionBridgeState extends ConsumerState<ActiveSessionBridge>
   @override
   Widget build(BuildContext context) {
     final info = _computeInfo();
-    final visible = info.kind != _BridgeKind.none;
+    // Only the live-call case needs suppressing while already on that
+    // screen — patientWaiting/upcoming still need to surface from
+    // elsewhere in the app so the doctor can navigate to accept/start them.
+    final visible = info.kind != _BridgeKind.none &&
+        !(info.kind == _BridgeKind.liveCall && _onVideoCallScreen);
 
     return IgnorePointer(
       ignoring: !visible,

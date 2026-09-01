@@ -3,36 +3,137 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/services/feedback_service.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../../../shared_core/shared_core.dart';
+import '../models/nutritionist_profile.dart';
 import '../providers/nutrition_providers.dart';
+import '../services/nutritionist_profile_service.dart';
 
-/// Nutritionist identity — read-only, sourced from the admin-curated
-/// `nutritionists/{uid}` catalogue entry the patient app's "choose a
-/// nutritionist" screen also reads. Unlike every other partner module,
-/// there is no self-onboarding/edit flow here: a nutritionist account is
-/// fully provisioned by an admin (role grant + catalogue entry together),
-/// so opening a write path here would let a partner edit the very catalogue
-/// listing patients choose from with no review step. See the Phase A scope
-/// note in firestore.rules for the full reasoning.
+/// Nutritionist identity — a hero avatar/rating card plus specialization
+/// info, mirroring the Caregiver module's profile shape. This screen is also
+/// the module's only profile *write* path: creating
+/// `nutritionist_profiles/{uid}` here is what starts the admin-approval gate
+/// (see `AppRouteRefreshListenable`) and, once approved, is what
+/// `onNutritionistProfileWriteForVisibility` (functions/index.js) mirrors
+/// into the patient-facing `nutritionists/{uid}` catalogue entry — before
+/// that, a nutritionist simply isn't findable or bookable by patients.
 class NutritionProfileScreen extends ConsumerWidget {
   const NutritionProfileScreen({super.key});
 
+  Future<void> _edit(BuildContext context, NutritionistProfile current) async {
+    final uid = NutritionistProfileService.currentUid;
+    if (uid == null) {
+      FeedbackService.showError(context, 'You are not signed in.');
+      return;
+    }
+
+    final name = TextEditingController(
+        text: current.name == 'Complete your profile' ? '' : current.name);
+    final qualification = TextEditingController(text: current.qualification);
+    final specialization = TextEditingController(text: current.specialization);
+    final experienceYears = TextEditingController(
+        text: current.experienceYears == 0 ? '' : '${current.experienceYears}');
+    final consultationFee = TextEditingController(
+        text: current.consultationFee == 0 ? '' : '${current.consultationFee}');
+    final city = TextEditingController(text: current.city);
+    final bio = TextEditingController(text: current.bio);
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Nutritionist Details'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(controller: name, decoration: const InputDecoration(labelText: 'Full name')),
+              TextField(controller: qualification, decoration: const InputDecoration(labelText: 'Qualification (e.g. RD, MSc Nutrition)')),
+              TextField(controller: specialization, decoration: const InputDecoration(labelText: 'Specialization')),
+              TextField(
+                controller: experienceYears,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Years of experience'),
+              ),
+              TextField(
+                controller: consultationFee,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Consultation fee (₹)'),
+              ),
+              TextField(controller: city, decoration: const InputDecoration(labelText: 'City')),
+              TextField(
+                controller: bio,
+                maxLines: 3,
+                decoration: const InputDecoration(labelText: 'About you'),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Save')),
+        ],
+      ),
+    );
+
+    if (saved != true) return;
+
+    final fee = num.tryParse(consultationFee.text.trim()) ?? 0;
+    final years = int.tryParse(experienceYears.text.trim()) ?? 0;
+
+    try {
+      await NutritionistProfileService.updateProfile(uid, {
+        'name': name.text.trim(),
+        'qualification': qualification.text.trim(),
+        'specialization': specialization.text.trim(),
+        'experienceYears': years,
+        'consultationFee': fee,
+        'city': city.text.trim(),
+        'bio': bio.text.trim(),
+      });
+      if (context.mounted) FeedbackService.showSuccess(context, 'Profile saved');
+    } catch (_) {
+      if (context.mounted) {
+        FeedbackService.showError(context, "Couldn't save your profile. Please try again.");
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final profile = ref.watch(nutritionistCatalogueDocProvider).valueOrNull ?? const {};
-    final name = profile['name'] as String? ?? 'Nutritionist';
-    final specialization = profile['specialization'] as String? ?? '';
-    final rating = ((profile['rating'] as num?) ?? 0).toDouble();
-    final experienceYears = ((profile['experienceYears'] as num?) ?? 0).toInt();
-    final bio = profile['bio'] as String? ?? '';
+    final profile = ref.watch(nutritionistProfileProvider).valueOrNull ?? NutritionistProfile.empty();
 
     return SharedAppShell(
       currentRoute: AppRoutes.nutritionProfile,
       title: 'Nutritionist Profile',
+      extraActions: [
+        IconButton(
+          icon: const Icon(Icons.edit_outlined, color: AppColors.textPrimary),
+          onPressed: () => _edit(context, profile),
+          tooltip: 'Edit profile',
+        ),
+      ],
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          if (profile.status == 'pending')
+            const Padding(
+              padding: EdgeInsets.only(bottom: 12),
+              child: PremiumCard(
+                child: Row(
+                  children: [
+                    Icon(Icons.hourglass_top_rounded, color: AppColors.warning),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Your application is under review. Patients will be able to find and book you once approved.',
+                        style: AppTextStyles.bodySmall,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(24),
@@ -43,26 +144,48 @@ class NutritionProfileScreen extends ConsumerWidget {
             ),
             child: Column(
               children: [
-                SharedProfileAvatar(name: name, size: 76, isVerified: true),
+                SharedProfileAvatar(name: profile.name, size: 76, isVerified: profile.documentsVerified),
                 const SizedBox(height: 14),
-                Text(name, style: const TextStyle(fontFamily: 'Inter', fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white)),
-                if (specialization.isNotEmpty) ...[
+                Text(profile.name, style: const TextStyle(fontFamily: 'Inter', fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white)),
+                if (profile.specialization.isNotEmpty) ...[
                   const SizedBox(height: 4),
-                  Text(specialization, style: const TextStyle(fontFamily: 'Inter', fontSize: 12, color: Colors.white70)),
+                  Text(profile.specialization, style: const TextStyle(fontFamily: 'Inter', fontSize: 12, color: Colors.white70)),
                 ],
                 const SizedBox(height: 18),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    _HeroStat(label: 'Rating', value: rating.toStringAsFixed(1), icon: Icons.star_rounded),
+                    _HeroStat(label: 'Rating', value: profile.rating.toStringAsFixed(1), icon: Icons.star_rounded),
                     Container(width: 1, height: 30, color: Colors.white24),
-                    _HeroStat(label: 'Experience', value: '$experienceYears yrs', icon: Icons.workspace_premium_outlined),
+                    _HeroStat(label: 'Experience', value: '${profile.experienceYears} yrs', icon: Icons.workspace_premium_outlined),
+                    Container(width: 1, height: 30, color: Colors.white24),
+                    _HeroStat(label: 'Fee', value: '₹${profile.consultationFee}', icon: Icons.currency_rupee_rounded),
                   ],
                 ),
               ],
             ),
           ),
-          if (bio.isNotEmpty) ...[
+          if (profile.qualification.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            PremiumCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Text('Qualification', style: AppTextStyles.labelMedium),
+                      const Spacer(),
+                      if (profile.documentsVerified)
+                        const StatusBadge(label: 'Verified', color: AppColors.success, icon: Icons.verified_rounded),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Text(profile.qualification, style: AppTextStyles.bodyMedium),
+                ],
+              ),
+            ),
+          ],
+          if (profile.bio.isNotEmpty) ...[
             const SizedBox(height: 16),
             PremiumCard(
               child: Column(
@@ -70,26 +193,11 @@ class NutritionProfileScreen extends ConsumerWidget {
                 children: [
                   const Text('About', style: AppTextStyles.labelMedium),
                   const SizedBox(height: 10),
-                  Text(bio, style: AppTextStyles.bodyMedium),
+                  Text(profile.bio, style: AppTextStyles.bodyMedium),
                 ],
               ),
             ),
           ],
-          const SizedBox(height: 16),
-          const PremiumCard(
-            child: Row(
-              children: [
-                Icon(Icons.info_outline_rounded, color: AppColors.primary),
-                SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Your public profile is managed by the MedNu team. Contact support to update these details.',
-                    style: AppTextStyles.bodySmall,
-                  ),
-                ),
-              ],
-            ),
-          ),
         ],
       ),
     );

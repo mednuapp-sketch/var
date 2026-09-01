@@ -1,5 +1,18 @@
 {
   "projects": {
     "default": "mednu-healthcare-app"
-  }
+  },
+  "targets": {
+    "mednu-healthcare-app": {
+      "hosting": {
+        "admin": [
+          "mednu-healthcare-app"
+        ],
+        "web": [
+          "mednu-web"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }
