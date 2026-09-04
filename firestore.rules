@@ -21,6 +21,20 @@ service cloud.firestore {
         exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
+    // ── Admin profile/role (mednu-admin panel access control) ────────────────
+    // Mirrors ROLE_TAB_ACCESS in mednu-admin/js/app.js — keep both in sync.
+    // An admins/{uid} doc with no `role` field is treated as 'director' (full
+    // access), matching the client's verifyAdminRole() default.
+    function adminRole() {
+      return isAdmin() ?
+        (('role' in get(/databases/$(database)/documents/admins/$(request.auth.uid)).data) ?
+          get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role : 'director')
+        : null;
+    }
+    // Directors always pass any adminInRoles() check, regardless of the list given.
+    function isDirector() { return adminRole() == 'director'; }
+    function adminInRoles(roles) { return isAdmin() && (isDirector() || adminRole() in roles); }
+
     // Check if user is a verified doctor
     function isDoctor() {
       return isAuth() &&
@@ -101,7 +115,7 @@ service cloud.firestore {
     // rule at all until now, so the Reports tab 404'd with permission-denied
     // for every admin, including Directors.
     match /admin_generated_reports/{reportId} {
-      allow read, write: if isAdmin();
+      allow read, write: if adminInRoles(['support', 'hr']);
     }
 
     // ── Users ───────────────────────────────────────────────────────────────
@@ -361,7 +375,7 @@ service cloud.firestore {
     // ── Promotional banners (public read, admin write) ──────────────────────
     match /banners/{bannerId} {
       allow read:  if true; // Banners visible even on login/onboarding screen
-      allow write: if isAdmin();
+      allow write: if adminInRoles(['marketing', 'hr']);
     }
 
     // ── Medicines & pharmacy ─────────────────────────────────────────────────
@@ -381,20 +395,20 @@ service cloud.firestore {
       allow read: if isAuth() && (
         resource.data.userId == request.auth.uid ||
         resource.data.doctorId == request.auth.uid ||
-        isAdmin()
+        adminInRoles(['support', 'hr'])
       );
       allow create: if isAuth() && (
         request.resource.data.userId == request.auth.uid ||
         request.resource.data.doctorId == request.auth.uid
       );
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
+      allow update: if adminInRoles(['support', 'hr']);
+      allow delete: if adminInRoles(['support', 'hr']);
     }
 
     // ── Referral config (read-only for all authenticated users) ─────────────
     match /referralConfig/{doc} {
       allow read: if isAuth();
-      allow write: if isAdmin();
+      allow write: if adminInRoles(['marketing', 'hr']);
     }
 
     // ── Referrals ────────────────────────────────────────────────────────────
@@ -404,13 +418,13 @@ service cloud.firestore {
       allow read: if isAuth() && (
         resource.data.referrerId     == request.auth.uid ||
         resource.data.referredUserId == request.auth.uid ||
-        isAdmin()
+        adminInRoles(['marketing', 'hr'])
       );
       allow create: if isAuth() &&
         request.resource.data.referredUserId == request.auth.uid &&
         request.resource.data.referrerId     != request.auth.uid;
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
+      allow update: if adminInRoles(['marketing', 'hr']);
+      allow delete: if adminInRoles(['marketing', 'hr']);
     }
 
     // ── Deletion requests (account deletion) ─────────────────────────────────
@@ -522,7 +536,7 @@ service cloud.firestore {
     // ── Broadcast notifications (admin only write) ────────────────────────────
     match /broadcast_notifications/{notifId} {
       allow read:  if isAuth();
-      allow write: if isAdmin();
+      allow write: if adminInRoles(['support', 'hr']);
     }
 
     // ── Service requests (diagnostics, physio, etc.) ─────────────────────────
@@ -580,7 +594,7 @@ service cloud.firestore {
       // Any authenticated user can browse active (approved) labs; the owner
       // and admin can always read their own/any profile regardless of status.
       allow read: if isAuth() && (
-        isOwner(labId) || isAdmin() || resource.data.status == 'active'
+        isOwner(labId) || adminInRoles(['hr']) || resource.data.status == 'active'
       );
       // Fixed to 'pending'/false so a self-registering lab can't set either
       // to its "verified" value in the very same write that creates the
@@ -596,11 +610,17 @@ service cloud.firestore {
       // admin can, e.g. to clear a slot for re-submission), so an approval
       // already granted against the original files can never be silently
       // invalidated by a later swap.
+      // HR may verify individual documents (documentVerification only) but
+      // can't approve/activate/reject/delete the partner — that status change
+      // is Director-only, matching the client-side gating in
+      // mednu-admin/js/app.js (_setPartnerStatus's canApproveRegistrations()).
       allow update: if (isOwner(labId) &&
                          doesNotModify(['status', 'isVerified', 'rating', 'totalReviews', 'documentVerification']) &&
                          (resource.data.status != 'active' || doesNotModify(['documents']))) ||
-                       isAdmin();
-      allow delete: if isAdmin();
+                       (adminInRoles(['hr']) &&
+                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['documentVerification'])) ||
+                       isDirector();
+      allow delete: if isDirector();
 
       // A lab manages its own test catalogue; nobody else reads this
       // subcollection directly — a Cloud Function mirrors each test's public
@@ -697,7 +717,7 @@ service cloud.firestore {
 
     match /pharmacy_profiles/{pharmacyId} {
       allow read: if isAuth() && (
-        isOwner(pharmacyId) || isAdmin() || resource.data.status == 'active'
+        isOwner(pharmacyId) || adminInRoles(['hr']) || resource.data.status == 'active'
       );
       // See lab_profiles' create rule above for why status/isVerified are
       // fixed here rather than left to the client.
@@ -705,12 +725,15 @@ service cloud.firestore {
                        request.resource.data.status == 'pending' &&
                        request.resource.data.isVerified == false;
       // See lab_profiles' update rule above for why `documents` locks once
-      // `status == 'active'`.
+      // `status == 'active'`, and for why HR is limited to
+      // documentVerification-only while approval is Director-only.
       allow update: if (isOwner(pharmacyId) &&
                          doesNotModify(['status', 'isVerified', 'rating', 'totalReviews', 'documentVerification']) &&
                          (resource.data.status != 'active' || doesNotModify(['documents']))) ||
-                       isAdmin();
-      allow delete: if isAdmin();
+                       (adminInRoles(['hr']) &&
+                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['documentVerification'])) ||
+                       isDirector();
+      allow delete: if isDirector();
 
       // A pharmacy manages its own stock; nobody else reads this
       // subcollection directly (the Orders/Inventory screens never query
@@ -799,7 +822,7 @@ service cloud.firestore {
 
     match /ambulance_profiles/{ambulanceId} {
       allow read: if isAuth() && (
-        isOwner(ambulanceId) || isAdmin() || resource.data.status == 'active'
+        isOwner(ambulanceId) || adminInRoles(['hr']) || resource.data.status == 'active'
       );
       // See lab_profiles' create rule above for why status/isVerified are
       // fixed here rather than left to the client.
@@ -808,12 +831,16 @@ service cloud.firestore {
                        request.resource.data.isVerified == false;
       // A partner can update its own profile but not self-approve/self-verify
       // or inflate its own rating/trip count. See lab_profiles' update rule
-      // above for why `documents` locks once `status == 'active'`.
+      // above for why `documents` locks once `status == 'active'`, and for
+      // why HR is limited to documentVerification-only while approval is
+      // Director-only.
       allow update: if (isOwner(ambulanceId) &&
                          doesNotModify(['status', 'isVerified', 'rating', 'totalReviews', 'totalTrips', 'documentVerification']) &&
                          (resource.data.status != 'active' || doesNotModify(['documents']))) ||
-                       isAdmin();
-      allow delete: if isAdmin();
+                       (adminInRoles(['hr']) &&
+                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['documentVerification'])) ||
+                       isDirector();
+      allow delete: if isDirector();
     }
 
     match /ambulance_requests/{requestId} {
@@ -890,7 +917,7 @@ service cloud.firestore {
 
     match /caregiver_profiles/{caregiverId} {
       allow read: if isAuth() && (
-        isOwner(caregiverId) || isAdmin() || resource.data.status == 'active'
+        isOwner(caregiverId) || adminInRoles(['hr']) || resource.data.status == 'active'
       );
       // See lab_profiles' create rule above for why status/isVerified are
       // fixed here rather than left to the client.
@@ -898,12 +925,15 @@ service cloud.firestore {
                        request.resource.data.status == 'pending' &&
                        request.resource.data.isVerified == false;
       // See lab_profiles' update rule above for why `documents` locks once
-      // `status == 'active'`.
+      // `status == 'active'`, and for why HR is limited to
+      // documentVerification-only while approval is Director-only.
       allow update: if (isOwner(caregiverId) &&
                          doesNotModify(['status', 'isVerified', 'rating', 'totalReviews', 'totalVisits', 'documentVerification']) &&
                          (resource.data.status != 'active' || doesNotModify(['documents']))) ||
-                       isAdmin();
-      allow delete: if isAdmin();
+                       (adminInRoles(['hr']) &&
+                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['documentVerification'])) ||
+                       isDirector();
+      allow delete: if isDirector();
     }
 
     match /caregiver_visits/{visitId} {
@@ -1138,7 +1168,7 @@ service cloud.firestore {
       allow create: if isAuth() &&
                        request.resource.data.patientId == request.auth.uid &&
                        request.resource.data.doctorId  != request.auth.uid;
-      allow update, delete: if isAdmin();
+      allow update, delete: if adminInRoles(['hr']);
     }
 
     // ── Doctor rating summary (aggregate, Cloud-Function-only) ────────────────
@@ -1190,14 +1220,14 @@ service cloud.firestore {
       allow read: if isAuth() && (
         resource.data.doctorId == request.auth.uid ||
         resource.data.patientId == request.auth.uid ||
-        isAdmin()
+        adminInRoles(['hr'])
       );
       // Any authenticated user can submit feedback as long as they own the patientId
       // and are not rating themselves (doctorId != their own uid).
       allow create: if isAuth() &&
                        request.resource.data.patientId == request.auth.uid &&
                        request.resource.data.doctorId != request.auth.uid;
-      allow update, delete: if isAdmin();
+      allow update, delete: if adminInRoles(['hr']);
     }
 
     // ── Payments — the unified escrow ledger (Payment Distribution & ──────────
@@ -1212,7 +1242,7 @@ service cloud.firestore {
       allow read: if isAuth() && (
         resource.data.patientId == request.auth.uid ||
         resource.data.providerId == request.auth.uid ||
-        isAdmin()
+        adminInRoles(['finance', 'hr'])
       );
       allow write: if false;
     }
@@ -1639,9 +1669,9 @@ service cloud.firestore {
 
     match /wallet_transactions/{txId} {
       allow read: if isAuth() && (
-        resource.data.doctorId == request.auth.uid || isAdmin()
+        resource.data.doctorId == request.auth.uid || adminInRoles(['finance', 'hr'])
       );
-      allow create: if isAdmin();
+      allow create: if adminInRoles(['finance', 'hr']);
       allow update, delete: if false;
     }
 
@@ -1763,8 +1793,8 @@ service cloud.firestore {
 
     // ── Weekly quality reports (generated by Cloud Function, read by admin) ──────
     match /weekly_quality_reports/{reportId} {
-      allow read:   if isAdmin();
-      allow create: if isAdmin();
+      allow read:   if adminInRoles(['hr']);
+      allow create: if adminInRoles(['hr']);
       allow update, delete: if false;
     }
 
