@@ -95,6 +95,15 @@ service cloud.firestore {
       allow write: if false; // Only Firebase Console / Cloud Functions can manage admins
     }
 
+    // ── Admin-generated reports (mednu-admin Reports tab) ────────────────────
+    // Separate from the patient-app 'reports' collection (uploaded scans) —
+    // see the comment in mednu-admin/js/app.js's loadReportsList(). Had no
+    // rule at all until now, so the Reports tab 404'd with permission-denied
+    // for every admin, including Directors.
+    match /admin_generated_reports/{reportId} {
+      allow read, write: if isAdmin();
+    }
+
     // ── Users ───────────────────────────────────────────────────────────────
     match /users/{userId} {
       // Users can read/update their own profile; admins can read all
@@ -209,11 +218,17 @@ service cloud.firestore {
     match /appointments/{appointmentId} {
       // Single-document reads: restrict to patient/doctor/admin only.
       // resource == null covers tx.get() on a not-yet-created slot document.
+      // The last clause lets a guest (a family member joining via a signed
+      // share link — see createGuestJoinLink/redeemGuestJoinLink in
+      // functions/index.js) read only the one appointment their custom-token
+      // claim is scoped to.
       allow get: if isAuth() && (
         resource == null ||
         resource.data.patientId == request.auth.uid ||
         resource.data.doctorId  == request.auth.uid ||
-        isAdmin()
+        isAdmin() ||
+        (request.auth.token.guestAppointmentId != null &&
+          request.auth.token.guestAppointmentId == appointmentId)
       );
       // Collection queries (e.g. slot-availability check, appointment list):
       // resource.data is null during list operations so field checks cannot be
@@ -226,14 +241,49 @@ service cloud.firestore {
                        request.resource.data.doctorId != request.auth.uid;
       // Patient can cancel (status update only) or reschedule (date/time/type
       // only — doctorId, patientId, fee stay locked so a reschedule can never
-      // change who's billed or how much); doctor can update consultation status
+      // change who's billed or how much); doctor can update consultation status.
+      // Guest (a family member on a 3-way call, joined via a signed share
+      // link) may only mark the appointment completed — needed so a call
+      // that the guest happens to be the last participant to leave still
+      // gets finalized (see WhatsApp-style "last one out" logic in
+      // video_call_screen.dart / guest_video_call_screen.dart).
       allow update: if isAuth() && (
         (resource.data.patientId == request.auth.uid &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'cancelReason', 'updatedAt', 'consultationId', 'date', 'time', 'consultationType'])) ||
         (resource.data.doctorId == request.auth.uid &&
           doesNotModify(['patientId', 'doctorId', 'amount', 'createdAt'])) ||
+        (request.auth.token.guestAppointmentId != null &&
+          request.auth.token.guestAppointmentId == appointmentId &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'completedAt']) &&
+          request.resource.data.status == 'completed') ||
         isAdmin()
       );
+      allow delete: if isAdmin();
+    }
+
+    // ── Pre-consultation patient intake forms ───────────────────────────────
+    // One doc per appointment (doc id == appointmentId), filled by the patient
+    // after payment and before the doctor's consultation — see
+    // pre_consultation_form_screen.dart (mednu) and
+    // pre_consultation_summary_card.dart (mednu_doctor). Only ever read/
+    // written as single documents (never queried as a collection), so no
+    // `allow list` is needed.
+    match /patient_intake_forms/{appointmentId} {
+      // resource == null covers the stream before the patient has submitted
+      // anything yet — without this, PreConsultationSummaryCard/
+      // _IntakePendingChip would get PERMISSION_DENIED instead of a graceful
+      // "doesn't exist" snapshot for every appointment pre-submission.
+      allow get: if isAuth() && (
+        resource == null ||
+        resource.data.patientId == request.auth.uid ||
+        resource.data.doctorId  == request.auth.uid ||
+        isAdmin()
+      );
+      // Must be the real appointment's own patient — prevents writing an
+      // intake doc under someone else's appointmentId.
+      allow create, update: if isAuth() &&
+        request.resource.data.patientId == request.auth.uid &&
+        get(/databases/$(database)/documents/appointments/$(appointmentId)).data.patientId == request.auth.uid;
       allow delete: if isAdmin();
     }
 
@@ -277,9 +327,35 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Bill-payment discount catalog — admin-defined, shown to every patient
+    // paying a hospital bill (see hospital_discount_service.dart).
+    match /hospital_bill_discounts/{discountId} {
+      allow read:  if isAuth();
+      allow write: if isAdmin();
+    }
+
+    // One record per hospital bill payment (capturePayment's bookingCollection
+    // for serviceType 'hospital_bill', or written directly by the client while
+    // kRequirePayment is false — see payment_screen.dart).
+    match /hospital_bill_payments/{paymentId} {
+      allow create: if isAuth() && request.resource.data.patientId == request.auth.uid;
+      allow read:   if isAuth() && (resource.data.patientId == request.auth.uid || isAdmin());
+      allow update, delete: if false;
+    }
+
     match /ambulances/{ambulanceId} {
       allow read:  if isAuth();
       allow write: if isAdmin();
+    }
+
+    // ── Health education articles (public read, admin write) ────────────────
+    // Patients may bump the view counter; everything else is admin-only.
+    match /health_articles/{articleId} {
+      allow read: if isAuth();
+      allow update: if isAdmin() ||
+        (isAuth() &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['views']));
+      allow create, delete: if isAdmin();
     }
 
     // ── Promotional banners (public read, admin write) ──────────────────────
@@ -349,10 +425,19 @@ service cloud.firestore {
     // Patients create requests; doctors accept/decline/end them.
     // Both parties can read and update their own session.
     match /consultations/{consultationId} {
+      // Last clause: guest join (see appointments' allow get above for the
+      // claim's origin) — matched via the consultation's own appointmentId
+      // field rather than the doc id, since a guest's link is issued before
+      // the consultation doc even exists (it's created later, when the
+      // doctor starts a scheduled call). Guarded by `!= null` first so the
+      // short-circuited `||` never has to evaluate resource.data.appointmentId
+      // (absent on walk-in/quick-connect docs) for the common non-guest case.
       allow read: if isAuth() && (
         resource.data.patientId == request.auth.uid ||
         resource.data.doctorId  == request.auth.uid ||
-        isAdmin()
+        isAdmin() ||
+        (request.auth.token.guestAppointmentId != null &&
+          resource.data.appointmentId == request.auth.token.guestAppointmentId)
       );
 
       // Patients create walk-in consultation requests (callerType == 'patient').
@@ -368,6 +453,7 @@ service cloud.firestore {
 
       // Patient may update status/cancel/session fields only.
       // Doctor may update status and medical-note fields only.
+      // Guest (see allow read above) may only end the call — status/endedAt.
       // Admin may update anything.
       allow update: if isAuth() && (
         (resource.data.patientId == request.auth.uid &&
@@ -379,6 +465,9 @@ service cloud.firestore {
             .hasOnly(['status', 'ringingAt', 'declinedAt', 'endedAt',
                       'startedAt', 'durationSeconds', 'doctorNotes',
                       'missedAt', 'active'])) ||
+        (request.auth.token.guestAppointmentId != null &&
+          resource.data.appointmentId == request.auth.token.guestAppointmentId &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'endedAt'])) ||
         isAdmin()
       );
 
@@ -391,14 +480,20 @@ service cloud.firestore {
             .data.patientId == request.auth.uid ||
           get(/databases/$(database)/documents/consultations/$(consultationId))
             .data.doctorId  == request.auth.uid ||
-          isAdmin()
+          isAdmin() ||
+          (request.auth.token.guestAppointmentId != null &&
+            get(/databases/$(database)/documents/consultations/$(consultationId))
+              .data.appointmentId == request.auth.token.guestAppointmentId)
         );
         allow create: if isAuth() &&
                          request.resource.data.senderId == request.auth.uid && (
                            get(/databases/$(database)/documents/consultations/$(consultationId))
                              .data.patientId == request.auth.uid ||
                            get(/databases/$(database)/documents/consultations/$(consultationId))
-                             .data.doctorId  == request.auth.uid
+                             .data.doctorId  == request.auth.uid ||
+                           (request.auth.token.guestAppointmentId != null &&
+                             get(/databases/$(database)/documents/consultations/$(consultationId))
+                               .data.appointmentId == request.auth.token.guestAppointmentId)
                          );
         allow update, delete: if false;
       }
@@ -1255,6 +1350,15 @@ service cloud.firestore {
 
     // ── Diet plans (admin-managed, public read) ───────────────────────────────
     match /diet_plans/{planId} {
+      allow read: if isAuth();
+      allow write: if isAdmin();
+    }
+
+    // ── Physiotherapists (public read; mirrored from physiotherapist_profiles) ─
+    // Written only by `onPhysiotherapistProfileWriteForVisibility`'s Cloud
+    // Function mirror (Admin SDK, bypasses these rules), same pattern as
+    // `nutritionists` below.
+    match /physiotherapists/{physiotherapistId} {
       allow read: if isAuth();
       allow write: if isAdmin();
     }
