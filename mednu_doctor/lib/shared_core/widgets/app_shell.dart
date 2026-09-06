@@ -133,6 +133,10 @@ String _profileRouteForRole(AppRole role) {
       return AppRoutes.counsellingProfile;
     case AppRole.nutritionist:
       return AppRoutes.nutritionProfile;
+    case AppRole.hospital:
+      // No dedicated profile screen for this role (see role_menu.dart) — its
+      // one destination is Payments, so the avatar routes there too.
+      return AppRoutes.hospitalPayments;
     case AppRole.admin:
       return AppRoutes.editProfile;
   }

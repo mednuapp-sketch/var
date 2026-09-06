@@ -99,6 +99,7 @@ class Visit {
   final CareType type;
   final VisitStatus status;
   final String patientName;
+  final String patientPhone;
   final int patientAge;
   final String address;
   final DateTime scheduledAt;
@@ -113,6 +114,7 @@ class Visit {
     required this.type,
     required this.status,
     required this.patientName,
+    required this.patientPhone,
     required this.patientAge,
     required this.address,
     required this.scheduledAt,
@@ -139,6 +141,7 @@ class Visit {
       type: _careTypeFrom(d['type'] as String?),
       status: _statusFrom(d['status'] as String?),
       patientName: d['patientName'] as String? ?? 'Patient',
+      patientPhone: d['patientPhone'] as String? ?? '',
       patientAge: ((d['patientAge'] as num?) ?? 0).toInt(),
       address: d['address'] as String? ?? '',
       scheduledAt: (d['scheduledAt'] as Timestamp?)?.toDate() ??
@@ -179,6 +182,7 @@ class Visit {
         type: type,
         status: status ?? this.status,
         patientName: patientName,
+        patientPhone: patientPhone,
         patientAge: patientAge,
         address: address,
         scheduledAt: scheduledAt,

@@ -162,7 +162,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
         'status': 'active',
         'familyMembers': [],
         'walletBalance': 0.0,
-        'isPremium': false,
         'referralPoints': 0,
         'rewardPoints': 0,
         'loginAttempts': 0,

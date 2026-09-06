@@ -19,6 +19,19 @@ class FcmService {
   static StreamSubscription<String>? _tokenRefreshSub;
   static StreamSubscription<User?>? _authSub;
 
+  /// `type` values used by the pool-vertical "new job created" pushes
+  /// (`_broadcastNewJobToActiveProviders`/pinned `_sendProviderNotification`
+  /// calls in functions/index.js) — kept as one set so the foreground
+  /// handler below doesn't need a branch per vertical.
+  static const _newJobTypes = {
+    'new_lab_booking',
+    'new_pharmacy_order',
+    'new_ambulance_request',
+    'new_caregiver_visit',
+    'new_physio_session',
+    'new_counselling_session',
+  };
+
   /// Call once from [main] after Firebase is initialized. Deliberately does
   /// NOT request notification permission — awaiting that system dialog
   /// before runApp() blocks the first frame, leaving a blank window until
@@ -47,6 +60,20 @@ class FcmService {
           title: message.notification?.title ?? 'Application Approved',
           body: message.notification?.body ??
               'Your MedNU partner account is verified — you can start receiving bookings now.',
+          type: type,
+        );
+      } else if (_newJobTypes.contains(type)) {
+        // These land via `_sendProviderNotification`/`_broadcastNewJobToActiveProviders`
+        // (functions/index.js) — the same "new job" pushes that already show a
+        // system notification when the app is backgrounded/killed. Without this
+        // branch a provider foregrounded on a *different* screen would miss it
+        // entirely: the incoming-requests streams behind each vertical's list
+        // are `.autoDispose`, so they aren't even live unless that exact screen
+        // is open — the Firestore bell record alone isn't enough to get their
+        // attention in the moment.
+        CallNotificationService.showGenericNotification(
+          title: message.notification?.title ?? 'New Job Available',
+          body: message.notification?.body ?? 'A new booking is available.',
           type: type,
         );
       }

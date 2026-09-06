@@ -63,20 +63,17 @@ class _DesktopStats extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const stats = StatsBarSection._stats;
-    return IntrinsicHeight(
-      child: Row(
-        children: [
-          for (int i = 0; i < stats.length; i++) ...[
-            Expanded(child: _StatPillar(stat: stats[i])),
-            if (i < stats.length - 1)
-              Container(
-                width: 1,
-                margin: const EdgeInsets.symmetric(vertical: 4),
-                color: const Color(0xFFF0F0F0),
-              ),
-          ],
+    return Row(
+      children: [
+        for (int i = 0; i < stats.length; i++) ...[
+          Expanded(child: _StatPillar(stat: stats[i])),
+          if (i < stats.length - 1)
+            const SizedBox(
+              height: 48,
+              child: VerticalDivider(width: 1, color: Color(0xFFF0F0F0)),
+            ),
         ],
-      ),
+      ],
     );
   }
 }
@@ -133,6 +130,8 @@ class _StatPillar extends StatelessWidget {
               children: [
                 Text(
                   stat['title'] as String,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.poppins(
                     fontSize: isMobile ? 12.5 : 14,
                     fontWeight: FontWeight.w700,
@@ -142,6 +141,8 @@ class _StatPillar extends StatelessWidget {
                 const SizedBox(height: 3),
                 Text(
                   stat['subtitle'] as String,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.poppins(
                     fontSize: isMobile ? 10.5 : 12,
                     color: const Color(0xFF9E9E9E),

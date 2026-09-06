@@ -1,14 +1,19 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:intl/intl.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/utils/maps_launcher.dart';
 import '../../../core/utils/op_slip_service.dart';
 import '../../../core/widgets/ux_widgets.dart';
+import '../../intake/services/intake_service.dart';
 
 // Converts "09:00 AM" / "02:30 PM" to total minutes since midnight for sorting.
 int _slotToMinutes(String t) {
@@ -159,99 +164,25 @@ class _AppointmentScreenState extends State<AppointmentScreen>
 
           // ValueKey(uid) keeps this StreamBuilder's subscription stable
           // across parent rebuilds as long as the same user is logged in.
+          // Nested with the hospital_appointments stream below so both
+          // doctor bookings and hospital OP bookings show up together —
+          // see HospitalAppointmentBookingScreen.
           return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
             key: ValueKey(uid),
             stream: FirebaseFirestore.instance
                 .collection('appointments')
                 .where('patientId', isEqualTo: uid)
                 .snapshots(),
-            builder: (context, snap) {
-              if (snap.connectionState == ConnectionState.waiting) {
-                return ListView(
-                  physics: const NeverScrollableScrollPhysics(),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 10,
-                  ),
-                  children: List.generate(
-                    4,
-                    (_) => const _AppointmentCardSkeleton(),
-                  ),
-                );
-              }
-              if (snap.hasError) {
-                return AppErrorState(
-                  onRetry: () => context.go(AppRoutes.appointment),
-                );
-              }
-
-              final docs = List<QueryDocumentSnapshot<Map<String, dynamic>>>.of(
-                snap.data?.docs ?? [],
-              );
-
-              final today = DateTime.now();
-              final todayDate = DateTime(today.year, today.month, today.day);
-
-              bool isDatePast(Map<String, dynamic> d) {
-                final dateStr = d['date'] as String? ?? '';
-                final apptDate = _parseApptDate(dateStr);
-                if (apptDate == null) return false;
-                if (apptDate.isBefore(todayDate)) return true;
-                if (apptDate.isAfter(todayDate)) return false;
-                // Same calendar day — a date-only comparison can't tell a
-                // 9 AM slot from an 9 PM one, so fall through to the slot
-                // time itself (+30 min grace, matching the join window
-                // below) instead of leaving it in Upcoming until midnight.
-                final timeStr = d['time'] as String? ?? '';
-                if (timeStr.isEmpty) return false;
-                final slotDateTime = todayDate.add(
-                  Duration(minutes: _slotToMinutes(timeStr)),
-                );
-                return slotDateTime
-                    .add(const Duration(minutes: 30))
-                    .isBefore(today);
-              }
-
-              // Upcoming: booked & date is today or future — sorted closest first
-              final upcoming =
-                  docs
-                      .where(
-                        (d) => d['status'] == 'booked' && !isDatePast(d.data()),
-                      )
-                      .toList()
-                    ..sort(
-                      (a, b) => _apptSortKey(
-                        a.data(),
-                      ).compareTo(_apptSortKey(b.data())),
-                    );
-              // Past: completed OR booked but date already passed — newest first
-              final past =
-                  docs
-                      .where(
-                        (d) =>
-                            d['status'] == 'completed' ||
-                            (d['status'] == 'booked' && isDatePast(d.data())),
-                      )
-                      .toList()
-                    ..sort(
-                      (a, b) => _apptSortKey(
-                        b.data(),
-                      ).compareTo(_apptSortKey(a.data())),
-                    );
-              final cancelled =
-                  docs.where((d) => d['status'] == 'cancelled').toList()..sort(
-                    (a, b) => _apptSortKey(
-                      b.data(),
-                    ).compareTo(_apptSortKey(a.data())),
-                  );
-
-              return TabBarView(
-                controller: _tab,
-                children: [
-                  _buildList(upcoming, 'Confirmed'),
-                  _buildList(past, 'Completed'),
-                  _buildList(cancelled, 'Cancelled'),
-                ],
+            builder: (context, apptSnap) {
+              return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                key: ValueKey('$uid-hospital'),
+                stream: FirebaseFirestore.instance
+                    .collection('hospital_appointments')
+                    .where('patientId', isEqualTo: uid)
+                    .snapshots(),
+                builder: (context, hospSnap) {
+                  return _buildAppointmentsBody(context, apptSnap, hospSnap);
+                },
               );
             },
           );
@@ -270,6 +201,88 @@ class _AppointmentScreenState extends State<AppointmentScreen>
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildAppointmentsBody(
+    BuildContext context,
+    AsyncSnapshot<QuerySnapshot<Map<String, dynamic>>> apptSnap,
+    AsyncSnapshot<QuerySnapshot<Map<String, dynamic>>> hospSnap,
+  ) {
+    if (apptSnap.connectionState == ConnectionState.waiting ||
+        hospSnap.connectionState == ConnectionState.waiting) {
+      return ListView(
+        physics: const NeverScrollableScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        children: List.generate(4, (_) => const _AppointmentCardSkeleton()),
+      );
+    }
+    if (apptSnap.hasError || hospSnap.hasError) {
+      return AppErrorState(onRetry: () => context.go(AppRoutes.appointment));
+    }
+
+    final docs = [
+      ...List<QueryDocumentSnapshot<Map<String, dynamic>>>.of(
+        apptSnap.data?.docs ?? [],
+      ),
+      ...List<QueryDocumentSnapshot<Map<String, dynamic>>>.of(
+        hospSnap.data?.docs ?? [],
+      ),
+    ];
+
+    final today = DateTime.now();
+    final todayDate = DateTime(today.year, today.month, today.day);
+
+    bool isDatePast(Map<String, dynamic> d) {
+      final dateStr = d['date'] as String? ?? '';
+      final apptDate = _parseApptDate(dateStr);
+      if (apptDate == null) return false;
+      if (apptDate.isBefore(todayDate)) return true;
+      if (apptDate.isAfter(todayDate)) return false;
+      // Same calendar day — a date-only comparison can't tell a
+      // 9 AM slot from an 9 PM one, so fall through to the slot
+      // time itself (+30 min grace, matching the join window
+      // below) instead of leaving it in Upcoming until midnight.
+      final timeStr = d['time'] as String? ?? '';
+      if (timeStr.isEmpty) return false;
+      final slotDateTime = todayDate.add(
+        Duration(minutes: _slotToMinutes(timeStr)),
+      );
+      return slotDateTime.add(const Duration(minutes: 30)).isBefore(today);
+    }
+
+    // Upcoming: booked & date is today or future — sorted closest first
+    final upcoming =
+        docs
+            .where((d) => d['status'] == 'booked' && !isDatePast(d.data()))
+            .toList()
+          ..sort(
+            (a, b) => _apptSortKey(a.data()).compareTo(_apptSortKey(b.data())),
+          );
+    // Past: completed OR booked but date already passed — newest first
+    final past =
+        docs
+            .where(
+              (d) =>
+                  d['status'] == 'completed' ||
+                  (d['status'] == 'booked' && isDatePast(d.data())),
+            )
+            .toList()
+          ..sort(
+            (a, b) => _apptSortKey(b.data()).compareTo(_apptSortKey(a.data())),
+          );
+    final cancelled = docs.where((d) => d['status'] == 'cancelled').toList()
+      ..sort(
+        (a, b) => _apptSortKey(b.data()).compareTo(_apptSortKey(a.data())),
+      );
+
+    return TabBarView(
+      controller: _tab,
+      children: [
+        _buildList(upcoming, 'Confirmed'),
+        _buildList(past, 'Completed'),
+        _buildList(cancelled, 'Cancelled'),
+      ],
     );
   }
 
@@ -413,14 +426,20 @@ class _AppointmentScreenState extends State<AppointmentScreen>
           }
         }
 
-        final doctorName = data['doctorName'] as String? ?? 'Doctor';
-        final specialty = data['doctorSpecialty'] as String? ?? '';
+        final isHospitalOp = data['type'] == 'hospital_op';
+        final doctorName = isHospitalOp
+            ? (data['hospitalName'] as String? ?? 'Hospital')
+            : (data['doctorName'] as String? ?? 'Doctor');
+        final specialty = isHospitalOp
+            ? 'OP Appointment'
+            : (data['doctorSpecialty'] as String? ?? '');
         final time = data['time'] as String? ?? '';
         final type = data['consultationType'] as String? ?? 'Video';
         final isInPerson = type == 'In-Person';
         final opPrescriptionId = data['prescriptionId'] as String?;
         final hasOpSlip =
             opPrescriptionId != null && opPrescriptionId.isNotEmpty;
+        final opToken = data['opToken'] as String?;
 
         final accentColor = isUpcoming
             ? AppColors.accent
@@ -483,8 +502,10 @@ class _AppointmentScreenState extends State<AppointmentScreen>
                                   ),
                                   borderRadius: BorderRadius.circular(16),
                                 ),
-                                child: const Icon(
-                                  Icons.person_rounded,
+                                child: Icon(
+                                  isHospitalOp
+                                      ? Icons.local_hospital_rounded
+                                      : Icons.person_rounded,
                                   size: 30,
                                   color: AppColors.primary,
                                 ),
@@ -582,7 +603,9 @@ class _AppointmentScreenState extends State<AppointmentScreen>
                               ],
                             ),
                           ),
-                          if (isInPerson && (isUpcoming || isCompleted)) ...[
+                          if (!isHospitalOp &&
+                              isInPerson &&
+                              (isUpcoming || isCompleted)) ...[
                             const SizedBox(height: 10),
                             _OpStatusChip(
                               ready: hasOpSlip,
@@ -590,7 +613,22 @@ class _AppointmentScreenState extends State<AppointmentScreen>
                                   _viewPrescription(appointments[i].id, data),
                             ),
                           ],
-                          if (isUpcoming) ...[
+                          if (isHospitalOp && opToken != null) ...[
+                            const SizedBox(height: 10),
+                            _HospitalOpTokenChip(opToken: opToken),
+                          ],
+                          if (isHospitalOp && isUpcoming) ...[
+                            const SizedBox(height: 12),
+                            _HospitalOpActionRow(
+                              hospitalAddress:
+                                  data['hospitalAddress'] as String? ?? '',
+                              onCancel: () => _cancelAppointment(
+                                appointments[i].id,
+                                appointments[i].reference.parent.id,
+                              ),
+                            ),
+                          ],
+                          if (!isHospitalOp && isUpcoming) ...[
                             const SizedBox(height: 12),
                             _ScheduledJoinSection(
                               appointmentId: appointments[i].id,
@@ -598,8 +636,17 @@ class _AppointmentScreenState extends State<AppointmentScreen>
                               type: type,
                               doctorName: doctorName,
                               specialty: specialty,
-                              onCancel: () =>
-                                  _cancelAppointment(appointments[i].id),
+                              onCancel: () => _cancelAppointment(
+                                appointments[i].id,
+                                appointments[i].reference.parent.id,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            _IntakePendingChip(
+                              appointmentId: appointments[i].id,
+                              doctorId: data['doctorId'] as String? ?? '',
+                              doctorName: doctorName,
+                              doctorSpecialty: specialty,
                             ),
                             const SizedBox(height: 10),
                             // ── Reschedule button ──────────────────────────────────────
@@ -638,13 +685,15 @@ class _AppointmentScreenState extends State<AppointmentScreen>
                                   final doctorId =
                                       data['doctorId'] as String? ?? '';
                                   if (doctorId.isNotEmpty) {
-                                    context.push(Uri(
-                                      path: '/doctors/$doctorId',
-                                      queryParameters: {
-                                        'rescheduleId': appointments[i].id,
-                                        'rescheduleType': type,
-                                      },
-                                    ).toString());
+                                    context.push(
+                                      Uri(
+                                        path: '/doctors/$doctorId',
+                                        queryParameters: {
+                                          'rescheduleId': appointments[i].id,
+                                          'rescheduleType': type,
+                                        },
+                                      ).toString(),
+                                    );
                                   } else {
                                     context.push(AppRoutes.doctors);
                                   }
@@ -664,56 +713,79 @@ class _AppointmentScreenState extends State<AppointmentScreen>
                               currentIndex: actualStatus == 'completed' ? 2 : 1,
                             ),
                             const SizedBox(height: 12),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: OutlinedButton.icon(
-                                    icon: const Icon(
-                                      Icons.receipt_long_rounded,
-                                      size: 16,
-                                    ),
-                                    label: Text(
-                                      isInPerson
-                                          ? 'Download OP Slip'
-                                          : 'Prescription',
-                                    ),
-                                    onPressed: () => _viewPrescription(
-                                      appointments[i].id,
-                                      data,
-                                    ),
+                            if (isHospitalOp)
+                              SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton.icon(
+                                  icon: const Icon(
+                                    Icons.replay_rounded,
+                                    size: 16,
                                   ),
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: ElevatedButton.icon(
-                                    icon: const Icon(
-                                      Icons.replay_rounded,
-                                      size: 16,
-                                    ),
-                                    label: const Text('Book Again'),
-                                    onPressed: () {
-                                      final doctorId =
-                                          data['doctorId'] as String? ?? '';
-                                      if (doctorId.isNotEmpty) {
-                                        context.push('/doctors/$doctorId');
-                                      } else {
-                                        context.push(AppRoutes.doctors);
-                                      }
+                                  label: const Text('Book Again'),
+                                  onPressed: () => context.push(
+                                    AppRoutes.hospitalAppointment,
+                                    extra: {
+                                      'hospitalId': data['hospitalId'],
+                                      'hospitalName': data['hospitalName'],
+                                      'hospitalAddress':
+                                          data['hospitalAddress'],
+                                      'hospitalPhone': data['hospitalPhone'],
                                     },
                                   ),
                                 ),
-                              ],
-                            ),
-                            const SizedBox(height: 10),
-                            // Rate Doctor button — shown only for completed appointments
-                            // that haven't been reviewed yet.
-                            _RateButton(
-                              appointmentId: appointments[i].id,
-                              doctorId: data['doctorId'] as String? ?? '',
-                              doctorName: doctorName,
-                              doctorSpecialty: specialty,
-                              consultationType: type,
-                            ),
+                              )
+                            else ...[
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: OutlinedButton.icon(
+                                      icon: const Icon(
+                                        Icons.receipt_long_rounded,
+                                        size: 16,
+                                      ),
+                                      label: Text(
+                                        isInPerson
+                                            ? 'Download OP Slip'
+                                            : 'Prescription',
+                                      ),
+                                      onPressed: () => _viewPrescription(
+                                        appointments[i].id,
+                                        data,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: ElevatedButton.icon(
+                                      icon: const Icon(
+                                        Icons.replay_rounded,
+                                        size: 16,
+                                      ),
+                                      label: const Text('Book Again'),
+                                      onPressed: () {
+                                        final doctorId =
+                                            data['doctorId'] as String? ?? '';
+                                        if (doctorId.isNotEmpty) {
+                                          context.push('/doctors/$doctorId');
+                                        } else {
+                                          context.push(AppRoutes.doctors);
+                                        }
+                                      },
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              // Rate Doctor button — shown only for completed
+                              // appointments that haven't been reviewed yet.
+                              _RateButton(
+                                appointmentId: appointments[i].id,
+                                doctorId: data['doctorId'] as String? ?? '',
+                                doctorName: doctorName,
+                                doctorSpecialty: specialty,
+                                consultationType: type,
+                              ),
+                            ],
                           ],
                         ],
                       ), // Column
@@ -735,7 +807,10 @@ class _AppointmentScreenState extends State<AppointmentScreen>
         appointmentData: data,
       );
 
-  Future<void> _cancelAppointment(String docId) async {
+  Future<void> _cancelAppointment(
+    String docId, [
+    String collection = 'appointments',
+  ]) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -765,7 +840,7 @@ class _AppointmentScreenState extends State<AppointmentScreen>
       if (!mounted) return;
       try {
         await FirebaseFirestore.instance
-            .collection('appointments')
+            .collection(collection)
             .doc(docId)
             .update({
               'status': 'cancelled',
@@ -777,8 +852,10 @@ class _AppointmentScreenState extends State<AppointmentScreen>
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-              content: Text(
-                  'Could not cancel the appointment — check your connection and try again.')),
+            content: Text(
+              'Could not cancel the appointment — check your connection and try again.',
+            ),
+          ),
         );
       }
     }
@@ -954,6 +1031,219 @@ class _OpStatusChip extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+// Shows the OP token generated at booking time for a hospital OP
+// appointment — the patient shows this at the hospital reception instead of
+// a doctor prescription/OP-slip PDF, since there's no doctor writing one.
+class _HospitalOpTokenChip extends StatelessWidget {
+  final String opToken;
+  const _HospitalOpTokenChip({required this.opToken});
+
+  void _copy(BuildContext context) {
+    Clipboard.setData(ClipboardData(text: opToken));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('OP token copied')));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => _copy(context),
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: AppColors.accent.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.accent.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          children: [
+            const Icon(
+              Icons.confirmation_number_rounded,
+              size: 14,
+              color: AppColors.accentText,
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                'OP Token: $opToken',
+                style: const TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.accentText,
+                ),
+              ),
+            ),
+            const Icon(
+              Icons.copy_rounded,
+              size: 14,
+              color: AppColors.accentText,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// Directions + Cancel row for an upcoming hospital OP appointment — the
+// hospital-flow equivalent of _ScheduledJoinSection, minus any video/audio
+// call joining (there's no doctor/consultation to join for a walk-in OP
+// visit). Directions use the hospitalAddress stored on the booking itself,
+// so no doctor-lookup round-trip is needed the way OpSlipService.openDirections
+// needs one.
+class _HospitalOpActionRow extends StatefulWidget {
+  final String hospitalAddress;
+  final VoidCallback onCancel;
+  const _HospitalOpActionRow({
+    required this.hospitalAddress,
+    required this.onCancel,
+  });
+
+  @override
+  State<_HospitalOpActionRow> createState() => _HospitalOpActionRowState();
+}
+
+class _HospitalOpActionRowState extends State<_HospitalOpActionRow> {
+  bool _opening = false;
+
+  Future<void> _openDirections() async {
+    if (_opening || widget.hospitalAddress.isEmpty) return;
+    setState(() => _opening = true);
+    try {
+      await MapsLauncher.navigateToAddress(widget.hospitalAddress);
+    } finally {
+      if (mounted) setState(() => _opening = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.error,
+              side: BorderSide(color: AppColors.error.withValues(alpha: 0.5)),
+            ),
+            icon: const Icon(Icons.cancel_outlined, size: 16),
+            label: const Text('Cancel'),
+            onPressed: widget.onCancel,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+            icon: _opening
+                ? const SizedBox(
+                    width: 15,
+                    height: 15,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Icon(
+                    Icons.directions_rounded,
+                    size: 16,
+                    color: Colors.white,
+                  ),
+            label: const Text(
+              'Directions',
+              style: TextStyle(color: Colors.white),
+            ),
+            onPressed: widget.hospitalAddress.isEmpty ? null : _openDirections,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// Realtime reminder: streams patient_intake_forms/{id} and only renders once
+// (never blocking the card) — this is the "fill it later" recovery path
+// promised by PreConsultationFormScreen's skip dialog.
+class _IntakePendingChip extends StatelessWidget {
+  final String appointmentId;
+  final String doctorId;
+  final String doctorName;
+  final String doctorSpecialty;
+
+  const _IntakePendingChip({
+    required this.appointmentId,
+    required this.doctorId,
+    required this.doctorName,
+    required this.doctorSpecialty,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: IntakeService.stream(appointmentId),
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
+          return const SizedBox.shrink();
+        }
+        if (snap.data?.exists == true) return const SizedBox.shrink();
+        return GestureDetector(
+          onTap: () => context.push(
+            AppRoutes.preConsultationForm,
+            extra: {
+              'appointmentId': appointmentId,
+              'doctorId': doctorId,
+              'doctorName': doctorName,
+              'doctorSpecialty': doctorSpecialty,
+            },
+          ),
+          behavior: HitTestBehavior.opaque,
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: AppColors.warning.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: AppColors.warning.withValues(alpha: 0.3),
+              ),
+            ),
+            child: const Row(
+              children: [
+                Icon(
+                  Icons.assignment_late_rounded,
+                  size: 14,
+                  color: AppColors.warning,
+                ),
+                SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'Complete your pre-consultation form',
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.warning,
+                    ),
+                  ),
+                ),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: 16,
+                  color: AppColors.warning,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -1294,6 +1584,11 @@ class _ScheduledJoinSectionState extends State<_ScheduledJoinSection>
         'status': 'scheduled_waiting',
         'createdAt': now,
         'updatedAt': now,
+        // Carried over from the appointment so a family member's guest-join
+        // link (redeemGuestJoinLink/generateAgoraToken in functions/index.js)
+        // can be authorized against this consultation once it exists.
+        if ((data['guestPhone'] as String? ?? '').trim().isNotEmpty)
+          'guestPhone': (data['guestPhone'] as String).trim(),
       });
       batch.update(db.collection('appointments').doc(widget.appointmentId), {
         'consultationId': consultRef.id,
@@ -1334,6 +1629,29 @@ class _ScheduledJoinSectionState extends State<_ScheduledJoinSection>
 
   @override
   Widget build(BuildContext context) {
+    final content = _buildContent(context);
+    final guestPhone = (widget.data['guestPhone'] as String? ?? '').trim();
+    if (guestPhone.isEmpty) return content;
+    // A guest phone was attached at booking time — offer to share a join
+    // link regardless of which join-window state the section above is in,
+    // since the whole point is sharing it well ahead of the appointment.
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        content,
+        const SizedBox(height: 10),
+        _ShareGuestLinkButton(
+          appointmentId: widget.appointmentId,
+          guestName: widget.data['patientName'] as String? ?? 'them',
+          doctorName: widget.doctorName,
+          dateStr: widget.data['date'] as String? ?? '',
+          timeStr: widget.data['time'] as String? ?? '',
+        ),
+      ],
+    );
+  }
+
+  Widget _buildContent(BuildContext context) {
     final dateStr = widget.data['date'] as String? ?? '';
     final timeStr = widget.data['time'] as String? ?? '';
     final type = widget.type;
@@ -1773,5 +2091,111 @@ class _ScheduledJoinSectionState extends State<_ScheduledJoinSection>
         .collection('consultations')
         .doc(consultationId)
         .snapshots();
+  }
+}
+
+// ── Share a guest join link ────────────────────────────────────────────────
+//
+// Shown under the join section whenever a guest phone number was attached at
+// booking time (see _BookingConfirmSheet in consultation_screen.dart). Lets
+// the account holder send the family member a link so they can join the
+// call themselves, from their own phone, without a MedNu login — see
+// createGuestJoinLink/redeemGuestJoinLink in functions/index.js.
+class _ShareGuestLinkButton extends StatefulWidget {
+  final String appointmentId;
+  final String guestName;
+  final String doctorName;
+  final String dateStr;
+  final String timeStr;
+
+  const _ShareGuestLinkButton({
+    required this.appointmentId,
+    required this.guestName,
+    required this.doctorName,
+    required this.dateStr,
+    required this.timeStr,
+  });
+
+  @override
+  State<_ShareGuestLinkButton> createState() => _ShareGuestLinkButtonState();
+}
+
+class _ShareGuestLinkButtonState extends State<_ShareGuestLinkButton> {
+  bool _sharing = false;
+
+  Future<void> _share() async {
+    if (_sharing) return;
+    setState(() => _sharing = true);
+    try {
+      final result = await FirebaseFunctions.instance
+          .httpsCallable('createGuestJoinLink')
+          .call({'appointmentId': widget.appointmentId});
+      final deepLink = (result.data as Map)['deepLink'] as String?;
+      if (deepLink == null || deepLink.isEmpty) {
+        throw Exception('No link returned');
+      }
+      if (!mounted) return;
+
+      final when = [
+        widget.dateStr,
+        widget.timeStr,
+      ].where((s) => s.isNotEmpty).join(' · ');
+      final message =
+          'Hi ${widget.guestName}, you have a video consultation '
+          'with Dr. ${widget.doctorName}'
+          '${when.isNotEmpty ? ' on $when' : ''}.\n\n'
+          'Tap this link to join: $deepLink\n\n'
+          "Don't have the MedNU app yet? Install it first, then tap this link again.";
+
+      await Share.share(message, subject: 'Join your MedNU consultation');
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Could not create join link: ${e.toString().replaceAll('Exception: ', '')}',
+          ),
+          backgroundColor: Colors.red.shade700,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _sharing = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton.icon(
+      onPressed: _sharing ? null : _share,
+      style: OutlinedButton.styleFrom(
+        foregroundColor: AppColors.primary,
+        side: const BorderSide(color: AppColors.primary),
+        minimumSize: const Size.fromHeight(44),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+      icon: _sharing
+          ? const SizedBox(
+              width: 15,
+              height: 15,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: AppColors.primary,
+              ),
+            )
+          : const Icon(Icons.ios_share_rounded, size: 15),
+      label: Text(
+        'Share join link with ${widget.guestName}',
+        style: const TextStyle(
+          fontFamily: 'Poppins',
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+        ),
+        overflow: TextOverflow.ellipsis,
+      ),
+    );
   }
 }

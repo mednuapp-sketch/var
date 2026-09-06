@@ -500,10 +500,17 @@ class _CardActions extends StatelessWidget {
       BookingStatus.inProgress,
       BookingStatus.consultationStarted,
     }.contains(status);
+    // A hospital bill payment has no provider/session to rate or cancel —
+    // it's a payment record, not a booking workflow (see UnifiedBooking.
+    // fromHospitalBillPayment, which maps it onto `pending`/`completed`
+    // purely to reuse the Active/Completed tab placement, not to imply either
+    // action makes sense here).
+    final isHospitalBillPayment = booking.source == BookingSource.hospitalBillPayment;
     final canRate =
+        !isHospitalBillPayment &&
         status == BookingStatus.completed &&
         !(booking.rawData['isRated'] as bool? ?? false);
-    final canCancel = const {
+    final canCancel = !isHospitalBillPayment && const {
       BookingStatus.pending,
       BookingStatus.requested,
       BookingStatus.confirmed,
@@ -541,14 +548,15 @@ class _CardActions extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(
             child: ElevatedButton.icon(
-              onPressed: () => context.push(
-                AppRoutes.orderTracking,
-                extra: {
-                  'orderId': booking.id,
-                  'serviceType': booking.serviceType,
-                  'serviceName': booking.serviceName,
-                },
-              ),
+              // ServiceDetailScreen already has real live status (streamed
+              // from Firestore) plus a working Cancel action — the generic
+              // OrderTrackingScreen this used to open only accepted a static
+              // {orderId, serviceType, serviceName} extra with no actual
+              // status/provider data, so it fell back to hardcoded
+              // placeholders ("Dr. Anjali Sharma", ₹500) for every booking
+              // type, and its own Cancel button never wrote to Firestore.
+              onPressed: () =>
+                  context.push(AppRoutes.serviceDetail, extra: booking),
               icon: const Icon(Icons.location_on_rounded, size: 15),
               label: const Text(
                 'Track',

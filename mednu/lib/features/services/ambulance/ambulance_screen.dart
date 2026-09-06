@@ -424,6 +424,7 @@ class _AmbulanceScreenState extends ConsumerState<AmbulanceScreen> {
 
   Widget _buildAppBar() => SliverAppBar(
         pinned: true,
+        backgroundColor: _kRed,
         expandedHeight: AppSpacing.headerHeight(context),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded,

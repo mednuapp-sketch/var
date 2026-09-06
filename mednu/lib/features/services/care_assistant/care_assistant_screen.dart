@@ -160,6 +160,7 @@ class _CareAssistantScreenState extends ConsumerState<CareAssistantScreen> {
             slivers: [
               SliverAppBar(
                 pinned: true,
+                backgroundColor: _themeColor,
                 expandedHeight: AppSpacing.headerHeight(context),
                 leading: IconButton(
                   icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),

@@ -7,6 +7,7 @@ class PharmacyProfile {
   final String address;
   final double? latitude;
   final double? longitude;
+  final String city;
   final String phone;
   final String email;
   final bool deliveryAvailable;
@@ -30,6 +31,7 @@ class PharmacyProfile {
     required this.address,
     this.latitude,
     this.longitude,
+    this.city = '',
     required this.phone,
     required this.email,
     required this.deliveryAvailable,
@@ -52,6 +54,7 @@ class PharmacyProfile {
       address: (d['address'] as String?) ?? '',
       latitude: (d['latitude'] as num?)?.toDouble(),
       longitude: (d['longitude'] as num?)?.toDouble(),
+      city: (d['city'] as String?) ?? '',
       phone: (d['phone'] as String?) ?? '',
       email: (d['email'] as String?) ?? '',
       deliveryAvailable: (d['deliveryAvailable'] as bool?) ?? true,

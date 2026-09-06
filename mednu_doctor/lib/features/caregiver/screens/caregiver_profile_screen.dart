@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -7,6 +8,8 @@ import '../../../core/router/app_router.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../../../shared_core/shared_core.dart';
 import '../../../core/services/feedback_service.dart';
+import '../../location/models/precise_address.dart';
+import '../../location/screens/map_location_picker_screen.dart';
 import '../models/caregiver_profile.dart';
 import '../providers/caregiver_providers.dart';
 import '../services/caregiver_profile_service.dart';
@@ -40,49 +43,97 @@ class CaregiverProfileScreen extends ConsumerWidget {
         TextEditingController(text: current.hourlyRate == 0 ? '' : '${current.hourlyRate}');
     final experienceYears = TextEditingController(
         text: current.experienceYears == 0 ? '' : '${current.experienceYears}');
+    var city = current.city;
+    var lat = current.lat;
+    var lng = current.lng;
 
     final saved = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Caregiver Details'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(controller: name, decoration: const InputDecoration(labelText: 'Full name')),
-              TextField(
-                controller: certifications,
-                decoration: const InputDecoration(
-                  labelText: 'Certifications',
-                  hintText: 'Comma separated',
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: const Text('Caregiver Details'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(controller: name, decoration: const InputDecoration(labelText: 'Full name')),
+                TextField(
+                  controller: certifications,
+                  decoration: const InputDecoration(
+                    labelText: 'Certifications',
+                    hintText: 'Comma separated',
+                  ),
                 ),
-              ),
-              TextField(
-                controller: specialties,
-                decoration: const InputDecoration(
-                  labelText: 'Specialties',
-                  hintText: 'Comma separated',
+                TextField(
+                  controller: specialties,
+                  decoration: const InputDecoration(
+                    labelText: 'Specialties',
+                    hintText: 'Comma separated',
+                  ),
                 ),
-              ),
-              TextField(
-                controller: hourlyRate,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Hourly rate (₹)'),
-              ),
-              TextField(
-                controller: experienceYears,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Years of experience'),
-              ),
-            ],
+                TextField(
+                  controller: hourlyRate,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Hourly rate (₹)'),
+                ),
+                TextField(
+                  controller: experienceYears,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Years of experience'),
+                ),
+                const SizedBox(height: 12),
+                InkWell(
+                  onTap: () async {
+                    final result = await Navigator.of(dialogContext).push<PreciseAddress>(
+                      MaterialPageRoute(
+                        builder: (_) => MapLocationPickerScreen(initialLat: lat, initialLng: lng),
+                      ),
+                    );
+                    if (result == null) return;
+                    setDialogState(() {
+                      city = result.city ?? city;
+                      lat = result.lat;
+                      lng = result.lng;
+                    });
+                  },
+                  borderRadius: BorderRadius.circular(8),
+                  child: InputDecorator(
+                    decoration: const InputDecoration(
+                      labelText: 'Service Area',
+                      prefixIcon: Icon(Icons.location_on_outlined, color: AppColors.textSecondary),
+                      suffixIcon: Icon(Icons.map_outlined, color: AppColors.primary),
+                      helperText: 'Tap to pick the city/area you serve on the map',
+                    ),
+                    child: Text(
+                      city.isEmpty ? 'Select on map' : city,
+                      style: TextStyle(color: city.isEmpty ? AppColors.textHint : AppColors.textPrimary),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+            TextButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Save')),
+          ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Save')),
-        ],
       ),
     );
+
+    // Disposal is deferred until well after the dialog's own exit transition
+    // finishes — disposing synchronously right after showDialog's Future
+    // resolves is the documented dispose-race crash pattern elsewhere in this
+    // codebase (the AlertDialog/TextFields are still mounted and mid-animation
+    // at that exact point, not actually unmounted yet). The default Material
+    // dialog transition is ~150ms; 400ms leaves comfortable margin.
+    unawaited(Future.delayed(const Duration(milliseconds: 400), () {
+      name.dispose();
+      certifications.dispose();
+      specialties.dispose();
+      hourlyRate.dispose();
+      experienceYears.dispose();
+    }));
 
     if (saved != true) return;
 
@@ -103,6 +154,9 @@ class CaregiverProfileScreen extends ConsumerWidget {
           'specialties': split(specialties),
           'hourlyRate': rate,
           'experienceYears': years,
+          'city': city,
+          if (lat != null && lng != null) 'lat': lat,
+          if (lat != null && lng != null) 'lng': lng,
         });
       } else {
         await CaregiverProfileService.createProfile(
@@ -112,6 +166,9 @@ class CaregiverProfileScreen extends ConsumerWidget {
           specialties: split(specialties),
           hourlyRate: rate,
           experienceYears: years,
+          city: city,
+          lat: lat,
+          lng: lng,
         );
       }
       if (context.mounted) FeedbackService.showSuccess(context, 'Profile saved');

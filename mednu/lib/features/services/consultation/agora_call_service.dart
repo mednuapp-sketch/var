@@ -14,7 +14,18 @@ enum _QualityTier { high, medium, low, audioOnly }
 class AgoraCallService {
   RtcEngine? _engine;
   bool isJoined = false;
-  int? remoteUid;
+
+  /// All other participants currently in the channel — a plain int, not a
+  /// bool/single-uid slot, so a 3-party call (e.g. patient + a guest family
+  /// member + doctor) can track each remote independently: one leaving no
+  /// longer clears the others' state, which `onUserOffline` used to do when
+  /// it unconditionally nulled a single `remoteUid`.
+  final Set<int> remoteUids = {};
+
+  /// This device's own Agora uid, assigned by `generateAgoraToken` from the
+  /// caller's verified role (doctor=1, patient=2, guest=3) — fixed per role
+  /// so every screen can label tiles deterministically instead of guessing.
+  int? localUid;
 
   // Starts at high, not medium — the adaptive logic below only ever steps
   // this down in response to actual measured network quality, so starting
@@ -24,7 +35,7 @@ class AgoraCallService {
   bool _userVideoMuted = false;
 
   final void Function(int uid) onRemoteJoined;
-  final void Function() onRemoteLeft;
+  final void Function(int uid) onRemoteLeft;
   final void Function(int qualityIndex, bool audioOnly)? onNetworkQualityChanged;
 
   /// Fires whenever Agora's connection state changes so the UI can show
@@ -46,6 +57,13 @@ class AgoraCallService {
   bool get isInitialized => _engine != null;
   RtcEngine get engine => _engine!;
   bool get isAudioOnlyMode => _isAudioOnlyMode;
+
+  /// Requests camera + mic access up front (before the engine is created)
+  /// so the pre-join lobby can show a proper permission prompt/denied state
+  /// instead of the engine silently starting with no video/audio.
+  Future<Map<Permission, PermissionStatus>> requestPermissions() {
+    return [Permission.camera, Permission.microphone].request();
+  }
 
   Future<void> initialize() async {
     await [Permission.camera, Permission.microphone].request();
@@ -72,7 +90,7 @@ class AgoraCallService {
         onAgoraError?.call(err, msg);
       },
       onUserJoined: (_, uid, __) {
-        remoteUid = uid;
+        remoteUids.add(uid);
         _engine!.setRemoteVideoStreamType(
           uid: uid,
           streamType: VideoStreamType.videoStreamHigh,
@@ -80,8 +98,8 @@ class AgoraCallService {
         onRemoteJoined(uid);
       },
       onUserOffline: (_, uid, __) {
-        remoteUid = null;
-        onRemoteLeft();
+        remoteUids.remove(uid);
+        onRemoteLeft(uid);
       },
       onNetworkQuality: (connection, remoteUid, txQuality, rxQuality) {
         if (remoteUid != 0) return;
@@ -95,9 +113,9 @@ class AgoraCallService {
             isJoined) {
           // Re-subscribe to remote streams after a reconnect to prevent
           // a frozen video frame on the recovered connection.
-          if (remoteUid != null) {
+          for (final uid in remoteUids) {
             _engine?.setRemoteVideoStreamType(
-              uid: remoteUid!,
+              uid: uid,
               streamType: VideoStreamType.videoStreamHigh,
             );
           }
@@ -107,8 +125,8 @@ class AgoraCallService {
         final channelId = connection.channelId;
         if (channelId == null || _engine == null) return;
         try {
-          final newToken = await _fetchToken(channelId);
-          await _engine!.renewToken(newToken);
+          final newAuth = await _fetchAuth(channelId);
+          await _engine!.renewToken(newAuth.token);
         } catch (e) {
           // ignore: avoid_print
           print('[Agora] Token renewal failed: $e');
@@ -202,24 +220,28 @@ class AgoraCallService {
   }
 
   /// Calls the `generateAgoraToken` Cloud Function, which also authorizes
-  /// the request server-side (only the doctor/patient on this consultation
-  /// may obtain a token for its channel).
-  Future<String> _fetchToken(String channelId) async {
+  /// the request server-side (only the doctor/patient/guest on this
+  /// consultation may obtain a token for its channel) and assigns this
+  /// caller a fixed uid for their verified role (doctor=1, patient=2,
+  /// guest=3) so every screen can label tiles deterministically.
+  Future<({String token, int uid})> _fetchAuth(String channelId) async {
     final result = await FirebaseFunctions.instance
         .httpsCallable('generateAgoraToken')
         .call({'channelName': channelId});
-    return result.data['token'] as String;
+    final data = result.data as Map;
+    return (token: data['token'] as String, uid: data['uid'] as int);
   }
 
   Future<void> joinChannel(String channelId) async {
     if (isJoined || _engine == null) return;
-    final token = await _fetchToken(channelId);
+    final auth = await _fetchAuth(channelId);
     if (isJoined || _engine == null) return;
     isJoined = true;
+    localUid = auth.uid;
     await _engine!.joinChannel(
-      token: token,
+      token: auth.token,
       channelId: channelId,
-      uid: 0,
+      uid: auth.uid,
       options: const ChannelMediaOptions(
         autoSubscribeAudio: true,
         autoSubscribeVideo: true,
@@ -256,6 +278,8 @@ class AgoraCallService {
     await _engine?.release();
     _engine = null;
     isJoined = false;
+    remoteUids.clear();
+    localUid = null;
     _isAudioOnlyMode = false;
     _userVideoMuted = false;
     _currentTier = _QualityTier.high;

@@ -35,6 +35,9 @@ class CaregiverProfileService {
     List<String> specialties = const [],
     num hourlyRate = 0,
     int experienceYears = 0,
+    String city = '',
+    double? lat,
+    double? lng,
   }) async {
     String? fcmToken;
     try {
@@ -55,6 +58,9 @@ class CaregiverProfileService {
       'totalReviews': 0,
       'totalVisits': 0,
       'experienceYears': experienceYears,
+      'city': city,
+      if (lat != null && lng != null) 'lat': lat,
+      if (lat != null && lng != null) 'lng': lng,
       'createdAt': FieldValue.serverTimestamp(),
       if (fcmToken != null) 'fcmToken': fcmToken,
     });

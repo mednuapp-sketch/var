@@ -12,7 +12,13 @@
 
     <!-- ── Camera & Media ── -->
     <uses-permission android:name="android.permission.CAMERA" />
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <!-- READ_MEDIA_IMAGES/READ_MEDIA_VIDEO intentionally NOT declared — Play policy
+         requires apps to use the system photo picker instead. image_picker
+         (image_picker_android 0.8.7+, currently 0.8.13+16) auto-switches to the
+         Android photo picker on API 33+ (and its Play services backport on
+         older devices) precisely when these permissions are absent, so
+         declaring them was both unnecessary and the cause of the Play Console
+         rejection (2026-09-06). -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
 
@@ -71,6 +77,19 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+
+            <!-- Guest call-join deep link (mednu://join?a=&t=&exp=) — see
+                 _handleGuestDeepLink in main.dart and createGuestJoinLink in
+                 functions/index.js. Custom scheme, not an https App Link, so
+                 it needs no domain/hosting — only works once the app is
+                 already installed, which it must be anyway for the native
+                 Agora video call to run. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="mednu"/>
             </intent-filter>
         </activity>
 

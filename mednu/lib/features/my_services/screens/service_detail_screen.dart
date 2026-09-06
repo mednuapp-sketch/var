@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -615,6 +616,24 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final items = <_DetailItem>[];
 
+    // Only surface this when the booking was made for someone other than the
+    // account holder — compared by phone (the stable identifier in this
+    // phone-auth app) rather than name, which is free text at checkout.
+    final myPhoneRaw = FirebaseAuth.instance.currentUser?.phoneNumber ?? '';
+    final myPhone = myPhoneRaw.startsWith('+91') ? myPhoneRaw.substring(3) : myPhoneRaw;
+    final bookedForName = (live.rawData['patientName'] as String? ?? '').trim();
+    final bookedForPhone = (live.rawData['patientPhone'] as String? ?? '').trim();
+    if (bookedForName.isNotEmpty && bookedForPhone.isNotEmpty && bookedForPhone != myPhone) {
+      items.add(
+        _DetailItem(
+          icon: Icons.person_rounded,
+          label: 'Booked For',
+          value: '$bookedForName · $bookedForPhone',
+          color: const Color(0xFF00897B),
+        ),
+      );
+    }
+
     if (live.date.isNotEmpty) {
       items.add(
         _DetailItem(
@@ -901,6 +920,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
 
   Widget _buildActionButtons(BuildContext context, UnifiedBooking live) {
     final canCancel =
+        live.source != BookingSource.hospitalBillPayment &&
         live.isActive &&
         live.status != BookingStatus.inProgress &&
         live.status != BookingStatus.consultationStarted;
@@ -1719,6 +1739,11 @@ class _ServiceInfo {
         return const _ServiceInfo(
           icon: Icons.local_pharmacy_rounded,
           gradient: AppColors.medicineGrad,
+        );
+      case BookingSource.hospitalBillPayment:
+        return const _ServiceInfo(
+          icon: Icons.receipt_long_rounded,
+          gradient: AppColors.hospitalGrad,
         );
     }
   }

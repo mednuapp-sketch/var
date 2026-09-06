@@ -35,6 +35,7 @@ class _PharmacyOnboardingScreenState extends State<PharmacyOnboardingScreen> {
   final _addressCtrl = TextEditingController();
   double? _addressLat;
   double? _addressLng;
+  String _addressCity = '';
   final _phoneCtrl = TextEditingController();
   final Map<String, File?> _pickedDocs = {};
   final _selectedCategories = <String>{};
@@ -77,6 +78,7 @@ class _PharmacyOnboardingScreenState extends State<PharmacyOnboardingScreen> {
         address: _addressCtrl.text.trim(),
         latitude: _addressLat,
         longitude: _addressLng,
+        city: _addressCity,
         phone: Validators.normalizePhone(_phoneCtrl.text.trim()),
         deliveryAvailable: _deliveryAvailable,
         categoriesOffered: _selectedCategories.toList(),
@@ -245,6 +247,7 @@ class _PharmacyOnboardingScreenState extends State<PharmacyOnboardingScreen> {
       _addressCtrl.text = result.formatted;
       _addressLat = result.lat;
       _addressLng = result.lng;
+      _addressCity = result.city ?? '';
     });
   }
 

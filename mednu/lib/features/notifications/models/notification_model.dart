@@ -37,6 +37,15 @@ enum PatientNotifType {
   medicineRejected,
   medicineCancelled,
   medicineReturned,
+  // The pharmacy backend actually sends `pharmacy_${status}` /
+  // `prescription_*` (functions/index.js's onMedicineOrderCreated pharmacy
+  // pipeline), not `medicine_*` — these existing medicine* values above are
+  // mapped from both prefixes below in _typeFrom. The 4 below are genuinely
+  // new: there is no pre-existing equivalent for a prescription decision.
+  prescriptionRequired,
+  prescriptionVerified,
+  prescriptionRejected,
+  prescriptionReuploadRequested,
 
   // ── Lab / Diagnostics ─────────────────────────────────────────────────────
   labAccepted,
@@ -189,6 +198,19 @@ class NotificationModel {
       'medicine_cancelled':        PatientNotifType.medicineCancelled,
       'medicine_returned':         PatientNotifType.medicineReturned,
       'order_update':              PatientNotifType.orderUpdate,
+      // Actual strings sent by the pharmacy order pipeline (functions/index.js
+      // onMedicineOrderCreated's status-change branch: `pharmacy_${status}`)
+      // — previously unmapped, so these all resolved to `unknown` (no CTA
+      // button, generic icon) despite being real, common order events.
+      'pharmacy_verified':               PatientNotifType.medicineVerified,
+      'pharmacy_packed':                 PatientNotifType.medicinePacked,
+      'pharmacy_out_for_delivery':       PatientNotifType.medicineOutForDelivery,
+      'pharmacy_delivered':              PatientNotifType.medicineDelivered,
+      'pharmacy_cancelled':              PatientNotifType.medicineCancelled,
+      'prescription_required':           PatientNotifType.prescriptionRequired,
+      'prescription_verified':           PatientNotifType.prescriptionVerified,
+      'prescription_rejected':           PatientNotifType.prescriptionRejected,
+      'prescription_reupload_requested': PatientNotifType.prescriptionReuploadRequested,
 
       // Lab
       'lab_accepted':              PatientNotifType.labAccepted,

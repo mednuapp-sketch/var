@@ -22,6 +22,12 @@ class SettingsScreen extends ConsumerStatefulWidget {
   ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
 }
 
+String _reminderMinutesLabel(int minutes) {
+  if (minutes < 60) return '$minutes minutes';
+  final hours = minutes ~/ 60;
+  return '$hours hour${hours > 1 ? 's' : ''}';
+}
+
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _notifications = true;
   bool _waterReminder = true;
@@ -82,7 +88,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   void _showTimingPicker(BuildContext context) {
-    const options = [5, 10, 15, 30, 60];
+    const options = [5, 10, 15, 30, 60, 120, 180];
     showDialog<int>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -94,7 +100,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: options.map((m) {
-            final label = m >= 60 ? '1 hour' : '$m minutes';
+            final label = _reminderMinutesLabel(m);
             final selected = _appointmentReminderMinutes == m;
             return ListTile(
               dense: true,
@@ -759,7 +765,7 @@ class _ReminderTimingTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final label = minutes >= 60 ? '1 hour before' : '$minutes minutes before';
+    final label = '${_reminderMinutesLabel(minutes)} before';
     return ListTile(
       onTap: onTap,
       contentPadding: EdgeInsets.symmetric(horizontal: R.p(context, 16), vertical: R.p(context, 4)),

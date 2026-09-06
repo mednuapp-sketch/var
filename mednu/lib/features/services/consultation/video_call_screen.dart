@@ -5,8 +5,10 @@ import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:go_router/go_router.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:screen_protector/screen_protector.dart';
 import 'agora_call_service.dart';
+import 'call_ui_widgets.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/services/active_call_service.dart';
@@ -40,11 +42,23 @@ class _VideoCallScreenState extends State<VideoCallScreen>
   bool _isMuted = false;
   bool _isCameraOff = false;
   bool _isSpeakerOn = true;
-  bool _remoteJoined = false;
+
+  /// All remote uids currently in the channel — besides the doctor (uid 1),
+  /// a family member the appointment was booked for can also be on this
+  /// call as a guest (uid 3, see AgoraCallService/generateAgoraToken).
+  Set<int> _remoteUids = {};
+  bool get _remoteJoined => _remoteUids.isNotEmpty;
+  String? _guestLabel;
   bool _engineReady = false;
   bool _ending = false;
   bool _isReconnecting = false;
   int _callDuration = 0;
+
+  // Pre-join lobby (Google Meet-style): request camera/mic permission and
+  // preview the local camera before actually publishing/joining the channel.
+  bool _inLobby = true;
+  bool _lobbyLoading = true;
+  bool _permissionsBlocked = false;
 
   int _networkQualityIndex = 0;
   bool _isAudioOnly = false;
@@ -76,12 +90,13 @@ class _VideoCallScreenState extends State<VideoCallScreen>
     _agora = AgoraCallService(
       onRemoteJoined: (uid) {
         if (!mounted) return;
-        setState(() => _remoteJoined = true);
-        _startTimer();
+        final isFirst = _remoteUids.isEmpty;
+        setState(() => _remoteUids = {..._remoteUids, uid});
+        if (isFirst) _startTimer();
       },
-      onRemoteLeft: () {
+      onRemoteLeft: (uid) {
         if (!mounted) return;
-        setState(() => _remoteJoined = false);
+        setState(() => _remoteUids = {..._remoteUids}..remove(uid));
       },
       onNetworkQualityChanged: (qualityIndex, audioOnly) {
         if (!mounted) return;
@@ -103,7 +118,7 @@ class _VideoCallScreenState extends State<VideoCallScreen>
         setState(() => _agoraError = label);
       },
     );
-    _initAgora();
+    _initLobbyPreview();
   }
 
   Future<void> _enableScreenProtection() async {
@@ -135,25 +150,66 @@ class _VideoCallScreenState extends State<VideoCallScreen>
     }
   }
 
-  Future<void> _initAgora() async {
+  /// Requests camera/mic permission and starts the local preview for the
+  /// pre-join lobby. Does NOT join the Agora channel yet — that only
+  /// happens once the user taps "Join call" in [_joinCall].
+  Future<void> _initLobbyPreview() async {
     try {
-      await _agora.initialize();
+      final statuses = await _agora
+          .requestPermissions()
+          .timeout(const Duration(seconds: 15));
       if (!mounted) return;
-      setState(() => _engineReady = true);
-      // Start the foreground service + cache the Flutter engine so Android does
-      // not kill the process (or the Dart VM) if the user swipes from recents.
-      await ActiveCallService.start(
-        callId: widget.callId,
-        callerName: widget.doctorName ?? 'Doctor',
-      );
-      // Handle "End Call" tapped in the persistent notification while in background.
-      ActiveCallService.setEndCallFromNotificationHandler(() => _doEndCall());
-      _watchConsultation();
+      final camGranted = statuses[Permission.camera]?.isGranted ?? false;
+      final micGranted = statuses[Permission.microphone]?.isGranted ?? false;
+
+      if (!camGranted && !micGranted) {
+        setState(() {
+          _permissionsBlocked = true;
+          _lobbyLoading = false;
+        });
+        return;
+      }
+
+      await _agora.initialize().timeout(const Duration(seconds: 15));
+      if (!mounted) return;
+      if (!camGranted) {
+        _isCameraOff = true;
+        await _agora.muteLocalVideo(true);
+      }
+      if (!micGranted) {
+        _isMuted = true;
+        await _agora.muteLocalAudio(true);
+      }
+      if (!mounted) return;
+      setState(() {
+        _permissionsBlocked = false;
+        _engineReady = true;
+        _lobbyLoading = false;
+      });
     } catch (e) {
-      debugPrint('[VideoCall] Agora init failed: $e');
+      debugPrint('[VideoCall] Lobby preview init failed: $e');
       if (!mounted) return;
-      setState(() => _agoraError = 'Could not start the video call. Please try again.');
+      setState(() {
+        _agoraError = 'Could not start camera preview. Please try again.';
+        _lobbyLoading = false;
+      });
     }
+  }
+
+  /// Called when the user taps "Join call" in the lobby — actually connects
+  /// to the Agora channel and starts watching the consultation for the
+  /// doctor joining.
+  Future<void> _joinCall() async {
+    setState(() => _inLobby = false);
+    // Start the foreground service + cache the Flutter engine so Android does
+    // not kill the process (or the Dart VM) if the user swipes from recents.
+    await ActiveCallService.start(
+      callId: widget.callId,
+      callerName: widget.doctorName ?? 'Doctor',
+    );
+    // Handle "End Call" tapped in the persistent notification while in background.
+    ActiveCallService.setEndCallFromNotificationHandler(() => _doEndCall());
+    _watchConsultation();
   }
 
   void _watchConsultation() {
@@ -173,7 +229,10 @@ class _VideoCallScreenState extends State<VideoCallScreen>
       }
       if (_appointmentId == null) {
         final apptId = data['appointmentId'] as String?;
-        if (apptId != null && apptId.isNotEmpty) _appointmentId = apptId;
+        if (apptId != null && apptId.isNotEmpty) {
+          _appointmentId = apptId;
+          _loadGuestLabel(apptId);
+        }
       }
 
       // Doctor joined Agora → patient should join too
@@ -197,6 +256,23 @@ class _VideoCallScreenState extends State<VideoCallScreen>
           break;
       }
     });
+  }
+
+  // The appointment's `patientName` is whoever it was actually booked for —
+  // this account holder's own name when booked for "Self", or a family
+  // member's name when a guest link exists for them — used to label their
+  // video tile if they join this call (see `_buildRemoteView`).
+  Future<void> _loadGuestLabel(String appointmentId) async {
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('appointments')
+          .doc(appointmentId)
+          .get();
+      final name = (snap.data()?['patientName'] as String?)?.trim();
+      if (mounted && name != null && name.isNotEmpty) {
+        setState(() => _guestLabel = name);
+      }
+    } catch (_) {}
   }
 
   void _startTimer() {
@@ -269,6 +345,7 @@ class _VideoCallScreenState extends State<VideoCallScreen>
 
   @override
   Widget build(BuildContext context) {
+    if (_inLobby) return _buildLobby();
     return PopScope(
       // During an active call, back button minimizes the app (like WhatsApp)
       // so the call continues via the foreground service notification.
@@ -291,6 +368,278 @@ class _VideoCallScreenState extends State<VideoCallScreen>
             if (_isReconnecting) _buildReconnectBanner(),
             if (_agoraError != null) _buildAgoraErrorBanner(),
             _buildBottomControls(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Pre-join lobby (Google Meet-style) ────────────────────────────────────
+
+  Widget _buildLobby() {
+    if (_permissionsBlocked) {
+      return Scaffold(
+        backgroundColor: const Color(0xFF14141C),
+        body: Stack(
+          children: [
+            _buildLobbyPermissionBlocked(),
+            _buildLobbyTopBar(),
+          ],
+        ),
+      );
+    }
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          _buildLobbyPreview(),
+          _buildLobbyTopBar(),
+          if (_agoraError != null) _buildAgoraErrorBanner(),
+          _buildLobbyBottomPanel(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLobbyPreview() {
+    if (_lobbyLoading || !_engineReady) {
+      return Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFF1A0533), Color(0xFF0D1B3E)],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+        ),
+        child: const Center(
+          child: CircularProgressIndicator(color: Colors.white54),
+        ),
+      );
+    }
+    if (_isCameraOff) {
+      return Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFF1A0533), Color(0xFF0D1B3E)],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+        ),
+        child: Center(
+          child: Container(
+            width: 120,
+            height: 120,
+            decoration: const BoxDecoration(
+              gradient: AppColors.primaryGradient,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.videocam_off_rounded,
+                size: 48, color: Colors.white),
+          ),
+        ),
+      );
+    }
+    return AgoraVideoView(
+      controller: VideoViewController(
+        rtcEngine: _agora.engine,
+        canvas: const VideoCanvas(
+          uid: 0,
+          renderMode: RenderModeType.renderModeHidden,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLobbyPermissionBlocked() {
+    return Container(
+      alignment: Alignment.center,
+      padding: const EdgeInsets.symmetric(horizontal: 32),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 84,
+            height: 84,
+            decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha:0.08),
+                shape: BoxShape.circle),
+            child: const Icon(Icons.videocam_off_rounded,
+                color: Colors.white54, size: 36),
+          ),
+          const SizedBox(height: 20),
+          const Text(
+            'Camera & microphone access needed',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+                color: Colors.white),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Allow access so the doctor can see and hear you during the consultation.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 13,
+                color: Colors.white60,
+                height: 1.4),
+          ),
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () => openAppSettings(),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+              ),
+              child: const Text('Open Settings',
+                  style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white)),
+            ),
+          ),
+          const SizedBox(height: 10),
+          TextButton(
+            onPressed: () {
+              setState(() => _lobbyLoading = true);
+              _initLobbyPreview();
+            },
+            child: const Text('Try again',
+                style: TextStyle(fontFamily: 'Poppins', color: Colors.white60)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLobbyTopBar() {
+    return Positioned(
+      top: 0,
+      left: 0,
+      right: 0,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 50, 16, 16),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Colors.black.withValues(alpha:0.6), Colors.transparent],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+        ),
+        child: Row(
+          children: [
+            TopButton(
+              icon: Icons.arrow_back_rounded,
+              onTap: () => Navigator.of(context).maybePop(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLobbyBottomPanel() {
+    return Positioned(
+      bottom: 0,
+      left: 0,
+      right: 0,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Colors.transparent, Colors.black.withValues(alpha:0.85)],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              widget.doctorName ?? 'Doctor',
+              style: const TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white),
+            ),
+            if ((widget.doctorSpecialty ?? '').isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                widget.doctorSpecialty!,
+                style: const TextStyle(
+                    fontFamily: 'Poppins', fontSize: 13, color: Colors.white60),
+              ),
+            ],
+            const SizedBox(height: 6),
+            const Text(
+              'Ready to join the consultation?',
+              style: TextStyle(
+                  fontFamily: 'Poppins', fontSize: 13, color: Colors.white54),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                CallButton(
+                  icon: _isMuted ? Icons.mic_off_rounded : Icons.mic_rounded,
+                  label: _isMuted ? 'Unmute' : 'Mute',
+                  isActive: _isMuted,
+                  onTap: () {
+                    setState(() => _isMuted = !_isMuted);
+                    _agora.muteLocalAudio(_isMuted);
+                  },
+                ),
+                const SizedBox(width: 28),
+                CallButton(
+                  icon: _isCameraOff
+                      ? Icons.videocam_off_rounded
+                      : Icons.videocam_rounded,
+                  label: 'Camera',
+                  isActive: _isCameraOff,
+                  onTap: () {
+                    setState(() => _isCameraOff = !_isCameraOff);
+                    _agora.muteLocalVideo(_isCameraOff);
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: (_lobbyLoading || _agoraError != null)
+                    ? null
+                    : _joinCall,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  disabledBackgroundColor: AppColors.primary.withValues(alpha:0.4),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16)),
+                ),
+                child: _lobbyLoading
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Text('Join call',
+                        style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white)),
+              ),
+            ),
           ],
         ),
       ),
@@ -361,19 +710,42 @@ class _VideoCallScreenState extends State<VideoCallScreen>
     if (!_engineReady) {
       return const Center(child: CircularProgressIndicator(color: Colors.white54));
     }
+    // Whether a family member the appointment was booked for has also
+    // joined as a guest (uid 3) — the only other remote possible here
+    // besides the doctor (uid 1), since "self" (uid 2) is this local device.
+    final hasGuest = _remoteUids.contains(3);
     return Stack(
       fit: StackFit.expand,
       children: [
-        AgoraVideoView(
-          controller: VideoViewController.remote(
-            rtcEngine: _agora.engine,
-            canvas: VideoCanvas(
-              uid: _agora.remoteUid ?? 0,
-              renderMode: RenderModeType.renderModeHidden,
+        if (!hasGuest)
+          AgoraVideoView(
+            controller: VideoViewController.remote(
+              rtcEngine: _agora.engine,
+              canvas: VideoCanvas(
+                uid: _remoteUids.isEmpty ? 0 : _remoteUids.first,
+                renderMode: RenderModeType.renderModeHidden,
+              ),
+              connection: RtcConnection(channelId: widget.callId),
             ),
-            connection: RtcConnection(channelId: widget.callId),
+          )
+        else
+          Column(
+            children: [
+              Expanded(
+                child: _buildLabeledRemoteTile(
+                  uid: 1,
+                  label: widget.doctorName ?? 'Doctor',
+                ),
+              ),
+              Container(height: 2, color: Colors.black),
+              Expanded(
+                child: _buildLabeledRemoteTile(
+                  uid: 3,
+                  label: _guestLabel ?? 'Guest',
+                ),
+              ),
+            ],
           ),
-        ),
         if (_isAudioOnly)
           Container(
             color: Colors.black54,
@@ -392,6 +764,48 @@ class _VideoCallScreenState extends State<VideoCallScreen>
               ],
             ),
           ),
+      ],
+    );
+  }
+
+  // A single tile in the 2-remote (doctor + guest family member) layout —
+  // used only once a guest has actually joined; the ordinary 1:1 case above
+  // keeps the original full-bleed single view untouched.
+  Widget _buildLabeledRemoteTile({required int uid, required String label}) {
+    final joined = _remoteUids.contains(uid);
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        const ColoredBox(color: Color(0xFF1A0533)),
+        if (joined)
+          AgoraVideoView(
+            controller: VideoViewController.remote(
+              rtcEngine: _agora.engine,
+              canvas: VideoCanvas(uid: uid, renderMode: RenderModeType.renderModeHidden),
+              connection: RtcConnection(channelId: widget.callId),
+            ),
+          )
+        else
+          const Center(child: CircularProgressIndicator(color: Colors.white54)),
+        Positioned(
+          left: 10,
+          bottom: 10,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.55),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              label,
+              style: const TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white),
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -495,7 +909,7 @@ class _VideoCallScreenState extends State<VideoCallScreen>
               ]),
             ),
             const Spacer(),
-            _TopButton(
+            TopButton(
                 icon: Icons.chat_rounded,
                 onTap: () => _showChat(context)),
           ],
@@ -632,7 +1046,7 @@ class _VideoCallScreenState extends State<VideoCallScreen>
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                _CallButton(
+                CallButton(
                   icon: _isMuted
                       ? Icons.mic_off_rounded
                       : Icons.mic_rounded,
@@ -643,7 +1057,7 @@ class _VideoCallScreenState extends State<VideoCallScreen>
                     _agora.muteLocalAudio(_isMuted);
                   },
                 ),
-                _CallButton(
+                CallButton(
                   icon: _isCameraOff
                       ? Icons.videocam_off_rounded
                       : Icons.videocam_rounded,
@@ -654,7 +1068,7 @@ class _VideoCallScreenState extends State<VideoCallScreen>
                     _agora.muteLocalVideo(_isCameraOff);
                   },
                 ),
-                _AnimatedTap(
+                AnimatedTap(
                   heavy: true,
                   onTap: () => _confirmEnd(context),
                   child: Container(
@@ -675,7 +1089,7 @@ class _VideoCallScreenState extends State<VideoCallScreen>
                         color: Colors.white, size: 30),
                   ),
                 ),
-                _CallButton(
+                CallButton(
                   icon: _isSpeakerOn
                       ? Icons.volume_up_rounded
                       : Icons.volume_off_rounded,
@@ -686,7 +1100,7 @@ class _VideoCallScreenState extends State<VideoCallScreen>
                     _agora.setSpeakerphone(_isSpeakerOn);
                   },
                 ),
-                _CallButton(
+                CallButton(
                   icon: Icons.flip_camera_android_rounded,
                   label: 'Flip',
                   isActive: false,
@@ -738,10 +1152,16 @@ class _VideoCallScreenState extends State<VideoCallScreen>
   }) async {
     if (_ending) return;
     _ending = true;
+    // WhatsApp-style group-call semantics: leaving only ends the consultation
+    // for everyone once the LAST participant leaves an empty channel — this
+    // must be read before `_agora.dispose()` below clears it. If someone else
+    // is still in the channel, this device just exits locally and the rest
+    // keep talking.
+    final isLastToLeave = _agora.remoteUids.isEmpty;
     // Stop foreground service + release engine cache so the next cold start
     // creates a fresh Flutter engine (no stale call state).
     await ActiveCallService.stop();
-    if (!fromRemote && widget.callId.isNotEmpty) {
+    if (!fromRemote && isLastToLeave && widget.callId.isNotEmpty) {
       try {
         await FirebaseFirestore.instance
             .collection('consultations')
@@ -754,9 +1174,13 @@ class _VideoCallScreenState extends State<VideoCallScreen>
         debugPrint('[VideoCall] End-call status update failed: $e');
       }
     }
-    // Always mark the linked appointment completed — idempotent even if doctor
-    // side writes it at the same time.
-    if (_appointmentId != null && _appointmentId!.isNotEmpty) {
+    // Mark the linked appointment completed once the visit is actually over
+    // for everyone: either another party already ended it (fromRemote — the
+    // Firestore status change is the authoritative signal) or this device is
+    // the last one leaving. Idempotent even if another party's leave races this.
+    if ((fromRemote || isLastToLeave) &&
+        _appointmentId != null &&
+        _appointmentId!.isNotEmpty) {
       try {
         await FirebaseFirestore.instance
             .collection('appointments')
@@ -769,7 +1193,7 @@ class _VideoCallScreenState extends State<VideoCallScreen>
         debugPrint('[VideoCall] Appointment complete failed: $e');
       }
     }
-    if (mounted) setState(() { _engineReady = false; _remoteJoined = false; });
+    if (mounted) setState(() { _engineReady = false; _remoteUids = {}; });
     await _agora.dispose();
     if (!mounted) return;
     _showPostCallSheet(context, reason: reason);
@@ -1001,128 +1425,6 @@ class _FeedbackOption extends StatelessWidget {
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
                   color: color)),
-        ],
-      ),
-    );
-  }
-}
-
-class _AnimatedTap extends StatefulWidget {
-  final Widget child;
-  final VoidCallback onTap;
-  final bool heavy;
-  const _AnimatedTap(
-      {required this.child, required this.onTap, this.heavy = false});
-
-  @override
-  State<_AnimatedTap> createState() => _AnimatedTapState();
-}
-
-class _AnimatedTapState extends State<_AnimatedTap>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _ctrl;
-  late Animation<double> _scale;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 75),
-      reverseDuration: const Duration(milliseconds: 130),
-    );
-    _scale = Tween<double>(begin: 1.0, end: widget.heavy ? 0.80 : 0.86)
-        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  void _down(TapDownDetails _) {
-    widget.heavy
-        ? HapticFeedback.mediumImpact()
-        : HapticFeedback.lightImpact();
-    _ctrl.forward();
-  }
-
-  void _up(TapUpDetails _) {
-    _ctrl.reverse();
-    widget.onTap();
-  }
-
-  void _cancel() => _ctrl.reverse();
-
-  @override
-  Widget build(BuildContext context) => GestureDetector(
-        onTapDown: _down,
-        onTapUp: _up,
-        onTapCancel: _cancel,
-        child: ScaleTransition(scale: _scale, child: widget.child),
-      );
-}
-
-class _TopButton extends StatelessWidget {
-  final IconData icon;
-  final VoidCallback onTap;
-  const _TopButton({required this.icon, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return _AnimatedTap(
-      onTap: onTap,
-      child: Container(
-        width: 38,
-        height: 38,
-        decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha:0.4),
-          shape: BoxShape.circle,
-        ),
-        child: Icon(icon, color: Colors.white, size: 18),
-      ),
-    );
-  }
-}
-
-class _CallButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final bool isActive;
-  final VoidCallback onTap;
-  const _CallButton(
-      {required this.icon,
-      required this.label,
-      required this.isActive,
-      required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return _AnimatedTap(
-      onTap: onTap,
-      child: Column(
-        children: [
-          Container(
-            width: 52,
-            height: 52,
-            decoration: BoxDecoration(
-              color: isActive
-                  ? Colors.white.withValues(alpha:0.3)
-                  : Colors.white.withValues(alpha:0.15),
-              shape: BoxShape.circle,
-              border: isActive
-                  ? Border.all(color: Colors.white, width: 1.5)
-                  : null,
-            ),
-            child: Icon(icon, color: Colors.white, size: 24),
-          ),
-          const SizedBox(height: 6),
-          Text(label,
-              style: const TextStyle(
-                  color: Colors.white70,
-                  fontSize: 11,
-                  fontFamily: 'Poppins')),
         ],
       ),
     );

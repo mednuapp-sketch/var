@@ -1,4 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -7,6 +8,7 @@ import 'package:mednu/core/constants/app_colors.dart';
 import 'package:mednu/core/constants/app_text_styles.dart';
 import 'package:mednu/core/router/app_router.dart';
 import 'package:mednu/core/widgets/ux_widgets.dart';
+import '../../health/providers/water_tracker_provider.dart';
 import '../models/notification_model.dart';
 import '../providers/notification_provider.dart';
 import '../services/notification_service.dart';
@@ -768,14 +770,14 @@ class _SwipeDeleteBg extends StatelessWidget {
 
 // ── Notification tile ─────────────────────────────────────────────────────────
 
-class _NotifTile extends StatelessWidget {
+class _NotifTile extends ConsumerWidget {
   final NotificationModel notif;
   final String uid;
 
   const _NotifTile({required this.notif, required this.uid});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final meta = _NotifMeta.of(notif.type);
 
     return GestureDetector(
@@ -934,11 +936,26 @@ class _NotifTile extends StatelessWidget {
                                     SizedBox(
                                       width: double.infinity,
                                       child: ElevatedButton(
-                                        onPressed: () {
+                                        onPressed: () async {
                                           PatientNotificationService.markRead(
                                             uid,
                                             notif.id,
                                           );
+                                          // "Mark Done" used to just open the
+                                          // water tracker screen without
+                                          // logging anything — this actually
+                                          // logs the glass, same call
+                                          // home_widgets.dart's own Mark Done
+                                          // button makes.
+                                          if (notif.type == PatientNotifType.waterReminder) {
+                                            await ref.read(waterTrackerProvider.notifier).logWater();
+                                            if (context.mounted) {
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                const SnackBar(content: Text('Nice! Water intake logged.')),
+                                              );
+                                            }
+                                            return;
+                                          }
                                           _navigate(context);
                                         },
                                         style: ElevatedButton.styleFrom(
@@ -991,9 +1008,73 @@ class _NotifTile extends StatelessWidget {
     _navigate(context);
   }
 
+  // Medicine/pharmacy order events — including the prescription-decision
+  // types, which are updates on the same `orders` doc — carry a real order
+  // id in `bookingId` (functions/index.js sets `bookingId: orderId`). Without
+  // this, they fell back to either a fake generic tracker (_routeFor's bare
+  // AppRoutes.orderTracking) or the medicine shopping catalogue
+  // (_serviceRoute('medicine') for actionType open_service), never the order
+  // itself — the concrete reason "upload prescription" felt unreachable from
+  // a pharmacy_prescription_required push.
+  static const _medicineOrderTypes = {
+    PatientNotifType.medicineAccepted,
+    PatientNotifType.medicineProcessing,
+    PatientNotifType.medicineVerified,
+    PatientNotifType.medicinePacked,
+    PatientNotifType.medicineOutForDelivery,
+    PatientNotifType.medicineDelivered,
+    PatientNotifType.medicineCancelled,
+    PatientNotifType.medicineReturned,
+    PatientNotifType.medicineRejected,
+    PatientNotifType.orderUpdate,
+    PatientNotifType.prescriptionRequired,
+    PatientNotifType.prescriptionVerified,
+    PatientNotifType.prescriptionRejected,
+    PatientNotifType.prescriptionReuploadRequested,
+  };
+
   void _navigate(BuildContext context) {
+    // Prescription notifications need a real Firestore fetch before we can
+    // navigate — PrescriptionViewerScreen has no fetch-by-id fallback, so
+    // pushing its plain route (as _routeFor would) renders a blank RX-0000
+    // placeholder instead of the actual prescription.
+    if (notif.actionType == 'open_prescription' ||
+        notif.type == PatientNotifType.prescriptionUploaded) {
+      _openPrescription(context);
+      return;
+    }
+    if ((_medicineOrderTypes.contains(notif.type) ||
+            notif.actionType == 'open_order' ||
+            (notif.actionType == 'open_service' &&
+                notif.serviceType == 'medicine')) &&
+        notif.bookingId.isNotEmpty) {
+      context.push(AppRoutes.orderDetail, extra: {'orderId': notif.bookingId});
+      return;
+    }
     final route = _routeFor(notif);
     if (route != null && context.mounted) context.push(route);
+  }
+
+  Future<void> _openPrescription(BuildContext context) async {
+    Map<String, dynamic>? rx;
+    if (notif.bookingId.isNotEmpty) {
+      try {
+        final snap = await FirebaseFirestore.instance
+            .collection('prescriptions')
+            .where('appointmentId', isEqualTo: notif.bookingId)
+            .limit(1)
+            .get();
+        if (snap.docs.isNotEmpty) {
+          rx = {...snap.docs.first.data(), 'id': snap.docs.first.id};
+        }
+      } catch (_) {}
+    }
+    if (!context.mounted) return;
+    if (rx != null) {
+      context.push(AppRoutes.prescriptionViewer, extra: rx);
+    } else {
+      context.push(AppRoutes.records);
+    }
   }
 
   String? _routeFor(NotificationModel n) {
@@ -1003,7 +1084,9 @@ class _NotifTile extends StatelessWidget {
       case 'open_prescription':
         return AppRoutes.prescriptionViewer;
       case 'open_order':
-        return AppRoutes.orderTracking;
+        // Fallback only (no bookingId) — _navigate handles the real order
+        // case first.
+        return AppRoutes.medicineOrders;
       case 'open_diagnostics':
         return AppRoutes.diagnostics;
       case 'open_ambulance':
@@ -1048,7 +1131,14 @@ class _NotifTile extends StatelessWidget {
       case PatientNotifType.medicineReturned:
       case PatientNotifType.medicineRejected:
       case PatientNotifType.orderUpdate:
-        return AppRoutes.orderTracking;
+      case PatientNotifType.prescriptionRequired:
+      case PatientNotifType.prescriptionVerified:
+      case PatientNotifType.prescriptionRejected:
+      case PatientNotifType.prescriptionReuploadRequested:
+        // Fallback only — _navigate handles these first with the real
+        // orderId when bookingId is present. This is the real orders list,
+        // not the fake tracker AppRoutes.orderTracking used to point to.
+        return AppRoutes.medicineOrders;
       case PatientNotifType.labAccepted:
       case PatientNotifType.labAssigned:
       case PatientNotifType.labInProgress:
@@ -1105,7 +1195,11 @@ class _NotifTile extends StatelessWidget {
       case PatientNotifType.periodTracker:
         return AppRoutes.periodTracker;
       case PatientNotifType.medicineReminder:
-        return AppRoutes.medicine;
+        // There is no per-dose intake log in this app (unlike water, which
+        // waterTrackerProvider actually tracks) — AppRoutes.medicine was the
+        // shopping catalogue, not even a relevant screen for "did you take
+        // it". This is the user's own medicine list instead.
+        return AppRoutes.myMedicines;
       case PatientNotifType.bookingAccepted:
       case PatientNotifType.bookingAssigned:
       case PatientNotifType.bookingStarted:
@@ -1130,7 +1224,12 @@ class _NotifTile extends StatelessWidget {
       case 'appointment':
         return AppRoutes.appointment;
       case 'medicine':
-        return AppRoutes.medicine;
+        // The real orders list, not the shopping catalogue — a medicine
+        // order-status push (e.g. pharmacy_prescription_required) means
+        // "look at your order," not "browse medicines." _navigate handles
+        // the common case (bookingId present) by going straight to the
+        // specific order; this is only the no-bookingId fallback.
+        return AppRoutes.medicineOrders;
       case 'diagnostics':
       case 'lab':
         return AppRoutes.diagnostics;
@@ -1172,6 +1271,13 @@ class _NotifTile extends StatelessWidget {
         return 'Track Delivery';
       case PatientNotifType.medicineDelivered:
         return 'View Order';
+      case PatientNotifType.prescriptionRequired:
+      case PatientNotifType.prescriptionReuploadRequested:
+        return 'Upload Prescription';
+      case PatientNotifType.prescriptionVerified:
+        return 'View Order';
+      case PatientNotifType.prescriptionRejected:
+        return 'View Details';
       case PatientNotifType.labReportReady:
         return 'View Report';
       case PatientNotifType.ambulanceAccepted:
@@ -1184,7 +1290,9 @@ class _NotifTile extends StatelessWidget {
       case PatientNotifType.waterReminder:
         return 'Mark Done';
       case PatientNotifType.medicineReminder:
-        return 'Mark Taken';
+        // Not "Mark Taken" — there's no dose-intake log for this button to
+        // write to, so a label implying one would be a second dead action.
+        return 'View Medicines';
       case PatientNotifType.consultationDone:
       case PatientNotifType.followupDay1:
       case PatientNotifType.followupDay2:

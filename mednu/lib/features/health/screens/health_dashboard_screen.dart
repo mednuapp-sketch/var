@@ -1278,8 +1278,6 @@ class _QuickActions extends StatelessWidget {
           () => context.push(AppRoutes.records)),
       ('Consultations', Icons.history_rounded, AppColors.consultGrad,
           () => context.push(AppRoutes.appointment)),
-      ('Prescription Viewer', Icons.pageview_rounded, AppColors.primaryGradient,
-          () => context.push(AppRoutes.prescriptionViewer)),
     ];
 
     return _staticGrid(
@@ -1531,90 +1529,12 @@ class _BMICard extends StatelessWidget {
                         fontFamily: 'Poppins',
                         fontWeight: FontWeight.w600,
                         fontSize: 13)),
-                onPressed: () => _calcSheet(context),
+                onPressed: () => context.push(AppRoutes.nutritionBmi),
               ),
             ),
           ]),
         );
       },
-    );
-  }
-
-  void _calcSheet(BuildContext context) {
-    double h = 165, w = 65;
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => StatefulBuilder(
-        builder: (ctx, set) => Padding(
-          padding: EdgeInsets.only(
-              bottom: MediaQuery.of(ctx).viewInsets.bottom),
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(20, 14, 20, 28),
-            decoration: BoxDecoration(
-                color: context.appSurface,
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(24))),
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Container(
-                  width: 36,
-                  height: 4,
-                  decoration: BoxDecoration(
-                      color: context.appDivider,
-                      borderRadius: BorderRadius.circular(2))),
-              const SizedBox(height: 14),
-              const Text('BMI Calculator', style: AppTextStyles.h3),
-              const SizedBox(height: 18),
-              Text('Height: ${h.round()} cm', style: AppTextStyles.labelLarge),
-              Slider(
-                  value: h,
-                  min: 130,
-                  max: 210,
-                  onChanged: (v) => set(() => h = v),
-                  activeColor: AppColors.primary),
-              Text('Weight: ${w.round()} kg', style: AppTextStyles.labelLarge),
-              Slider(
-                  value: w,
-                  min: 25,
-                  max: 200,
-                  onChanged: (v) => set(() => w = v),
-                  activeColor: AppColors.primary),
-              const SizedBox(height: 10),
-              Builder(builder: (_) {
-                final hm = h / 100;
-                final bmi = w / (hm * hm);
-                final Color col;
-                final String lbl;
-                if (bmi < 18.5) { col = const Color(0xFF1565C0); lbl = 'Underweight'; }
-                else if (bmi < 25) { col = const Color(0xFF2E7D32); lbl = 'Normal'; }
-                else if (bmi < 30) { col = const Color(0xFFE65100); lbl = 'Overweight'; }
-                else { col = AppColors.error; lbl = 'Obese'; }
-                return Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                      color: col.withValues(alpha:0.1),
-                      borderRadius: BorderRadius.circular(12)),
-                  child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.monitor_weight_rounded,
-                            color: col, size: 20),
-                        const SizedBox(width: 8),
-                        Text(
-                            'BMI: ${bmi.toStringAsFixed(1)} – $lbl',
-                            style: TextStyle(
-                                fontFamily: 'Poppins',
-                                fontSize: 17,
-                                fontWeight: FontWeight.w800,
-                                color: col)),
-                      ]),
-                );
-              }),
-            ]),
-          ),
-        ),
-      ),
     );
   }
 }

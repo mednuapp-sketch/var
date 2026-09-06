@@ -19,6 +19,12 @@ class BookingService {
     String notes = '',
     Map<String, dynamic> serviceDetails = const {},
     num? amount,
+    // Lets a caller pre-assign a specific provider (e.g. {'physiotherapistId':
+    // id} from booking a specific physiotherapist rather than requesting any
+    // available one) — merged straight into the request doc. The Cloud
+    // Function mirror for that module (see functions/index.js
+    // `_buildSessionDoc`) honors this field and skips the unclaimed pool.
+    Map<String, dynamic> extraFields = const {},
   }) async {
     final uid = _auth.currentUser?.uid;
     if (uid == null || uid.isEmpty) throw Exception('User not authenticated');
@@ -45,6 +51,7 @@ class BookingService {
         'amount':         amount,
         'status':         'pending',
         'assignedTo':     null,
+        ...extraFields,
         'createdAt':      FieldValue.serverTimestamp(),
         'updatedAt':      FieldValue.serverTimestamp(),
       });

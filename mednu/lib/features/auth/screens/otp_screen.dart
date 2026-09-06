@@ -111,7 +111,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
         if (status == 'hasMpin' || status == 'noMpin') {
           context.go(AppRoutes.home);
         } else {
-          context.go(AppRoutes.register, extra: {'phone': widget.phone});
+          context.go(AppRoutes.termsAccept, extra: {'phone': widget.phone});
         }
       }
     } catch (e) {

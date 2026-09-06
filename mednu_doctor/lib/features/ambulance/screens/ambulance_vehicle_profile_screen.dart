@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -85,6 +86,21 @@ class AmbulanceVehicleProfileScreen extends ConsumerWidget {
         ],
       ),
     );
+
+    // Disposal is deferred until well after the dialog's own exit transition
+    // finishes — disposing synchronously right after showDialog's Future
+    // resolves is the documented dispose-race crash pattern elsewhere in this
+    // codebase (the AlertDialog/TextFields are still mounted and mid-animation
+    // at that exact point, not actually unmounted yet). The default Material
+    // dialog transition is ~150ms; 400ms leaves comfortable margin.
+    unawaited(Future.delayed(const Duration(milliseconds: 400), () {
+      plate.dispose();
+      vehicleType.dispose();
+      driverName.dispose();
+      driverPhone.dispose();
+      driverLicense.dispose();
+      equipment.dispose();
+    }));
 
     if (saved != true) return;
 

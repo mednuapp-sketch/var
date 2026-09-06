@@ -7,6 +7,7 @@ import '../../../core/services/feedback_service.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../models/cart_item.dart';
 import '../providers/cart_provider.dart';
+import '../providers/pending_prescription_provider.dart';
 import '../widgets/checkout_details_sheet.dart';
 
 class CartScreen extends ConsumerStatefulWidget {
@@ -56,6 +57,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
               'patientName': d.name,
               'patientPhone': d.phone,
               'address': d.address,
+              if (d.locationData != null) 'recipientLocation': d.locationData,
               'preferredDate': d.date,
               'preferredTime': d.time,
               'notes': d.notes,
@@ -85,6 +87,28 @@ class _CartScreenState extends ConsumerState<CartScreen> {
               'deliveryAddress': d.address,
               'deliveryName': d.name,
               'deliveryPhone': d.phone,
+              if (d.locationData != null) 'recipientLocation': d.locationData,
+              // The cart lock (CartNotifier.conflictFor) guarantees every
+              // medicine item shares one pharmacy by checkout time, so it's
+              // safe to hoist just the first item's source pharmacy here.
+              // onMedicineOrderCreated (functions/index.js) reads this to pin
+              // the resulting order instead of dropping it in the unclaimed
+              // pool; captureCartPayment also reads it for commission
+              // attribution (_PROVIDER_FIELD_BY_SERVICE.medicine).
+              'pharmacyId': medicineItems.first.serviceDetails['sourcePharmacyId'],
+              // Attached from the medicine browsing screen before this order
+              // existed (see medicine_screen.dart's Upload Prescription
+              // action) — captureCartPayment (functions/index.js) writes
+              // `bookingData` verbatim onto the new orders/{orderId} doc, so
+              // these land exactly like a post-purchase upload would, just
+              // already there when the order is created. No
+              // prescriptionUploadedAt here: FieldValue.serverTimestamp()
+              // doesn't survive the callable-function JSON boundary, and
+              // OrderModel treats a missing timestamp as fine (null).
+              if (ref.read(pendingPrescriptionProvider) != null) ...{
+                'prescriptionUrl': ref.read(pendingPrescriptionProvider)!.url,
+                'prescriptionFileType': ref.read(pendingPrescriptionProvider)!.fileType,
+              },
             },
           },
       ];
@@ -107,6 +131,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
 
     final payments = (result!['payments'] as List).cast<Map>();
     ref.read(cartProvider.notifier).clear();
+    ref.read(pendingPrescriptionProvider.notifier).state = null;
     setState(() => _checkingOut = false);
     FeedbackService.showSuccess(context, 'Order placed successfully!');
 

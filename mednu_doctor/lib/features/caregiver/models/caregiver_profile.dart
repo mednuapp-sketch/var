@@ -12,6 +12,9 @@ class CaregiverProfile {
   final double rating;
   final int totalVisits;
   final int experienceYears;
+  final String city;
+  final double? lat;
+  final double? lng;
   final bool documentsVerified;
 
   /// Admin-approval status: 'pending' | 'active'. Distinct from
@@ -34,6 +37,9 @@ class CaregiverProfile {
     required this.rating,
     required this.totalVisits,
     required this.experienceYears,
+    this.city = '',
+    this.lat,
+    this.lng,
     required this.documentsVerified,
     this.status = 'pending',
     this.documents = const {},
@@ -71,6 +77,9 @@ class CaregiverProfile {
       rating: ((d['rating'] as num?) ?? 0).toDouble(),
       totalVisits: ((d['totalVisits'] as num?) ?? 0).toInt(),
       experienceYears: ((d['experienceYears'] as num?) ?? 0).toInt(),
+      city: d['city'] as String? ?? '',
+      lat: (d['lat'] as num?)?.toDouble(),
+      lng: (d['lng'] as num?)?.toDouble(),
       documentsVerified: d['documentsVerified'] as bool? ?? false,
       status: d['status'] as String? ?? 'pending',
       documents: Map<String, dynamic>.from(

@@ -461,6 +461,7 @@ class _FamilyManagementScreenState extends ConsumerState<FamilyManagementScreen>
         slivers: [
           SliverAppBar(
             pinned: true,
+            backgroundColor: const Color(0xFF33172C),
             expandedHeight: 140,
             leading: IconButton(
               icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),

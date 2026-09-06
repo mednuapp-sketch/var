@@ -25,41 +25,70 @@ double _haversineKm(double lat1, double lng1, double lat2, double lng2) {
   return r * 2 * asin(sqrt(a));
 }
 
+// Prefers the doctor's registered clinic coordinates (captured at
+// registration/profile-edit via the map picker) since those are stable;
+// falls back to the live-tracked GPS `location` field for doctors who
+// haven't pinned a clinic location yet.
+GeoPoint? _clinicGeoPoint(Map<String, dynamic> data) {
+  final lat = (data['clinicLat'] as num?)?.toDouble();
+  final lng = (data['clinicLng'] as num?)?.toDouble();
+  if (lat != null && lng != null) return GeoPoint(lat, lng);
+  return data['location'] as GeoPoint?;
+}
+
 // ─────────────────────────────────────────────────────────────
 //  Filter state
 // ─────────────────────────────────────────────────────────────
 class _FilterState {
-  final String sortBy; // 'relevance' | 'fee_asc' | 'fee_desc'
+  final String sortBy; // 'relevance' | 'fee_asc' | 'fee_desc' | 'distance_asc' | 'distance_desc'
   final int maxFee; // 0 = any
   final String gender; // 'Any' | 'Male' | 'Female'
   final bool availableNow; // filter to online doctors only
+  final List<String> languages; // empty = any language
+  final String city; // empty = any city; browses that city regardless of GPS
 
   const _FilterState({
     this.sortBy = 'relevance',
     this.maxFee = 0,
     this.gender = 'Any',
     this.availableNow = false,
+    this.languages = const [],
+    this.city = '',
   });
 
   bool get hasActiveFilters =>
       sortBy != 'relevance' ||
       maxFee > 0 ||
       gender != 'Any' ||
-      availableNow;
+      availableNow ||
+      languages.isNotEmpty ||
+      city.trim().isNotEmpty;
 
   _FilterState copyWith({
     String? sortBy,
     int? maxFee,
     String? gender,
     bool? availableNow,
+    List<String>? languages,
+    String? city,
   }) =>
       _FilterState(
         sortBy: sortBy ?? this.sortBy,
         maxFee: maxFee ?? this.maxFee,
         gender: gender ?? this.gender,
         availableNow: availableNow ?? this.availableNow,
+        languages: languages ?? this.languages,
+        city: city ?? this.city,
       );
 }
+
+// Kept in sync with the language list offered at doctor registration/profile
+// edit in mednu_doctor — these are the only values the `languages` field on
+// a doctor doc can contain.
+const _allLanguages = [
+  'English', 'Telugu', 'Hindi', 'Tamil', 'Kannada',
+  'Malayalam', 'Marathi', 'Bengali',
+];
 
 // ─────────────────────────────────────────────────────────────
 //  Main Screen
@@ -69,6 +98,10 @@ class DoctorsListScreen extends ConsumerStatefulWidget {
   final String? initialMode; // 'video' | 'inperson'
   final String? initialType; // 'therapist' | null (any professional type)
   final int? initialDuration; // preferred session length in minutes, carried from the booking flow
+  // The counselling screen's own display title for the therapy type picked
+  // (e.g. "Depression & Anxiety") — when present, makes this list read as
+  // that type's own therapist directory rather than a generic doctor search.
+  final String? initialTherapyTitle;
   final bool showBackButton;
 
   const DoctorsListScreen({
@@ -77,6 +110,7 @@ class DoctorsListScreen extends ConsumerStatefulWidget {
     this.initialMode,
     this.initialType,
     this.initialDuration,
+    this.initialTherapyTitle,
     this.showBackButton = true,
   });
 
@@ -182,6 +216,7 @@ class _DoctorsListScreenState extends ConsumerState<DoctorsListScreen>
       builder: (_) => _FilterSheet(
         initial: _filters,
         onApply: (f) => setState(() => _filters = f),
+        showDistanceSort: _consultationMode == 'inperson',
       ),
     );
   }
@@ -269,14 +304,30 @@ class _DoctorsListScreenState extends ConsumerState<DoctorsListScreen>
       resizeToAvoidBottomInset: false,
       backgroundColor: context.appBackground,
       appBar: AppBar(
-        title: Text(
-          _therapistsOnly ? 'Find Therapists' : 'Find Doctors',
-          style: const TextStyle(
-            fontFamily: 'Poppins',
-            fontWeight: FontWeight.w700,
-            color: Colors.white,
-            fontSize: 18,
-          ),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              widget.initialTherapyTitle ?? (_therapistsOnly ? 'Find Therapists' : 'Find Doctors'),
+              style: const TextStyle(
+                fontFamily: 'Poppins',
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+                fontSize: 18,
+              ),
+            ),
+            if (widget.initialTherapyTitle != null)
+              const Text(
+                'Choose a therapist near you',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontWeight: FontWeight.w400,
+                  color: Colors.white70,
+                  fontSize: 11.5,
+                ),
+              ),
+          ],
         ),
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
@@ -462,7 +513,7 @@ class _DoctorsListScreenState extends ConsumerState<DoctorsListScreen>
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Video consultations available across India',
+                    'Consultations available across India',
                     style: AppTextStyles.caption
                         .copyWith(color: Colors.teal.shade700),
                     maxLines: 1,
@@ -604,6 +655,20 @@ class _DoctorsListScreenState extends ConsumerState<DoctorsListScreen>
                     onRemove: () => setState(
                         () => _filters = _filters.copyWith(availableNow: false)),
                   ),
+                if (_filters.languages.isNotEmpty)
+                  _ActiveFilterChip(
+                    label: _filters.languages.length == 1
+                        ? _filters.languages.first
+                        : '${_filters.languages.length} Languages',
+                    onRemove: () => setState(
+                        () => _filters = _filters.copyWith(languages: const [])),
+                  ),
+                if (_filters.city.trim().isNotEmpty)
+                  _ActiveFilterChip(
+                    label: _filters.city.trim(),
+                    onRemove: () =>
+                        setState(() => _filters = _filters.copyWith(city: '')),
+                  ),
                 // Clear all button
                 GestureDetector(
                   onTap: () => setState(() => _filters = const _FilterState()),
@@ -686,6 +751,10 @@ class _DoctorsListScreenState extends ConsumerState<DoctorsListScreen>
         return 'Fee: Low';
       case 'fee_desc':
         return 'Fee: High';
+      case 'distance_asc':
+        return 'Nearest First';
+      case 'distance_desc':
+        return 'Farthest First';
       default:
         return s;
     }
@@ -766,12 +835,31 @@ class _DoctorListView extends StatelessWidget {
         List<MapEntry<QueryDocumentSnapshot<Map<String, dynamic>>, double?>>
             withDistance;
 
-        if (!locationMode.isGlobal &&
+        final cityQuery = filters.city.trim().toLowerCase();
+        double? distanceFor(Map<String, dynamic> data) {
+          if (locationMode.lat == null || locationMode.lng == null) return null;
+          final gp = _clinicGeoPoint(data);
+          if (gp == null) return null;
+          return _haversineKm(
+              locationMode.lat!, locationMode.lng!, gp.latitude, gp.longitude);
+        }
+
+        if (cityQuery.isNotEmpty) {
+          // A city filter browses that city outright, ignoring the device's
+          // live/set location entirely — distance is still computed for
+          // display/sort when possible, just never used to exclude a doctor.
+          withDistance = list
+              .where((doc) => (doc.data()['clinicCity'] as String? ?? '')
+                  .toLowerCase()
+                  .contains(cityQuery))
+              .map((doc) => MapEntry(doc, distanceFor(doc.data())))
+              .toList();
+        } else if (!locationMode.isGlobal &&
             locationMode.lat != null &&
             locationMode.lng != null) {
           withDistance = list
               .map((doc) {
-                final gp = doc.data()['location'] as GeoPoint?;
+                final gp = _clinicGeoPoint(doc.data());
                 if (gp == null) return null;
                 final km = _haversineKm(locationMode.lat!, locationMode.lng!,
                     gp.latitude, gp.longitude);
@@ -823,8 +911,36 @@ class _DoctorListView extends StatelessWidget {
           }).toList();
         }
 
+        if (filters.languages.isNotEmpty) {
+          withDistance = withDistance.where((e) {
+            // Doctors registered before language selection existed have no
+            // `languages` field — treat them as English-speaking, matching
+            // the default selection doctors see on that step.
+            final langs = (e.key.data()['languages'] as List?)
+                    ?.cast<String>() ??
+                const ['English'];
+            return filters.languages.any(langs.contains);
+          }).toList();
+        }
+
         // ── Sort ─────────────────────────────────────────────
         switch (filters.sortBy) {
+          case 'distance_asc':
+            withDistance.sort((a, b) {
+              if (a.value == null && b.value == null) return 0;
+              if (a.value == null) return 1;
+              if (b.value == null) return -1;
+              return a.value!.compareTo(b.value!);
+            });
+            break;
+          case 'distance_desc':
+            withDistance.sort((a, b) {
+              if (a.value == null && b.value == null) return 0;
+              if (a.value == null) return 1;
+              if (b.value == null) return -1;
+              return b.value!.compareTo(a.value!);
+            });
+            break;
           case 'fee_asc':
             withDistance.sort((a, b) {
               final fa = a.key.data()['fee'];
@@ -1223,8 +1339,13 @@ class _DoctorCard extends StatelessWidget {
                 if (isOnline) ...[
                   Expanded(
                     child: GestureDetector(
-                      onTap: () => context.push('/doctors/$docId',
-                          extra: {'mode': 'quickConnect'}),
+                      // DoctorProfileScreen's route only ever reads `mode`
+                      // from the URL's query string (app_router.dart:
+                      // `s.uri.queryParameters['mode']`) — passing it via
+                      // `extra` instead, as this used to, was silently
+                      // dropped, so Quick Connect landed on the exact same
+                      // screen state as a bare profile visit (i.e. Book Now).
+                      onTap: () => context.push('/doctors/$docId?mode=quickConnect'),
                       child: Container(
                         height: 44,
                         decoration: BoxDecoration(
@@ -1363,7 +1484,12 @@ class _ActiveFilterChip extends StatelessWidget {
 class _FilterSheet extends StatefulWidget {
   final _FilterState initial;
   final ValueChanged<_FilterState> onApply;
-  const _FilterSheet({required this.initial, required this.onApply});
+  final bool showDistanceSort;
+  const _FilterSheet({
+    required this.initial,
+    required this.onApply,
+    this.showDistanceSort = false,
+  });
 
   @override
   State<_FilterSheet> createState() => _FilterSheetState();
@@ -1371,11 +1497,93 @@ class _FilterSheet extends StatefulWidget {
 
 class _FilterSheetState extends State<_FilterSheet> {
   late _FilterState _state;
+  late final TextEditingController _cityCtrl;
+  final _cityDio = Dio();
+  List<String> _citySuggestions = [];
+  bool _cityLoading = false;
+  Timer? _cityDebounce;
 
   @override
   void initState() {
     super.initState();
     _state = widget.initial;
+    _cityCtrl = TextEditingController(text: widget.initial.city);
+  }
+
+  @override
+  void dispose() {
+    _cityDebounce?.cancel();
+    _cityDio.close(force: true);
+    _cityCtrl.dispose();
+    super.dispose();
+  }
+
+  // Typing invalidates whatever city was previously confirmed — the filter
+  // only ever holds a name picked from real, geocoded suggestions below, so
+  // free-form / misspelled text can never be applied as a city filter.
+  void _onCityChanged(String v) {
+    if (_state.city.isNotEmpty && _state.city != v) {
+      setState(() => _state = _state.copyWith(city: ''));
+    }
+    _cityDebounce?.cancel();
+    final q = v.trim();
+    if (q.length < 2) {
+      setState(() {
+        _citySuggestions = [];
+        _cityLoading = false;
+      });
+      return;
+    }
+    _cityDebounce = Timer(const Duration(milliseconds: 450), () => _searchCity(q));
+  }
+
+  Future<void> _searchCity(String q) async {
+    if (!mounted) return;
+    setState(() => _cityLoading = true);
+    try {
+      final res = await _cityDio.get(
+        'https://nominatim.openstreetmap.org/search',
+        queryParameters: {
+          'q': q, 'format': 'jsonv2', 'addressdetails': 1,
+          'limit': 8, 'countrycodes': 'in',
+        },
+        options: Options(
+          headers: {'User-Agent': 'MedNUApp/1.0'},
+          receiveTimeout: const Duration(seconds: 8),
+        ),
+      );
+      if (!mounted) return;
+      final seen = <String>{};
+      final cities = <String>[];
+      for (final item in (res.data as List)) {
+        final addr = item['address'] as Map<String, dynamic>? ?? {};
+        final city = (addr['city'] ?? addr['town'] ?? addr['village'] ??
+            addr['county'] ?? addr['state_district']) as String?;
+        if (city == null || city.trim().isEmpty) continue;
+        final key = city.trim().toLowerCase();
+        if (seen.add(key)) cities.add(city.trim());
+      }
+      setState(() {
+        _citySuggestions = cities;
+        _cityLoading = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _cityLoading = false);
+    }
+  }
+
+  void _selectCity(String city) {
+    _cityDebounce?.cancel();
+    _cityCtrl.value = TextEditingValue(
+      text: city,
+      selection: TextSelection.collapsed(offset: city.length),
+    );
+    setState(() {
+      _state = _state.copyWith(city: city);
+      _citySuggestions = [];
+      _cityLoading = false;
+    });
+    FocusScope.of(context).unfocus();
   }
 
   @override
@@ -1403,8 +1611,13 @@ class _FilterSheetState extends State<_FilterSheet> {
             const Text('Filter Doctors', style: AppTextStyles.h3),
             const Spacer(),
             TextButton(
-              onPressed: () => setState(
-                  () => _state = const _FilterState()),
+              onPressed: () => setState(() {
+                _cityDebounce?.cancel();
+                _state = const _FilterState();
+                _cityCtrl.clear();
+                _citySuggestions = [];
+                _cityLoading = false;
+              }),
               child: const Text('Reset All'),
             ),
           ]),
@@ -1419,8 +1632,109 @@ class _FilterSheetState extends State<_FilterSheet> {
               _sortChip('relevance', 'Relevance'),
               _sortChip('fee_asc', 'Fee: Low → High'),
               _sortChip('fee_desc', 'Fee: High → Low'),
+              if (widget.showDistanceSort) ...[
+                _sortChip('distance_asc', 'Nearest First'),
+                _sortChip('distance_desc', 'Farthest First'),
+              ],
             ],
           ),
+          if (!widget.showDistanceSort)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text('Switch to the In-Person tab to sort by distance',
+                  style: AppTextStyles.caption.copyWith(color: context.appTextHint)),
+            ),
+          const SizedBox(height: 20),
+
+          // Languages
+          const Text('Languages Spoken', style: AppTextStyles.labelLarge),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8, runSpacing: 8,
+            children: _allLanguages.map(_langChip).toList(),
+          ),
+          const SizedBox(height: 20),
+
+          // City — independent of the device's live/set location, so a
+          // patient can browse doctors in any city regardless of where
+          // they currently are.
+          const Text('City', style: AppTextStyles.labelLarge),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _cityCtrl,
+            onChanged: _onCityChanged,
+            decoration: InputDecoration(
+              hintText: 'e.g. Hyderabad',
+              isDense: true,
+              prefixIcon: const Icon(Icons.location_city_rounded, size: 20),
+              suffixIcon: _cityLoading
+                  ? const Padding(
+                      padding: EdgeInsets.all(14),
+                      child: SizedBox(
+                        width: 16, height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    )
+                  : _cityCtrl.text.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.close_rounded, size: 18),
+                          onPressed: () => setState(() {
+                            _cityDebounce?.cancel();
+                            _cityCtrl.clear();
+                            _state = _state.copyWith(city: '');
+                            _citySuggestions = [];
+                            _cityLoading = false;
+                          }),
+                        )
+                      : null,
+              filled: true,
+              fillColor: Colors.grey.shade100,
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+            ),
+          ),
+          if (_citySuggestions.isNotEmpty)
+            Container(
+              margin: const EdgeInsets.only(top: 6),
+              decoration: BoxDecoration(
+                color: context.appSurface,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: context.appBorder),
+              ),
+              child: ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                itemCount: _citySuggestions.length,
+                separatorBuilder: (_, __) =>
+                    Divider(height: 1, color: Colors.grey.shade100),
+                itemBuilder: (_, i) {
+                  final city = _citySuggestions[i];
+                  return ListTile(
+                    dense: true,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14),
+                    leading: const Icon(Icons.location_on_rounded,
+                        color: AppColors.primary, size: 18),
+                    title: Text(city, style: AppTextStyles.labelLarge),
+                    onTap: () => _selectCity(city),
+                  );
+                },
+              ),
+            )
+          else if (!_cityLoading &&
+              _cityCtrl.text.trim().length >= 2 &&
+              _state.city.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text('No matching city found — pick one from the suggestions',
+                  style: AppTextStyles.caption.copyWith(color: context.appTextHint)),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text('Browse doctors in a different city, regardless of your current location',
+                  style: AppTextStyles.caption.copyWith(color: context.appTextHint)),
+            ),
           const SizedBox(height: 20),
 
           // Max fee
@@ -1507,6 +1821,18 @@ class _FilterSheetState extends State<_FilterSheet> {
     return GestureDetector(
       onTap: () => setState(() => _state = _state.copyWith(maxFee: value)),
       child: _buildChip(label, sel),
+    );
+  }
+
+  Widget _langChip(String lang) {
+    final sel = _state.languages.contains(lang);
+    return GestureDetector(
+      onTap: () => setState(() {
+        final updated = List<String>.from(_state.languages);
+        sel ? updated.remove(lang) : updated.add(lang);
+        _state = _state.copyWith(languages: updated);
+      }),
+      child: _buildChip(lang, sel),
     );
   }
 

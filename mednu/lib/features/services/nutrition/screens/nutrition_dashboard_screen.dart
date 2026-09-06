@@ -67,7 +67,7 @@ class _DashboardAppBar extends StatelessWidget {
     return SliverAppBar(
       pinned: true,
       expandedHeight: R.h(context, 140),
-      backgroundColor: AppColors.accent,
+      backgroundColor: const Color(0xFF33691E), // matches nutritionGrad's dark stop so the collapsed bar doesn't jump to an unrelated color
       leading: IconButton(
         icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
         onPressed: () => context.pop(),

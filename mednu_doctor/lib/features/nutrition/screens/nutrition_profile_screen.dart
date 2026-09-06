@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
@@ -6,6 +7,8 @@ import '../../../core/router/app_router.dart';
 import '../../../core/services/feedback_service.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../../../shared_core/shared_core.dart';
+import '../../location/models/precise_address.dart';
+import '../../location/screens/map_location_picker_screen.dart';
 import '../models/nutritionist_profile.dart';
 import '../providers/nutrition_providers.dart';
 import '../services/nutritionist_profile_service.dart';
@@ -20,6 +23,11 @@ import '../services/nutritionist_profile_service.dart';
 /// that, a nutritionist simply isn't findable or bookable by patients.
 class NutritionProfileScreen extends ConsumerWidget {
   const NutritionProfileScreen({super.key});
+
+  static const _allLanguages = [
+    'English', 'Telugu', 'Hindi', 'Tamil', 'Kannada',
+    'Malayalam', 'Marathi', 'Bengali',
+  ];
 
   Future<void> _edit(BuildContext context, NutritionistProfile current) async {
     final uid = NutritionistProfileService.currentUid;
@@ -36,45 +44,118 @@ class NutritionProfileScreen extends ConsumerWidget {
         text: current.experienceYears == 0 ? '' : '${current.experienceYears}');
     final consultationFee = TextEditingController(
         text: current.consultationFee == 0 ? '' : '${current.consultationFee}');
-    final city = TextEditingController(text: current.city);
+    var city = current.city;
+    var lat = current.lat;
+    var lng = current.lng;
     final bio = TextEditingController(text: current.bio);
+    final selectedLanguages = <String>{
+      ...current.languages.isEmpty ? const ['English'] : current.languages,
+    };
 
     final saved = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Nutritionist Details'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(controller: name, decoration: const InputDecoration(labelText: 'Full name')),
-              TextField(controller: qualification, decoration: const InputDecoration(labelText: 'Qualification (e.g. RD, MSc Nutrition)')),
-              TextField(controller: specialization, decoration: const InputDecoration(labelText: 'Specialization')),
-              TextField(
-                controller: experienceYears,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Years of experience'),
-              ),
-              TextField(
-                controller: consultationFee,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Consultation fee (₹)'),
-              ),
-              TextField(controller: city, decoration: const InputDecoration(labelText: 'City')),
-              TextField(
-                controller: bio,
-                maxLines: 3,
-                decoration: const InputDecoration(labelText: 'About you'),
-              ),
-            ],
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: const Text('Nutritionist Details'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(controller: name, decoration: const InputDecoration(labelText: 'Full name')),
+                TextField(controller: qualification, decoration: const InputDecoration(labelText: 'Qualification (e.g. RD, MSc Nutrition)')),
+                TextField(controller: specialization, decoration: const InputDecoration(labelText: 'Specialization')),
+                TextField(
+                  controller: experienceYears,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Years of experience'),
+                ),
+                TextField(
+                  controller: consultationFee,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Consultation fee (₹)'),
+                ),
+                InkWell(
+                  onTap: () async {
+                    final result = await Navigator.of(dialogContext).push<PreciseAddress>(
+                      MaterialPageRoute(
+                        builder: (_) => MapLocationPickerScreen(initialLat: lat, initialLng: lng),
+                      ),
+                    );
+                    if (result == null) return;
+                    setDialogState(() {
+                      city = result.city ?? city;
+                      lat = result.lat;
+                      lng = result.lng;
+                    });
+                  },
+                  borderRadius: BorderRadius.circular(8),
+                  child: InputDecorator(
+                    decoration: const InputDecoration(
+                      labelText: 'Service Area',
+                      prefixIcon: Icon(Icons.location_on_outlined, color: AppColors.textSecondary),
+                      suffixIcon: Icon(Icons.map_outlined, color: AppColors.primary),
+                      helperText: 'Tap to pick the city/area you serve on the map',
+                    ),
+                    child: Text(
+                      city.isEmpty ? 'Select on map' : city,
+                      style: TextStyle(color: city.isEmpty ? AppColors.textHint : AppColors.textPrimary),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: bio,
+                  maxLines: 3,
+                  decoration: const InputDecoration(labelText: 'About you'),
+                ),
+                const SizedBox(height: 12),
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('Languages Spoken', style: AppTextStyles.labelMedium),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: NutritionProfileScreen._allLanguages.map((lang) => FilterChip(
+                    label: Text(lang),
+                    selected: selectedLanguages.contains(lang),
+                    onSelected: (v) => setDialogState(() {
+                      if (v) {
+                        selectedLanguages.add(lang);
+                      } else if (selectedLanguages.length > 1) {
+                        selectedLanguages.remove(lang);
+                      }
+                    }),
+                    selectedColor: AppColors.primary.withValues(alpha: 0.14),
+                    checkmarkColor: AppColors.primary,
+                  )).toList(),
+                ),
+              ],
+            ),
           ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+            TextButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Save')),
+          ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Save')),
-        ],
       ),
     );
+
+    // Disposal is deferred until well after the dialog's own exit transition
+    // finishes — disposing synchronously right after showDialog's Future
+    // resolves is the documented dispose-race crash pattern elsewhere in this
+    // codebase (the AlertDialog/TextFields are still mounted and mid-animation
+    // at that exact point, not actually unmounted yet). The default Material
+    // dialog transition is ~150ms; 400ms leaves comfortable margin.
+    unawaited(Future.delayed(const Duration(milliseconds: 400), () {
+      name.dispose();
+      qualification.dispose();
+      specialization.dispose();
+      experienceYears.dispose();
+      consultationFee.dispose();
+      bio.dispose();
+    }));
 
     if (saved != true) return;
 
@@ -88,8 +169,11 @@ class NutritionProfileScreen extends ConsumerWidget {
         'specialization': specialization.text.trim(),
         'experienceYears': years,
         'consultationFee': fee,
-        'city': city.text.trim(),
+        'city': city,
+        if (lat != null && lng != null) 'lat': lat,
+        if (lat != null && lng != null) 'lng': lng,
         'bio': bio.text.trim(),
+        'languages': selectedLanguages.toList(),
       });
       if (context.mounted) FeedbackService.showSuccess(context, 'Profile saved');
     } catch (_) {

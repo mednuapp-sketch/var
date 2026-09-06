@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/services/connectivity_service.dart';
+import '../../../core/services/booking_service.dart';
 import '../../../core/utils/r.dart';
 import 'emergency_contacts_service.dart';
 import 'manage_contacts_screen.dart';
@@ -24,11 +27,14 @@ class _EmergencyScreenState extends State<EmergencyScreen>
 
   List<EmergencyContact> _contacts = [];
   late AnimationController _pulseCtrl;
+  String _patientName = '';
+  String _patientPhone = '';
 
   @override
   void initState() {
     super.initState();
     _loadContacts();
+    _prefillPatient();
     _pulseCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 900),
@@ -44,6 +50,25 @@ class _EmergencyScreenState extends State<EmergencyScreen>
   Future<void> _loadContacts() async {
     final contacts = await EmergencyContactsService.getContacts();
     if (mounted) setState(() => _contacts = contacts);
+  }
+
+  Future<void> _prefillPatient() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    final raw = user.phoneNumber ?? '';
+    if (mounted) {
+      setState(() =>
+          _patientPhone = raw.startsWith('+91') ? raw.substring(3) : raw);
+    }
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      if (mounted) {
+        setState(() => _patientName = snap.data()?['name'] ?? '');
+      }
+    } catch (_) {}
   }
 
   Future<void> _callMedNuCenter() async {
@@ -126,6 +151,7 @@ class _EmergencyScreenState extends State<EmergencyScreen>
           SliverAppBar(
             expandedHeight: AppSpacing.headerHeight(context),
             pinned: true,
+            backgroundColor: const Color(0xFFB71C1C),
             leading: IconButton(
               icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
               onPressed: () => context.pop(),
@@ -462,6 +488,35 @@ class _EmergencyScreenState extends State<EmergencyScreen>
 
     final uri = Uri.parse('smsto:$numbers?body=${Uri.encodeComponent(message)}');
 
+    // Also fire the real backend emergency-doctor pipeline: creates a
+    // service_requests doc that onEmergencyDoctorRequest (functions/index.js)
+    // picks up to broadcast a critical push to every active doctor + write an
+    // admin_alerts doc. Best-effort — an SOS must still "succeed" (SMS goes
+    // out) even if this call fails, but we track it to avoid overstating what
+    // happened in the confirmation dialog below.
+    var doctorsNotified = false;
+    try {
+      await BookingService.createRequest(
+        type: 'emergency_doctor',
+        serviceName: 'Emergency Doctor Assistance',
+        patientName: _patientName.isNotEmpty ? _patientName : 'Emergency',
+        patientPhone: _patientPhone,
+        address: position != null
+            ? '${position.latitude}, ${position.longitude}'
+            : 'Location not shared',
+        preferredDate: 'Immediate',
+        preferredTime: 'Now',
+        notes: 'Triggered via SOS on the Emergency screen.',
+        extraFields: {
+          if (position != null) 'latitude': position.latitude,
+          if (position != null) 'longitude': position.longitude,
+        },
+      );
+      doctorsNotified = true;
+    } catch (_) {
+      // Swallow — SMS path below still runs regardless.
+    }
+
     if (!context.mounted) return;
     Navigator.pop(context); // close sending dialog
 
@@ -491,10 +546,22 @@ class _EmergencyScreenState extends State<EmergencyScreen>
                 Text('SMS sent to ${c.name}', style: const TextStyle(fontFamily: 'Poppins', fontSize: 13)),
               ]),
             )),
+            if (doctorsNotified) ...[
+              const Padding(
+                padding: EdgeInsets.only(top: 4, bottom: 6),
+                child: Row(children: [
+                  Icon(Icons.local_hospital_rounded, size: 16, color: Color(0xFF2E7D32)),
+                  SizedBox(width: 6),
+                  Text('Nearby MedNU doctors have been alerted', style: TextStyle(fontFamily: 'Poppins', fontSize: 13)),
+                ]),
+              ),
+            ],
             const SizedBox(height: 10),
-            const Text(
-              'Emergency assistance will be provided through a MedNU partner',
-              style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: Colors.grey, fontStyle: FontStyle.italic),
+            Text(
+              doctorsNotified
+                  ? 'A MedNU doctor will reach out for support until help arrives.'
+                  : 'Could not reach MedNU\'s emergency network — please also call the Emergency Center below.',
+              style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: Colors.grey, fontStyle: FontStyle.italic),
             ),
           ],
         ),

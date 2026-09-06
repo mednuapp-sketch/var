@@ -11,6 +11,8 @@ import '../../../core/router/app_router.dart';
 import '../../auth/services/doctor_auth_service.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../../../core/utils/validators.dart';
+import '../../location/models/precise_address.dart';
+import '../../location/screens/map_location_picker_screen.dart';
 
 class DoctorProfileEditScreen extends StatefulWidget {
   const DoctorProfileEditScreen({super.key});
@@ -45,6 +47,9 @@ class _DoctorProfileEditScreenState extends State<DoctorProfileEditScreen> {
   bool         _hasPendingSpecRequest = false;
   String?      _nameError;
   String?      _clinicAddrError;
+  double?      _clinicLat;
+  double?      _clinicLng;
+  String       _clinicCity = '';
 
   // Photo upload state
   File?   _localImage;
@@ -76,6 +81,9 @@ class _DoctorProfileEditScreenState extends State<DoctorProfileEditScreen> {
         _qualCtrl.text       = data['qualifications'] as String? ?? '';
         _clinicNameCtrl.text = data['clinicName']  as String? ?? '';
         _clinicAddrCtrl.text = data['clinicAddress'] as String? ?? '';
+        _clinicLat           = (data['clinicLat'] as num?)?.toDouble();
+        _clinicLng           = (data['clinicLng'] as num?)?.toDouble();
+        _clinicCity          = data['clinicCity'] as String? ?? '';
         _currentPhotoUrl     = data['photoUrl']    as String?;
 
         final spec = data['specialty'] as String?;
@@ -151,6 +159,9 @@ class _DoctorProfileEditScreenState extends State<DoctorProfileEditScreen> {
         'clinicName':     _clinicNameCtrl.text.trim(),
         'clinicAddress':  clinicAddress,
         'languages':      _selectedLanguages,
+        if (_clinicLat != null && _clinicLng != null) 'clinicLat': _clinicLat,
+        if (_clinicLat != null && _clinicLng != null) 'clinicLng': _clinicLng,
+        if (_clinicCity.isNotEmpty) 'clinicCity': _clinicCity,
         'updatedAt':      FieldValue.serverTimestamp(),
       });
       if (!mounted) return;
@@ -170,6 +181,23 @@ class _DoctorProfileEditScreenState extends State<DoctorProfileEditScreen> {
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  Future<void> _pickAddress() async {
+    final result = await Navigator.of(context).push<PreciseAddress>(
+      MaterialPageRoute(
+        builder: (_) => MapLocationPickerScreen(
+            initialLat: _clinicLat, initialLng: _clinicLng),
+      ),
+    );
+    if (result == null || !mounted) return;
+    setState(() {
+      _clinicAddrCtrl.text = result.formatted;
+      _clinicLat = result.lat;
+      _clinicLng = result.lng;
+      _clinicCity = result.city ?? '';
+      _clinicAddrError = null;
+    });
   }
 
   @override
@@ -672,10 +700,28 @@ class _DoctorProfileEditScreenState extends State<DoctorProfileEditScreen> {
                   const SizedBox(height: 12),
                   _field('Address *', _clinicAddrCtrl,
                       maxLines: 2, errorText: _clinicAddrError),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: _pickAddress,
+                    icon: Icon(_clinicLat != null ? Icons.check_circle_rounded : Icons.map_outlined,
+                        size: 17, color: _clinicLat != null ? AppColors.success : AppColors.primary),
+                    label: Text(
+                      _clinicLat != null ? 'Location pinned on map — tap to change' : 'Pick precise location on map',
+                      style: TextStyle(fontFamily: 'Inter', fontSize: 12.5, fontWeight: FontWeight.w600,
+                          color: _clinicLat != null ? AppColors.success : AppColors.primary),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(color: _clinicLat != null ? AppColors.success : AppColors.primary),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      minimumSize: const Size(double.infinity, 0),
+                    ),
+                  ),
                   const Padding(
                     padding: EdgeInsets.only(top: 6),
                     child: Text(
-                      'Required for in-person patients — used for map directions.',
+                      'Required for in-person patients — used for map directions. '
+                      'Pinning your exact location also lets nearby patients find and sort you by distance.',
                       style: TextStyle(
                           fontFamily: 'Inter', fontSize: 11, color: AppColors.textSecondary),
                     ),

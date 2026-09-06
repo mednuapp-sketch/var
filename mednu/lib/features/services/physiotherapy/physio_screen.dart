@@ -11,6 +11,8 @@ import '../../../core/utils/r.dart';
 import '../../../core/widgets/add_to_cart_button.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../../cart/providers/cart_provider.dart';
+import 'models/physiotherapist_model.dart';
+import 'services/physiotherapist_service.dart';
 
 class PhysioScreen extends ConsumerWidget {
   const PhysioScreen({super.key});
@@ -38,7 +40,20 @@ class PhysioScreen extends ConsumerWidget {
     return '₹$price$label';
   }
 
-  void _book(BuildContext ctx, WidgetRef ref, Map<String, dynamic> svc) {
+  // Sentinel for "Any available physiotherapist" — distinct from the `null`
+  // showModalBottomSheet returns when the sheet is dismissed without a
+  // choice (back button / tap outside), so the two cases can't be confused:
+  // "any" should still add to cart, "dismissed" should abort the add.
+  static const Object _anyPhysio = Object();
+
+  Future<void> _book(BuildContext ctx, WidgetRef ref, Map<String, dynamic> svc) async {
+    // Optional — lets the patient tie this booking to a specific
+    // physiotherapist (same catalog, same fee) instead of an unassigned
+    // request. Skippable via "Any available physiotherapist".
+    final chosen = await _pickPhysiotherapist(ctx);
+    if (chosen == null) return; // dismissed without deciding — abort the add
+
+    if (!ctx.mounted) return;
     ref.read(cartProvider.notifier).addItem(
           type: 'physiotherapy',
           serviceName: svc['name'] as String,
@@ -48,9 +63,121 @@ class PhysioScreen extends ConsumerWidget {
             'sessionType': svc['name'],
             'title':       svc['name'],
             'price':       svc['price'],
+            if (chosen is PhysiotherapistModel) ...{
+              'physiotherapistId':   chosen.id,
+              'physiotherapistName': chosen.name,
+            },
           },
         );
     FeedbackService.showSuccess(ctx, '${svc['name']} added to cart');
+  }
+
+  /// Returns a [PhysiotherapistModel] if the patient picked one, [_anyPhysio]
+  /// if they chose "Any available physiotherapist", or `null` if they
+  /// dismissed the sheet without deciding (caller should abort the add).
+  Future<Object?> _pickPhysiotherapist(BuildContext ctx) async {
+    final result = await showModalBottomSheet<Object?>(
+      context: ctx,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => DraggableScrollableSheet(
+        initialChildSize: 0.6,
+        minChildSize: 0.4,
+        maxChildSize: 0.9,
+        expand: false,
+        builder: (_, scrollCtrl) => Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            children: [
+              Center(
+                child: Container(
+                  margin: const EdgeInsets.only(top: 12, bottom: 4),
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.fromLTRB(20, 8, 20, 4),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('Choose a physiotherapist (optional)', style: AppTextStyles.h4),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                child: GestureDetector(
+                  onTap: () => Navigator.pop(sheetCtx, _anyPhysio),
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: _themeColor.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(children: [
+                      const Icon(Icons.shuffle_rounded, color: _themeColor, size: 18),
+                      const SizedBox(width: 10),
+                      const Expanded(
+                        child: Text('Any available physiotherapist',
+                            style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 13, color: _themeColor)),
+                      ),
+                      Icon(Icons.chevron_right_rounded, color: Colors.grey[400]),
+                    ]),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: StreamBuilder<List<PhysiotherapistModel>>(
+                  stream: PhysiotherapistService.physiotherapistsStream(),
+                  builder: (context, snap) {
+                    final list = snap.data ?? const [];
+                    if (snap.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    if (list.isEmpty) {
+                      return const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(24),
+                          child: Text('No physiotherapists available right now', style: AppTextStyles.bodySmall),
+                        ),
+                      );
+                    }
+                    return ListView.separated(
+                      controller: scrollCtrl,
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      itemCount: list.length,
+                      separatorBuilder: (_, __) => Divider(height: 1, color: Colors.grey[100]),
+                      itemBuilder: (context, i) {
+                        final p = list[i];
+                        return ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: CircleAvatar(
+                            backgroundColor: _themeColor.withValues(alpha: 0.12),
+                            child: Text(p.name.isNotEmpty ? p.name[0].toUpperCase() : 'P', style: const TextStyle(color: _themeColor)),
+                          ),
+                          title: Text(p.name, style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 13)),
+                          subtitle: Text(
+                            p.specialties.isNotEmpty ? p.specialties.join(' · ') : p.city,
+                            style: const TextStyle(fontFamily: 'Poppins', fontSize: 11.5),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          onTap: () => Navigator.pop(sheetCtx, p),
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    return result;
   }
 
   @override
@@ -61,6 +188,7 @@ class PhysioScreen extends ConsumerWidget {
         slivers: [
           SliverAppBar(
             pinned: true,
+            backgroundColor: const Color(0xFF0D47A1),
             expandedHeight: AppSpacing.headerHeight(context),
             leading: IconButton(
               icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
@@ -109,6 +237,40 @@ class PhysioScreen extends ConsumerWidget {
             child: Padding(
               padding: AppSpacing.page(context),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                // Find a specific physiotherapist banner
+                Container(
+                  margin: EdgeInsets.only(bottom: AppSpacing.sectionGap(context)),
+                  child: GestureDetector(
+                    onTap: () => context.push(AppRoutes.physioTherapistList),
+                    child: Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(colors: [Color(0xFFE0F7FA), Color(0xFFE3F2FD)]),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: const Color(0xFF00838F).withValues(alpha: 0.3)),
+                      ),
+                      child: Row(children: [
+                        Container(
+                          width: 44, height: 44,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF00838F).withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(Icons.person_search_rounded, color: Color(0xFF00838F), size: 26),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          const Text('Find a Physiotherapist', style: TextStyle(
+                              fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w700,
+                              color: Color(0xFF00838F))),
+                          Text('Browse by language, city & specialty',
+                              style: TextStyle(fontFamily: 'Poppins', fontSize: 11, color: context.appTextSecondary)),
+                        ])),
+                        const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Color(0xFF00838F)),
+                      ]),
+                    ),
+                  ),
+                ),
                 // Progress info banner
                 Container(
                   margin: EdgeInsets.only(bottom: AppSpacing.sectionGap(context)),

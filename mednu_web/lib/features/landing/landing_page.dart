@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import '../../core/constants/app_colors.dart';
 import 'widgets/navbar.dart';
 import 'widgets/hero_section.dart';
 import 'widgets/stats_bar_section.dart';
@@ -116,8 +114,6 @@ class _LandingPageState extends State<LandingPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      floatingActionButton: _AiDoctorFab(onTap: widget.onLoginTap),
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       body: CustomScrollView(
         controller: _scroll,
         slivers: [
@@ -209,101 +205,4 @@ class _NavbarDelegate extends SliverPersistentHeaderDelegate {
       old.onLoginTap != onLoginTap ||
       old.onNavTap != onNavTap ||
       old.activeSection != activeSection;
-}
-
-// ─── Doctor AI Floating Button ────────────────────────────────────────────────
-
-class _AiDoctorFab extends StatefulWidget {
-  final VoidCallback onTap;
-  const _AiDoctorFab({required this.onTap});
-
-  @override
-  State<_AiDoctorFab> createState() => _AiDoctorFabState();
-}
-
-class _AiDoctorFabState extends State<_AiDoctorFab>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _pulse;
-  late Animation<double> _scale;
-  bool _hovered = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _pulse = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1800),
-    )..repeat(reverse: true);
-    _scale = Tween<double>(begin: 1.0, end: 1.06).animate(
-      CurvedAnimation(parent: _pulse, curve: Curves.easeInOut),
-    );
-  }
-
-  @override
-  void dispose() {
-    _pulse.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: ScaleTransition(
-          scale: _scale,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              gradient: AppColors.primaryGradient,
-              borderRadius: BorderRadius.circular(50),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.primary.withValues(alpha: _hovered ? 0.55 : 0.35),
-                  blurRadius: _hovered ? 28 : 18,
-                  offset: const Offset(0, 8),
-                ),
-              ],
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.2),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.smart_toy_rounded,
-                      color: Colors.white, size: 18),
-                ),
-                const SizedBox(width: 10),
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('AI Doctor',
-                        style: GoogleFonts.poppins(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                        )),
-                    Text('Ask anything',
-                        style: GoogleFonts.poppins(
-                          fontSize: 10,
-                          color: Colors.white70,
-                        )),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }

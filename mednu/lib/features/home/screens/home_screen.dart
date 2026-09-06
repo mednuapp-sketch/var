@@ -21,7 +21,6 @@ import '../../banners/presentation/banner_popup_widget.dart';
 import '../../health/screens/prescription_viewer_screen.dart';
 import 'global_search_screen.dart';
 import 'location_picker_screen.dart';
-import '../../my_services/screens/my_services_screen.dart';
 import '../../doctors/screens/doctors_list_screen.dart';
 import '../../notifications/providers/notification_provider.dart';
 import '../../../core/widgets/add_to_cart_button.dart';
@@ -33,37 +32,27 @@ class HomeScreen extends ConsumerStatefulWidget {
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends ConsumerState<HomeScreen>
-    with WidgetsBindingObserver {
+class _HomeScreenState extends ConsumerState<HomeScreen> {
   bool _exitDialogOpen = false;
 
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
-  }
-
-  // Called by the platform (Android back gesture) before GoRouter processes it.
-  // Observers are invoked in LIFO order, so this runs before GoRouter's Router widget.
-  @override
-  Future<bool> didPopRoute() async {
+  // canPop is always false so neither the hardware/software back button nor
+  // the Android edge-swipe predictive-back gesture ever pops this route on
+  // their own — onPopInvokedWithResult fires for both and we decide what
+  // happens. (The old WidgetsBindingObserver.didPopRoute() approach only
+  // reliably caught the button, not the edge-swipe gesture.)
+  Future<void> _handlePopInvoked(bool didPop, Object? result) async {
+    if (didPop) return;
     // If GoRouter has a pushed sub-route (e.g. /consultation), let GoRouter pop it.
     if (GoRouter.of(context).canPop()) {
       GoRouter.of(context).pop();
-      return true;
+      return;
     }
     // Guard against double-open while dialog is awaiting.
-    if (_exitDialogOpen) return true;
+    if (_exitDialogOpen) return;
     // Non-home tab → switch to Home first.
     if (ref.read(bottomNavIndexProvider) != 0) {
       if (mounted) ref.read(bottomNavIndexProvider.notifier).state = 0;
-      return true;
+      return;
     }
     // Already on Home tab → ask to exit.
     _exitDialogOpen = true;
@@ -93,25 +82,27 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     );
     _exitDialogOpen = false;
     if (shouldExit == true && mounted) SystemNavigator.pop();
-    return true;
   }
 
   @override
   Widget build(BuildContext context) {
     final currentIndex = ref.watch(bottomNavIndexProvider);
-    return Scaffold(
-      body: IndexedStack(
-        index: currentIndex,
-        children: const [
-          _HomeBody(),
-          DoctorsListScreen(),
-          MyServicesScreen(),
-          _ProfileBody(),
-        ],
-      ),
-      bottomNavigationBar: _MedNUBottomNav(
-        currentIndex: currentIndex,
-        onTap: (i) => ref.read(bottomNavIndexProvider.notifier).state = i,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: _handlePopInvoked,
+      child: Scaffold(
+        body: IndexedStack(
+          index: currentIndex,
+          children: const [
+            _HomeBody(),
+            DoctorsListScreen(),
+            _ProfileBody(),
+          ],
+        ),
+        bottomNavigationBar: _MedNUBottomNav(
+          currentIndex: currentIndex,
+          onTap: (i) => ref.read(bottomNavIndexProvider.notifier).state = i,
+        ),
       ),
     );
   }
@@ -417,7 +408,7 @@ class _HomeBodyState extends ConsumerState<_HomeBody>
                 ),
                 const SizedBox(height: 12),
                 const HealthTipCard(),
-                const SizedBox(height: 100),
+                const SizedBox(height: 20),
               ],
             ),
           ),
@@ -1400,7 +1391,6 @@ class _ProfileBody extends ConsumerWidget {
     final walletBalance = (docData?['walletBalance'] ?? 0.0) as num;
     final referralCode = docData?['referralCode'] as String? ?? '—';
     final referralPoints = (docData?['referralPoints'] ?? 0) as num;
-    final isPremium = docData?['isPremium'] as bool? ?? false;
     final isMale = (docData?['gender'] as String? ?? '').toLowerCase() == 'male';
 
     // One-time migration: regenerate legacy referral codes that don't match XXXX#### format
@@ -1429,7 +1419,6 @@ class _ProfileBody extends ConsumerWidget {
               email: email,
               photoUrl: photoUrl,
               initials: initials,
-              isPremium: isPremium,
               onEditTap: () => context.push(AppRoutes.profile),
               onSettingsTap: () => context.push(AppRoutes.settings),
             ),
@@ -1466,19 +1455,6 @@ class _ProfileBody extends ConsumerWidget {
                           onTap: () => context.push(AppRoutes.referral),
                         ),
                       ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: _StatCard(
-                          icon: isPremium
-                              ? Icons.workspace_premium_rounded
-                              : Icons.star_border_rounded,
-                          iconColor: const Color(0xFFE65100),
-                          iconBg: const Color(0xFFFFF3E0),
-                          label: 'Plan',
-                          value: isPremium ? 'Premium' : 'Free',
-                          onTap: () => context.push(AppRoutes.premium),
-                        ),
-                      ),
                     ],
                   ),
                 ),
@@ -1504,25 +1480,23 @@ class _ProfileBody extends ConsumerWidget {
 
                 // MY HEALTH section
                 _MenuSection(title: 'MY HEALTH', items: [
-                  _MenuItem(icon: Icons.calendar_month_rounded, iconColor: const Color(0xFF1565C0), label: 'My Appointments', onTap: () => context.push(AppRoutes.appointment)),
                   _MenuItem(icon: Icons.medical_services_rounded, iconColor: AppColors.primary, label: 'My Services', badge: 'Tracker', onTap: () => context.push(AppRoutes.myServices)),
+                  _MenuItem(icon: Icons.calendar_month_rounded, iconColor: const Color(0xFF1565C0), label: 'My Appointments', onTap: () => context.push(AppRoutes.appointment)),
                   _MenuItem(icon: Icons.favorite_rounded, iconColor: const Color(0xFFE53935), label: 'Favourite Doctors', onTap: () => context.push(AppRoutes.favouriteDoctors)),
-                  _MenuItem(icon: Icons.local_hospital_rounded, iconColor: const Color(0xFF1565C0), label: 'Find Hospitals', onTap: () => context.push(AppRoutes.hospitals)),
                   _MenuItem(icon: Icons.folder_rounded, iconColor: const Color(0xFF2E7D32), label: 'My Health Records', onTap: () => context.push(AppRoutes.records)),
                   _MenuItem(icon: Icons.people_rounded, iconColor: const Color(0xFF522546), label: 'Family Members', onTap: () => context.push(AppRoutes.family)),
-                  _MenuItem(icon: Icons.medication_rounded, iconColor: const Color(0xFF00695C), label: 'My Medicines', onTap: () => context.push(AppRoutes.medicine)),
+                  _MenuItem(icon: Icons.medication_rounded, iconColor: const Color(0xFF00695C), label: 'My Medicines', onTap: () => context.push(AppRoutes.myMedicines)),
                   _MenuItem(icon: Icons.monitor_heart_rounded, iconColor: AppColors.primary, label: 'Health Dashboard', onTap: () => context.push(AppRoutes.healthDashboard)),
                   if (!isMale)
                     _MenuItem(icon: Icons.favorite_rounded, iconColor: const Color(0xFFA36BAC), label: 'Period Tracker', onTap: () => context.push(AppRoutes.periodTracker)),
                   _MenuItem(icon: Icons.water_drop_rounded, iconColor: const Color(0xFF1565C0), label: 'Water Reminder', onTap: () => context.push(AppRoutes.waterReminder)),
-                  _MenuItem(icon: Icons.local_shipping_rounded, iconColor: const Color(0xFFE65100), label: 'Track Order', onTap: () => context.push(AppRoutes.orderTracking)),
+                  _MenuItem(icon: Icons.local_shipping_rounded, iconColor: const Color(0xFFE65100), label: 'Track Order', onTap: () => context.push(AppRoutes.medicineOrders)),
                 ]),
 
                 const SizedBox(height: 12),
 
                 _MenuSection(title: 'ACCOUNT', items: [
                   _MenuItem(icon: Icons.account_balance_wallet_rounded, iconColor: const Color(0xFF1565C0), label: 'Payments & Wallet', trailing: '₹${walletBalance.toStringAsFixed(0)}', onTap: () => context.push(AppRoutes.wallet)),
-                  _MenuItem(icon: Icons.workspace_premium_rounded, iconColor: const Color(0xFFE65100), label: 'Upgrade to Premium', onTap: () => context.push(AppRoutes.premium)),
                   _MenuItem(icon: Icons.card_giftcard_rounded, iconColor: const Color(0xFF6A1B9A), label: 'Referral & Rewards', trailing: '$referralPoints pts', onTap: () => context.push(AppRoutes.referral)),
                 ]),
 
@@ -1563,7 +1537,6 @@ class _ProfileBody extends ConsumerWidget {
 
 class _ProfileHeader extends StatelessWidget {
   final String name, phone, email, photoUrl, initials;
-  final bool isPremium;
   final VoidCallback onEditTap, onSettingsTap;
 
   const _ProfileHeader({
@@ -1572,7 +1545,6 @@ class _ProfileHeader extends StatelessWidget {
     required this.email,
     required this.photoUrl,
     required this.initials,
-    required this.isPremium,
     required this.onEditTap,
     required this.onSettingsTap,
   });
@@ -1657,42 +1629,6 @@ class _ProfileHeader extends StatelessWidget {
           Text(
             contact,
             style: AppTextStyles.bodySmall.copyWith(color: context.appTextSecondary),
-          ),
-        ],
-
-        // Premium badge
-        if (isPremium) ...[
-          const SizedBox(height: 10),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                  colors: [Color(0xFFFFB300), Color(0xFFFFA000)]),
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                    color: const Color(0xFFFFB300).withValues(alpha: 0.35),
-                    blurRadius: 8,
-                    offset: const Offset(0, 3))
-              ],
-            ),
-            child: const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.workspace_premium_rounded, size: 13, color: Colors.white),
-                SizedBox(width: 5),
-                Text(
-                  'PREMIUM',
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 10,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white,
-                    letterSpacing: 0.8,
-                  ),
-                ),
-              ],
-            ),
           ),
         ],
 
@@ -2263,8 +2199,8 @@ class _MedNUBottomNav extends StatelessWidget {
                   ),
                 ),
               ),
-              _NavItem(icon: Icons.calendar_month_rounded, label: 'Services', index: 2, currentIndex: currentIndex, onTap: onTap),
-              _NavItem(icon: Icons.person_outline_rounded, label: 'Profile', index: 3, currentIndex: currentIndex, onTap: onTap),
+              const _NavPushItem(icon: Icons.local_hospital_rounded, label: 'Hospitals', route: AppRoutes.hospitals),
+              _NavItem(icon: Icons.person_outline_rounded, label: 'Profile', index: 2, currentIndex: currentIndex, onTap: onTap),
             ],
           ),
         ),
@@ -2325,6 +2261,46 @@ class _NavItem extends StatelessWidget {
               style: AppTextStyles.caption.copyWith(
                 color: isActive ? AppColors.primary : inactiveColor,
                 fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+                fontSize: 10,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Bottom-nav item that pushes a standalone route instead of switching
+/// the shell's IndexedStack tab (mirrors [_NavItem]'s look, e.g. Hospitals).
+class _NavPushItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String route;
+  const _NavPushItem({required this.icon, required this.label, required this.route});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final inactiveColor = isDark
+        ? const Color(0xFF4A6080)
+        : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.40);
+
+    return GestureDetector(
+      onTap: () => context.push(route),
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 24, color: inactiveColor),
+            const SizedBox(height: 3),
+            Text(
+              label,
+              style: AppTextStyles.caption.copyWith(
+                color: inactiveColor,
+                fontWeight: FontWeight.w500,
                 fontSize: 10,
               ),
             ),

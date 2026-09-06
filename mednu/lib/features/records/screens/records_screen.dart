@@ -7,6 +7,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
@@ -39,11 +40,27 @@ class _RecordsScreenState extends State<RecordsScreen>
   List<Map<String, dynamic>> _reports = [];
   bool _reportsLoading = true;
 
+  // Lab-partner-uploaded results — a separate collection the patient app
+  // never read before (root cause of "I can't see any reports": a patient
+  // who completes a lab test previously had no screen showing the result at
+  // all, since it never landed in `reports`, which only holds self-uploaded
+  // photos). See mednu_doctor/lib/features/lab/services/lab_booking_service.dart.
+  StreamSubscription? _diagReportsSub;
+  List<Map<String, dynamic>> _diagReports = [];
+  bool _diagReportsLoading = true;
+
   StreamSubscription? _consultSub;
   List<Map<String, dynamic>> _consultations = [];
   bool _consultLoading = true;
 
   bool _uploading = false;
+
+  // Controllers for one-off dialogs/sheets (e.g. _uploadReport's name prompt):
+  // disposing them the instant showDialog/showModalBottomSheet's future
+  // resolves (right on Navigator.pop) races the dialog's still-animating-out,
+  // still-mounted TextField — defer disposal to this screen's own dispose()
+  // instead, which only runs after the dialog is long gone.
+  final List<TextEditingController> _transientCtrls = [];
 
   @override
   void initState() {
@@ -51,6 +68,7 @@ class _RecordsScreenState extends State<RecordsScreen>
     _tab = TabController(length: 3, vsync: this, initialIndex: widget.initialTab ?? 0);
     _subscribePrescriptions();
     _subscribeReports();
+    _subscribeDiagnosticReports();
     _subscribeConsultations();
   }
 
@@ -104,6 +122,56 @@ class _RecordsScreenState extends State<RecordsScreen>
     }, onError: (_) { if (mounted) setState(() => _reportsLoading = false); });
   }
 
+  void _subscribeDiagnosticReports() {
+    // diagnostic_reports has no memberId field today — lab bookings are
+    // always for the account holder, so skip merging it into a family
+    // member's records view rather than risk showing someone else's results.
+    if (_uid.isEmpty || widget.memberId != null) {
+      setState(() => _diagReportsLoading = false);
+      return;
+    }
+
+    final q = FirebaseFirestore.instance
+        .collection('diagnostic_reports')
+        .where('patientId', isEqualTo: _uid)
+        .orderBy('uploadedAt', descending: true)
+        .limit(50);
+
+    _diagReportsSub = q.snapshots().listen((snap) {
+      if (!mounted) return;
+      setState(() {
+        _diagReports = snap.docs.map((doc) {
+          final d = doc.data();
+          final fileUrl = d['fileUrl'] as String? ?? '';
+          final isPdf = (d['fileType'] as String? ?? 'image') == 'pdf';
+          return <String, dynamic>{
+            'id': doc.id,
+            'source': 'lab',
+            'name': d['testName'] as String? ?? 'Lab Report',
+            'imageUrl': isPdf ? '' : fileUrl,
+            'fileUrl': fileUrl,
+            'fileType': isPdf ? 'pdf' : 'image',
+            'status': 'Uploaded',
+            'createdAt': d['uploadedAt'],
+          };
+        }).toList();
+        _diagReportsLoading = false;
+      });
+    }, onError: (_) { if (mounted) setState(() => _diagReportsLoading = false); });
+  }
+
+  List<Map<String, dynamic>> get _allReports {
+    final merged = [..._reports, ..._diagReports];
+    merged.sort((a, b) {
+      final at = a['createdAt'];
+      final bt = b['createdAt'];
+      final ad = at is Timestamp ? at.toDate() : DateTime.fromMillisecondsSinceEpoch(0);
+      final bd = bt is Timestamp ? bt.toDate() : DateTime.fromMillisecondsSinceEpoch(0);
+      return bd.compareTo(ad);
+    });
+    return merged;
+  }
+
   void _subscribeConsultations() {
     if (_uid.isEmpty) { setState(() => _consultLoading = false); return; }
 
@@ -134,7 +202,11 @@ class _RecordsScreenState extends State<RecordsScreen>
     _tab.dispose();
     _prescSub?.cancel();
     _reportsSub?.cancel();
+    _diagReportsSub?.cancel();
     _consultSub?.cancel();
+    for (final c in _transientCtrls) {
+      c.dispose();
+    }
     super.dispose();
   }
 
@@ -187,37 +259,33 @@ class _RecordsScreenState extends State<RecordsScreen>
   Future<void> _uploadReport() async {
     // 1. Ask report name first
     final nameCtrl = TextEditingController();
-    String? reportName;
-    try {
-      reportName = await showDialog<String>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Text('Report Name',
-              style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
-          content: TextField(
-            controller: nameCtrl,
-            autofocus: true,
-            decoration: InputDecoration(
-              hintText: 'e.g. Blood Test, X-Ray...',
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-            ),
+    _transientCtrls.add(nameCtrl);
+    final reportName = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Report Name',
+            style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
+        content: TextField(
+          controller: nameCtrl,
+          autofocus: true,
+          decoration: InputDecoration(
+            hintText: 'e.g. Blood Test, X-Ray...',
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
           ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-            ElevatedButton(
-              onPressed: () {
-                if (nameCtrl.text.trim().isEmpty) return;
-                Navigator.pop(ctx, nameCtrl.text.trim());
-              },
-              child: const Text('Continue'),
-            ),
-          ],
         ),
-      );
-    } finally {
-      nameCtrl.dispose();
-    }
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () {
+              if (nameCtrl.text.trim().isEmpty) return;
+              Navigator.pop(ctx, nameCtrl.text.trim());
+            },
+            child: const Text('Continue'),
+          ),
+        ],
+      ),
+    );
     if (reportName == null || !mounted) return;
 
     // 2. Choose source
@@ -351,9 +419,10 @@ class _RecordsScreenState extends State<RecordsScreen>
           _buildConsultationsTab(),
         ],
       ),
-      floatingActionButton: widget.isMemberView
-          ? null
-          : Container(
+      // Uploading on a family member's behalf is fully supported by the
+      // write path below (_uploadReport already sends memberId) — hiding
+      // this FAB for isMemberView was the only thing stopping it.
+      floatingActionButton: Container(
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
                   colors: [Color(0xFF522546), Color(0xFF633058)],
@@ -474,7 +543,7 @@ class _RecordsScreenState extends State<RecordsScreen>
   // ── Reports Tab ────────────────────────────────────────────────────────────
 
   Widget _buildReportsTab() {
-    if (_reportsLoading) {
+    if (_reportsLoading || _diagReportsLoading) {
       return ListView(
         physics: const NeverScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
@@ -482,25 +551,29 @@ class _RecordsScreenState extends State<RecordsScreen>
       );
     }
 
-    if (_reports.isEmpty) {
+    final allReports = _allReports;
+    if (allReports.isEmpty) {
       return AppEmptyState(
         icon: Icons.science_rounded,
         title: 'No reports uploaded yet',
         message: 'Upload your lab reports, X-rays, or scans for easy access.',
         iconColor: const Color(0xFF0097A7),
-        actionLabel: widget.isMemberView ? null : 'Upload Report',
-        onAction: (widget.isMemberView || _uploading) ? null : _uploadReport,
+        actionLabel: 'Upload Report',
+        onAction: _uploading ? null : _uploadReport,
       );
     }
 
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-      itemCount: _reports.length,
+      itemCount: allReports.length,
       itemBuilder: (context, i) {
-        final r = _reports[i];
+        final r = allReports[i];
         final name = r['name'] as String? ?? 'Report';
         final status = r['status'] as String? ?? 'Uploaded';
         final imageUrl = r['imageUrl'] as String? ?? '';
+        final isPdf = r['fileType'] == 'pdf';
+        final fileUrl = r['fileUrl'] as String? ?? '';
+        final isLab = r['source'] == 'lab';
         final dateStr = _formatDate(r['createdAt']);
 
         Color statusColor;
@@ -524,7 +597,9 @@ class _RecordsScreenState extends State<RecordsScreen>
             borderRadius: BorderRadius.circular(16),
             child: InkWell(
               borderRadius: BorderRadius.circular(16),
-              onTap: imageUrl.isNotEmpty ? () => _viewReport(r) : null,
+              onTap: isPdf
+                  ? (fileUrl.isNotEmpty ? () => _openExternalFile(fileUrl) : null)
+                  : (imageUrl.isNotEmpty ? () => _viewReport(r) : null),
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Row(children: [
@@ -542,7 +617,21 @@ class _RecordsScreenState extends State<RecordsScreen>
                   ),
                   const SizedBox(width: 12),
                   Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(name, style: AppTextStyles.labelLarge),
+                    Row(children: [
+                      Flexible(child: Text(name, style: AppTextStyles.labelLarge, overflow: TextOverflow.ellipsis)),
+                      if (isLab) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0097A7).withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Text('Lab', style: TextStyle(
+                              fontFamily: 'Poppins', fontSize: 9, fontWeight: FontWeight.w700, color: Color(0xFF0097A7))),
+                        ),
+                      ],
+                    ]),
                     if (dateStr.isNotEmpty) Text(dateStr, style: AppTextStyles.bodySmall),
                   ])),
                   Container(
@@ -556,7 +645,7 @@ class _RecordsScreenState extends State<RecordsScreen>
                             fontWeight: FontWeight.w600, color: statusColor)),
                   ),
                   const SizedBox(width: 4),
-                  if (imageUrl.isNotEmpty)
+                  if (imageUrl.isNotEmpty || (isPdf && fileUrl.isNotEmpty))
                     Icon(Icons.chevron_right_rounded, color: context.appTextHint, size: 20),
                 ]),
               ),
@@ -573,6 +662,20 @@ class _RecordsScreenState extends State<RecordsScreen>
         color: const Color(0xFF0097A7).withValues(alpha:0.1), borderRadius: BorderRadius.circular(12)),
     child: const Icon(Icons.science_rounded, color: Color(0xFF0097A7), size: 24),
   );
+
+  Future<void> _openExternalFile(String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri == null) return;
+    try {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open this file')),
+        );
+      }
+    }
+  }
 
   void _viewReport(Map<String, dynamic> r) {
     final imageUrl = r['imageUrl'] as String? ?? '';

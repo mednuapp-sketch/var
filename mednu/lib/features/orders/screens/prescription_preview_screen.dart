@@ -15,10 +15,17 @@ import '../services/prescription_upload_service.dart';
 /// `orderDetailProvider` listener picks up the result — no local order
 /// state duplicated here.
 class PrescriptionPreviewScreen extends StatefulWidget {
-  final String orderId;
   final File file;
+  // The actual persistence differs by caller: order-scoped
+  // (PrescriptionUploadService.upload, writes straight to orders/{orderId})
+  // for the post-purchase order-detail flow, or uid-scoped
+  // (PrescriptionUploadService.uploadPending) for attaching one before an
+  // order exists — see medicine_screen.dart. Either way this screen only
+  // needs to know how to trigger it and report progress; whoever supplies
+  // the callback owns what happens with the result.
+  final Future<void> Function(File file, void Function(double progress) onProgress) onUpload;
 
-  const PrescriptionPreviewScreen({super.key, required this.orderId, required this.file});
+  const PrescriptionPreviewScreen({super.key, required this.file, required this.onUpload});
 
   @override
   State<PrescriptionPreviewScreen> createState() => _PrescriptionPreviewScreenState();
@@ -36,13 +43,9 @@ class _PrescriptionPreviewScreenState extends State<PrescriptionPreviewScreen> {
       _progress = 0;
     });
     try {
-      await PrescriptionUploadService.upload(
-        orderId: widget.orderId,
-        file: widget.file,
-        onProgress: (p) {
-          if (mounted) setState(() => _progress = p);
-        },
-      );
+      await widget.onUpload(widget.file, (p) {
+        if (mounted) setState(() => _progress = p);
+      });
       if (!mounted) return;
       FeedbackService.showSuccess(context, 'Prescription uploaded');
       Navigator.of(context).pop(true);

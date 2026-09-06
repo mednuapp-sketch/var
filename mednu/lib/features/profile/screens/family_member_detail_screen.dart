@@ -168,6 +168,7 @@ class _FamilyMemberDetailScreenState extends ConsumerState<FamilyMemberDetailScr
           SliverAppBar(
             expandedHeight: R.h(context, 210),
             pinned: true,
+            backgroundColor: color,
             leading: IconButton(
               icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
               onPressed: () => context.pop(),

@@ -547,6 +547,20 @@ class _HospitalsScreenState extends State<HospitalsScreen> {
                         hospital: hospitals[i],
                         onCall: () => _call(hospitals[i].phone),
                         onDirections: () => _directions(hospitals[i]),
+                        onPayBill: hospitals[i].mednuId == null
+                            ? null
+                            : () => context.push(AppRoutes.hospitalBillPay, extra: {
+                                  'hospitalId': hospitals[i].mednuId,
+                                  'hospitalName': hospitals[i].name,
+                                }),
+                        onBookAppointment: hospitals[i].mednuId == null
+                            ? null
+                            : () => context.push(AppRoutes.hospitalAppointment, extra: {
+                                  'hospitalId': hospitals[i].mednuId,
+                                  'hospitalName': hospitals[i].name,
+                                  'hospitalAddress': hospitals[i].address,
+                                  'hospitalPhone': hospitals[i].phone,
+                                }),
                       ),
                     ),
                     childCount: hospitals.length,
@@ -636,7 +650,7 @@ class _HospitalHeader extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Hospitals & Centres',
+                              'Nearby Hospitals',
                               style: TextStyle(
                                 fontFamily: 'Poppins',
                                 fontSize: 20,
@@ -937,11 +951,15 @@ class _NearbyHospitalCard extends StatelessWidget {
   final NearbyHospital hospital;
   final VoidCallback onCall;
   final VoidCallback onDirections;
+  final VoidCallback? onPayBill;
+  final VoidCallback? onBookAppointment;
 
   const _NearbyHospitalCard({
     required this.hospital,
     required this.onCall,
     required this.onDirections,
+    this.onPayBill,
+    this.onBookAppointment,
   });
 
   String get _distanceLabel {
@@ -1189,6 +1207,28 @@ class _NearbyHospitalCard extends StatelessWidget {
                       ),
                     ],
                   ),
+                  if (hospital.isMednu && onBookAppointment != null) ...[
+                    const SizedBox(height: 10),
+                    _HospitalActionBtn(
+                      icon: Icons.event_available_rounded,
+                      label: 'Book Appointment',
+                      enabled: true,
+                      filled: true,
+                      color: AppColors.primary,
+                      onTap: onBookAppointment,
+                    ),
+                  ],
+                  if (hospital.isMednu && onPayBill != null) ...[
+                    const SizedBox(height: 10),
+                    _HospitalActionBtn(
+                      icon: Icons.receipt_long_rounded,
+                      label: 'Pay Bill',
+                      enabled: true,
+                      filled: true,
+                      color: AppColors.secondary,
+                      onTap: onPayBill,
+                    ),
+                  ],
                 ],
               ),
             ),

@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
@@ -12,6 +13,7 @@ import '../../../core/services/feedback_service.dart';
 import '../../../core/widgets/add_to_cart_button.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../../cart/providers/cart_provider.dart';
+import '../../home/providers/location_provider.dart';
 import '../../my_services/models/unified_booking.dart';
 
 class DiagnosticsScreen extends ConsumerStatefulWidget {
@@ -58,29 +60,6 @@ class _DiagnosticsScreenState extends ConsumerState<DiagnosticsScreen> {
     FeedbackService.showSuccess(context, '${test['name']} added to cart');
   }
 
-  /// Same as [_book], but for a test pulled from a specific lab's own
-  /// catalogue (`lab_tests_catalogue`) rather than the admin-curated
-  /// `services` list. Carrying `sourceLabId`/`sourceTestId` through in
-  /// `serviceDetails` is what lets `onDiagnosticServiceRequestCreated`
-  /// (functions/index.js) route the resulting booking straight to that lab
-  /// instead of dropping it into the shared unclaimed queue.
-  void _bookFromLab(Map<String, dynamic> test) {
-    ref.read(cartProvider.notifier).addItem(
-          type: 'diagnostics',
-          serviceName: test['name'] as String,
-          themeColor: _themeColor,
-          unitAmount: (test['price'] as num?)?.toInt() ?? 0,
-          serviceDetails: {
-            'testName': test['name'],
-            'price': test['price'],
-            'reportTime': test['duration'],
-            'sourceLabId': test['sourceLabId'],
-            'sourceTestId': test['sourceTestId'],
-          },
-        );
-    FeedbackService.showSuccess(context, '${test['name']} added to cart');
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -89,6 +68,7 @@ class _DiagnosticsScreenState extends ConsumerState<DiagnosticsScreen> {
         slivers: [
           SliverAppBar(
             pinned: true,
+            backgroundColor: _themeColor,
             expandedHeight: AppSpacing.headerHeight(context),
             leading: IconButton(
               icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
@@ -137,7 +117,7 @@ class _DiagnosticsScreenState extends ConsumerState<DiagnosticsScreen> {
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
                   .collection('services')
-                  .where('type', isEqualTo: 'diagnostics')
+                  .where('type', whereIn: ['diagnostics', 'lab_tests'])
                   .where('isEnabled', isEqualTo: true)
                   .snapshots(),
               builder: (ctx, snap) {
@@ -163,8 +143,8 @@ class _DiagnosticsScreenState extends ConsumerState<DiagnosticsScreen> {
                       ),
                     ),
                   ),
-                  // ── Real tests from registered, approved labs ─────────────
-                  _LabCatalogueTests(onBook: _bookFromLab),
+                  // ── Labs near you (tap through to that lab's own menu) ────
+                  _LabsNearYouSection(query: _query),
                   // ── Popular tests ─────────────────────────────────────────
                   _PopularTestsRow(onBook: _book),
                   const SizedBox(height: 8),
@@ -303,108 +283,285 @@ class _DiagnosticsScreenState extends ConsumerState<DiagnosticsScreen> {
   }
 }
 
-// ── Tests from registered labs (real catalogue, not admin-curated) ──────────
+// ── Labs near you (vendor-first: pick a lab, then see its own test menu) ────
 //
-// Sourced from `lab_tests_catalogue` — the patient-facing mirror of each
-// active lab's own test catalogue (see `onLabTestInventoryWrite`,
-// functions/index.js). Booking one of these routes the request straight to
-// the lab that listed it, unlike the generic `services`-backed list below.
+// Sourced straight from `lab_profiles` (status == 'active') — the same real,
+// registered-lab data `lab_tests_catalogue` mirrors from. Tapping a card
+// pushes LabMenuScreen, which streams that one lab's own catalogue.
+//
+// [query] also cross-references `lab_tests_catalogue` so searching a test
+// name (e.g. "MRI Scan") surfaces the labs that stock it, not just labs
+// whose own name matches — mirroring how Zomato search matches both
+// restaurant name and menu items.
 
-class _LabCatalogueTests extends StatelessWidget {
-  final void Function(Map<String, dynamic>) onBook;
-  const _LabCatalogueTests({required this.onBook});
+class _LabsNearYouSection extends ConsumerStatefulWidget {
+  final String query;
+  const _LabsNearYouSection({required this.query});
+
+  @override
+  ConsumerState<_LabsNearYouSection> createState() => _LabsNearYouSectionState();
+}
+
+class _LabsNearYouSectionState extends ConsumerState<_LabsNearYouSection> {
+  String _cityFilter = '';
+
+  static String _distanceLabel(double? d) {
+    if (d == null) return '';
+    if (d < 1) return '${(d * 1000).round()} m away';
+    return '${d.toStringAsFixed(1)} km away';
+  }
+
+  // Independent of the device's live/set location — lets a patient browse
+  // labs in any city regardless of where they currently are, instead of
+  // only the 15km GPS radius.
+  Widget _cityFilterField(BuildContext context) => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+        child: TextField(
+          onChanged: (v) => setState(() => _cityFilter = v),
+          decoration: InputDecoration(
+            hintText: 'Filter by city (e.g. Hyderabad)',
+            prefixIcon: Icon(Icons.location_city_rounded, color: context.appTextHint, size: 20),
+            suffixIcon: _cityFilter.isNotEmpty
+                ? IconButton(
+                    icon: Icon(Icons.close_rounded, color: context.appTextHint, size: 18),
+                    onPressed: () => setState(() => _cityFilter = ''),
+                  )
+                : null,
+            isDense: true,
+            filled: true,
+            fillColor: context.appSurface,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+          ),
+        ),
+      );
 
   @override
   Widget build(BuildContext context) {
+    final myLocation = ref.watch(locationProvider);
+
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('lab_tests_catalogue')
           .where('isActive', isEqualTo: true)
-          .limit(30)
           .snapshots(),
-      builder: (context, snap) {
-        final docs = snap.data?.docs ?? const [];
-        // Don't render the section at all while empty/loading — this is an
-        // additive list on top of the admin-curated one below, so an empty
-        // state here would just be visual noise, not useful information.
-        if (docs.isEmpty) return const SizedBox.shrink();
+      builder: (context, testSnap) {
+        final q = widget.query.trim().toLowerCase();
+        final matchingLabIds = q.isEmpty
+            ? const <String>{}
+            : (testSnap.data?.docs ?? const [])
+                .where((d) => ((d.data() as Map<String, dynamic>)['name'] as String? ?? '')
+                    .toLowerCase()
+                    .contains(q))
+                .map((d) => (d.data() as Map<String, dynamic>)['sourceLabId'] as String?)
+                .whereType<String>()
+                .toSet();
 
-        final tests = docs.map((d) {
-          final data = d.data() as Map<String, dynamic>;
-          return {
-            'name': (data['name'] as String? ?? '').trim(),
-            'price': (data['price'] as num?)?.toInt() ?? 0,
-            'duration': (data['duration'] as String? ?? '').trim(),
-            'labName': (data['labName'] as String? ?? '').trim(),
-            'sourceLabId': data['sourceLabId'],
-            'sourceTestId': data['sourceTestId'],
-          };
-        }).toList();
+        return StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('lab_profiles')
+              .where('status', isEqualTo: 'active')
+              .snapshots(),
+          builder: (context, snap) {
+            final docs = snap.data?.docs ?? const [];
+            // Don't render the section at all while empty/loading — this sits
+            // above the admin-curated list below, so an empty state here
+            // would just be visual noise, not useful information.
+            if (docs.isEmpty) return const SizedBox.shrink();
 
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Padding(
-              padding: EdgeInsets.fromLTRB(16, 4, 16, 10),
-              child: Text('Tests from Labs Near You', style: AppTextStyles.h4),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Column(
-                children: tests.map((t) {
-                  final duration = t['duration'] as String;
-                  final labName = t['labName'] as String;
-                  final subtitle = [
-                    if (labName.isNotEmpty) labName,
-                    if (duration.isNotEmpty) 'Reports in $duration',
-                  ].join(' • ');
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 10),
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: context.appSurface,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: context.appBorder),
+            var labs = docs.map((d) {
+              final data = d.data() as Map<String, dynamic>;
+              final lat = (data['latitude'] as num?)?.toDouble();
+              final lng = (data['longitude'] as num?)?.toDouble();
+              double? distanceKm;
+              if (myLocation.lat != null && myLocation.lng != null && lat != null && lng != null) {
+                distanceKm = Geolocator.distanceBetween(myLocation.lat!, myLocation.lng!, lat, lng) / 1000;
+              }
+              return {
+                'id': d.id,
+                'name': (data['name'] as String? ?? 'Lab').trim(),
+                'address': (data['address'] as String? ?? '').trim(),
+                'city': (data['city'] as String? ?? '').trim(),
+                'rating': ((data['rating'] as num?) ?? 0).toDouble(),
+                'totalReviews': (data['totalReviews'] as int?) ?? 0,
+                'distanceKm': distanceKm,
+              };
+            }).toList();
+
+            // Nearest first; labs with no coordinates on file sink to the bottom
+            // instead of scattering through the list.
+            labs.sort((a, b) => ((a['distanceKm'] as double?) ?? double.infinity)
+                .compareTo((b['distanceKm'] as double?) ?? double.infinity));
+
+            // A city filter browses that city outright, ignoring the
+            // device's live location entirely; otherwise fall back to the
+            // 15km in-person radius used for doctors, instead of listing
+            // every registered lab nationwide.
+            final cityQuery = _cityFilter.trim().toLowerCase();
+            if (cityQuery.isNotEmpty) {
+              labs = labs.where((lab) =>
+                  (lab['city'] as String).toLowerCase().contains(cityQuery)).toList();
+            } else if (myLocation.lat != null && myLocation.lng != null) {
+              labs = labs.where((lab) {
+                final d = lab['distanceKm'] as double?;
+                return d != null && d <= 15.0;
+              }).toList();
+            }
+
+            if (q.isNotEmpty) {
+              labs = labs.where((lab) =>
+                  (lab['name'] as String).toLowerCase().contains(q) ||
+                  matchingLabIds.contains(lab['id'] as String)).toList();
+            }
+
+            final heading = cityQuery.isNotEmpty ? 'Labs in "${_cityFilter.trim()}"' : 'Labs Near You';
+
+            if (labs.isEmpty) {
+              if (q.isEmpty && cityQuery.isEmpty) return const SizedBox.shrink();
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _cityFilterField(context),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+                    child: Text(
+                      q.isNotEmpty
+                          ? 'No labs found offering tests for "${widget.query}"'
+                          : 'No labs found in "${_cityFilter.trim()}"',
+                      style: AppTextStyles.bodySmall.copyWith(color: context.appTextHint),
                     ),
-                    child: Row(children: [
-                      Container(
-                        width: 46, height: 46,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF0097A7).withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Icon(Icons.biotech_rounded, color: Color(0xFF0097A7), size: 24),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text(t['name'] as String, style: AppTextStyles.labelLarge),
-                        if (subtitle.isNotEmpty)
-                          Text(subtitle, style: AppTextStyles.bodySmall, maxLines: 1, overflow: TextOverflow.ellipsis),
-                      ])),
-                      Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                        Text('₹${t['price']}', style: AppTextStyles.labelLarge.copyWith(color: const Color(0xFF0097A7))),
-                        const SizedBox(height: 4),
-                        GestureDetector(
-                          onTap: () => onBook(t),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                            decoration: BoxDecoration(
-                              gradient: const LinearGradient(colors: [Color(0xFF0097A7), Color(0xFF26C6DA)]),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: const Text('Add to Cart', style: TextStyle(fontFamily: 'Poppins', fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white)),
+                  ),
+                ],
+              );
+            }
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _cityFilterField(context),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
+                  child: Row(
+                    children: [
+                      Text(heading, style: AppTextStyles.h4),
+                      if (cityQuery.isEmpty && myLocation.hasCoordinates) ...[
+                        const Spacer(),
+                        Icon(Icons.my_location_rounded, size: 12, color: context.appTextHint),
+                        const SizedBox(width: 3),
+                        Flexible(
+                          child: Text(
+                            myLocation.displayName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTextStyles.bodySmall.copyWith(color: context.appTextHint),
                           ),
                         ),
-                      ]),
-                    ]),
-                  );
-                }).toList(),
-              ),
-            ),
-            const SizedBox(height: 8),
-          ],
+                      ],
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Column(
+                    children: labs.map((lab) {
+                      final address = lab['address'] as String;
+                      final rating = lab['rating'] as double;
+                      final totalReviews = lab['totalReviews'] as int;
+                      final distanceLabel = _distanceLabel(lab['distanceKm'] as double?);
+                      return GestureDetector(
+                        onTap: () => context.push(AppRoutes.labMenu.replaceFirst(':id', lab['id'] as String)),
+                        child: Container(
+                          margin: const EdgeInsets.only(bottom: 10),
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: context.appSurface,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: context.appBorder),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                width: 46, height: 46,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF0097A7).withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Icon(Icons.biotech_rounded, color: Color(0xFF0097A7), size: 24),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                Text(lab['name'] as String, style: AppTextStyles.labelLarge, maxLines: 1, overflow: TextOverflow.ellipsis),
+                                if (address.isNotEmpty) ...[
+                                  const SizedBox(height: 2),
+                                  Row(children: [
+                                    Icon(Icons.location_on_rounded, size: 12, color: context.appTextHint),
+                                    const SizedBox(width: 3),
+                                    Expanded(
+                                      child: Text(address, style: AppTextStyles.bodySmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+                                    ),
+                                  ]),
+                                ],
+                                const SizedBox(height: 6),
+                                Wrap(
+                                  spacing: 6,
+                                  runSpacing: 4,
+                                  children: [
+                                    _LabInfoChip(
+                                      icon: Icons.star_rounded,
+                                      label: totalReviews > 0 ? '${rating.toStringAsFixed(1)} ($totalReviews)' : 'New',
+                                      bg: const Color(0xFFFFF8E1),
+                                      fg: const Color(0xFFF57F17),
+                                    ),
+                                    if (distanceLabel.isNotEmpty)
+                                      _LabInfoChip(
+                                        icon: Icons.near_me_rounded,
+                                        label: distanceLabel,
+                                        bg: const Color(0xFFE0F7FA),
+                                        fg: const Color(0xFF0097A7),
+                                      ),
+                                  ],
+                                ),
+                              ])),
+                              const SizedBox(width: 4),
+                              Icon(Icons.chevron_right_rounded, color: context.appTextHint),
+                            ],
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
+            );
+          },
         );
       },
+    );
+  }
+}
+
+class _LabInfoChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color bg;
+  final Color fg;
+
+  const _LabInfoChip({required this.icon, required this.label, required this.bg, required this.fg});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(6)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 10, color: fg),
+          const SizedBox(width: 3),
+          Text(label, style: TextStyle(fontFamily: 'Poppins', fontSize: 10, fontWeight: FontWeight.w600, color: fg)),
+        ],
+      ),
     );
   }
 }
@@ -499,7 +656,7 @@ class _MyDiagnosticsBookings extends StatelessWidget {
       stream: FirebaseFirestore.instance
           .collection('service_requests')
           .where('patientId', isEqualTo: uid)
-          .where('type', isEqualTo: 'diagnostics')
+          .where('type', whereIn: ['diagnostics', 'lab_tests'])
           .orderBy('createdAt', descending: true)
           .limit(10)
           .snapshots(),

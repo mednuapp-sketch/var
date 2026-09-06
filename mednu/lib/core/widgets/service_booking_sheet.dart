@@ -26,6 +26,7 @@ class ServiceBookingSheet extends ConsumerStatefulWidget {
   final String? priceLabel;
   final int amount;
   final String paymentDescription;
+  final Map<String, dynamic> extraFields;
 
   const ServiceBookingSheet({
     super.key,
@@ -36,6 +37,7 @@ class ServiceBookingSheet extends ConsumerStatefulWidget {
     this.priceLabel,
     this.amount = 0,
     this.paymentDescription = '',
+    this.extraFields = const {},
   });
 
   static Future<void> show(
@@ -47,6 +49,7 @@ class ServiceBookingSheet extends ConsumerStatefulWidget {
     String? priceLabel,
     int amount = 0,
     String paymentDescription = '',
+    Map<String, dynamic> extraFields = const {},
   }) {
     return showModalBottomSheet(
       context: context,
@@ -61,6 +64,7 @@ class ServiceBookingSheet extends ConsumerStatefulWidget {
           priceLabel: priceLabel,
           amount: amount,
           paymentDescription: paymentDescription,
+          extraFields: extraFields,
         ),
       ),
     );
@@ -651,6 +655,7 @@ class _ServiceBookingSheetState extends ConsumerState<ServiceBookingSheet> {
       'amount': widget.amount,
       'status': 'pending',
       'assignedTo': null,
+      ...widget.extraFields,
     };
 
     // ── Payment gate ──────────────────────────────────────
@@ -706,6 +711,7 @@ class _ServiceBookingSheetState extends ConsumerState<ServiceBookingSheet> {
           ...widget.serviceDetails,
           'locationData': locationData,
         },
+        extraFields: widget.extraFields,
       );
 
       if (mounted) {

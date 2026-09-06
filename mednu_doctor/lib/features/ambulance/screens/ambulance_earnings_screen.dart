@@ -11,10 +11,13 @@ import '../widgets/weekly_earnings_chart.dart';
 
 /// Earnings — reuses the Shared Core wallet layer's presentation
 /// conventions (the same "hero total + transaction list" shape as Lab/
-/// Pharmacy Earnings) but is backed by the module's own mock providers,
-/// not `walletSummaryProvider`, since there's no `ambulance_transactions`
-/// ledger yet. Adds a weekly bar chart (`fl_chart`, already a dependency)
-/// so this screen isn't just another list of rows.
+/// Pharmacy Earnings) but is backed by the module's own real,
+/// `ambulance_trips`-derived providers (`weeklyEarningsProvider` /
+/// `tripHistoryProvider`) rather than `walletSummaryProvider` directly —
+/// the wallet's authoritative balance still comes from the real
+/// `ambulance_transactions` ledger, this screen just shapes trip history
+/// into a weekly chart. Adds a weekly bar chart (`fl_chart`, already a
+/// dependency) so this screen isn't just another list of rows.
 class AmbulanceEarningsScreen extends ConsumerWidget {
   const AmbulanceEarningsScreen({super.key});
 

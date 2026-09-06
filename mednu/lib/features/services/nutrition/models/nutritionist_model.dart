@@ -17,6 +17,8 @@ class NutritionistModel {
   final bool isOnlineAvailable;
   final bool isInPersonAvailable;
   final String city;
+  final double? lat;
+  final double? lng;
   final String clinicName;
   final List<String> availableDays;
   final Map<String, List<String>> slots; // day -> list of time slots
@@ -39,6 +41,8 @@ class NutritionistModel {
     required this.isOnlineAvailable,
     required this.isInPersonAvailable,
     required this.city,
+    this.lat,
+    this.lng,
     required this.clinicName,
     required this.availableDays,
     required this.slots,
@@ -64,6 +68,8 @@ class NutritionistModel {
       isOnlineAvailable: d['isOnlineAvailable'] as bool? ?? true,
       isInPersonAvailable: d['isInPersonAvailable'] as bool? ?? false,
       city: d['city'] as String? ?? '',
+      lat: (d['lat'] as num?)?.toDouble(),
+      lng: (d['lng'] as num?)?.toDouble(),
       clinicName: d['clinicName'] as String? ?? '',
       availableDays: List<String>.from(d['availableDays'] as List? ?? []),
       slots: (d['slots'] as Map<String, dynamic>?)?.map(

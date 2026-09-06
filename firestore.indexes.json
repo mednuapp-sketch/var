@@ -33,6 +33,22 @@
       ]
     },
     {
+      "collectionGroup": "hospital_bill_payments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "hospitalId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt",  "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "hospital_bill_payments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "patientId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "ambulance_profiles",
       "queryScope": "COLLECTION",
       "fields": [
@@ -878,6 +894,14 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "labId",      "order": "ASCENDING" },
+        { "fieldPath": "uploadedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "diagnostic_reports",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "patientId",  "order": "ASCENDING" },
         { "fieldPath": "uploadedAt", "order": "DESCENDING" }
       ]
     },

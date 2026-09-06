@@ -238,7 +238,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
         'updatedAt':          now,
         'lastLogin':          now,
         'familyMembers':      [],
-        'isPremium':          false,
         'walletBalance':      0.0,
         'referralCode':       myReferralCode,
         'referralPoints':     0,

@@ -16,7 +16,7 @@ const _kTips = {
     'Add calorie-dense, nutrient-rich foods like nuts and avocados.',
     'Increase protein intake to build healthy muscle mass.',
     'Eat 5–6 small meals per day rather than 3 large ones.',
-    'Consult a nutritionist for a personalised weight-gain plan.',
+    'Consult a dietician for a personalised weight-gain plan.',
   ],
   'Normal': [
     'Maintain your balanced, varied diet — you are doing great!',

@@ -6,6 +6,7 @@ enum BookingSource {
   serviceRequest,
   nutrition,
   medicineOrder,
+  hospitalBillPayment,
 }
 
 enum BookingStatus {
@@ -202,7 +203,11 @@ class UnifiedBooking {
       source: BookingSource.serviceRequest,
       serviceType: serviceType,
       serviceName: d['serviceName'] as String? ?? serviceType,
-      providerName: d['assignedTo'] as String?,
+      // `assignedToName` is the human-readable name resolved server-side
+      // (see functions/index.js `_providerDisplayName`) when a provider is
+      // assigned/claimed; older bookings written before that existed fall
+      // back to the raw uid rather than showing nothing.
+      providerName: d['assignedToName'] as String? ?? d['assignedTo'] as String?,
       providerPhone: d['providerPhone'] as String?,
       date: d['preferredDate'] as String? ?? '',
       time: d['preferredTime'] as String? ?? '',
@@ -262,6 +267,36 @@ class UnifiedBooking {
       rawData: d,
       createdAt: createdAt,
       updatedAt: _tsToDate(d['updatedAt']),
+    );
+  }
+
+  /// From the `hospital_bill_payments` collection (mednu/lib/features/
+  /// hospitals/screens/pay_hospital_bill_screen.dart). Status is derived
+  /// from `hospitalVerified` rather than a status string — this collection
+  /// has none, since it's a payment record, not a workflow with states.
+  /// Mapped onto the two generic statuses whose existing timeline-index
+  /// behaviour (see `_currentStepIndex` below) already does what's wanted
+  /// here: `pending` sits at step 0 (still "Active"), `completed` sits at
+  /// the last step (moves it into the "Completed" tab) — no new BookingStatus
+  /// value needed.
+  factory UnifiedBooking.fromHospitalBillPayment(Map<String, dynamic> d, String id) {
+    final createdAt = _tsToDate(d['createdAt']);
+    final verified = d['hospitalVerified'] == true;
+    return UnifiedBooking(
+      id: id,
+      source: BookingSource.hospitalBillPayment,
+      serviceType: 'Hospital Bill Payment',
+      serviceName: d['hospitalName'] as String? ?? 'Hospital Bill',
+      providerName: d['hospitalName'] as String?,
+      date: createdAt != null
+          ? '${createdAt.day}/${createdAt.month}/${createdAt.year}'
+          : '',
+      time: '',
+      status: verified ? BookingStatus.completed : BookingStatus.pending,
+      amount: (d['finalAmount'] as num?)?.toDouble(),
+      rawData: d,
+      createdAt: createdAt,
+      updatedAt: _tsToDate(d['hospitalVerifiedAt']) ?? createdAt,
     );
   }
 
@@ -429,6 +464,11 @@ class UnifiedBooking {
           {'title': 'Order Confirmed', 'desc': 'Pharmacy has confirmed your order'},
           {'title': 'Out for Delivery', 'desc': 'Delivery partner is on the way'},
           {'title': 'Delivered', 'desc': 'Order delivered to your doorstep'},
+        ];
+      case BookingSource.hospitalBillPayment:
+        return [
+          {'title': 'Bill Paid', 'desc': 'Your payment was received successfully'},
+          {'title': 'Verified by Hospital', 'desc': 'The hospital has confirmed your payment'},
         ];
     }
   }

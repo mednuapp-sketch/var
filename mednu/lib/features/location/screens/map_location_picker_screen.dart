@@ -32,10 +32,18 @@ class MapLocationPickerScreen extends ConsumerStatefulWidget {
   final double? initialLat;
   final double? initialLng;
 
+  /// Whether confirming a pin also overwrites the app-wide "my current
+  /// location" (`locationProvider`). Defaults to true, matching every
+  /// existing call site. Pass false when picking a location for someone
+  /// else (e.g. a family member's delivery address) so the orderer's own
+  /// saved location isn't silently overwritten by the recipient's pin.
+  final bool updateGlobalLocation;
+
   const MapLocationPickerScreen({
     super.key,
     this.initialLat,
     this.initialLng,
+    this.updateGlobalLocation = true,
   });
 
   @override
@@ -363,7 +371,9 @@ class _MapLocationPickerScreenState
   void _confirm() {
     final p = _picked;
     if (p == null) return;
-    ref.read(locationProvider.notifier).setPreciseAddress(p);
+    if (widget.updateGlobalLocation) {
+      ref.read(locationProvider.notifier).setPreciseAddress(p);
+    }
     Navigator.pop(context, p);
   }
 

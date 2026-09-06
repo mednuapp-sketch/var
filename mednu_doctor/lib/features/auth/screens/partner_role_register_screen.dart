@@ -18,6 +18,7 @@ import '../../../shared_core/models/app_role.dart';
 import '../../ambulance/services/ambulance_profile_service.dart';
 import '../../caregiver/services/caregiver_profile_service.dart';
 import '../../counselling/services/counselling_profile_service.dart';
+import '../../hospital_billing/services/hospital_profile_service.dart';
 import '../../lab/models/lab_profile.dart';
 import '../../lab/services/lab_profile_service.dart';
 import '../../nutrition/services/nutritionist_profile_service.dart';
@@ -66,6 +67,7 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
   final _addressCtrl = TextEditingController();
   double? _addressLat;
   double? _addressLng;
+  String _addressCity = '';
   final _phoneCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   bool _deliveryAvailable = true;
@@ -84,6 +86,14 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
   final _certificationsCtrl = TextEditingController();
   final _specialtiesCtrl = TextEditingController();
   final _hourlyRateCtrl = TextEditingController();
+
+  // Nutritionist (languages spoken — matches the doctor registration list so
+  // the patient app's language filter has one consistent set of values).
+  static const _allLanguages = [
+    'English', 'Telugu', 'Hindi', 'Tamil', 'Kannada',
+    'Malayalam', 'Marathi', 'Bengali',
+  ];
+  final _selectedLanguages = <String>{'English'};
 
   bool _saving = false;
 
@@ -290,6 +300,10 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
           certifications: _csv(_certificationsCtrl),
           specialties: _csv(_specialtiesCtrl),
           hourlyRate: num.tryParse(_hourlyRateCtrl.text.trim()) ?? 0,
+          city: _addressCity,
+          clinicLat: _addressLat,
+          clinicLng: _addressLng,
+          languages: _selectedLanguages.toList(),
         );
       case AppRole.counsellor:
         return CounsellingProfileService.createProfile(
@@ -306,6 +320,13 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
           qualification: _certificationsCtrl.text.trim(),
           specialization: _specialtiesCtrl.text.trim(),
           consultationFee: num.tryParse(_hourlyRateCtrl.text.trim()) ?? 0,
+          languages: _selectedLanguages.toList(),
+        );
+      case AppRole.hospital:
+        return HospitalProfileService.createProfile(
+          uid: uid,
+          contactName: _nameCtrl.text.trim(),
+          phone: _phoneCtrl.text.trim(),
         );
       case AppRole.doctor:
       case AppRole.admin:
@@ -501,6 +522,26 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
               Icons.currency_rupee_rounded,
               keyboardType: TextInputType.number),
         ];
+      case AppRole.hospital:
+        return [
+          _field(_nameCtrl, 'Billing Desk Contact Name', Icons.person_outline),
+          const SizedBox(height: 14),
+          _field(_phoneCtrl, 'Contact Phone', Icons.call_outlined,
+              keyboardType: TextInputType.phone, locked: true),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              'Our team will confirm which hospital this account represents '
+              'before approving it, using the phone number above.',
+              style: AppTextStyles.caption,
+            ),
+          ),
+        ];
       case AppRole.physiotherapist:
         return [
           _field(_nameCtrl, 'Full Name', Icons.person_outline),
@@ -516,6 +557,31 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
           _field(_hourlyRateCtrl, 'Session Rate (₹)',
               Icons.currency_rupee_rounded,
               keyboardType: TextInputType.number),
+          const SizedBox(height: 14),
+          _addressPickerField('Clinic / Home-visit Base Address'),
+          const SizedBox(height: 22),
+          const Text('Languages Spoken', style: AppTextStyles.h4),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _allLanguages.map((lang) => FilterChip(
+              label: Text(lang),
+              selected: _selectedLanguages.contains(lang),
+              onSelected: (v) => setState(() {
+                if (v) {
+                  _selectedLanguages.add(lang);
+                } else if (_selectedLanguages.length > 1) {
+                  _selectedLanguages.remove(lang);
+                }
+              }),
+              selectedColor: AppColors.primary.withValues(alpha: 0.14),
+              checkmarkColor: AppColors.primary,
+              labelStyle: AppTextStyles.labelMedium.copyWith(
+                color: _selectedLanguages.contains(lang) ? AppColors.primary : AppColors.textSecondary,
+              ),
+            )).toList(),
+          ),
         ];
       case AppRole.counsellor:
         return [
@@ -548,6 +614,29 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
           _field(_hourlyRateCtrl, 'Consultation Fee (₹)',
               Icons.currency_rupee_rounded,
               keyboardType: TextInputType.number),
+          const SizedBox(height: 22),
+          const Text('Languages Spoken', style: AppTextStyles.h4),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _allLanguages.map((lang) => FilterChip(
+              label: Text(lang),
+              selected: _selectedLanguages.contains(lang),
+              onSelected: (v) => setState(() {
+                if (v) {
+                  _selectedLanguages.add(lang);
+                } else if (_selectedLanguages.length > 1) {
+                  _selectedLanguages.remove(lang);
+                }
+              }),
+              selectedColor: AppColors.primary.withValues(alpha: 0.14),
+              checkmarkColor: AppColors.primary,
+              labelStyle: AppTextStyles.labelMedium.copyWith(
+                color: _selectedLanguages.contains(lang) ? AppColors.primary : AppColors.textSecondary,
+              ),
+            )).toList(),
+          ),
         ];
       case AppRole.doctor:
       case AppRole.admin:
@@ -787,6 +876,7 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
       _addressCtrl.text = result.formatted;
       _addressLat = result.lat;
       _addressLng = result.lng;
+      _addressCity = result.city ?? '';
     });
   }
 

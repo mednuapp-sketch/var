@@ -4,7 +4,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
-import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
@@ -75,8 +74,8 @@ class ReferralScreen extends ConsumerWidget {
                 // ── Reward banner ─────────────────────────────────
                 _RewardBanner(config: config),
 
-                // ── Code + QR card ────────────────────────────────
-                _CodeAndQRCard(
+                // ── Referral code card ────────────────────────────
+                _ReferralCodeCard(
                   referralCode: referralCode,
                   referralLink: referralLink,
                   config: config,
@@ -102,22 +101,22 @@ class ReferralScreen extends ConsumerWidget {
                       Container(
                         width: 28, height: 28,
                         decoration: BoxDecoration(
-                          color: AppColors.accent.withValues(alpha: 0.1),
+                          color: AppColors.secondary.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: const Icon(Icons.history_rounded,
-                            size: 15, color: AppColors.accent),
+                            size: 15, color: AppColors.secondary),
                       ),
                       const SizedBox(width: 8),
                       Text('Referral History',
                           style: AppTextStyles.h4
-                              .copyWith(color: AppColors.accent)),
+                              .copyWith(color: AppColors.secondary)),
                       const Spacer(),
                       historyAsync.maybeWhen(
                         data: (list) => list.isNotEmpty
                             ? _CountChip(
                                 label: '${list.length} total',
-                                color: AppColors.accent)
+                                color: AppColors.secondary)
                             : const SizedBox.shrink(),
                         orElse: () => const SizedBox.shrink(),
                       ),
@@ -195,10 +194,6 @@ class _HeroHeader extends StatelessWidget {
               ),
             ),
           ),
-          Positioned(
-            top: 60, right: 20,
-            child: _ConfettiDots(),
-          ),
           SafeArea(
             child: LayoutBuilder(
               builder: (context, constraints) {
@@ -261,14 +256,14 @@ class _HeroHeader extends StatelessWidget {
                     Row(
                       children: [
                         const Icon(Icons.timer_outlined,
-                            color: Colors.amber, size: 14),
+                            color: AppColors.primaryBright, size: 14),
                         const SizedBox(width: 4),
                         Text(
                           'Offer ends ${DateFormat('d MMM yyyy').format(config.offerExpiryDate!)}',
                           style: const TextStyle(
                             fontFamily: 'Poppins',
                             fontSize: 11,
-                            color: Colors.amber,
+                            color: AppColors.primaryBright,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -287,52 +282,6 @@ class _HeroHeader extends StatelessWidget {
       ),
     );
   }
-}
-
-/// Decorative confetti dots — simple colored circles, no package needed.
-class _ConfettiDots extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Row(children: [
-          const _Dot(color: Colors.amber, size: 8),
-          const SizedBox(width: 10),
-          const _Dot(color: Colors.white38, size: 5),
-          const SizedBox(width: 14),
-          _Dot(color: Colors.pinkAccent.shade100, size: 7),
-        ]),
-        const SizedBox(height: 8),
-        const Row(children: [
-          _Dot(color: Colors.white24, size: 5),
-          SizedBox(width: 18),
-          _Dot(color: Colors.amber, size: 6),
-          SizedBox(width: 8),
-          _Dot(color: Colors.white38, size: 8),
-        ]),
-        const SizedBox(height: 10),
-        Row(children: [
-          const SizedBox(width: 8),
-          _Dot(color: Colors.pinkAccent.shade100, size: 5),
-          const SizedBox(width: 12),
-          const _Dot(color: Colors.amber, size: 7),
-        ]),
-      ],
-    );
-  }
-}
-
-class _Dot extends StatelessWidget {
-  final Color color;
-  final double size;
-  const _Dot({required this.color, required this.size});
-
-  @override
-  Widget build(BuildContext context) => Container(
-        width: size, height: size,
-        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-      );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -360,7 +309,7 @@ class _EarningsSummary extends StatelessWidget {
                   ? '—'
                   : '₹${NumberFormat('#,##0').format(stats['earned'] ?? 0)}',
               icon: Icons.account_balance_wallet_rounded,
-              color: AppColors.accent,
+              color: context.appGood,
             ),
           ),
           const SizedBox(width: 10),
@@ -371,7 +320,7 @@ class _EarningsSummary extends StatelessWidget {
                   ? '—'
                   : '${stats['pending'] ?? 0}',
               icon: Icons.schedule_rounded,
-              color: AppColors.warning,
+              color: context.appWarn,
             ),
           ),
           const SizedBox(width: 10),
@@ -506,7 +455,7 @@ class _RewardBanner extends StatelessWidget {
                             .copyWith(color: context.appTextSecondary)),
                     Text(config.referredRewardFormatted,
                         style: AppTextStyles.display
-                            .copyWith(color: AppColors.accent)),
+                            .copyWith(color: AppColors.secondary)),
                     const SizedBox(height: 2),
                     Text('on joining MedNU',
                         style: AppTextStyles.bodySmall
@@ -523,13 +472,13 @@ class _RewardBanner extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  Code + QR Card
+//  Referral Code Card
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _CodeAndQRCard extends StatelessWidget {
+class _ReferralCodeCard extends StatelessWidget {
   final String referralCode, referralLink;
   final ReferralConfig config;
-  const _CodeAndQRCard({
+  const _ReferralCodeCard({
     required this.referralCode,
     required this.referralLink,
     required this.config,
@@ -549,7 +498,7 @@ class _CodeAndQRCard extends StatelessWidget {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(msg,
           style: const TextStyle(fontFamily: 'Poppins', fontSize: 13)),
-      backgroundColor: AppColors.accent,
+      backgroundColor: AppColors.primary,
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       margin: const EdgeInsets.all(16),
@@ -580,121 +529,64 @@ class _CodeAndQRCard extends StatelessWidget {
           children: [
             const Text('Your Referral Code', style: AppTextStyles.h4),
             const SizedBox(height: 14),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Left: code + buttons
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // Code display box
-                      GestureDetector(
-                        onTap: () => _copyCode(context),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 14),
-                          decoration: BoxDecoration(
-                            color: context.appBackground,
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(
-                              color: AppColors.primary
-                                  .withValues(alpha: 0.3),
-                              width: 1.5,
-                            ),
-                          ),
-                          child: Column(
-                            children: [
-                              Text(
-                                referralCode,
-                                style: const TextStyle(
-                                  fontFamily: 'Poppins',
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.w800,
-                                  color: AppColors.primary,
-                                  letterSpacing: 5,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                              const SizedBox(height: 4),
-                              Text('Tap to copy',
-                                  style: TextStyle(
-                                    fontFamily: 'Poppins',
-                                    fontSize: 10,
-                                    color: context.appTextHint,
-                                  )),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _ActionButton(
-                              icon: Icons.copy_rounded,
-                              label: 'Copy Code',
-                              color: AppColors.primary,
-                              onTap: () => _copyCode(context),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: _ActionButton(
-                              icon: Icons.link_rounded,
-                              label: 'Copy Link',
-                              color: AppColors.secondary,
-                              onTap: () => _copyLink(context),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
+            // Code display box
+            GestureDetector(
+              onTap: () => _copyCode(context),
+              child: Container(
+                width: double.infinity,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+                decoration: BoxDecoration(
+                  color: context.appBackground,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: AppColors.primary.withValues(alpha: 0.3),
+                    width: 1.5,
                   ),
                 ),
-
-                const SizedBox(width: 16),
-
-                // Right: QR code
-                Column(
+                child: Column(
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: AppColors.border),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.05),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
+                    Text(
+                      referralCode,
+                      style: const TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 28,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.primary,
+                        letterSpacing: 6,
                       ),
-                      child: QrImageView(
-                        data: referralLink,
-                        version: QrVersions.auto,
-                        size: 100,
-                        backgroundColor: Colors.white,
-                        eyeStyle: const QrEyeStyle(
-                          eyeShape: QrEyeShape.square,
-                          color: AppColors.primary,
-                        ),
-                        dataModuleStyle: const QrDataModuleStyle(
-                          dataModuleShape: QrDataModuleShape.square,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
+                      textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 6),
-                    Text('Scan QR',
+                    Text('Tap to copy',
                         style: TextStyle(
                           fontFamily: 'Poppins',
-                          fontSize: 10,
+                          fontSize: 11,
                           color: context.appTextHint,
                         )),
                   ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: _ActionButton(
+                    icon: Icons.copy_rounded,
+                    label: 'Copy Code',
+                    color: AppColors.primary,
+                    onTap: () => _copyCode(context),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _ActionButton(
+                    icon: Icons.link_rounded,
+                    label: 'Copy Link',
+                    color: AppColors.secondary,
+                    onTap: () => _copyLink(context),
+                  ),
                 ),
               ],
             ),
@@ -930,7 +822,7 @@ class _HowItWorks extends StatelessWidget {
                 'You get ${config.referrerRewardFormatted} and your friend gets '
                 '${config.referredRewardFormatted} — instantly in your wallets.',
             icon: Icons.account_balance_wallet_rounded,
-            color: AppColors.accent,
+            color: AppColors.success,
             isLast: true,
           ),
         ],
@@ -1038,13 +930,13 @@ class _MilestoneSection extends StatelessWidget {
         decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: [
-              AppColors.accent.withValues(alpha: 0.08),
-              AppColors.accent.withValues(alpha: 0.04),
+              AppColors.primary.withValues(alpha: 0.08),
+              AppColors.primary.withValues(alpha: 0.04),
             ],
           ),
           borderRadius: BorderRadius.circular(20),
           border:
-              Border.all(color: AppColors.accent.withValues(alpha: 0.2)),
+              Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1054,11 +946,11 @@ class _MilestoneSection extends StatelessWidget {
                 Container(
                   width: 32, height: 32,
                   decoration: BoxDecoration(
-                    color: AppColors.accent.withValues(alpha: 0.15),
+                    color: AppColors.primary.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: const Icon(Icons.emoji_events_rounded,
-                      color: AppColors.accent, size: 18),
+                      color: AppColors.primary, size: 18),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -1082,7 +974,7 @@ class _MilestoneSection extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(
                       horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
-                    color: AppColors.accent,
+                    color: AppColors.primary,
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text('$rewarded / $nextMilestone',
@@ -1102,9 +994,9 @@ class _MilestoneSection extends StatelessWidget {
                 value: progress,
                 minHeight: 10,
                 backgroundColor:
-                    AppColors.accent.withValues(alpha: 0.15),
+                    AppColors.primary.withValues(alpha: 0.15),
                 valueColor:
-                    const AlwaysStoppedAnimation<Color>(AppColors.accent),
+                    const AlwaysStoppedAnimation<Color>(AppColors.primary),
               ),
             ),
             const SizedBox(height: 12),
@@ -1118,13 +1010,13 @@ class _MilestoneSection extends StatelessWidget {
                       width: 28, height: 28,
                       decoration: BoxDecoration(
                         color: reached
-                            ? AppColors.accent
-                            : AppColors.accent.withValues(alpha: 0.1),
+                            ? AppColors.primary
+                            : AppColors.primary.withValues(alpha: 0.1),
                         shape: BoxShape.circle,
                         border: Border.all(
                           color: reached
-                              ? AppColors.accent
-                              : AppColors.accent.withValues(alpha: 0.3),
+                              ? AppColors.primary
+                              : AppColors.primary.withValues(alpha: 0.3),
                           width: 2,
                         ),
                       ),
@@ -1134,7 +1026,7 @@ class _MilestoneSection extends StatelessWidget {
                             : Icons.emoji_events_rounded,
                         color: reached
                             ? Colors.white
-                            : AppColors.accent.withValues(alpha: 0.5),
+                            : AppColors.primary.withValues(alpha: 0.5),
                         size: 14,
                       ),
                     ),
@@ -1145,7 +1037,7 @@ class _MilestoneSection extends StatelessWidget {
                           fontSize: 10,
                           fontWeight: FontWeight.w700,
                           color: reached
-                              ? AppColors.accent
+                              ? AppColors.primary
                               : context.appTextHint,
                         )),
                   ],
@@ -1170,7 +1062,7 @@ class _ReferralCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isRewarded  = record.isRewarded;
-    final statusColor = isRewarded ? AppColors.success : AppColors.warning;
+    final statusColor = isRewarded ? context.appGood : context.appWarn;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
@@ -1246,9 +1138,7 @@ class _ReferralCard extends StatelessWidget {
                           ? '+₹${record.referrerRewardAmount.toStringAsFixed(0)} credited to wallet'
                           : 'Reward on ${record.triggerCondition.replaceAll('_', ' ')}',
                       style: AppTextStyles.bodySmall.copyWith(
-                        color: isRewarded
-                            ? AppColors.success
-                            : AppColors.warning,
+                        color: statusColor,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -1322,7 +1212,7 @@ class _ErrorState extends StatelessWidget {
       child: Column(
         children: [
           Icon(Icons.wifi_off_rounded,
-              size: 48, color: AppColors.error.withValues(alpha: 0.5)),
+              size: 48, color: context.appCrit.withValues(alpha: 0.5)),
           const SizedBox(height: 12),
           Text('Couldn\'t load history',
               style:

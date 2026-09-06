@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -12,6 +13,7 @@ import '../../../core/constants/therapy_specialties.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/utils/r.dart';
 import '../../../core/widgets/ux_widgets.dart';
+import '../../intake/services/doctor_booking_flow.dart';
 
 class ConsultationScreen extends ConsumerStatefulWidget {
   final bool therapistsOnly;
@@ -472,9 +474,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               gradient: hasOnline
-                  ? const LinearGradient(
-                      colors: [Color(0xFF1B5E20), Color(0xFF2E7D32)],
-                    )
+                  ? AppColors.primaryGradient
                   : LinearGradient(
                       colors: [
                         AppColors.primary.withValues(alpha: 0.08),
@@ -487,7 +487,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
                   : Border.all(color: AppColors.primary.withValues(alpha: 0.15)),
               boxShadow: hasOnline
                   ? [BoxShadow(
-                      color: const Color(0xFF2E7D32).withValues(alpha: 0.3),
+                      color: AppColors.primary.withValues(alpha: 0.3),
                       blurRadius: 12,
                       offset: const Offset(0, 4),
                     )]
@@ -506,7 +506,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
                   ),
                   child: Icon(
                     hasOnline ? Icons.circle : Icons.bolt_rounded,
-                    color: hasOnline ? const Color(0xFF69F0AE) : AppColors.primary,
+                    color: hasOnline ? context.appAccent : AppColors.primary,
                     size: hasOnline ? 18 : 26,
                   ),
                 ),
@@ -623,30 +623,56 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
       patientPhotoUrl = patSnap.data()?['photoUrl'] as String? ?? '';
     } catch (_) {}
 
-    final ref = FirebaseFirestore.instance.collection('consultations').doc();
-    final now = FieldValue.serverTimestamp();
+    final feeStr = (doctor['fee'] as String? ?? '').replaceAll('₹', '').trim();
+    final fee = int.tryParse(feeStr) ?? 0;
+
+    if (!context.mounted) return;
+
+    // ── Pre-consultation form — before payment, same as every other doctor
+    // booking flow (see DoctorBookingFlow's class doc). Quick Connect used to
+    // skip this entirely and go straight to payment.
+    final formData = await DoctorBookingFlow.collectIntake(
+      context,
+      doctorId: doctor['uid'] as String? ?? '',
+      doctorName: doctor['name'] as String? ?? 'Doctor',
+      doctorSpecialty: doctor['specialty'] as String? ?? '',
+    );
+    if (formData == null || !context.mounted) {
+      if (mounted) setState(() => _connectingDoctorUid = null);
+      return;
+    }
+
+    Map<String, dynamic>? result;
     try {
-      final fee = (doctor['fee'] as String? ?? '')
-          .replaceAll('₹', '')
-          .trim();
-      await ref.set({
-        'channelName': ref.id,
-        'status': 'pending',
-        'callerType': 'patient',
-        'patientId': user.uid,
-        'patientName': user.displayName ?? user.email ?? 'Patient',
-        'patientFcmToken': patientFcmToken,
-        'patientPhotoUrl': patientPhotoUrl,
-        'doctorId': doctor['uid'] ?? '',
-        'doctorName': doctor['name'],
-        'doctorSpecialty': doctor['specialty'],
-        'doctorPhotoUrl': doctor['photoUrl'] ?? '',
-        'consultationType': 'Video',
-        'fee': int.tryParse(fee) ?? 0,
-        'chiefComplaint': '',
-        'createdAt': now,
-        'updatedAt': now,
-      });
+      // Same capturePayment-backed booking flow every other paid service goes
+      // through (see _BookingConfirmSheetState._confirmAndPay below) — the
+      // consultation doc is only created once PaymentScreen confirms the
+      // booking (for real once kRequirePayment is true; instantly for free
+      // while it's false — see payment_config.dart), instead of being written
+      // directly here with no payment step at all.
+      result = await context.push<Map<String, dynamic>>(
+        AppRoutes.payment,
+        extra: {
+          'amount': fee.toString(),
+          'description': 'Quick consultation with ${doctor['name'] ?? 'Doctor'}',
+          'serviceType': 'video_consultation',
+          'bookingCollection': 'consultations',
+          'bookingData': {
+            'status': 'pending',
+            'callerType': 'patient',
+            'patientName': user.displayName ?? user.email ?? 'Patient',
+            'patientFcmToken': patientFcmToken,
+            'patientPhotoUrl': patientPhotoUrl,
+            'doctorId': doctor['uid'] ?? '',
+            'doctorName': doctor['name'],
+            'doctorSpecialty': doctor['specialty'],
+            'doctorPhotoUrl': doctor['photoUrl'] ?? '',
+            'consultationType': 'Video',
+            'fee': fee,
+            'chiefComplaint': '',
+          },
+        },
+      );
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -661,6 +687,20 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
       if (mounted) setState(() => _connectingDoctorUid = null);
       return;
     }
+
+    final consultationId = result?['bookingId'] as String?;
+    if (consultationId == null) {
+      // Payment sheet was closed/cancelled before completing — nothing was booked.
+      if (mounted) setState(() => _connectingDoctorUid = null);
+      return;
+    }
+
+    await DoctorBookingFlow.submitIntake(
+      appointmentId: consultationId,
+      doctorId: doctor['uid'] as String? ?? '',
+      doctorName: doctor['name'] as String? ?? 'Doctor',
+      data: formData,
+    );
 
     if (!context.mounted) return;
 
@@ -687,7 +727,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
     context.push(
       AppRoutes.outgoingCall,
       extra: {
-        'consultationId': ref.id,
+        'consultationId': consultationId,
         'doctorName': doctor['name'] as String? ?? 'Doctor',
         'doctorSpecialty': doctor['specialty'] as String? ?? '',
         'doctorPhotoUrl': doctor['photoUrl'] as String? ?? '',
@@ -1215,7 +1255,7 @@ class _QuickConnectCard extends StatelessWidget {
                 child: Container(
                   width: 14, height: 14,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF4CAF50),
+                    color: context.appAccent,
                     shape: BoxShape.circle,
                     border: Border.all(color: context.appSurface, width: 2),
                   ),
@@ -1240,26 +1280,26 @@ class _QuickConnectCard extends StatelessWidget {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF4CAF50).withValues(alpha: 0.1),
+                          color: context.appPrimarySoft,
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(
-                            color: const Color(0xFF4CAF50).withValues(alpha: 0.3),
+                            color: context.appPrimary.withValues(alpha: 0.3),
                           ),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.access_time_rounded,
-                                size: 10, color: Color(0xFF2E7D32)),
+                            Icon(Icons.access_time_rounded,
+                                size: 10, color: context.appPrimary),
                             const SizedBox(width: 3),
                             Flexible(
                               child: Text(
                                 doctor['wait'] as String? ?? 'Ready',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontFamily: 'Poppins', fontSize: 10,
-                                  fontWeight: FontWeight.w600, color: Color(0xFF2E7D32),
+                                  fontWeight: FontWeight.w600, color: context.appPrimary,
                                 ),
                               ),
                             ),
@@ -1283,11 +1323,11 @@ class _QuickConnectCard extends StatelessWidget {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF2E7D32).withValues(alpha: connecting ? 0.7 : 1),
+                  color: AppColors.primary.withValues(alpha: connecting ? 0.7 : 1),
                   borderRadius: BorderRadius.circular(14),
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xFF2E7D32).withValues(alpha: 0.35),
+                      color: AppColors.primary.withValues(alpha: 0.35),
                       blurRadius: 10,
                       offset: const Offset(0, 4),
                     ),
@@ -1573,9 +1613,50 @@ class _BookingConfirmSheetState extends State<_BookingConfirmSheet> {
   bool _isLoading = false;
   final _chiefComplaintCtrl = TextEditingController();
 
+  // ── Who is this for? ── -1 = self (default/unchanged behavior). Picking a
+  // family member lets the patient optionally attach that member's phone
+  // number so a "Share join link" button (on the appointment screen, once
+  // booked) can let them join the actual call from their own phone later —
+  // see createGuestJoinLink/redeemGuestJoinLink in functions/index.js.
+  List<Map<String, dynamic>> _familyMembers = [];
+  int _bookingForIndex = -1;
+  final _guestPhoneCtrl = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadFamilyMembers();
+  }
+
+  Future<void> _loadFamilyMembers() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    try {
+      final snap = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      final raw = snap.data()?['familyMembers'];
+      if (!mounted || raw is! List) return;
+      setState(() {
+        _familyMembers = raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+      });
+    } catch (_) {}
+  }
+
+  void _selectBookingFor(int index) {
+    setState(() {
+      _bookingForIndex = index;
+      if (index >= 0) {
+        final phone = _familyMembers[index]['phone'] as String? ?? '';
+        _guestPhoneCtrl.text = phone;
+      } else {
+        _guestPhoneCtrl.clear();
+      }
+    });
+  }
+
   @override
   void dispose() {
     _chiefComplaintCtrl.dispose();
+    _guestPhoneCtrl.dispose();
     super.dispose();
   }
 
@@ -1601,7 +1682,39 @@ class _BookingConfirmSheetState extends State<_BookingConfirmSheet> {
         if (fsName.isNotEmpty) patientName = fsName;
       } catch (_) {}
 
+      // Booking for a family member: show the doctor who they're actually
+      // treating, and carry the guest phone number so a join link can be
+      // generated later (only if one was entered — this stays completely
+      // unchanged for the default "Self" booking).
+      final bookingForMember = _bookingForIndex >= 0 && _bookingForIndex < _familyMembers.length
+          ? _familyMembers[_bookingForIndex]
+          : null;
+      // Always the account holder's own name, kept distinct from patientName
+      // below (which may get overridden to a family member's name) — the call
+      // screens use this to label the booking account holder's own video tile.
+      final bookedByName = patientName;
+      if (bookingForMember != null) {
+        final memberName = (bookingForMember['name'] as String? ?? '').trim();
+        if (memberName.isNotEmpty) patientName = memberName;
+      }
+      final guestPhone = _guestPhoneCtrl.text.trim();
+
       if (!mounted) return;
+
+      // ── Pre-consultation form — before payment, same as every other
+      // doctor booking flow (see DoctorBookingFlow's class doc). This sheet
+      // used to skip it entirely.
+      final formData = await DoctorBookingFlow.collectIntake(
+        context,
+        doctorId: widget.doctor['uid'] as String? ?? '',
+        doctorName: widget.doctor['name'] as String? ?? 'Doctor',
+        doctorSpecialty: widget.doctor['specialty'] as String? ?? '',
+      );
+      if (formData == null || !mounted) {
+        setState(() => _isLoading = false);
+        return;
+      }
+
       // ── Open PaymentScreen — this used to write the appointment + a
       // 'status: paid' payment doc directly, with no gateway call at all
       // (a phantom-paid booking anyone could trigger for free). It now goes
@@ -1620,43 +1733,63 @@ class _BookingConfirmSheetState extends State<_BookingConfirmSheet> {
             'doctorName': widget.doctor['name'],
             'doctorSpecialty': widget.doctor['specialty'],
             'patientName': patientName,
+            'bookedByName': bookedByName,
             'date': widget.date,
             'time': widget.time,
             'consultationType': widget.type,
             'fee': totalFee,
             'status': 'booked',
             'chiefComplaint': _chiefComplaintCtrl.text.trim(),
+            if (bookingForMember != null && guestPhone.isNotEmpty) 'guestPhone': guestPhone,
           },
         },
       );
 
       if (!mounted) return;
-      if (result?['bookingId'] == null) {
+      final bookingId = result?['bookingId'] as String?;
+
+      // Capture the router BEFORE Navigator.pop() — after pop the sheet's
+      // context is deactivated and context.push()/context.go() on it would
+      // throw, which would be silently caught and shown as a booking failure.
+      final router = GoRouter.of(context);
+
+      if (bookingId == null) {
         setState(() => _isLoading = false);
+        Navigator.pop(context);
+        router.push(
+          AppRoutes.bookingSummary,
+          extra: {
+            'success': false,
+            'doctorName': widget.doctor['name'] as String? ?? 'Doctor',
+            'doctorSpecialty': widget.doctor['specialty'] as String? ?? '',
+            'failureReason': 'Your payment wasn\'t completed, so this appointment was not booked. You can try again anytime.',
+          },
+        );
         return;
       }
 
-      // Capture messenger and router BEFORE Navigator.pop() — after pop the
-      // sheet's context is deactivated and ScaffoldMessenger.of() would throw,
-      // which would be silently caught and shown as a booking failure.
-      final messenger = ScaffoldMessenger.of(context);
-      final router = GoRouter.of(context);
-      Navigator.pop(context);
-      messenger.showSnackBar(
-        SnackBar(
-          content: const Row(
-            children: [
-              Icon(Icons.check_circle_rounded, color: Colors.white),
-              SizedBox(width: 8),
-              Text('Appointment booked successfully!'),
-            ],
-          ),
-          backgroundColor: AppColors.accent,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
+      await DoctorBookingFlow.submitIntake(
+        appointmentId: bookingId,
+        doctorId: widget.doctor['uid'] as String? ?? '',
+        doctorName: widget.doctor['name'] as String? ?? 'Doctor',
+        data: formData,
       );
-      router.go(AppRoutes.appointment);
+      if (!mounted) return;
+
+      Navigator.pop(context);
+      router.push(
+        AppRoutes.bookingSummary,
+        extra: {
+          'success': true,
+          'doctorName': widget.doctor['name'] as String? ?? 'Doctor',
+          'doctorSpecialty': widget.doctor['specialty'] as String? ?? '',
+          'date': widget.date,
+          'time': widget.time,
+          'consultationType': widget.type,
+          'fee': totalFee.toString(),
+          'formData': formData,
+        },
+      );
     } catch (e) {
       debugPrint('Booking error: $e');
       if (!mounted) return;
@@ -1674,79 +1807,175 @@ class _BookingConfirmSheetState extends State<_BookingConfirmSheet> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(24),
+      padding: EdgeInsets.only(
+        left: 24, right: 24, top: 24,
+        bottom: 24 + MediaQuery.of(context).viewInsets.bottom,
+      ),
+      constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.88),
       decoration: BoxDecoration(
         color: context.appSurface,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 40, height: 4,
-            decoration: BoxDecoration(color: context.appBorder, borderRadius: BorderRadius.circular(2)),
-          ),
-          const SizedBox(height: 20),
-          Container(
-            width: 72, height: 72,
-            decoration: const BoxDecoration(
-              gradient: AppColors.primaryGradient,
-              shape: BoxShape.circle,
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40, height: 4,
+              decoration: BoxDecoration(color: context.appBorder, borderRadius: BorderRadius.circular(2)),
             ),
-            child: const Icon(Icons.check_rounded, color: Colors.white, size: 36),
-          ),
-          const SizedBox(height: 16),
-          const Text('Confirm Booking', style: AppTextStyles.h3),
-          const SizedBox(height: 24),
-          _ConfirmRow(Icons.person_rounded, 'Doctor', widget.doctor['name']),
-          _ConfirmRow(Icons.medical_services_rounded, 'Specialty', widget.doctor['specialty']),
-          _ConfirmRow(Icons.calendar_today_rounded, 'Date', widget.displayDate),
-          _ConfirmRow(Icons.access_time_rounded, 'Time', widget.time),
-          _ConfirmRow(Icons.video_call_rounded, 'Type', '${widget.type} Consultation'),
-          _ConfirmRow(Icons.currency_rupee_rounded, 'Total',
-              '₹${(int.tryParse(widget.doctor['fee'].replaceAll('₹', '').trim()) ?? 0) + 20}'),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _chiefComplaintCtrl,
-            maxLines: 2,
-            textCapitalization: TextCapitalization.sentences,
-            decoration: InputDecoration(
-              labelText: 'Reason for visit (optional)',
-              hintText: 'e.g. Fever for 2 days, headache...',
-              prefixIcon: const Icon(Icons.notes_rounded),
-              filled: true,
-              fillColor: context.appBackground,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
+            const SizedBox(height: 20),
+            Container(
+              width: 72, height: 72,
+              decoration: const BoxDecoration(
+                gradient: AppColors.primaryGradient,
+                shape: BoxShape.circle,
               ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: AppColors.primary),
+              child: const Icon(Icons.check_rounded, color: Colors.white, size: 36),
+            ),
+            const SizedBox(height: 16),
+            const Text('Confirm Booking', style: AppTextStyles.h3),
+            const SizedBox(height: 24),
+            _ConfirmRow(Icons.person_rounded, 'Doctor', widget.doctor['name']),
+            _ConfirmRow(Icons.medical_services_rounded, 'Specialty', widget.doctor['specialty']),
+            _ConfirmRow(Icons.calendar_today_rounded, 'Date', widget.displayDate),
+            _ConfirmRow(Icons.access_time_rounded, 'Time', widget.time),
+            _ConfirmRow(Icons.video_call_rounded, 'Type', '${widget.type} Consultation'),
+            _ConfirmRow(Icons.currency_rupee_rounded, 'Total',
+                '₹${(int.tryParse(widget.doctor['fee'].replaceAll('₹', '').trim()) ?? 0) + 20}'),
+            if (_familyMembers.isNotEmpty) ...[
+              const SizedBox(height: 20),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text('Who is this for?',
+                    style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                        color: context.appTextPrimary)),
               ),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _BookingForChip(
+                    label: 'Self',
+                    selected: _bookingForIndex < 0,
+                    onTap: () => _selectBookingFor(-1),
+                  ),
+                  for (int i = 0; i < _familyMembers.length; i++)
+                    _BookingForChip(
+                      label: _familyMembers[i]['name'] as String? ?? 'Member',
+                      selected: _bookingForIndex == i,
+                      onTap: () => _selectBookingFor(i),
+                    ),
+                ],
+              ),
+              if (_bookingForIndex >= 0) ...[
+                const SizedBox(height: 14),
+                TextField(
+                  controller: _guestPhoneCtrl,
+                  keyboardType: TextInputType.phone,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  decoration: InputDecoration(
+                    labelText: "${_familyMembers[_bookingForIndex]['name'] ?? 'Their'}'s phone (optional)",
+                    hintText: 'So they can join the call themselves',
+                    prefixIcon: const Icon(Icons.phone_iphone_rounded),
+                    filled: true,
+                    fillColor: context.appBackground,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: AppColors.primary),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  "Add their number and, once booked, you can share a link so they can join the video call directly from their own phone — you don't need to be with them.",
+                  style: TextStyle(fontFamily: 'Poppins', fontSize: 11, color: context.appTextSecondary, height: 1.4),
+                ),
+              ],
+            ],
+            const SizedBox(height: 16),
+            TextField(
+              controller: _chiefComplaintCtrl,
+              maxLines: 2,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: InputDecoration(
+                labelText: 'Reason for visit (optional)',
+                hintText: 'e.g. Fever for 2 days, headache...',
+                prefixIcon: const Icon(Icons.notes_rounded),
+                filled: true,
+                fillColor: context.appBackground,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: AppColors.primary),
+                ),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              ),
             ),
-          ),
-          const SizedBox(height: 24),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: _isLoading ? null : _confirmAndPay,
-              child: _isLoading
-                  ? const SizedBox(
-                      height: 20, width: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                    )
-                  : const Text('Confirm & Pay'),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _isLoading ? null : _confirmAndPay,
+                child: _isLoading
+                    ? const SizedBox(
+                        height: 20, width: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Text('Confirm & Pay'),
+              ),
             ),
+            const SizedBox(height: 12),
+            TextButton(
+              onPressed: _isLoading ? null : () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BookingForChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  const _BookingForChip({required this.label, required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.primary : context.appBackground,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: selected ? AppColors.primary : context.appBorder),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontFamily: 'Poppins',
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: selected ? Colors.white : context.appTextPrimary,
           ),
-          const SizedBox(height: 12),
-          TextButton(
-            onPressed: _isLoading ? null : () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          const SizedBox(height: 8),
-        ],
+        ),
       ),
     );
   }

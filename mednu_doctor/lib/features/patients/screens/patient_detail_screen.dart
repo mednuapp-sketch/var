@@ -277,7 +277,6 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
   }
 
   Widget _buildOverview(Map<String, dynamic> userData) {
-    final isPremium = userData['isPremium'] as bool? ?? false;
     final familyList = (userData['familyMembers'] as List?) ?? [];
     final familyCount = familyList.length;
 
@@ -292,13 +291,6 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
           decoration: _cardDecoration(),
           child: Row(
             children: [
-              _SummaryTile(
-                icon: Icons.verified_rounded,
-                color: isPremium ? AppColors.warning : AppColors.secondary,
-                label: 'Status',
-                value: isPremium ? 'Premium' : 'Standard',
-              ),
-              _verticalDivider(),
               _SummaryTile(
                 icon: Icons.family_restroom_rounded,
                 color: AppColors.primary,
@@ -646,13 +638,6 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
             offset: const Offset(0, 2),
           ),
         ],
-      );
-
-  Widget _verticalDivider() => Container(
-        width: 1,
-        height: 40,
-        margin: const EdgeInsets.symmetric(horizontal: 12),
-        color: AppColors.divider,
       );
 }
 

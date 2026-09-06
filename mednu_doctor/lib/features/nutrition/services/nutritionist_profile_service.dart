@@ -27,6 +27,7 @@ class NutritionistProfileService {
     num consultationFee = 0,
     String bio = '',
     String city = '',
+    List<String> languages = const [],
   }) async {
     String? fcmToken;
     try {
@@ -42,6 +43,7 @@ class NutritionistProfileService {
       'consultationFee': consultationFee,
       'bio': bio,
       'city': city,
+      'languages': languages,
       'documentsVerified': false,
       'status': 'pending',
       'isVerified': false,

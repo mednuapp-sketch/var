@@ -8,6 +8,7 @@ class BannerModel {
   final String storagePath;
   final String? ctaText;
   final String? ctaUrl;
+  final int order;
   final bool isEnabled;
   final DateTime? startDate;
   final DateTime? endDate;
@@ -21,6 +22,7 @@ class BannerModel {
     required this.storagePath,
     this.ctaText,
     this.ctaUrl,
+    this.order = 0,
     required this.isEnabled,
     this.startDate,
     this.endDate,
@@ -45,6 +47,7 @@ class BannerModel {
       storagePath: data['storagePath'] as String? ?? '',
       ctaText: data['ctaText'] as String?,
       ctaUrl: data['ctaUrl'] as String?,
+      order: data['order'] as int? ?? 0,
       isEnabled: data['isEnabled'] as bool? ?? false,
       startDate: (data['startDate'] as Timestamp?)?.toDate(),
       endDate: (data['endDate'] as Timestamp?)?.toDate(),

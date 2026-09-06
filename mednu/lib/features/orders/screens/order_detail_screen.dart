@@ -1,12 +1,78 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
+import '../../../core/services/feedback_service.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../models/order_model.dart';
 import '../providers/order_providers.dart';
 import '../widgets/prescription_card.dart';
+
+// A patient can cancel from any non-terminal status — the backend
+// (onMedicineOrderCancelledByPatient in functions/index.js) mirrors any
+// orders.status -> 'cancelled' write onto pharmacy_orders automatically, and
+// firestore.rules already allow-lists 'status'/'cancelReason'/'updatedAt' as
+// patient-self-updatable fields. Nothing server-side was missing — only this
+// button.
+const _kCancellableStatuses = {
+  'confirmed', 'prescription_required', 'verified', 'packed', 'out_for_delivery',
+};
+
+Future<void> _cancelOrder(BuildContext context, String orderId) async {
+  final confirm = await showDialog<bool>(
+    context: context,
+    builder: (_) => AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: const Text('Cancel Order',
+          style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700)),
+      content: const Text(
+        'Are you sure you want to cancel this order?\nThis action cannot be undone.',
+        style: TextStyle(fontFamily: 'Poppins', height: 1.5),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Keep Order'),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.pop(context, true),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.error,
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+          child: const Text('Cancel Order', style: TextStyle(fontFamily: 'Poppins')),
+        ),
+      ],
+    ),
+  );
+  if (confirm != true || !context.mounted) return;
+
+  FeedbackService.showLoading(context, 'Cancelling order...');
+  try {
+    await FirebaseFirestore.instance.collection('orders').doc(orderId).update({
+      'status': 'cancelled',
+      'cancelReason': 'Cancelled by patient',
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+    if (context.mounted) {
+      FeedbackService.dismiss(context);
+      FeedbackService.showSuccess(context, 'Order cancelled successfully');
+    }
+  } catch (e) {
+    if (context.mounted) {
+      FeedbackService.showError(
+        context,
+        'Failed to cancel order. Please try again.',
+        onRetry: () => _cancelOrder(context, orderId),
+      );
+    }
+  }
+}
 
 /// New, additive per-order detail screen for medicine `orders` — the
 /// collection had no reader anywhere in the app before this feature (see
@@ -107,9 +173,83 @@ class _SummaryCard extends StatelessWidget {
               const SizedBox(width: 6),
               Expanded(child: Text(order.deliveryAddress, style: AppTextStyles.bodySmall)),
             ]),
+          // Only present when checkout captured a map location rather than a
+          // typed address (order_model.dart's recipientLocation.{lat,lng}) —
+          // no live courier position exists for medicine delivery (unlike
+          // ambulance), so this is a static pin on the delivery address, not
+          // a live-tracking map.
+          if (order.deliveryLat != null && order.deliveryLng != null) ...[
+            const SizedBox(height: 10),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: SizedBox(
+                height: 140,
+                child: IgnorePointer(
+                  child: GoogleMap(
+                    initialCameraPosition: CameraPosition(
+                      target: LatLng(order.deliveryLat!, order.deliveryLng!),
+                      zoom: 15,
+                    ),
+                    liteModeEnabled: true,
+                    myLocationButtonEnabled: false,
+                    zoomControlsEnabled: false,
+                    compassEnabled: false,
+                    mapToolbarEnabled: false,
+                    markers: {
+                      Marker(
+                        markerId: const MarkerId('delivery'),
+                        position: LatLng(order.deliveryLat!, order.deliveryLng!),
+                        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+                      ),
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ],
+          if (_deliveringToSomeoneElse()) ...[
+            const SizedBox(height: 6),
+            Row(children: [
+              const Icon(Icons.person_outline_rounded, size: 16, color: AppColors.textSecondary),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'Delivering to ${order.deliveryName} · ${order.deliveryPhone}',
+                  style: AppTextStyles.bodySmall,
+                ),
+              ),
+            ]),
+          ],
+          if (_kCancellableStatuses.contains(order.status)) ...[
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () => _cancelOrder(context, order.orderId),
+                icon: const Icon(Icons.cancel_outlined, size: 18),
+                label: const Text('Cancel Order',
+                    style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.error,
+                  side: const BorderSide(color: AppColors.error),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
+  }
+
+  // Only surface this when the order was placed for someone other than the
+  // account holder — compared by phone (the stable identifier in this
+  // phone-auth app) rather than name, which is free text at checkout.
+  bool _deliveringToSomeoneElse() {
+    if (order.deliveryName.trim().isEmpty || order.deliveryPhone.trim().isEmpty) return false;
+    final myPhoneRaw = FirebaseAuth.instance.currentUser?.phoneNumber ?? '';
+    final myPhone = myPhoneRaw.startsWith('+91') ? myPhoneRaw.substring(3) : myPhoneRaw;
+    return order.deliveryPhone.trim() != myPhone;
   }
 
   String _statusLabel(String status) {

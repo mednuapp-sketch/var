@@ -13,6 +13,9 @@ class NutritionistProfile {
   final String bio;
   final num consultationFee;
   final String city;
+  final double? lat;
+  final double? lng;
+  final List<String> languages;
   final double rating;
   final int reviewCount;
   final bool documentsVerified;
@@ -31,6 +34,9 @@ class NutritionistProfile {
     required this.bio,
     required this.consultationFee,
     required this.city,
+    this.lat,
+    this.lng,
+    this.languages = const [],
     required this.rating,
     required this.reviewCount,
     required this.documentsVerified,
@@ -47,6 +53,7 @@ class NutritionistProfile {
         bio: '',
         consultationFee: 0,
         city: '',
+        languages: [],
         rating: 0,
         reviewCount: 0,
         documentsVerified: false,
@@ -62,6 +69,9 @@ class NutritionistProfile {
       bio: d['bio'] as String? ?? '',
       consultationFee: (d['consultationFee'] as num?) ?? 0,
       city: d['city'] as String? ?? '',
+      lat: (d['lat'] as num?)?.toDouble(),
+      lng: (d['lng'] as num?)?.toDouble(),
+      languages: ((d['languages'] as List?) ?? const []).whereType<String>().toList(),
       rating: ((d['rating'] as num?) ?? 0).toDouble(),
       reviewCount: ((d['reviewCount'] as num?) ?? 0).toInt(),
       documentsVerified: d['documentsVerified'] as bool? ?? false,

@@ -97,7 +97,7 @@ class CaregiverVisitDetailScreen extends ConsumerWidget {
                         ),
                       ),
                       IconButton.filled(
-                        onPressed: () => _call(context, '+919900011122'),
+                        onPressed: visit.patientPhone.isEmpty ? null : () => _call(context, visit.patientPhone),
                         icon: const Icon(Icons.call_rounded),
                         style: IconButton.styleFrom(backgroundColor: AppColors.success),
                       ),

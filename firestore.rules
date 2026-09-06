@@ -98,6 +98,14 @@ service cloud.firestore {
         get(/databases/$(database)/documents/counsellor_profiles/$(request.auth.uid)).data.status == 'active';
     }
 
+    // Check if user has an approved Hospital billing-desk partner profile —
+    // same active-status gate as isLabPartner() and friends above.
+    function isHospitalPartner() {
+      return isAuth() &&
+        exists(/databases/$(database)/documents/hospital_profiles/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/hospital_profiles/$(request.auth.uid)).data.status == 'active';
+    }
+
     // Validate that a write doesn't modify protected fields
     function doesNotModify(fields) {
       return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
@@ -275,13 +283,40 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // ── Hospital OP appointments ────────────────────────────────────────────
+    // Created server-side only, via capturePayment/captureCartPayment
+    // (functions/index.js) writing under bookingCollection:
+    // 'hospital_appointments' — the Admin SDK there bypasses these rules
+    // entirely, so `allow create: if false` below doesn't block booking.
+    // The client only ever reads (My Appointments list/stream in
+    // appointment_screen.dart) and cancels (status update), so this is a
+    // read/cancel-only slice of the /appointments rules above, minus
+    // doctorId/guest handling which doesn't apply to a walk-in OP visit.
+    match /hospital_appointments/{appointmentId} {
+      allow get: if isAuth() && (
+        resource.data.patientId == request.auth.uid ||
+        isAdmin()
+      );
+      allow list: if isAuth();
+      allow create: if false;
+      allow update: if isAuth() && (
+        (resource.data.patientId == request.auth.uid &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt'])) ||
+        isAdmin()
+      );
+      allow delete: if isAdmin();
+    }
+
     // ── Pre-consultation patient intake forms ───────────────────────────────
-    // One doc per appointment (doc id == appointmentId), filled by the patient
-    // after payment and before the doctor's consultation — see
-    // pre_consultation_form_screen.dart (mednu) and
-    // pre_consultation_summary_card.dart (mednu_doctor). Only ever read/
-    // written as single documents (never queried as a collection), so no
-    // `allow list` is needed.
+    // One doc per booking (doc id == the appointments/{id} or
+    // consultations/{id} doc it's attached to — DoctorBookingFlow.submitIntake
+    // in mednu writes it under whichever id the booking actually got, so it
+    // covers Doctor Profile / Schedule-tab bookings (appointments) and Quick
+    // Connect (consultations) alike), filled by the patient before payment
+    // and attached right after — see pre_consultation_form_screen.dart +
+    // doctor_booking_flow.dart (mednu) and pre_consultation_summary_card.dart
+    // (mednu_doctor). Only ever read/written as single documents (never
+    // queried as a collection), so no `allow list` is needed.
     match /patient_intake_forms/{appointmentId} {
       // resource == null covers the stream before the patient has submitted
       // anything yet — without this, PreConsultationSummaryCard/
@@ -293,11 +328,19 @@ service cloud.firestore {
         resource.data.doctorId  == request.auth.uid ||
         isAdmin()
       );
-      // Must be the real appointment's own patient — prevents writing an
-      // intake doc under someone else's appointmentId.
+      // Must be the real booking's own patient — prevents writing an intake
+      // doc under someone else's appointmentId/consultationId. Checked
+      // against whichever collection actually has that id (exists() first,
+      // short-circuiting the get() so a Quick Connect id — which has no
+      // appointments/{id} doc at all — doesn't fail evaluation).
       allow create, update: if isAuth() &&
         request.resource.data.patientId == request.auth.uid &&
-        get(/databases/$(database)/documents/appointments/$(appointmentId)).data.patientId == request.auth.uid;
+        (
+          (exists(/databases/$(database)/documents/appointments/$(appointmentId)) &&
+            get(/databases/$(database)/documents/appointments/$(appointmentId)).data.patientId == request.auth.uid) ||
+          (exists(/databases/$(database)/documents/consultations/$(appointmentId)) &&
+            get(/databases/$(database)/documents/consultations/$(appointmentId)).data.patientId == request.auth.uid)
+        );
       allow delete: if isAdmin();
     }
 
@@ -353,11 +396,52 @@ service cloud.firestore {
     // kRequirePayment is false — see payment_screen.dart).
     match /hospital_bill_payments/{paymentId} {
       allow create: if isAuth() && request.resource.data.patientId == request.auth.uid;
-      allow read:   if isAuth() && (resource.data.patientId == request.auth.uid || isAdmin());
-      allow update, delete: if false;
+      // A hospital's own billing-desk login may read its hospital's payment
+      // records (see hospital_profiles below) so staff can confirm a
+      // patient's payment actually landed, in real time.
+      allow read:   if isAuth() && (
+        resource.data.patientId == request.auth.uid ||
+        isAdmin() ||
+        (isHospitalPartner() &&
+          resource.data.hospitalId == get(/databases/$(database)/documents/hospital_profiles/$(request.auth.uid)).data.hospitalId)
+      );
+      // A hospital's own billing-desk login may mark a payment it can see as
+      // verified — and *only* that field pair, never the amounts/patientId/
+      // discount the payment itself records. This is the "how do hospitals
+      // verify this payment" action surfaced on HospitalPaymentsScreen (mednu_doctor).
+      allow update: if isAuth() && isHospitalPartner() &&
+        resource.data.hospitalId == get(/databases/$(database)/documents/hospital_profiles/$(request.auth.uid)).data.hospitalId &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['hospitalVerified', 'hospitalVerifiedAt']);
+      allow delete: if false;
+    }
+
+    // Hospital billing-desk partner profile — self-registered like every
+    // other partner role (see PartnerRoleRegisterScreen in mednu_doctor), but
+    // unlike lab/pharmacy/ambulance/caregiver it links back to an existing
+    // admin-curated `hospitals/{hospitalId}` catalog entry rather than being
+    // the operational entity itself. `hospitalId`/`hospitalName` may be
+    // pre-filled client-side by phone-number auto-match at registration, but
+    // only a Director can change them afterwards (or flip `status`) — the
+    // same trust boundary every other partner role's approval already uses.
+    match /hospital_profiles/{hospitalUid} {
+      allow read:   if isAuth() && (isOwner(hospitalUid) || isAdmin());
+      allow create: if isOwner(hospitalUid) && request.resource.data.status == 'pending';
+      allow update: if (isOwner(hospitalUid) &&
+                         doesNotModify(['status', 'hospitalId', 'hospitalName'])) ||
+                       isDirector();
+      allow delete: if isDirector();
     }
 
     match /ambulances/{ambulanceId} {
+      allow read:  if isAuth();
+      allow write: if isAdmin();
+    }
+
+    // ── Equipment rental vendors (public read, admin write) ─────────────────
+    // Admin-managed, same shape as hospitals/ambulances above — a vendor's
+    // own equipment items live in `services` (type == 'equipment') tagged
+    // with `sourceVendorId`, mirroring medicines_catalogue/sourcePharmacyId.
+    match /equipment_vendors/{vendorId} {
       allow read:  if isAuth();
       allow write: if isAdmin();
     }

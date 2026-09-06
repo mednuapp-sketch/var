@@ -89,5 +89,22 @@
 	<!-- ── Firebase Cloud Messaging ── -->
 	<key>FirebaseAppDelegateProxyEnabled</key>
 	<false/>
+
+	<!-- ── Guest call-join deep link (mednu://join?a=&t=&exp=) ──
+	     Custom URL scheme, not a Universal Link — no domain/hosting needed;
+	     only works once the app is already installed, which it must be
+	     anyway for the native Agora video call to run. See
+	     _handleGuestDeepLink in main.dart. -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.mednu.guestjoin</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>mednu</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

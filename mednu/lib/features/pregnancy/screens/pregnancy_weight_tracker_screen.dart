@@ -22,6 +22,12 @@ class _PregnancyWeightTrackerScreenState
     with SingleTickerProviderStateMixin {
   late final AnimationController _fadeCtrl;
 
+  // Controllers for the "Log Weight" sheet — created fresh per sheet open
+  // and never explicitly disposed there (the sheet isn't awaited, so there's
+  // no safe single point after it closes); registered here instead and
+  // disposed once, when this screen itself goes away.
+  final List<TextEditingController> _transientCtrls = [];
+
   @override
   void initState() {
     super.initState();
@@ -37,6 +43,9 @@ class _PregnancyWeightTrackerScreenState
   @override
   void dispose() {
     _fadeCtrl.dispose();
+    for (final c in _transientCtrls) {
+      c.dispose();
+    }
     super.dispose();
   }
 
@@ -979,6 +988,7 @@ class _PregnancyWeightTrackerScreenState
   void _showAddWeightSheet(BuildContext context, PregnancyProfile profile) {
     final weightCtrl = TextEditingController();
     final notesCtrl = TextEditingController();
+    _transientCtrls.addAll([weightCtrl, notesCtrl]);
     final formKey = GlobalKey<FormState>();
 
     showModalBottomSheet(

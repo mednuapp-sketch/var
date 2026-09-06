@@ -18,6 +18,7 @@ import '../../../core/utils/r.dart';
 import '../../auth/services/doctor_auth_service.dart';
 import '../../location/services/doctor_location_service.dart';
 import '../../../core/widgets/ux_widgets.dart';
+import '../../../core/widgets/pre_consultation_summary_card.dart';
 import '../../../shared_core/shared_core.dart';
 
 int _slotToMins(String t) {
@@ -973,18 +974,23 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
             });
 
             // Schedule local reminders for upcoming appointments.
-            // Guarded by _scheduledReminderIds so we only call the notification
-            // plugin once per appointment ID per session, not on every stream event.
+            // Guarded by _scheduledReminderIds, keyed on id+date+time (not just
+            // id) so a reschedule — which changes date/time but keeps the same
+            // appointment id and 'booked' status — is treated as unseen and
+            // re-queued with the new fireAt instead of leaving the stale one.
             for (final appt in upcoming) {
-              if (_scheduledReminderIds.contains(appt.id)) continue;
-              _scheduledReminderIds.add(appt.id);
               final d = appt.data();
+              final dateStr = d['date'] as String? ?? '';
+              final timeStr = d['time'] as String? ?? '';
+              final signature = '${appt.id}_${dateStr}_$timeStr';
+              if (_scheduledReminderIds.contains(signature)) continue;
+              _scheduledReminderIds.add(signature);
               AppointmentReminderService.scheduleReminders(
                 uid:           uid,
                 appointmentId: appt.id,
                 patientName:   d['patientName'] as String? ?? 'Patient',
-                dateStr:       d['date']        as String? ?? '',
-                timeStr:       d['time']        as String? ?? '',
+                dateStr:       dateStr,
+                timeStr:       timeStr,
               );
             }
 
@@ -1184,6 +1190,17 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
                 onCancel: () => _cancelAppointment(docId),
                 onStart: () => _startCallForAppointment(docId, data),
                 onComplete: () => _completeAppointment(docId),
+                onReschedule: () => _rescheduleAppointment(docId, data),
+              ),
+
+            // ── Pre-consultation summary (real-time) ──────
+            if (isUpcoming)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: PreConsultationSummaryCard(
+                  appointmentId: docId,
+                  patientName: patientName,
+                ),
               ),
 
             // ── Action buttons for completed ──────────────
@@ -1576,6 +1593,8 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
         final now        = FieldValue.serverTimestamp();
         final batch      = db.batch();
 
+        final guestPhone = (data['guestPhone'] as String? ?? '').trim();
+
         batch.set(consultRef, {
           'appointmentId':   appointmentId,
           'channelName':     appointmentId, // stable channel = appointment ID
@@ -1592,6 +1611,12 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
           'status':          'pending',
           'createdAt':       now,
           'updatedAt':       now,
+          // Carried over from the appointment so a family member's guest-join
+          // link (see redeemGuestJoinLink/generateAgoraToken in
+          // functions/index.js) can be authorized against this consultation
+          // once it exists — the link itself is issued at booking time,
+          // before this doc is created.
+          if (guestPhone.isNotEmpty) 'guestPhone': guestPhone,
         });
 
         // Patient notification so their background listener fires
@@ -1751,6 +1776,68 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
             'Failed to cancel appointment. Please try again.',
           );
         }
+      }
+    }
+  }
+
+  // Backend support for this already existed (firestore.rules lets the
+  // doctor update an appointment's date/time freely; onAppointmentStatusChange
+  // in functions/index.js now detects a same-status date/time change and
+  // notifies the patient) — only this client action was missing. Status
+  // deliberately stays 'booked': appointment_screen.dart's upcoming-list
+  // query filters on status == 'booked', so writing a separate 'rescheduled'
+  // status would make the appointment vanish from the patient's list.
+  Future<void> _rescheduleAppointment(String docId, Map<String, dynamic> data) async {
+    final currentDate = DateTime.tryParse(data['date'] as String? ?? '') ?? DateTime.now();
+    final now = DateTime.now();
+    final pickedDate = await showDatePicker(
+      context: context,
+      initialDate: currentDate.isBefore(now) ? now : currentDate,
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 90)),
+      helpText: 'Reschedule to',
+    );
+    if (pickedDate == null || !mounted) return;
+
+    final pickedTime = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.now(),
+      helpText: 'Reschedule time',
+    );
+    if (pickedTime == null || !mounted) return;
+
+    final h = pickedTime.hourOfPeriod == 0 ? 12 : pickedTime.hourOfPeriod;
+    final period = pickedTime.period == DayPeriod.am ? 'AM' : 'PM';
+    final timeStr = '${h.toString().padLeft(2, '0')}:${pickedTime.minute.toString().padLeft(2, '0')} $period';
+    final dateStr = DateFormat('yyyy-MM-dd').format(pickedDate);
+
+    FeedbackService.showLoading(context, 'Rescheduling appointment...');
+    try {
+      await FirebaseFirestore.instance.collection('appointments').doc(docId).update({
+        'date':      dateStr,
+        'time':      timeStr,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      final uid = DoctorAuthService.currentUid;
+      if (uid != null) await AppointmentReminderService.cancelReminders(uid, docId);
+      await OperationLogger.logSuccess(
+        action: DoctorOpAction.appointmentRescheduled,
+        entityId: docId,
+        entityType: 'appointment',
+        message: 'Appointment rescheduled by doctor to $dateStr $timeStr',
+      );
+      if (mounted) {
+        FeedbackService.dismiss(context);
+        FeedbackService.showSuccess(context, 'Appointment rescheduled — patient will be notified');
+      }
+    } catch (e) {
+      await OperationLogger.logError(
+        action: DoctorOpAction.appointmentRescheduled,
+        entityId: docId,
+        errorDetails: e.toString(),
+      );
+      if (mounted) {
+        FeedbackService.showError(context, 'Failed to reschedule. Please try again.');
       }
     }
   }
@@ -2008,6 +2095,7 @@ class _ProfileTab extends StatelessWidget {
           ...[
             {'icon': Icons.person_outline_rounded,         'label': 'Edit Profile',              'route': AppRoutes.editProfile,  'color': AppColors.primary},
             {'icon': Icons.calendar_month_rounded,         'label': 'Availability Schedule',     'route': AppRoutes.schedule,     'color': const Color(0xFF1565C0)},
+            {'icon': Icons.event_busy_rounded,             'label': 'Block a Slot',              'route': AppRoutes.blockSlots,   'color': const Color(0xFFB71C1C)},
             {'icon': Icons.people_rounded,                 'label': 'My Patients',               'route': AppRoutes.patients,     'color': const Color(0xFF2E7D32)},
             {'icon': Icons.account_balance_wallet_rounded, 'label': 'Earnings & Analytics',      'route': AppRoutes.earnings,     'color': const Color(0xFFE65100)},
             {'icon': Icons.settings_rounded,               'label': 'Settings',                  'route': AppRoutes.settings,     'color': AppColors.textSecondary},
@@ -2268,6 +2356,7 @@ class _DoctorScheduledCallSection extends StatefulWidget {
   final VoidCallback onCancel;
   final VoidCallback onStart;
   final VoidCallback onComplete;
+  final VoidCallback onReschedule;
 
   const _DoctorScheduledCallSection({
     required this.appointmentId,
@@ -2275,6 +2364,7 @@ class _DoctorScheduledCallSection extends StatefulWidget {
     required this.onCancel,
     required this.onStart,
     required this.onComplete,
+    required this.onReschedule,
   });
 
   @override
@@ -2441,6 +2531,8 @@ class _DoctorScheduledCallSectionState
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
       child: Row(children: [
+        _rescheduleBtn(),
+        const SizedBox(width: 8),
         Expanded(child: _cancelBtn()),
         const SizedBox(width: 10),
         Expanded(
@@ -2489,6 +2581,8 @@ class _DoctorScheduledCallSectionState
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
       child: Row(children: [
+        _rescheduleBtn(),
+        const SizedBox(width: 8),
         Expanded(child: _cancelBtn()),
         const SizedBox(width: 10),
         Expanded(
@@ -2537,6 +2631,8 @@ class _DoctorScheduledCallSectionState
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
       child: Row(children: [
+        _rescheduleBtn(),
+        const SizedBox(width: 8),
         Expanded(child: _cancelBtn()),
         const SizedBox(width: 10),
         Expanded(
@@ -2568,6 +2664,8 @@ class _DoctorScheduledCallSectionState
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
       child: Row(children: [
+        _rescheduleBtn(),
+        const SizedBox(width: 8),
         Expanded(child: _cancelBtn()),
         const SizedBox(width: 10),
         Expanded(
@@ -2598,6 +2696,8 @@ class _DoctorScheduledCallSectionState
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
       child: Row(children: [
+        _rescheduleBtn(),
+        const SizedBox(width: 8),
         Expanded(child: _cancelBtn()),
         const SizedBox(width: 10),
         Expanded(
@@ -2632,5 +2732,20 @@ class _DoctorScheduledCallSectionState
           fontFamily: 'Inter', fontSize: 13, fontWeight: FontWeight.w600),
     ),
     onPressed: widget.onCancel,
+  );
+
+  // Square icon-only button (not Expanded) so it slots in next to _cancelBtn
+  // without reworking every row's layout for a 3rd full-width button.
+  Widget _rescheduleBtn() => Container(
+    width: 44, height: 44,
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: AppColors.border),
+    ),
+    child: IconButton(
+      icon: const Icon(Icons.edit_calendar_rounded, size: 18, color: AppColors.textSecondary),
+      tooltip: 'Reschedule',
+      onPressed: widget.onReschedule,
+    ),
   );
 }

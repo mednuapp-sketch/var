@@ -12,6 +12,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:go_router/go_router.dart';
+import 'package:app_links/app_links.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'firebase_options.dart';
 import 'app.dart';
@@ -130,10 +131,10 @@ void _handleFcmNavigation(Map<String, dynamic> data) {
       ctx.go(AppRoutes.consultation);
       return;
     case 'open_prescription':
-      ctx.go(AppRoutes.prescriptionViewer);
+      _openPrescriptionFromNotification(ctx, data['bookingId'] as String? ?? '');
       return;
     case 'open_order':
-      ctx.go(AppRoutes.orderTracking);
+      _goMedicineOrder(ctx, data);
       return;
     case 'open_diagnostics':
       ctx.go(AppRoutes.diagnostics);
@@ -148,6 +149,16 @@ void _handleFcmNavigation(Map<String, dynamic> data) {
       ctx.go(AppRoutes.pregnancyCheckups);
       return;
     case 'open_service':
+      // The real pharmacy order pipeline (onMedicineOrderCreated in
+      // functions/index.js) sends actionType:'open_service',
+      // serviceType:'medicine' with a real order id in `bookingId` —
+      // _serviceRouteFromType('medicine') has no order id and previously
+      // always landed on the medicine shopping catalogue instead of the
+      // order itself (e.g. a "please upload your prescription" push).
+      if (serviceType.toLowerCase() == 'medicine') {
+        _goMedicineOrder(ctx, data);
+        return;
+      }
       ctx.go(_serviceRouteFromType(serviceType));
       return;
   }
@@ -155,8 +166,11 @@ void _handleFcmNavigation(Map<String, dynamic> data) {
   // Fallback: route by notification type string.
   if (type.startsWith('appointment_') || type == 'appointment_reminder') {
     ctx.go(AppRoutes.appointment);
-  } else if (type.startsWith('medicine_') || type == 'order_update') {
-    ctx.go(AppRoutes.orderTracking);
+  } else if (type.startsWith('medicine_') ||
+      type.startsWith('pharmacy_') ||
+      (type.startsWith('prescription_') && type != 'prescription_uploaded') ||
+      type == 'order_update') {
+    _goMedicineOrder(ctx, data);
   } else if (type.startsWith('lab_') || type.startsWith('diagnostics_')) {
     ctx.go(AppRoutes.diagnostics);
   } else if (type.startsWith('ambulance_')) {
@@ -174,7 +188,7 @@ void _handleFcmNavigation(Map<String, dynamic> data) {
   } else if (type.startsWith('quickconnect_')) {
     ctx.go(AppRoutes.consultation);
   } else if (type == 'prescription_uploaded') {
-    ctx.go(AppRoutes.prescriptionViewer);
+    _openPrescriptionFromNotification(ctx, data['bookingId'] as String? ?? '');
   } else if (type == 'consultation_done' || type == 'followup_day1' || type == 'followup_day2') {
     ctx.go(AppRoutes.postConsultation);
   } else if (type == 'water_reminder') {
@@ -185,6 +199,60 @@ void _handleFcmNavigation(Map<String, dynamic> data) {
     ctx.go(AppRoutes.submitReview);
   } else {
     ctx.go(AppRoutes.notifications);
+  }
+}
+
+/// Routes a medicine/pharmacy order notification to the specific order
+/// (`AppRoutes.orderDetail`, backed by the real `orders` collection via
+/// `orderDetailProvider`) when `data['bookingId']` names one, falling back to
+/// the real orders list otherwise. Replaces landing on either a fake generic
+/// tracker with hardcoded placeholder data, or the medicine shopping
+/// catalogue — see functions/index.js's onMedicineOrderCreated, which sets
+/// `bookingId: orderId` for every pharmacy order-status push.
+void _goMedicineOrder(BuildContext ctx, Map<String, dynamic> data) {
+  final orderId = data['bookingId'] as String? ?? '';
+  if (orderId.isNotEmpty) {
+    ctx.go(AppRoutes.orderDetail, extra: {'orderId': orderId});
+  } else {
+    ctx.go(AppRoutes.medicineOrders);
+  }
+}
+
+/// Fetches the real prescription doc linked to [appointmentId] (the
+/// notification's `bookingId` — see `_sendPatientNotification` in
+/// functions/index.js, which sets `bookingId: apptId` for the
+/// `prescription_uploaded` status change) before navigating.
+///
+/// PrescriptionViewerScreen has no fetch-by-id fallback of its own: pushing
+/// its route with no `extra` renders every field on a placeholder ('RX-0000',
+/// empty diagnosis/medicines) instead of the real prescription — this was the
+/// case for every "Prescription Ready" push tap. `write_prescription_screen
+/// .dart` stores the originating appointment id as `prescriptions
+/// .appointmentId`, so that's the lookup key.
+Future<void> _openPrescriptionFromNotification(
+  BuildContext ctx,
+  String appointmentId,
+) async {
+  Map<String, dynamic>? rx;
+  if (appointmentId.isNotEmpty) {
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('prescriptions')
+          .where('appointmentId', isEqualTo: appointmentId)
+          .limit(1)
+          .get();
+      if (snap.docs.isNotEmpty) {
+        rx = {...snap.docs.first.data(), 'id': snap.docs.first.id};
+      }
+    } catch (_) {}
+  }
+  if (!ctx.mounted) return;
+  if (rx != null) {
+    ctx.go(AppRoutes.prescriptionViewer, extra: rx);
+  } else {
+    // No linked prescription found (missing bookingId, deleted doc, or the
+    // query failed) — land on Records instead of a blank placeholder viewer.
+    ctx.go(AppRoutes.records);
   }
 }
 
@@ -255,10 +323,90 @@ Future<void> _navigateOnLaunchNotification(Map<String, dynamic> data) async {
   );
 }
 
+/// Handles the `mednu://join?a=<appointmentId>&t=<token>&exp=<epochSeconds>`
+/// deep link — a family member tapping the "guest join" link shared from
+/// the appointment screen (see createGuestJoinLink in functions/index.js and
+/// _ShareGuestLinkButton in appointment_screen.dart).
+///
+/// Unlike _handleFcmNavigation, this deliberately does NOT require an
+/// existing session — the whole point of a guest link is that the family
+/// member has no MedNU login. It waits for the app to leave the splash
+/// screen (so it doesn't get immediately overwritten by splash's own
+/// ~1.5s-delayed context.go — see _navigateOnLaunchNotification above for
+/// the same race on the FCM side) but, unlike that FCM path, does NOT wait
+/// for the user to be authenticated or past login/OTP/MPIN — a guest may
+/// never pass through any of those.
+Future<void> _handleGuestDeepLink(Uri uri) async {
+  if (uri.host != 'join') return;
+  final appointmentId = uri.queryParameters['a'];
+  final token = uri.queryParameters['t'];
+  final exp = int.tryParse(uri.queryParameters['exp'] ?? '');
+  if (appointmentId == null || appointmentId.isEmpty ||
+      token == null || token.isEmpty || exp == null) {
+    CrashReportingService.log('Malformed guest join link: $uri', tag: 'DeepLink');
+    return;
+  }
+
+  const pollInterval = Duration(milliseconds: 150);
+  const window = Duration(seconds: 6);
+  final deadline = DateTime.now().add(window);
+
+  while (DateTime.now().isBefore(deadline)) {
+    final ctx = appNavigatorKey.currentContext;
+    if (ctx != null) {
+      var location = AppRoutes.splash;
+      try {
+        // ignore: use_build_context_synchronously
+        location = GoRouter.of(ctx).routerDelegate.currentConfiguration.uri.path;
+      } catch (_) {
+        location = AppRoutes.splash; // Router not ready yet — keep waiting.
+      }
+      if (location != AppRoutes.splash) {
+        // ignore: use_build_context_synchronously
+        ctx.go(AppRoutes.guestJoin, extra: {
+          'appointmentId': appointmentId,
+          'token': token,
+          'exp': exp,
+        });
+        return;
+      }
+    }
+    await Future.delayed(pollInterval);
+  }
+
+  CrashReportingService.log(
+    'Guest join deep link dropped — navigator/route not ready after '
+    '${window.inSeconds}s',
+    tag: 'DeepLink',
+  );
+}
+
+Future<void> _initDeepLinks() async {
+  final appLinks = AppLinks();
+  try {
+    final initial = await appLinks.getInitialLink();
+    if (initial != null && initial.scheme == 'mednu') {
+      unawaited(_handleGuestDeepLink(initial));
+    }
+  } catch (e) {
+    CrashReportingService.log('getInitialLink failed: $e', tag: 'DeepLink');
+  }
+  appLinks.uriLinkStream.listen((uri) {
+    if (uri.scheme == 'mednu') {
+      unawaited(_handleGuestDeepLink(uri));
+    }
+  }, onError: (e) {
+    CrashReportingService.log('uriLinkStream error: $e', tag: 'DeepLink');
+  });
+}
+
 String _serviceRouteFromType(String serviceType) {
   switch (serviceType.toLowerCase()) {
     case 'appointment':   return AppRoutes.appointment;
-    case 'medicine':      return AppRoutes.orderTracking;
+    // Fallback only (no bookingId) — _goMedicineOrder handles the real-order
+    // case. The real orders list, not the fake tracker or the shopping
+    // catalogue.
+    case 'medicine':      return AppRoutes.medicineOrders;
     case 'diagnostics':
     case 'lab':           return AppRoutes.diagnostics;
     case 'ambulance':     return AppRoutes.ambulance;
@@ -447,10 +595,18 @@ void main() {
         cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
       );
 
-      // ── Parallelise all post-Firebase init work ───────────────
-      // App Check, FCM, notification services, and localisation
-      // are independent of each other — run them concurrently to
-      // cut cold-start time by ~600-900 ms.
+      // ── App Check + localisation ──────────────────────────────
+      // These two are the only pre-runApp async steps left blocking the
+      // first frame: App Check gates every Firestore/Functions call made
+      // right after launch (including the splash screen's own read), and
+      // EasyLocalization's data is read synchronously by the
+      // EasyLocalization widget below (no loading builder is configured for
+      // it). FCM, call/health notification setup, and deep-link listener
+      // registration used to block here too — moved below, after runApp(),
+      // since none of them gate the first frame and their setup can be
+      // network-bound (App Check's own Play Integrity/App Attest fetch is
+      // the same story, but activate() itself only configures the provider;
+      // token fetch happens lazily per-request afterwards).
       await Future.wait([
         FirebaseAppCheck.instance.activate(
           androidProvider: kDebugMode
@@ -460,9 +616,6 @@ void main() {
               ? AppleProvider.debug
               : AppleProvider.appAttest,
         ),
-        _initFCM(),
-        CallNotificationService.init(),
-        HealthNotificationService.init(),
         EasyLocalization.ensureInitialized(),
       ]);
 
@@ -495,9 +648,24 @@ void main() {
         ),
       );
 
-      // Deferred to after the first frame — see _initFCM().
+      // Deferred to after the first frame: the notification permission
+      // prompt (see _requestNotificationPermission()), plus FCM/call/health
+      // notification setup and deep-link listener registration — none of
+      // these gate the first frame, and running them here instead of in the
+      // blocking Future.wait above means a slow/flaky network can no longer
+      // delay the app's very first paint. The terminated-tap FCM handler and
+      // guest deep-link handler both already poll for splash to hand off
+      // before navigating (see _navigateOnLaunchNotification /
+      // _handleGuestDeepLink above), so registering their listeners a few
+      // hundred ms later than before is harmless.
       WidgetsBinding.instance.addPostFrameCallback((_) {
         unawaited(_requestNotificationPermission());
+        unawaited(Future.wait([
+          _initFCM(),
+          CallNotificationService.init(),
+          HealthNotificationService.init(),
+          _initDeepLinks(),
+        ]));
       });
     },
     (error, stack) {

@@ -78,7 +78,7 @@ class NutritionHomeScreen extends ConsumerWidget {
     return SliverAppBar(
       pinned: true,
       expandedHeight: R.h(context, 170),
-      backgroundColor: AppColors.accent,
+      backgroundColor: const Color(0xFF33691E), // matches nutritionGrad's dark stop so the collapsed bar doesn't jump to an unrelated color
       leading: IconButton(
         icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
         onPressed: () => context.canPop() ? context.pop() : context.go(AppRoutes.home),
@@ -413,7 +413,7 @@ class _FindNutritionistBanner extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'Find a Nutritionist',
+                    'Find a Dietician',
                     style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 17, color: Colors.white),
                   ),
                   const SizedBox(height: 4),
@@ -639,7 +639,7 @@ class _FeaturedNutritionistsSection extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const _SectionTitle(title: 'Featured Nutritionists'),
+            const _SectionTitle(title: 'Featured Dieticians'),
             GestureDetector(
               onTap: onViewAll,
               child: Text('View All →', style: AppTextStyles.labelSmall.copyWith(color: AppColors.accent)),
@@ -698,10 +698,10 @@ class _EmptyNutritionists extends StatelessWidget {
         children: [
           Icon(Icons.person_search_rounded, size: 52, color: Colors.grey[300]),
           const SizedBox(height: 12),
-          Text('No Nutritionists Yet', style: AppTextStyles.labelLarge.copyWith(color: context.appTextSecondary)),
+          Text('No Dieticians Yet', style: AppTextStyles.labelLarge.copyWith(color: context.appTextSecondary)),
           const SizedBox(height: 4),
           Text(
-            'Nutritionists will appear here\nonce added by admin',
+            'Dieticians will appear here\nonce added by admin',
             style: AppTextStyles.bodySmall.copyWith(color: context.appTextHint),
             textAlign: TextAlign.center,
           ),
@@ -882,7 +882,7 @@ class _ViewAllButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(14),
         ),
         child: Text(
-          'View All Nutritionists',
+          'View All Dieticians',
           style: AppTextStyles.labelLarge.copyWith(color: AppColors.accent),
         ),
       ),

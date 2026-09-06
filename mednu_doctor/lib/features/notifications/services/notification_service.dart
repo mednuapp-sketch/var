@@ -60,6 +60,52 @@ class NotificationService {
     });
   }
 
+  // ── Provider notifications (ambulance/pharmacy/lab/caregiver/physio/
+  // counsellor/nutritionist/admin — every non-doctor role hosted by this
+  // app) ──────────────────────────────────────────────────────────────────
+  //
+  // `provider_notifications/{providerId}/items` already exists — it's what
+  // the backend's `_sendProviderNotification` helper (functions/index.js)
+  // writes to for settlement/earnings pushes, and firestore.rules already
+  // has a matching rule for it — but until now nothing on this app's side
+  // ever read it for non-doctor roles, so those pushes landed with no
+  // in-app trace. Keyed by Firebase Auth uid rather than by role: a
+  // provider account's uid is unique regardless of which role it
+  // registered under, so this one collection covers every vertical instead
+  // of needing 7 near-identical `{role}_notifications` collections.
+
+  static CollectionReference<Map<String, dynamic>> _providerNotifs(String uid) =>
+      _db.collection('provider_notifications').doc(uid).collection('items');
+
+  static Stream<List<NotificationModel>> streamForProvider(String uid) =>
+      _providerNotifs(uid)
+          .orderBy('createdAt', descending: true)
+          .limit(50)
+          .snapshots()
+          .map((s) {
+        final now = Timestamp.now();
+        return s.docs
+            .where((doc) {
+              final deliverAt = doc.data()['deliverAt'];
+              if (deliverAt is Timestamp) return deliverAt.compareTo(now) <= 0;
+              return true;
+            })
+            .map(NotificationModel.fromDoc)
+            .toList();
+      });
+
+  static Future<void> markProviderRead(String uid, String notifId) =>
+      _providerNotifs(uid).doc(notifId).update({'isRead': true});
+
+  static Future<void> markAllProviderRead(String uid) async {
+    final batch = _db.batch();
+    final snap = await _providerNotifs(uid).where('isRead', isEqualTo: false).get();
+    for (final doc in snap.docs) {
+      batch.update(doc.reference, {'isRead': true});
+    }
+    await batch.commit();
+  }
+
   // ── Patient notifications (read by the patient app) ───────────────────────
 
   static CollectionReference<Map<String, dynamic>> _patientNotifs(String patientId) =>

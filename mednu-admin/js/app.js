@@ -31,29 +31,100 @@ window.addEventListener('unhandledrejection', event => {
 });
 
 // â”€â”€ Admin role verification â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Returns the admin's `role` field from admins/{uid}, or null if the account
+// isn't an admin at all. An admin doc with no `role` field set is treated as
+// 'director' (full access) so existing accounts keep working until someone
+// assigns them a narrower role.
 async function verifyAdminRole(uid) {
   try {
     const adminDoc = await db.collection('admins').doc(uid).get();
-    return adminDoc.exists;
+    if (!adminDoc.exists) return null;
+    return adminDoc.data().role || 'director';
   } catch (e) {
-    return false;
+    return null;
   }
+}
+
+// â”€â”€ Profile-based access control â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// NOTE: this only hides nav/tabs/action buttons in the UI. It is not a
+// security boundary by itself -- a signed-in account can still call Firestore
+// directly from devtools unless matching Firestore Security Rules restrict
+// reads/writes for each role server-side (not present in this repo).
+let currentAdminRole = 'director';
+
+// Each list is the `data-tab` values a role may open, taken from the
+// nav-section-label groupings in index.html. `null` = every tab (Director).
+const ROLE_TAB_ACCESS = {
+  director:  null,
+  finance:   ['revenue', 'wallet'],
+  marketing: ['banners', 'referrals'],
+  support:   ['reports', 'tickets', 'broadcast'],
+  hr:        [
+    'ambulance-partners', 'caregiver-partners', 'pharmacy-partners', 'lab-partners',       // Partner Accounts
+    'physio-partners', 'counselling-partners', 'nutrition-partners',                        // Partner Accounts (cont.)
+    'revenue', 'wallet',                                                            // Finance
+    'banners', 'referrals',                                                         // Marketing
+    'reports', 'tickets', 'broadcast',                                              // Support
+    'quality-analytics', 'feedback', 'reviews',                                     // Quality
+  ],
+};
+
+function isDirector() { return currentAdminRole === 'director'; }
+
+function canAccessTab(tab) {
+  const allowed = ROLE_TAB_ACCESS[currentAdminRole];
+  if (allowed === null) return true;      // director
+  if (!allowed) return false;             // unrecognized role: default-deny
+  return allowed.includes(tab);
+}
+
+// Only Directors can approve/reject doctors, specialization requests, or
+// partner (ambulance/caregiver/pharmacy/lab) registrations, even for roles
+// like HR that can otherwise view the Partner Accounts tab.
+function canApproveRegistrations() { return isDirector(); }
+
+function applyRoleNavVisibility() {
+  document.querySelectorAll('.nav-item[data-tab]').forEach(item => {
+    item.style.display = canAccessTab(item.dataset.tab) ? '' : 'none';
+  });
+  document.querySelectorAll('.nav-section-label').forEach(label => {
+    let sib = label.nextElementSibling;
+    let anyVisible = false;
+    while (sib && !sib.classList.contains('nav-section-label')) {
+      if (sib.classList.contains('nav-item') && sib.style.display !== 'none') anyVisible = true;
+      sib = sib.nextElementSibling;
+    }
+    label.style.display = anyVisible ? '' : 'none';
+  });
+}
+
+function firstAccessibleTab() {
+  const item = Array.from(document.querySelectorAll('.nav-item[data-tab]'))
+    .find(el => canAccessTab(el.dataset.tab));
+  return item ? { tab: item.dataset.tab, title: item.dataset.title } : null;
 }
 
 // ---- AUTH GUARD ----
 auth.onAuthStateChanged(async user => {
   if (user) {
-    // Verify the signed-in user is actually an admin
-    const isAdmin = await verifyAdminRole(user.uid);
-    if (!isAdmin) {
+    // Verify the signed-in user is actually an admin, and which profile they hold
+    const role = await verifyAdminRole(user.uid);
+    if (!role) {
       showToast('Access denied: not an admin account.');
       await auth.signOut();
       return;
     }
+    currentAdminRole = role;
     document.getElementById('login-page').style.display = 'none';
     document.getElementById('app').style.display = 'flex';
+    applyRoleNavVisibility();
     initDashboard();
+    if (!canAccessTab('overview')) {
+      const landing = firstAccessibleTab();
+      if (landing) switchTab(landing.tab, landing.title);
+    }
   } else {
+    currentAdminRole = 'director';
     document.getElementById('login-page').style.display = 'flex';
     document.getElementById('app').style.display = 'none';
   }
@@ -83,6 +154,10 @@ document.querySelectorAll('.nav-item[data-tab]').forEach(item => {
 });
 
 function switchTab(tab, title) {
+  if (!canAccessTab(tab)) {
+    showToast('You do not have access to this section.');
+    return;
+  }
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.querySelector(`.nav-item[data-tab="${tab}"]`).classList.add('active');
   document.querySelectorAll('.tab-section').forEach(s => s.classList.remove('active'));
@@ -302,7 +377,7 @@ function loadLiveStrip() {
   );
 
   _stripUnsubscribes.push(
-    db.collection('consultations').where('status', 'in', ['pending', 'ongoing', 'active']).onSnapshot(snap => {
+    db.collection('consultations').where('status', 'in', ['pending', 'ongoing', 'active', 'scheduled_waiting']).onSnapshot(snap => {
       if (el('strip-active-calls')) el('strip-active-calls').textContent = snap.size;
     }, err => console.warn('strip active-calls listener:', err))
   );
@@ -876,6 +951,7 @@ function cancelDoctorEdit() {
 }
 
 async function approveDoctor(id, btn) {
+  if (!canApproveRegistrations()) { showToast('Only Directors can approve doctors.'); return; }
   withCooldown(`approve-${id}`, async () => {
     btn.disabled = true; btn.textContent = '...';
     try {
@@ -894,6 +970,7 @@ async function approveDoctor(id, btn) {
 }
 
 async function rejectDoctor(id, btn) {
+  if (!canApproveRegistrations()) { showToast('Only Directors can reject doctors.'); return; }
   withCooldown(`reject-${id}`, async () => {
     btn.disabled = true; btn.textContent = '...';
     try {
@@ -999,6 +1076,7 @@ function showDoctorModal(d) {
 // approveDoctor()/rejectDoctor() so the modal button and the table-row button
 // cannot both fire a write for the same doctor on a fast double-click.
 async function approveFromModal(id) {
+  if (!canApproveRegistrations()) { showToast('Only Directors can approve doctors.'); return; }
   withCooldown(`approve-${id}`, async () => {
     try {
       await db.collection('doctors').doc(id).update({
@@ -1015,6 +1093,7 @@ async function approveFromModal(id) {
 }
 
 async function rejectFromModal(id) {
+  if (!canApproveRegistrations()) { showToast('Only Directors can reject doctors.'); return; }
   if (!confirm('Are you sure you want to reject this doctor application?')) return;
   withCooldown(`reject-${id}`, async () => {
     try {
@@ -1243,6 +1322,7 @@ async function approveSpecRequestFromModal(id) {
 }
 
 async function _doApproveSpecRequest(id) {
+  if (!canApproveRegistrations()) { showToast('Only Directors can approve specialization requests.'); return; }
   const r = allSpecRequests.find(x => x.id === id);
   if (!r) return;
   try {
@@ -1306,6 +1386,7 @@ function _showRejectDialog(id, r) {
 }
 
 async function _submitRejectSpecRequest(id) {
+  if (!canApproveRegistrations()) { showToast('Only Directors can reject specialization requests.'); return; }
   const reason = (document.getElementById('sr-reject-reason')?.value || '').trim();
   if (!reason) { alert('Please enter a rejection reason.'); return; }
   document.getElementById('sr-reject-dialog')?.remove();
@@ -2095,6 +2176,7 @@ function renderBannersList(banners) {
     const ctaChip = b.ctaText
       ? `<span class="banner-cta-chip">CTA: ${escHtml(b.ctaText)}</span>`
       : '';
+    const orderChip = `<span class="banner-cta-chip">Order: ${Number.isFinite(b.order) ? b.order : 0}</span>`;
     const thumb = b.imageUrl
       ? `<img class="banner-thumb" src="${escHtml(b.imageUrl)}" alt="${escHtml(b.title || 'Banner')}" loading="lazy" />`
       : '<div class="banner-thumb-placeholder"><i class="ti ti-photo"></i></div>';
@@ -2105,6 +2187,7 @@ function renderBannersList(banners) {
         <div class="banner-name">${title}</div>
         <div class="banner-meta">${dateRange}</div>
         ${ctaChip}
+        ${orderChip}
         <div style="margin-top:6px;">${getBannerStatusBadge(b)}</div>
       </div>
       <div class="banner-actions">
@@ -2166,6 +2249,7 @@ function editBanner(id) {
   document.getElementById('banner-desc').value     = banner.description || '';
   document.getElementById('banner-cta-text').value = banner.ctaText     || '';
   document.getElementById('banner-cta-url').value  = banner.ctaUrl      || '';
+  document.getElementById('banner-order').value    = Number.isFinite(banner.order) ? banner.order : 0;
   document.getElementById('banner-enabled').checked = banner.isEnabled;
 
   if (banner.startDate) {
@@ -2203,6 +2287,7 @@ function resetBannerForm() {
   document.getElementById('banner-desc').value       = '';
   document.getElementById('banner-cta-text').value   = '';
   document.getElementById('banner-cta-url').value    = '';
+  document.getElementById('banner-order').value      = '';
   document.getElementById('banner-start-date').value = '';
   document.getElementById('banner-end-date').value   = '';
   document.getElementById('banner-enabled').checked  = true;
@@ -2257,6 +2342,8 @@ async function publishBanner() {
   const desc       = document.getElementById('banner-desc').value.trim();
   const ctaText    = document.getElementById('banner-cta-text').value.trim();
   const ctaUrl     = document.getElementById('banner-cta-url').value.trim();
+  const orderVal   = document.getElementById('banner-order').value.trim();
+  const order      = orderVal === '' ? 0 : (parseInt(orderVal, 10) || 0);
   const isEnabled  = document.getElementById('banner-enabled').checked;
   const startVal   = document.getElementById('banner-start-date').value;
   const endVal     = document.getElementById('banner-end-date').value;
@@ -2316,6 +2403,7 @@ async function publishBanner() {
     storagePath,
     ctaText:  ctaText || null,
     ctaUrl:   ctaUrl  || null,
+    order,
     isEnabled,
     startDate: startVal ? firebase.firestore.Timestamp.fromDate(new Date(startVal)) : null,
     endDate:   endVal   ? firebase.firestore.Timestamp.fromDate(new Date(endVal))   : null,
@@ -2754,6 +2842,7 @@ let _notifications       = [];
 let _unreadNotifCount    = 0;
 let _notifUnsubscribe    = null;
 let _seenRequestIds      = new Set(JSON.parse(localStorage.getItem('seenRequests') || '[]'));
+let _adminAlertsUnsubscribe = null;
 
 function toggleNotifPanel() {
   const panel = document.getElementById('notif-panel');
@@ -2802,6 +2891,98 @@ function toLocalDatetimeString(date) {
 let allHospitals = [];
 let _editingHospitalId = null;
 let _hospitalsListener = null;
+// Set only when the admin picks a real place from the Google Maps search
+// below (not on freehand typing) — carries placeId/lat/lng into
+// saveHospital() so future duplicate checks can be exact instead of the
+// fuzzy name-matching the patient app falls back to for older, freehand
+// entries that have no placeId at all.
+let _selectedHospitalPlace = null;
+let _hospitalPlaceAutocomplete = null;
+
+/// Normalizes a hospital name the same way mednu's
+/// NearbyHospitalService._normalize() does, so the fuzzy duplicate-name
+/// warning below flags the same near-matches the patient app would merge.
+function _normalizeHospitalName(name) {
+  return (name || '')
+    .toLowerCase()
+    .replace(/\b(hospital|medical|centre|center|clinic|care|health|pvt|ltd|private|limited)\b/g, '')
+    .replace(/[^a-z0-9]/g, '');
+}
+
+function _findDuplicateHospital(placeId, name) {
+  const byPlaceId = allHospitals.find(h => h.placeId && h.placeId === placeId);
+  if (byPlaceId) return { hospital: byPlaceId, exact: true };
+  const norm = _normalizeHospitalName(name);
+  if (!norm) return null;
+  const byName = allHospitals.find(h => {
+    if (_editingHospitalId && h.id === _editingHospitalId) return false;
+    const hn = _normalizeHospitalName(h.name);
+    return hn && (norm === hn || norm.includes(hn) || hn.includes(norm));
+  });
+  return byName ? { hospital: byName, exact: false } : null;
+}
+
+/// Waits (polling, since the Maps script tag is `async defer`) for
+/// `google.maps.places` to be ready, then wires up Place Autocomplete on the
+/// "Search Google Maps" field. Safe to call more than once — re-attaching to
+/// the same input is a no-op beyond the first successful call.
+function initHospitalPlaceAutocomplete(attemptsLeft = 20) {
+  if (_hospitalPlaceAutocomplete) return;
+  const input = document.getElementById('hosp-place-search');
+  if (!input) return;
+  if (!(window.google && google.maps && google.maps.places)) {
+    if (attemptsLeft <= 0) return;
+    setTimeout(() => initHospitalPlaceAutocomplete(attemptsLeft - 1), 300);
+    return;
+  }
+
+  _hospitalPlaceAutocomplete = new google.maps.places.Autocomplete(input, {
+    types: ['establishment'],
+    fields: ['place_id', 'name', 'formatted_address', 'formatted_phone_number', 'geometry', 'url'],
+  });
+
+  _hospitalPlaceAutocomplete.addListener('place_changed', () => {
+    const place = _hospitalPlaceAutocomplete.getPlace();
+    const hint = document.getElementById('hosp-place-hint');
+    if (!place || !place.place_id) {
+      if (hint) { hint.textContent = 'Could not read that place — try selecting a suggestion from the dropdown.'; hint.style.color = 'var(--danger)'; }
+      return;
+    }
+
+    const dup = _findDuplicateHospital(place.place_id, place.name || '');
+    if (dup && dup.exact) {
+      _selectedHospitalPlace = null;
+      if (hint) {
+        hint.style.color = 'var(--danger)';
+        hint.textContent = `Already in your catalog as "${dup.hospital.name}" — edit that entry instead of adding a duplicate.`;
+      }
+      return;
+    }
+
+    _selectedHospitalPlace = {
+      placeId: place.place_id,
+      lat: place.geometry && place.geometry.location ? place.geometry.location.lat() : null,
+      lng: place.geometry && place.geometry.location ? place.geometry.location.lng() : null,
+    };
+
+    document.getElementById('hosp-name').value = place.name || '';
+    document.getElementById('hosp-address').value = place.formatted_address || '';
+    const phoneEl = document.getElementById('hosp-phone');
+    if (phoneEl && !phoneEl.value && place.formatted_phone_number) phoneEl.value = place.formatted_phone_number;
+    const mapsEl = document.getElementById('hosp-maps');
+    if (mapsEl && !mapsEl.value && place.url) mapsEl.value = place.url;
+
+    if (hint) {
+      if (dup && !dup.exact) {
+        hint.style.color = 'var(--warning, #b9720b)';
+        hint.textContent = `Heads up: "${dup.hospital.name}" already looks similar in your catalog — double-check this isn't the same hospital before saving.`;
+      } else {
+        hint.style.color = 'var(--success, #1e8e5a)';
+        hint.textContent = `Matched to Google Maps ✓ — name, address${phoneEl && place.formatted_phone_number ? ', phone' : ''} filled in.`;
+      }
+    }
+  });
+}
 
 function loadHospitals() {
   if (_hospitalsListener) _hospitalsListener();
@@ -2883,6 +3064,20 @@ async function saveHospital() {
     return;
   }
 
+  // Exact match (same Google place) always blocks — no override. A fuzzy
+  // name-only match (e.g. this was typed freehand, no placeId to compare)
+  // only warns, since two genuinely different hospitals can share a common
+  // name fragment like "City Hospital".
+  const dup = _findDuplicateHospital(_selectedHospitalPlace && _selectedHospitalPlace.placeId, name);
+  if (dup && dup.exact) {
+    showToast(`Already in your catalog as "${dup.hospital.name}" — edit that entry instead.`);
+    return;
+  }
+  if (dup && !dup.exact &&
+      !confirm(`"${dup.hospital.name}" already looks similar in your catalog. Save "${name}" anyway?`)) {
+    return;
+  }
+
   const btn = document.getElementById('save-hospital-btn');
   btn.disabled = true;
   btn.textContent = 'Saving…';
@@ -2895,6 +3090,11 @@ async function saveHospital() {
     isEnabled,
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
   };
+  if (_selectedHospitalPlace) {
+    data.placeId = _selectedHospitalPlace.placeId;
+    if (_selectedHospitalPlace.lat != null) data.lat = _selectedHospitalPlace.lat;
+    if (_selectedHospitalPlace.lng != null) data.lng = _selectedHospitalPlace.lng;
+  }
 
   try {
     if (_editingHospitalId) {
@@ -2918,6 +3118,14 @@ function editHospital(id) {
   const h = allHospitals.find(x => x.id === id);
   if (!h) return;
   _editingHospitalId = id;
+  // Editing doesn't require re-searching — leave _selectedHospitalPlace
+  // unset so saveHospital() never sends a placeId key, which means the
+  // existing record's placeId (if any) is left exactly as it was.
+  _selectedHospitalPlace = null;
+  const placeSearchEl = document.getElementById('hosp-place-search');
+  if (placeSearchEl) placeSearchEl.value = '';
+  const placeHintEl = document.getElementById('hosp-place-hint');
+  if (placeHintEl) placeHintEl.textContent = '';
   document.getElementById('hosp-name').value    = h.name    || '';
   document.getElementById('hosp-address').value = h.address || '';
   document.getElementById('hosp-phone').value   = h.phone   || '';
@@ -2932,10 +3140,13 @@ function editHospital(id) {
 
 function cancelHospitalEdit() {
   _editingHospitalId = null;
-  ['hosp-name','hosp-address','hosp-phone','hosp-maps'].forEach(id => {
+  _selectedHospitalPlace = null;
+  ['hosp-name','hosp-address','hosp-phone','hosp-maps','hosp-place-search'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
+  const placeHintEl = document.getElementById('hosp-place-hint');
+  if (placeHintEl) placeHintEl.textContent = '';
   const emEl = document.getElementById('hosp-emergency');
   if (emEl) emEl.checked = false;
   const enEl = document.getElementById('hosp-enabled');
@@ -2963,6 +3174,175 @@ async function deleteHospital(id, btn) {
   try {
     await db.collection('hospitals').doc(id).delete();
     showToast('Hospital deleted');
+  } catch (err) {
+    btn.disabled = false;
+    showToast('Delete failed: ' + err.message);
+  }
+}
+
+// ============================================
+//   HOSPITAL BILL DISCOUNTS
+// ============================================
+let allBillDiscounts = [];
+let _editingBillDiscountId = null;
+let _billDiscountsListener = null;
+
+function loadBillDiscounts() {
+  if (_billDiscountsListener) _billDiscountsListener();
+  _billDiscountsListener = db.collection('hospital_bill_discounts')
+    .orderBy('createdAt', 'desc')
+    .onSnapshot(snap => {
+      allBillDiscounts = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      filterBillDiscounts();
+      const enabledCount = allBillDiscounts.filter(d => d.isEnabled).length;
+      const badge = document.getElementById('nav-bill-discount-count');
+      if (badge) {
+        if (enabledCount > 0) { badge.textContent = enabledCount; badge.style.display = 'inline'; }
+        else badge.style.display = 'none';
+      }
+    }, err => console.error('Bill discounts load error:', err));
+}
+
+function filterBillDiscounts() {
+  const q      = (document.getElementById('bill-discount-search')?.value || '').toLowerCase();
+  const filter = document.getElementById('bill-discount-filter')?.value || 'all';
+  let filtered = allBillDiscounts;
+  if (q) filtered = filtered.filter(d => (d.label || '').toLowerCase().includes(q));
+  if (filter === 'enabled')       filtered = filtered.filter(d => d.isEnabled);
+  else if (filter === 'disabled') filtered = filtered.filter(d => !d.isEnabled);
+  renderBillDiscountsList(filtered);
+}
+
+function _billDiscountValueLabel(d) {
+  return d.type === 'flat' ? `Flat ₹${d.value} off` : `${d.value}% off`;
+}
+
+function renderBillDiscountsList(discounts) {
+  const el = document.getElementById('bill-discounts-list');
+  if (!el) return;
+  if (!discounts.length) {
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon"><i class="ti ti-discount-2"></i></div><p>No discounts added yet</p></div>';
+    return;
+  }
+  el.innerHTML = discounts.map(d => `
+    <div class="banner-card" id="bill-discount-card-${d.id}">
+      <div class="banner-thumb-placeholder" style="background:#F5E6F0;color:#522546;font-size:26px;">
+        <i class="ti ti-discount-2"></i>
+      </div>
+      <div class="banner-info">
+        <div class="banner-name">${escHtml(d.label || '—')}</div>
+        <div class="banner-meta">${escHtml(_billDiscountValueLabel(d))}${d.maxDiscountAmount ? ` · capped at ₹${d.maxDiscountAmount}` : ''}${d.minBillAmount ? ` · min bill ₹${d.minBillAmount}` : ''}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">
+          ${d.isEnabled ? '<span class="pill pill-active">Enabled</span>' : '<span class="pill pill-suspended">Disabled</span>'}
+        </div>
+      </div>
+      <div class="banner-actions">
+        <label class="toggle-label" title="${d.isEnabled ? 'Click to disable' : 'Click to enable'}">
+          <input type="checkbox" ${d.isEnabled ? 'checked' : ''} onchange="toggleBillDiscount('${d.id}', this.checked)" />
+          <span class="toggle-switch"></span>
+        </label>
+        <button class="btn btn-outline" onclick="editBillDiscount('${d.id}')" title="Edit">
+          <i class="ti ti-edit"></i>
+        </button>
+        <button class="btn btn-reject" onclick="deleteBillDiscount('${d.id}', this)" title="Delete">
+          <i class="ti ti-trash"></i>
+        </button>
+      </div>
+    </div>`).join('');
+}
+
+async function saveBillDiscount() {
+  const label = document.getElementById('bd-label')?.value.trim();
+  const type  = document.getElementById('bd-type')?.value || 'percent';
+  const value = parseFloat(document.getElementById('bd-value')?.value);
+  const maxRaw = document.getElementById('bd-max')?.value;
+  const minRaw = document.getElementById('bd-min')?.value;
+  const isEnabled = document.getElementById('bd-enabled')?.checked !== false;
+
+  if (!label || isNaN(value) || value <= 0) {
+    showToast('Discount label and a value greater than 0 are required');
+    return;
+  }
+
+  const btn = document.getElementById('save-bill-discount-btn');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+
+  const data = {
+    label, type, value,
+    maxDiscountAmount: maxRaw ? parseFloat(maxRaw) : null,
+    minBillAmount:     minRaw ? parseFloat(minRaw) : null,
+    isEnabled,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+  };
+
+  try {
+    if (_editingBillDiscountId) {
+      await db.collection('hospital_bill_discounts').doc(_editingBillDiscountId).update(data);
+      showToast('Discount updated ✓');
+    } else {
+      data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+      await db.collection('hospital_bill_discounts').add(data);
+      showToast('Discount added ✓');
+    }
+    cancelBillDiscountEdit();
+  } catch (err) {
+    showToast('Save failed: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="ti ti-device-floppy"></i> Save Discount';
+  }
+}
+
+function editBillDiscount(id) {
+  const d = allBillDiscounts.find(x => x.id === id);
+  if (!d) return;
+  _editingBillDiscountId = id;
+  document.getElementById('bd-label').value = d.label || '';
+  document.getElementById('bd-type').value  = d.type  || 'percent';
+  document.getElementById('bd-value').value = d.value ?? '';
+  document.getElementById('bd-max').value   = d.maxDiscountAmount ?? '';
+  document.getElementById('bd-min').value   = d.minBillAmount ?? '';
+  document.getElementById('bd-enabled').checked = d.isEnabled !== false;
+  document.getElementById('bill-discount-form-title').textContent = 'Edit Discount';
+  document.getElementById('save-bill-discount-btn').innerHTML = '<i class="ti ti-device-floppy"></i> Save Changes';
+  document.getElementById('cancel-bill-discount-btn').style.display = 'inline-flex';
+  document.getElementById('tab-bill-discounts').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function cancelBillDiscountEdit() {
+  _editingBillDiscountId = null;
+  ['bd-label','bd-value','bd-max','bd-min'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  const typeEl = document.getElementById('bd-type');
+  if (typeEl) typeEl.value = 'percent';
+  const enEl = document.getElementById('bd-enabled');
+  if (enEl) enEl.checked = true;
+  document.getElementById('bill-discount-form-title').textContent = 'Add Discount';
+  document.getElementById('save-bill-discount-btn').innerHTML = '<i class="ti ti-device-floppy"></i> Save Discount';
+  document.getElementById('cancel-bill-discount-btn').style.display = 'none';
+}
+
+async function toggleBillDiscount(id, enabled) {
+  try {
+    await db.collection('hospital_bill_discounts').doc(id).update({
+      isEnabled: enabled,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    showToast(enabled ? 'Discount enabled ✓' : 'Discount disabled');
+  } catch (err) {
+    showToast('Update failed: ' + err.message);
+  }
+}
+
+async function deleteBillDiscount(id, btn) {
+  if (!confirm('Delete this discount? This cannot be undone.')) return;
+  btn.disabled = true;
+  try {
+    await db.collection('hospital_bill_discounts').doc(id).delete();
+    showToast('Discount deleted');
   } catch (err) {
     btn.disabled = false;
     showToast('Delete failed: ' + err.message);
@@ -3152,6 +3532,187 @@ async function deleteAmbulance(id, btn) {
     btn.disabled = false;
     showToast('Delete failed: ' + err.message);
   }
+}
+
+// ============================================
+//   EQUIPMENT VENDORS — FULL CRUD
+//   Same shape as Ambulances above. A vendor's own equipment items live in
+//   `services` (type == 'equipment') tagged with `sourceVendorId` — see
+//   _syncEquipmentFields()/saveService() below, mirroring how pharmacies
+//   scope `medicines_catalogue` via `sourcePharmacyId`.
+// ============================================
+
+let allEquipmentVendors = [];
+let _editingEquipmentVendorId = null;
+let _equipmentVendorsListener = null;
+
+function loadEquipmentVendors() {
+  if (_equipmentVendorsListener) _equipmentVendorsListener();
+  _equipmentVendorsListener = db.collection('equipment_vendors')
+    .orderBy('createdAt', 'desc')
+    .onSnapshot(snap => {
+      allEquipmentVendors = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      renderEquipmentVendorsList(allEquipmentVendors);
+      _syncEquipmentVendorDropdown();
+      const enabledCount = allEquipmentVendors.filter(v => v.isEnabled).length;
+      const badge = document.getElementById('nav-equipment-vendor-count');
+      if (badge) {
+        if (enabledCount > 0) { badge.textContent = enabledCount; badge.style.display = 'inline'; }
+        else badge.style.display = 'none';
+      }
+    }, err => console.error('Equipment vendors load error:', err));
+}
+
+function renderEquipmentVendorsList(vendors) {
+  const el = document.getElementById('equipment-vendors-list');
+  if (!el) return;
+  if (!vendors.length) {
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon"><i class="ti ti-tools"></i></div><p>No equipment vendors added yet</p></div>';
+    return;
+  }
+  el.innerHTML = vendors.map(v => `
+    <div class="banner-card" id="equipment-vendor-card-${v.id}">
+      <div class="banner-thumb-placeholder" style="background:#eceff118;color:#37474f;font-size:26px;">
+        <i class="ti ti-tools"></i>
+      </div>
+      <div class="banner-info">
+        <div class="banner-name">${escHtml(v.name || '—')}</div>
+        <div class="banner-meta">${escHtml(v.city || '—')}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">
+          ${v.phone ? `<span class="banner-cta-chip"><i class="ti ti-phone" style="font-size:11px;"></i> ${escHtml(v.phone)}</span>` : ''}
+          ${(v.lat && v.lng) ? `<span class="banner-cta-chip"><i class="ti ti-map-pin" style="font-size:11px;"></i> ${v.lat.toFixed(4)}, ${v.lng.toFixed(4)}</span>` : '<span class="pill pill-pending">No location set</span>'}
+          ${v.isEnabled ? '<span class="pill pill-active">Visible</span>' : '<span class="pill pill-suspended">Hidden</span>'}
+        </div>
+      </div>
+      <div class="banner-actions">
+        <label class="toggle-label" title="${v.isEnabled ? 'Click to hide' : 'Click to show'}">
+          <input type="checkbox" ${v.isEnabled ? 'checked' : ''} onchange="toggleEquipmentVendor('${v.id}', this.checked)" />
+          <span class="toggle-switch"></span>
+        </label>
+        <button class="btn btn-outline" onclick="editEquipmentVendor('${v.id}')" title="Edit">
+          <i class="ti ti-edit"></i>
+        </button>
+        <button class="btn btn-reject" onclick="deleteEquipmentVendor('${v.id}', this)" title="Delete">
+          <i class="ti ti-trash"></i>
+        </button>
+      </div>
+    </div>`).join('');
+}
+
+async function saveEquipmentVendor() {
+  const name    = document.getElementById('eqv-name')?.value.trim();
+  const phone   = document.getElementById('eqv-phone')?.value.trim();
+  const city    = document.getElementById('eqv-city')?.value.trim();
+  const latRaw  = document.getElementById('eqv-lat')?.value.trim();
+  const lngRaw  = document.getElementById('eqv-lng')?.value.trim();
+  const isEnabled = document.getElementById('eqv-enabled')?.checked !== false;
+
+  if (!name || !phone) {
+    showToast('Vendor name and phone are required');
+    return;
+  }
+
+  const lat = latRaw !== '' ? parseFloat(latRaw) : null;
+  const lng = lngRaw !== '' ? parseFloat(lngRaw) : null;
+  if ((latRaw !== '' && Number.isNaN(lat)) || (lngRaw !== '' && Number.isNaN(lng))) {
+    showToast('Latitude/longitude must be valid numbers');
+    return;
+  }
+
+  const btn = document.getElementById('save-equipment-vendor-btn');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+
+  const data = {
+    name, phone,
+    city: city || '',
+    lat: lat ?? null,
+    lng: lng ?? null,
+    isEnabled,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+  };
+
+  try {
+    if (_editingEquipmentVendorId) {
+      await db.collection('equipment_vendors').doc(_editingEquipmentVendorId).update(data);
+      showToast('Equipment vendor updated ✓');
+    } else {
+      data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+      await db.collection('equipment_vendors').add(data);
+      showToast('Equipment vendor added ✓');
+    }
+    cancelEquipmentVendorEdit();
+  } catch (err) {
+    showToast('Save failed: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="ti ti-device-floppy"></i> Save Vendor';
+  }
+}
+
+function editEquipmentVendor(id) {
+  const v = allEquipmentVendors.find(x => x.id === id);
+  if (!v) return;
+  _editingEquipmentVendorId = id;
+  document.getElementById('eqv-name').value  = v.name  || '';
+  document.getElementById('eqv-phone').value = v.phone || '';
+  document.getElementById('eqv-city').value  = v.city  || '';
+  document.getElementById('eqv-lat').value   = v.lat ?? '';
+  document.getElementById('eqv-lng').value   = v.lng ?? '';
+  document.getElementById('eqv-enabled').checked = v.isEnabled !== false;
+  document.getElementById('equipment-vendor-form-title').textContent = 'Edit Equipment Vendor';
+  document.getElementById('save-equipment-vendor-btn').innerHTML = '<i class="ti ti-device-floppy"></i> Save Changes';
+  document.getElementById('cancel-equipment-vendor-btn').style.display = 'inline-flex';
+  document.getElementById('tab-equipmentVendors').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function cancelEquipmentVendorEdit() {
+  _editingEquipmentVendorId = null;
+  ['eqv-name', 'eqv-phone', 'eqv-city', 'eqv-lat', 'eqv-lng'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  const enEl = document.getElementById('eqv-enabled');
+  if (enEl) enEl.checked = true;
+  document.getElementById('equipment-vendor-form-title').textContent = 'Add Equipment Vendor';
+  document.getElementById('save-equipment-vendor-btn').innerHTML = '<i class="ti ti-device-floppy"></i> Save Vendor';
+  document.getElementById('cancel-equipment-vendor-btn').style.display = 'none';
+}
+
+async function toggleEquipmentVendor(id, enabled) {
+  try {
+    await db.collection('equipment_vendors').doc(id).update({
+      isEnabled: enabled,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    showToast(enabled ? 'Vendor visible in app ✓' : 'Vendor hidden from app');
+  } catch (err) {
+    showToast('Update failed: ' + err.message);
+  }
+}
+
+async function deleteEquipmentVendor(id, btn) {
+  if (!confirm('Delete this equipment vendor? This cannot be undone.')) return;
+  btn.disabled = true;
+  try {
+    await db.collection('equipment_vendors').doc(id).delete();
+    showToast('Equipment vendor deleted');
+  } catch (err) {
+    btn.disabled = false;
+    showToast('Delete failed: ' + err.message);
+  }
+}
+
+// Keeps the Services form's "Source Vendor" dropdown (equipment-only, see
+// _syncEquipmentFields()) in sync with the live vendor list, preserving
+// whatever is currently selected.
+function _syncEquipmentVendorDropdown() {
+  const sel = document.getElementById('svc-vendor');
+  if (!sel) return;
+  const current = sel.value;
+  sel.innerHTML = '<option value="">— No specific vendor —</option>' +
+    allEquipmentVendors.map(v => `<option value="${v.id}">${escHtml(v.name || '—')}</option>`).join('');
+  sel.value = current;
 }
 
 // ============================================
@@ -3987,9 +4548,9 @@ function initLiveCallsListener() {
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
 
-  // ── Active calls (pending + ongoing + active) ──────────────────────────────
+  // ── Active calls (pending + ongoing + active + scheduled_waiting) ───────────
   _activeCallsListener = db.collection('consultations')
-    .where('status', 'in', ['pending', 'ongoing', 'active'])
+    .where('status', 'in', ['pending', 'ongoing', 'active', 'scheduled_waiting'])
     .onSnapshot(snap => {
       const rows = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       _renderActiveCalls(rows);
@@ -4076,8 +4637,8 @@ function _renderActiveCalls(rows) {
   Object.keys(_callTimers).forEach(id => { if (!activeIds.has(id)) delete _callTimers[id]; });
 
   tbody.innerHTML = rows.map(r => {
-    const statusColor = r.status === 'active' ? '#1e8e3e' : r.status === 'ongoing' ? '#0277bd' : '#f9a825';
-    const statusLabel = r.status === 'active' ? '🟢 In Call' : r.status === 'ongoing' ? '🔵 Joining' : '🟡 Ringing';
+    const statusColor = r.status === 'active' ? '#1e8e3e' : r.status === 'ongoing' ? '#0277bd' : r.status === 'scheduled_waiting' ? '#8e44ad' : '#f9a825';
+    const statusLabel = r.status === 'active' ? '🟢 In Call' : r.status === 'ongoing' ? '🔵 Joining' : r.status === 'scheduled_waiting' ? '🟣 Waiting for Doctor' : '🟡 Ringing';
     const started = r.startedAt && r.startedAt.toDate
       ? r.startedAt.toDate().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
       : (r.createdAt && r.createdAt.toDate ? r.createdAt.toDate().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '—');
@@ -4190,13 +4751,17 @@ function initDashboard() {
   loadReportsList();
   loadBannersRealtime();
   loadHospitals();
+  initHospitalPlaceAutocomplete();
+  loadBillDiscounts();
   loadAmbulances();
+  loadEquipmentVendors();
   loadHealthArticles();
   initReferralSettingsListener();
   initReferralsListener();
   loadFeedbacksRealtime();
   initRequestsListener();
   initNotificationsListener();
+  initAdminAlertsListener();
   initServicesListener();
   initMedicinesCatalogueListener();
   initAppointmentsListener();
@@ -4228,6 +4793,9 @@ function updateAdminDisplayName() {
   const name = user.displayName || user.email || 'Admin';
   const el = document.querySelector('.admin-name');
   if (el) el.textContent = name.split('@')[0];
+  const ROLE_LABELS = { director: 'Director', hr: 'HR', finance: 'Finance', marketing: 'Marketing', support: 'Support & Tele-calling' };
+  const roleEl = document.querySelector('.admin-role');
+  if (roleEl) roleEl.textContent = ROLE_LABELS[currentAdminRole] || currentAdminRole;
 }
 
 // ============================================
@@ -4402,10 +4970,13 @@ function _syncEquipmentFields() {
   const buyPriceGroup = document.getElementById('svc-buy-price-group');
   const priceUnitGroup = document.getElementById('svc-price-unit-group');
   const priceLabel    = document.getElementById('svc-price-label');
+  const vendorGroup   = document.getElementById('svc-vendor-group');
   if (depositGroup)   depositGroup.style.display   = isEquipment ? 'block' : 'none';
   if (buyPriceGroup)  buyPriceGroup.style.display  = isEquipment ? 'block' : 'none';
   if (priceUnitGroup) priceUnitGroup.style.display = isEquipment ? 'none'  : 'block';
   if (priceLabel)     priceLabel.textContent       = isEquipment ? 'Rent Price / Day (₹)' : 'Price (₹)';
+  if (vendorGroup)     vendorGroup.style.display    = isEquipment ? 'block' : 'none';
+  if (isEquipment) _syncEquipmentVendorDropdown();
 }
 
 // ============================================
@@ -4576,6 +5147,7 @@ async function saveService() {
   const deposit     = type === 'equipment' && depositRaw ? parseFloat(depositRaw) : null;
   const buyPriceRaw = document.getElementById('svc-buy-price')?.value;
   const purchasePrice = type === 'equipment' && buyPriceRaw ? parseFloat(buyPriceRaw) : null;
+  const sourceVendorId = type === 'equipment' ? (document.getElementById('svc-vendor')?.value || null) : null;
   const fileInput   = document.getElementById('service-file-input');
   const file        = fileInput?.files[0];
 
@@ -4625,6 +5197,7 @@ async function saveService() {
     description: description || null,
     deposit:     deposit,
     purchasePrice: purchasePrice,
+    sourceVendorId: sourceVendorId,
     imageUrl, storagePath,
     isEnabled, isFeatured,
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -4665,6 +5238,8 @@ function editService(id) {
   const buyPriceInput = document.getElementById('svc-buy-price');
   if (buyPriceInput) buyPriceInput.value = s.purchasePrice || '';
   _syncEquipmentFields();
+  const vendorSelect = document.getElementById('svc-vendor');
+  if (vendorSelect) vendorSelect.value = s.sourceVendorId || '';
   if (s.imageUrl) {
     const img = document.getElementById('service-preview-img');
     img.src = s.imageUrl; img.style.display = 'block';
@@ -4678,7 +5253,7 @@ function editService(id) {
 
 function cancelServiceEdit() {
   _editingServiceId = null;
-  ['svc-name','svc-price','svc-duration','svc-desc','svc-deposit','svc-buy-price'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  ['svc-name','svc-price','svc-duration','svc-desc','svc-deposit','svc-buy-price','svc-vendor'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   const typeEl = document.getElementById('svc-type');
   if (typeEl) typeEl.value = _activeServiceCategory || 'diagnostics';
   const puEl = document.getElementById('svc-price-unit'); if (puEl) puEl.value = 'per_session';
@@ -5164,6 +5739,60 @@ function addSvcReqNotif(id, d) {
   }
 }
 
+// ── Critical admin alerts ─────────────────────────────────────────────────
+//
+// `admin_alerts` (functions/index.js: onSeriousComplaint, onEmergencyDoctorRequest,
+// _sendAdminAlert — 9 call sites total: failed/large payments, settlement
+// failures, serious complaints, emergency-doctor requests) was write-only
+// before this — nothing anywhere in this admin panel ever read the
+// collection, so none of it was visible to an admin except by querying
+// Firestore directly. Routed into the existing notification bell rather than
+// a new tab, since that's already a live, cross-cutting "things that just
+// happened" surface (see `initNotificationsListener` above for the
+// service_requests equivalent).
+//
+// The 3 call sites don't share one document shape: `_sendAdminAlert` writes
+// `title`/`body` directly, while `onSeriousComplaint`/`onEmergencyDoctorRequest`
+// only write structured fields (`type`, `patientName`, `reason`, ...) — this
+// derives a human title/subtitle for either shape.
+function _describeAdminAlert(a) {
+  if (a.title || a.body) {
+    return { title: a.title || 'Admin Alert', sub: a.body || '' };
+  }
+  if (a.type === 'emergency_doctor') {
+    return {
+      title: '🚨 Emergency Doctor Request',
+      sub: `${a.patientName || 'A patient'} needs immediate medical assistance.`,
+    };
+  }
+  if (a.type === 'serious_complaint') {
+    return {
+      title: '⚠️ Serious Complaint',
+      sub: `${a.patientName || 'A patient'} vs Dr. ${a.doctorName || 'Unknown'}: ${a.reason || 'No reason given'}`,
+    };
+  }
+  return {
+    title: capitalize((a.type || 'alert').replace(/_/g, ' ')),
+    sub: a.data ? Object.entries(a.data).map(([k, v]) => `${k}: ${v}`).join(', ') : '',
+  };
+}
+
+function initAdminAlertsListener() {
+  if (_adminAlertsUnsubscribe) _adminAlertsUnsubscribe();
+  _adminAlertsUnsubscribe = db.collection('admin_alerts')
+    .orderBy('createdAt', 'desc')
+    .limit(50)
+    .onSnapshot(snap => {
+      snap.docChanges().forEach(change => {
+        if (change.type !== 'added') return;
+        const d = change.doc.data();
+        if (d.isRead) return; // already handled before this session started listening
+        const { title, sub } = _describeAdminAlert(d);
+        addSystemNotif('admin_alert', { id: change.doc.id, title, sub, severity: d.severity || 'high' });
+      });
+    }, err => console.error('Admin alerts listener error:', err));
+}
+
 function renderNotifList() {
   const list = document.getElementById('notif-list');
   if (!list) return;
@@ -5185,6 +5814,7 @@ function renderNotifList() {
         doctor_reg:  { icon: '<i class="ti ti-stethoscope"></i>', bg: '#F5E6F0', fg: '#522546', title: 'New Doctor Registration', sub: escHtml(n.name||'') + ' &ndash; ' + escHtml(n.specialty||'') },
         appointment: { icon: '<i class="ti ti-calendar-check"></i>', bg: '#e8f5e9', fg: '#2e7d32', title: 'New Appointment', sub: escHtml(n.patient||'') + ' with Dr. ' + escHtml(n.doctor||'') },
         ticket:      { icon: '<i class="ti ti-ticket"></i>', bg: '#fff3e0', fg: '#e65100', title: 'New ' + capitalize(n.priority||'medium') + ' Ticket', sub: escHtml(n.user||'') + ': ' + escHtml(n.title||'') },
+        admin_alert: { icon: '<i class="ti ti-alert-triangle"></i>', bg: n.severity === 'critical' ? '#fdecea' : '#fff3e0', fg: n.severity === 'critical' ? '#c62828' : '#e65100', title: n.title || 'Admin Alert', sub: escHtml(n.sub||'') },
       };
       const cfg = configs[n._type] || { icon: '<i class="ti ti-bell"></i>', bg: '#f3e5f5', fg: '#7b1fa2', title: 'System Notification', sub: '' };
       return `<div class="notif-item ${!n._read ? 'notif-unread' : ''}" onclick="handleSysNotifClick('${n._id}','${n._type}','${n.id||''}')">
@@ -5226,6 +5856,15 @@ function handleSysNotifClick(nId, type, docId) {
   document.getElementById('notif-panel').style.display = 'none';
   const tabMap = { doctor_reg: 'doctors', appointment: 'appointments', ticket: 'tickets' };
   if (tabMap[type]) switchTab(tabMap[type], { doctors:'Doctors', appointments:'Appointments', tickets:'Support Tickets' }[type]);
+
+  // Unlike tickets/service-requests (dismissed only client-side, per-browser),
+  // `admin_alerts` docs carry a real `isRead` field the backend already
+  // defined — persist it so a critical alert someone already looked at
+  // doesn't reappear as unread for every other admin/session.
+  if (type === 'admin_alert' && docId) {
+    db.collection('admin_alerts').doc(docId).update({ isRead: true })
+      .catch(err => console.error('Failed to mark admin_alerts read:', err));
+  }
 }
 
 function updateNotifBadge() {
@@ -5237,6 +5876,19 @@ function updateNotifBadge() {
 }
 
 function markAllNotifsRead() {
+  // Same reasoning as the single-click path in handleSysNotifClick — these
+  // are the real Firestore isRead flags other admins/sessions also read,
+  // not just this browser's local "seen" dismissal.
+  const batch = db.batch();
+  let hasAlertWrites = false;
+  _sysNotifs.forEach(n => {
+    if (n._type === 'admin_alert' && n.id && !n._read) {
+      batch.update(db.collection('admin_alerts').doc(n.id), { isRead: true });
+      hasAlertWrites = true;
+    }
+  });
+  if (hasAlertWrites) batch.commit().catch(err => console.error('Failed to mark admin_alerts read:', err));
+
   _notifications.forEach(n => { n._read = true; _seenRequestIds.add(n.id); });
   _sysNotifs.forEach(n => { n._read = true; if (n.id) _seenSysIds.add(n.id); });
   localStorage.setItem('seenRequests', JSON.stringify([..._seenRequestIds]));
@@ -7065,7 +7717,7 @@ function selectGsResult(idx) {
   closeGlobalSearch();
   const cfg = GS_COLLECTIONS[item._type];
   if (cfg && typeof switchTab === 'function') {
-    const tabTitles = { doctors:'Doctors', patients:'Patients', hospitals:'Hospitals', ambulances:'Ambulances', tickets:'Support Tickets', appointments:'Appointments', referrals:'Referrals', banners:'Banners', analytics:'Analytics', wallet:'Wallet', medicines:'MedNU Pharmacy', maternity:'Maternity', requests:'Service Requests' };
+    const tabTitles = { doctors:'Doctors', patients:'Patients', hospitals:'Hospitals', ambulances:'Ambulances', equipmentVendors:'Equipment Vendors', tickets:'Support Tickets', appointments:'Appointments', referrals:'Referrals', banners:'Banners', analytics:'Analytics', wallet:'Wallet', medicines:'MedNU Pharmacy', maternity:'Maternity', requests:'Service Requests' };
     switchTab(cfg.tab, tabTitles[cfg.tab] || cfg.tab);
   }
 }
@@ -7080,7 +7732,7 @@ function setSearchFilter(type, btn) {
 
 function navigateFromSearch(tab) {
   closeGlobalSearch();
-  const tabTitles = { doctors:'Doctors', patients:'Patients', hospitals:'Hospitals', ambulances:'Ambulances', tickets:'Support Tickets', appointments:'Appointments', referrals:'Referrals', banners:'Banners', analytics:'Analytics', wallet:'Wallet', medicines:'MedNU Pharmacy', maternity:'Maternity', requests:'Service Requests' };
+  const tabTitles = { doctors:'Doctors', patients:'Patients', hospitals:'Hospitals', ambulances:'Ambulances', equipmentVendors:'Equipment Vendors', tickets:'Support Tickets', appointments:'Appointments', referrals:'Referrals', banners:'Banners', analytics:'Analytics', wallet:'Wallet', medicines:'MedNU Pharmacy', maternity:'Maternity', requests:'Service Requests' };
   if (typeof switchTab === 'function') switchTab(tab, tabTitles[tab] || tab);
 }
 
@@ -7746,10 +8398,107 @@ const PARTNER_ROLES = {
       (p.email || '').toLowerCase().includes(q) ||
       (p.servicesOffered || []).join(' ').toLowerCase().includes(q),
   },
+  // Physiotherapy/counselling/nutrition partners had NO admin approval UI at
+  // all before this — they could register but never reach `status: 'active'`
+  // short of hand-editing Firestore. Unlike lab/pharmacy/ambulance/caregiver,
+  // these 3 roles have no document-verification step defined anywhere
+  // (`PartnerDocumentType.forRole` in mednu_doctor returns `[]` for them), so
+  // `docSlots: {}` here is intentional, not an oversight — see the
+  // `allDocsVerified` fix below that lets Approve work with zero doc slots.
+  physiotherapy: {
+    label:        'Physiotherapist Partner',
+    collection:   'physiotherapist_profiles',
+    txCollection: 'physio_transactions',
+    txField:      'physiotherapistId',
+    tab:          'physio-partners',
+    prefix:       'phy',
+    cols:         7,
+    navBadge:     'nav-physio-partners-count',
+    extraFilterId:'phy-specialty-filter',
+    docSlots: {},
+    nameOf: p => p.name || 'Unnamed partner',
+    subOf:  p => (p.specialties || []).join(', ') || p.city || '—',
+    extraValues: list => [...new Set([].concat(...list.map(p => p.specialties || [])).filter(Boolean))].sort(),
+    extraMatch:  (p, v) => (p.specialties || []).includes(v),
+    searchMatch: (p, q) =>
+      (p.name || '').toLowerCase().includes(q) ||
+      (p.specialties || []).join(' ').toLowerCase().includes(q) ||
+      (p.certifications || []).join(' ').toLowerCase().includes(q) ||
+      (p.city || '').toLowerCase().includes(q),
+  },
+  counselling: {
+    label:        'Counsellor Partner',
+    collection:   'counsellor_profiles',
+    txCollection: 'counselling_transactions',
+    txField:      'counsellorId',
+    tab:          'counselling-partners',
+    prefix:       'cns',
+    cols:         5,
+    navBadge:     'nav-counselling-partners-count',
+    extraFilterId:'cns-specialty-filter',
+    docSlots: {},
+    nameOf: p => p.name || 'Unnamed partner',
+    subOf:  p => (p.specialties || []).join(', ') || '—',
+    extraValues: list => [...new Set([].concat(...list.map(p => p.specialties || [])).filter(Boolean))].sort(),
+    extraMatch:  (p, v) => (p.specialties || []).includes(v),
+    searchMatch: (p, q) =>
+      (p.name || '').toLowerCase().includes(q) ||
+      (p.specialties || []).join(' ').toLowerCase().includes(q) ||
+      (p.certifications || []).join(' ').toLowerCase().includes(q),
+  },
+  // No earnings ledger exists for nutrition (a nutritionist is booked
+  // directly by the patient rather than claimed from an unclaimed pool, so
+  // there's no Cloud-Function-written transaction collection to read) —
+  // txCollection stays null and the earnings card/refresh is omitted for
+  // this role rather than pointed at a collection that doesn't exist.
+  nutrition: {
+    label:        'Nutritionist Partner',
+    collection:   'nutritionist_profiles',
+    txCollection: null,
+    txField:      null,
+    tab:          'nutrition-partners',
+    prefix:       'nut',
+    cols:         7,
+    navBadge:     'nav-nutrition-partners-count',
+    extraFilterId:'nut-specialization-filter',
+    docSlots: {},
+    nameOf: p => p.name || 'Unnamed partner',
+    subOf:  p => p.specialization || p.qualification || '—',
+    extraValues: list => [...new Set(list.map(p => p.specialization).filter(Boolean))].sort(),
+    extraMatch:  (p, v) => (p.specialization || '') === v,
+    searchMatch: (p, q) =>
+      (p.name || '').toLowerCase().includes(q) ||
+      (p.qualification || '').toLowerCase().includes(q) ||
+      (p.specialization || '').toLowerCase().includes(q) ||
+      (p.city || '').toLowerCase().includes(q),
+  },
+  // A hospital billing-desk login has no earnings ledger and nothing to
+  // verify (no docSlots — see the nutrition comment above for why that's
+  // safe) — it exists only to read `hospital_bill_payments` for the
+  // `hospitalId` it's linked to, so patients/staff at the desk can confirm a
+  // payment landed. See firestore.rules' hospital_profiles + isHospitalPartner().
+  hospital: {
+    label:        'Hospital Partner',
+    collection:   'hospital_profiles',
+    txCollection: null,
+    txField:      null,
+    tab:          'hospital-partners',
+    prefix:       'hp',
+    cols:         5,
+    navBadge:     'nav-hospital-partners-count',
+    extraFilterId:null,
+    docSlots: {},
+    nameOf: p => p.hospitalName || p.contactName || 'Unnamed partner',
+    subOf:  p => p.contactName || '—',
+    searchMatch: (p, q) =>
+      (p.hospitalName || '').toLowerCase().includes(q) ||
+      (p.contactName || '').toLowerCase().includes(q) ||
+      (p.phone || '').toLowerCase().includes(q),
+  },
 };
 
-const _partnerData      = { ambulance: [], caregiver: [], pharmacy: [], lab: [] };
-const _partnerListeners = { ambulance: null, caregiver: null, pharmacy: null, lab: null };
+const _partnerData      = { ambulance: [], caregiver: [], pharmacy: [], lab: [], physiotherapy: [], counselling: [], nutrition: [] };
+const _partnerListeners = { ambulance: null, caregiver: null, pharmacy: null, lab: null, physiotherapy: null, counselling: null, nutrition: null };
 
 function partnerStatusOf(p) {
   const s = (p.status || 'pending').toLowerCase();
@@ -7835,10 +8584,14 @@ function filterPartnerTable(role) {
   renderPartnerTable(role, list);
 }
 
-function filterAmbulancePartners() { filterPartnerTable('ambulance'); }
-function filterCaregiverPartners() { filterPartnerTable('caregiver'); }
-function filterPharmacyPartners()  { filterPartnerTable('pharmacy');  }
-function filterLabPartners()       { filterPartnerTable('lab');       }
+function filterAmbulancePartners()  { filterPartnerTable('ambulance');    }
+function filterCaregiverPartners()  { filterPartnerTable('caregiver');    }
+function filterPharmacyPartners()   { filterPartnerTable('pharmacy');     }
+function filterLabPartners()        { filterPartnerTable('lab');         }
+function filterPhysioPartners()     { filterPartnerTable('physiotherapy');}
+function filterCounsellingPartners(){ filterPartnerTable('counselling'); }
+function filterNutritionPartners()  { filterPartnerTable('nutrition');   }
+function filterHospitalPartners()   { filterPartnerTable('hospital');    }
 
 // ── Table rendering ──────────────────────────────────────────────────────────
 function partnerActionsCell(role, p) {
@@ -7915,6 +8668,56 @@ function renderPartnerTable(role, list) {
         ${statusCell}${actions}
       </tr>`;
     }
+    if (role === 'physiotherapy') {
+      const specs = (p.specialties || []).slice(0, 3)
+        .map(s => `<span class="svc-type-badge" style="background:#e8f5e9;color:#2e7d32;">${escHtml(s)}</span>`).join(' ');
+      return `<tr>
+        <td><div class="user-cell">${avatar}
+          <div><div class="user-name">${escHtml(p.name || '—')}</div>
+          <div class="user-sub">${escHtml(p.city || '')}</div></div></div></td>
+        <td>${specs || '—'}</td>
+        <td>${p.hourlyRate ? escHtml(formatCurrency(p.hourlyRate)) + '/hr' : '—'}</td>
+        <td>${escHtml(p.experienceYears ? p.experienceYears + ' yrs' : '—')}</td>
+        <td>${partnerRatingCell(p)}</td>
+        ${statusCell}${actions}
+      </tr>`;
+    }
+    if (role === 'counselling') {
+      const specs = (p.specialties || []).slice(0, 3)
+        .map(s => `<span class="svc-type-badge" style="background:#ede7f6;color:#4527a0;">${escHtml(s)}</span>`).join(' ');
+      return `<tr>
+        <td><div class="user-cell">${avatar}
+          <div><div class="user-name">${escHtml(p.name || '—')}</div>
+          <div class="user-sub">${escHtml(p.experienceYears ? p.experienceYears + ' yrs experience' : '')}</div></div></div></td>
+        <td>${specs || '—'}</td>
+        <td>${p.hourlyRate ? escHtml(formatCurrency(p.hourlyRate)) + '/hr' : '—'}</td>
+        ${statusCell}${actions}
+      </tr>`;
+    }
+    if (role === 'nutrition') {
+      return `<tr>
+        <td><div class="user-cell">${avatar}
+          <div><div class="user-name">${escHtml(p.name || '—')}</div>
+          <div class="user-sub">${escHtml(p.qualification || '')}</div></div></div></td>
+        <td>${escHtml(p.specialization || '—')}</td>
+        <td>${p.consultationFee ? escHtml(formatCurrency(p.consultationFee)) : '—'}</td>
+        <td>${escHtml(p.experienceYears ? p.experienceYears + ' yrs' : '—')}</td>
+        <td>${partnerRatingCell(p)}</td>
+        ${statusCell}${actions}
+      </tr>`;
+    }
+    if (role === 'hospital') {
+      return `<tr>
+        <td><div class="user-cell">${avatar}
+          <div><div class="user-name">${escHtml(p.hospitalName || 'Not linked yet')}</div>
+          <div class="user-sub">${escHtml(p.contactName || '')}</div></div></div></td>
+        <td>${escHtml(p.phone || '—')}</td>
+        <td>${p.hospitalId
+              ? '<span class="pill pill-active">Linked</span>'
+              : '<span class="pill pill-suspended">Not linked</span>'}</td>
+        ${statusCell}${actions}
+      </tr>`;
+    }
     // pharmacy
     return `<tr>
       <td><div class="user-cell">${avatar}
@@ -7933,6 +8736,7 @@ function renderPartnerTable(role, list) {
 
 // ── Status actions (approve / reject / activate / deactivate) ───────────────
 function _setPartnerStatus(role, id, status, btn, successMsg) {
+  if (!canApproveRegistrations()) { showToast('Only Directors can approve/reject partner registrations.'); return; }
   const cfg = PARTNER_ROLES[role];
   const original = btn ? btn.textContent : '';
   withCooldown('partner-' + role + '-' + id + '-' + status, async () => {
@@ -7962,7 +8766,13 @@ function approvePartner(role, id, btn) {
   const docs = (p && p.documents) || {};
   const vers = (p && p.documentVerification) || {};
   const slots = Object.keys(cfg.docSlots);
-  const allVerified = slots.length > 0 &&
+  // A role with zero required doc slots (physiotherapy/counselling/nutrition/
+  // hospital) has nothing to verify, so it must not be treated the same as
+  // "verification incomplete" — mirrors showPartnerModal's `allDocsVerified`.
+  // This used to read `slots.length > 0 && ...`, which evaluated to `false`
+  // whenever a role had zero slots — silently blocking Approve for exactly
+  // the roles docSlots:{} was meant to exempt.
+  const allVerified = slots.length === 0 ||
     slots.every(k => _partnerDocStatus(docs[k] || null, vers[k] || null) === 'verified');
   if (!allVerified) {
     showToast('Verify every required document before approving.');
@@ -7971,6 +8781,41 @@ function approvePartner(role, id, btn) {
   _setPartnerStatus(role, id, 'active', btn, cfg.label + ' approved');
 }
 function activatePartner(role, id, btn) { _setPartnerStatus(role, id, 'active', btn, PARTNER_ROLES[role].label + ' activated'); }
+
+// Hospital's Approve also assigns which `hospitals/{id}` catalog entry this
+// login represents — the field a Director must confirm in the modal's
+// "Link to Hospital Catalog Entry" select before Approve can proceed for
+// this role. See PARTNER_ROLES.hospital / hospital_profiles in firestore.rules.
+function approveHospitalPartner(id, btn) {
+  if (!canApproveRegistrations()) { showToast('Only Directors can approve/reject partner registrations.'); return; }
+  const select = document.getElementById('hp-link-select-' + id);
+  const hospitalId = select ? select.value : '';
+  if (!hospitalId) {
+    showToast('Select which hospital this login represents before approving.');
+    return;
+  }
+  const hospital = allHospitals.find(h => h.id === hospitalId);
+  const original = btn ? btn.textContent : '';
+  withCooldown('partner-hospital-' + id + '-active', async () => {
+    if (btn) { btn.disabled = true; btn.textContent = '...'; }
+    try {
+      await db.collection('hospital_profiles').doc(id).update({
+        hospitalId,
+        hospitalName: hospital ? (hospital.name || '') : '',
+        status: 'active',
+        approvedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedBy: auth.currentUser?.email || 'admin',
+      });
+      showToast('Hospital partner approved ✓');
+      document.getElementById('partner-modal')?.remove();
+    } catch (err) {
+      console.error('approveHospitalPartner:', err);
+      if (btn) { btn.disabled = false; btn.textContent = original; }
+      showToast('Failed to approve hospital partner. Please try again.');
+    }
+  });
+}
 
 function deactivatePartner(role, id, btn) {
   if (!confirm('Deactivate this partner? They will lose access to new jobs until reactivated.')) return;
@@ -8171,10 +9016,19 @@ function loadAmbulancePartnerEarnings() { loadPartnerEarnings('ambulance', true)
 function loadCaregiverPartnerEarnings() { loadPartnerEarnings('caregiver', true); }
 function loadPharmacyPartnerEarnings()  { loadPartnerEarnings('pharmacy',  true); }
 function loadLabPartnerEarnings()       { loadPartnerEarnings('lab',       true); }
+function loadPhysioPartnerEarnings()       { loadPartnerEarnings('physiotherapy', true); }
+function loadCounsellingPartnerEarnings()  { loadPartnerEarnings('counselling',   true); }
+// No loadNutritionPartnerEarnings() — nutrition has no txCollection (see
+// PARTNER_ROLES comment), and its admin tab has no Earnings Overview card.
 
 async function _renderPartnerModalEarnings(role, id) {
   const cfg = PARTNER_ROLES[role];
-  if (!document.getElementById('partner-modal-earnings')) return;
+  const box0 = document.getElementById('partner-modal-earnings');
+  if (!box0) return;
+  if (!cfg.txCollection) {
+    box0.innerHTML = '<div style="font-size:12px;color:#aaa;font-style:italic;">Earnings ledger not tracked for this role yet.</div>';
+    return;
+  }
   try {
     const snap = await db.collection(cfg.txCollection).where(cfg.txField, '==', id).get();
     const txs = snap.docs.map(d => d.data()).filter(_isCreditedEarning)
@@ -8317,7 +9171,11 @@ function showPartnerModal(role, id) {
     return { stat, html };
   });
   const docHtml = docEntries.map(e => e.html).join('');
-  const allDocsVerified = docEntries.length > 0 && docEntries.every(e => e.stat === 'verified');
+  // A role with zero required doc slots (physiotherapy/counselling/nutrition
+  // — see PARTNER_ROLES comment) has nothing to verify, so it must not be
+  // treated the same as "verification incomplete"; only block Approve when
+  // there ARE slots and not all of them are verified yet.
+  const allDocsVerified = docEntries.length === 0 || docEntries.every(e => e.stat === 'verified');
 
   let fields;
   if (role === 'ambulance') {
@@ -8347,6 +9205,43 @@ function showPartnerModal(role, id) {
       ['Services',       (p.servicesOffered || []).join(', ') || '—'],
       ['Verified',       p.isVerified ? 'Yes' : 'No'],
     ];
+  } else if (role === 'physiotherapy') {
+    fields = [
+      ['Hourly Rate',    p.hourlyRate ? formatCurrency(p.hourlyRate) + '/hr' : '—'],
+      ['Experience',     p.experienceYears ? p.experienceYears + ' yrs' : '—'],
+      ['Specialties',    (p.specialties || []).join(', ') || '—'],
+      ['Certifications', (p.certifications || []).join(', ') || '—'],
+      ['City',           p.city || '—'],
+      ['Languages',      (p.languages || []).join(', ') || '—'],
+      ['Total Sessions', String(p.totalSessions || 0)],
+      ['Verified',       p.isVerified ? 'Yes' : 'No'],
+    ];
+  } else if (role === 'counselling') {
+    fields = [
+      ['Hourly Rate',    p.hourlyRate ? formatCurrency(p.hourlyRate) + '/hr' : '—'],
+      ['Experience',     p.experienceYears ? p.experienceYears + ' yrs' : '—'],
+      ['Specialties',    (p.specialties || []).join(', ') || '—'],
+      ['Certifications', (p.certifications || []).join(', ') || '—'],
+      ['Total Sessions', String(p.totalSessions || 0)],
+      ['Verified',       p.isVerified ? 'Yes' : 'No'],
+    ];
+  } else if (role === 'nutrition') {
+    fields = [
+      ['Qualification',    p.qualification || '—'],
+      ['Specialization',   p.specialization || '—'],
+      ['Experience',       p.experienceYears ? p.experienceYears + ' yrs' : '—'],
+      ['Consultation Fee', p.consultationFee ? formatCurrency(p.consultationFee) : '—'],
+      ['City',             p.city || '—'],
+      ['Languages',        (p.languages || []).join(', ') || '—'],
+      ['Bio',              p.bio || '—'],
+      ['Verified',         p.isVerified ? 'Yes' : 'No'],
+    ];
+  } else if (role === 'hospital') {
+    fields = [
+      ['Contact Name',    p.contactName || '—'],
+      ['Phone',           p.phone || '—'],
+      ['Linked Hospital',  p.hospitalName || 'Not linked yet'],
+    ];
   } else {
     fields = [
       ['Licence Number', p.licenseNumber || '—'],
@@ -8363,9 +9258,38 @@ function showPartnerModal(role, id) {
     : 'No reviews']);
   fields.push(['Registered', p.createdAt ? formatDate(p.createdAt) : '—']);
 
+  // Hospital is the one partner role that links back to an existing,
+  // separately-curated `hospitals` catalog entry rather than being the
+  // operational entity itself — see hospital_profiles in firestore.rules.
+  // `createProfile()` in mednu_doctor best-effort auto-matches this by the
+  // applicant's verified phone number, but a Director must confirm (or pick
+  // the right one, if no match was found) before Approve is allowed to run.
+  let hospitalLinkHtml = '';
+  if (role === 'hospital') {
+    const options = (typeof allHospitals !== 'undefined' ? allHospitals : []).map(h =>
+      `<option value="${escHtml(h.id)}" ${p.hospitalId === h.id ? 'selected' : ''}>${escHtml(h.name || h.id)}</option>`
+    ).join('');
+    hospitalLinkHtml = `
+      <div style="margin-bottom:20px;">
+        <div style="font-size:14px;font-weight:700;margin-bottom:8px;">Link to Hospital Catalog Entry</div>
+        <select id="hp-link-select-${pid}" class="form-input">
+          <option value="">— Select the hospital this login represents —</option>
+          ${options}
+        </select>
+        <div style="font-size:11px;color:#888;margin-top:6px;">
+          ${p.hospitalId
+            ? 'Auto-matched by phone number — confirm this is correct before approving.'
+            : 'No automatic match found for this phone number — pick the correct hospital before approving.'}
+        </div>
+      </div>`;
+  }
+
   const actionRow = st === 'pending'
-    ? `<button onclick="approvePartner('${role}','${pid}', this)" ${allDocsVerified ? '' : 'disabled title="Verify every required document above before approving"'} style="flex:1;min-width:140px;padding:12px;background:${allDocsVerified ? '#2e7d32' : '#bdbdbd'};color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:${allDocsVerified ? 'pointer' : 'not-allowed'};">${allDocsVerified ? 'Approve' : 'Approve (verify docs first)'}</button>
-       <button onclick="rejectPartner('${role}','${pid}', this)" style="flex:1;min-width:140px;padding:12px;background:#c62828;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;">Reject</button>`
+    ? (role === 'hospital'
+        ? `<button onclick="approveHospitalPartner('${pid}', this)" style="flex:1;min-width:140px;padding:12px;background:#2e7d32;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;">Approve</button>
+           <button onclick="rejectPartner('${role}','${pid}', this)" style="flex:1;min-width:140px;padding:12px;background:#c62828;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;">Reject</button>`
+        : `<button onclick="approvePartner('${role}','${pid}', this)" ${allDocsVerified ? '' : 'disabled title="Verify every required document above before approving"'} style="flex:1;min-width:140px;padding:12px;background:${allDocsVerified ? '#2e7d32' : '#bdbdbd'};color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:${allDocsVerified ? 'pointer' : 'not-allowed'};">${allDocsVerified ? 'Approve' : 'Approve (verify docs first)'}</button>
+           <button onclick="rejectPartner('${role}','${pid}', this)" style="flex:1;min-width:140px;padding:12px;background:#c62828;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;">Reject</button>`)
     : st === 'active'
       ? `<button onclick="deactivatePartner('${role}','${pid}', this)" style="flex:1;min-width:140px;padding:12px;background:#c62828;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;">Deactivate Partner</button>`
       : `<button onclick="activatePartner('${role}','${pid}', this)" style="flex:1;min-width:140px;padding:12px;background:#2e7d32;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;">Activate Partner</button>`;
@@ -8400,6 +9324,7 @@ function showPartnerModal(role, id) {
             <div style="font-size:14px;font-weight:600;margin-top:2px;overflow-wrap:anywhere;">${escHtml(String(v))}</div>
           </div>`).join('')}
       </div>
+      ${hospitalLinkHtml}
 
       <div style="margin-bottom:20px;">
         <div style="font-size:14px;font-weight:700;margin-bottom:8px;">Account &amp; Role</div>
@@ -8412,6 +9337,7 @@ function showPartnerModal(role, id) {
         </div>
       </div>
 
+      ${Object.keys(cfg.docSlots).length > 0 ? `
       <div style="margin-bottom:20px;">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
           <span style="font-size:14px;font-weight:700;">Uploaded Documents</span>
@@ -8423,7 +9349,10 @@ function showPartnerModal(role, id) {
           only way its status changes — partners cannot verify their own documents.
         </div>
         <div class="partner-doc-grid">${docHtml}</div>
-      </div>
+      </div>` : `
+      <div style="margin-bottom:20px;font-size:12px;color:#888;font-style:italic;">
+        This role has no document-verification step — review the profile details above, then Approve or Reject directly.
+      </div>`}
 
       <div style="margin-bottom:20px;">
         <div style="font-size:14px;font-weight:700;margin-bottom:8px;">Earnings</div>
@@ -8473,11 +9402,14 @@ function reviewPendingDoctor(id) {
 }
 
 const _PENDING_ROLE_BADGES = {
-  doctor:    { label: 'Doctor',    bg: '#e3f2fd', fg: '#1565c0' },
-  ambulance: { label: 'Ambulance', bg: '#ffebee', fg: '#c62828' },
-  caregiver: { label: 'Care', bg: '#f3e5f5', fg: '#6a1b9a' },
-  pharmacy:  { label: 'Pharmacy',  bg: '#e8f5e9', fg: '#2e7d32' },
-  lab:       { label: 'Lab',       bg: '#e0f2f1', fg: '#00695c' },
+  doctor:        { label: 'Doctor',     bg: '#e3f2fd', fg: '#1565c0' },
+  ambulance:     { label: 'Ambulance',  bg: '#ffebee', fg: '#c62828' },
+  caregiver:     { label: 'Care',       bg: '#f3e5f5', fg: '#6a1b9a' },
+  pharmacy:      { label: 'Pharmacy',   bg: '#e8f5e9', fg: '#2e7d32' },
+  lab:           { label: 'Lab',        bg: '#e0f2f1', fg: '#00695c' },
+  physiotherapy: { label: 'Physio',     bg: '#e8f5e9', fg: '#2e7d32' },
+  counselling:   { label: 'Counsellor', bg: '#ede7f6', fg: '#4527a0' },
+  nutrition:     { label: 'Nutrition',  bg: '#fff3e0', fg: '#ef6c00' },
 };
 
 // Where each role's own full verification tab lives — used so a group's
@@ -8485,11 +9417,14 @@ const _PENDING_ROLE_BADGES = {
 // of always Doctors, which is what made partner requests look like they
 // belonged to the doctor queue.
 const _PENDING_ROLE_NAV = {
-  doctor:    { tab: 'doctors',            title: 'Doctors' },
-  ambulance: { tab: 'ambulance-partners',  title: 'Ambulance Partners' },
-  caregiver: { tab: 'caregiver-partners',  title: 'Care Partners' },
-  pharmacy:  { tab: 'pharmacy-partners',   title: 'Pharmacy Partners' },
-  lab:       { tab: 'lab-partners',        title: 'Lab Partners' },
+  doctor:        { tab: 'doctors',             title: 'Doctors' },
+  ambulance:     { tab: 'ambulance-partners',  title: 'Ambulance Partners' },
+  caregiver:     { tab: 'caregiver-partners',  title: 'Care Partners' },
+  pharmacy:      { tab: 'pharmacy-partners',   title: 'Pharmacy Partners' },
+  lab:           { tab: 'lab-partners',        title: 'Lab Partners' },
+  physiotherapy: { tab: 'physio-partners',     title: 'Physiotherapist Partners' },
+  counselling:   { tab: 'counselling-partners',title: 'Counsellor Partners' },
+  nutrition:     { tab: 'nutrition-partners',  title: 'Nutritionist Partners' },
 };
 
 const PENDING_ROWS_PER_GROUP = 4;
@@ -8567,10 +9502,12 @@ window.switchTab = function (tab, title) {
   if (_prevSwitchTab_partners) _prevSwitchTab_partners(tab, title);
   // Cache-aware (no `force`): repeatedly switching between partner tabs must
   // not re-read the whole ledger every time. The Refresh button forces.
-  if (tab === 'ambulance-partners') loadPartnerEarnings('ambulance');
-  if (tab === 'caregiver-partners') loadPartnerEarnings('caregiver');
-  if (tab === 'pharmacy-partners')  loadPartnerEarnings('pharmacy');
-  if (tab === 'lab-partners')       loadPartnerEarnings('lab');
+  if (tab === 'ambulance-partners')    loadPartnerEarnings('ambulance');
+  if (tab === 'caregiver-partners')    loadPartnerEarnings('caregiver');
+  if (tab === 'pharmacy-partners')     loadPartnerEarnings('pharmacy');
+  if (tab === 'lab-partners')          loadPartnerEarnings('lab');
+  if (tab === 'physio-partners')       loadPartnerEarnings('physiotherapy');
+  if (tab === 'counselling-partners')  loadPartnerEarnings('counselling');
 };
 
 // ============================================================================

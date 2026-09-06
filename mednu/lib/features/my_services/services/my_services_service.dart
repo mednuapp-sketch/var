@@ -23,6 +23,7 @@ class MyServicesService {
       _serviceRequestsStream(uid),
       _nutritionStream(uid),
       _ordersStream(uid),
+      _hospitalBillPaymentsStream(uid),
     ]);
   }
 
@@ -44,6 +45,8 @@ class MyServicesService {
           return UnifiedBooking.fromNutrition(d, snap.id);
         case BookingSource.medicineOrder:
           return UnifiedBooking.fromOrder(d, snap.id);
+        case BookingSource.hospitalBillPayment:
+          return UnifiedBooking.fromHospitalBillPayment(d, snap.id);
       }
     });
   }
@@ -174,6 +177,19 @@ class MyServicesService {
             .toList());
   }
 
+  static Stream<List<UnifiedBooking>> _hospitalBillPaymentsStream(String uid) {
+    return _db
+        .collection('hospital_bill_payments')
+        .where('patientId', isEqualTo: uid)
+        .orderBy('createdAt', descending: true)
+        .limit(_historyLimit)
+        .snapshots()
+        .handleError((e) => debugPrint('MyServicesService: hospital_bill_payments stream error: $e'))
+        .map((s) => s.docs
+            .map((d) => UnifiedBooking.fromHospitalBillPayment(d.data(), d.id))
+            .toList());
+  }
+
   // ── Stream merger ───────────────────────────────────────────────────────────
 
   static Stream<List<UnifiedBooking>> _mergeStreams(
@@ -236,6 +252,7 @@ class MyServicesService {
       case BookingSource.serviceRequest: return 'service_requests';
       case BookingSource.nutrition:      return 'nutrition_appointments';
       case BookingSource.medicineOrder:  return 'orders';
+      case BookingSource.hospitalBillPayment: return 'hospital_bill_payments';
     }
   }
 }

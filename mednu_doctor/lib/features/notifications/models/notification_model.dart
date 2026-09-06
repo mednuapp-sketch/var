@@ -56,7 +56,11 @@ class NotificationModel {
       body:      d['body'] as String? ?? '',
       createdAt: (d['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       isRead:    d['isRead'] as bool? ?? false,
-      payload:   (d['payload'] as Map<String, dynamic>?) ?? {},
+      // `provider_notifications` (written by the backend's
+      // `_sendProviderNotification` helper) names this field `data`, not
+      // `payload` — accept either so that collection renders correctly too.
+      payload:   (d['payload'] as Map<String, dynamic>?) ??
+          (d['data'] as Map<String, dynamic>?) ?? {},
     );
   }
 

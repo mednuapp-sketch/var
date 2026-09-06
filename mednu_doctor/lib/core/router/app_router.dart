@@ -19,8 +19,10 @@ import '../../features/consultations/screens/incoming_request_screen.dart';
 import '../../features/consultations/screens/doctor_video_call_screen.dart';
 import '../../features/prescription/screens/write_prescription_screen.dart';
 import '../../features/patients/screens/patient_detail_screen.dart';
+import '../../features/patients/screens/pre_consultation_summary_screen.dart';
 import '../../features/patients/screens/patients_list_screen.dart';
 import '../../features/schedule/screens/availability_screen.dart';
+import '../../features/schedule/screens/block_slots_screen.dart';
 import '../../features/profile/screens/doctor_profile_screen.dart';
 import '../../features/notifications/screens/doctor_notifications_screen.dart';
 import '../../features/earnings/screens/doctor_earnings_screen.dart';
@@ -86,6 +88,7 @@ import '../../features/nutrition/screens/nutrition_appointments_screen.dart';
 import '../../features/nutrition/screens/nutrition_appointment_detail_screen.dart';
 import '../../features/nutrition/screens/nutrition_earnings_screen.dart';
 import '../../features/nutrition/screens/nutrition_profile_screen.dart';
+import '../../features/hospital_billing/screens/hospital_payments_screen.dart';
 
 /// Bridges Firebase's auth stream into a [Listenable] so GoRouter's
 /// [refreshListenable] re-evaluates the redirect on every auth state change.
@@ -250,8 +253,10 @@ class AppRoutes {
   static const videoCall           = '/video-call';
   static const prescription        = '/prescription';
   static const patientDetail       = '/patient-detail';
+  static const preConsultationSummary = '/pre-consultation-summary';
   static const patients            = '/patients';
   static const schedule            = '/schedule';
+  static const blockSlots          = '/block-slots';
   static const editProfile         = '/edit-profile';
   static const earnings            = '/earnings';
   static const notifications       = '/notifications';
@@ -331,6 +336,9 @@ class AppRoutes {
   static const nutritionAppointmentDetail   = '/nutrition/appointment-detail';
   static const nutritionEarnings            = '/nutrition/earnings';
   static const nutritionProfile             = '/nutrition/profile';
+
+  // ── Hospital billing-desk partner module ──────────────────────────────────
+  static const hospitalPayments = '/hospital/payments';
 }
 
 // Routes that unauthenticated users may visit.
@@ -510,8 +518,19 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           );
         },
       ),
+      GoRoute(
+        path: AppRoutes.preConsultationSummary,
+        builder: (c, s) {
+          final extra = s.extra as Map<String, dynamic>?;
+          return PreConsultationSummaryScreen(
+            appointmentId: extra?['appointmentId'] as String? ?? '',
+            patientName: extra?['patientName'] as String? ?? 'Patient',
+          );
+        },
+      ),
       GoRoute(path: AppRoutes.patients,        builder: (c, s) => const PatientsListScreen()),
       GoRoute(path: AppRoutes.schedule,        builder: (c, s) => const AvailabilityScreen()),
+      GoRoute(path: AppRoutes.blockSlots,      builder: (c, s) => const BlockSlotsScreen()),
       GoRoute(path: AppRoutes.editProfile,     builder: (c, s) => const DoctorProfileEditScreen()),
       GoRoute(path: AppRoutes.notifications,   builder: (c, s) => const DoctorNotificationsScreen()),
       GoRoute(path: AppRoutes.earnings,        builder: (c, s) => const DoctorEarningsScreen()),
@@ -703,6 +722,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(path: AppRoutes.nutritionEarnings, pageBuilder: (c, s) => const NoTransitionPage(child: NutritionEarningsScreen())),
       GoRoute(path: AppRoutes.nutritionProfile,  pageBuilder: (c, s) => const NoTransitionPage(child: NutritionProfileScreen())),
+
+      // ── Hospital billing-desk partner module ──────────────────────────────
+      GoRoute(path: AppRoutes.hospitalPayments, pageBuilder: (c, s) => const NoTransitionPage(child: HospitalPaymentsScreen())),
     ],
   );
 });

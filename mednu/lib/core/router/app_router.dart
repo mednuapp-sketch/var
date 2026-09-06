@@ -5,21 +5,25 @@ import '../../features/splash/splash_screen.dart';
 import '../../features/onboarding/onboarding_screen.dart';
 import '../../features/auth/screens/phone_entry_screen.dart';
 import '../../features/auth/screens/otp_screen.dart';
+import '../../features/auth/screens/terms_accept_screen.dart';
 import '../../features/auth/screens/register_screen.dart';
 import '../../features/auth/screens/mpin_screen.dart';
 import '../../features/auth/screens/create_mpin_screen.dart';
 import '../../features/home/screens/home_screen.dart';
 import '../../features/services/consultation/consultation_screen.dart';
 import '../../features/services/consultation/video_call_screen.dart';
+import '../../features/services/consultation/guest_join_screen.dart';
+import '../../features/services/consultation/guest_video_call_screen.dart';
 import '../../features/services/consultation/outgoing_call_screen.dart';
 import '../../features/services/consultation/incoming_call_screen.dart';
 import '../../features/services/emergency/emergency_screen.dart';
 import '../../features/services/emergency/manage_contacts_screen.dart';
 import '../../features/services/medicine_delivery/medicine_screen.dart';
+import '../../features/medicines/screens/my_medicines_screen.dart';
 import '../../features/services/ambulance/ambulance_screen.dart';
 import '../../features/services/ambulance/ambulance_live_tracking_screen.dart';
 import '../../features/services/diagnostics/diagnostics_screen.dart';
-import '../../features/services/lab_tests/lab_tests_screen.dart';
+import '../../features/services/diagnostics/screens/lab_menu_screen.dart';
 import '../../features/services/caregivers/caregivers_screen.dart';
 import '../../features/services/care_assistant/care_assistant_screen.dart';
 import '../../features/services/nutrition/screens/nutrition_home_screen.dart';
@@ -31,14 +35,20 @@ import '../../features/services/nutrition/screens/meal_tracking_screen.dart';
 import '../../features/services/nutrition/screens/bmi_calculator_screen.dart';
 import '../../features/services/nutrition/screens/nutrition_goals_screen.dart';
 import '../../features/services/physiotherapy/physio_screen.dart';
+import '../../features/services/physiotherapy/screens/physiotherapist_list_screen.dart';
+import '../../features/services/physiotherapy/screens/physiotherapist_profile_screen.dart';
 import '../../features/services/counselling/counselling_screen.dart';
 import '../../features/services/equipment_hiring/equipment_screen.dart';
+import '../../features/services/equipment_hiring/equipment_vendors_screen.dart';
 import '../../features/services/appointment/appointment_screen.dart';
 import '../../features/doctors/screens/doctors_list_screen.dart';
 import '../../features/doctors/screens/doctor_profile_screen.dart';
 import '../../features/doctors/screens/favourite_doctors_screen.dart';
 import '../../features/doctors/screens/specialities_screen.dart';
 import '../../features/hospitals/screens/hospitals_screen.dart';
+import '../../features/hospitals/screens/pay_hospital_bill_screen.dart';
+import '../../features/hospitals/screens/hospital_bill_payment_success_screen.dart';
+import '../../features/hospitals/screens/hospital_appointment_booking_screen.dart';
 import '../../features/pharmacy/screens/pharmacy_screen.dart';
 import '../../features/records/screens/records_screen.dart';
 import '../../features/wallet/screens/wallet_screen.dart';
@@ -48,7 +58,6 @@ import '../../features/profile/screens/family_management_screen.dart';
 import '../../features/profile/screens/family_member_detail_screen.dart';
 import '../../features/profile/screens/settings_screen.dart';
 import '../../features/education/screens/education_screen.dart';
-import '../../features/premium/screens/premium_screen.dart';
 import '../../features/health/screens/health_dashboard_screen.dart';
 import '../../features/health/screens/period_tracker_screen.dart';
 import '../../features/health/screens/water_reminder_screen.dart';
@@ -56,6 +65,8 @@ import '../../features/health/screens/post_consultation_screen.dart';
 import '../../features/health/screens/prescription_viewer_screen.dart';
 import '../../features/tracking/screens/order_tracking_screen.dart';
 import '../../features/payment/screens/payment_screen.dart';
+import '../../features/intake/screens/pre_consultation_form_screen.dart';
+import '../../features/intake/screens/booking_summary_screen.dart';
 import '../../features/payment/screens/payment_history_screen.dart';
 import '../../features/payment/screens/invoice_screen.dart';
 import '../../features/referral/screens/referral_screen.dart';
@@ -90,6 +101,7 @@ class AppRoutes {
   static const onboarding         = '/onboarding';
   static const login              = '/login';   // PhoneEntryScreen
   static const otp                = '/otp';
+  static const termsAccept        = '/terms-accept';
   static const register           = '/register';
   static const mpin               = '/mpin';
   static const createMpin         = '/create-mpin';
@@ -99,16 +111,21 @@ class AppRoutes {
   static const appointment        = '/appointment';
   static const consultation       = '/consultation';
   static const videoCall          = '/consultation/video/:id';
+  static const guestJoin          = '/guest-join';
+  static const guestVideoCall     = '/guest-join/video';
   static const emergency          = '/emergency';
   static const sosContacts        = '/sos/contacts';
   static const medicine           = '/medicine';
+  static const pharmacyMenu       = '/pharmacy-menu/:id';
   static const diagnostics        = '/diagnostics';
-  static const labTests           = '/lab-tests';
+  static const labMenu            = '/lab-menu/:id';
   static const ambulance          = '/ambulance';
   static const ambulanceLiveTracking = '/ambulance/live-tracking';
   static const caregivers         = '/caregivers';
   static const careAssistant      = '/care-assistant';
   static const physio             = '/physio';
+  static const physioTherapistList    = '/physio/therapists';
+  static const physioTherapistProfile = '/physio/therapist/:id';
   static const nutrition                      = '/nutrition';
   static const nutritionNutritionists         = '/nutrition/nutritionists';
   static const nutritionNutritionistProfile   = '/nutrition/nutritionist/:id';
@@ -119,8 +136,13 @@ class AppRoutes {
   static const nutritionGoals                 = '/nutrition/goals';
   static const counselling        = '/counselling';
   static const equipment          = '/equipment';
+  static const equipmentVendors   = '/equipment-vendors';
+  static const equipmentMenu      = '/equipment-menu/:id';
   static const cart               = '/cart';
   static const hospitals          = '/hospitals';
+  static const hospitalBillPay    = '/hospitals/pay-bill';
+  static const hospitalBillPaymentSuccess = '/hospitals/pay-bill/success';
+  static const hospitalAppointment = '/hospitals/book-appointment';
   static const pharmacy           = '/pharmacy';
   static const records            = '/records';
   static const wallet             = '/wallet';
@@ -131,14 +153,16 @@ class AppRoutes {
   static const favouriteDoctors   = '/profile/favourites';
   static const settings           = '/profile/settings';
   static const education          = '/education';
-  static const premium            = '/premium';
   static const healthDashboard    = '/health';
   static const periodTracker      = '/health/period';
   static const waterReminder      = '/health/water';
   static const postConsultation   = '/post-consultation';
   static const prescriptionViewer = '/prescription';
+  static const myMedicines        = '/my-medicines';
   static const orderTracking      = '/order-tracking';
   static const payment            = '/payment';
+  static const preConsultationForm = '/pre-consultation';
+  static const bookingSummary     = '/booking-summary';
   static const paymentHistory     = '/payment/history';
   static const invoice            = '/payment/invoice';
   static const referral           = '/referral';
@@ -211,6 +235,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         },
       ),
       GoRoute(
+        path: AppRoutes.termsAccept,
+        builder: (c, s) {
+          final extra = s.extra as Map<String, dynamic>? ?? {};
+          return TermsAcceptScreen(phone: extra['phone'] as String? ?? '');
+        },
+      ),
+      GoRoute(
         path: AppRoutes.register,
         builder: (c, s) {
           final extra = s.extra as Map<String, dynamic>? ?? {};
@@ -247,6 +278,29 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           );
         },
       ),
+      GoRoute(
+        path: AppRoutes.guestJoin,
+        builder: (c, s) {
+          final extra = s.extra as Map<String, dynamic>? ?? {};
+          return GuestJoinScreen(
+            appointmentId: extra['appointmentId'] as String? ?? '',
+            token: extra['token'] as String? ?? '',
+            exp: extra['exp'] as int? ?? 0,
+          );
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.guestVideoCall,
+        builder: (c, s) {
+          final extra = s.extra as Map<String, dynamic>? ?? {};
+          return GuestVideoCallScreen(
+            appointmentId: extra['appointmentId'] as String? ?? '',
+            consultationId: extra['consultationId'] as String? ?? '',
+            doctorName: extra['doctorName'] as String? ?? 'your doctor',
+            doctorSpecialty: extra['doctorSpecialty'] as String? ?? '',
+          );
+        },
+      ),
       GoRoute(path: AppRoutes.emergency,          builder: (c, s) => const EmergencyScreen()),
       GoRoute(path: AppRoutes.sosContacts,        builder: (c, s) => const ManageContactsScreen()),
       GoRoute(path: AppRoutes.medicine,           builder: (c, s) {
@@ -257,6 +311,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         }
         return MedicineScreen(prescriptionMedicines: rxMeds);
       }),
+      GoRoute(path: AppRoutes.pharmacyMenu,        builder: (c, s) => MedicineScreen(pharmacyId: s.pathParameters['id'])),
       GoRoute(path: AppRoutes.ambulance,          builder: (c, s) => const AmbulanceScreen()),
       GoRoute(
         path: AppRoutes.ambulanceLiveTracking,
@@ -266,7 +321,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         },
       ),
       GoRoute(path: AppRoutes.diagnostics,        builder: (c, s) => const DiagnosticsScreen()),
-      GoRoute(path: AppRoutes.labTests,           builder: (c, s) => const LabTestsScreen()),
+      GoRoute(path: AppRoutes.labMenu,            builder: (c, s) => LabMenuScreen(labId: s.pathParameters['id'] ?? '')),
       GoRoute(path: AppRoutes.caregivers,         builder: (c, s) => const CaregiversScreen()),
       GoRoute(path: AppRoutes.careAssistant,      builder: (c, s) => const CareAssistantScreen()),
       GoRoute(path: AppRoutes.nutrition,                    builder: (c, s) => const NutritionHomeScreen()),
@@ -278,14 +333,53 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: AppRoutes.nutritionBmi,                 builder: (c, s) => const BmiCalculatorScreen()),
       GoRoute(path: AppRoutes.nutritionGoals,               builder: (c, s) => const NutritionGoalsScreen()),
       GoRoute(path: AppRoutes.physio,             builder: (c, s) => const PhysioScreen()),
+      GoRoute(path: AppRoutes.physioTherapistList, builder: (c, s) => const PhysiotherapistListScreen()),
+      GoRoute(
+        path: AppRoutes.physioTherapistProfile,
+        builder: (c, s) => PhysiotherapistProfileScreen(physiotherapistId: s.pathParameters['id'] ?? ''),
+      ),
       GoRoute(path: AppRoutes.counselling,        builder: (c, s) => const CounsellingScreen()),
       GoRoute(path: AppRoutes.equipment,          builder: (c, s) => const EquipmentScreen()),
+      GoRoute(path: AppRoutes.equipmentVendors,   builder: (c, s) => const EquipmentVendorsScreen()),
+      GoRoute(path: AppRoutes.equipmentMenu,      builder: (c, s) {
+        final extra = s.extra as Map<String, dynamic>? ?? {};
+        return EquipmentScreen(
+          vendorId: s.pathParameters['id'],
+          vendorName: extra['vendorName'] as String?,
+        );
+      }),
       GoRoute(path: AppRoutes.cart,               builder: (c, s) => const CartScreen()),
       GoRoute(path: AppRoutes.appointment,        builder: (c, s) => const AppointmentScreen()),
-      GoRoute(path: AppRoutes.doctors,            builder: (c, s) => DoctorsListScreen(initialSpecialty: s.uri.queryParameters['specialty'], initialMode: s.uri.queryParameters['mode'], initialType: s.uri.queryParameters['type'], initialDuration: int.tryParse(s.uri.queryParameters['duration'] ?? ''))),
+      GoRoute(path: AppRoutes.doctors,            builder: (c, s) => DoctorsListScreen(initialSpecialty: s.uri.queryParameters['specialty'], initialMode: s.uri.queryParameters['mode'], initialType: s.uri.queryParameters['type'], initialDuration: int.tryParse(s.uri.queryParameters['duration'] ?? ''), initialTherapyTitle: s.uri.queryParameters['title'])),
       GoRoute(path: AppRoutes.specialities,       builder: (c, s) => const SpecialitiesScreen()),
       GoRoute(path: AppRoutes.doctorProfile,      builder: (c, s) => DoctorProfileScreen(doctorId: s.pathParameters['id'] ?? '', initialDuration: int.tryParse(s.uri.queryParameters['duration'] ?? ''), initialMode: s.uri.queryParameters['mode'], rescheduleAppointmentId: s.uri.queryParameters['rescheduleId'], rescheduleType: s.uri.queryParameters['rescheduleType'])),
       GoRoute(path: AppRoutes.hospitals,          builder: (c, s) => HospitalsScreen(initialQuery: s.uri.queryParameters['q'])),
+      GoRoute(path: AppRoutes.hospitalBillPay,    builder: (c, s) {
+        final extra = s.extra as Map<String, dynamic>? ?? {};
+        return PayHospitalBillScreen(
+          hospitalId: extra['hospitalId'] as String? ?? '',
+          hospitalName: extra['hospitalName'] as String? ?? '',
+        );
+      }),
+      GoRoute(path: AppRoutes.hospitalBillPaymentSuccess, builder: (c, s) {
+        final extra = s.extra as Map<String, dynamic>? ?? {};
+        return HospitalBillPaymentSuccessScreen(
+          hospitalName: extra['hospitalName'] as String? ?? '',
+          billAmount: (extra['billAmount'] as num?)?.toDouble() ?? 0,
+          finalAmount: (extra['finalAmount'] as num?)?.toDouble() ?? 0,
+          discountLabel: extra['discountLabel'] as String?,
+          transactionId: extra['transactionId'] as String? ?? '',
+        );
+      }),
+      GoRoute(path: AppRoutes.hospitalAppointment, builder: (c, s) {
+        final extra = s.extra as Map<String, dynamic>? ?? {};
+        return HospitalAppointmentBookingScreen(
+          hospitalId: extra['hospitalId'] as String? ?? '',
+          hospitalName: extra['hospitalName'] as String? ?? '',
+          hospitalAddress: extra['hospitalAddress'] as String? ?? '',
+          hospitalPhone: extra['hospitalPhone'] as String? ?? '',
+        );
+      }),
       GoRoute(path: AppRoutes.pharmacy,           builder: (c, s) => const PharmacyScreen()),
       GoRoute(path: AppRoutes.records, builder: (c, s) {
         final extra = s.extra as Map<String, dynamic>?;
@@ -303,7 +397,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: AppRoutes.familyMemberDetail, builder: (c, s) => FamilyMemberDetailScreen(member: s.extra as Map<String, dynamic>? ?? {})),
       GoRoute(path: AppRoutes.settings,           builder: (c, s) => const SettingsScreen()),
       GoRoute(path: AppRoutes.education,          builder: (c, s) => const EducationScreen()),
-      GoRoute(path: AppRoutes.premium,            builder: (c, s) => const PremiumScreen()),
 GoRoute(path: AppRoutes.healthDashboard,    builder: (c, s) => const HealthDashboardScreen()),
 GoRoute(path: AppRoutes.periodTracker,      builder: (c, s) => const PeriodTrackerScreen()),
 GoRoute(path: AppRoutes.waterReminder,      builder: (c, s) => const WaterReminderScreen()),
@@ -321,6 +414,7 @@ GoRoute(
   },
 ),
 GoRoute(path: AppRoutes.prescriptionViewer, builder: (c, s) => PrescriptionViewerScreen(data: s.extra as Map<String, dynamic>?)),
+      GoRoute(path: AppRoutes.myMedicines, builder: (c, s) => const MyMedicinesScreen()),
 GoRoute(path: AppRoutes.orderTracking,      builder: (c, s) => OrderTrackingScreen(orderData: s.extra as Map<String, dynamic>?)),
 GoRoute(path: AppRoutes.payment, builder: (c, s) {
   final extra = s.extra as Map<String, dynamic>?;
@@ -335,6 +429,35 @@ GoRoute(path: AppRoutes.payment, builder: (c, s) {
   );
 }),
 GoRoute(path: AppRoutes.paymentHistory, builder: (c, s) => const PaymentHistoryScreen()),
+GoRoute(
+  path: AppRoutes.preConsultationForm,
+  builder: (c, s) {
+    final extra = s.extra as Map<String, dynamic>? ?? {};
+    return PreConsultationFormScreen(
+      appointmentId: extra['appointmentId'] as String?,
+      doctorId: extra['doctorId'] as String? ?? '',
+      doctorName: extra['doctorName'] as String? ?? 'Doctor',
+      doctorSpecialty: extra['doctorSpecialty'] as String? ?? '',
+    );
+  },
+),
+GoRoute(
+  path: AppRoutes.bookingSummary,
+  builder: (c, s) {
+    final extra = s.extra as Map<String, dynamic>? ?? {};
+    return BookingSummaryScreen(
+      success: extra['success'] as bool? ?? false,
+      doctorName: extra['doctorName'] as String? ?? 'Doctor',
+      doctorSpecialty: extra['doctorSpecialty'] as String? ?? '',
+      date: extra['date'] as String?,
+      time: extra['time'] as String?,
+      consultationType: extra['consultationType'] as String?,
+      fee: extra['fee'] as String?,
+      formData: (extra['formData'] as Map?)?.cast<String, dynamic>(),
+      failureReason: extra['failureReason'] as String?,
+    );
+  },
+),
 GoRoute(path: AppRoutes.invoice, builder: (c, s) {
   final extra = s.extra as Map<String, dynamic>?;
   return InvoiceScreen(paymentId: extra?['paymentId'] as String? ?? '');

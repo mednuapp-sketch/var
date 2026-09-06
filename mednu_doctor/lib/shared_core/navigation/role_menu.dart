@@ -279,6 +279,18 @@ List<NavItem> buildMenuForRole(AppRole role) {
           route: AppRoutes.nutritionProfile,
         ),
       ];
+    case AppRole.hospital:
+      // Read-only: payment status is set server-side by the patient app's
+      // payment pipeline, there's nothing else for the billing desk to do —
+      // one destination, no Earnings/Profile items like the other roles.
+      return const [
+        NavItem(
+          label: 'Payments',
+          icon: Icons.receipt_long_outlined,
+          activeIcon: Icons.receipt_long_rounded,
+          route: AppRoutes.hospitalPayments,
+        ),
+      ];
     case AppRole.admin:
       // No feature module exists yet for this role — the app shell should
       // hide role-switching to it (or show a "coming soon" state) rather

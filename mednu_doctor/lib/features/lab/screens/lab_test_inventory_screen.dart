@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
@@ -118,10 +119,17 @@ class LabTestInventoryScreen extends ConsumerWidget {
       ),
     );
 
-    nameCtrl.dispose();
-    categoryCtrl.dispose();
-    priceCtrl.dispose();
-    durationCtrl.dispose();
+    // Deferred, not synchronous: disposing right as showModalBottomSheet's
+    // Future resolves is a real crash here — the sheet's TextFields are still
+    // mounted and mid-exit-animation at that exact point, not actually
+    // unmounted yet (default bottom-sheet transition is ~250ms; 400ms leaves
+    // comfortable margin).
+    unawaited(Future.delayed(const Duration(milliseconds: 400), () {
+      nameCtrl.dispose();
+      categoryCtrl.dispose();
+      priceCtrl.dispose();
+      durationCtrl.dispose();
+    }));
   }
 
   @override

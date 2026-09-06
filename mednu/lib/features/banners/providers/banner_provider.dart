@@ -11,3 +11,8 @@ final bannerRepositoryProvider = Provider<BannerRepository>((ref) {
 final activeBannerProvider = FutureProvider<BannerModel?>((ref) async {
   return ref.read(bannerRepositoryProvider).fetchActiveBanner();
 });
+
+/// Fetches every currently active banner for the home screen's ad carousel.
+final activeBannersProvider = FutureProvider<List<BannerModel>>((ref) async {
+  return ref.read(bannerRepositoryProvider).fetchActiveBanners();
+});

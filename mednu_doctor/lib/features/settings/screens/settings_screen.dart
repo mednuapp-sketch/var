@@ -72,12 +72,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _setApptReminderMinutes(int minutes) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
     await AppointmentReminderService.setReminderMinutes(minutes);
     if (mounted) setState(() => _apptReminderMinutes = minutes);
+    if (uid != null) {
+      try {
+        await AppointmentReminderService.resyncAll(uid);
+      } catch (_) {}
+    }
   }
 
   void _showReminderTimingPicker() {
-    const options = [5, 10, 15, 30, 60];
+    const options = [5, 10, 15, 30, 60, 120, 180];
     showDialog<int>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -90,7 +96,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: options.map((m) {
-            final label    = m >= 60 ? '1 hour' : '$m minutes';
+            final label    = m >= 60 ? '${m ~/ 60} hour${m >= 120 ? 's' : ''}' : '$m minutes';
             final selected = _apptReminderMinutes == m;
             return ListTile(
               dense: true,

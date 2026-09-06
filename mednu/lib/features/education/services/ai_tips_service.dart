@@ -1,12 +1,17 @@
 import 'package:dio/dio.dart';
 
 class AiTipsService {
-  // Injected via --dart-define=GEMINI_API_KEY=... at build time.
-  // Restrict this key in Google Cloud Console to package com.mednu.mednu + release SHA-1.
-  static const String _apiKey = String.fromEnvironment(
-    'GEMINI_API_KEY',
-    defaultValue: 'AIzaSyAUK46gRgthH-vxhZkFP8SM4UqSmpRbJsE',
-  );
+  // Injected via --dart-define=GEMINI_API_KEY=... at build time — no
+  // hardcoded fallback. A real API key (unlike a Maps SDK key) isn't
+  // restrictable to an app package/SHA-1, so baking one into the APK as a
+  // default means anyone who decompiles the app can make Gemini calls billed
+  // to this account. Every build that omits --dart-define now just falls
+  // back to the static _fallbackTips below (see the catch blocks) instead of
+  // silently shipping a real key. The key that used to be hardcoded here is
+  // already exposed via git history regardless of this change — rotate it in
+  // Google AI Studio and supply the new one only via --dart-define going
+  // forward.
+  static const String _apiKey = String.fromEnvironment('GEMINI_API_KEY');
   static const String _apiUrl =
       'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
 

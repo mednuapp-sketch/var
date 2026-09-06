@@ -19,6 +19,55 @@ initializeApp();
 // Fires when a patient creates a new consultation document.
 // Reads the assigned doctor's FCM token and sends a high-priority call
 // notification so the doctor is alerted even when the app is killed.
+// Doctor-initiated calls (dashboard_screen.dart's "Start Consultation" for a
+// *scheduled* appointment — see `callerType: 'doctor'` written there) need to
+// ring the PATIENT, not the doctor who just tapped the button. The patient
+// app (mednu/lib/main.dart) already fully handles `type:'incoming_doctor_call'`
+// in its background handler, notification-tap router, and foreground
+// listener — it was just never actually sent. Deliberately data-only, no
+// `notification` payload at any level: the client calls
+// CallNotificationService.showIncomingCall() itself for this type in every
+// app state, so a notification payload here would make the OS additionally
+// auto-display a generic system notification alongside it.
+async function _pushIncomingDoctorCallToPatient(data, consultationId) {
+  const patientId = data.patientId;
+  if (!patientId) return;
+
+  let fcmToken = null;
+  try {
+    const userDoc = await getFirestore().collection("users").doc(patientId).get();
+    if (userDoc.exists) fcmToken = userDoc.data()?.fcmToken || null;
+  } catch (_) {}
+  if (!fcmToken) {
+    console.log(`Patient ${patientId} has no FCM token — incoming doctor call push skipped.`);
+    return;
+  }
+
+  const message = {
+    token: fcmToken,
+    data: {
+      type: "incoming_doctor_call",
+      consultationId,
+      doctorId: data.doctorId || "",
+      doctorName: data.doctorName || "Doctor",
+      doctorSpecialty: data.doctorSpecialty || "",
+      doctorPhotoUrl: data.doctorPhotoUrl || "",
+    },
+    android: { priority: "high" },
+    apns: {
+      headers: { "apns-priority": "10", "apns-push-type": "background" },
+      payload: { aps: { "content-available": 1 } },
+    },
+  };
+
+  try {
+    const response = await getMessaging().send(message);
+    console.log(`Incoming-doctor-call FCM sent to patient ${patientId}: ${response}`);
+  } catch (err) {
+    console.error(`Incoming-doctor-call FCM failed for patient ${patientId}:`, err);
+  }
+}
+
 exports.onNewConsultation = onDocumentCreated(
   "consultations/{consultationId}",
   async (event) => {
@@ -27,6 +76,12 @@ exports.onNewConsultation = onDocumentCreated(
 
     const data = snap.data();
     if (data.status !== "pending") return;
+
+    const consultationId = event.params.consultationId;
+    if (data.callerType === "doctor") {
+      await _pushIncomingDoctorCallToPatient(data, consultationId);
+      return;
+    }
 
     const doctorId = data.doctorId;
     if (!doctorId) return;
@@ -47,7 +102,6 @@ exports.onNewConsultation = onDocumentCreated(
 
     const patientName = data.patientName || "Patient";
     const complaint = data.chiefComplaint || "";
-    const consultationId = event.params.consultationId;
     const consultationType = data.consultationType || "Video";
 
     const message = {
@@ -232,49 +286,17 @@ exports.onAppointmentCompleted = onDocumentUpdated(
 
     if (existingReview.exists && existingReview.data().reviewed) return;
 
-    // Get patient's FCM token.
-    let fcmToken = null;
-    const userDoc = await db.collection("users").doc(patientId).get();
-    if (userDoc.exists) fcmToken = userDoc.data().fcmToken || null;
-
-    if (!fcmToken) return;
-
-    const message = {
-      token: fcmToken,
-      data: {
-        type: "review_prompt",
-        appointmentId,
-        doctorId: after.doctorId || "",
-        doctorName,
-      },
-      android: {
-        priority: "normal",
-        notification: {
-          channelId: "default",
-          title: `How was your visit with ${doctorName}?`,
-          body: "Share your experience to help other patients.",
-        },
-      },
-      apns: {
-        headers: { "apns-priority": "5" },
-        payload: {
-          aps: {
-            alert: {
-              title: `How was your visit with ${doctorName}?`,
-              body: "Share your experience to help other patients.",
-            },
-            sound: "default",
-          },
-        },
-      },
-    };
-
-    try {
-      await getMessaging().send(message);
-      console.log(`Review prompt sent to patient ${patientId} for appt ${appointmentId}`);
-    } catch (err) {
-      console.error("Review prompt FCM failed:", err);
-    }
+    // Was FCM-only (no in-app record) — switched to the shared helper so
+    // the prompt also shows up in the patient's notification bell, not just
+    // as a push that's easy to miss/dismiss.
+    await _sendPatientNotification(db, getMessaging(), patientId, {
+      title: `How was your visit with ${doctorName}?`,
+      body: "Share your experience to help other patients.",
+      type: "review_prompt",
+      bookingId: appointmentId,
+      doctorId: after.doctorId || "",
+      extraData: { doctorName },
+    });
   }
 );
 
@@ -1176,7 +1198,18 @@ exports.onAppointmentStatusChange = onDocumentUpdated(
   async (event) => {
     const before = event.data.before.data();
     const after  = event.data.after.data();
-    if (before.status === after.status) return;
+    // A doctor-initiated reschedule (dashboard_screen.dart in mednu_doctor)
+    // deliberately keeps status == 'booked' rather than writing a separate
+    // 'rescheduled' status value: the patient app's upcoming-appointments
+    // query filters strictly on status == 'booked' (appointment_screen.dart),
+    // so a literal 'rescheduled' status would silently drop the appointment
+    // out of the patient's list entirely. That means this can't rely on the
+    // status-changed check alone to notice a reschedule — it has to also
+    // watch date/time.
+    const statusChanged = before.status !== after.status;
+    const rescheduled = before.status === "booked" && after.status === "booked" &&
+      (before.date !== after.date || before.time !== after.time);
+    if (!statusChanged && !rescheduled) return;
 
     const patientId = after.patientId;
     if (!patientId) return;
@@ -1186,6 +1219,22 @@ exports.onAppointmentStatusChange = onDocumentUpdated(
     const apptId    = event.params.appointmentId;
     const doctorName = after.doctorName || "your doctor";
     const doctorId   = after.doctorId   || "";
+
+    // Appointment is no longer going to happen (or already happened) —
+    // delete the doctor's queued scheduled_reminders docs so a stale
+    // "starting now" / T-N-min push can't fire after the fact. This is the
+    // only cleanup path for a patient-initiated cancel/reject: the doctor
+    // app only cancels its own queued reminders on a doctor-initiated
+    // cancel/complete action, so without this a patient cancelling never
+    // reaches the doctor's queued reminders.
+    if (doctorId && ["rejected", "declined", "cancelled", "completed"].includes(after.status)) {
+      try {
+        const batch = db.batch();
+        batch.delete(db.collection("scheduled_reminders").doc(`${doctorId}_appt_${apptId}_reminder`));
+        batch.delete(db.collection("scheduled_reminders").doc(`${doctorId}_appt_${apptId}_start`));
+        await batch.commit();
+      } catch (_) {}
+    }
 
     // Format appointment date/time if available.
     let formattedDt = "";
@@ -1207,11 +1256,19 @@ exports.onAppointmentStatusChange = onDocumentUpdated(
 
     switch (after.status) {
       case "booked":
-        title = "Appointment Booked";
-        body  = formattedDt
-          ? `Your appointment with Dr. ${doctorName} has been booked for ${formattedDt}.`
-          : `Your appointment with Dr. ${doctorName} has been successfully booked.`;
-        type  = "appointment_booked";
+        if (rescheduled) {
+          title = "Appointment Rescheduled";
+          body  = formattedDt
+            ? `Your appointment with Dr. ${doctorName} has been rescheduled to ${formattedDt}.`
+            : `Your appointment with Dr. ${doctorName} has been rescheduled.`;
+          type  = "appointment_rescheduled";
+        } else {
+          title = "Appointment Booked";
+          body  = formattedDt
+            ? `Your appointment with Dr. ${doctorName} has been booked for ${formattedDt}.`
+            : `Your appointment with Dr. ${doctorName} has been successfully booked.`;
+          type  = "appointment_booked";
+        }
         break;
       case "confirmed":
       case "accepted":
@@ -1564,9 +1621,12 @@ exports.onPregnancyCheckupStatusChange = onDocumentUpdated(
     const messaging = getMessaging();
     const checkupId = event.params.checkupId;
 
-    // Format checkup date if available.
+    // Format checkup date if available. `scheduledDate` is the field the
+    // Flutter model (mednu/lib/features/pregnancy/models/pregnancy_models.dart)
+    // actually writes — `checkupDate`/`scheduledAt`/`date` never existed on
+    // this doc, which silently left every notification below dateless.
     let formattedDate = "";
-    const rawDate = after.checkupDate || after.scheduledAt || after.date || null;
+    const rawDate = after.scheduledDate || null;
     if (rawDate) {
       try {
         const d = rawDate.toDate ? rawDate.toDate() : new Date(rawDate);
@@ -1580,6 +1640,13 @@ exports.onPregnancyCheckupStatusChange = onDocumentUpdated(
       confirmed:  ["Checkup Confirmed", formattedDate ? `Your pregnancy checkup on ${formattedDate} has been confirmed.` : "Your pregnancy checkup has been confirmed.", "pregnancy_checkup_confirmed"],
       completed:  ["Checkup Completed", "Your pregnancy checkup has been completed. Stay healthy!", "pregnancy_checkup_completed"],
       cancelled:  ["Checkup Cancelled", "Your pregnancy checkup has been cancelled. Please reschedule.", "pregnancy_checkup_cancelled"],
+      // The real status vocabulary (mednu's PregnancyCheckup model) is
+      // upcoming/completed/missed/cancelled — `booked`/`reminder`/`confirmed`
+      // above are legacy keys nothing ever writes; `missed` was the one
+      // status with a live writer (`markCheckupMissed` in
+      // pregnancy_provider.dart) that had no entry here at all, so a missed
+      // checkup silently sent no notification.
+      missed:     ["Checkup Missed", "You missed your pregnancy checkup. Please reschedule as soon as possible.", "pregnancy_checkup_missed"],
     };
 
     const entry = statusMap[after.status];
@@ -1621,6 +1688,14 @@ exports.onBroadcastCreated = onDocumentCreated(
     const db        = getFirestore();
     const messaging = getMessaging();
     const tokens    = [];
+    // mednu-admin's sendBroadcast() already writes the in-app
+    // patient_notifications/doctor_notifications record for every target,
+    // including 'all_doctors' (see app.js) — this function only ever
+    // handled the FCM push, and only ever collected patient tokens, so an
+    // 'all_doctors' (or the doctor half of 'all_users') broadcast got its
+    // bell entry but no push, i.e. never reached a doctor whose app was
+    // closed. doctorTokens closes that gap.
+    const doctorTokens = [];
 
     // ── Collect FCM tokens ───────────────────────────────────────────────────
     if (target === "all_patients" || target === "all_users") {
@@ -1638,6 +1713,22 @@ exports.onBroadcastCreated = onDocumentCreated(
       } while (lastDoc);
     }
 
+    if (target === "all_doctors" || target === "all_users") {
+      // Mirrors mednu-admin's own doctor fan-out: active doctors only.
+      let lastDoc = null;
+      do {
+        let q = db.collection("doctors").where("status", "==", "active")
+          .select("fcmToken").limit(500);
+        if (lastDoc) q = q.startAfter(lastDoc);
+        const page = await q.get();
+        page.forEach((doc) => {
+          const t = doc.data().fcmToken;
+          if (t) doctorTokens.push(t);
+        });
+        lastDoc = page.size === 500 ? page.docs[page.size - 1] : null;
+      } while (lastDoc);
+    }
+
     if (target === "specific_user" && targetUserId) {
       const userDoc = await db.collection("users").doc(targetUserId).get();
       if (userDoc.exists) {
@@ -1646,7 +1737,7 @@ exports.onBroadcastCreated = onDocumentCreated(
       }
     }
 
-    if (!tokens.length) {
+    if (!tokens.length && !doctorTokens.length) {
       console.log(`Broadcast ${event.params.broadcastId}: no FCM tokens — in-app only.`);
       return;
     }
@@ -1658,55 +1749,65 @@ exports.onBroadcastCreated = onDocumentCreated(
     let successCount = 0;
     let failCount    = 0;
 
-    // Send in 500-token chunks (FCM sendEachForMulticast limit).
-    for (let i = 0; i < tokens.length; i += 500) {
-      const chunk = tokens.slice(i, i + 500);
-      const msg = {
-        tokens: chunk,
-        data:   fcmData,
-        android: {
-          priority: "high",
-          notification: {
-            channelId:             "mednu_default_channel",
-            title,
-            body,
-            sound:                 "default",
-            defaultVibrateTimings: true,
-          },
-        },
-        apns: {
-          headers: { "apns-priority": "5" },
-          payload: {
-            aps: {
-              alert: { title, body },
-              sound: "default",
-              badge: 1,
+    // channelId differs per app: mednu registers 'mednu_default_channel' as
+    // its default notification channel; mednu_doctor never registered that
+    // one — 'incoming_call' is the only channel that actually exists on a
+    // doctor's device (see _notifyPartnerApproved above for the same
+    // reasoning), so a doctor-bound push must use it instead.
+    async function _sendChunked(tokenList, channelId) {
+      for (let i = 0; i < tokenList.length; i += 500) {
+        const chunk = tokenList.slice(i, i + 500);
+        const msg = {
+          tokens: chunk,
+          data:   fcmData,
+          android: {
+            priority: "high",
+            notification: {
+              channelId,
+              title,
+              body,
+              sound:                 "default",
+              defaultVibrateTimings: true,
             },
           },
-        },
-      };
+          apns: {
+            headers: { "apns-priority": "5" },
+            payload: {
+              aps: {
+                alert: { title, body },
+                sound: "default",
+                badge: 1,
+              },
+            },
+          },
+        };
 
-      try {
-        const res = await messaging.sendEachForMulticast(msg);
-        successCount += res.successCount;
-        failCount    += res.failureCount;
-      } catch (err) {
-        console.error(`Broadcast chunk ${Math.floor(i / 500) + 1} FCM error:`, err);
+        try {
+          const res = await messaging.sendEachForMulticast(msg);
+          successCount += res.successCount;
+          failCount    += res.failureCount;
+        } catch (err) {
+          console.error(`Broadcast chunk ${Math.floor(i / 500) + 1} (${channelId}) FCM error:`, err);
+        }
       }
     }
 
+    await _sendChunked(tokens, "mednu_default_channel");
+    await _sendChunked(doctorTokens, "incoming_call");
+
     // ── Mark broadcast as pushed ─────────────────────────────────────────────
+    const totalTokens = tokens.length + doctorTokens.length;
     try {
       await snap.ref.update({
         fcmSentAt:       FieldValue.serverTimestamp(),
-        fcmTokenCount:   tokens.length,
+        fcmTokenCount:   totalTokens,
         fcmSuccessCount: successCount,
         fcmFailCount:    failCount,
       });
     } catch (_) {}
 
     console.log(
-      `Broadcast ${event.params.broadcastId}: FCM ${successCount}/${tokens.length} sent, ${failCount} failed.`
+      `Broadcast ${event.params.broadcastId}: FCM ${successCount}/${totalTokens} sent, ${failCount} failed.`
     );
   }
 );
@@ -2659,6 +2760,7 @@ const _PROVIDER_FIELD_BY_SERVICE = {
   caregiver: "caregiverId",
   nursing: "caregiverId",
   home_care: "caregiverId",
+  physiotherapy: "physiotherapistId",
 };
 
 function _round2(n) {
@@ -2726,7 +2828,10 @@ async function _sendProviderNotification(db, messaging, providerId, opts) {
     // Providers may be doctors, labs, pharmacies, ambulances, or caregivers —
     // each keeps its profile in its own collection. Cheap enough to probe in
     // order since this only runs on real settlement/earnings events.
-    const candidates = ["doctors", "lab_profiles", "pharmacy_profiles", "ambulance_profiles", "caregiver_profiles"];
+    const candidates = [
+      "doctors", "lab_profiles", "pharmacy_profiles", "ambulance_profiles", "caregiver_profiles",
+      "nutritionist_profiles", "physiotherapist_profiles", "counsellor_profiles",
+    ];
     for (const col of candidates) {
       const snap = await db.collection(col).doc(providerId).get();
       if (snap.exists && snap.get("fcmToken")) { fcmToken = snap.get("fcmToken"); break; }
@@ -2747,6 +2852,39 @@ async function _sendProviderNotification(db, messaging, providerId, opts) {
   } catch (err) {
     console.error(`FCM send failed for provider ${providerId}:`, err.message);
   }
+}
+
+// ── New-job broadcast helper ─────────────────────────────────────────────────
+// Every pool-based vertical's "new job created" trigger used to write the
+// job doc and stop — a provider only ever learned about it by having the
+// right "incoming requests" screen open live. This pushes a "new job
+// available" notification (in-app record + FCM) to every active provider of
+// one type, so it also reaches a provider whose app is backgrounded or
+// killed. Reuses `_sendProviderNotification` per provider — its bookingId
+// dedup, `provider_notifications` write shape, and per-provider FCM send all
+// apply unchanged; this only decides *who* gets one. Sends run in
+// bounded-concurrency batches since a busy vertical could have many active
+// providers and this must not slow down the write that triggered it.
+async function _broadcastNewJobToActiveProviders(db, messaging, {
+  profileCollection, title, body, type, serviceType, bookingId, extraData = {},
+}) {
+  let snap;
+  try {
+    snap = await db.collection(profileCollection).where("status", "==", "active").get();
+  } catch (err) {
+    console.error(`New-job broadcast: failed to query ${profileCollection}:`, err.message);
+    return;
+  }
+
+  const providerIds = snap.docs.map((d) => d.id);
+  const CONCURRENCY = 20;
+  for (let i = 0; i < providerIds.length; i += CONCURRENCY) {
+    const chunk = providerIds.slice(i, i + CONCURRENCY);
+    await Promise.all(chunk.map((providerId) =>
+      _sendProviderNotification(db, messaging, providerId, { title, body, type, serviceType, bookingId, extraData }),
+    ));
+  }
+  console.log(`New-job broadcast (${type}): notified ${providerIds.length} active ${profileCollection}.`);
 }
 
 // ── Admin alert helper ────────────────────────────────────────────────────────
@@ -3649,6 +3787,65 @@ exports.onAppointmentSettlement = onDocumentUpdated(
   }
 );
 
+// ── Support ticket resolved ────────────────────────────────────────────────
+//
+// `support_tickets/{ticketId}` is raised by either a patient
+// (submit_ticket_screen.dart, role: 'patient', userId) or a doctor/partner
+// (report_problem_screen.dart, role: 'doctor', doctorId) and, until now, its
+// resolution was silent — mednu-admin's `saveTicketAdminNotes` writes
+// `adminNotes` as explicitly internal ("not visible to the user" per its own
+// placeholder text), so only the transition to `status: 'resolved'` (the
+// admin's "Resolve" button) is the user-visible event worth a push for.
+exports.onSupportTicketResolved = onDocumentUpdated(
+  "support_tickets/{ticketId}",
+  async (event) => {
+    const before = event.data.before.data();
+    const after = event.data.after.data();
+    if (before.status === after.status) return;
+    if (after.status !== "resolved") return;
+
+    const db = getFirestore();
+    const messaging = getMessaging();
+    const ticketId = event.params.ticketId;
+    const title = "Support Ticket Resolved";
+    const body = `Your ${after.category || "support"} ticket has been resolved. Tap to view.`;
+
+    if (after.role === "doctor" && after.doctorId) {
+      await _sendProviderNotification(db, messaging, after.doctorId, {
+        title, body, type: "support_ticket_resolved", bookingId: ticketId,
+      }).catch(() => {});
+    } else if (after.userId) {
+      await _sendPatientNotification(db, messaging, after.userId, {
+        title, body, type: "support_ticket_resolved", bookingId: ticketId,
+      }).catch(() => {});
+    }
+  }
+);
+
+// ── Support live-chat reply ──────────────────────────────────────────────────
+//
+// `support_chats/{uid}/messages` (live_chat_screen.dart, mednu_doctor) is a
+// doctor/partner's own 1:1 thread with MedNU support — `uid` is the account
+// that owns the thread, every message carries `senderId`. A reply from
+// support (any `senderId` other than the thread owner) previously had no
+// push at all; the owner only saw it by having the chat screen open.
+exports.onSupportChatMessageCreated = onDocumentCreated(
+  "support_chats/{uid}/messages/{messageId}",
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+    const data = snap.data();
+    const uid = event.params.uid;
+    if (!data.senderId || data.senderId === uid) return; // the owner's own message
+
+    await _sendProviderNotification(getFirestore(), getMessaging(), uid, {
+      title: "New reply from MedNU Support",
+      body: (data.text || "").toString().slice(0, 120) || "You have a new message.",
+      type: "support_chat_reply",
+    }).catch(() => {});
+  }
+);
+
 // ── Admin: Commission rules ───────────────────────────────────────────────────
 //
 // Request data: { serviceType, type: 'percentage'|'fixed'|'hybrid',
@@ -4259,6 +4456,22 @@ exports.onDiagnosticServiceRequestCreated = onDocumentCreated(
       updatedAt: FieldValue.serverTimestamp(),
     });
     _logLab("INFO", "diagnostic_booking_created", { requestId, type: data.type });
+
+    const testLabel = details.testName || data.serviceName || "diagnostic test";
+    if (pinnedLabId) {
+      await _sendProviderNotification(db, getMessaging(), pinnedLabId, {
+        title: "New Booking Assigned",
+        body: `A new ${testLabel} booking has been assigned to you.`,
+        type: "new_lab_booking", serviceType: "lab", bookingId: requestId,
+      });
+    } else {
+      await _broadcastNewJobToActiveProviders(db, getMessaging(), {
+        profileCollection: "lab_profiles",
+        title: "New Test Booking Available",
+        body: `A new ${testLabel} booking is available to claim.`,
+        type: "new_lab_booking", serviceType: "lab", bookingId: requestId,
+      });
+    }
   }
 );
 
@@ -4832,6 +5045,26 @@ exports.onMedicineOrderCreated = onDocumentCreated(
 
     const totalAmount = data.total ?? items.reduce((sum, i) => sum + (i.price || 0) * (i.count || 1), 0);
 
+    // An order placed from a specific pharmacy's own menu carries that
+    // pharmacy's id on the order doc (see cart_screen.dart's checkout,
+    // hoisted from the cart-locked medicine items' `sourcePharmacyId`) — pin
+    // it directly instead of dropping into the unclaimed pool, but only if
+    // that pharmacy is still active; a pharmacy suspended between the patient
+    // browsing and checking out falls back to the pool rather than silently
+    // losing the order. Mirrors the lab pinning in
+    // onDiagnosticServiceRequestCreated above.
+    let pinnedPharmacyId = null;
+    if (data.pharmacyId) {
+      const pharmacySnap = await db.collection("pharmacy_profiles").doc(data.pharmacyId).get();
+      if (pharmacySnap.exists && pharmacySnap.data().status === "active") {
+        pinnedPharmacyId = data.pharmacyId;
+      } else {
+        _logPharmacy("WARNING", "source_pharmacy_inactive_falling_back_to_pool", {
+          orderId, sourcePharmacyId: data.pharmacyId,
+        });
+      }
+    }
+
     // The order doc and its line items are written in ONE batch with
     // deterministic item IDs (`{orderId}_{index}`). Previously the items used
     // auto-IDs in a second commit: two concurrent redeliveries could both
@@ -4843,10 +5076,15 @@ exports.onMedicineOrderCreated = onDocumentCreated(
       sourceCollection: "orders",
       sourceId: orderId,
       orderType: "medicine",
-      pharmacyId: null,
+      pharmacyId: pinnedPharmacyId,
       status: "pending",
       requiresPrescription,
-      prescriptionUrl: null,
+      // A prescription attached before checkout (medicine_screen.dart's
+      // Upload Prescription action, carried into the order's own create-time
+      // write) must be visible to the pharmacy immediately, not just ones
+      // uploaded after the order already exists — this was unconditionally
+      // null regardless of what the order doc actually had.
+      prescriptionUrl: data.prescriptionUrl || null,
       patientId: data.patientId,
       patientName: data.deliveryName || "Patient",
       patientPhone: data.deliveryPhone || "",
@@ -4871,6 +5109,22 @@ exports.onMedicineOrderCreated = onDocumentCreated(
     await batch.commit();
 
     _logPharmacy("INFO", "pharmacy_order_created", { orderId, orderType: "medicine", items: items.length, requiresPrescription });
+
+    const itemLabel = `${items.length} item${items.length === 1 ? "" : "s"}`;
+    if (pinnedPharmacyId) {
+      await _sendProviderNotification(db, getMessaging(), pinnedPharmacyId, {
+        title: "New Order Assigned",
+        body: `A new medicine order (${itemLabel}) has been assigned to you.`,
+        type: "new_pharmacy_order", serviceType: "pharmacy", bookingId: orderId,
+      });
+    } else {
+      await _broadcastNewJobToActiveProviders(db, getMessaging(), {
+        profileCollection: "pharmacy_profiles",
+        title: "New Medicine Order Available",
+        body: `A new medicine order (${itemLabel}) is available to claim.`,
+        type: "new_pharmacy_order", serviceType: "pharmacy", bookingId: orderId,
+      });
+    }
   }
 );
 
@@ -4931,6 +5185,13 @@ exports.onEquipmentServiceRequestCreated = onDocumentCreated(
     await batch.commit();
 
     _logPharmacy("INFO", "pharmacy_order_created", { orderId: requestId, orderType: "equipment" });
+
+    await _broadcastNewJobToActiveProviders(db, getMessaging(), {
+      profileCollection: "pharmacy_profiles",
+      title: "New Equipment Request Available",
+      body: `A new ${details.equipmentName || data.serviceName || "medical equipment"} request is available to claim.`,
+      type: "new_pharmacy_order", serviceType: "equipment", bookingId: requestId,
+    });
   }
 );
 
@@ -5248,7 +5509,10 @@ function _pharmacyInventoryCatalogueDoc(item, pharmacyId, itemId, pharmacyName) 
     qty: 1,
     unit: "Tablets",
     requiresPrescription: item.requiresPrescription === true,
-    isActive: (item.stock ?? 0) > 0,
+    // Blocked wins over stock: a pharmacy pulling an item (recall, temporary
+    // stop-sell) must hide it from patients even if `stock` is still > 0,
+    // without losing the stock count itself.
+    isActive: (item.stock ?? 0) > 0 && item.blocked !== true,
     sourcePharmacyId: pharmacyId,
     sourceItemId: itemId,
     pharmacyName: pharmacyName || "",
@@ -5511,6 +5775,18 @@ exports.onAmbulanceServiceRequestCreated = onDocumentCreated(
     }
 
     _logAmbulance("INFO", "ambulance_request_created", { requestId, matchedAmbulanceId });
+
+    // Ambulance is always pinned to exactly one nearest driver, never
+    // broadcast to the whole pool — a driver who wasn't matched has no way
+    // to claim this request anyway, so notifying them would just be noise
+    // (and would misrepresent an already-assigned job as open).
+    if (matchedAmbulanceId) {
+      await _sendProviderNotification(db, getMessaging(), matchedAmbulanceId, {
+        title: "🚑 New Ambulance Request",
+        body: "A new ambulance request needs your response now.",
+        type: "new_ambulance_request", serviceType: "ambulance", bookingId: requestId,
+      });
+    }
   }
 );
 
@@ -5563,7 +5839,19 @@ exports.reassignStaleAmbulanceAssignments = onSchedule(
           },
           { lastUpdateTime: doc.updateTime }, // same lost-update guard as _expireStaleDocs.
         );
-        if (next) reassigned++; else openedToPool++;
+        if (next) {
+          reassigned++;
+          // Same reasoning as the initial-match push above — the previous
+          // driver already timed out, so only the newly-matched one needs
+          // to hear about it now.
+          await _sendProviderNotification(db, getMessaging(), next, {
+            title: "🚑 New Ambulance Request",
+            body: "A new ambulance request needs your response now.",
+            type: "new_ambulance_request", serviceType: "ambulance", bookingId: doc.id,
+          });
+        } else {
+          openedToPool++;
+        }
       } catch {
         skipped++; // driver acted on it between the query and this write — leave it alone.
       }
@@ -5891,6 +6179,7 @@ exports.onCaregiverServiceRequestCreated = onDocumentCreated(
       status: "scheduled",
       patientId: data.patientId,
       patientName: data.patientName || "Patient",
+      patientPhone: data.patientPhone || "",
       patientAge: 0,
       address: data.address || "",
       scheduledAt: _caregiverScheduledAt(data),
@@ -5929,6 +6218,21 @@ exports.onCaregiverServiceRequestCreated = onDocumentCreated(
     }
 
     _logCaregiver("INFO", "caregiver_visit_created", { requestId, sourceType: data.type });
+
+    if (pinnedCaregiverId) {
+      await _sendProviderNotification(db, getMessaging(), pinnedCaregiverId, {
+        title: "New Visit Assigned",
+        body: `A new ${data.serviceName || "caregiver"} visit has been assigned to you.`,
+        type: "new_caregiver_visit", serviceType: "caregiver", bookingId: requestId,
+      });
+    } else {
+      await _broadcastNewJobToActiveProviders(db, getMessaging(), {
+        profileCollection: "caregiver_profiles",
+        title: "New Visit Request Available",
+        body: `A new ${data.serviceName || "caregiver"} visit request is available to claim.`,
+        type: "new_caregiver_visit", serviceType: "caregiver", bookingId: requestId,
+      });
+    }
   }
 );
 
@@ -6103,6 +6407,13 @@ function _caregiverListingDoc(profile, existingCreatedAt) {
     ratePerHour: hourlyRate,
     ratePer12Hr: Math.round(hourlyRate * 12),
     rating: profile.rating ?? 0,
+    // Patient-side caregivers_screen.dart already reads `location` (a
+    // pre-existing field name distinct from `city` used by the other
+    // verticals) — matching it here rather than introducing a second name.
+    location: profile.city || "",
+    ...(profile.lat != null && profile.lng != null
+      ? { lat: profile.lat, lng: profile.lng }
+      : {}),
     isVerified: profile.documentsVerified === true,
     isActive: true,
     createdAt: existingCreatedAt || FieldValue.serverTimestamp(),
@@ -6202,11 +6513,37 @@ function _logCounselling(severity, event, data = {}) {
   else console.log(JSON.stringify(payload));
 }
 
+// `assignedTo` on service_requests has always been the provider's raw uid
+// (a foreign key, not a display value) — every module's "My Services" view
+// resolves it straight to the screen with no name lookup, so a patient sees
+// a uid where a person's name belongs. This looks the name up once at
+// mirror-write time and stores it alongside as `assignedToName`, rather than
+// changing what `assignedTo` itself means (other code may still rely on it
+// being a bare uid).
+async function _providerDisplayName(db, profileCollection, id) {
+  if (!id) return null;
+  try {
+    const snap = await db.collection(profileCollection).doc(id).get();
+    return snap.exists ? (snap.data().name || null) : null;
+  } catch (_) {
+    return null;
+  }
+}
+
 // Builds the mirrored session doc from a service_requests doc. Identical
 // shape for both modules; only the provider-id field name differs, which the
 // caller passes in.
+//
+// A patient booking a specific provider directly (e.g. from the
+// "Physiotherapists Near You" list) sets `[providerIdField]` on the
+// service_requests doc itself at creation — this mirror honors that instead
+// of always dropping the request into the unclaimed pool, going straight to
+// 'accepted' for that provider exactly as if they'd just claimed it
+// themselves. A request with no pre-assigned provider behaves exactly as
+// before: unclaimed and 'pending'.
 function _buildSessionDoc(data, providerIdField) {
   const details = data.serviceDetails || {};
+  const preAssignedProviderId = data[providerIdField] || null;
   return {
     sourceRequestId: null, // overwritten by the caller with the real requestId
     type: data.type,
@@ -6220,8 +6557,8 @@ function _buildSessionDoc(data, providerIdField) {
     preferredDate: data.preferredDate || "",
     preferredTime: data.preferredTime || "",
     notes: data.notes || "",
-    [providerIdField]: null,
-    status: "pending",
+    [providerIdField]: preAssignedProviderId,
+    status: preAssignedProviderId ? "accepted" : "pending",
     createdAt: data.createdAt || FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   };
@@ -6246,10 +6583,46 @@ exports.onPhysioServiceRequestCreated = onDocumentCreated(
       return;
     }
 
-    await sessionRef.set({
+    const sessionDoc = {
       ..._buildSessionDoc(data, "physiotherapistId"),
       sourceRequestId: requestId,
-    });
+    };
+    await sessionRef.set(sessionDoc);
+
+    // A pre-assigned booking (patient picked a specific physiotherapist
+    // directly, rather than requesting any available one) is born already
+    // 'accepted' — that transition happens entirely within this create, so
+    // onPhysioSessionStatusChange (function 3 below, which only reacts to
+    // *updates* on physio_sessions) never observes it. Mirror it back onto
+    // the source service_requests doc here instead, so the patient's live
+    // "My Services" view reflects the real status/assigned provider
+    // immediately rather than staying stuck on 'pending' until some later
+    // status change happens to fire an update.
+    if (sessionDoc.physiotherapistId) {
+      const providerName = await _providerDisplayName(db, "physiotherapist_profiles", sessionDoc.physiotherapistId);
+      await snap.ref.update({
+        status: "accepted",
+        assignedTo: sessionDoc.physiotherapistId,
+        ...(providerName ? { assignedToName: providerName } : {}),
+        updatedAt: FieldValue.serverTimestamp(),
+      }).catch((err) => {
+        _logPhysio("ERROR", "preassigned_service_request_mirror_failed", { requestId, error: err.message });
+      });
+
+      await _sendProviderNotification(db, getMessaging(), sessionDoc.physiotherapistId, {
+        title: "New Session Assigned",
+        body: "A new physiotherapy session has been assigned to you.",
+        type: "new_physio_session", serviceType: "physiotherapy", bookingId: requestId,
+      });
+    } else {
+      await _broadcastNewJobToActiveProviders(db, getMessaging(), {
+        profileCollection: "physiotherapist_profiles",
+        title: "New Session Request Available",
+        body: "A new physiotherapy session request is available to claim.",
+        type: "new_physio_session", serviceType: "physiotherapy", bookingId: requestId,
+      });
+    }
+
     _logPhysio("INFO", "physio_session_created", { requestId });
   }
 );
@@ -6304,7 +6677,11 @@ exports.onPhysioSessionStatusChange = onDocumentUpdated(
 
       const mappedStatus = _PHYSIO_TO_SERVICE_REQUEST_STATUS[after.status];
       if (statusChanged && mappedStatus) update.status = mappedStatus;
-      if (claimChanged && after.physiotherapistId) update.assignedTo = after.physiotherapistId;
+      if (claimChanged && after.physiotherapistId) {
+        update.assignedTo = after.physiotherapistId;
+        const providerName = await _providerDisplayName(db, "physiotherapist_profiles", after.physiotherapistId);
+        if (providerName) update.assignedToName = providerName;
+      }
 
       if (Object.keys(update).length > 1) {
         const serviceRequestRef = db.collection("service_requests").doc(after.sourceRequestId || sessionId);
@@ -6402,10 +6779,45 @@ exports.onCounsellingServiceRequestCreated = onDocumentCreated(
       return;
     }
 
-    await sessionRef.set({
+    const sessionDoc = {
       ..._buildSessionDoc(data, "counsellorId"),
       sourceRequestId: requestId,
-    });
+    };
+    await sessionRef.set(sessionDoc);
+
+    // Mirrors physiotherapy's equivalent block above: a pre-assigned booking
+    // is born already 'accepted' by `_buildSessionDoc`, but that transition
+    // happens entirely within this create, so `onCounsellingSessionStatusChange`
+    // (which only reacts to *updates*) never observes it. Without this, the
+    // patient's live "My Services" view stayed stuck on 'pending' for a
+    // directly-booked counsellor until some later status change happened to
+    // touch the doc — this case was previously handled for physio but missed
+    // here.
+    if (sessionDoc.counsellorId) {
+      const providerName = await _providerDisplayName(db, "counsellor_profiles", sessionDoc.counsellorId);
+      await snap.ref.update({
+        status: "accepted",
+        assignedTo: sessionDoc.counsellorId,
+        ...(providerName ? { assignedToName: providerName } : {}),
+        updatedAt: FieldValue.serverTimestamp(),
+      }).catch((err) => {
+        _logCounselling("ERROR", "preassigned_service_request_mirror_failed", { requestId, error: err.message });
+      });
+
+      await _sendProviderNotification(db, getMessaging(), sessionDoc.counsellorId, {
+        title: "New Session Assigned",
+        body: "A new counselling session has been assigned to you.",
+        type: "new_counselling_session", serviceType: "counselling", bookingId: requestId,
+      });
+    } else {
+      await _broadcastNewJobToActiveProviders(db, getMessaging(), {
+        profileCollection: "counsellor_profiles",
+        title: "New Session Request Available",
+        body: "A new counselling session request is available to claim.",
+        type: "new_counselling_session", serviceType: "counselling", bookingId: requestId,
+      });
+    }
+
     _logCounselling("INFO", "counselling_session_created", { requestId });
   }
 );
@@ -6459,7 +6871,11 @@ exports.onCounsellingSessionStatusChange = onDocumentUpdated(
 
       const mappedStatus = _COUNSELLING_TO_SERVICE_REQUEST_STATUS[after.status];
       if (statusChanged && mappedStatus) update.status = mappedStatus;
-      if (claimChanged && after.counsellorId) update.assignedTo = after.counsellorId;
+      if (claimChanged && after.counsellorId) {
+        update.assignedTo = after.counsellorId;
+        const providerName = await _providerDisplayName(db, "counsellor_profiles", after.counsellorId);
+        if (providerName) update.assignedToName = providerName;
+      }
 
       if (Object.keys(update).length > 1) {
         const serviceRequestRef = db.collection("service_requests").doc(after.sourceRequestId || sessionId);
@@ -6565,12 +6981,15 @@ function _nutritionistListingDoc(profile, existingCreatedAt) {
     bio: profile.bio || "",
     consultationFee: profile.consultationFee ?? 0,
     city: profile.city || "",
+    ...(profile.lat != null && profile.lng != null
+      ? { lat: profile.lat, lng: profile.lng }
+      : {}),
     rating: profile.rating ?? 0,
     reviewCount: profile.reviewCount ?? 0,
     isAvailable: true,
     isOnlineAvailable: true,
     isInPersonAvailable: false,
-    languages: [],
+    languages: profile.languages || [],
     expertiseAreas: [],
     availableDays: [],
     slots: {},
@@ -6608,10 +7027,73 @@ exports.onNutritionistProfileWriteForVisibility = onDocumentWritten(
 
 exports.onNutritionistProfileApproved = onDocumentUpdated("nutritionist_profiles/{uid}", async (event) => {
   await _notifyPartnerApproved(
-    getMessaging(), "nutritionist", event.params.uid,
+    getFirestore(), getMessaging(), "nutritionist", event.params.uid,
     event.data.before.data(), event.data.after.data(),
   );
 });
+
+// ══════════════════════════════════════════════════════════════════════════
+// ── Physiotherapist public catalogue mirror ──────────────────────────────────
+//
+// Physiotherapy already has a live booking pipeline (service_requests[type
+// 'physiotherapy'] -> physio_sessions, see above) that assigns any available
+// physiotherapist to an unclaimed request. What was missing is a way for a
+// patient to browse and pick a SPECIFIC physiotherapist up front (by
+// language/city, same as Doctors) rather than always getting auto-matched.
+// This mirror publishes an approved `physiotherapist_profiles/{uid}` into a
+// new public `physiotherapists/{uid}` catalogue a patient can browse — same
+// 1:1-doc mirror shape as `onNutritionistProfileWriteForVisibility`. Booking
+// a specific physiotherapist from that catalogue still goes through the
+// existing service_requests -> physio_sessions pipeline unchanged; it just
+// pre-sets `physiotherapistId` on the request (see `_buildSessionDoc` above),
+// skipping the unclaimed pool instead of bypassing it.
+function _physiotherapistListingDoc(profile, existingCreatedAt) {
+  return {
+    name: profile.name || "Physiotherapist",
+    photoUrl: profile.photoUrl || "",
+    certifications: profile.certifications || [],
+    specialties: profile.specialties || [],
+    experienceYears: profile.experienceYears ?? 0,
+    hourlyRate: profile.hourlyRate ?? 0,
+    rating: profile.rating ?? 0,
+    totalSessions: profile.totalSessions ?? 0,
+    city: profile.city || "",
+    languages: profile.languages || [],
+    ...(profile.clinicLat != null && profile.clinicLng != null
+      ? { clinicLat: profile.clinicLat, clinicLng: profile.clinicLng }
+      : {}),
+    isAvailable: true,
+    createdAt: existingCreatedAt || FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+}
+
+exports.onPhysiotherapistProfileWriteForVisibility = onDocumentWritten(
+  "physiotherapist_profiles/{physiotherapistId}",
+  async (event) => {
+    const physiotherapistId = event.params.physiotherapistId;
+    const db = getFirestore();
+    const listingRef = db.collection("physiotherapists").doc(physiotherapistId);
+
+    const after = event.data.after;
+    if (!after.exists) {
+      await listingRef.delete().catch(() => {});
+      return;
+    }
+
+    const profile = after.data();
+    if (profile.status !== "active") {
+      await listingRef.delete().catch(() => {});
+      return;
+    }
+
+    const existing = await listingRef.get();
+    await listingRef.set(
+      _physiotherapistListingDoc(profile, existing.exists ? existing.data().createdAt : null),
+      { merge: true },
+    );
+  }
+);
 // ══════════════════════════════════════════════════════════════════════════
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -6805,18 +7287,31 @@ exports.sendDueWaterReminders = onSchedule({ schedule: "every 15 minutes", timeZ
 // the partner's device using the `fcmToken` already on the document —
 // VerificationPendingScreen's "we'll notify you" promise had nothing behind
 // it until this.
-async function _notifyPartnerApproved(messaging, role, uid, before, after) {
+async function _notifyPartnerApproved(db, messaging, role, uid, before, after) {
   if (before.status === after.status) return;
   if (after.status !== "active") return;
+
+  const title = "Application Approved";
+  const body = "Your MedNU partner account is verified — you can start receiving bookings now.";
+
+  // In-app record — this previously only ever sent the FCM push, so the
+  // approval never showed up in the notification bell even for a partner
+  // who missed the OS push (app closed at the time, notification swiped
+  // away, etc.). Same collection/shape `_sendProviderNotification` writes,
+  // so it renders identically to every other provider-side notification.
+  await db.collection("provider_notifications").doc(uid).collection("items").add({
+    type: "account_approved", title, body, role,
+    createdAt: FieldValue.serverTimestamp(),
+    deliverAt: FieldValue.serverTimestamp(),
+    isRead: false,
+    data: {},
+  }).catch((err) => console.error(`Failed to write provider_notifications for ${role} ${uid}:`, err.message));
 
   const fcmToken = after.fcmToken;
   if (!fcmToken) {
     console.log(`No fcmToken on ${role}_profiles/${uid} — approval push skipped`);
     return;
   }
-
-  const title = "Application Approved";
-  const body = "Your MedNU partner account is verified — you can start receiving bookings now.";
 
   try {
     await messaging.send({
@@ -6853,30 +7348,189 @@ async function _notifyPartnerApproved(messaging, role, uid, before, after) {
 
 exports.onLabProfileApproved = onDocumentUpdated("lab_profiles/{uid}", async (event) => {
   await _notifyPartnerApproved(
-    getMessaging(), "lab", event.params.uid,
+    getFirestore(), getMessaging(), "lab", event.params.uid,
     event.data.before.data(), event.data.after.data(),
   );
 });
 
 exports.onPharmacyProfileApproved = onDocumentUpdated("pharmacy_profiles/{uid}", async (event) => {
   await _notifyPartnerApproved(
-    getMessaging(), "pharmacy", event.params.uid,
+    getFirestore(), getMessaging(), "pharmacy", event.params.uid,
     event.data.before.data(), event.data.after.data(),
   );
 });
 
 exports.onAmbulanceProfileApproved = onDocumentUpdated("ambulance_profiles/{uid}", async (event) => {
   await _notifyPartnerApproved(
-    getMessaging(), "ambulance", event.params.uid,
+    getFirestore(), getMessaging(), "ambulance", event.params.uid,
     event.data.before.data(), event.data.after.data(),
   );
 });
 
 exports.onCaregiverProfileApproved = onDocumentUpdated("caregiver_profiles/{uid}", async (event) => {
   await _notifyPartnerApproved(
-    getMessaging(), "caregiver", event.params.uid,
+    getFirestore(), getMessaging(), "caregiver", event.params.uid,
     event.data.before.data(), event.data.after.data(),
   );
+});
+
+// Doctor accounts use the exact same `doctors/{uid}.status: 'pending' ->
+// 'active'` convention as every partner profile (see doctor_auth_service.dart
+// registration + mednu-admin's approve action) but, unlike the 5 partner
+// verticals above, never had an approval-push trigger at all.
+exports.onDoctorProfileApproved = onDocumentUpdated("doctors/{uid}", async (event) => {
+  await _notifyPartnerApproved(
+    getFirestore(), getMessaging(), "doctor", event.params.uid,
+    event.data.before.data(), event.data.after.data(),
+  );
+});
+
+// ── Guest Join: family-member call access without a MedNu account ───────────
+//
+// Lets the account holder who booked a *scheduled* consultation for a family
+// member (who has no MedNu login of their own) share a signed, time-boxed
+// link so that family member can join the call from their own phone.
+//
+// The link is bound to the appointmentId, not a consultationId — the
+// consultation doc for a scheduled appointment doesn't exist yet at booking
+// time; it's only created later when the doctor actually starts the call
+// (see mednu_doctor's dashboard_screen.dart, _startCallForAppointment). The
+// guest's Firebase custom-token session carries a `guestAppointmentId` claim,
+// which Firestore rules and generateAgoraToken (below) check against instead
+// of requiring the guest to be the doctor/patient uid on the doc.
+//
+// The token itself is an HMAC over the appointmentId + expiry, verified
+// server-side with no Firebase Auth required to redeem it (the whole point
+// is the guest has no account) — same crypto.createHmac pattern already used
+// for Razorpay webhook verification elsewhere in this file.
+
+// Request data: { appointmentId: string }
+// Response:     { deepLink: string }
+exports.createGuestJoinLink = onCall({ secrets: ["GUEST_LINK_SECRET"] }, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Sign in to continue.");
+
+  const { appointmentId } = request.data || {};
+  if (typeof appointmentId !== "string" || !appointmentId.trim()) {
+    throw new HttpsError("invalid-argument", "appointmentId is required.");
+  }
+
+  const db = getFirestore();
+  const apptSnap = await db.collection("appointments").doc(appointmentId).get();
+  if (!apptSnap.exists) {
+    throw new HttpsError("not-found", "Appointment not found.");
+  }
+  const appt = apptSnap.data();
+  if (appt.patientId !== uid) {
+    throw new HttpsError("permission-denied", "You can only share a join link for your own booking.");
+  }
+  const guestPhone = (appt.guestPhone || "").trim();
+  if (!guestPhone) {
+    throw new HttpsError(
+      "failed-precondition",
+      "This booking has no guest phone number — add one when booking to enable this.",
+    );
+  }
+
+  // Expiry: the appointment's scheduled date/time (IST) + 3 hours, so a late
+  // start is still covered. Falls back to 24h from now if date/time are
+  // missing or in an unexpected format, rather than failing outright.
+  let exp;
+  const dateStr = appt.date;
+  const timeMatch = /^(\d{2}):(\d{2})\s*(AM|PM)$/i.exec((appt.time || "").trim());
+  if (typeof dateStr === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dateStr) && timeMatch) {
+    let hour = parseInt(timeMatch[1], 10) % 12;
+    if (timeMatch[3].toUpperCase() === "PM") hour += 12;
+    const scheduled = new Date(`${dateStr}T${String(hour).padStart(2, "0")}:${timeMatch[2]}:00+05:30`);
+    exp = Math.floor(scheduled.getTime() / 1000) + 3 * 3600;
+  } else {
+    exp = Math.floor(Date.now() / 1000) + 24 * 3600;
+  }
+
+  const secret = process.env.GUEST_LINK_SECRET;
+  if (!secret) {
+    throw new HttpsError("failed-precondition", "Guest join is not configured.");
+  }
+  const token = crypto
+    .createHmac("sha256", secret)
+    .update(`${appointmentId}.${exp}`)
+    .digest("hex");
+
+  // Wrapped in an https:// landing page (mednu_web/web/join.html) rather than
+  // handed out as a bare mednu:// custom-scheme link: most share targets
+  // (WhatsApp, SMS, iMessage) only auto-linkify http(s) URLs, so a raw custom
+  // scheme often isn't even tappable. The landing page redirects into this
+  // same mednu://join deep link once opened in a real browser.
+  return {
+    deepLink: `https://mednu-web.web.app/join.html?a=${appointmentId}&t=${token}&exp=${exp}`,
+  };
+});
+
+// Request data: { appointmentId: string, token: string, exp: number }
+// Response:     { customToken, doctorName, doctorSpecialty, date, time, consultationId }
+exports.redeemGuestJoinLink = onCall({ secrets: ["GUEST_LINK_SECRET"] }, async (request) => {
+  const { appointmentId, token, exp } = request.data || {};
+  if (
+    typeof appointmentId !== "string" || !appointmentId.trim() ||
+    typeof token !== "string" || !token.trim() ||
+    typeof exp !== "number"
+  ) {
+    throw new HttpsError("invalid-argument", "Invalid join link.");
+  }
+
+  if (Math.floor(Date.now() / 1000) > exp) {
+    throw new HttpsError("deadline-exceeded", "This join link has expired.");
+  }
+
+  const secret = process.env.GUEST_LINK_SECRET;
+  if (!secret) {
+    throw new HttpsError("failed-precondition", "Guest join is not configured.");
+  }
+  const expected = crypto
+    .createHmac("sha256", secret)
+    .update(`${appointmentId}.${exp}`)
+    .digest("hex");
+
+  let valid = false;
+  try {
+    const expectedBuf = Buffer.from(expected, "hex");
+    const givenBuf = Buffer.from(token, "hex");
+    valid = expectedBuf.length === givenBuf.length && crypto.timingSafeEqual(expectedBuf, givenBuf);
+  } catch (_) {
+    valid = false;
+  }
+  if (!valid) {
+    throw new HttpsError("permission-denied", "Invalid join link.");
+  }
+
+  const db = getFirestore();
+  const apptSnap = await db.collection("appointments").doc(appointmentId).get();
+  if (!apptSnap.exists) {
+    throw new HttpsError("not-found", "This appointment no longer exists.");
+  }
+  const appt = apptSnap.data();
+  if (!(appt.guestPhone || "").trim()) {
+    throw new HttpsError("failed-precondition", "This booking is not guest-enabled.");
+  }
+  if (appt.status === "cancelled") {
+    throw new HttpsError("failed-precondition", "This appointment was cancelled.");
+  }
+  if (appt.status === "completed") {
+    throw new HttpsError("failed-precondition", "This consultation has already ended.");
+  }
+
+  const customToken = await getAuth().createCustomToken(`guest_${appointmentId}`, {
+    guestAppointmentId: appointmentId,
+  });
+
+  return {
+    customToken,
+    doctorName: appt.doctorName || "your doctor",
+    doctorSpecialty: appt.doctorSpecialty || "",
+    date: appt.date || "",
+    time: appt.time || "",
+    consultationId: appt.consultationId || null,
+  };
 });
 
 // ── Agora RTC token ───────────────────────────────────────────────────────
@@ -6898,16 +7552,20 @@ exports.generateAgoraToken = onCall({ secrets: ["AGORA_APP_CERTIFICATE"] }, asyn
 
   // Both apps use the consultation's own Firestore doc id as the Agora
   // channel name, so this doubles as the join authorization check — only
-  // the doctor or patient actually on this consultation may obtain a token
-  // for it. Without this, any signed-in user who learned/guessed a
-  // consultationId could join someone else's call.
+  // the doctor or patient actually on this consultation, or a guest holding
+  // a valid guestAppointmentId claim for it (see createGuestJoinLink above),
+  // may obtain a token for it. Without this, any signed-in user who
+  // learned/guessed a consultationId could join someone else's call.
   const db = getFirestore();
   const consultSnap = await db.collection("consultations").doc(consultationId).get();
   if (!consultSnap.exists) {
     throw new HttpsError("not-found", "Consultation not found.");
   }
   const consult = consultSnap.data();
-  if (consult.doctorId !== uid && consult.patientId !== uid) {
+  const guestAppointmentId = request.auth?.token?.guestAppointmentId;
+  const isGuest = !!guestAppointmentId && !!consult.appointmentId &&
+    guestAppointmentId === consult.appointmentId;
+  if (consult.doctorId !== uid && consult.patientId !== uid && !isGuest) {
     throw new HttpsError("permission-denied", "You are not a participant in this consultation.");
   }
 
@@ -6916,17 +7574,22 @@ exports.generateAgoraToken = onCall({ secrets: ["AGORA_APP_CERTIFICATE"] }, asyn
     throw new HttpsError("failed-precondition", "Video calling is not configured.");
   }
 
-  // Both apps join with uid: 0 (Agora auto-assigns an internal numeric uid),
-  // so the token must be issued for uid 0 too — a token bound to any other
-  // uid is rejected by Agora at join time.
+  // Fixed uid per verified role on this consultation, not a client-supplied
+  // or auto-assigned (0) uid — this lets a 3-party call (patient + a family
+  // member joining as guest + doctor) tell participants' video tiles apart.
+  // Assigned from the caller's *verified* identity above, never trusted from
+  // the client, so a guest can't claim the doctor's uid. Ordinary 1:1 calls
+  // only ever use uid 1/2, so this is unchanged for every call in flight.
+  const assignedUid = consult.doctorId === uid ? 1 : consult.patientId === uid ? 2 : 3;
+
   const expirationInSeconds = 3600;
   const currentTs = Math.floor(Date.now() / 1000);
   const privilegeExpiredTs = currentTs + expirationInSeconds;
 
   const token = RtcTokenBuilder.buildTokenWithUid(
-    AGORA_APP_ID, appCertificate, consultationId, 0,
+    AGORA_APP_ID, appCertificate, consultationId, assignedUid,
     RtcRole.PUBLISHER, privilegeExpiredTs, privilegeExpiredTs,
   );
 
-  return { token, expiresAt: privilegeExpiredTs };
+  return { token, uid: assignedUid, expiresAt: privilegeExpiredTs };
 });

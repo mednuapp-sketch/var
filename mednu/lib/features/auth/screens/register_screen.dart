@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,10 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/services/image_upload_service.dart';
-import '../../referral/referral_service.dart';
 import '../providers/auth_provider.dart';
-
-const _bloodGroups = ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'];
 
 class RegisterScreen extends ConsumerStatefulWidget {
   final String phone;
@@ -26,18 +22,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
   final _emailCtrl   = TextEditingController();
   final _dobCtrl     = TextEditingController();
   final _cityCtrl    = TextEditingController();
-  final _referralCtrl = TextEditingController();
 
   String  _selectedGender    = 'Male';
-  String? _selectedBloodGroup;
   bool    _isLoading         = false;
-  bool    _termsAccepted     = false;
   File?   _profileImage;
   double  _uploadProgress    = 0;
-
-  Timer? _debounce;
-  bool   _isValidatingCode   = false;
-  ReferralValidationResult? _codeResult;
 
   late AnimationController _animCtrl;
   late Animation<double>   _fadeIn;
@@ -54,12 +43,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
   @override
   void dispose() {
     _animCtrl.dispose();
-    _debounce?.cancel();
     _nameCtrl.dispose();
     _emailCtrl.dispose();
     _dobCtrl.dispose();
     _cityCtrl.dispose();
-    _referralCtrl.dispose();
     super.dispose();
   }
 
@@ -142,21 +129,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
     if (file != null && mounted) setState(() => _profileImage = file);
   }
 
-  // ── Referral validation ───────────────────────────────────────────────────
-  void _onReferralChanged(String value) {
-    _debounce?.cancel();
-    if (value.trim().isEmpty) {
-      setState(() { _codeResult = null; _isValidatingCode = false; });
-      return;
-    }
-    setState(() => _isValidatingCode = true);
-    _debounce = Timer(const Duration(milliseconds: 700), () async {
-      final result = await ReferralService()
-          .validateReferralCode(value.trim().toUpperCase());
-      if (mounted) setState(() { _codeResult = result; _isValidatingCode = false; });
-    });
-  }
-
   // ── DOB picker ────────────────────────────────────────────────────────────
   Future<void> _pickDob() async {
     final now = DateTime.now();
@@ -186,10 +158,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
   // ── Submit ────────────────────────────────────────────────────────────────
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    if (!_termsAccepted) {
-      _showError('Please accept the Terms & Privacy Policy.');
-      return;
-    }
     if (_dobCtrl.text.trim().isEmpty) {
       _showError('Please select your date of birth.');
       return;
@@ -214,8 +182,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
         gender:       _selectedGender,
         email:        _emailCtrl.text.trim().isEmpty ? null : _emailCtrl.text.trim(),
         city:         _cityCtrl.text.trim().isEmpty ? null : _cityCtrl.text.trim(),
-        bloodGroup:   _selectedBloodGroup,
-        referralCode: _referralCtrl.text.trim().isEmpty ? null : _referralCtrl.text.trim(),
       );
 
       // Update photo URL if uploaded
@@ -467,144 +433,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                             controller: _cityCtrl,
                             hint: 'Your city',
                             prefix: Icons.location_city_outlined,
-                          ),
-
-                          const SizedBox(height: 20),
-
-                          // ══ Health Info ════════════════════════════════
-                          _SectionHeader(
-                              icon: Icons.favorite_rounded,
-                              label: 'Health Info'),
-                          const SizedBox(height: 12),
-
-                          _sectionLabel('Blood Group (optional)'),
-                          const SizedBox(height: 6),
-                          _BloodGroupPicker(
-                            selected: _selectedBloodGroup,
-                            onSelect: (v) =>
-                                setState(() => _selectedBloodGroup = v),
-                          ),
-
-                          const SizedBox(height: 20),
-
-                          // ══ Referral ═══════════════════════════════════
-                          _SectionHeader(
-                              icon: Icons.card_giftcard_rounded,
-                              label: 'Referral (optional)'),
-                          const SizedBox(height: 12),
-
-                          _sectionLabel('Referral Code'),
-                          const SizedBox(height: 6),
-                          TextFormField(
-                            controller: _referralCtrl,
-                            textCapitalization: TextCapitalization.characters,
-                            style: const TextStyle(
-                              fontSize: 14,
-                              color: Color(0xFF1A0A2E),
-                              fontFamily: 'Poppins',
-                              letterSpacing: 1,
-                            ),
-                            decoration: _inputDeco(
-                                    Icons.card_giftcard_outlined, 'e.g. MED12345')
-                                .copyWith(
-                              suffixIcon: _isValidatingCode
-                                  ? const Padding(
-                                      padding: EdgeInsets.all(14),
-                                      child: SizedBox(
-                                        width: 18, height: 18,
-                                        child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            color: AppColors.primary),
-                                      ))
-                                  : _codeResult != null
-                                      ? Icon(
-                                          _codeResult!.isValid
-                                              ? Icons.check_circle_rounded
-                                              : Icons.cancel_rounded,
-                                          color: _codeResult!.isValid
-                                              ? const Color(0xFF2E7D32)
-                                              : const Color(0xFFB00020),
-                                          size: 22,
-                                        )
-                                      : null,
-                            ),
-                            onChanged: _onReferralChanged,
-                          ),
-                          if (_codeResult != null)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 6, left: 4),
-                              child: Text(
-                                _codeResult!.isValid
-                                    ? '✓ Referred by ${_codeResult!.referrerName ?? "a friend"}'
-                                    : '✗ Invalid referral code',
-                                style: TextStyle(
-                                  color: _codeResult!.isValid
-                                      ? const Color(0xFF2E7D32)
-                                      : const Color(0xFFB00020),
-                                  fontSize: 12,
-                                  fontFamily: 'Poppins',
-                                ),
-                              ),
-                            ),
-
-                          const SizedBox(height: 24),
-
-                          // ── Terms ─────────────────────────────────────
-                          GestureDetector(
-                            onTap: () =>
-                                setState(() => _termsAccepted = !_termsAccepted),
-                            child: Container(
-                              padding: const EdgeInsets.all(14),
-                              decoration: BoxDecoration(
-                                color: _termsAccepted
-                                    ? const Color(0xFFF0E8FA)
-                                    : const Color(0xFFFAFAFA),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: _termsAccepted
-                                      ? AppColors.primary.withValues(alpha: 0.5)
-                                      : const Color(0xFFE0E0E0),
-                                ),
-                              ),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  AnimatedContainer(
-                                    duration: const Duration(milliseconds: 200),
-                                    width: 22, height: 22,
-                                    margin: const EdgeInsets.only(top: 1),
-                                    decoration: BoxDecoration(
-                                      color: _termsAccepted
-                                          ? AppColors.primary
-                                          : Colors.transparent,
-                                      borderRadius: BorderRadius.circular(6),
-                                      border: Border.all(
-                                        color: _termsAccepted
-                                            ? AppColors.primary
-                                            : const Color(0xFFBBBBBB),
-                                        width: 1.5,
-                                      ),
-                                    ),
-                                    child: _termsAccepted
-                                        ? const Icon(Icons.check,
-                                            color: Colors.white, size: 14)
-                                        : null,
-                                  ),
-                                  const SizedBox(width: 12),
-                                  const Expanded(
-                                    child: Text(
-                                      'I agree to the Terms of Service and Privacy Policy',
-                                      style: TextStyle(
-                                        color: Color(0xFF444444),
-                                        fontSize: 13,
-                                        fontFamily: 'Poppins',
-                                        height: 1.5,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
                           ),
 
                           const SizedBox(height: 24),
@@ -905,50 +733,3 @@ class _GenderChip extends StatelessWidget {
   );
 }
 
-class _BloodGroupPicker extends StatelessWidget {
-  final String? selected;
-  final void Function(String?) onSelect;
-  const _BloodGroupPicker({required this.selected, required this.onSelect});
-
-  @override
-  Widget build(BuildContext context) => Wrap(
-    spacing: 8,
-    runSpacing: 8,
-    children: _bloodGroups.map((bg) {
-      final isSelected = selected == bg;
-      return GestureDetector(
-        onTap: () => onSelect(isSelected ? null : bg),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          width: 60, height: 44,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: isSelected ? AppColors.primary : const Color(0xFFF8F4FF),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: isSelected
-                  ? AppColors.primary
-                  : AppColors.primary.withValues(alpha: 0.2),
-            ),
-            boxShadow: isSelected
-                ? [
-                    BoxShadow(
-                      color: AppColors.primary.withValues(alpha: 0.25),
-                      blurRadius: 6,
-                      offset: const Offset(0, 2),
-                    ),
-                  ]
-                : null,
-          ),
-          child: Text(bg,
-              style: TextStyle(
-                color: isSelected ? Colors.white : AppColors.primary,
-                fontWeight: FontWeight.w700,
-                fontFamily: 'Poppins',
-                fontSize: 13,
-              )),
-        ),
-      );
-    }).toList(),
-  );
-}

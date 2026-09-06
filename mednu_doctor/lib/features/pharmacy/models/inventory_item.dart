@@ -16,6 +16,7 @@ class InventoryItem {
   final int stock;
   final int lowStockThreshold;
   final bool requiresPrescription;
+  final bool blocked;
 
   const InventoryItem({
     required this.id,
@@ -25,6 +26,7 @@ class InventoryItem {
     required this.stock,
     required this.lowStockThreshold,
     required this.requiresPrescription,
+    required this.blocked,
   });
 
   factory InventoryItem.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
@@ -37,6 +39,7 @@ class InventoryItem {
       stock: (d['stock'] as int?) ?? 0,
       lowStockThreshold: (d['lowStockThreshold'] as int?) ?? 10,
       requiresPrescription: (d['requiresPrescription'] as bool?) ?? false,
+      blocked: (d['blocked'] as bool?) ?? false,
     );
   }
 

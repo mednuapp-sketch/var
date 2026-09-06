@@ -69,7 +69,7 @@ class SearchService {
       id: 'lab_tests',
       title: 'Lab Tests',
       subtitle: 'Blood tests & sample collection at home',
-      route: AppRoutes.labTests,
+      route: AppRoutes.diagnostics,
       icon: Icons.bloodtype_rounded,
       color: Color(0xFF3949AB),
       category: SearchCategory.service,
@@ -158,7 +158,7 @@ class SearchService {
     ),
     SearchResult(
       id: 'hospitals',
-      title: 'Find Hospitals',
+      title: 'Nearby Hospitals',
       subtitle: 'Hospitals & clinics near you',
       route: AppRoutes.hospitals,
       icon: Icons.local_hospital_rounded,
@@ -297,16 +297,6 @@ class SearchService {
       keywords: ['referral', 'refer', 'invite', 'earn', 'rewards', 'share', 'referral code', 'refer earn'],
     ),
     SearchResult(
-      id: 'premium',
-      title: 'MedNU Premium',
-      subtitle: 'Unlimited consultations & exclusive benefits',
-      route: AppRoutes.premium,
-      icon: Icons.workspace_premium_rounded,
-      color: Color(0xFFFF8F00),
-      category: SearchCategory.service,
-      keywords: ['premium', 'subscription', 'plan', 'upgrade', 'unlimited', 'pro', 'gold', 'mednu premium'],
-    ),
-    SearchResult(
       id: 'profile',
       title: 'My Profile',
       subtitle: 'View and edit your personal details',
@@ -419,7 +409,11 @@ class SearchService {
       color: Color(0xFF2E7D32),
       category: SearchCategory.speciality,
       keywords: ['general physician', 'gp', 'fever', 'cold', 'cough', 'flu', 'general doctor', 'family doctor'],
-      extra: <String, dynamic>{'specialty': 'General Medicine', 'mode': 'filter'},
+      // Must match the canonical category string doctors_list_screen.dart's
+      // Firestore query filters on exactly (where('specialty', isEqualTo:)) —
+      // 'General Medicine' matched no doctor and silently returned an empty
+      // list.
+      extra: <String, dynamic>{'specialty': 'General', 'mode': 'filter'},
     ),
     SearchResult(
       id: 'spec_cardiology',
@@ -474,7 +468,9 @@ class SearchService {
       color: Color(0xFF546E7A),
       category: SearchCategory.speciality,
       keywords: ['orthopedic', 'ortho', 'bone', 'joint', 'spine', 'fracture', 'knee', 'back pain', 'sports injury'],
-      extra: <String, dynamic>{'specialty': 'Orthopedics', 'mode': 'filter'},
+      // Canonical spelling used everywhere else is British ('Orthopaedics') —
+      // the American spelling here matched no doctor.
+      extra: <String, dynamic>{'specialty': 'Orthopaedics', 'mode': 'filter'},
     ),
     SearchResult(
       id: 'spec_neurology',
@@ -529,7 +525,10 @@ class SearchService {
       color: Color(0xFFE65100),
       category: SearchCategory.speciality,
       keywords: ['diabetologist', 'diabetes', 'sugar', 'endocrinology', 'insulin', 'thyroid', 'hormone'],
-      extra: <String, dynamic>{'specialty': 'Diabetology', 'mode': 'filter'},
+      // 'Diabetology' isn't a category anywhere else in the app — no doctor
+      // record uses it. 'Endocrinology' is the real category diabetes
+      // specialists are filed under (see specialities_screen.dart).
+      extra: <String, dynamic>{'specialty': 'Endocrinology', 'mode': 'filter'},
     ),
     SearchResult(
       id: 'spec_oncology',
@@ -550,7 +549,7 @@ class SearchService {
       id: 'lab_cbc',
       title: 'CBC – Complete Blood Count',
       subtitle: 'Blood test · Results in 24 hrs',
-      route: AppRoutes.labTests,
+      route: AppRoutes.diagnostics,
       icon: Icons.water_drop_rounded,
       color: Color(0xFF0097A7),
       category: SearchCategory.labTest,
@@ -560,7 +559,7 @@ class SearchService {
       id: 'lab_hba1c',
       title: 'HbA1c (Diabetes Test)',
       subtitle: 'Blood sugar level · Results in 24 hrs',
-      route: AppRoutes.labTests,
+      route: AppRoutes.diagnostics,
       icon: Icons.bloodtype_rounded,
       color: Color(0xFFE65100),
       category: SearchCategory.labTest,
@@ -570,7 +569,7 @@ class SearchService {
       id: 'lab_lipid',
       title: 'Lipid Profile',
       subtitle: 'Cholesterol test · Results in 24 hrs',
-      route: AppRoutes.labTests,
+      route: AppRoutes.diagnostics,
       icon: Icons.monitor_heart_rounded,
       color: Color(0xFFEF5350),
       category: SearchCategory.labTest,
@@ -580,7 +579,7 @@ class SearchService {
       id: 'lab_thyroid',
       title: 'Thyroid Function Test',
       subtitle: 'TSH, T3, T4 · Results in 24 hrs',
-      route: AppRoutes.labTests,
+      route: AppRoutes.diagnostics,
       icon: Icons.biotech_rounded,
       color: Color(0xFF6A1B9A),
       category: SearchCategory.labTest,
@@ -620,7 +619,7 @@ class SearchService {
       id: 'lab_urine',
       title: 'Urine Routine & Microscopy',
       subtitle: 'Kidney & bladder health · 24 hrs',
-      route: AppRoutes.labTests,
+      route: AppRoutes.diagnostics,
       icon: Icons.science_rounded,
       color: Color(0xFFFFB300),
       category: SearchCategory.labTest,
@@ -630,7 +629,7 @@ class SearchService {
       id: 'lab_covid',
       title: 'COVID-19 Test (RT-PCR)',
       subtitle: 'Rapid / RT-PCR test available',
-      route: AppRoutes.labTests,
+      route: AppRoutes.diagnostics,
       icon: Icons.coronavirus_rounded,
       color: Color(0xFFFF6F00),
       category: SearchCategory.labTest,

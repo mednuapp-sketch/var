@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
@@ -10,59 +12,181 @@ import '../../../core/router/app_router.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../profile/screens/family_management_screen.dart';
 import '../../health/providers/water_tracker_provider.dart';
+import '../../banners/data/banner_model.dart';
+import '../../banners/providers/banner_provider.dart';
+import '../../education/services/health_article_service.dart';
 
 // ═══════════════════════════════════════════════════════════
-// DoctorConsultBanner
+// DoctorConsultBanner — auto-scrolling hero carousel.
+// Slide 0 is the fixed "Consult Top Doctors" card — the whole card
+// navigates, not just the Quick Connect pill. Any further slides are
+// admin-posted ads from the `banners` collection (managed in the admin
+// dashboard's Banners tab) and are display-only — tapping them does
+// nothing, so the carousel can't be mistaken for a row of buttons.
 // ═══════════════════════════════════════════════════════════
-class DoctorConsultBanner extends StatelessWidget {
+const double _heroCardHeight = 192;
+const _heroCardRadius = BorderRadius.only(
+  bottomLeft: Radius.circular(28),
+  bottomRight: Radius.circular(28),
+);
+
+class DoctorConsultBanner extends ConsumerStatefulWidget {
   const DoctorConsultBanner({super.key});
 
-  static const double _cardHeight = 192;
-  static const _cardRadius = BorderRadius.only(
-    bottomLeft: Radius.circular(28),
-    bottomRight: Radius.circular(28),
-  );
-  static const _brandGradient = AppColors.heroBannerGradient;
+  @override
+  ConsumerState<DoctorConsultBanner> createState() =>
+      _DoctorConsultBannerState();
+}
+
+class _DoctorConsultBannerState extends ConsumerState<DoctorConsultBanner> {
+  // Large fixed virtual page count so auto-scroll can always move forward
+  // by one page (PageController.animateToPage(current + 1)) and let
+  // itemBuilder's `i % slideCount` wrap the content — a true circular loop
+  // instead of reverse-animating back across every slide on last → first.
+  // Same technique already used by ServiceGrid below.
+  static const int _virtualCount = 100000;
+
+  late final PageController _controller;
+  Timer? _autoScrollTimer;
+  int _slideCount = 1;
+  int _currentPage = 0;
+
+  int _centeredVirtualPage(int slideCount, int realIndex) =>
+      (_virtualCount ~/ 2 ~/ slideCount) * slideCount + realIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller =
+        PageController(initialPage: _centeredVirtualPage(_slideCount, 0));
+  }
+
+  void _restartAutoScroll() {
+    _autoScrollTimer?.cancel();
+    if (_slideCount <= 1) return;
+    _autoScrollTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+      if (!_controller.hasClients) return;
+      final current = _controller.page?.round() ?? 0;
+      _controller.animateToPage(
+        current + 1,
+        duration: const Duration(milliseconds: 500),
+        curve: Curves.easeInOutCubic,
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    _autoScrollTimer?.cancel();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final adsAsync = ref.watch(activeBannersProvider);
+    ref.listen<AsyncValue<List<BannerModel>>>(activeBannersProvider, (_, next) {
+      final count = 1 + (next.valueOrNull?.length ?? 0);
+      if (count != _slideCount) {
+        final target = _centeredVirtualPage(count, _currentPage % count);
+        setState(() => _slideCount = count);
+        if (_controller.hasClients) _controller.jumpToPage(target);
+        _restartAutoScroll();
+      }
+    });
+    final ads = adsAsync.valueOrNull ?? const <BannerModel>[];
+    final slideCount = 1 + ads.length;
+
+    return Column(
+      children: [
+        SizedBox(
+          height: _heroCardHeight,
+          child: PageView.builder(
+            controller: _controller,
+            itemCount: _virtualCount,
+            onPageChanged: (i) =>
+                setState(() => _currentPage = i % slideCount),
+            itemBuilder: (_, i) {
+              final real = i % slideCount;
+              return real == 0
+                  ? const _HeroConsultSlide()
+                  : _AdSlide(ad: ads[real - 1]);
+            },
+          ),
+        ),
+        if (slideCount > 1) ...[
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(slideCount, (i) {
+              final active = _currentPage == i;
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                margin: const EdgeInsets.symmetric(horizontal: 3),
+                width: active ? 18 : 5,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: active
+                      ? AppColors.primary
+                      : AppColors.primary.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(3),
+                ),
+              );
+            }),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _HeroConsultSlide extends StatelessWidget {
+  const _HeroConsultSlide();
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: () => context.push(AppRoutes.consultation),
       child: Container(
         width: double.infinity,
-        height: _cardHeight,
+        height: _heroCardHeight,
         decoration: BoxDecoration(
-          borderRadius: _cardRadius,
-          gradient: _brandGradient,
+          borderRadius: _heroCardRadius,
+          gradient: AppColors.heroBannerGradient,
           boxShadow: [
             BoxShadow(
-              color: AppColors.primary.withValues(alpha:0.38),
+              color: AppColors.primary.withValues(alpha: 0.38),
               blurRadius: 24,
               offset: const Offset(0, 10),
             ),
           ],
         ),
         child: ClipRRect(
-          borderRadius: _cardRadius,
+          borderRadius: _heroCardRadius,
           child: Stack(
             children: [
               // Large soft glow behind the doctor
               Positioned(
-                right: -18, top: -25,
+                right: -18,
+                top: -25,
                 child: Container(
-                  width: 150, height: 150,
+                  width: 150,
+                  height: 150,
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha:0.10),
+                    color: Colors.white.withValues(alpha: 0.10),
                     shape: BoxShape.circle,
                   ),
                 ),
               ),
               Positioned(
-                right: 75, bottom: -35,
+                right: 75,
+                bottom: -35,
                 child: Container(
-                  width: 80, height: 80,
+                  width: 80,
+                  height: 80,
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha:0.05),
+                    color: Colors.white.withValues(alpha: 0.05),
                     shape: BoxShape.circle,
                   ),
                 ),
@@ -71,7 +195,9 @@ class DoctorConsultBanner extends StatelessWidget {
               const Positioned(left: 20, top: 18, child: _DotGrid()),
               // Doctor cutout illustration, fully contained within the card
               Positioned(
-                right: 4, top: 0, bottom: 0,
+                right: 4,
+                top: 0,
+                bottom: 0,
                 width: 138,
                 child: Image.asset(
                   'assets/images/avatar.png',
@@ -81,13 +207,13 @@ class DoctorConsultBanner extends StatelessWidget {
               ),
               // Soft wave that lets the doctor emerge instead of a hard PNG crop line
               Positioned(
-                left: 0, right: 0, bottom: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
                 height: 46,
                 child: ClipPath(
                   clipper: _WaveClipper(),
-                  child: Container(
-                    color: Theme.of(context).colorScheme.surface,
-                  ),
+                  child: Container(color: Theme.of(context).colorScheme.surface),
                 ),
               ),
               // Text content on the left
@@ -118,14 +244,18 @@ class DoctorConsultBanner extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 14),
+                    // Visual only — the whole card (GestureDetector above) handles the tap.
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 9,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(22),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withValues(alpha:0.12),
+                            color: Colors.black.withValues(alpha: 0.12),
                             blurRadius: 8,
                             offset: const Offset(0, 3),
                           ),
@@ -144,7 +274,11 @@ class DoctorConsultBanner extends StatelessWidget {
                             ),
                           ),
                           SizedBox(width: 5),
-                          Icon(Icons.arrow_forward_rounded, size: 12, color: AppColors.primary),
+                          Icon(
+                            Icons.arrow_forward_rounded,
+                            size: 12,
+                            color: AppColors.primary,
+                          ),
                         ],
                       ),
                     ),
@@ -152,6 +286,62 @@ class DoctorConsultBanner extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Admin-posted ad slide. Intentionally has no GestureDetector at all —
+// unlike the hero slide, ad slides are display-only and never navigate.
+class _AdSlide extends StatelessWidget {
+  final BannerModel ad;
+  const _AdSlide({required this.ad});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      height: _heroCardHeight,
+      decoration: BoxDecoration(
+        borderRadius: _heroCardRadius,
+        color: AppColors.primary.withValues(alpha: 0.08),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.12),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: _heroCardRadius,
+        child: CachedNetworkImage(
+          imageUrl: ad.imageUrl,
+          width: double.infinity,
+          height: _heroCardHeight,
+          fit: BoxFit.cover,
+          placeholder: (_, __) => Container(
+            color: AppColors.primary.withValues(alpha: 0.08),
+            child: const Center(
+              child: SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: AppColors.primary,
+                ),
+              ),
+            ),
+          ),
+          errorWidget: (_, __, ___) => Container(
+            decoration: const BoxDecoration(
+              gradient: AppColors.heroBannerGradient,
+            ),
+            child: const Center(
+              child: Icon(Icons.image_rounded, color: Colors.white60, size: 40),
+            ),
           ),
         ),
       ),
@@ -174,7 +364,8 @@ class _DotGrid extends StatelessWidget {
               return Padding(
                 padding: EdgeInsets.only(right: col == 2 ? 0 : 6),
                 child: Container(
-                  width: 3, height: 3,
+                  width: 3,
+                  height: 3,
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.28),
                     shape: BoxShape.circle,
@@ -197,14 +388,20 @@ class _WaveClipper extends CustomClipper<Path> {
     return Path()
       ..moveTo(0, size.height * 0.65)
       ..cubicTo(
-        size.width * 0.16, size.height * 0.25,
-        size.width * 0.36, size.height * 0.95,
-        size.width * 0.60, size.height * 0.55,
+        size.width * 0.16,
+        size.height * 0.25,
+        size.width * 0.36,
+        size.height * 0.95,
+        size.width * 0.60,
+        size.height * 0.55,
       )
       ..cubicTo(
-        size.width * 0.78, size.height * 0.25,
-        size.width * 0.90, size.height * 0.70,
-        size.width, size.height * 0.40,
+        size.width * 0.78,
+        size.height * 0.25,
+        size.width * 0.90,
+        size.height * 0.70,
+        size.width,
+        size.height * 0.40,
       )
       ..lineTo(size.width, size.height)
       ..lineTo(0, size.height)
@@ -239,7 +436,7 @@ class AiDoctorCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF4527A0).withValues(alpha:0.38),
+              color: const Color(0xFF4527A0).withValues(alpha: 0.38),
               blurRadius: 24,
               offset: const Offset(0, 10),
             ),
@@ -248,21 +445,25 @@ class AiDoctorCard extends StatelessWidget {
         child: Stack(
           children: [
             Positioned(
-              right: -18, top: -22,
+              right: -18,
+              top: -22,
               child: Container(
-                width: 100, height: 100,
+                width: 100,
+                height: 100,
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha:0.07),
+                  color: Colors.white.withValues(alpha: 0.07),
                   shape: BoxShape.circle,
                 ),
               ),
             ),
             Positioned(
-              right: 55, bottom: -28,
+              right: 55,
+              bottom: -28,
               child: Container(
-                width: 70, height: 70,
+                width: 70,
+                height: 70,
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha:0.05),
+                  color: Colors.white.withValues(alpha: 0.05),
                   shape: BoxShape.circle,
                 ),
               ),
@@ -273,9 +474,10 @@ class AiDoctorCard extends StatelessWidget {
                 Row(
                   children: [
                     Container(
-                      width: 50, height: 50,
+                      width: 50,
+                      height: 50,
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha:0.18),
+                        color: Colors.white.withValues(alpha: 0.18),
                         borderRadius: BorderRadius.circular(16),
                       ),
                       child: const Icon(
@@ -306,9 +508,12 @@ class AiDoctorCard extends StatelessWidget {
                               ),
                               const SizedBox(width: 8),
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 3,
+                                ),
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha:0.22),
+                                  color: Colors.white.withValues(alpha: 0.22),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: const Text(
@@ -337,7 +542,8 @@ class AiDoctorCard extends StatelessWidget {
                     ),
                     // Animated pulse dot
                     Container(
-                      width: 10, height: 10,
+                      width: 10,
+                      height: 10,
                       decoration: const BoxDecoration(
                         color: Color(0xFF69FF47),
                         shape: BoxShape.circle,
@@ -360,35 +566,47 @@ class AiDoctorCard extends StatelessWidget {
                 Wrap(
                   spacing: 8,
                   runSpacing: 6,
-                  children: _questions.map((q) => Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha:0.14),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.white.withValues(alpha:0.3)),
-                    ),
-                    child: Text(
-                      q,
-                      style: const TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                      ),
-                    ),
-                  )).toList(),
+                  children: _questions
+                      .map(
+                        (q) => Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.14),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.3),
+                            ),
+                          ),
+                          child: Text(
+                            q,
+                            style: const TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      )
+                      .toList(),
                 ),
                 const SizedBox(height: 16),
                 Align(
                   alignment: Alignment.centerRight,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 10,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(22),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withValues(alpha:0.14),
+                          color: Colors.black.withValues(alpha: 0.14),
                           blurRadius: 8,
                           offset: const Offset(0, 3),
                         ),
@@ -397,7 +615,11 @@ class AiDoctorCard extends StatelessWidget {
                     child: const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.auto_awesome_rounded, size: 13, color: Color(0xFF4527A0)),
+                        Icon(
+                          Icons.auto_awesome_rounded,
+                          size: 13,
+                          color: Color(0xFF4527A0),
+                        ),
                         SizedBox(width: 6),
                         Text(
                           'Ask AI Doctor',
@@ -428,25 +650,25 @@ class SpecialtiesSection extends StatelessWidget {
   const SpecialtiesSection({super.key});
 
   static const _specs = [
-    _Spec('General',          Icons.medical_services_rounded,   Color(0xFF1565C0)),
-    _Spec('Cardiology',       Icons.favorite_rounded,           Color(0xFFC62828)),
-    _Spec('Dermatology',      Icons.face_rounded,                Color(0xFFE65100)),
-    _Spec('Gynaecology',      Icons.pregnant_woman_rounded,      Color(0xFF522546)),
-    _Spec('Paediatrics',      Icons.child_care_rounded,         Color(0xFF6A1B9A)),
-    _Spec('ENT',              Icons.hearing_rounded,            Color(0xFF00695C)),
-    _Spec('Orthopaedics',     Icons.accessibility_new_rounded,  Color(0xFF283593)),
-    _Spec('Neurology',        Icons.psychology_rounded,         Color(0xFF3D1D36)),
-    _Spec('Ophthalmology',    Icons.visibility_rounded,         Color(0xFF2E7D32)),
-    _Spec('Psychiatry',       Icons.self_improvement_rounded,   Color(0xFF00838F)),
-    _Spec('Endocrinology',    Icons.science_rounded,            Color(0xFF558B2F)),
-    _Spec('Gastroenterology', Icons.monitor_heart_rounded,      Color(0xFFE65100)),
-    _Spec('Nephrology',       Icons.water_drop_rounded,         Color(0xFF283593)),
-    _Spec('Urology',          Icons.health_and_safety_rounded,  Color(0xFF633058)),
-    _Spec('Pulmonology',      Icons.air_rounded,                Color(0xFF006064)),
-    _Spec('General Surgery',  Icons.cut_rounded,                Color(0xFF4E342E)),
-    _Spec('Dental',           Icons.mood_rounded,               Color(0xFF00838F)),
-    _Spec('Rheumatology',     Icons.elderly_rounded,            Color(0xFF827717)),
-    _Spec('Oncology',         Icons.biotech_rounded,            Color(0xFFBF360C)),
+    _Spec('General', Icons.medical_services_rounded, Color(0xFF1565C0)),
+    _Spec('Cardiology', Icons.favorite_rounded, Color(0xFFC62828)),
+    _Spec('Dermatology', Icons.face_rounded, Color(0xFFE65100)),
+    _Spec('Gynaecology', Icons.pregnant_woman_rounded, Color(0xFF522546)),
+    _Spec('Paediatrics', Icons.child_care_rounded, Color(0xFF6A1B9A)),
+    _Spec('ENT', Icons.hearing_rounded, Color(0xFF00695C)),
+    _Spec('Orthopaedics', Icons.accessibility_new_rounded, Color(0xFF283593)),
+    _Spec('Neurology', Icons.psychology_rounded, Color(0xFF3D1D36)),
+    _Spec('Ophthalmology', Icons.visibility_rounded, Color(0xFF2E7D32)),
+    _Spec('Psychiatry', Icons.self_improvement_rounded, Color(0xFF00838F)),
+    _Spec('Endocrinology', Icons.science_rounded, Color(0xFF558B2F)),
+    _Spec('Gastroenterology', Icons.monitor_heart_rounded, Color(0xFFE65100)),
+    _Spec('Nephrology', Icons.water_drop_rounded, Color(0xFF283593)),
+    _Spec('Urology', Icons.health_and_safety_rounded, Color(0xFF633058)),
+    _Spec('Pulmonology', Icons.air_rounded, Color(0xFF006064)),
+    _Spec('General Surgery', Icons.cut_rounded, Color(0xFF4E342E)),
+    _Spec('Dental', Icons.mood_rounded, Color(0xFF00838F)),
+    _Spec('Rheumatology', Icons.elderly_rounded, Color(0xFF827717)),
+    _Spec('Oncology', Icons.biotech_rounded, Color(0xFFBF360C)),
   ];
 
   @override
@@ -475,10 +697,8 @@ class SpecialtiesSection extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 20),
             itemCount: _specs.length,
             separatorBuilder: (_, __) => const SizedBox(width: 14),
-            itemBuilder: (_, i) => SizedBox(
-              width: 58,
-              child: _SpecChip(spec: _specs[i]),
-            ),
+            itemBuilder: (_, i) =>
+                SizedBox(width: 58, child: _SpecChip(spec: _specs[i])),
           ),
         ),
       ],
@@ -506,19 +726,20 @@ class _SpecChip extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.start,
         children: [
           Container(
-            width: 50, height: 50,
+            width: 50,
+            height: 50,
             decoration: BoxDecoration(
               color: isDark
-                  ? spec.color.withValues(alpha:0.15)
-                  : spec.color.withValues(alpha:0.10),
+                  ? spec.color.withValues(alpha: 0.15)
+                  : spec.color.withValues(alpha: 0.10),
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: spec.color.withValues(alpha:isDark ? 0.35 : 0.20),
+                color: spec.color.withValues(alpha: isDark ? 0.35 : 0.20),
                 width: 1,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: spec.color.withValues(alpha:isDark ? 0.25 : 0.12),
+                  color: spec.color.withValues(alpha: isDark ? 0.25 : 0.12),
                   blurRadius: isDark ? 14 : 8,
                   offset: const Offset(0, 3),
                 ),
@@ -535,7 +756,9 @@ class _SpecChip extends StatelessWidget {
             style: AppTextStyles.caption.copyWith(
               fontWeight: FontWeight.w600,
               fontSize: 9,
-              color: Theme.of(context).colorScheme.onSurface.withValues(alpha:0.75),
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurface.withValues(alpha: 0.75),
               height: 1.2,
             ),
           ),
@@ -590,7 +813,9 @@ class FamilyRow extends ConsumerWidget {
                 onTap: () => context.push(AppRoutes.profile),
                 child: _FamilyMemberTile(
                   member: _FamilyMember(
-                    name: userName.isNotEmpty ? userName.split(' ').first : 'You',
+                    name: userName.isNotEmpty
+                        ? userName.split(' ').first
+                        : 'You',
                     initials: selfInitial,
                     isActive: true,
                   ),
@@ -598,11 +823,15 @@ class FamilyRow extends ConsumerWidget {
               ),
               ...members.map((m) {
                 final name = m['name'] as String? ?? '';
-                final relation = m['relation'] as String? ?? name.split(' ').first;
-                final displayName = relation.isNotEmpty ? relation : name.split(' ').first;
+                final relation =
+                    m['relation'] as String? ?? name.split(' ').first;
+                final displayName = relation.isNotEmpty
+                    ? relation
+                    : name.split(' ').first;
                 final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
                 return GestureDetector(
-                  onTap: () => context.push(AppRoutes.familyMemberDetail, extra: m),
+                  onTap: () =>
+                      context.push(AppRoutes.familyMemberDetail, extra: m),
                   child: _FamilyMemberTile(
                     member: _FamilyMember(name: displayName, initials: initial),
                   ),
@@ -611,9 +840,10 @@ class FamilyRow extends ConsumerWidget {
               // Add button
               GestureDetector(
                 onTap: () {
-                  final currentUid = ref.read(authProvider).user?.uid
-                      ?? FirebaseAuth.instance.currentUser?.uid
-                      ?? '';
+                  final currentUid =
+                      ref.read(authProvider).user?.uid ??
+                      FirebaseAuth.instance.currentUser?.uid ??
+                      '';
                   final minorCount = members.where((m) {
                     final age = m['age'];
                     return age is int && age > 0 && age < 18;
@@ -623,7 +853,9 @@ class FamilyRow extends ConsumerWidget {
                     return age is int && age >= 18;
                   }).length;
                   showAddFamilyMemberSheet(
-                    context, ref, currentUid,
+                    context,
+                    ref,
+                    currentUid,
                     currentMinorCount: minorCount,
                     currentAdultCount: adultCount,
                     currentTotalCount: members.length,
@@ -645,9 +877,13 @@ class FamilyRow extends ConsumerWidget {
                             width: 1.5,
                             strokeAlign: BorderSide.strokeAlignOutside,
                           ),
-                          color: AppColors.primary.withValues(alpha:0.06),
+                          color: AppColors.primary.withValues(alpha: 0.06),
                         ),
-                        child: const Icon(Icons.add_rounded, color: AppColors.primary, size: 26),
+                        child: const Icon(
+                          Icons.add_rounded,
+                          color: AppColors.primary,
+                          size: 26,
+                        ),
                       ),
                       const SizedBox(height: 7),
                       Text(
@@ -674,7 +910,11 @@ class _FamilyMember {
   final String name;
   final String initials;
   final bool isActive;
-  const _FamilyMember({required this.name, required this.initials, this.isActive = false});
+  const _FamilyMember({
+    required this.name,
+    required this.initials,
+    this.isActive = false,
+  });
 }
 
 class _FamilyMemberTile extends StatelessWidget {
@@ -700,12 +940,16 @@ class _FamilyMemberTile extends StatelessWidget {
                   gradient: member.isActive
                       ? AppColors.primaryGradient
                       : const LinearGradient(
-                          colors: [Color(0xFFE1BEE7), Color(0xFFF8BBD0)]),
+                          colors: [Color(0xFFE1BEE7), Color(0xFFF8BBD0)],
+                        ),
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
-                      color: (member.isActive ? AppColors.primary : const Color(0xFFAB47BC))
-                          .withValues(alpha:0.28),
+                      color:
+                          (member.isActive
+                                  ? AppColors.primary
+                                  : const Color(0xFFAB47BC))
+                              .withValues(alpha: 0.28),
                       blurRadius: 12,
                       offset: const Offset(0, 4),
                     ),
@@ -739,7 +983,11 @@ class _FamilyMemberTile extends StatelessWidget {
                         width: 2,
                       ),
                     ),
-                    child: const Icon(Icons.check_rounded, size: 10, color: Colors.white),
+                    child: const Icon(
+                      Icons.check_rounded,
+                      size: 10,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
             ],
@@ -755,7 +1003,9 @@ class _FamilyMemberTile extends StatelessWidget {
               fontSize: 11,
               color: member.isActive
                   ? AppColors.primary
-                  : Theme.of(context).colorScheme.onSurface.withValues(alpha:0.75),
+                  : Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.75),
             ),
           ),
         ],
@@ -792,7 +1042,9 @@ class _NotificationStripState extends ConsumerState<NotificationStrip> {
     final userDoc = uid.isNotEmpty
         ? ref.watch(userDocProvider(uid))
         : const AsyncValue<Map<String, dynamic>?>.data(null);
-    final isMale = (userDoc.valueOrNull?['gender'] as String? ?? '').toLowerCase() == 'male';
+    final isMale =
+        (userDoc.valueOrNull?['gender'] as String? ?? '').toLowerCase() ==
+        'male';
     final waterState = ref.watch(waterTrackerProvider);
     final waterCopy = _waterStripCopy(waterState);
 
@@ -824,9 +1076,13 @@ class _NotificationStripState extends ConsumerState<NotificationStrip> {
     return GestureDetector(
       onHorizontalDragEnd: (d) {
         if (d.primaryVelocity! < 0) {
-          setState(() { _current = (safeIndex + 1) % strips.length; });
+          setState(() {
+            _current = (safeIndex + 1) % strips.length;
+          });
         } else {
-          setState(() { _current = (safeIndex - 1 + strips.length) % strips.length; });
+          setState(() {
+            _current = (safeIndex - 1 + strips.length) % strips.length;
+          });
         }
       },
       child: AnimatedSwitcher(
@@ -844,7 +1100,8 @@ class _NotificationStripState extends ConsumerState<NotificationStrip> {
                   behavior: SnackBarBehavior.floating,
                   duration: const Duration(seconds: 1),
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
               );
             }
@@ -891,17 +1148,33 @@ class _WaterStripCopy {
 _WaterStripCopy _waterStripCopy(WaterTrackerState state) {
   if (state.goalReached) {
     return _WaterStripCopy(
-        'Goal Reached! 💧', '${state.totalMl} ml logged today', 'View', false);
+      'Goal Reached! 💧',
+      '${state.totalMl} ml logged today',
+      'View',
+      false,
+    );
   }
-  final lastLog = state.todayLogs.isEmpty ? null : state.todayLogs.last.loggedAt;
-  final intervalHours = state.reminderIntervalHours > 0 ? state.reminderIntervalHours : 2;
+  final lastLog = state.todayLogs.isEmpty
+      ? null
+      : state.todayLogs.last.loggedAt;
+  final intervalHours = state.reminderIntervalHours > 0
+      ? state.reminderIntervalHours
+      : 2;
   final sinceLast = lastLog == null ? null : DateTime.now().difference(lastLog);
   if (sinceLast != null && sinceLast < Duration(hours: intervalHours)) {
     return _WaterStripCopy(
-        'Staying hydrated! 💧', 'Last logged ${_timeAgo(sinceLast)}', 'Log More', true);
+      'Staying hydrated! 💧',
+      'Last logged ${_timeAgo(sinceLast)}',
+      'Log More',
+      true,
+    );
   }
-  return _WaterStripCopy('Drink Water! 💧',
-      'You haven\'t had water in $intervalHours hours', 'Mark Done', true);
+  return _WaterStripCopy(
+    'Drink Water! 💧',
+    'You haven\'t had water in $intervalHours hours',
+    'Mark Done',
+    true,
+  );
 }
 
 String _timeAgo(Duration d) {
@@ -927,23 +1200,28 @@ class _StripTile extends StatelessWidget {
         margin: const EdgeInsets.symmetric(horizontal: 20),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: isDark
-              ? strip.color.withValues(alpha:0.12)
-              : strip.bg,
+          color: isDark ? strip.color.withValues(alpha: 0.12) : strip.bg,
           borderRadius: BorderRadius.circular(16),
           border: isDark
-              ? Border.all(color: strip.color.withValues(alpha:0.25), width: 1)
+              ? Border.all(color: strip.color.withValues(alpha: 0.25), width: 1)
               : Border(left: BorderSide(color: strip.color, width: 4)),
           boxShadow: isDark
-              ? [BoxShadow(color: strip.color.withValues(alpha:0.12), blurRadius: 16, offset: const Offset(0, 4))]
+              ? [
+                  BoxShadow(
+                    color: strip.color.withValues(alpha: 0.12),
+                    blurRadius: 16,
+                    offset: const Offset(0, 4),
+                  ),
+                ]
               : null,
         ),
         child: Row(
           children: [
             Container(
-              width: 40, height: 40,
+              width: 40,
+              height: 40,
               decoration: BoxDecoration(
-                color: strip.color.withValues(alpha:0.18),
+                color: strip.color.withValues(alpha: 0.18),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(strip.icon, color: strip.color, size: 22),
@@ -954,15 +1232,22 @@ class _StripTile extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(strip.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.labelLarge.copyWith(color: strip.color, fontSize: 13)),
+                  Text(
+                    strip.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.labelLarge.copyWith(
+                      color: strip.color,
+                      fontSize: 13,
+                    ),
+                  ),
                   const SizedBox(height: 2),
-                  Text(strip.sub,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.bodySmall),
+                  Text(
+                    strip.sub,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.bodySmall,
+                  ),
                 ],
               ),
             ),
@@ -977,7 +1262,10 @@ class _StripTile extends StatelessWidget {
               },
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: strip.color,
                   borderRadius: BorderRadius.circular(10),
@@ -1018,19 +1306,123 @@ class _ServiceGridState extends State<ServiceGrid> {
   static const int _virtualCount = 12000;
 
   static final _services = [
-    const _Service('Emergency',   Icons.emergency_rounded,         AppColors.emergencyGrad,   AppRoutes.emergency,     null,      'Immediate 24/7 help for medical emergencies',  'Call Now'),
-    const _Service('Consultation', Icons.video_call_rounded,       AppColors.consultGrad,     AppRoutes.consultation,  null,      'Consult Our Top Specialists',  'Book Now'),
-    const _Service('Pharmacy',    Icons.medication_liquid_rounded, AppColors.medicineGrad,    AppRoutes.medicine,      null,      'Order medicines to be delivered to your doorstep',    'Order Now'),
-    const _Service('Pregnancy',   Icons.pregnant_woman_rounded,    AppColors.pregnancyGrad,   AppRoutes.pregnancy,     'NEW',     'Track your pregnancy journey week by week',      'Track Now'),
-    const _Service('Diagnostics', Icons.science_rounded,           AppColors.diagnosticGrad,  AppRoutes.diagnostics,   null,      'X-Ray, MRI, CT, ECG & imaging scans',        'Book Test'),
-    const _Service('Lab Tests',   Icons.bloodtype_rounded,         AppColors.labTestGrad,    AppRoutes.labTests,     null,      'Book blood & lab tests with certified labs', 'Book Test'),
-    const _Service('Care Assist', Icons.support_agent_rounded,     AppColors.careAssistGrad,  AppRoutes.careAssistant, null,      'Health assistant at your service',    'Try Now'),
-    const _Service('Ambulance',   Icons.local_shipping_rounded,    AppColors.ambulanceGrad,   AppRoutes.ambulance,     null,      'Emergency ambulance at your location',           'Call Now'),
-    const _Service('Physiotherapy', Icons.fitness_center_rounded,  AppColors.physioGrad,      AppRoutes.physio,        null,      'Physiotherapy & rehabilitation',          'Book Now'),
-    const _Service('Nutrition and Diet',   Icons.restaurant_rounded,        AppColors.nutritionGrad,   AppRoutes.nutrition,     null,      'Personalised diet plans from nutritionists',      'Get Plan'),
-    const _Service('Therapy and Counselling', Icons.psychology_rounded, AppColors.counselGrad,     AppRoutes.counselling,   null,      'Mental health support & therapy sessions',        'Book Now'),
-    const _Service('Equipment',   Icons.medical_services_rounded,  AppColors.equipmentGrad,   AppRoutes.equipment,     null,      'Rent or buy medical equipment online',            'Browse'),
-    const _Service('Caregivers',  Icons.elderly_rounded,           AppColors.caregiverGrad,   AppRoutes.caregivers,    null,      'Trained attendants & caregiver support',          'Hire Now'),
+    const _Service(
+      'Emergency',
+      Icons.emergency_rounded,
+      AppColors.emergencyGrad,
+      AppRoutes.emergency,
+      null,
+      'Immediate 24/7 help for medical emergencies',
+      'Call Now',
+    ),
+    const _Service(
+      'Consultation',
+      Icons.video_call_rounded,
+      AppColors.consultGrad,
+      AppRoutes.consultation,
+      null,
+      'Consult Our Top Specialists',
+      'Book Now',
+    ),
+    const _Service(
+      'Pharmacy',
+      Icons.medication_liquid_rounded,
+      AppColors.medicineGrad,
+      AppRoutes.pharmacy,
+      null,
+      'Order medicines to be delivered to your doorstep',
+      'Order Now',
+    ),
+    const _Service(
+      'Pregnancy',
+      Icons.pregnant_woman_rounded,
+      AppColors.pregnancyGrad,
+      AppRoutes.pregnancy,
+      'NEW',
+      'Track your pregnancy journey week by week',
+      'Track Now',
+    ),
+    const _Service(
+      'Diagnostics',
+      Icons.science_rounded,
+      AppColors.diagnosticGrad,
+      AppRoutes.diagnostics,
+      null,
+      'X-Ray, MRI, CT, ECG & imaging scans',
+      'Book Test',
+    ),
+    const _Service(
+      'Care Assist',
+      Icons.support_agent_rounded,
+      AppColors.careAssistGrad,
+      AppRoutes.careAssistant,
+      null,
+      'Health assistant at your service',
+      'Try Now',
+    ),
+    const _Service(
+      'Ambulance',
+      Icons.local_shipping_rounded,
+      AppColors.ambulanceGrad,
+      AppRoutes.ambulance,
+      null,
+      'Emergency ambulance at your location',
+      'Call Now',
+    ),
+    const _Service(
+      'Physiotherapy',
+      Icons.fitness_center_rounded,
+      AppColors.physioGrad,
+      AppRoutes.physio,
+      null,
+      'Physiotherapy & rehabilitation',
+      'Book Now',
+    ),
+    const _Service(
+      'Nutrition and Diet',
+      Icons.restaurant_rounded,
+      AppColors.nutritionGrad,
+      AppRoutes.nutrition,
+      null,
+      'Personalised diet plans from nutritionists',
+      'Get Plan',
+    ),
+    const _Service(
+      'Therapy and Counselling',
+      Icons.psychology_rounded,
+      AppColors.counselGrad,
+      AppRoutes.counselling,
+      null,
+      'Mental health support & therapy sessions',
+      'Book Now',
+    ),
+    const _Service(
+      'Equipment',
+      Icons.medical_services_rounded,
+      AppColors.equipmentGrad,
+      AppRoutes.equipment,
+      null,
+      'Rent or buy medical equipment online',
+      'Browse',
+    ),
+    const _Service(
+      'Caregivers',
+      Icons.elderly_rounded,
+      AppColors.caregiverGrad,
+      AppRoutes.caregivers,
+      null,
+      'Trained attendants & caregiver support',
+      'Hire Now',
+    ),
+    const _Service(
+      'Nearby Hospitals',
+      Icons.local_hospital_rounded,
+      AppColors.hospitalGrad,
+      AppRoutes.hospitals,
+      null,
+      'Locate nearby hospitals & pay bills with instant discounts',
+      'Explore',
+    ),
   ];
 
   int get _count => _services.length;
@@ -1039,10 +1431,14 @@ class _ServiceGridState extends State<ServiceGrid> {
   @override
   void initState() {
     super.initState();
-    _controller = PageController(viewportFraction: 0.62, initialPage: _initialPage);
+    _controller = PageController(
+      viewportFraction: 0.62,
+      initialPage: _initialPage,
+    );
     _currentPage = _initialPage.toDouble();
     _controller.addListener(() {
-      if (mounted) setState(() => _currentPage = _controller.page ?? _currentPage);
+      if (mounted)
+        setState(() => _currentPage = _controller.page ?? _currentPage);
     });
   }
 
@@ -1070,7 +1466,10 @@ class _ServiceGridState extends State<ServiceGrid> {
               return Transform.scale(
                 scale: scale,
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 4,
+                  ),
                   child: _ServiceCarouselCard(
                     service: _services[realIndex],
                     isCenter: isCenter,
@@ -1091,7 +1490,9 @@ class _ServiceGridState extends State<ServiceGrid> {
               width: active ? 18 : 5,
               height: 5,
               decoration: BoxDecoration(
-                color: active ? AppColors.primary : AppColors.primary.withValues(alpha:0.2),
+                color: active
+                    ? AppColors.primary
+                    : AppColors.primary.withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(3),
               ),
             );
@@ -1111,8 +1512,13 @@ class _Service {
   final String description;
   final String buttonLabel;
   const _Service(
-    this.label, this.icon, this.gradient, this.route,
-    this.badge, this.description, this.buttonLabel,
+    this.label,
+    this.icon,
+    this.gradient,
+    this.route,
+    this.badge,
+    this.description,
+    this.buttonLabel,
   );
 }
 
@@ -1136,7 +1542,7 @@ class _ServiceCarouselCard extends StatelessWidget {
           boxShadow: isCenter
               ? [
                   BoxShadow(
-                    color: baseColor.withValues(alpha:0.5),
+                    color: baseColor.withValues(alpha: 0.5),
                     blurRadius: 24,
                     offset: const Offset(0, 10),
                   ),
@@ -1150,18 +1556,22 @@ class _ServiceCarouselCard extends StatelessWidget {
               // Decorative ECG-like line for Emergency
               if (service.label == 'Emergency')
                 Positioned(
-                  bottom: 50, left: 0, right: 0,
+                  bottom: 50,
+                  left: 0,
+                  right: 0,
                   child: CustomPaint(
                     size: const Size(double.infinity, 30),
                     painter: _EcgLinePainter(),
                   ),
                 ),
               Positioned(
-                top: -20, right: -20,
+                top: -20,
+                right: -20,
                 child: Container(
-                  width: 90, height: 90,
+                  width: 90,
+                  height: 90,
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha:0.08),
+                    color: Colors.white.withValues(alpha: 0.08),
                     shape: BoxShape.circle,
                   ),
                 ),
@@ -1178,7 +1588,7 @@ class _ServiceCarouselCard extends StatelessWidget {
                           width: isCenter ? 44 : 34,
                           height: isCenter ? 44 : 34,
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha:0.22),
+                            color: Colors.white.withValues(alpha: 0.22),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Icon(
@@ -1190,9 +1600,12 @@ class _ServiceCarouselCard extends StatelessWidget {
                         const Spacer(),
                         if (service.badge != null)
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
                             decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha:0.28),
+                              color: Colors.white.withValues(alpha: 0.28),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
@@ -1237,13 +1650,16 @@ class _ServiceCarouselCard extends StatelessWidget {
                       Align(
                         alignment: Alignment.centerRight,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(16),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withValues(alpha:0.15),
+                                color: Colors.black.withValues(alpha: 0.15),
                                 blurRadius: 6,
                                 offset: const Offset(0, 2),
                               ),
@@ -1252,10 +1668,15 @@ class _ServiceCarouselCard extends StatelessWidget {
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              if (service.label == 'Emergency' || service.label == 'Ambulance')
+                              if (service.label == 'Emergency' ||
+                                  service.label == 'Ambulance')
                                 Padding(
                                   padding: const EdgeInsets.only(right: 4),
-                                  child: Icon(Icons.phone_rounded, size: 10, color: baseColor),
+                                  child: Icon(
+                                    Icons.phone_rounded,
+                                    size: 10,
+                                    color: baseColor,
+                                  ),
                                 ),
                               Text(
                                 service.buttonLabel,
@@ -1287,7 +1708,7 @@ class _EcgLinePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.white.withValues(alpha:0.15)
+      ..color = Colors.white.withValues(alpha: 0.15)
       ..strokeWidth = 1.5
       ..style = PaintingStyle.stroke;
     final path = Path();
@@ -1341,7 +1762,9 @@ class UpcomingAppointmentCard extends StatelessWidget {
     final tomorrow = today.add(const Duration(days: 1));
     if (d.year == today.year && d.month == today.month && d.day == today.day) {
       return 'Today';
-    } else if (d.year == tomorrow.year && d.month == tomorrow.month && d.day == tomorrow.day) {
+    } else if (d.year == tomorrow.year &&
+        d.month == tomorrow.month &&
+        d.day == tomorrow.day) {
       return 'Tomorrow';
     }
     return DateFormat('d MMM yyyy').format(d);
@@ -1355,8 +1778,7 @@ class UpcomingAppointmentCard extends StatelessWidget {
     final cleaned = timeStr.trim().toUpperCase();
     final isPm = cleaned.endsWith('PM');
     final isAm = cleaned.endsWith('AM');
-    final timePart =
-        cleaned.replaceAll('AM', '').replaceAll('PM', '').trim();
+    final timePart = cleaned.replaceAll('AM', '').replaceAll('PM', '').trim();
     final parts = timePart.split(':');
     int hour = int.tryParse(parts[0]) ?? 0;
     final minute = parts.length > 1 ? (int.tryParse(parts[1]) ?? 0) : 0;
@@ -1409,13 +1831,17 @@ class UpcomingAppointmentCard extends StatelessWidget {
         docs.sort((a, b) {
           final aData = a.data();
           final bData = b.data();
-          final aDt = _parseAppointmentDateTime(
+          final aDt =
+              _parseAppointmentDateTime(
                 aData['date'] as String? ?? '',
-                aData['time'] as String? ?? '') ??
+                aData['time'] as String? ?? '',
+              ) ??
               DateTime(9999);
-          final bDt = _parseAppointmentDateTime(
+          final bDt =
+              _parseAppointmentDateTime(
                 bData['date'] as String? ?? '',
-                bData['time'] as String? ?? '') ??
+                bData['time'] as String? ?? '',
+              ) ??
               DateTime(9999);
           return aDt.compareTo(bDt);
         });
@@ -1456,16 +1882,18 @@ class UpcomingAppointmentCard extends StatelessWidget {
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha:0.4),
+          color: Theme.of(
+            context,
+          ).colorScheme.outlineVariant.withValues(alpha: 0.4),
         ),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primary.withValues(alpha:0.08),
+            color: AppColors.primary.withValues(alpha: 0.08),
             blurRadius: 20,
             offset: const Offset(0, 6),
           ),
           BoxShadow(
-            color: Colors.black.withValues(alpha:0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -1485,11 +1913,15 @@ class UpcomingAppointmentCard extends StatelessWidget {
               height: 64,
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
-                    colors: [Color(0xFFF8BBD0), Color(0xFFE1BEE7)]),
+                  colors: [Color(0xFFF8BBD0), Color(0xFFE1BEE7)],
+                ),
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: const Icon(Icons.person_rounded,
-                  color: AppColors.primary, size: 34),
+              child: const Icon(
+                Icons.person_rounded,
+                color: AppColors.primary,
+                size: 34,
+              ),
             ),
           ),
           const SizedBox(width: 14),
@@ -1527,16 +1959,16 @@ class UpcomingAppointmentCard extends StatelessWidget {
           // Action button
           GestureDetector(
             onTap: () => context.push(
-                isVideo ? AppRoutes.consultation : AppRoutes.appointment),
+              isVideo ? AppRoutes.consultation : AppRoutes.appointment,
+            ),
             child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               decoration: BoxDecoration(
                 gradient: AppColors.primaryGradient,
                 borderRadius: BorderRadius.circular(14),
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.primary.withValues(alpha:0.35),
+                    color: AppColors.primary.withValues(alpha: 0.35),
                     blurRadius: 12,
                     offset: const Offset(0, 4),
                   ),
@@ -1580,12 +2012,10 @@ class UpcomingAppointmentCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: AppColors.primary.withValues(alpha:0.15),
-          ),
+          border: Border.all(color: AppColors.primary.withValues(alpha: 0.15)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha:0.04),
+              color: Colors.black.withValues(alpha: 0.04),
               blurRadius: 12,
               offset: const Offset(0, 4),
             ),
@@ -1597,28 +2027,34 @@ class UpcomingAppointmentCard extends StatelessWidget {
               width: 52,
               height: 52,
               decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha:0.1),
+                color: AppColors.primary.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(14),
               ),
-              child: const Icon(Icons.calendar_today_outlined,
-                  color: AppColors.primary, size: 26),
+              child: const Icon(
+                Icons.calendar_today_outlined,
+                color: AppColors.primary,
+                size: 26,
+              ),
             ),
             const SizedBox(width: 14),
             const Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('No Upcoming Appointments',
-                      style: AppTextStyles.labelLarge),
+                  Text(
+                    'No Upcoming Appointments',
+                    style: AppTextStyles.labelLarge,
+                  ),
                   SizedBox(height: 4),
-                  Text('Book a consultation with a doctor',
-                      style: AppTextStyles.bodySmall),
+                  Text(
+                    'Book a consultation with a doctor',
+                    style: AppTextStyles.bodySmall,
+                  ),
                 ],
               ),
             ),
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
                 gradient: AppColors.primaryGradient,
                 borderRadius: BorderRadius.circular(12),
@@ -1647,7 +2083,9 @@ class UpcomingAppointmentCard extends StatelessWidget {
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha:0.4),
+          color: Theme.of(
+            context,
+          ).colorScheme.outlineVariant.withValues(alpha: 0.4),
         ),
       ),
       child: Row(
@@ -1656,7 +2094,7 @@ class UpcomingAppointmentCard extends StatelessWidget {
             width: 68,
             height: 68,
             decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha:0.08),
+              color: AppColors.primary.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(18),
             ),
           ),
@@ -1666,25 +2104,31 @@ class UpcomingAppointmentCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
-                    height: 14,
-                    width: 120,
-                    decoration: BoxDecoration(
-                        color: Colors.grey.shade200,
-                        borderRadius: BorderRadius.circular(6))),
+                  height: 14,
+                  width: 120,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade200,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                ),
                 const SizedBox(height: 8),
                 Container(
-                    height: 11,
-                    width: 90,
-                    decoration: BoxDecoration(
-                        color: Colors.grey.shade200,
-                        borderRadius: BorderRadius.circular(6))),
+                  height: 11,
+                  width: 90,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade200,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                ),
                 const SizedBox(height: 10),
                 Container(
-                    height: 24,
-                    width: 150,
-                    decoration: BoxDecoration(
-                        color: Colors.grey.shade200,
-                        borderRadius: BorderRadius.circular(8))),
+                  height: 24,
+                  width: 150,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade200,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
               ],
             ),
           ),
@@ -1698,14 +2142,18 @@ class _InfoChip extends StatelessWidget {
   final IconData icon;
   final String label;
   final Color color;
-  const _InfoChip({required this.icon, required this.label, required this.color});
+  const _InfoChip({
+    required this.icon,
+    required this.label,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withValues(alpha:0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
@@ -1714,11 +2162,16 @@ class _InfoChip extends StatelessWidget {
           Icon(icon, size: 11, color: color),
           const SizedBox(width: 4),
           Flexible(
-            child: Text(label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTextStyles.caption.copyWith(
-                    color: color, fontWeight: FontWeight.w700, fontSize: 10)),
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTextStyles.caption.copyWith(
+                color: color,
+                fontWeight: FontWeight.w700,
+                fontSize: 10,
+              ),
+            ),
           ),
         ],
       ),
@@ -1743,50 +2196,82 @@ class _HealthTip {
     required this.icon,
     required this.gradient,
   });
+
+  // Maps an admin-posted health_articles doc (same collection that powers
+  // the /education screen) onto this carousel's display shape, so the
+  // home teaser stays in sync with whatever the admin dashboard publishes.
+  factory _HealthTip.fromArticle(HealthArticle a) => _HealthTip(
+    category: a.category,
+    title: a.title,
+    sub: a.summary,
+    icon: _iconForHealthCategory(a.category),
+    gradient: AppColors.primaryGradient.colors,
+  );
 }
 
+IconData _iconForHealthCategory(String category) {
+  switch (category) {
+    case 'Heart Health':
+      return Icons.favorite_rounded;
+    case 'Diabetes':
+      return Icons.bloodtype_rounded;
+    case 'Pregnancy':
+      return Icons.pregnant_woman_rounded;
+    case 'Nutrition':
+      return Icons.restaurant_rounded;
+    case 'Mental Health':
+      return Icons.psychology_rounded;
+    case 'Fitness':
+      return Icons.fitness_center_rounded;
+    default:
+      return Icons.article_rounded;
+  }
+}
+
+// Shown until the first live health_articles snapshot arrives (or if the
+// admin hasn't published any yet) so the home screen is never blank.
 const _kHealthTips = [
   _HealthTip(
     category: 'Hydration',
     title: 'Stay Hydrated',
     sub: 'Drink 8 glasses daily to keep your body at peak performance.',
     icon: Icons.water_drop_rounded,
-    gradient: [Color(0xFF1565C0), Color(0xFF1E88E5), Color(0xFF42A5F5)],
+    gradient: [Color(0xFF522546), Color(0xFF633058)],
   ),
   _HealthTip(
     category: 'Fitness',
     title: 'Exercise Daily',
     sub: '30 minutes of movement boosts immunity and lifts your mood.',
     icon: Icons.directions_run_rounded,
-    gradient: [Color(0xFF2E7D32), Color(0xFF43A047), Color(0xFF66BB6A)],
+    gradient: [Color(0xFF522546), Color(0xFF633058)],
   ),
   _HealthTip(
     category: 'Sleep',
     title: 'Sleep Well',
     sub: '7–8 hours of quality sleep restores and repairs your body.',
     icon: Icons.bedtime_rounded,
-    gradient: [Color(0xFF3D1D36), Color(0xFF633058), Color(0xFFAB47BC)],
+    gradient: [Color(0xFF522546), Color(0xFF633058)],
   ),
   _HealthTip(
     category: 'Nutrition',
     title: 'Eat Healthy',
     sub: 'Fresh fruits and veggies fuel your energy all day long.',
     icon: Icons.eco_rounded,
-    gradient: [Color(0xFFE65100), Color(0xFFF57C00), Color(0xFFFF8A65)],
+    gradient: [Color(0xFF522546), Color(0xFF633058)],
   ),
   _HealthTip(
     category: 'Mindfulness',
     title: 'Manage Stress',
     sub: '10 minutes of meditation a day reduces cortisol significantly.',
     icon: Icons.self_improvement_rounded,
-    gradient: [Color(0xFF00695C), Color(0xFFF9943B), Color(0xFFFBB878)],
+    gradient: [Color(0xFF522546), Color(0xFF633058)],
   ),
   _HealthTip(
     category: 'Prevention',
     title: 'Regular Checkup',
     sub: 'Annual health screenings catch problems before they start.',
     icon: Icons.health_and_safety_rounded,
-    gradient: [Color(0xFFB71C1C), Color(0xFFC62828), Color(0xFFEF5350)],
+    gradient: [Color(0xFF522546), Color(0xFF633058)],
   ),
 ];
 
@@ -1800,6 +2285,8 @@ class HealthTipCard extends StatefulWidget {
 class _HealthTipCardState extends State<HealthTipCard> {
   final PageController _pageController = PageController(viewportFraction: 0.88);
   int _currentPage = 0;
+  List<_HealthTip> _tips = _kHealthTips;
+  StreamSubscription<List<HealthArticle>>? _articlesSub;
 
   @override
   void initState() {
@@ -1808,31 +2295,49 @@ class _HealthTipCardState extends State<HealthTipCard> {
       final page = _pageController.page?.round() ?? 0;
       if (page != _currentPage) setState(() => _currentPage = page);
     });
+    // Same health_articles collection the admin dashboard's Health Articles
+    // tab and the /education screen use — whatever the admin publishes/
+    // features there shows up here live. Featured articles take priority;
+    // if none are featured yet, fall back to all enabled ones; if the
+    // collection is empty, keep the static defaults so this never goes blank.
+    _articlesSub = HealthArticleService.stream().listen((articles) {
+      if (!mounted || articles.isEmpty) return;
+      final featured = articles.where((a) => a.isFeatured).toList();
+      final source = featured.isNotEmpty ? featured : articles;
+      setState(() {
+        _tips = source.map(_HealthTip.fromArticle).toList();
+        _currentPage = 0;
+      });
+      if (_pageController.hasClients) _pageController.jumpToPage(0);
+    }, onError: (_) {});
   }
 
   @override
   void dispose() {
     _pageController.dispose();
+    _articlesSub?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final tips = _tips;
+    final activeIndex = _currentPage.clamp(0, tips.length - 1);
     return Column(
       children: [
         SizedBox(
           height: 136,
           child: PageView.builder(
             controller: _pageController,
-            itemCount: _kHealthTips.length,
+            itemCount: tips.length,
             padEnds: false,
             physics: const BouncingScrollPhysics(),
             itemBuilder: (context, index) {
-              final tip = _kHealthTips[index];
+              final tip = tips[index];
               return Padding(
                 padding: EdgeInsets.only(
                   left: index == 0 ? 20 : 6,
-                  right: index == _kHealthTips.length - 1 ? 20 : 6,
+                  right: index == tips.length - 1 ? 20 : 6,
                 ),
                 child: _StoryTipCard(tip: tip),
               );
@@ -1842,8 +2347,8 @@ class _HealthTipCardState extends State<HealthTipCard> {
         const SizedBox(height: 10),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(_kHealthTips.length, (i) {
-            final isActive = i == _currentPage;
+          children: List.generate(tips.length, (i) {
+            final isActive = i == activeIndex;
             return AnimatedContainer(
               duration: const Duration(milliseconds: 280),
               curve: Curves.easeOut,
@@ -1852,7 +2357,7 @@ class _HealthTipCardState extends State<HealthTipCard> {
               margin: const EdgeInsets.symmetric(horizontal: 3),
               decoration: BoxDecoration(
                 color: isActive
-                    ? _kHealthTips[_currentPage].gradient.first
+                    ? tips[activeIndex].gradient.first
                     : const Color(0xFFCFD8DC),
                 borderRadius: BorderRadius.circular(3),
               ),
@@ -1870,119 +2375,128 @@ class _StoryTipCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: tip.gradient,
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+    return GestureDetector(
+      onTap: () => context.push(AppRoutes.education),
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: tip.gradient,
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(22),
+          boxShadow: [
+            BoxShadow(
+              color: tip.gradient.first.withValues(alpha: 0.35),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
         ),
-        borderRadius: BorderRadius.circular(22),
-        boxShadow: [
-          BoxShadow(
-            color: tip.gradient.first.withValues(alpha:0.35),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Stack(
-        children: [
-          // decorative blob top-right
-          Positioned(
-            top: -28,
-            right: -28,
-            child: Container(
-              width: 110,
-              height: 110,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white.withValues(alpha:0.12),
-              ),
-            ),
-          ),
-          Positioned(
-            bottom: -18,
-            right: 50,
-            child: Container(
-              width: 60,
-              height: 60,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white.withValues(alpha:0.08),
-              ),
-            ),
-          ),
-          // content
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
-            child: Row(
-              children: [
-                // icon container
-                Container(
-                  width: 68,
-                  height: 68,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha:0.22),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: Colors.white.withValues(alpha:0.35), width: 1.5),
-                  ),
-                  child: Icon(tip.icon, color: Colors.white, size: 32),
+        child: Stack(
+          children: [
+            // decorative blob top-right
+            Positioned(
+              top: -28,
+              right: -28,
+              child: Container(
+                width: 110,
+                height: 110,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withValues(alpha: 0.12),
                 ),
-                const SizedBox(width: 16),
-                // text
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha:0.22),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          tip.category.toUpperCase(),
-                          style: const TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 9,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                            letterSpacing: 0.8,
+              ),
+            ),
+            Positioned(
+              bottom: -18,
+              right: 50,
+              child: Container(
+                width: 60,
+                height: 60,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withValues(alpha: 0.08),
+                ),
+              ),
+            ),
+            // content
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+              child: Row(
+                children: [
+                  // icon container
+                  Container(
+                    width: 68,
+                    height: 68,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.22),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.35),
+                        width: 1.5,
+                      ),
+                    ),
+                    child: Icon(tip.icon, color: Colors.white, size: 32),
+                  ),
+                  const SizedBox(width: 16),
+                  // text
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 9,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.22),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            tip.category.toUpperCase(),
+                            style: const TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 9,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                              letterSpacing: 0.8,
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 7),
-                      Text(
-                        tip.title,
-                        style: const TextStyle(
-                          fontFamily: 'Poppins',
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
-                          height: 1.1,
+                        const SizedBox(height: 7),
+                        Text(
+                          tip.title,
+                          style: const TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                            height: 1.1,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 5),
-                      Text(
-                        tip.sub,
-                        style: TextStyle(
-                          fontFamily: 'Poppins',
-                          fontSize: 11,
-                          color: Colors.white.withValues(alpha:0.88),
-                          height: 1.4,
+                        const SizedBox(height: 5),
+                        Text(
+                          tip.sub,
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 11,
+                            color: Colors.white.withValues(alpha: 0.88),
+                            height: 1.4,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

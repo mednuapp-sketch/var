@@ -14,10 +14,24 @@ class _ManageContactsScreenState extends State<ManageContactsScreen> {
   List<EmergencyContact> _contacts = [];
   bool _loading = true;
 
+  // Controllers for the add/edit contact sheet — created fresh per sheet
+  // open and never explicitly disposed there (the sheet isn't awaited, so
+  // there's no safe single point after it closes); registered here instead
+  // and disposed once, when this screen itself goes away.
+  final List<TextEditingController> _transientCtrls = [];
+
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    for (final c in _transientCtrls) {
+      c.dispose();
+    }
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -136,6 +150,7 @@ class _ManageContactsScreenState extends State<ManageContactsScreen> {
         TextEditingController(text: existing?.name ?? prefillName);
     final phoneCtrl =
         TextEditingController(text: existing?.phone ?? prefillPhone);
+    _transientCtrls.addAll([nameCtrl, phoneCtrl]);
     final formKey = GlobalKey<FormState>();
 
     showModalBottomSheet(

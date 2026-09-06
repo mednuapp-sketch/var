@@ -9,6 +9,13 @@ class Hospital {
   final bool isEmergency;
   final bool isEnabled;
 
+  /// Google Places `place_id`, set only when this entry was added via the
+  /// admin's "Search Google Maps" picker rather than typed freehand — lets
+  /// [NearbyHospitalService] match it against a Google nearby-search result
+  /// exactly instead of falling back to fuzzy name matching. Null for
+  /// entries added before that picker existed.
+  final String? placeId;
+
   const Hospital({
     required this.id,
     required this.name,
@@ -17,6 +24,7 @@ class Hospital {
     required this.mapsUrl,
     required this.isEmergency,
     required this.isEnabled,
+    this.placeId,
   });
 
   factory Hospital.fromFirestore(DocumentSnapshot doc) {
@@ -30,6 +38,7 @@ class Hospital {
       isEmergency: (d['isEmergency'] as bool?) ?? false,
       // Default true so hospitals saved before this field was introduced still appear
       isEnabled: (d['isEnabled'] as bool?) ?? true,
+      placeId: d['placeId'] as String?,
     );
   }
 }

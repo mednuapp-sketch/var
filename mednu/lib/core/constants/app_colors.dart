@@ -72,7 +72,7 @@ class AppColors {
   static const LinearGradient emergencyGrad   = LinearGradient(colors: [Color(0xFFEF5350), Color(0xFFB71C1C)], begin: Alignment.topLeft, end: Alignment.bottomRight);
   static const LinearGradient appointmentGrad = LinearGradient(colors: [Color(0xFF42A5F5), Color(0xFF1565C0)], begin: Alignment.topLeft, end: Alignment.bottomRight);
   static const LinearGradient medicineGrad    = LinearGradient(colors: [Color(0xFF66BB6A), Color(0xFF2E7D32)], begin: Alignment.topLeft, end: Alignment.bottomRight);
-  static const LinearGradient consultGrad     = LinearGradient(colors: [Color(0xFFAB47BC), Color(0xFF6A1B9A)], begin: Alignment.topLeft, end: Alignment.bottomRight);
+  static const LinearGradient consultGrad     = LinearGradient(colors: [Color(0xFF522546), Color(0xFF633058)], begin: Alignment.topLeft, end: Alignment.bottomRight);
   static const LinearGradient diagnosticGrad  = LinearGradient(colors: [Color(0xFF26C6DA), Color(0xFF0097A7)], begin: Alignment.topLeft, end: Alignment.bottomRight);
   static const LinearGradient labTestGrad     = LinearGradient(colors: [Color(0xFF5C6BC0), Color(0xFF3949AB)], begin: Alignment.topLeft, end: Alignment.bottomRight);
   static const LinearGradient careAssistGrad  = LinearGradient(colors: [Color(0xFFFFA726), Color(0xFFE65100)], begin: Alignment.topLeft, end: Alignment.bottomRight);
@@ -83,6 +83,7 @@ class AppColors {
   static const LinearGradient equipmentGrad   = LinearGradient(colors: [Color(0xFF78909C), Color(0xFF263238)], begin: Alignment.topLeft, end: Alignment.bottomRight);
   static const LinearGradient caregiverGrad   = LinearGradient(colors: [Color(0xFFA36BAC), Color(0xFF522546)], begin: Alignment.topLeft, end: Alignment.bottomRight);
   static const LinearGradient pregnancyGrad   = LinearGradient(colors: [Color(0xFF522546), Color(0xFF633058)], begin: Alignment.topLeft, end: Alignment.bottomRight);
+  static const LinearGradient hospitalGrad    = LinearGradient(colors: [Color(0xFF522546), Color(0xFF633058)], begin: Alignment.topLeft, end: Alignment.bottomRight);
 
   // ── Status (semantic — independent of brand) ───────────
   static const Color success  = Color(0xFF1E8E5A); // --good

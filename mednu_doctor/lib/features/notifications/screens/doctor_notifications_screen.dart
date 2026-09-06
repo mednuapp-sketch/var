@@ -5,19 +5,21 @@ import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
-import '../../auth/services/doctor_auth_service.dart';
+import '../../../shared_core/notifications/shared_notification_providers.dart';
 import '../models/notification_model.dart';
-import '../providers/notification_provider.dart';
-import '../services/notification_service.dart';
 import '../../../core/widgets/ux_widgets.dart';
 
+/// Despite the name, this screen is shared by every role the app hosts
+/// (doctor and every partner vertical) — it reads the role-aware
+/// `sharedNotificationsProvider` rather than the doctor-only
+/// `notificationsProvider`, so a non-doctor account's `provider_notifications`
+/// actually show up here instead of always rendering empty.
 class DoctorNotificationsScreen extends ConsumerWidget {
   const DoctorNotificationsScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final notifAsync = ref.watch(notificationsProvider);
-    final uid = DoctorAuthService.currentUid ?? '';
+    final notifAsync = ref.watch(sharedNotificationsProvider);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -41,7 +43,7 @@ class DoctorNotificationsScreen extends ConsumerWidget {
                   final hasUnread = list.any((n) => !n.isRead);
                   if (!hasUnread) return const SizedBox.shrink();
                   return TextButton.icon(
-                    onPressed: () => NotificationService.markAllRead(uid),
+                    onPressed: () => sharedMarkAllNotificationsRead(ref),
                     icon: const Icon(Icons.done_all_rounded,
                         color: Colors.white, size: 16),
                     label: const Text(
@@ -81,7 +83,7 @@ class DoctorNotificationsScreen extends ConsumerWidget {
             ),
             error: (e, _) => SliverFillRemaining(
               child: AppErrorState(
-                onRetry: () => ref.invalidate(notificationsProvider),
+                onRetry: () => ref.invalidate(sharedNotificationsProvider),
               ),
             ),
             data: (notifications) {
@@ -116,10 +118,7 @@ class DoctorNotificationsScreen extends ConsumerWidget {
                       final notif = item as NotificationModel;
                       return FadeInSlide(
                         delay: Duration(milliseconds: i * 30),
-                        child: _NotifTile(
-                          notif: notif,
-                          doctorUid: uid,
-                        ),
+                        child: _NotifTile(notif: notif),
                       );
                     },
                     childCount: grouped.length,
@@ -309,18 +308,17 @@ class _NotifHeader extends StatelessWidget {
 // Notification Tile
 // ──────────────────────────────────────────────────────────────
 
-class _NotifTile extends StatelessWidget {
+class _NotifTile extends ConsumerWidget {
   final NotificationModel notif;
-  final String doctorUid;
 
-  const _NotifTile({required this.notif, required this.doctorUid});
+  const _NotifTile({required this.notif});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final meta = _meta(notif.type);
 
     return GestureDetector(
-      onTap: () => _onTap(context),
+      onTap: () => _onTap(context, ref),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         margin: const EdgeInsets.only(bottom: 8),
@@ -439,8 +437,7 @@ class _NotifTile extends StatelessWidget {
                     button: true,
                     label: 'Mark notification as read',
                     child: GestureDetector(
-                      onTap: () =>
-                          NotificationService.markRead(doctorUid, notif.id),
+                      onTap: () => sharedMarkNotificationRead(ref, notif.id),
                       child: Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 8, vertical: 3),
@@ -466,9 +463,9 @@ class _NotifTile extends StatelessWidget {
     );
   }
 
-  void _onTap(BuildContext context) {
+  void _onTap(BuildContext context, WidgetRef ref) {
     if (!notif.isRead) {
-      NotificationService.markRead(doctorUid, notif.id);
+      sharedMarkNotificationRead(ref, notif.id);
     }
     final route = _routeFor(notif);
     if (route != null) {

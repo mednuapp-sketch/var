@@ -5,13 +5,20 @@ import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
 import '../../../core/constants/app_text_styles.dart';
+import '../../../core/router/app_router.dart';
 import '../../../core/services/feedback_service.dart';
 import '../../../core/widgets/add_to_cart_button.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../../cart/providers/cart_provider.dart';
 
 class EquipmentScreen extends ConsumerStatefulWidget {
-  const EquipmentScreen({super.key});
+  // When set, scopes the catalog to one admin-managed vendor (see
+  // EquipmentVendorsScreen) instead of the flat, unscoped national catalog —
+  // same optional-scoping shape as MedicineScreen's pharmacyId.
+  final String? vendorId;
+  final String? vendorName;
+
+  const EquipmentScreen({super.key, this.vendorId, this.vendorName});
 
   @override
   ConsumerState<EquipmentScreen> createState() => _EquipmentScreenState();
@@ -223,11 +230,7 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen> with SingleTi
             flexibleSpace: FlexibleSpaceBar(
               background: Container(
                 decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Color(0xFF263238), Color(0xFF78909C)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
+                  gradient: AppColors.primaryGradient,
                 ),
                 child: SafeArea(
                   child: LayoutBuilder(
@@ -250,10 +253,13 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen> with SingleTi
                               children: [
                                 Icon(Icons.medical_services_rounded, color: Colors.white, size: AppSpacing.headerIconSize(context)),
                                 SizedBox(height: AppSpacing.headerIconGap(context)),
-                                const Text('Medical Equipment',
+                                Text(widget.vendorName ?? 'Medical Equipment',
                                     maxLines: 1, overflow: TextOverflow.ellipsis,
                                     style: AppTextStyles.onPrimaryH2),
-                                const Text('Rent or buy medical equipment online',
+                                Text(
+                                    widget.vendorId != null
+                                        ? 'Rent or buy from this vendor'
+                                        : 'Rent or buy medical equipment online',
                                     maxLines: 1, overflow: TextOverflow.ellipsis,
                                     style: AppTextStyles.onPrimaryBody),
                               ],
@@ -269,11 +275,16 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen> with SingleTi
           ),
           SliverToBoxAdapter(
             child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('services')
-                  .where('type', isEqualTo: 'equipment')
-                  .where('isEnabled', isEqualTo: true)
-                  .snapshots(),
+              stream: (() {
+                Query query = FirebaseFirestore.instance
+                    .collection('services')
+                    .where('type', isEqualTo: 'equipment')
+                    .where('isEnabled', isEqualTo: true);
+                if (widget.vendorId != null) {
+                  query = query.where('sourceVendorId', isEqualTo: widget.vendorId);
+                }
+                return query.snapshots();
+              })(),
               builder: (ctx, snap) {
                 if (snap.connectionState == ConnectionState.waiting) {
                   return _buildSkeleton();
@@ -307,6 +318,42 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen> with SingleTi
                 return Padding(
                   padding: AppSpacing.page(context),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    // Find a specific vendor banner — hidden once already
+                    // viewing one vendor's own scoped catalog.
+                    if (widget.vendorId == null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: GestureDetector(
+                          onTap: () => context.push(AppRoutes.equipmentVendors),
+                          child: Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(colors: [Color(0xFFECEFF1), Color(0xFFE3F2FD)]),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: const Color(0xFF37474F).withValues(alpha: 0.3)),
+                            ),
+                            child: Row(children: [
+                              Container(
+                                width: 44, height: 44,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF37474F).withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Icon(Icons.person_search_rounded, color: Color(0xFF37474F), size: 26),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                const Text('Find Equipment Vendors Near You', style: TextStyle(
+                                    fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w700,
+                                    color: Color(0xFF37474F))),
+                                Text('Browse by vendor · rent or buy locally',
+                                    style: TextStyle(fontFamily: 'Poppins', fontSize: 11, color: context.appTextSecondary)),
+                              ])),
+                              const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Color(0xFF37474F)),
+                            ]),
+                          ),
+                        ),
+                      ),
                     const Text('Available Equipment', style: AppTextStyles.h4),
                     SizedBox(height: AppSpacing.cardGap(context)),
                     if (visible.isEmpty)

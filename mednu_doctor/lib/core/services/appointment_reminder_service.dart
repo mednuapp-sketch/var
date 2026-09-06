@@ -67,6 +67,28 @@ class AppointmentReminderService {
     await prefs.setInt(_kReminderMinutes, minutes);
   }
 
+  /// Re-queue reminders for every upcoming booked appointment under the
+  /// doctor's current reminder-minutes preference — call after the
+  /// preference changes so already-queued reminders pick up the new lead
+  /// time instead of firing at the stale one.
+  static Future<void> resyncAll(String uid) async {
+    final snap = await FirebaseFirestore.instance
+        .collection('appointments')
+        .where('doctorId', isEqualTo: uid)
+        .where('status', isEqualTo: 'booked')
+        .get();
+    for (final doc in snap.docs) {
+      final d = doc.data();
+      await scheduleReminders(
+        uid: uid,
+        appointmentId: doc.id,
+        patientName: d['patientName'] as String? ?? 'Patient',
+        dateStr: d['date'] as String? ?? '',
+        timeStr: d['time'] as String? ?? '',
+      );
+    }
+  }
+
   // ── Queue reminders for an upcoming appointment ────────────────────────────
 
   /// [uid]           the doctor's own uid (recipient of the push).

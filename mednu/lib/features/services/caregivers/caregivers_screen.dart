@@ -7,10 +7,12 @@ import '../../../core/constants/app_spacing.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/services/feedback_service.dart';
+import '../../../core/utils/distance.dart';
 import '../../../core/utils/r.dart';
 import '../../../core/widgets/add_to_cart_button.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../../cart/providers/cart_provider.dart';
+import '../../home/providers/location_provider.dart';
 
 // ─────────────────────────────────────────────────────────────
 //  Filter state
@@ -56,6 +58,28 @@ class _CaregiversScreenState extends ConsumerState<CaregiversScreen> {
   String _query       = '';
   String _locationFilter = '';    // free-text city filter
   _CaregiverFilterState _filters = const _CaregiverFilterState();
+
+  // Placeholder displayNames that aren't real place names — never seed the
+  // filter with these while GPS/reverse-geocoding is still in flight.
+  static const _placeholderLocationNames = {
+    'Detecting…', 'Location off', 'Select location', 'Current location',
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    // Default to the city/area picked via the app-wide location switcher, so
+    // switching to e.g. Hyderabad there already scopes caregivers here —
+    // still editable/clearable like any other manual filter. `preciseAddress`
+    // (reverse-geocoded) may not have resolved yet at this point, so fall
+    // back to `displayName`, which "Popular Cities" already sets to the
+    // exact city name synchronously.
+    final locState = ref.read(locationProvider);
+    final city = locState.preciseAddress?.city ?? locState.displayName;
+    if (city.isNotEmpty && !_placeholderLocationNames.contains(city)) {
+      _locationFilter = city;
+    }
+  }
 
   void _openFilterSheet() {
     showModalBottomSheet(
@@ -109,6 +133,8 @@ class _CaregiversScreenState extends ConsumerState<CaregiversScreen> {
       'type':       type,
       'gender':     raw['gender']     as String? ?? '',
       'location':   raw['location']   as String? ?? '',
+      'lat':        (raw['lat'] as num?)?.toDouble(),
+      'lng':        (raw['lng'] as num?)?.toDouble(),
       'color':      _colorFor(type),
       'isVerified': isVerified,
     };
@@ -295,12 +321,44 @@ class _CaregiversScreenState extends ConsumerState<CaregiversScreen> {
                 .toList();
           }
 
-          final filtered = _applyFilters(caregivers);
+          var filtered = _applyFilters(caregivers);
+
+          // Real distance sort/filter, same 15km convention already used by
+          // pharmacy/diagnostics/doctors/physiotherapists/nutritionists —
+          // layered on top of the existing city-text filter rather than
+          // replacing it (a typed city still narrows the list even without
+          // GPS). Falls back to unsorted when the patient or a caregiver has
+          // no coordinates on file.
+          final myLoc = ref.watch(locationProvider);
+          if (myLoc.lat != null && myLoc.lng != null) {
+            for (final c in filtered) {
+              final lat = c['lat'] as double?;
+              final lng = c['lng'] as double?;
+              c['distanceKm'] = (lat != null && lng != null)
+                  ? distanceKm(myLoc.lat!, myLoc.lng!, lat, lng)
+                  : null;
+            }
+            filtered = filtered
+                .where((c) {
+                  final d = c['distanceKm'] as double?;
+                  return d == null || d <= nearbyRadiusKm;
+                })
+                .toList()
+              ..sort((a, b) {
+                final da = a['distanceKm'] as double?;
+                final db = b['distanceKm'] as double?;
+                if (da == null && db == null) return 0;
+                if (da == null) return 1;
+                if (db == null) return -1;
+                return da.compareTo(db);
+              });
+          }
 
           return CustomScrollView(
             slivers: [
               SliverAppBar(
                 pinned: true,
+                backgroundColor: AppColors.primaryDark,
                 expandedHeight: AppSpacing.headerHeight(context),
                 leading: IconButton(
                   icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
@@ -327,11 +385,7 @@ class _CaregiversScreenState extends ConsumerState<CaregiversScreen> {
                 flexibleSpace: FlexibleSpaceBar(
                   background: Container(
                     decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [Color(0xFFEC407A), Color(0xFF33172C)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
+                      gradient: AppColors.primaryGradient,
                     ),
                     child: SafeArea(
                       child: LayoutBuilder(
@@ -517,13 +571,16 @@ class _CaregiversScreenState extends ConsumerState<CaregiversScreen> {
                                 ]),
                                 const SizedBox(height: 2),
                                 Text(c['specialty'] as String, style: AppTextStyles.bodySmall),
-                                if ((c['location'] as String).isNotEmpty) ...[
+                                if ((c['distanceKm'] as double?) != null || (c['location'] as String).isNotEmpty) ...[
                                   const SizedBox(height: 2),
                                   Row(children: [
                                     Icon(Icons.location_on_outlined, size: 13, color: context.appTextHint),
                                     const SizedBox(width: 2),
                                     Flexible(
-                                      child: Text(c['location'] as String,
+                                      child: Text(
+                                          c['distanceKm'] != null
+                                              ? '${(c['distanceKm'] as double).toStringAsFixed(1)} km away'
+                                              : c['location'] as String,
                                           style: AppTextStyles.labelSmall,
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis),
@@ -544,7 +601,7 @@ class _CaregiversScreenState extends ConsumerState<CaregiversScreen> {
                                       gradient: AppColors.primaryGradient,
                                       borderRadius: BorderRadius.circular(10),
                                     ),
-                                    child: const Text('Add to Cart',
+                                    child: const Text('Hire',
                                         style: TextStyle(
                                             fontFamily: 'Poppins',
                                             fontSize: 12,

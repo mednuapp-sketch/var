@@ -696,7 +696,7 @@ class _DateStripState extends State<_DateStrip> {
         ),
         // Date scroll list
         SizedBox(
-          height: 80,
+          height: 88,
           child: ListView.separated(
             controller: _scrollCtrl,
             scrollDirection: Axis.horizontal,
@@ -713,7 +713,7 @@ class _DateStripState extends State<_DateStrip> {
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
                   width: 60,
-                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  padding: const EdgeInsets.symmetric(vertical: 8),
                   decoration: BoxDecoration(
                     gradient: isSelected ? _kGradient : null,
                     color: isSelected ? null : context.appSurface,
@@ -735,44 +735,48 @@ class _DateStripState extends State<_DateStrip> {
                           ]
                         : null,
                   ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        DateFormat('EEE').format(date),
-                        style: TextStyle(
-                          fontFamily: 'Poppins',
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          color: isSelected
-                              ? Colors.white70
-                              : context.appTextSecondary,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          DateFormat('EEE').format(date),
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: isSelected
+                                ? Colors.white70
+                                : context.appTextSecondary,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        DateFormat('d').format(date),
-                        style: TextStyle(
-                          fontFamily: 'Poppins',
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                          color: isSelected
-                              ? Colors.white
-                              : context.appTextPrimary,
+                        const SizedBox(height: 4),
+                        Text(
+                          DateFormat('d').format(date),
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                            color: isSelected
+                                ? Colors.white
+                                : context.appTextPrimary,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        DateFormat('MMM').format(date),
-                        style: TextStyle(
-                          fontFamily: 'Poppins',
-                          fontSize: 9,
-                          color: isSelected
-                              ? Colors.white60
-                              : context.appTextHint,
+                        const SizedBox(height: 2),
+                        Text(
+                          DateFormat('MMM').format(date),
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 9,
+                            color: isSelected
+                                ? Colors.white60
+                                : context.appTextHint,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               );
@@ -946,7 +950,7 @@ class _SummaryCard extends StatelessWidget {
             ],
           ),
           const Divider(height: 20, color: Color(0xFFDCEDC8)),
-          _SummaryRow(label: 'Nutritionist', value: nutritionistName),
+          _SummaryRow(label: 'Dietician', value: nutritionistName),
           _SummaryRow(
             label: 'Date',
             value: DateFormat('EEE, MMM d, yyyy').format(date),

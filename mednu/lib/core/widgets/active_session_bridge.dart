@@ -63,6 +63,27 @@ class _ActiveSessionBridgeState extends ConsumerState<ActiveSessionBridge>
   static const _openBeforeMin = 15;
   static const _closeAfterMin = 30;
 
+  // Drag-to-reposition: null means "use the default bottom-anchored spot"
+  // (today's fixed position, unchanged unless the patient actually drags
+  // it). Once dragged, holds the card's top offset in logical pixels and it
+  // stays wherever they left it for the rest of the session.
+  double? _dragTop;
+  static const _cardHeightEstimate = 76.0;
+
+  void _onDragStart(double defaultTop) {
+    _dragTop ??= defaultTop;
+  }
+
+  void _onDragUpdate(DragUpdateDetails details) {
+    if (_dragTop == null) return;
+    final mq = MediaQuery.of(context);
+    final minTop = mq.padding.top + 8;
+    final maxTop = mq.size.height - mq.padding.bottom - _cardHeightEstimate - 8;
+    setState(() {
+      _dragTop = (_dragTop! + details.delta.dy).clamp(minTop, maxTop);
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -237,34 +258,61 @@ class _ActiveSessionBridgeState extends ConsumerState<ActiveSessionBridge>
     final visible = info.kind != _BridgeKind.none &&
         !(info.kind == _BridgeKind.liveCall && _onVideoCallScreen);
 
+    final mq = MediaQuery.of(context);
+    // Mirrors the default Align(bottomCenter)+SafeArea(minimum: 72) spot
+    // below, expressed as a top offset — only used to seed the very first
+    // drag so the card doesn't jump when the patient first grabs it.
+    final defaultTop = mq.size.height -
+        (mq.padding.bottom > 72 ? mq.padding.bottom : 72) -
+        _cardHeightEstimate;
+
+    final draggableCard = visible
+        ? GestureDetector(
+            onVerticalDragStart: (_) => _onDragStart(defaultTop),
+            onVerticalDragUpdate: _onDragUpdate,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: _BridgeCard(
+                info: info,
+                pulse: _pulse,
+                onTap: () => _onTap(info),
+              ),
+            ),
+          )
+        : const SizedBox.shrink();
+
     return IgnorePointer(
       ignoring: !visible,
-      child: Align(
-        alignment: Alignment.bottomCenter,
-        child: SafeArea(
-          top: false,
-          minimum: const EdgeInsets.only(bottom: 72),
-          child: AnimatedSlide(
-            duration: const Duration(milliseconds: 320),
-            curve: Curves.easeOutCubic,
-            offset: visible ? Offset.zero : const Offset(0, 0.4),
-            child: AnimatedOpacity(
-              duration: const Duration(milliseconds: 250),
-              opacity: visible ? 1 : 0,
-              child: visible
-                  ? Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: _BridgeCard(
-                        info: info,
-                        pulse: _pulse,
-                        onTap: () => _onTap(info),
-                      ),
-                    )
-                  : const SizedBox.shrink(),
+      child: _dragTop == null
+          ? Align(
+              alignment: Alignment.bottomCenter,
+              child: SafeArea(
+                top: false,
+                minimum: const EdgeInsets.only(bottom: 72),
+                child: AnimatedSlide(
+                  duration: const Duration(milliseconds: 320),
+                  curve: Curves.easeOutCubic,
+                  offset: visible ? Offset.zero : const Offset(0, 0.4),
+                  child: AnimatedOpacity(
+                    duration: const Duration(milliseconds: 250),
+                    opacity: visible ? 1 : 0,
+                    child: draggableCard,
+                  ),
+                ),
+              ),
+            )
+          // Once dragged, the card stays exactly where the patient left it
+          // instead of snapping back to the bottom on the next rebuild.
+          : Positioned(
+              top: _dragTop,
+              left: 0,
+              right: 0,
+              child: AnimatedOpacity(
+                duration: const Duration(milliseconds: 250),
+                opacity: visible ? 1 : 0,
+                child: draggableCard,
+              ),
             ),
-          ),
-        ),
-      ),
     );
   }
 }
@@ -318,83 +366,99 @@ class _BridgeCard extends StatelessWidget {
               ),
             ],
           ),
-          child: Row(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Stack(
-                clipBehavior: Clip.none,
+              // Grab handle — signals the card can be dragged to reposition,
+              // matching this app's bottom-sheet handle convention.
+              Container(
+                width: 32,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.4),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              Row(
                 children: [
+                  Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.16),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(icon, color: Colors.white, size: 20),
+                      ),
+                      if (isLive)
+                        Positioned(
+                          right: -1,
+                          top: -1,
+                          child: AnimatedBuilder(
+                            animation: pulse,
+                            builder: (_, child) => Opacity(
+                              opacity: 0.5 + pulse.value * 0.5,
+                              child: child,
+                            ),
+                            child: Container(
+                              width: 11,
+                              height: 11,
+                              decoration: BoxDecoration(
+                                color: AppColors.accent,
+                                shape: BoxShape.circle,
+                                border: Border.all(color: AppColors.primary, width: 1.5),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.white.withValues(alpha: 0.85),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
                   Container(
-                    width: 40,
-                    height: 40,
+                    padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
                       color: Colors.white.withValues(alpha: 0.16),
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(icon, color: Colors.white, size: 20),
+                    child: const Icon(Icons.chevron_right_rounded, color: Colors.white, size: 18),
                   ),
-                  if (isLive)
-                    Positioned(
-                      right: -1,
-                      top: -1,
-                      child: AnimatedBuilder(
-                        animation: pulse,
-                        builder: (_, child) => Opacity(
-                          opacity: 0.5 + pulse.value * 0.5,
-                          child: child,
-                        ),
-                        child: Container(
-                          width: 11,
-                          height: 11,
-                          decoration: BoxDecoration(
-                            color: AppColors.accent,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: AppColors.primary, width: 1.5),
-                          ),
-                        ),
-                      ),
-                    ),
                 ],
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.white.withValues(alpha: 0.85),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.16),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.chevron_right_rounded, color: Colors.white, size: 18),
               ),
             ],
           ),

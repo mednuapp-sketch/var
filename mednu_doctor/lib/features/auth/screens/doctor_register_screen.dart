@@ -8,6 +8,8 @@ import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/services/image_upload_service.dart';
 import '../../../core/utils/validators.dart';
+import '../../location/models/precise_address.dart';
+import '../../location/screens/map_location_picker_screen.dart';
 
 class DoctorRegisterScreen extends StatefulWidget {
   const DoctorRegisterScreen({super.key});
@@ -35,7 +37,21 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
   final _expCtrl        = TextEditingController();
   final _feeCtrl        = TextEditingController();
   final _otherSpecCtrl  = TextEditingController();
+  final _clinicNameCtrl = TextEditingController();
+  final _clinicAddrCtrl = TextEditingController();
   String? _selectedSpec;
+  String? _clinicAddrError;
+  double? _clinicLat;
+  double? _clinicLng;
+  String _clinicCity = '';
+  final List<String> _selectedLanguages = ['English'];
+
+  // Matches the language list offered in profile-edit, and what the patient
+  // app's "Find Doctors" filter sheet filters on — keep these three in sync.
+  static const _allLanguages = [
+    'English', 'Telugu', 'Hindi', 'Tamil', 'Kannada',
+    'Malayalam', 'Marathi', 'Bengali',
+  ];
 
   // Names match patient app specialty filters exactly so search/filter works
   static const _specialties = [
@@ -96,6 +112,8 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
     _expCtrl.dispose();
     _feeCtrl.dispose();
     _otherSpecCtrl.dispose();
+    _clinicNameCtrl.dispose();
+    _clinicAddrCtrl.dispose();
     super.dispose();
   }
 
@@ -140,7 +158,29 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
     if (_feeCtrl.text.trim().isEmpty) {
       _snack('Please enter your consultation fee'); return false;
     }
+    if (_clinicAddrCtrl.text.trim().isEmpty) {
+      setState(() => _clinicAddrError = 'Enter your clinic/hospital consultation address');
+      _snack('Please enter your consultation address'); return false;
+    }
+    setState(() => _clinicAddrError = null);
     return true;
+  }
+
+  Future<void> _pickAddress() async {
+    final result = await Navigator.of(context).push<PreciseAddress>(
+      MaterialPageRoute(
+        builder: (_) => MapLocationPickerScreen(
+            initialLat: _clinicLat, initialLng: _clinicLng),
+      ),
+    );
+    if (result == null || !mounted) return;
+    setState(() {
+      _clinicAddrCtrl.text = result.formatted;
+      _clinicLat = result.lat;
+      _clinicLng = result.lng;
+      _clinicCity = result.city ?? '';
+      _clinicAddrError = null;
+    });
   }
 
   String get _effectiveSpecialty =>
@@ -233,6 +273,12 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
         fee:                _feeCtrl.text.trim(),
         gender:             _selectedGender,
         registrationNumber: _regNoCtrl.text.trim(),
+        clinicName:         _clinicNameCtrl.text.trim(),
+        clinicAddress:      _clinicAddrCtrl.text.trim(),
+        languages:          _selectedLanguages,
+        clinicLat:          _clinicLat,
+        clinicLng:          _clinicLng,
+        clinicCity:         _clinicCity,
         documentUrls:       urls,
       );
 
@@ -504,6 +550,62 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
         const SizedBox(width: 12),
         Expanded(child: _field('Consultation Fee (₹) *', _feeCtrl, 'e.g. 500', type: TextInputType.number)),
       ]),
+      const SizedBox(height: 20),
+      const _SectionHeader(icon: Icons.translate_rounded, title: 'Languages Spoken', subtitle: 'Patients can filter doctors by language'),
+      const SizedBox(height: 12),
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: _allLanguages.map((lang) => FilterChip(
+          label: Text(lang, style: const TextStyle(fontFamily: 'Inter', fontSize: 12)),
+          selected: _selectedLanguages.contains(lang),
+          selectedColor: AppColors.primary.withValues(alpha:0.12),
+          checkmarkColor: AppColors.primary,
+          onSelected: (selected) {
+            setState(() {
+              if (selected) {
+                _selectedLanguages.add(lang);
+              } else if (_selectedLanguages.length > 1) {
+                _selectedLanguages.remove(lang);
+              }
+            });
+          },
+        )).toList(),
+      ),
+      const SizedBox(height: 20),
+      const _SectionHeader(icon: Icons.local_hospital_rounded, title: 'Clinic / Hospital Details', subtitle: 'Where patients will meet you in person'),
+      const SizedBox(height: 14),
+      _field('Clinic / Hospital Name', _clinicNameCtrl, 'e.g. Sunshine Multispeciality Clinic'),
+      const SizedBox(height: 14),
+      _field('Consultation Address *', _clinicAddrCtrl, 'Full address for in-person visits',
+          maxLines: 2,
+          errorText: _clinicAddrError,
+          onChanged: (_) { if (_clinicAddrError != null) setState(() => _clinicAddrError = null); }),
+      const SizedBox(height: 8),
+      OutlinedButton.icon(
+        onPressed: _pickAddress,
+        icon: Icon(_clinicLat != null ? Icons.check_circle_rounded : Icons.map_outlined,
+            size: 17, color: _clinicLat != null ? AppColors.success : AppColors.primary),
+        label: Text(
+          _clinicLat != null ? 'Location pinned on map — tap to change' : 'Pick precise location on map',
+          style: TextStyle(fontFamily: 'Inter', fontSize: 12.5, fontWeight: FontWeight.w600,
+              color: _clinicLat != null ? AppColors.success : AppColors.primary),
+        ),
+        style: OutlinedButton.styleFrom(
+          side: BorderSide(color: _clinicLat != null ? AppColors.success : AppColors.primary),
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          minimumSize: const Size(double.infinity, 0),
+        ),
+      ),
+      const Padding(
+        padding: EdgeInsets.only(top: 6),
+        child: Text(
+          'Required for in-person patients — shown on your profile and used for map directions. '
+          'Pinning your exact location also lets nearby patients find and sort you by distance.',
+          style: TextStyle(fontFamily: 'Inter', fontSize: 11, color: AppColors.textSecondary),
+        ),
+      ),
       const SizedBox(height: 32),
       _NextButton(onTap: () { if (_validatePage2()) _nextPage(); }),
     ]),
@@ -955,13 +1057,14 @@ class _DeclText extends StatelessWidget {
 }
 
 Widget _field(String label, TextEditingController ctrl, String hint,
-    {TextInputType type = TextInputType.text, String? errorText, ValueChanged<String>? onChanged}) =>
+    {TextInputType type = TextInputType.text, String? errorText, ValueChanged<String>? onChanged, int maxLines = 1}) =>
     Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text(label, style: AppTextStyles.labelLarge),
       const SizedBox(height: 6),
       TextField(
         controller: ctrl,
         keyboardType: type,
+        maxLines: maxLines,
         style: AppTextStyles.bodyLarge,
         onChanged: onChanged,
         decoration: InputDecoration(

@@ -37,6 +37,7 @@ class _LabOnboardingScreenState extends State<LabOnboardingScreen> {
   final _addressCtrl = TextEditingController();
   double? _addressLat;
   double? _addressLng;
+  String _addressCity = '';
   final _phoneCtrl = TextEditingController();
   final _selectedServices = <String>{};
   final Map<String, File?> _pickedDocs = {};
@@ -78,6 +79,7 @@ class _LabOnboardingScreenState extends State<LabOnboardingScreen> {
         address: _addressCtrl.text.trim(),
         latitude: _addressLat,
         longitude: _addressLng,
+        city: _addressCity,
         phone: _phoneCtrl.text.trim(),
         servicesOffered: _selectedServices.toList(),
       );
@@ -235,6 +237,7 @@ class _LabOnboardingScreenState extends State<LabOnboardingScreen> {
       _addressCtrl.text = result.formatted;
       _addressLat = result.lat;
       _addressLng = result.lng;
+      _addressCity = result.city ?? '';
     });
   }
 

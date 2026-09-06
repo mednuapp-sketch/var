@@ -101,7 +101,7 @@ class _ErrorScaffold extends StatelessWidget {
           icon: const Icon(Icons.arrow_back_ios_new_rounded),
           onPressed: onBack,
         ),
-        title: const Text('Nutritionist Profile', style: AppTextStyles.h3),
+        title: const Text('Dietician Profile', style: AppTextStyles.h3),
         backgroundColor: context.appSurface,
         foregroundColor: context.appTextPrimary,
         elevation: 0,
@@ -149,7 +149,7 @@ class _NotFoundScaffold extends StatelessWidget {
               ),
               const SizedBox(height: 20),
               Text(
-                'Nutritionist not found',
+                'Dietician not found',
                 style: AppTextStyles.labelLarge
                     .copyWith(color: context.appTextPrimary),
               ),

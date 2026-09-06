@@ -1,5 +1,9 @@
+import 'dart:io';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
@@ -25,7 +29,14 @@ class PrescriptionCard extends StatelessWidget {
     if (file == null || !context.mounted) return;
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => PrescriptionPreviewScreen(orderId: order.orderId, file: file),
+        builder: (_) => PrescriptionPreviewScreen(
+          file: file,
+          onUpload: (f, onProgress) => PrescriptionUploadService.upload(
+            orderId: order.orderId,
+            file: f,
+            onProgress: onProgress,
+          ),
+        ),
       ),
     );
   }
@@ -61,6 +72,47 @@ class PrescriptionCard extends StatelessWidget {
     final uri = Uri.tryParse(url);
     if (uri == null || !await launchUrl(uri, mode: LaunchMode.externalApplication)) {
       if (context.mounted) FeedbackService.showError(context, 'Could not open the file.');
+    }
+  }
+
+  // Same mechanism prescription_viewer_screen.dart already uses for its own
+  // Share/Download buttons: hand the file to the OS share sheet, which
+  // offers "Save to Files/Downloads" as a target — actual on-device storage
+  // download needs extra runtime permissions on Android 10+ that this app
+  // deliberately avoids. Downloads the real Storage bytes to a temp file
+  // first (unlike the viewer's version, which synthesizes a PDF from
+  // structured data — this file already exists, it's the uploaded scan).
+  Future<File> _downloadToTemp() async {
+    final url = order.prescriptionUrl!;
+    final ext = order.prescriptionFileType == 'pdf' ? 'pdf' : 'jpg';
+    final dir = await getTemporaryDirectory();
+    final path = '${dir.path}/prescription_${order.orderId}.$ext';
+    await Dio().download(url, path);
+    return File(path);
+  }
+
+  Future<void> _share(BuildContext context) async {
+    try {
+      final file = await _downloadToTemp();
+      await Share.shareXFiles(
+        [XFile(file.path, mimeType: order.prescriptionFileType == 'pdf' ? 'application/pdf' : 'image/jpeg')],
+        subject: 'Prescription — Order #${order.orderId}',
+      );
+    } catch (_) {
+      if (context.mounted) FeedbackService.showError(context, 'Could not share the file. Please try again.');
+    }
+  }
+
+  Future<void> _download(BuildContext context) async {
+    try {
+      final file = await _downloadToTemp();
+      await Share.shareXFiles(
+        [XFile(file.path, mimeType: order.prescriptionFileType == 'pdf' ? 'application/pdf' : 'image/jpeg')],
+        subject: 'Prescription — Order #${order.orderId}',
+        text: 'Choose "Save to Files" / "Save Image" to keep a copy on this device.',
+      );
+    } catch (_) {
+      if (context.mounted) FeedbackService.showError(context, 'Download failed. Please try again.');
     }
   }
 
@@ -152,6 +204,26 @@ class PrescriptionCard extends StatelessWidget {
               ),
             ],
             const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _share(context),
+                    icon: const Icon(Icons.share_rounded, size: 18),
+                    label: const Text('Share'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _download(context),
+                    icon: const Icon(Icons.download_rounded, size: 18),
+                    label: const Text('Download'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
             Row(
               children: [
                 Expanded(

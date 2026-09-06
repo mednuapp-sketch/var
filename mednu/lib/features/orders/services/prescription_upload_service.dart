@@ -157,6 +157,55 @@ class PrescriptionUploadService {
     return downloadUrl;
   }
 
+  /// Same pick/compress/size-guard pipeline as [upload], but for attaching a
+  /// prescription *before* an order exists — from the medicine browsing
+  /// screen, not post-purchase order detail. There's no `orders/{orderId}`
+  /// to scope the upload to yet, so this writes to a uid-keyed path
+  /// (`pending_prescriptions/{uid}/...`, see storage.rules) instead and
+  /// writes nothing to Firestore — the caller carries the returned URL
+  /// forward into the order's own create-time write at checkout
+  /// (cart_screen.dart), which firestore.rules permits freely (the
+  /// self-update field allow-list only restricts *updates*, not the
+  /// document's initial fields on create).
+  static Future<({String url, String fileType, String fileName})> uploadPending({
+    required String uid,
+    required File file,
+    required void Function(double progress) onProgress,
+  }) async {
+    final fileType = fileTypeFor(file);
+    final uploadFile = await _compressIfImage(file);
+
+    final sizeBytes = await uploadFile.length();
+    if (sizeBytes > maxSizeBytes) {
+      throw PrescriptionTooLargeException(sizeBytes);
+    }
+
+    final fileName = uploadFile.path.split(Platform.pathSeparator).last;
+    final storagePath =
+        'pending_prescriptions/$uid/${DateTime.now().millisecondsSinceEpoch}_$fileName';
+
+    final ref = _storage.ref(storagePath);
+    final task = ref.putFile(uploadFile);
+
+    final progressSub = task.snapshotEvents.listen(
+      (snapshot) {
+        if (snapshot.totalBytes > 0) {
+          onProgress(snapshot.bytesTransferred / snapshot.totalBytes);
+        }
+      },
+      onError: (_) {},
+    );
+
+    try {
+      await task;
+    } finally {
+      await progressSub.cancel();
+    }
+
+    final downloadUrl = await ref.getDownloadURL();
+    return (url: downloadUrl, fileType: fileType, fileName: fileName);
+  }
+
   /// Removes the prescription from the order (sets the three fields back
   /// to null). Best-effort Storage delete — a missing/already-deleted
   /// object never blocks clearing the Firestore fields.

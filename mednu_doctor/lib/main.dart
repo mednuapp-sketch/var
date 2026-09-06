@@ -462,6 +462,10 @@ class _MedNUDoctorAppState extends ConsumerState<MedNUDoctorApp>
         case AppRole.nutritionist:
           ref.invalidate(myNutritionAppointmentsProvider);
           break;
+        case AppRole.hospital:
+          // Its one screen (HospitalPaymentsScreen) reads a plain Firestore
+          // StreamBuilder, not a Riverpod provider — nothing to invalidate.
+          break;
         case AppRole.doctor:
         case AppRole.admin:
           // The Doctor role's incoming-call queue is not a Riverpod stream —

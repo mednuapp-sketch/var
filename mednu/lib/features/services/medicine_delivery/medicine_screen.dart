@@ -1,20 +1,31 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/constants/app_spacing.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/services/feedback_service.dart';
 import '../../../core/utils/r.dart';
 import '../../../core/widgets/add_to_cart_button.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../../cart/models/cart_item.dart';
 import '../../cart/providers/cart_provider.dart';
+import '../../cart/providers/pending_prescription_provider.dart';
+import '../../orders/screens/prescription_preview_screen.dart';
+import '../../orders/services/prescription_upload_service.dart';
+import '../../orders/widgets/prescription_source_sheet.dart';
 
 class MedicineScreen extends ConsumerStatefulWidget {
   final List<Map<String, dynamic>>? prescriptionMedicines;
-  const MedicineScreen({super.key, this.prescriptionMedicines});
+  /// When set, scopes the catalogue to one pharmacy's own stock — the "menu"
+  /// screen reached by tapping a pharmacy card on [PharmacyScreen]. Fetched
+  /// by id (not passed via nav `extra`) so deep links still work.
+  final String? pharmacyId;
+  const MedicineScreen({super.key, this.prescriptionMedicines, this.pharmacyId});
 
   @override
   ConsumerState<MedicineScreen> createState() => _MedicineScreenState();
@@ -31,6 +42,9 @@ class _MedicineScreenState extends ConsumerState<MedicineScreen> {
   final String _selectedCategory = 'All';
   List<Map<String, dynamic>> _prescriptionMeds = [];
   bool _showPrescriptionMeds = false;
+
+  // Pharmacy scoping (set when reached via a pharmacy card, see widget.pharmacyId)
+  Map<String, dynamic>? _pharmacy;
 
   // Computed
   List<Map<String, dynamic>> get _filteredMeds {
@@ -65,6 +79,46 @@ class _MedicineScreenState extends ConsumerState<MedicineScreen> {
       ref.watch(cartProvider).where((i) => i.type == 'medicine').toList();
   int get _cartCount => _medicineCartItems.length;
   int get _cartTotal => _medicineCartItems.fold<int>(0, (s, i) => s + i.totalAmount);
+
+  // ── Upload prescription before checkout ──────────────────────────────────
+  // The upload feature itself was already well-built (source picker, review,
+  // compression, size guard) — it just wasn't reachable from here, only from
+  // an order's own detail screen after purchase. No `orders/{orderId}` exists
+  // yet at this point, so this uploads to a uid-scoped pending path instead
+  // (see PrescriptionUploadService.uploadPending) and carries the result via
+  // pendingPrescriptionProvider — cart_screen.dart's checkout reads it and
+  // writes it onto the new order's initial fields.
+  Future<void> _uploadPrescription() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    final file = await showPrescriptionSourceSheet(context);
+    if (file == null || !mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => PrescriptionPreviewScreen(
+          file: file,
+          onUpload: (f, onProgress) async {
+            final result = await PrescriptionUploadService.uploadPending(
+              uid: uid,
+              file: f,
+              onProgress: onProgress,
+            );
+            ref.read(pendingPrescriptionProvider.notifier).state =
+                PendingPrescription(
+              url: result.url,
+              fileType: result.fileType,
+              fileName: result.fileName,
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  void _clearPendingPrescription() {
+    ref.read(pendingPrescriptionProvider.notifier).state = null;
+    FeedbackService.showInfo(context, 'Prescription removed');
+  }
   CartItem? _cartItemForMed(String medId) =>
       _medicineCartItems.where((i) => i.serviceDetails['id'] == medId).firstOrNull;
 
@@ -75,11 +129,18 @@ class _MedicineScreenState extends ConsumerState<MedicineScreen> {
       _prescriptionMeds = List.from(widget.prescriptionMedicines!);
       _showPrescriptionMeds = true;
     }
-    _catalogueSub = FirebaseFirestore.instance
+    if (widget.pharmacyId != null) {
+      FirebaseFirestore.instance.collection('pharmacy_profiles').doc(widget.pharmacyId).get().then((snap) {
+        if (mounted) setState(() => _pharmacy = snap.data());
+      });
+    }
+    Query<Map<String, dynamic>> query = FirebaseFirestore.instance
         .collection('medicines_catalogue')
-        .where('isActive', isEqualTo: true)
-        .snapshots()
-        .listen((snap) {
+        .where('isActive', isEqualTo: true);
+    if (widget.pharmacyId != null) {
+      query = query.where('sourcePharmacyId', isEqualTo: widget.pharmacyId);
+    }
+    _catalogueSub = query.snapshots().listen((snap) {
       if (!mounted) return;
       setState(() {
         _catalogueLoading = false;
@@ -95,6 +156,8 @@ class _MedicineScreenState extends ConsumerState<MedicineScreen> {
             'unit':                 data['unit'] as String? ?? 'Tablets',
             'requiresPrescription': data['requiresPrescription'] as bool? ?? false,
             'category':             (data['category'] as String? ?? '').trim(),
+            'sourcePharmacyId':     data['sourcePharmacyId'] as String?,
+            'pharmacyName':         data['pharmacyName'] as String?,
           };
         }).toList();
       });
@@ -109,7 +172,41 @@ class _MedicineScreenState extends ConsumerState<MedicineScreen> {
     super.dispose();
   }
 
-  void _addMedToCart(Map<String, dynamic> med) {
+  /// Shows the "your cart has items from another pharmacy" confirm dialog;
+  /// returns true if the cart's medicine items should be cleared and the add
+  /// should proceed, false/null if the user cancelled.
+  Future<bool> _confirmPharmacySwitch(String existingVendorName, String newPharmacyName) async {
+    final replace = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Replace items in cart?'),
+        content: Text(
+          'Your cart has medicines from $existingVendorName. '
+          'Add medicines from $newPharmacyName instead?',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Replace')),
+        ],
+      ),
+    );
+    return replace == true;
+  }
+
+  Future<void> _addMedToCart(Map<String, dynamic> med) async {
+    final sourcePharmacyId = med['sourcePharmacyId'] as String?;
+    if (sourcePharmacyId != null) {
+      final conflict = ref.read(cartProvider.notifier)
+          .conflictFor(type: 'medicine', vendorKey: 'pharmacy:$sourcePharmacyId');
+      if (conflict != null) {
+        final proceed = await _confirmPharmacySwitch(
+          conflict.existingVendorName,
+          (med['pharmacyName'] as String?) ?? 'this pharmacy',
+        );
+        if (!proceed || !mounted) return;
+        ref.read(cartProvider.notifier).clearType('medicine');
+      }
+    }
     ref.read(cartProvider.notifier).addItem(
           type: 'medicine',
           serviceName: med['name'] as String,
@@ -119,6 +216,8 @@ class _MedicineScreenState extends ConsumerState<MedicineScreen> {
             'id': med['id'],
             'name': med['name'],
             'brand': med['brand'],
+            'sourcePharmacyId': med['sourcePharmacyId'],
+            'pharmacyName': med['pharmacyName'],
           },
         );
   }
@@ -131,19 +230,69 @@ class _MedicineScreenState extends ConsumerState<MedicineScreen> {
     }
   }
 
-  void _addAllPrescriptionMeds() {
-    int added = 0;
+  Future<void> _addAllPrescriptionMeds() async {
+    // Resolve the batch's target pharmacy from the first catalogue match, so
+    // a flat multi-pharmacy catalogue doesn't prompt a replace-cart dialog
+    // once per item. Items from a different pharmacy than this are skipped,
+    // not individually confirmed.
+    String? targetPharmacyId;
+    String? targetPharmacyName;
     for (final m in _prescriptionMeds) {
       final keyword = (m['name'] as String? ?? '').toLowerCase().split(' ').first;
       final med = _catalogue.where((c) => (c['name'] as String).toLowerCase().contains(keyword)).firstOrNull;
-      if (med != null && _cartItemForMed(med['id'] as String) == null) {
-        _addMedToCart(med);
-        added++;
+      if (med != null) {
+        targetPharmacyId = med['sourcePharmacyId'] as String?;
+        targetPharmacyName = med['pharmacyName'] as String?;
+        break;
       }
     }
+
+    if (targetPharmacyId != null) {
+      final conflict = ref.read(cartProvider.notifier)
+          .conflictFor(type: 'medicine', vendorKey: 'pharmacy:$targetPharmacyId');
+      if (conflict != null) {
+        final proceed = await _confirmPharmacySwitch(
+          conflict.existingVendorName,
+          targetPharmacyName ?? 'this pharmacy',
+        );
+        if (!proceed || !mounted) return;
+        ref.read(cartProvider.notifier).clearType('medicine');
+      }
+    }
+
+    int added = 0;
+    int skipped = 0;
+    for (final m in _prescriptionMeds) {
+      final keyword = (m['name'] as String? ?? '').toLowerCase().split(' ').first;
+      final med = _catalogue.where((c) => (c['name'] as String).toLowerCase().contains(keyword)).firstOrNull;
+      if (med == null || _cartItemForMed(med['id'] as String) != null) continue;
+      final medPharmacyId = med['sourcePharmacyId'] as String?;
+      if (targetPharmacyId != null && medPharmacyId != null && medPharmacyId != targetPharmacyId) {
+        skipped++;
+        continue;
+      }
+      ref.read(cartProvider.notifier).addItem(
+            type: 'medicine',
+            serviceName: med['name'] as String,
+            themeColor: const Color(0xFF2E7D32),
+            unitAmount: med['price'] as int,
+            serviceDetails: {
+              'id': med['id'],
+              'name': med['name'],
+              'brand': med['brand'],
+              'sourcePharmacyId': med['sourcePharmacyId'],
+              'pharmacyName': med['pharmacyName'],
+            },
+          );
+      added++;
+    }
     if (mounted) {
+      final parts = <String>[
+        if (added > 0) '$added medicine${added > 1 ? 's' : ''} added to cart',
+        if (skipped > 0) '$skipped skipped (different pharmacy)',
+      ];
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(added > 0 ? '$added medicine${added > 1 ? 's' : ''} added to cart' : 'Medicines already in cart'),
+        content: Text(parts.isEmpty ? 'Medicines already in cart' : parts.join(', ')),
         backgroundColor: const Color(0xFF2E7D32),
         behavior: SnackBarBehavior.floating,
       ));
@@ -158,21 +307,78 @@ class _MedicineScreenState extends ConsumerState<MedicineScreen> {
         slivers: [
           SliverAppBar(
             pinned: true,
-            expandedHeight: R.h(context, 80),
-            centerTitle: false,
-            title: const Text('Pharmacy', style: AppTextStyles.onPrimaryH2),
+            backgroundColor: const Color(0xFF2E7D32),
+            expandedHeight: AppSpacing.headerHeight(context),
             leading: IconButton(icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white), onPressed: () => context.pop()),
-            actions: const [CartBadgeAction()],
-            flexibleSpace: const FlexibleSpaceBar(
-              background: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(colors: [Color(0xFF2E7D32), Color(0xFF66BB6A)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.upload_file_rounded, color: Colors.white),
+                tooltip: 'Upload Prescription',
+                onPressed: _uploadPrescription,
+              ),
+              const CartBadgeAction(),
+            ],
+            flexibleSpace: FlexibleSpaceBar(
+              background: Container(
+                decoration: const BoxDecoration(gradient: AppColors.medicineGrad),
+                child: SafeArea(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) => SingleChildScrollView(
+                      physics: const ClampingScrollPhysics(),
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                        child: Padding(
+                          padding: AppSpacing.headerPadding(context),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.local_pharmacy_rounded, color: Colors.white, size: AppSpacing.headerIconSize(context)),
+                              SizedBox(height: AppSpacing.headerIconGap(context)),
+                              Text(
+                                widget.pharmacyId != null ? ((_pharmacy?['name'] as String?) ?? 'Pharmacy') : 'Pharmacy',
+                                style: AppTextStyles.onPrimaryH2,
+                              ),
+                              const Text('Order genuine medicines, delivered fast', style: AppTextStyles.onPrimaryBody),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
           ),
           SliverToBoxAdapter(
             child: Column(children: [
+              if (ref.watch(pendingPrescriptionProvider) != null) ...[
+                SizedBox(height: R.h(context, 14)),
+                Container(
+                  margin: EdgeInsets.symmetric(horizontal: R.p(context, 16)),
+                  padding: EdgeInsets.symmetric(horizontal: R.p(context, 14), vertical: R.p(context, 12)),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2E7D32).withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(R.r(context, 14)),
+                    border: Border.all(color: const Color(0xFF2E7D32).withValues(alpha: 0.3)),
+                  ),
+                  child: Row(children: [
+                    const Icon(Icons.check_circle_rounded, color: Color(0xFF2E7D32), size: 20),
+                    SizedBox(width: R.w(context, 10)),
+                    Expanded(
+                      child: Text(
+                        'Prescription attached — it will be added to your order.',
+                        style: AppTextStyles.bodySmall.copyWith(color: const Color(0xFF2E7D32), fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: _clearPendingPrescription,
+                      child: const Icon(Icons.close_rounded, color: Color(0xFF2E7D32), size: 18),
+                    ),
+                  ]),
+                ),
+              ],
               // Prescription medicines section
               if (_showPrescriptionMeds && _prescriptionMeds.isNotEmpty) ...[
                 SizedBox(height: R.h(context, 14)),
@@ -342,10 +548,15 @@ class _MedicineScreenState extends ConsumerState<MedicineScreen> {
     ))),
   );
 
-  Widget _buildEmptyState() => const AppEmptyState(
+  Widget _buildEmptyState() => AppEmptyState(
     icon: Icons.medication_outlined,
+    iconColor: const Color(0xFF2E7D32),
     title: 'No Medicines Available',
-    message: 'The medicine catalogue will appear here once added by the pharmacy team.',
+    message: widget.pharmacyId != null
+        ? 'This pharmacy hasn\'t listed its catalogue yet. Check back soon or try another pharmacy nearby.'
+        : 'The medicine catalogue will appear here once added by the pharmacy team.',
+    actionLabel: widget.pharmacyId != null ? 'Browse Other Pharmacies' : null,
+    onAction: widget.pharmacyId != null ? () => context.pop() : null,
   );
 }
 
@@ -388,33 +599,34 @@ class _MedicineCard extends StatelessWidget {
     final inCart   = cartCount > 0;
 
     return Container(
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-      padding: const EdgeInsets.all(14),
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 0),
       decoration: BoxDecoration(
         color: context.appSurface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: inCart ? const Color(0xFF2E7D32).withValues(alpha:0.4) : context.appBorder),
         boxShadow: inCart ? [BoxShadow(color: const Color(0xFF2E7D32).withValues(alpha:0.08), blurRadius: 8, offset: const Offset(0, 2))] : null,
       ),
-      child: Row(children: [
-        Container(
-          width: 52, height: 52,
-          decoration: BoxDecoration(color: const Color(0xFF2E7D32).withValues(alpha:0.1), borderRadius: BorderRadius.circular(12)),
-          child: const Icon(Icons.medication_rounded, color: Color(0xFF2E7D32), size: 28),
-        ),
-        const SizedBox(width: 12),
+      // Zomato-style dish row: name/description/price on the left, a photo
+      // tile with a floating Add button overlapping its bottom edge on the
+      // right. Medicines have no photo field yet, so the tile is a fixed
+      // icon rather than a fabricated image.
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
             Expanded(child: Text(medicine['name'] as String, style: AppTextStyles.labelLarge)),
-            if (needsRx)
+            if (needsRx) ...[
+              const SizedBox(width: 6),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(color: Colors.orange.withValues(alpha:0.1), borderRadius: BorderRadius.circular(6)),
                 child: const Text('Rx', style: TextStyle(fontFamily: 'Poppins', fontSize: 9, fontWeight: FontWeight.w800, color: Colors.orange)),
               ),
+            ],
           ]),
+          const SizedBox(height: 3),
           Text('${medicine['brand']} • ${medicine['qty']} ${medicine['unit']}', style: AppTextStyles.bodySmall),
-          const SizedBox(height: 4),
+          const SizedBox(height: 8),
           Row(children: [
             Text('₹$price', style: AppTextStyles.labelLarge.copyWith(color: const Color(0xFF2E7D32))),
             const SizedBox(width: 6),
@@ -429,24 +641,55 @@ class _MedicineCard extends StatelessWidget {
             ],
           ]),
         ])),
-        const SizedBox(width: 8),
-        inCart
-            ? Row(mainAxisSize: MainAxisSize.min, children: [
-                _QtyBtn(icon: Icons.remove_rounded, onTap: onDecrement),
-                Padding(padding: const EdgeInsets.symmetric(horizontal: 8), child: Text('$cartCount', style: AppTextStyles.labelLarge)),
-                _QtyBtn(icon: Icons.add_rounded, onTap: onIncrement),
-              ])
-            : GestureDetector(
-                onTap: onAdd,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(colors: [Color(0xFF2E7D32), Color(0xFF66BB6A)]),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Text('Add', style: TextStyle(fontFamily: 'Poppins', fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
-                ),
+        const SizedBox(width: 10),
+        SizedBox(
+          width: 88,
+          child: Column(children: [
+            Container(
+              width: 76, height: 76,
+              decoration: BoxDecoration(
+                color: const Color(0xFF2E7D32).withValues(alpha:0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFF2E7D32).withValues(alpha:0.15)),
               ),
+              child: const Icon(Icons.medication_rounded, color: Color(0xFF2E7D32), size: 34),
+            ),
+            Transform.translate(
+              offset: const Offset(0, -14),
+              child: inCart
+                  ? Container(
+                      height: 28,
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      decoration: BoxDecoration(
+                        color: context.appSurface,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFF2E7D32)),
+                        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:0.08), blurRadius: 4, offset: const Offset(0, 1))],
+                      ),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        _QtyBtn(icon: Icons.remove_rounded, onTap: onDecrement),
+                        Padding(padding: const EdgeInsets.symmetric(horizontal: 6), child: Text('$cartCount', style: AppTextStyles.labelLarge)),
+                        _QtyBtn(icon: Icons.add_rounded, onTap: onIncrement),
+                      ]),
+                    )
+                  : GestureDetector(
+                      onTap: onAdd,
+                      child: Container(
+                        height: 28,
+                        width: 72,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: context.appSurface,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFF2E7D32)),
+                          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:0.08), blurRadius: 4, offset: const Offset(0, 1))],
+                        ),
+                        child: const Text('ADD', style: TextStyle(fontFamily: 'Poppins', fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF2E7D32))),
+                      ),
+                    ),
+            ),
+          ]),
+        ),
       ]),
     );
   }

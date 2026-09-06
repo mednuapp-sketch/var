@@ -121,8 +121,14 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       }
 
       // ── Step 2: Network check ────────────────────────────────────────────
+      // Bounded with a timeout — a stalled network must never leave the
+      // user staring at the splash screen indefinitely.
       try {
-        final doc = await db.collection('users').doc(uid).get();
+        final doc = await db
+            .collection('users')
+            .doc(uid)
+            .get()
+            .timeout(const Duration(seconds: 6));
         if (!mounted) return;
         if (doc.exists) {
           final data = doc.data() ?? {};
@@ -133,11 +139,19 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
           }
           return;
         }
-        // Firebase session exists but no Firestore doc — sign out cleanly
-        // so the user starts a fresh phone auth on the login screen.
-        await FirebaseAuth.instance.signOut();
+        // Firebase session exists but no Firestore profile yet — most often
+        // the user closed the app mid-registration. Resume registration
+        // instead of force-signing-out: this mirrors checkUserStatus() in
+        // auth_provider.dart (used on the OTP screen for the same "no doc"
+        // case), which also keeps the session alive rather than kicking the
+        // user back to a fresh phone/OTP login. Forcing a sign-out here was
+        // the cause of the app appearing to randomly "log the account out".
+        context.go(AppRoutes.termsAccept,
+            extra: {'phone': firebaseUser.phoneNumber ?? ''});
+        return;
       } catch (_) {
-        // Network failure — if cache was also empty, fall back to login
+        // Network failure or timeout — session is left intact so the next
+        // launch can retry; only the destination falls back to login.
         if (!mounted) return;
         context.go(onboarded ? AppRoutes.login : AppRoutes.onboarding);
         return;

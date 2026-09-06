@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -11,6 +12,7 @@ import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/utils/r.dart';
 import '../../../core/widgets/ux_widgets.dart';
+import '../../intake/services/doctor_booking_flow.dart';
 import '../data/doctors_data.dart';
 
 const _kDefaultSlots = [
@@ -63,6 +65,15 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
   String _consultationType = 'Video';
   late int _selectedDuration;
   bool _booking = false;
+  // Quick Connect (from the doctor-list card) used to be indistinguishable
+  // from Book Now — same screen, same blank slot picker — because the
+  // 'quickConnect' mode was passed via `extra`, which this route never reads
+  // (see doctors_list_screen.dart). Now that the mode actually arrives, this
+  // pre-picks the soonest open slot so the patient just confirms instead of
+  // choosing a time — a real difference, not a fake label, and it reuses the
+  // exact same booking/payment path Book Now uses (no shortcut around
+  // payment or doctor acceptance).
+  bool _quickConnectAutoPicked = false;
 
   DocData? _doc;
   bool _loadingDoc = true;
@@ -75,6 +86,19 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
   String? _hospitalAddress;
   List<String> _languages = [];
   List<String> _supportedModes = ['Video', 'In-Person'];
+
+  // ── Who is this for? ── -1 = self. Picking a family member lets the
+  // patient optionally attach that member's phone so a "Share join link"
+  // button (on the appointment screen, once booked) can let them join the
+  // actual call themselves — same pattern as the Consultation booking flow.
+  List<Map<String, dynamic>> _familyMembers = [];
+  int _bookingForIndex = -1;
+  final _guestPhoneCtrl = TextEditingController();
+
+  static String? _nonEmpty(String? s) {
+    final t = s?.trim();
+    return (t == null || t.isEmpty) ? null : t;
+  }
 
   StreamSubscription<DocumentSnapshot>? _docSub;
   StreamSubscription<DocumentSnapshot>? _favSub;
@@ -94,10 +118,38 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
       _consultationType = widget.rescheduleType!;
     } else if (widget.initialMode == 'inperson') {
       _consultationType = 'In-Person';
+    } else if (widget.initialMode == 'quickConnect') {
+      _consultationType = 'Video';
     }
     _subscribeDoctor();
     _subscribeFavouriteState();
+    _loadFamilyMembers();
     _slotTimer = Timer.periodic(const Duration(minutes: 1), (_) { if (mounted) setState(() {}); });
+  }
+
+  Future<void> _loadFamilyMembers() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    try {
+      final snap = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      final raw = snap.data()?['familyMembers'];
+      if (!mounted || raw is! List) return;
+      setState(() {
+        _familyMembers = raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+      });
+    } catch (_) {}
+  }
+
+  void _selectBookingFor(int index) {
+    setState(() {
+      _bookingForIndex = index;
+      if (index >= 0) {
+        final phone = _familyMembers[index]['phone'] as String? ?? '';
+        _guestPhoneCtrl.text = phone;
+      } else {
+        _guestPhoneCtrl.clear();
+      }
+    });
   }
 
   // ── Realtime doctor subscription ──────────────────────
@@ -138,8 +190,8 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
               [d['specialty'] as String? ?? ''],
         );
         _availability = d['availability'] as Map<String, dynamic>?;
-        _hospital = d['hospital'] as String? ?? d['hospitalAffiliation'] as String?;
-        _hospitalAddress = d['hospitalAddress'] as String? ?? d['clinicAddress'] as String?;
+        _hospital = _nonEmpty(d['hospital'] as String?) ?? _nonEmpty(d['clinicName'] as String?) ?? _nonEmpty(d['hospitalAffiliation'] as String?);
+        _hospitalAddress = _nonEmpty(d['hospitalAddress'] as String?) ?? _nonEmpty(d['clinicAddress'] as String?);
         _languages = (d['languages'] as List<dynamic>?)?.cast<String>() ?? [];
         if (modes != null && modes.isNotEmpty) {
           final allowed = modes.cast<String>().where((m) => m == 'Video' || m == 'In-Person').toList();
@@ -147,9 +199,31 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
         }
         _loadingDoc = false;
       });
+      _maybeAutoPickQuickConnectSlot();
     }, onError: (_) {
       if (mounted) setState(() => _loadingDoc = false);
     });
+  }
+
+  void _maybeAutoPickQuickConnectSlot() {
+    if (_quickConnectAutoPicked || widget.initialMode != 'quickConnect') return;
+    if (_isRescheduling || _selectedSlot != null) return;
+    for (var i = 0; i < _dates.length; i++) {
+      final date = _dates[i];
+      if (!_isDoctorWorkingDay(date)) continue;
+      final slots = _slotsForDate(date)
+          .where((s) => !_isSlotExpiredForDate(date, s))
+          .toList();
+      if (slots.isEmpty) continue;
+      setState(() {
+        _selectedDateIndex = i;
+        _selectedSlot = slots.first;
+        _quickConnectAutoPicked = true;
+      });
+      return;
+    }
+    // No open slot in the visible window — leave it to manual selection.
+    _quickConnectAutoPicked = true;
   }
 
   // ── Realtime favourite-state subscription ─────────────
@@ -236,8 +310,9 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
     return ds?['enabled'] == true;
   }
 
-  List<String> _slotsForSelectedDate() {
-    final date = _dates[_selectedDateIndex];
+  List<String> _slotsForSelectedDate() => _slotsForDate(_dates[_selectedDateIndex]);
+
+  List<String> _slotsForDate(DateTime date) {
     final avail = _availability;
     if (avail == null) return _kDefaultSlots.toList();
     final slotDuration = (avail['slotDuration'] as num?)?.toInt() ?? 30;
@@ -261,16 +336,32 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
         final displayH = h == 0 ? 12 : (h > 12 ? h - 12 : h);
         slots.add('${displayH.toString().padLeft(2, '0')}:${min.toString().padLeft(2, '0')} $period');
       }
-      return slots;
+      final blocked = _blockedSlotsForDate(date);
+      return blocked.isEmpty ? slots : slots.where((s) => !blocked.contains(s)).toList();
     } catch (_) {
       return _kDefaultSlots.toList();
     }
   }
 
-  bool _isSlotExpired(String slot) {
+  // Slots the doctor has manually blocked for this date (e.g. a sudden
+  // meeting), separate from the recurring weekly schedule — see the doctor
+  // app's Block a Slot screen, which writes availability.blockedSlots.
+  Set<String> _blockedSlotsForDate(DateTime date) {
+    final avail = _availability;
+    if (avail == null) return const {};
+    final blockedByDate = avail['blockedSlots'] as Map<String, dynamic>?;
+    if (blockedByDate == null) return const {};
+    final dateKey = DateFormat('yyyy-MM-dd').format(date);
+    final list = blockedByDate[dateKey] as List?;
+    return list?.cast<String>().toSet() ?? const {};
+  }
+
+  bool _isSlotExpired(String slot) =>
+      _isSlotExpiredForDate(_dates[_selectedDateIndex], slot);
+
+  bool _isSlotExpiredForDate(DateTime selectedDay, String slot) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final selectedDay = _dates[_selectedDateIndex];
     final selDate = DateTime(selectedDay.year, selectedDay.month, selectedDay.day);
     if (selDate.isAfter(today)) return false;
     if (selDate.isBefore(today)) return true;
@@ -292,6 +383,18 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('This slot has just expired. Please choose another time.'),
+          backgroundColor: AppColors.error, behavior: SnackBarBehavior.floating,
+        ));
+      }
+      return;
+    }
+    // Re-check against the doctor's blocked slots in case they blocked this
+    // exact time after the list was first rendered.
+    if (_blockedSlotsForDate(_dates[_selectedDateIndex]).contains(_selectedSlot)) {
+      setState(() => _selectedSlot = null);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('This slot is no longer available. Please choose another time.'),
           backgroundColor: AppColors.error, behavior: SnackBarBehavior.floating,
         ));
       }
@@ -324,6 +427,23 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
     } catch (_) {
       patientName = patient?.displayName ?? patient?.phoneNumber ?? 'Patient';
     }
+
+    // Always the account holder's own name, kept distinct from patientName
+    // below (which may get overridden to a family member's name) — the call
+    // screens use this to label the booking account holder's own video tile.
+    final bookedByName = patientName;
+
+    // Booking for a family member: show the doctor who they're actually
+    // treating, and carry the guest phone number so a join link can be
+    // generated later (only if one was entered — unchanged for "Self").
+    final bookingForMember = _bookingForIndex >= 0 && _bookingForIndex < _familyMembers.length
+        ? _familyMembers[_bookingForIndex]
+        : null;
+    if (bookingForMember != null) {
+      final memberName = (bookingForMember['name'] as String? ?? '').trim();
+      if (memberName.isNotEmpty) patientName = memberName;
+    }
+    final guestPhone = _guestPhoneCtrl.text.trim();
 
     // ── Pre-flight: confirm the slot is still free ───────────────────────────
     try {
@@ -392,13 +512,31 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
       return;
     }
 
+    // ── Pre-consultation form — before payment, not after ───────────────────
+    // Mandatory (see PreConsultationFormScreen's PopScope) — a null result
+    // means the patient cancelled the booking outright, not "skip and book
+    // anyway". No appointment exists yet at this point, so the answers are
+    // just held in memory and attached once payment succeeds and a real
+    // appointmentId exists (see submitIntake below) — see DoctorBookingFlow's
+    // class doc for why.
+    if (!mounted) return;
+    final formData = await DoctorBookingFlow.collectIntake(
+      context,
+      doctorId: widget.doctorId,
+      doctorName: doc.name,
+      doctorSpecialty: doc.spec,
+    );
+    if (formData == null || !mounted) {
+      setState(() => _booking = false);
+      return;
+    }
+
     // ── Open PaymentScreen — the slot is free, now collect payment ───────────
     // PaymentScreen pops with the newly-created appointment/payment ids only
     // after capturePayment verifies the charge server-side (HMAC-SHA256) and
     // creates the appointment doc itself — see functions/index.js. Nothing
     // here writes to Firestore directly, so a booking can never exist without
     // a real, server-verified payment behind it.
-    if (!mounted) return;
     final result = await context.push<Map<String, dynamic>>(
       AppRoutes.payment,
       extra: {
@@ -411,30 +549,55 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
           'doctorName':       doc.name,
           'doctorSpecialty':  doc.spec,
           'patientName':      patientName,
+          'bookedByName':     bookedByName,
           'date':             dateKey,
           'time':             slot,
           'consultationType': _consultationType,
           'duration':         duration,
           'fee':              amount,
           'status':           'booked',
+          if (bookingForMember != null && guestPhone.isNotEmpty) 'guestPhone': guestPhone,
         },
       },
     );
 
-    if (result?['bookingId'] == null || !mounted) return;
-
+    if (!mounted) return;
     final bookedSlot = slot;
     final bookedDate = _dates[_selectedDateIndex];
+    final bookingId = result?['bookingId'] as String?;
+
+    if (bookingId == null) {
+      setState(() => _booking = false);
+      await DoctorBookingFlow.showSummary(
+        context,
+        success: false,
+        doctorName: doc.name,
+        doctorSpecialty: doc.spec,
+        failureReason: 'Your payment wasn\'t completed, so this slot was not booked. You can try again anytime.',
+      );
+      return;
+    }
+
+    await DoctorBookingFlow.submitIntake(
+      appointmentId: bookingId,
+      doctorId: widget.doctorId,
+      doctorName: doc.name,
+      data: formData,
+    );
+    if (!mounted) return;
+
     setState(() { _selectedSlot = null; _booking = false; });
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(
-        'Appointment confirmed for ${DateFormat('d MMM').format(bookedDate)} at $bookedSlot',
-      ),
-      backgroundColor: const Color(0xFF2E7D32),
-      behavior: SnackBarBehavior.floating,
-      duration: const Duration(seconds: 4),
-    ));
-    _showBookingConfirmation(doc, bookedSlot, bookedDate);
+    await DoctorBookingFlow.showSummary(
+      context,
+      success: true,
+      doctorName: doc.name,
+      doctorSpecialty: doc.spec,
+      date: DateFormat('EEE, d MMM yyyy').format(bookedDate),
+      time: bookedSlot,
+      consultationType: '$_consultationType · $duration min',
+      fee: amount.toString(),
+      formData: formData,
+    );
   }
 
   void _showBookingConfirmation(DocData doc, String slot, DateTime date) {
@@ -523,6 +686,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
     _docSub?.cancel();
     _favSub?.cancel();
     _slotTimer?.cancel();
+    _guestPhoneCtrl.dispose();
     super.dispose();
   }
 
@@ -596,6 +760,14 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                   padding: EdgeInsets.symmetric(horizontal: R.p(context, 20)),
                   child: _buildSlotsSection(),
                 ),
+                SizedBox(height: R.h(context, 24)),
+
+                // ── Who is this for? ─────────────────────
+                if (_familyMembers.isNotEmpty)
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: R.p(context, 20)),
+                    child: _buildBookingForSection(),
+                  ),
                 SizedBox(height: R.h(context, 120)),
               ],
             ),
@@ -906,30 +1078,35 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
               ]),
             ),
           ),
-          if (_hospital != null || _hospitalAddress != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 10),
-              child: Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFB71C1C).withValues(alpha:0.05),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFB71C1C).withValues(alpha:0.15)),
-                ),
-                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const Icon(Icons.place_rounded, size: 18, color: Color(0xFFB71C1C)),
-                  const SizedBox(width: 10),
-                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    if (_hospital != null)
-                      Text(_hospital!, style: AppTextStyles.labelMedium.copyWith(color: const Color(0xFFB71C1C))),
-                    if (_hospitalAddress != null) ...[
-                      const SizedBox(height: 3),
-                      Text(_hospitalAddress!, style: AppTextStyles.caption.copyWith(color: context.appTextSecondary)),
-                    ],
-                  ])),
-                ]),
+          Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFB71C1C).withValues(alpha:0.05),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFB71C1C).withValues(alpha:0.15)),
               ),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Icon(Icons.place_rounded, size: 18, color: Color(0xFFB71C1C)),
+                const SizedBox(width: 10),
+                Expanded(child: (_hospital != null || _hospitalAddress != null)
+                  ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      if (_hospital != null)
+                        Text(_hospital!, style: AppTextStyles.labelMedium.copyWith(color: const Color(0xFFB71C1C))),
+                      if (_hospitalAddress != null) ...[
+                        const SizedBox(height: 3),
+                        Text(_hospitalAddress!, style: AppTextStyles.caption.copyWith(color: context.appTextSecondary)),
+                      ],
+                    ])
+                  : Text(
+                      'Clinic location not added by the doctor yet. Please confirm the address with the clinic before your visit.',
+                      style: AppTextStyles.caption.copyWith(color: context.appTextSecondary),
+                    ),
+                ),
+              ]),
             ),
+          ),
         ],
       ],
     );
@@ -1037,6 +1214,63 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
             ]),
           )).toList(),
         ),
+      ],
+    );
+  }
+
+  // ── Who is this for? ───────────────────────────────────
+  Widget _buildBookingForSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _PremiumSectionTitle('Who is this for?', Icons.family_restroom_rounded, Color(0xFF6A1B9A)),
+        SizedBox(height: R.h(context, 14)),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _BookingForChip(
+              label: 'Self',
+              selected: _bookingForIndex < 0,
+              onTap: () => _selectBookingFor(-1),
+            ),
+            for (int i = 0; i < _familyMembers.length; i++)
+              _BookingForChip(
+                label: _familyMembers[i]['name'] as String? ?? 'Member',
+                selected: _bookingForIndex == i,
+                onTap: () => _selectBookingFor(i),
+              ),
+          ],
+        ),
+        if (_bookingForIndex >= 0) ...[
+          SizedBox(height: R.h(context, 14)),
+          TextField(
+            controller: _guestPhoneCtrl,
+            keyboardType: TextInputType.phone,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            decoration: InputDecoration(
+              labelText: "${_familyMembers[_bookingForIndex]['name'] ?? 'Their'}'s phone (optional)",
+              hintText: 'So they can join the call themselves',
+              prefixIcon: const Icon(Icons.phone_iphone_rounded),
+              filled: true,
+              fillColor: Colors.white,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Color(0xFFE5E7EB), width: 1.5),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: AppColors.primary),
+              ),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            ),
+          ),
+          SizedBox(height: R.h(context, 6)),
+          Text(
+            "Add their number and, once booked, you can share a link so they can join the video call directly from their own phone — you don't need to be with them.",
+            style: TextStyle(fontFamily: 'Poppins', fontSize: 11, color: context.appTextSecondary, height: 1.4),
+          ),
+        ],
       ],
     );
   }
@@ -1343,11 +1577,20 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                       ),
                       child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                        Icon(_isRescheduling ? Icons.edit_calendar_rounded : Icons.calendar_month_rounded, size: 19, color: Colors.white),
+                        Icon(
+                          _isRescheduling
+                              ? Icons.edit_calendar_rounded
+                              : widget.initialMode == 'quickConnect'
+                                  ? Icons.flash_on_rounded
+                                  : Icons.calendar_month_rounded,
+                          size: 19, color: Colors.white,
+                        ),
                         const SizedBox(width: 8),
                         Text(_isRescheduling
                             ? 'Confirm Reschedule'
-                            : 'Book Appointment · ₹${_feeForDuration(doc.fee, _selectedDuration)}',
+                            : widget.initialMode == 'quickConnect'
+                                ? 'Connect Now · ₹${_feeForDuration(doc.fee, _selectedDuration)}'
+                                : 'Book Appointment · ₹${_feeForDuration(doc.fee, _selectedDuration)}',
                           style: const TextStyle(
                             fontFamily: 'Poppins', fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white,
                           )),
@@ -1510,6 +1753,45 @@ class _HeaderChip extends StatelessWidget {
 }
 
 // ── Section title ─────────────────────────────────────────
+class _BookingForChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  const _BookingForChip({required this.label, required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+        decoration: BoxDecoration(
+          gradient: selected ? AppColors.primaryGradient : null,
+          color: selected ? null : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: selected ? Colors.transparent : const Color(0xFFE5E7EB),
+            width: 1.5,
+          ),
+          boxShadow: selected
+              ? [BoxShadow(color: AppColors.primary.withValues(alpha: 0.28), blurRadius: 10, offset: const Offset(0, 4))]
+              : null,
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontFamily: 'Poppins',
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: selected ? Colors.white : const Color(0xFF1F2937),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _PremiumSectionTitle extends StatelessWidget {
   final String title;
   final IconData icon;

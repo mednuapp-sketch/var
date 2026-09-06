@@ -7,7 +7,7 @@ import '../../core/constants/app_colors.dart';
 /// no `roles` field, so every reader in this layer treats a missing/absent
 /// value as `[AppRole.doctor]` rather than throwing. No existing document
 /// needs to be migrated for the app to keep working exactly as before.
-enum AppRole { doctor, ambulance, pharmacy, lab, caregiver, physiotherapist, counsellor, nutritionist, admin }
+enum AppRole { doctor, ambulance, pharmacy, lab, caregiver, physiotherapist, counsellor, nutritionist, hospital, admin }
 
 extension AppRoleX on AppRole {
   /// Value stored in Firestore (`roles` / `activeRole` fields). Kept
@@ -31,6 +31,8 @@ extension AppRoleX on AppRole {
         return 'counsellor';
       case AppRole.nutritionist:
         return 'nutritionist';
+      case AppRole.hospital:
+        return 'hospital';
       case AppRole.admin:
         return 'admin';
     }
@@ -54,6 +56,8 @@ extension AppRoleX on AppRole {
         return 'Counsellor';
       case AppRole.nutritionist:
         return 'Nutritionist';
+      case AppRole.hospital:
+        return 'Hospital Billing Desk';
       case AppRole.admin:
         return 'Admin';
     }
@@ -80,6 +84,8 @@ extension AppRoleX on AppRole {
         return 'Mental health & counselling';
       case AppRole.nutritionist:
         return 'Diet & nutrition consultations';
+      case AppRole.hospital:
+        return 'Confirm patient bill payments';
       case AppRole.admin:
         return 'Manage platform operations';
     }
@@ -103,6 +109,8 @@ extension AppRoleX on AppRole {
         return Icons.psychology_rounded;
       case AppRole.nutritionist:
         return Icons.restaurant_menu_rounded;
+      case AppRole.hospital:
+        return Icons.receipt_long_rounded;
       case AppRole.admin:
         return Icons.admin_panel_settings_rounded;
     }
@@ -126,6 +134,8 @@ extension AppRoleX on AppRole {
         return const Color(0xFF5E35B1);
       case AppRole.nutritionist:
         return const Color(0xFF2E7D32);
+      case AppRole.hospital:
+        return const Color(0xFF00695C);
       case AppRole.admin:
         return const Color(0xFF37474F);
     }
@@ -149,6 +159,8 @@ extension AppRoleX on AppRole {
         return AppRole.counsellor;
       case 'nutritionist':
         return AppRole.nutritionist;
+      case 'hospital':
+        return AppRole.hospital;
       case 'admin':
         return AppRole.admin;
       default:

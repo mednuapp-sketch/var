@@ -794,10 +794,10 @@ class _ServicesRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final items = [
-      (icon: Icons.person_search_rounded, label: 'Doctors'),
-      (icon: Icons.medication_rounded, label: 'Medicines'),
-      (icon: Icons.biotech_rounded, label: 'Lab Tests'),
-      (icon: Icons.folder_shared_rounded, label: 'Records'),
+      (icon: Icons.video_call_rounded, label: 'Consult'),
+      (icon: Icons.medication_liquid_rounded, label: 'Pharmacy'),
+      (icon: Icons.science_rounded, label: 'Lab Tests'),
+      (icon: Icons.local_shipping_rounded, label: 'Ambulance'),
     ];
     return Container(
       color: Colors.white,

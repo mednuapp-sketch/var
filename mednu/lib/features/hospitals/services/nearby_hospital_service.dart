@@ -21,6 +21,13 @@ class NearbyHospital {
   final double? rating;
   final int? userRatingsTotal;
 
+  /// The real `hospitals` Firestore doc id, set only when [isMednu] is true.
+  /// [id] itself holds the Google Places `place_id` for MedNU hospitals that
+  /// were matched against a Google result (see [mergeResults]), so it can't
+  /// be used to look the hospital back up in Firestore — use this instead
+  /// wherever a feature (e.g. bill payment) needs the actual hospital doc.
+  final String? mednuId;
+
   const NearbyHospital({
     required this.id,
     required this.name,
@@ -29,6 +36,7 @@ class NearbyHospital {
     required this.mapsUrl,
     required this.isEmergency,
     required this.isMednu,
+    this.mednuId,
     this.lat,
     this.lng,
     this.distanceKm,
@@ -78,13 +86,13 @@ class NearbyHospitalService {
 
     for (final place in rawGooglePlaces) {
       final name = place['name'] as String? ?? '';
-      final matched = _matchMednu(name, mednuHospitals);
+      final placeId = place['place_id'] as String? ?? '';
+      final matched = _matchMednu(name, placeId, mednuHospitals);
       if (matched != null) matchedMednuIds.add(matched.id);
 
       final geo = place['geometry']?['location'];
       final lat = (geo?['lat'] as num?)?.toDouble();
       final lng = (geo?['lng'] as num?)?.toDouble();
-      final placeId = place['place_id'] as String? ?? '';
 
       results.add(NearbyHospital(
         id: placeId.isNotEmpty ? placeId : name,
@@ -96,6 +104,7 @@ class NearbyHospitalService {
             : matched?.mapsUrl ?? '',
         isEmergency: matched?.isEmergency ?? false,
         isMednu: matched != null,
+        mednuId: matched?.id,
         lat: lat,
         lng: lng,
         distanceKm: (lat != null && lng != null)
@@ -117,6 +126,7 @@ class NearbyHospitalService {
           mapsUrl: h.mapsUrl,
           isEmergency: h.isEmergency,
           isMednu: true,
+          mednuId: h.id,
         ));
       }
     }
@@ -136,7 +146,15 @@ class NearbyHospitalService {
     return results;
   }
 
-  Hospital? _matchMednu(String placeName, List<Hospital> mednuHospitals) {
+  Hospital? _matchMednu(String placeName, String placeId, List<Hospital> mednuHospitals) {
+    // Exact match first: a catalog entry added via the admin's "Search
+    // Google Maps" picker carries the real place_id, which is authoritative
+    // and can never false-match the way fuzzy name comparison can.
+    if (placeId.isNotEmpty) {
+      for (final h in mednuHospitals) {
+        if (h.placeId != null && h.placeId == placeId) return h;
+      }
+    }
     final norm = _normalize(placeName);
     if (norm.isEmpty) return null;
     for (final h in mednuHospitals) {

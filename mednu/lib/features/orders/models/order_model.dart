@@ -36,6 +36,8 @@ class OrderModel {
   final String deliveryAddress;
   final String deliveryName;
   final String deliveryPhone;
+  final double? deliveryLat;
+  final double? deliveryLng;
   final DateTime createdAt;
 
   // ── Additive prescription fields ──────────────────────────────────────
@@ -54,6 +56,8 @@ class OrderModel {
     required this.deliveryAddress,
     required this.deliveryName,
     required this.deliveryPhone,
+    this.deliveryLat,
+    this.deliveryLng,
     required this.createdAt,
     required this.prescriptionUrl,
     required this.prescriptionFileType,
@@ -76,6 +80,11 @@ class OrderModel {
       deliveryAddress: (d['deliveryAddress'] as String?) ?? '',
       deliveryName: (d['deliveryName'] as String?) ?? '',
       deliveryPhone: (d['deliveryPhone'] as String?) ?? '',
+      // Written by checkout_details_sheet.dart as recipientLocation.{lat,lng}
+      // (LocationData.toBookingMap()) whenever the user picked/confirmed a
+      // map location rather than typing a bare address — not always present.
+      deliveryLat: ((d['recipientLocation'] as Map?)?['lat'] as num?)?.toDouble(),
+      deliveryLng: ((d['recipientLocation'] as Map?)?['lng'] as num?)?.toDouble(),
       createdAt: (d['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       prescriptionUrl: d['prescriptionUrl'] as String?,
       prescriptionFileType: d['prescriptionFileType'] as String?,

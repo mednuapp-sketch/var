@@ -35,11 +35,20 @@ class PharmacyInventoryService {
       'stock': stock,
       'lowStockThreshold': lowStockThreshold,
       'requiresPrescription': requiresPrescription,
+      'blocked': false,
     });
   }
 
   static Future<void> updateStock(String pharmacyId, String itemId, int newStock) {
     return _collection(pharmacyId).doc(itemId).update({'stock': newStock});
+  }
+
+  /// Hides the item from the patient-facing catalogue without touching its
+  /// stock count (see `onPharmacyInventoryWrite` in functions/index.js) — for
+  /// a recall or a temporary stop-sell where the pharmacy wants to keep the
+  /// item configured rather than deleting and re-adding it later.
+  static Future<void> setBlocked(String pharmacyId, String itemId, bool blocked) {
+    return _collection(pharmacyId).doc(itemId).update({'blocked': blocked});
   }
 
   static Future<void> deleteItem(String pharmacyId, String itemId) {

@@ -563,6 +563,7 @@ class _CalendarScreenState extends ConsumerState<_CalendarScreen> {
   SliverAppBar _buildAppBar(BuildContext context) {
     return SliverAppBar(
       pinned: true,
+      backgroundColor: _kPinkDark,
       expandedHeight: 160,
       leading: IconButton(
         icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),

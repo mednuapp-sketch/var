@@ -13,6 +13,10 @@ class PhysioProfile {
   final int totalSessions;
   final int experienceYears;
   final bool documentsVerified;
+  final String city;
+  final double? clinicLat;
+  final double? clinicLng;
+  final List<String> languages;
 
   /// Admin-approval status: 'pending' | 'active'. Distinct from
   /// [documentsVerified] — this is the account-level gate the router keys
@@ -29,6 +33,10 @@ class PhysioProfile {
     required this.totalSessions,
     required this.experienceYears,
     required this.documentsVerified,
+    this.city = '',
+    this.clinicLat,
+    this.clinicLng,
+    this.languages = const [],
     this.status = 'pending',
   });
 
@@ -62,6 +70,10 @@ class PhysioProfile {
       totalSessions: ((d['totalSessions'] as num?) ?? 0).toInt(),
       experienceYears: ((d['experienceYears'] as num?) ?? 0).toInt(),
       documentsVerified: d['documentsVerified'] as bool? ?? false,
+      city: d['city'] as String? ?? '',
+      clinicLat: (d['clinicLat'] as num?)?.toDouble(),
+      clinicLng: (d['clinicLng'] as num?)?.toDouble(),
+      languages: ((d['languages'] as List?) ?? const []).whereType<String>().toList(),
       status: d['status'] as String? ?? 'pending',
     );
   }

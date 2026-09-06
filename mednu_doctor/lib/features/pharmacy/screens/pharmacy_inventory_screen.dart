@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
@@ -124,12 +125,17 @@ class PharmacyInventoryScreen extends ConsumerWidget {
       ),
     );
 
-    // The sheet's controllers are created per-open and would otherwise leak
-    // one set per invocation.
-    nameCtrl.dispose();
-    brandCtrl.dispose();
-    priceCtrl.dispose();
-    stockCtrl.dispose();
+    // Deferred, not synchronous: disposing right as showModalBottomSheet's
+    // Future resolves is a real crash here — the sheet's TextFields are still
+    // mounted and mid-exit-animation at that exact point, not actually
+    // unmounted yet (default bottom-sheet transition is ~250ms; 400ms leaves
+    // comfortable margin).
+    unawaited(Future.delayed(const Duration(milliseconds: 400), () {
+      nameCtrl.dispose();
+      brandCtrl.dispose();
+      priceCtrl.dispose();
+      stockCtrl.dispose();
+    }));
   }
 
   @override
@@ -201,6 +207,7 @@ class _InventoryTile extends StatelessWidget {
   const _InventoryTile({required this.item, required this.pharmacyId});
 
   Color get _stockColor {
+    if (item.blocked) return AppColors.neutral;
     if (item.isOutOfStock) return AppColors.error;
     if (item.isLowStock) return AppColors.warning;
     return AppColors.success;
@@ -210,56 +217,76 @@ class _InventoryTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return PremiumCard(
       margin: const EdgeInsets.only(bottom: 10),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Flexible(child: Text(item.name, style: AppTextStyles.labelLarge, overflow: TextOverflow.ellipsis)),
-                    if (item.requiresPrescription) ...[
-                      const SizedBox(width: 6),
-                      const Icon(Icons.medical_information_outlined, size: 14, color: AppColors.warning),
-                    ],
-                  ],
-                ),
-                if (item.brand.isNotEmpty)
-                  Text(item.brand, style: AppTextStyles.bodySmall),
-                const SizedBox(height: 4),
-                Text(CurrencyFormatter.format(item.price), style: AppTextStyles.bodyMedium),
-              ],
-            ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              StatusBadge(
-                label: item.isOutOfStock ? 'Out of stock' : '${item.stock} in stock',
-                color: _stockColor,
-              ),
-              const SizedBox(height: 6),
-              Row(
-                mainAxisSize: MainAxisSize.min,
+      // Blocked items stay in the list (not removed/greyed to invisible) so
+      // the pharmacist can still find and unblock them — only the patient
+      // catalogue hides them (see onPharmacyInventoryWrite).
+      child: Opacity(
+        opacity: item.blocked ? 0.6 : 1,
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  IconButton(
-                    visualDensity: VisualDensity.compact,
-                    icon: const Icon(Icons.remove_circle_outline_rounded, size: 20),
-                    onPressed: item.stock <= 0
-                        ? null
-                        : () => PharmacyInventoryService.updateStock(pharmacyId, item.id, item.stock - 1),
+                  Row(
+                    children: [
+                      Flexible(child: Text(item.name, style: AppTextStyles.labelLarge, overflow: TextOverflow.ellipsis)),
+                      if (item.requiresPrescription) ...[
+                        const SizedBox(width: 6),
+                        const Icon(Icons.medical_information_outlined, size: 14, color: AppColors.warning),
+                      ],
+                    ],
                   ),
-                  IconButton(
-                    visualDensity: VisualDensity.compact,
-                    icon: const Icon(Icons.add_circle_outline_rounded, size: 20),
-                    onPressed: () => PharmacyInventoryService.updateStock(pharmacyId, item.id, item.stock + 1),
-                  ),
+                  if (item.brand.isNotEmpty)
+                    Text(item.brand, style: AppTextStyles.bodySmall),
+                  const SizedBox(height: 4),
+                  Text(CurrencyFormatter.format(item.price), style: AppTextStyles.bodyMedium),
                 ],
               ),
-            ],
-          ),
-        ],
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                StatusBadge(
+                  label: item.blocked
+                      ? 'Blocked'
+                      : item.isOutOfStock
+                          ? 'Out of stock'
+                          : '${item.stock} in stock',
+                  color: _stockColor,
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      icon: const Icon(Icons.remove_circle_outline_rounded, size: 20),
+                      onPressed: item.stock <= 0
+                          ? null
+                          : () => PharmacyInventoryService.updateStock(pharmacyId, item.id, item.stock - 1),
+                    ),
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      icon: const Icon(Icons.add_circle_outline_rounded, size: 20),
+                      onPressed: () => PharmacyInventoryService.updateStock(pharmacyId, item.id, item.stock + 1),
+                    ),
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      tooltip: item.blocked ? 'Unblock (show to patients)' : 'Block (hide from patients)',
+                      icon: Icon(
+                        item.blocked ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                        size: 20,
+                        color: item.blocked ? AppColors.neutral : AppColors.textSecondary,
+                      ),
+                      onPressed: () => PharmacyInventoryService.setBlocked(pharmacyId, item.id, !item.blocked),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

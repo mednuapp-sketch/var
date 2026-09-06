@@ -26,6 +26,7 @@ class _PharmacyProfileScreenState extends ConsumerState<PharmacyProfileScreen> {
   final _addressCtrl = TextEditingController();
   double? _addressLat;
   double? _addressLng;
+  String _addressCity = '';
   final _phoneCtrl = TextEditingController();
 
   Future<void> _pickAddress() async {
@@ -39,6 +40,7 @@ class _PharmacyProfileScreenState extends ConsumerState<PharmacyProfileScreen> {
       _addressCtrl.text = result.formatted;
       _addressLat = result.lat;
       _addressLng = result.lng;
+      _addressCity = result.city ?? '';
     });
   }
 
@@ -52,6 +54,7 @@ class _PharmacyProfileScreenState extends ConsumerState<PharmacyProfileScreen> {
         'address': _addressCtrl.text.trim(),
         if (_addressLat != null) 'latitude': _addressLat,
         if (_addressLng != null) 'longitude': _addressLng,
+        if (_addressCity.isNotEmpty) 'city': _addressCity,
         'phone': _phoneCtrl.text.trim(),
       });
       if (!mounted) return;
@@ -102,6 +105,7 @@ class _PharmacyProfileScreenState extends ConsumerState<PharmacyProfileScreen> {
             _addressCtrl.text = profile.address;
             _addressLat = profile.latitude;
             _addressLng = profile.longitude;
+            _addressCity = profile.city;
             _phoneCtrl.text = profile.phone;
           }
 

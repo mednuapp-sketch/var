@@ -551,16 +551,6 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen>
       keywords: [],
     ),
     SearchResult(
-      id: '_b_premium',
-      title: 'Premium',
-      subtitle: '',
-      route: AppRoutes.premium,
-      icon: Icons.workspace_premium_rounded,
-      color: Color(0xFFFF8F00),
-      category: SearchCategory.service,
-      keywords: [],
-    ),
-    SearchResult(
       id: '_b_family',
       title: 'Family',
       subtitle: '',

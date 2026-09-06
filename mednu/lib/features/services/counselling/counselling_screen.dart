@@ -189,7 +189,8 @@ class _CounsellingScreenState extends State<CounsellingScreen> {
               child: OutlinedButton.icon(
                 onPressed: () {
                   Navigator.pop(context);
-                  context.push('${AppRoutes.doctors}?type=therapist&specialty=${t['specialty']}&duration=$_selectedDuration');
+                  final title = Uri.encodeComponent(t['title'] as String);
+                  context.push('${AppRoutes.doctors}?type=therapist&specialty=${t['specialty']}&duration=$_selectedDuration&title=$title');
                 },
                 icon: const Icon(Icons.calendar_today_rounded, size: 16),
                 label: const Text('Schedule Session'),
@@ -238,6 +239,7 @@ class _CounsellingScreenState extends State<CounsellingScreen> {
         slivers: [
           SliverAppBar(
             pinned: true,
+            backgroundColor: const Color(0xFF3D1D36),
             expandedHeight: AppSpacing.headerHeight(context),
             leading: IconButton(
               icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),

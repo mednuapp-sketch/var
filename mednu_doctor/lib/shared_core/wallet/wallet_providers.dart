@@ -28,6 +28,11 @@ final walletRepositoryProvider = Provider<WalletRepository>((ref) {
       return CounsellingTransactionWalletRepository();
     case AppRole.nutritionist:
       return NutritionAppointmentWalletRepository();
+    case AppRole.hospital:
+      // A hospital billing-desk login never earns anything — it only reads
+      // hospital_bill_payments (see HospitalPaymentService) — so, like
+      // Admin, it has no real wallet backing yet.
+      return DoctorAppointmentWalletRepository();
     case AppRole.admin:
       return DoctorAppointmentWalletRepository();
   }

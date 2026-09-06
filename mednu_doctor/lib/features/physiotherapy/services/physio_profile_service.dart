@@ -33,6 +33,10 @@ class PhysioProfileService {
     List<String> specialties = const [],
     num hourlyRate = 0,
     int experienceYears = 0,
+    String city = '',
+    double? clinicLat,
+    double? clinicLng,
+    List<String> languages = const [],
   }) async {
     String? fcmToken;
     try {
@@ -46,6 +50,10 @@ class PhysioProfileService {
       'certifications': certifications,
       'specialties': specialties,
       'hourlyRate': hourlyRate,
+      'city': city,
+      if (clinicLat != null && clinicLng != null) 'clinicLat': clinicLat,
+      if (clinicLat != null && clinicLng != null) 'clinicLng': clinicLng,
+      'languages': languages,
       'documentsVerified': false,
       'status': 'pending',
       'isVerified': false,

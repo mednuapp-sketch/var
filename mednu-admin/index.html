@@ -125,6 +125,15 @@
         <i class="ti ti-ambulance nav-icon" aria-hidden="true"></i> Ambulances
         <span class="nav-badge nav-badge-green" id="nav-ambulance-count" style="display:none;">0</span>
       </div>
+      <div class="nav-item" data-tab="equipmentVendors" data-title="Equipment Vendors">
+        <i class="ti ti-tools nav-icon" aria-hidden="true"></i> Equipment Vendors
+        <span class="nav-badge nav-badge-green" id="nav-equipment-vendor-count" style="display:none;">0</span>
+      </div>
+      <div class="nav-section-label">Billing</div>
+      <div class="nav-item" data-tab="bill-discounts" data-title="Hospital Bill Discounts">
+        <i class="ti ti-discount-2 nav-icon" aria-hidden="true"></i> Bill Discounts
+        <span class="nav-badge nav-badge-green" id="nav-bill-discount-count" style="display:none;">0</span>
+      </div>
       <!-- Maternity section hidden, restore when asked
       <div class="nav-section-label">Maternity</div>
       <div class="nav-item" data-tab="maternity" data-title="Maternity Care Management">
@@ -188,6 +197,22 @@
       <div class="nav-item" data-tab="lab-partners" data-title="Lab Partners">
         <i class="ti ti-microscope nav-icon" aria-hidden="true"></i> Lab Partners
         <span class="nav-badge nav-badge-red" id="nav-lab-partners-count" style="display:none;">0</span>
+      </div>
+      <div class="nav-item" data-tab="physio-partners" data-title="Physiotherapist Partners">
+        <i class="ti ti-activity nav-icon" aria-hidden="true"></i> Physio Partners
+        <span class="nav-badge nav-badge-red" id="nav-physio-partners-count" style="display:none;">0</span>
+      </div>
+      <div class="nav-item" data-tab="counselling-partners" data-title="Counsellor Partners">
+        <i class="ti ti-message-circle nav-icon" aria-hidden="true"></i> Counsellor Partners
+        <span class="nav-badge nav-badge-red" id="nav-counselling-partners-count" style="display:none;">0</span>
+      </div>
+      <div class="nav-item" data-tab="nutrition-partners" data-title="Nutritionist Partners">
+        <i class="ti ti-leaf nav-icon" aria-hidden="true"></i> Nutrition Partners
+        <span class="nav-badge nav-badge-red" id="nav-nutrition-partners-count" style="display:none;">0</span>
+      </div>
+      <div class="nav-item" data-tab="hospital-partners" data-title="Hospital Partners">
+        <i class="ti ti-building-hospital nav-icon" aria-hidden="true"></i> Hospital Partners
+        <span class="nav-badge nav-badge-red" id="nav-hospital-partners-count" style="display:none;">0</span>
       </div>
       <div class="nav-section-label">Logs &amp; Audit</div>
       <div class="nav-item" data-tab="prescriptions" data-title="Prescription Lookup">
@@ -1078,6 +1103,10 @@
               <label class="form-label">End Date <span class="form-hint">(optional — hide after)</span></label>
               <input id="banner-end-date" type="datetime-local" class="form-input" />
             </div>
+            <div class="form-group">
+              <label class="form-label">Display Order <span class="form-hint">(lower shows first in the home carousel; ties break by newest)</span></label>
+              <input id="banner-order" type="number" class="form-input" placeholder="0" step="1" />
+            </div>
           </div>
 
           <div class="banner-form-footer">
@@ -1508,6 +1537,11 @@
               <i class="ti ti-x"></i> Cancel
             </button>
           </div>
+          <div class="form-group" style="margin-bottom:14px;">
+            <label class="form-label">Search Google Maps <span class="form-hint">(find the real place instead of typing it — prevents duplicate/mismatched entries)</span></label>
+            <input id="hosp-place-search" type="text" class="form-input" placeholder="Start typing a hospital name..." autocomplete="off" />
+            <div id="hosp-place-hint" style="font-size:12px;margin-top:6px;"></div>
+          </div>
           <div class="banner-form-grid">
             <div class="form-group">
               <label class="form-label">Hospital Name <span style="color:var(--danger)">*</span></label>
@@ -1560,6 +1594,73 @@
             </div>
           </div>
           <div id="hospitals-list"><div class="loading">Loading hospitals…</div></div>
+        </div>
+      </div>
+
+      <!-- ===== BILL DISCOUNTS TAB ===== -->
+      <div id="tab-bill-discounts" class="tab-section">
+
+        <!-- Add / Edit Discount -->
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-header">
+            <span class="card-title" id="bill-discount-form-title">Add Discount</span>
+            <button class="btn btn-outline" id="cancel-bill-discount-btn" style="display:none;" onclick="cancelBillDiscountEdit()">
+              <i class="ti ti-x"></i> Cancel
+            </button>
+          </div>
+          <div class="banner-form-grid">
+            <div class="form-group">
+              <label class="form-label">Label <span style="color:var(--danger)">*</span></label>
+              <input id="bd-label" type="text" class="form-input" placeholder="e.g. 10% Off" maxlength="60" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Type <span style="color:var(--danger)">*</span></label>
+              <select id="bd-type" class="form-input">
+                <option value="percent">Percentage off</option>
+                <option value="flat">Flat amount off</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Value <span style="color:var(--danger)">*</span></label>
+              <input id="bd-value" type="number" min="0" step="0.01" class="form-input" placeholder="e.g. 10" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Max Discount Amount <span class="form-hint">(optional, caps a % discount)</span></label>
+              <input id="bd-max" type="number" min="0" step="1" class="form-input" placeholder="e.g. 500" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Minimum Bill Amount <span class="form-hint">(optional)</span></label>
+              <input id="bd-min" type="number" min="0" step="1" class="form-input" placeholder="e.g. 1000" />
+            </div>
+          </div>
+          <div class="banner-form-footer">
+            <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:center;flex:1;">
+              <label class="toggle-label">
+                <input type="checkbox" id="bd-enabled" checked />
+                <span class="toggle-switch"></span>
+                <span class="toggle-text">Visible in app</span>
+              </label>
+            </div>
+            <button id="save-bill-discount-btn" class="btn-publish" onclick="saveBillDiscount()">
+              <i class="ti ti-device-floppy"></i> Save Discount
+            </button>
+          </div>
+        </div>
+
+        <!-- Discounts List -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">All Discounts</span>
+            <div style="display:flex;gap:8px;">
+              <input id="bill-discount-search" type="text" class="search-input" placeholder="Search discounts..." oninput="filterBillDiscounts()" />
+              <select id="bill-discount-filter" class="filter-select" onchange="filterBillDiscounts()">
+                <option value="all">All</option>
+                <option value="enabled">Enabled</option>
+                <option value="disabled">Disabled</option>
+              </select>
+            </div>
+          </div>
+          <div id="bill-discounts-list"><div class="loading">Loading discounts…</div></div>
         </div>
       </div>
 
@@ -1635,6 +1736,62 @@
             </select>
           </div>
           <div id="ambulances-list"><div class="loading">Loading ambulance services…</div></div>
+        </div>
+      </div>
+
+      <!-- ===== EQUIPMENT VENDORS TAB ===== -->
+      <div id="tab-equipmentVendors" class="tab-section">
+
+        <!-- Add / Edit Equipment Vendor -->
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-header">
+            <span class="card-title" id="equipment-vendor-form-title">Add Equipment Vendor</span>
+            <button class="btn btn-outline" id="cancel-equipment-vendor-btn" style="display:none;" onclick="cancelEquipmentVendorEdit()">
+              <i class="ti ti-x"></i> Cancel
+            </button>
+          </div>
+          <div class="banner-form-grid">
+            <div class="form-group">
+              <label class="form-label">Vendor Name <span style="color:var(--danger)">*</span></label>
+              <input id="eqv-name" type="text" class="form-input" placeholder="e.g. CareWell Medical Equipment" maxlength="100" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Phone Number <span style="color:var(--danger)">*</span></label>
+              <input id="eqv-phone" type="tel" class="form-input" placeholder="e.g. 040-23607777" maxlength="20" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">City / Area <span class="form-hint">(optional)</span></label>
+              <input id="eqv-city" type="text" class="form-input" placeholder="e.g. Hyderabad, Secunderabad" maxlength="100" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Latitude <span class="form-hint">(required for nearby search)</span></label>
+              <input id="eqv-lat" type="number" step="any" class="form-input" placeholder="e.g. 17.4126" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Longitude <span class="form-hint">(required for nearby search)</span></label>
+              <input id="eqv-lng" type="number" step="any" class="form-input" placeholder="e.g. 78.4071" />
+            </div>
+          </div>
+          <div class="banner-form-footer">
+            <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:center;flex:1;">
+              <label class="toggle-label">
+                <input type="checkbox" id="eqv-enabled" checked />
+                <span class="toggle-switch"></span>
+                <span class="toggle-text">Visible in app</span>
+              </label>
+            </div>
+            <button id="save-equipment-vendor-btn" class="btn-publish" onclick="saveEquipmentVendor()">
+              <i class="ti ti-device-floppy"></i> Save Vendor
+            </button>
+          </div>
+        </div>
+
+        <!-- Equipment Vendors List -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">All Equipment Vendors</span>
+          </div>
+          <div id="equipment-vendors-list"><div class="loading">Loading equipment vendors…</div></div>
         </div>
       </div>
 
@@ -2254,6 +2411,12 @@
               <div class="form-group" id="svc-deposit-group" style="display:none;">
                 <label class="form-label">Refundable Deposit (₹) <span class="form-hint">(optional)</span></label>
                 <input id="svc-deposit" type="number" min="0" step="1" class="form-input" placeholder="e.g. 2000" />
+              </div>
+              <div class="form-group" id="svc-vendor-group" style="display:none;">
+                <label class="form-label">Source Vendor <span class="form-hint">(optional — leave unset for the shared national catalog)</span></label>
+                <select id="svc-vendor" class="filter-select" style="width:100%;padding:10px 12px;height:auto;">
+                  <option value="">— No specific vendor —</option>
+                </select>
               </div>
             </div>
 
@@ -3644,6 +3807,223 @@
         </div>
       </div>
 
+      <div id="tab-physio-partners" class="tab-section">
+        <div class="grid-4" style="margin-bottom:16px;">
+          <div class="card" style="text-align:center;padding:18px 12px;">
+            <div style="font-size:26px;font-weight:800;color:var(--primary);" id="phy-count-total">0</div>
+            <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">Total Partners</div>
+          </div>
+          <div class="card" style="text-align:center;padding:18px 12px;">
+            <div style="font-size:26px;font-weight:800;color:#f57f17;" id="phy-count-pending">0</div>
+            <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">Pending Approval</div>
+          </div>
+          <div class="card" style="text-align:center;padding:18px 12px;">
+            <div style="font-size:26px;font-weight:800;color:#1e8e3e;" id="phy-count-active">0</div>
+            <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">Active</div>
+          </div>
+          <div class="card" style="text-align:center;padding:18px 12px;">
+            <div style="font-size:26px;font-weight:800;color:#1565c0;" id="phy-earnings-total">₹0</div>
+            <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">Total Earnings</div>
+          </div>
+        </div>
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-header">
+            <div>
+              <span class="card-title">Earnings Overview</span>
+              <div class="data-fresh-label"><i class="ti ti-cash"></i> From physio_transactions ledger</div>
+            </div>
+            <button class="btn btn-outline" onclick="loadPhysioPartnerEarnings()"><i class="ti ti-refresh"></i> Refresh</button>
+          </div>
+          <div id="phy-earnings-summary" class="partner-earn-grid">
+            <div class="empty-state"><p>Loading earnings…</p></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">All Physiotherapist Partners</span>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <input id="phy-search" type="text" class="search-input" placeholder="Search name / specialty / city..." oninput="filterPhysioPartners()" />
+              <select id="phy-specialty-filter" class="filter-select" onchange="filterPhysioPartners()">
+                <option value="all">All specialties</option>
+              </select>
+              <select id="phy-status-filter" class="filter-select" onchange="filterPhysioPartners()">
+                <option value="all">All status</option>
+                <option value="pending">Pending</option>
+                <option value="active">Active</option>
+                <option value="suspended">Suspended</option>
+              </select>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Physiotherapist</th><th>Specialties</th><th>Rate</th><th>Experience</th>
+                  <th>Rating</th><th>Status</th><th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="phy-tbody">
+                <tr><td colspan="7" class="loading">Loading physiotherapist partners...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div id="tab-counselling-partners" class="tab-section">
+        <div class="grid-4" style="margin-bottom:16px;">
+          <div class="card" style="text-align:center;padding:18px 12px;">
+            <div style="font-size:26px;font-weight:800;color:var(--primary);" id="cns-count-total">0</div>
+            <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">Total Partners</div>
+          </div>
+          <div class="card" style="text-align:center;padding:18px 12px;">
+            <div style="font-size:26px;font-weight:800;color:#f57f17;" id="cns-count-pending">0</div>
+            <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">Pending Approval</div>
+          </div>
+          <div class="card" style="text-align:center;padding:18px 12px;">
+            <div style="font-size:26px;font-weight:800;color:#1e8e3e;" id="cns-count-active">0</div>
+            <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">Active</div>
+          </div>
+          <div class="card" style="text-align:center;padding:18px 12px;">
+            <div style="font-size:26px;font-weight:800;color:#1565c0;" id="cns-earnings-total">₹0</div>
+            <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">Total Earnings</div>
+          </div>
+        </div>
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-header">
+            <div>
+              <span class="card-title">Earnings Overview</span>
+              <div class="data-fresh-label"><i class="ti ti-cash"></i> From counselling_transactions ledger</div>
+            </div>
+            <button class="btn btn-outline" onclick="loadCounsellingPartnerEarnings()"><i class="ti ti-refresh"></i> Refresh</button>
+          </div>
+          <div id="cns-earnings-summary" class="partner-earn-grid">
+            <div class="empty-state"><p>Loading earnings…</p></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">All Counsellor Partners</span>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <input id="cns-search" type="text" class="search-input" placeholder="Search name / specialty..." oninput="filterCounsellingPartners()" />
+              <select id="cns-specialty-filter" class="filter-select" onchange="filterCounsellingPartners()">
+                <option value="all">All specialties</option>
+              </select>
+              <select id="cns-status-filter" class="filter-select" onchange="filterCounsellingPartners()">
+                <option value="all">All status</option>
+                <option value="pending">Pending</option>
+                <option value="active">Active</option>
+                <option value="suspended">Suspended</option>
+              </select>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Counsellor</th><th>Specialties</th><th>Rate</th><th>Status</th><th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="cns-tbody">
+                <tr><td colspan="5" class="loading">Loading counsellor partners...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div id="tab-nutrition-partners" class="tab-section">
+        <div class="grid-4" style="margin-bottom:16px;">
+          <div class="card" style="text-align:center;padding:18px 12px;">
+            <div style="font-size:26px;font-weight:800;color:var(--primary);" id="nut-count-total">0</div>
+            <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">Total Partners</div>
+          </div>
+          <div class="card" style="text-align:center;padding:18px 12px;">
+            <div style="font-size:26px;font-weight:800;color:#f57f17;" id="nut-count-pending">0</div>
+            <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">Pending Approval</div>
+          </div>
+          <div class="card" style="text-align:center;padding:18px 12px;">
+            <div style="font-size:26px;font-weight:800;color:#1e8e3e;" id="nut-count-active">0</div>
+            <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">Active</div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">All Nutritionist Partners</span>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <input id="nut-search" type="text" class="search-input" placeholder="Search name / qualification / specialization..." oninput="filterNutritionPartners()" />
+              <select id="nut-specialization-filter" class="filter-select" onchange="filterNutritionPartners()">
+                <option value="all">All specializations</option>
+              </select>
+              <select id="nut-status-filter" class="filter-select" onchange="filterNutritionPartners()">
+                <option value="all">All status</option>
+                <option value="pending">Pending</option>
+                <option value="active">Active</option>
+                <option value="suspended">Suspended</option>
+              </select>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Nutritionist</th><th>Specialization</th><th>Fee</th><th>Experience</th>
+                  <th>Rating</th><th>Status</th><th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="nut-tbody">
+                <tr><td colspan="7" class="loading">Loading nutritionist partners...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== HOSPITAL PARTNERS TAB ===== -->
+      <div id="tab-hospital-partners" class="tab-section">
+        <div class="grid-4" style="margin-bottom:16px;">
+          <div class="card" style="text-align:center;padding:18px 12px;">
+            <div style="font-size:26px;font-weight:800;color:var(--primary);" id="hp-count-total">0</div>
+            <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">Total Partners</div>
+          </div>
+          <div class="card" style="text-align:center;padding:18px 12px;">
+            <div style="font-size:26px;font-weight:800;color:#f57f17;" id="hp-count-pending">0</div>
+            <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">Pending Approval</div>
+          </div>
+          <div class="card" style="text-align:center;padding:18px 12px;">
+            <div style="font-size:26px;font-weight:800;color:#1e8e3e;" id="hp-count-active">0</div>
+            <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">Active</div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">All Hospital Billing-Desk Partners</span>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <input id="hp-search" type="text" class="search-input" placeholder="Search hospital / contact / phone..." oninput="filterHospitalPartners()" />
+              <select id="hp-status-filter" class="filter-select" onchange="filterHospitalPartners()">
+                <option value="all">All status</option>
+                <option value="pending">Pending</option>
+                <option value="active">Active</option>
+                <option value="suspended">Suspended</option>
+              </select>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Hospital</th><th>Phone</th><th>Catalog Link</th>
+                  <th>Status</th><th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="hp-tbody">
+                <tr><td colspan="5" class="loading">Loading hospital partners...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
       <!-- ===== SETTLEMENT DASHBOARD TAB ===== -->
       <div id="tab-settlements" class="tab-section">
 
@@ -4113,7 +4493,7 @@
   </div>
 </div>
 
-<script src="js/firebase-config.js?v=20260826a"></script>
-<script src="js/app.js?v=20260826a"></script>
+<script src="js/firebase-config.js?v=20260904a"></script>
+<script src="js/app.js?v=20260904a"></script>
 </body>
 </html>

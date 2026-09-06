@@ -6,43 +6,54 @@ import '../../../core/utils/responsive.dart';
 class ServicesSection extends StatelessWidget {
   const ServicesSection({super.key});
 
-  static const List<Map<String, dynamic>> _services = [
-    {
-      'icon': Icons.person_search_rounded,
-      'title': 'Consult Doctors',
-      'desc': 'Talk to expert doctors online or visit clinic',
-      'cta': 'Book Now',
-    },
-    {
-      'icon': Icons.medication_rounded,
-      'title': 'Order Medicines',
-      'desc': 'Get medicines delivered at home',
-      'cta': 'Order Now',
-    },
-    {
-      'icon': Icons.biotech_rounded,
-      'title': 'Lab Tests',
-      'desc': 'Book tests at home & get reports online',
-      'cta': 'Book Now',
-    },
-    {
-      'icon': Icons.folder_shared_rounded,
-      'title': 'Health Records',
-      'desc': 'Store & manage your health records securely',
-      'cta': 'View Now',
-    },
-    {
-      'icon': Icons.health_and_safety_rounded,
-      'title': 'Health Checkups',
-      'desc': 'Full body checkups for you & your family',
-      'cta': 'Book Now',
-    },
-  ];
+  static List<Map<String, dynamic>> get _services {
+    final colors = AppColors.serviceCardColors;
+    final raw = [
+      (Icons.emergency_rounded, 'Emergency',
+          'Immediate 24/7 help in a medical emergency', 'Call Now'),
+      (Icons.video_call_rounded, 'Consultation',
+          'Video or in-clinic consults with top doctors', 'Book Now'),
+      (Icons.medication_liquid_rounded, 'Pharmacy',
+          'Medicines delivered to your doorstep', 'Order Now'),
+      (Icons.science_rounded, 'Diagnostics',
+          'X-Ray, MRI, CT, ECG & lab tests at home', 'Book Test'),
+      (Icons.pregnant_woman_rounded, 'Pregnancy',
+          'Track your pregnancy journey week by week', 'Track Now'),
+      (Icons.local_shipping_rounded, 'Ambulance',
+          'Emergency ambulance dispatched to your location', 'Call Now'),
+      (Icons.support_agent_rounded, 'Care Assist',
+          'A health assistant on call whenever you need one', 'Try Now'),
+      (Icons.elderly_rounded, 'Caregivers',
+          'Trained attendants & caregiver support at home', 'Hire Now'),
+      (Icons.fitness_center_rounded, 'Physiotherapy',
+          'Physiotherapy & rehabilitation sessions', 'Book Now'),
+      (Icons.restaurant_rounded, 'Nutrition and Diet',
+          'Personalised diet plans from nutritionists', 'Get Plan'),
+      (Icons.psychology_rounded, 'Therapy and Counselling',
+          'Mental health support & therapy sessions', 'Book Now'),
+      (Icons.medical_services_rounded, 'Equipment',
+          'Rent or buy medical equipment online', 'Browse'),
+      (Icons.local_hospital_rounded, 'Nearby Hospitals',
+          'Locate hospitals nearby & pay bills with instant discounts',
+          'Explore'),
+      (Icons.receipt_long_rounded, 'Pay Hospital Bill',
+          'Pay hospital bills online with instant discounts', 'Pay Now'),
+    ];
+    return [
+      for (int i = 0; i < raw.length; i++)
+        {
+          'icon': raw[i].$1,
+          'title': raw[i].$2,
+          'desc': raw[i].$3,
+          'cta': raw[i].$4,
+          'color': colors[i % colors.length],
+        },
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
     final isMobile = Responsive.isMobile(context);
-    final isTablet = Responsive.isTablet(context);
 
     return Container(
       color: Colors.white,
@@ -81,49 +92,27 @@ class ServicesSection extends StatelessWidget {
               ),
               SizedBox(height: isMobile ? 32 : 52),
 
-              // Service cards
-              isMobile
-                  ? GridView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      gridDelegate:
-                          const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 2,
-                        crossAxisSpacing: 14,
-                        mainAxisSpacing: 14,
-                        childAspectRatio: 0.88,
-                      ),
-                      itemCount: _services.length,
-                      itemBuilder: (_, i) =>
-                          _ServiceCard(service: _services[i]),
-                    )
-                  : isTablet
-                      ? Wrap(
-                          spacing: 16,
-                          runSpacing: 16,
-                          children: _services
-                              .map((s) => SizedBox(
-                                    width: (MediaQuery.sizeOf(context).width -
-                                            Responsive.horizontalPadding(
-                                                    context) *
-                                                2 -
-                                            32) /
-                                        3,
-                                    child: _ServiceCard(service: s),
-                                  ))
-                              .toList(),
-                        )
-                      : Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: _services
-                              .map((s) => Expanded(
-                                      child: Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 6),
-                                    child: _ServiceCard(service: s),
-                                  )))
-                              .toList(),
-                        ),
+              // Service cards — every cell gets the same fixed height
+              // (mainAxisExtent) so all cards render at equal size. Safe
+              // from overflow because the card's title/description are
+              // capped with maxLines, bounding their max content height.
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: Responsive.gridCrossAxisCount(
+                    context,
+                    desktop: 4,
+                    tablet: 3,
+                    mobile: 2,
+                  ),
+                  crossAxisSpacing: isMobile ? 14 : 16,
+                  mainAxisSpacing: isMobile ? 14 : 16,
+                  mainAxisExtent: 240,
+                ),
+                itemCount: _services.length,
+                itemBuilder: (_, i) => _ServiceCard(service: _services[i]),
+              ),
             ],
           ),
         ),
@@ -145,6 +134,7 @@ class _ServiceCardState extends State<_ServiceCard> {
 
   @override
   Widget build(BuildContext context) {
+    final accent = widget.service['color'] as Color? ?? AppColors.primary;
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
@@ -159,14 +149,14 @@ class _ServiceCardState extends State<_ServiceCard> {
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: _hovered
-                ? AppColors.primary.withValues(alpha: 0.25)
+                ? accent.withValues(alpha: 0.35)
                 : const Color(0xFFF0F0F0),
             width: 1.5,
           ),
           boxShadow: [
             BoxShadow(
               color: _hovered
-                  ? AppColors.primary.withValues(alpha: 0.1)
+                  ? accent.withValues(alpha: 0.15)
                   : Colors.grey.withValues(alpha: 0.08),
               blurRadius: _hovered ? 24 : 12,
               offset: const Offset(0, 4),
@@ -176,6 +166,7 @@ class _ServiceCardState extends State<_ServiceCard> {
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
             // Icon
             AnimatedContainer(
@@ -183,15 +174,13 @@ class _ServiceCardState extends State<_ServiceCard> {
               width: 52,
               height: 52,
               decoration: BoxDecoration(
-                color: _hovered
-                    ? AppColors.primary
-                    : AppColors.primary.withValues(alpha: 0.1),
+                color: _hovered ? accent : accent.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(14),
               ),
               child: Icon(
                 widget.service['icon'] as IconData,
                 size: 26,
-                color: _hovered ? Colors.white : AppColors.primary,
+                color: _hovered ? Colors.white : accent,
               ),
             ),
             const SizedBox(height: 16),
@@ -199,6 +188,8 @@ class _ServiceCardState extends State<_ServiceCard> {
             // Title
             Text(
               widget.service['title'] as String,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
               style: GoogleFonts.poppins(
                 fontSize: 15,
                 fontWeight: FontWeight.w700,
@@ -210,6 +201,8 @@ class _ServiceCardState extends State<_ServiceCard> {
             // Description
             Text(
               widget.service['desc'] as String,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
               style: GoogleFonts.poppins(
                 fontSize: 12.5,
                 color: const Color(0xFF9E9E9E),
@@ -227,12 +220,11 @@ class _ServiceCardState extends State<_ServiceCard> {
                   style: GoogleFonts.poppins(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
-                    color: AppColors.primary,
+                    color: accent,
                   ),
                 ),
                 const SizedBox(width: 4),
-                const Icon(Icons.arrow_forward_rounded,
-                    size: 14, color: AppColors.primary),
+                Icon(Icons.arrow_forward_rounded, size: 14, color: accent),
               ],
             ),
           ],

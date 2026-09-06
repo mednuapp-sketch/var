@@ -25,6 +25,7 @@ class RoleEngineState {
   bool get isPhysiotherapist => activeRole == AppRole.physiotherapist;
   bool get isCounsellor => activeRole == AppRole.counsellor;
   bool get isNutritionist => activeRole == AppRole.nutritionist;
+  bool get isHospital => activeRole == AppRole.hospital;
   bool get isAdmin => activeRole == AppRole.admin;
 
   bool get canSwitchRoles => roles.length > 1;

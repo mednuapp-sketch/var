@@ -169,6 +169,13 @@ class BookingReminderService {
           title: 'Medicine Order Update',
           body:  'Your medicine order has an update.',
         );
+      case BookingSource.hospitalBillPayment:
+        // Unreachable in practice, same reasoning as medicineOrder above —
+        // fromHospitalBillPayment also leaves date/time empty.
+        return (
+          title: 'Hospital Bill Payment Update',
+          body:  'Your hospital bill payment has an update.',
+        );
     }
   }
 }

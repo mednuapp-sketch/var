@@ -15,8 +15,9 @@ import '../widgets/countdown_ring.dart';
 
 /// The dispatch queue — every pending emergency request, most urgent
 /// first, each with a shrinking countdown ring instead of plain text so
-/// urgency reads at a glance. Accept/Decline are immediate (mock state);
-/// Accept routes straight into Live Tracking since accepting an ambulance
+/// urgency reads at a glance. Accept/Decline go through
+/// `AmbulanceRequestService` as transaction-guarded Firestore writes; Accept
+/// routes straight into Live Tracking since accepting an ambulance
 /// request means you're now en route.
 class AmbulanceIncomingRequestsScreen extends ConsumerWidget {
   const AmbulanceIncomingRequestsScreen({super.key});

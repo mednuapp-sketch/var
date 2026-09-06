@@ -6,6 +6,8 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_text_styles.dart';
 import '../../../../core/router/app_router.dart';
+import '../../../../core/utils/distance.dart';
+import '../../../home/providers/location_provider.dart';
 import '../providers/nutrition_provider.dart';
 import '../models/nutritionist_model.dart';
 import '../../../../core/widgets/ux_widgets.dart';
@@ -27,6 +29,14 @@ class _NutritionistListScreenState
     extends ConsumerState<NutritionistListScreen> {
   final _searchCtrl = TextEditingController();
   String _searchQuery = '';
+  final Set<String> _selectedLanguages = {};
+
+  // Kept in sync with the language list offered at nutritionist
+  // registration/profile-edit in mednu_doctor.
+  static const _allLanguages = [
+    'English', 'Telugu', 'Hindi', 'Tamil', 'Kannada',
+    'Malayalam', 'Marathi', 'Bengali',
+  ];
 
   static const _specialties = [
     'All',
@@ -58,7 +68,7 @@ class _NutritionistListScreenState
           icon: const Icon(Icons.arrow_back_ios_new_rounded),
           onPressed: () => context.pop(),
         ),
-        title: const Text('Find Nutritionist', style: AppTextStyles.h3),
+        title: const Text('Find Dietician', style: AppTextStyles.h3),
         centerTitle: true,
         elevation: 0,
         scrolledUnderElevation: 1,
@@ -80,6 +90,16 @@ class _NutritionistListScreenState
             onSelect: (s) =>
                 ref.read(nutritionistSpecialtyFilterProvider.notifier).state =
                     s == 'All' ? null : s,
+          ),
+          // ── Language chips (multi-select) ─────────────────
+          _LanguageFilter(
+            languages: _allLanguages,
+            selected: _selectedLanguages,
+            onToggle: (lang) => setState(() {
+              _selectedLanguages.contains(lang)
+                  ? _selectedLanguages.remove(lang)
+                  : _selectedLanguages.add(lang);
+            }),
           ),
           // ── Results ───────────────────────────────────────
           Expanded(
@@ -107,23 +127,54 @@ class _NutritionistListScreenState
                       n.specialization
                           .toLowerCase()
                           .contains(selectedSpecialty.toLowerCase());
-                  return matchesQuery && matchesSpecialty;
+                  // Nutritionists registered before language selection
+                  // existed have an empty `languages` list — treat them as
+                  // English-speaking, matching the default selection they'd
+                  // see on that step.
+                  final nLanguages = n.languages.isEmpty ? const ['English'] : n.languages;
+                  final matchesLanguage = _selectedLanguages.isEmpty ||
+                      _selectedLanguages.any(nLanguages.contains);
+                  return matchesQuery && matchesSpecialty && matchesLanguage;
                 }).toList();
 
-                if (filtered.isEmpty) {
+                // Real distance sort/filter, same 15km convention already
+                // used by pharmacy/diagnostics/doctors/physiotherapists —
+                // falls back to showing everyone unsorted when the patient
+                // has no location set, or a nutritionist has none on file.
+                final myLoc = ref.watch(locationProvider);
+                List<(NutritionistModel, double?)> withDistance = filtered
+                    .map((n) => (
+                          n,
+                          (myLoc.lat != null && myLoc.lng != null && n.lat != null && n.lng != null)
+                              ? distanceKm(myLoc.lat!, myLoc.lng!, n.lat!, n.lng!)
+                              : null,
+                        ))
+                    .toList();
+                if (myLoc.lat != null && myLoc.lng != null) {
+                  withDistance = withDistance.where((e) => e.$2 == null || e.$2! <= nearbyRadiusKm).toList()
+                    ..sort((a, b) {
+                      if (a.$2 == null && b.$2 == null) return 0;
+                      if (a.$2 == null) return 1;
+                      if (b.$2 == null) return -1;
+                      return a.$2!.compareTo(b.$2!);
+                    });
+                }
+
+                if (withDistance.isEmpty) {
                   return _EmptyState(query: _searchQuery);
                 }
 
                 return ListView.separated(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
                   physics: const BouncingScrollPhysics(),
-                  itemCount: filtered.length,
+                  itemCount: withDistance.length,
                   separatorBuilder: (_, __) => const SizedBox(height: 14),
                   itemBuilder: (ctx, i) => _NutritionistCard(
-                    nutritionist: filtered[i],
+                    nutritionist: withDistance[i].$1,
+                    distanceKm: withDistance[i].$2,
                     onTap: () => context.push(
                       AppRoutes.nutritionNutritionistProfile
-                          .replaceFirst(':id', filtered[i].id),
+                          .replaceFirst(':id', withDistance[i].$1.id),
                     ),
                   ),
                 );
@@ -237,14 +288,76 @@ class _SpecialtyFilter extends StatelessWidget {
   }
 }
 
+// ── Language filter chips (multi-select) ──────────────────────────────────────
+
+class _LanguageFilter extends StatelessWidget {
+  final List<String> languages;
+  final Set<String> selected;
+  final ValueChanged<String> onToggle;
+
+  const _LanguageFilter({
+    required this.languages,
+    required this.selected,
+    required this.onToggle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: context.appSurface,
+      height: 44,
+      child: ListView.separated(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+        scrollDirection: Axis.horizontal,
+        itemCount: languages.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (ctx, i) {
+          final lang = languages[i];
+          final isSelected = selected.contains(lang);
+          return GestureDetector(
+            onTap: () => onToggle(lang),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              alignment: Alignment.center,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              decoration: BoxDecoration(
+                color: isSelected ? _kGreen.withValues(alpha: 0.1) : Colors.transparent,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                    color: isSelected ? _kGreen : context.appBorder),
+              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                if (isSelected) ...[
+                  const Icon(Icons.check_rounded, size: 13, color: _kGreen),
+                  const SizedBox(width: 4),
+                ],
+                Text(
+                  lang,
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: isSelected ? _kGreen : context.appTextSecondary,
+                  ),
+                ),
+              ]),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
 // ── Nutritionist card ─────────────────────────────────────────────────────────
 
 class _NutritionistCard extends StatelessWidget {
   final NutritionistModel nutritionist;
+  final double? distanceKm;
   final VoidCallback onTap;
 
   const _NutritionistCard(
-      {required this.nutritionist, required this.onTap});
+      {required this.nutritionist, this.distanceKm, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -351,9 +464,11 @@ class _NutritionistCard extends StatelessWidget {
                 ),
                 _InfoChip(
                   icon: Icons.location_on_rounded,
-                  label: nutritionist.city.isNotEmpty
-                      ? nutritionist.city
-                      : 'Online',
+                  label: distanceKm != null
+                      ? '${distanceKm!.toStringAsFixed(1)} km away'
+                      : nutritionist.city.isNotEmpty
+                          ? nutritionist.city
+                          : 'Online',
                   color: context.appTextSecondary,
                 ),
                 if (nutritionist.isOnlineAvailable)
@@ -626,7 +741,7 @@ class _EmptyState extends StatelessWidget {
             Text(
               query.isNotEmpty
                   ? 'Try a different search term or filter'
-                  : 'Nutritionists will appear here once added',
+                  : 'Dieticians will appear here once added',
               style: AppTextStyles.bodySmall
                   .copyWith(color: context.appTextSecondary),
               textAlign: TextAlign.center,

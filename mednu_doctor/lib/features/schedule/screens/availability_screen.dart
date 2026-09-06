@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import '../../../core/router/app_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
@@ -305,6 +306,53 @@ class _AvailabilityScreenState extends State<AvailabilityScreen> {
                       totalSlots: _totalWeeklySlots,
                       workingDays: _workingDays,
                       slotDuration: _slotDuration,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // ── Block a specific slot (one-off, e.g. a sudden meeting) ──
+                  FadeInSlide(
+                    delay: const Duration(milliseconds: 70),
+                    child: GestureDetector(
+                      onTap: () => context.push(AppRoutes.blockSlots),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: AppColors.divider),
+                        ),
+                        child: Row(children: [
+                          Container(
+                            width: 34,
+                            height: 34,
+                            decoration: BoxDecoration(
+                              color: AppColors.error.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Icon(Icons.event_busy_rounded,
+                                color: AppColors.error, size: 18),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('Block a Slot',
+                                    style: AppTextStyles.labelLarge),
+                                Text(
+                                  "Have a sudden meeting? Block just that time.",
+                                  style: AppTextStyles.caption
+                                      .copyWith(color: AppColors.textHint),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Icon(Icons.chevron_right_rounded,
+                              color: AppColors.textHint),
+                        ]),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 20),
