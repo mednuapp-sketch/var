@@ -239,6 +239,20 @@ service firebase.storage {
                    && isDocument();
     }
 
+    match /counsellor_documents/{uid}/{allPaths=**} {
+      allow read:  if isAuth() && (isOwner(uid) || isAdmin());
+      allow write: if isOwner(uid)
+                   && request.resource.size < 20 * 1024 * 1024
+                   && isDocument();
+    }
+
+    match /physiotherapist_documents/{uid}/{allPaths=**} {
+      allow read:  if isAuth() && (isOwner(uid) || isAdmin());
+      allow write: if isOwner(uid)
+                   && request.resource.size < 20 * 1024 * 1024
+                   && isDocument();
+    }
+
     // ── Promotional banners ───────────────────────────────────────────────────
     // Publicly readable (shown on the patient home screen) and admin-write-only:
     // the admin panel is the sole uploader. `isAuth()` was not sufficient here —

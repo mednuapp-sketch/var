@@ -26,10 +26,19 @@ Permission get _mediaPermission {
 }
 
 List<_PermissionInfo> get _kPermissions => [
-  const _PermissionInfo(Permission.camera,     Icons.camera_alt_rounded,  'Camera',          'Take profile photos and participate in video consultations.'),
-  const _PermissionInfo(Permission.microphone, Icons.mic_rounded,         'Microphone',      'Talk with patients during live video consultations.'),
-  const _PermissionInfo(Permission.location,   Icons.location_on_rounded, 'Location',        'Show your GPS position to nearby patients when you go online.'),
+  const _PermissionInfo(Permission.camera,       Icons.camera_alt_rounded,   'Camera',          'Take profile photos and participate in video consultations.'),
+  const _PermissionInfo(Permission.microphone,   Icons.mic_rounded,          'Microphone',      'Talk with patients during live video consultations.'),
+  const _PermissionInfo(Permission.location,     Icons.location_on_rounded, 'Location',        'Show your GPS position to nearby patients when you go online.'),
   _PermissionInfo(_mediaPermission, Icons.photo_library_rounded, 'Photos & Media', 'Save prescriptions, access reports and upload profile photos.'),
+  // Without this, incoming call/booking alerts have nowhere to register —
+  // FcmService (see requestPermissionAndRegisterToken) skips saving the FCM
+  // token entirely when this is denied, so the doctor is silently unreachable
+  // for every video call. Unlike FcmService's own bare requestPermission()
+  // call (fired with no context right after cold start, which many doctors
+  // reflexively decline), this sheet explains why and — critically — offers
+  // the "permanently denied -> Open App Settings" recovery path that a raw
+  // system dialog denial otherwise has no way back from.
+  const _PermissionInfo(Permission.notification, Icons.notifications_active_rounded, 'Notifications', 'Get alerted the instant a patient calls or books you.'),
 ];
 
 

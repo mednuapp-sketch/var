@@ -1,12 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-/// Backed by the public `physiotherapists/{id}` catalogue — mirrored from an
-/// approved `physiotherapist_profiles/{uid}` doc in the partner app by
-/// `onPhysiotherapistProfileWriteForVisibility` (functions/index.js). Same
-/// shape family as `NutritionistModel`, adapted to physiotherapy's own field
-/// names (`hourlyRate`/`totalSessions` rather than `consultationFee`/
-/// `reviewCount`) since those already exist in the partner-side model.
-class PhysiotherapistModel {
+/// Backed by the public `counsellors/{id}` catalogue — mirrored from an
+/// approved `counsellor_profiles/{uid}` doc in the partner app by
+/// `onCounsellorProfileWriteForVisibility` (functions/index.js). Same shape
+/// family as [PhysiotherapistModel], minus the location/language fields:
+/// counsellor registration collects neither (sessions are remote-only), so
+/// this model doesn't carry `city`/`clinicLat`/`clinicLng`/`languages`.
+class CounsellorModel {
   final String id;
   final String name;
   final String photoUrl;
@@ -16,10 +16,6 @@ class PhysiotherapistModel {
   final double rating;
   final int totalSessions;
   final num hourlyRate;
-  final String city;
-  final List<String> languages;
-  final double? clinicLat;
-  final double? clinicLng;
   final bool isAvailable;
   final bool isOnline;
   final DateTime? lastHeartbeat;
@@ -34,7 +30,7 @@ class PhysiotherapistModel {
     return DateTime.now().difference(hb).inMinutes < 3;
   }
 
-  const PhysiotherapistModel({
+  const CounsellorModel({
     required this.id,
     required this.name,
     required this.photoUrl,
@@ -44,20 +40,16 @@ class PhysiotherapistModel {
     required this.rating,
     required this.totalSessions,
     required this.hourlyRate,
-    required this.city,
-    required this.languages,
-    this.clinicLat,
-    this.clinicLng,
     required this.isAvailable,
     this.isOnline = false,
     this.lastHeartbeat,
   });
 
-  factory PhysiotherapistModel.fromFirestore(DocumentSnapshot doc) {
+  factory CounsellorModel.fromFirestore(DocumentSnapshot doc) {
     final d = (doc.data() as Map<String, dynamic>?) ?? {};
-    return PhysiotherapistModel(
+    return CounsellorModel(
       id: doc.id,
-      name: d['name'] as String? ?? 'Physiotherapist',
+      name: d['name'] as String? ?? 'Counsellor',
       photoUrl: d['photoUrl'] as String? ?? '',
       certifications: ((d['certifications'] as List?) ?? const []).whereType<String>().toList(),
       specialties: ((d['specialties'] as List?) ?? const []).whereType<String>().toList(),
@@ -65,10 +57,6 @@ class PhysiotherapistModel {
       rating: (d['rating'] as num?)?.toDouble() ?? 0.0,
       totalSessions: (d['totalSessions'] as num?)?.toInt() ?? 0,
       hourlyRate: (d['hourlyRate'] as num?) ?? 0,
-      city: d['city'] as String? ?? '',
-      languages: ((d['languages'] as List?) ?? const []).whereType<String>().toList(),
-      clinicLat: (d['clinicLat'] as num?)?.toDouble(),
-      clinicLng: (d['clinicLng'] as num?)?.toDouble(),
       isAvailable: d['isAvailable'] as bool? ?? true,
       isOnline: d['isOnline'] as bool? ?? false,
       lastHeartbeat: (d['lastHeartbeat'] as Timestamp?)?.toDate(),

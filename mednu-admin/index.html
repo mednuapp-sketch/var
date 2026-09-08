@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>MedNU Admin Panel</title>
-  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/style.css?v=20260908a" />
   <!-- Tabler Icons -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css" />
   <!-- Chart.js -->
@@ -59,179 +59,182 @@
       </div>
     </div>
     <nav class="nav">
-      <div class="nav-section-label">Main</div>
-      <div class="nav-item active" data-tab="overview" data-title="Overview">
+      <div class="nav-section-label" data-section="overview">Overview</div>
+      <div class="nav-item active" data-tab="overview" data-title="Overview" title="Live snapshot of key metrics across the whole platform">
         <i class="ti ti-layout-dashboard nav-icon" aria-hidden="true"></i> Overview
       </div>
-      <div class="nav-item" data-tab="doctors" data-title="Doctors">
-        <i class="ti ti-stethoscope nav-icon" aria-hidden="true"></i> Doctors
-      </div>
-      <div class="nav-item" data-tab="spec-requests" data-title="Specialization Requests">
-        <i class="ti ti-certificate nav-icon" aria-hidden="true"></i> Spec Requests
-        <span class="nav-badge nav-badge-red" id="nav-spec-requests-count" style="display:none;">0</span>
-      </div>
-      <div class="nav-item" data-tab="patients" data-title="Patients">
-        <i class="ti ti-users nav-icon" aria-hidden="true"></i> Patients
-      </div>
-      <div class="nav-item" data-tab="appointments" data-title="Appointments">
-        <i class="ti ti-calendar nav-icon" aria-hidden="true"></i> Appointments
-        <span class="nav-badge nav-badge-red" id="nav-appt-count" style="display:none;">0</span>
-      </div>
-      <div class="nav-item" data-tab="calls" data-title="Live Calls">
-        <i class="ti ti-phone-call nav-icon" aria-hidden="true"></i> Live Calls
-        <span class="nav-badge nav-badge-red" id="nav-calls-count" style="display:none;">0</span>
-      </div>
-      <div class="nav-item" data-tab="medicines" data-title="MedNU Pharmacy">
-        <i class="ti ti-pill nav-icon" aria-hidden="true"></i> MedNU Pharmacy
-      </div>
-      <div class="nav-section-label">Finance</div>
-      <div class="nav-item" data-tab="revenue" data-title="Revenue">
-        <i class="ti ti-chart-bar nav-icon" aria-hidden="true"></i> Revenue
-      </div>
-      <div class="nav-item" data-tab="wallet" data-title="Wallet &amp; Transactions">
-        <i class="ti ti-wallet nav-icon" aria-hidden="true"></i> Wallet
-        <span class="nav-badge nav-badge-red" id="nav-wallet-count" style="display:none;">0</span>
-      </div>
-      <div class="nav-section-label">Payments &amp; Settlements</div>
-      <div class="nav-item" data-tab="settlements" data-title="Settlement Dashboard">
-        <i class="ti ti-cash nav-icon" aria-hidden="true"></i> Settlements
-      </div>
-      <div class="nav-item" data-tab="commission-rules" data-title="Commission Rules">
-        <i class="ti ti-percentage nav-icon" aria-hidden="true"></i> Commission Rules
-      </div>
-      <div class="nav-item" data-tab="coupons" data-title="Coupons">
-        <i class="ti ti-ticket nav-icon" aria-hidden="true"></i> Coupons
-      </div>
-      <div class="nav-item" data-tab="campaigns" data-title="Campaigns">
-        <i class="ti ti-rocket nav-icon" aria-hidden="true"></i> Campaigns
-      </div>
-      <div class="nav-item" data-tab="refunds" data-title="Refunds">
-        <i class="ti ti-receipt-refund nav-icon" aria-hidden="true"></i> Refunds
-      </div>
-      <div class="nav-section-label">Marketing</div>
-      <div class="nav-item" data-tab="banners" data-title="Promotional Banners">
-        <i class="ti ti-speakerphone nav-icon" aria-hidden="true"></i> Banners
-        <span class="nav-badge nav-badge-green" id="nav-banner-count" style="display:none;">0</span>
-      </div>
-      <div class="nav-item" data-tab="referrals" data-title="Referral Settings">
-        <i class="ti ti-share nav-icon" aria-hidden="true"></i> Referrals
-      </div>
-      <div class="nav-section-label">Emergency</div>
-      <div class="nav-item" data-tab="hospitals" data-title="Hospitals">
-        <i class="ti ti-building-hospital nav-icon" aria-hidden="true"></i> Hospitals
-        <span class="nav-badge nav-badge-green" id="nav-hospital-count" style="display:none;">0</span>
-      </div>
-      <div class="nav-item" data-tab="ambulances" data-title="Ambulances">
-        <i class="ti ti-ambulance nav-icon" aria-hidden="true"></i> Ambulances
-        <span class="nav-badge nav-badge-green" id="nav-ambulance-count" style="display:none;">0</span>
-      </div>
-      <div class="nav-item" data-tab="equipmentVendors" data-title="Equipment Vendors">
-        <i class="ti ti-tools nav-icon" aria-hidden="true"></i> Equipment Vendors
-        <span class="nav-badge nav-badge-green" id="nav-equipment-vendor-count" style="display:none;">0</span>
-      </div>
-      <div class="nav-section-label">Billing</div>
-      <div class="nav-item" data-tab="bill-discounts" data-title="Hospital Bill Discounts">
-        <i class="ti ti-discount-2 nav-icon" aria-hidden="true"></i> Bill Discounts
-        <span class="nav-badge nav-badge-green" id="nav-bill-discount-count" style="display:none;">0</span>
-      </div>
+
+      <div class="nav-section-label" data-section="clinical" onclick="toggleNavSection(this)">Clinical Care &amp; Bookings <i class="ti ti-chevron-down nav-section-chevron" aria-hidden="true"></i></div>
       <!-- Maternity section hidden, restore when asked
-      <div class="nav-section-label">Maternity</div>
-      <div class="nav-item" data-tab="maternity" data-title="Maternity Care Management">
+      <div class="nav-item" data-tab="maternity" data-title="Maternity Care Management" title="Pregnancy checkups, alerts, and profiles">
         <i class="ti ti-heart nav-icon" aria-hidden="true"></i> Maternity
         <span class="nav-badge nav-badge-red" id="nav-maternity-alerts" style="display:none;">0</span>
       </div>
       -->
-      <div class="nav-section-label">Health Education</div>
-      <div class="nav-item" data-tab="health-articles" data-title="Health Education Articles">
-        <i class="ti ti-books nav-icon" aria-hidden="true"></i> Health Articles
-        <span class="nav-badge nav-badge-green" id="nav-health-articles-count" style="display:none;">0</span>
+      <div class="nav-item" data-tab="doctors" data-title="Doctors" title="Approve, manage, and monitor registered doctors">
+        <i class="ti ti-stethoscope nav-icon" aria-hidden="true"></i> Doctors
       </div>
-      <div class="nav-section-label">Quality</div>
-      <div class="nav-item" data-tab="quality-analytics" data-title="Weekly Quality Analytics">
-        <i class="ti ti-chart-area-line nav-icon" aria-hidden="true"></i> Quality Analytics
-        <span class="nav-badge nav-badge-red" id="nav-quality-flagged" style="display:none;">0</span>
+      <div class="nav-item" data-tab="spec-requests" data-title="Doctor Specialization Requests" title="Doctors asking to add a new specialization to their profile">
+        <i class="ti ti-certificate nav-icon" aria-hidden="true"></i> Doctor Spec Requests
+        <span class="nav-badge nav-badge-red" id="nav-spec-requests-count" style="display:none;">0</span>
       </div>
-      <div class="nav-item" data-tab="feedback" data-title="Patient Feedback">
-        <i class="ti ti-star nav-icon" aria-hidden="true"></i> Feedback
-        <span class="nav-badge nav-badge-green" id="nav-feedback-count" style="display:none;">0</span>
+      <div class="nav-item" data-tab="patients" data-title="Patients" title="Registered patient accounts">
+        <i class="ti ti-users nav-icon" aria-hidden="true"></i> Patients
       </div>
-      <div class="nav-item" data-tab="reviews" data-title="Doctor Reviews">
-        <i class="ti ti-message-star nav-icon" aria-hidden="true"></i> Reviews
-        <span class="nav-badge nav-badge-red" id="nav-reviews-flagged" style="display:none;">0</span>
+      <div class="nav-item" data-tab="appointments" data-title="Appointments" title="All booked doctor appointments">
+        <i class="ti ti-calendar nav-icon" aria-hidden="true"></i> Appointments
+        <span class="nav-badge nav-badge-red" id="nav-appt-count" style="display:none;">0</span>
       </div>
-      <div class="nav-section-label">Nutrition</div>
-      <div class="nav-item" data-tab="nutrition" data-title="Nutrition Management">
-        <i class="ti ti-salad nav-icon" aria-hidden="true"></i> Nutrition
-        <span class="nav-badge nav-badge-green" id="nav-nutrition-count" style="display:none;">0</span>
+      <div class="nav-item" data-tab="calls" data-title="Live Calls" title="Live and recent video/voice consultations">
+        <i class="ti ti-phone-call nav-icon" aria-hidden="true"></i> Live Calls
+        <span class="nav-badge nav-badge-red" id="nav-calls-count" style="display:none;">0</span>
       </div>
-      <div class="nav-section-label">Services</div>
-      <div class="nav-item" data-tab="services" data-title="Services Management">
-        <i class="ti ti-tools nav-icon" aria-hidden="true"></i> Services
+      <div class="nav-item" data-tab="medicines" data-title="MedNU Pharmacy" title="MedNu's own medicine catalog and prescription analytics">
+        <i class="ti ti-pill nav-icon" aria-hidden="true"></i> MedNU Pharmacy
+      </div>
+      <div class="nav-item" data-tab="prescriptions" data-title="Prescription Lookup" title="Look up a prescription by Rx ID">
+        <i class="ti ti-file-description nav-icon" aria-hidden="true"></i> Prescriptions
+      </div>
+
+      <div class="nav-section-label" data-section="service-catalog" onclick="toggleNavSection(this)">Service Catalog &amp; Requests <i class="ti ti-chevron-down nav-section-chevron" aria-hidden="true"></i></div>
+      <div class="nav-item" data-tab="services" data-title="Service Catalog" title="Define the non-doctor services patients can book (physio, nutrition, equipment, etc.)">
+        <i class="ti ti-tools nav-icon" aria-hidden="true"></i> Service Catalog
         <span class="nav-badge nav-badge-green" id="nav-services-count" style="display:none;">0</span>
       </div>
-      <div class="nav-item" data-tab="requests" data-title="Service Requests">
-        <i class="ti ti-clipboard-list nav-icon" aria-hidden="true"></i> Requests
+      <div class="nav-item" data-tab="requests" data-title="Patient Service Requests" title="Live queue of patient requests for a booked service">
+        <i class="ti ti-clipboard-list nav-icon" aria-hidden="true"></i> Patient Requests
         <span class="nav-badge nav-badge-red" id="nav-requests-count" style="display:none;">0</span>
       </div>
-      <div class="nav-item" data-tab="caregivers" data-title="Caregivers Management">
-        <i class="ti ti-heart-handshake nav-icon" aria-hidden="true"></i> Caregivers
+      <div class="nav-item" data-tab="nutrition" data-title="Nutrition Programs" title="Nutrition program bookings, meal logs, goals, and diet plans">
+        <i class="ti ti-salad nav-icon" aria-hidden="true"></i> Nutrition Programs
+        <span class="nav-badge nav-badge-green" id="nav-nutrition-count" style="display:none;">0</span>
+      </div>
+      <div class="nav-item" data-tab="caregivers" data-title="Caregiver Directory" title="Admin-curated directory of caregivers patients can book">
+        <i class="ti ti-heart-handshake nav-icon" aria-hidden="true"></i> Caregiver Directory
         <span class="nav-badge nav-badge-green" id="nav-caregivers-count" style="display:none;">0</span>
       </div>
-      <div class="nav-item" data-tab="care-assistants" data-title="Care Assistants Management">
-        <i class="ti ti-support nav-icon" aria-hidden="true"></i> Care Assistants
+      <div class="nav-item" data-tab="care-assistants" data-title="Care Assistant Directory" title="Admin-curated directory of care assistants patients can book">
+        <i class="ti ti-nurse nav-icon" aria-hidden="true"></i> Care Assistant Directory
         <span class="nav-badge nav-badge-green" id="nav-care-assistants-count" style="display:none;">0</span>
       </div>
-      <div class="nav-section-label">Partner Accounts</div>
-      <div class="nav-item" data-tab="ambulance-partners" data-title="Ambulance Partners">
+
+      <div class="nav-section-label" data-section="directory" onclick="toggleNavSection(this)">Directory &amp; Facilities <i class="ti ti-chevron-down nav-section-chevron" aria-hidden="true"></i></div>
+      <div class="nav-item" data-tab="hospitals" data-title="Hospital Directory" title="Patient-facing hospital listings admins curate">
+        <i class="ti ti-building-hospital nav-icon" aria-hidden="true"></i> Hospital Directory
+        <span class="nav-badge nav-badge-green" id="nav-hospital-count" style="display:none;">0</span>
+      </div>
+      <div class="nav-item" data-tab="ambulances" data-title="Ambulance Directory" title="Patient-facing ambulance listings admins curate">
+        <i class="ti ti-ambulance nav-icon" aria-hidden="true"></i> Ambulance Directory
+        <span class="nav-badge nav-badge-green" id="nav-ambulance-count" style="display:none;">0</span>
+      </div>
+      <div class="nav-item" data-tab="equipmentVendors" data-title="Equipment Vendors" title="Medical equipment rental/sale vendors">
+        <i class="ti ti-tools nav-icon" aria-hidden="true"></i> Equipment Vendors
+        <span class="nav-badge nav-badge-green" id="nav-equipment-vendor-count" style="display:none;">0</span>
+      </div>
+
+      <div class="nav-section-label" data-section="partners" onclick="toggleNavSection(this)">Partner Accounts &amp; Verification <i class="ti ti-chevron-down nav-section-chevron" aria-hidden="true"></i></div>
+      <div class="nav-item" data-tab="ambulance-partners" data-title="Ambulance Partners" title="Self-registered ambulance driver accounts awaiting or holding verification">
         <i class="ti ti-steering-wheel nav-icon" aria-hidden="true"></i> Ambulance Partners
         <span class="nav-badge nav-badge-red" id="nav-ambulance-partners-count" style="display:none;">0</span>
       </div>
-      <div class="nav-item" data-tab="caregiver-partners" data-title="Care Partners">
+      <div class="nav-item" data-tab="caregiver-partners" data-title="Care Partners" title="Self-registered caregiver accounts awaiting or holding verification">
         <i class="ti ti-user-heart nav-icon" aria-hidden="true"></i> Care Partners
         <span class="nav-badge nav-badge-red" id="nav-caregiver-partners-count" style="display:none;">0</span>
       </div>
-      <div class="nav-item" data-tab="pharmacy-partners" data-title="Pharmacy Partners">
+      <div class="nav-item" data-tab="pharmacy-partners" data-title="Pharmacy Partners" title="Third-party pharmacy vendor accounts awaiting or holding verification">
         <i class="ti ti-building-store nav-icon" aria-hidden="true"></i> Pharmacy Partners
         <span class="nav-badge nav-badge-red" id="nav-pharmacy-partners-count" style="display:none;">0</span>
       </div>
-      <div class="nav-item" data-tab="lab-partners" data-title="Lab Partners">
+      <div class="nav-item" data-tab="lab-partners" data-title="Lab Partners" title="Diagnostic lab partner accounts awaiting or holding verification">
         <i class="ti ti-microscope nav-icon" aria-hidden="true"></i> Lab Partners
         <span class="nav-badge nav-badge-red" id="nav-lab-partners-count" style="display:none;">0</span>
       </div>
-      <div class="nav-item" data-tab="physio-partners" data-title="Physiotherapist Partners">
+      <div class="nav-item" data-tab="physio-partners" data-title="Physiotherapist Partners" title="Physiotherapist partner accounts awaiting or holding verification">
         <i class="ti ti-activity nav-icon" aria-hidden="true"></i> Physio Partners
         <span class="nav-badge nav-badge-red" id="nav-physio-partners-count" style="display:none;">0</span>
       </div>
-      <div class="nav-item" data-tab="counselling-partners" data-title="Counsellor Partners">
+      <div class="nav-item" data-tab="counselling-partners" data-title="Counsellor Partners" title="Counsellor partner accounts awaiting or holding verification">
         <i class="ti ti-message-circle nav-icon" aria-hidden="true"></i> Counsellor Partners
         <span class="nav-badge nav-badge-red" id="nav-counselling-partners-count" style="display:none;">0</span>
       </div>
-      <div class="nav-item" data-tab="nutrition-partners" data-title="Nutritionist Partners">
+      <div class="nav-item" data-tab="nutrition-partners" data-title="Nutritionist Partners" title="Nutritionist partner accounts awaiting or holding verification">
         <i class="ti ti-leaf nav-icon" aria-hidden="true"></i> Nutrition Partners
         <span class="nav-badge nav-badge-red" id="nav-nutrition-partners-count" style="display:none;">0</span>
       </div>
-      <div class="nav-item" data-tab="hospital-partners" data-title="Hospital Partners">
+      <div class="nav-item" data-tab="hospital-partners" data-title="Hospital Partners" title="Billing-desk login for hospital staff, linked to a Hospital Directory entry">
         <i class="ti ti-building-hospital nav-icon" aria-hidden="true"></i> Hospital Partners
         <span class="nav-badge nav-badge-red" id="nav-hospital-partners-count" style="display:none;">0</span>
       </div>
-      <div class="nav-section-label">Logs &amp; Audit</div>
-      <div class="nav-item" data-tab="prescriptions" data-title="Prescription Lookup">
-        <i class="ti ti-file-description nav-icon" aria-hidden="true"></i> Prescriptions
+
+      <div class="nav-section-label" data-section="commerce" onclick="toggleNavSection(this)">Commerce &amp; Payments <i class="ti ti-chevron-down nav-section-chevron" aria-hidden="true"></i></div>
+      <div class="nav-item" data-tab="revenue" data-title="Revenue" title="Platform revenue and payment trends">
+        <i class="ti ti-chart-bar nav-icon" aria-hidden="true"></i> Revenue
       </div>
-      <div class="nav-item" data-tab="operation-logs" data-title="Operation Logs">
-        <i class="ti ti-activity nav-icon" aria-hidden="true"></i> Operation Logs
-        <span class="nav-badge nav-badge-red" id="nav-error-logs-count" style="display:none;">0</span>
+      <div class="nav-item" data-tab="wallet" data-title="Wallet &amp; Transactions" title="Patient wallet balances and transaction history">
+        <i class="ti ti-wallet nav-icon" aria-hidden="true"></i> Wallet
+        <span class="nav-badge nav-badge-red" id="nav-wallet-count" style="display:none;">0</span>
       </div>
-      <div class="nav-section-label">Support</div>
-      <div class="nav-item" data-tab="reports" data-title="Reports">
-        <i class="ti ti-report nav-icon" aria-hidden="true"></i> Reports
+      <div class="nav-item" data-tab="settlements" data-title="Settlement Dashboard" title="Partner payout settlement tracking">
+        <i class="ti ti-cash nav-icon" aria-hidden="true"></i> Settlements
       </div>
-      <div class="nav-item" data-tab="tickets" data-title="Support Tickets">
+      <div class="nav-item" data-tab="commission-rules" data-title="Commission Rules" title="Commission percentage configured per service type">
+        <i class="ti ti-percentage nav-icon" aria-hidden="true"></i> Commission Rules
+      </div>
+      <div class="nav-item" data-tab="coupons" data-title="Coupons" title="Discount coupon codes">
+        <i class="ti ti-ticket nav-icon" aria-hidden="true"></i> Coupons
+      </div>
+      <div class="nav-item" data-tab="campaigns" data-title="Campaigns" title="Promotional campaign configuration">
+        <i class="ti ti-rocket nav-icon" aria-hidden="true"></i> Campaigns
+      </div>
+      <div class="nav-item" data-tab="refunds" data-title="Refunds" title="Refund requests and processing">
+        <i class="ti ti-receipt-refund nav-icon" aria-hidden="true"></i> Refunds
+      </div>
+      <div class="nav-item" data-tab="bill-discounts" data-title="Hospital Bill Discounts" title="Discount schemes tied to a specific hospital's billing">
+        <i class="ti ti-discount-2 nav-icon" aria-hidden="true"></i> Bill Discounts
+        <span class="nav-badge nav-badge-green" id="nav-bill-discount-count" style="display:none;">0</span>
+      </div>
+
+      <div class="nav-section-label" data-section="content" onclick="toggleNavSection(this)">Content &amp; Marketing <i class="ti ti-chevron-down nav-section-chevron" aria-hidden="true"></i></div>
+      <div class="nav-item" data-tab="banners" data-title="Promotional Banners" title="Home-screen promotional banners shown to patients">
+        <i class="ti ti-speakerphone nav-icon" aria-hidden="true"></i> Banners
+        <span class="nav-badge nav-badge-green" id="nav-banner-count" style="display:none;">0</span>
+      </div>
+      <div class="nav-item" data-tab="referrals" data-title="Referral Settings" title="Referral program rules and payouts">
+        <i class="ti ti-share nav-icon" aria-hidden="true"></i> Referrals
+      </div>
+      <div class="nav-item" data-tab="health-articles" data-title="Health Education Articles" title="Health education articles shown in the patient app">
+        <i class="ti ti-books nav-icon" aria-hidden="true"></i> Health Articles
+        <span class="nav-badge nav-badge-green" id="nav-health-articles-count" style="display:none;">0</span>
+      </div>
+      <div class="nav-item" data-tab="broadcast" data-title="Broadcast Notifications" title="Send an announcement notification to patients or doctors">
+        <i class="ti ti-send nav-icon" aria-hidden="true"></i> Broadcast
+      </div>
+
+      <div class="nav-section-label" data-section="quality-support" onclick="toggleNavSection(this)">Quality &amp; Support <i class="ti ti-chevron-down nav-section-chevron" aria-hidden="true"></i></div>
+      <div class="nav-item" data-tab="quality-analytics" data-title="Weekly Quality Analytics" title="Auto-computed weekly doctor quality/rating scorecard">
+        <i class="ti ti-chart-area-line nav-icon" aria-hidden="true"></i> Quality Analytics
+        <span class="nav-badge nav-badge-red" id="nav-quality-flagged" style="display:none;">0</span>
+      </div>
+      <div class="nav-item" data-tab="feedback" data-title="Patient Feedback" title="Patient-submitted feedback">
+        <i class="ti ti-star nav-icon" aria-hidden="true"></i> Feedback
+        <span class="nav-badge nav-badge-green" id="nav-feedback-count" style="display:none;">0</span>
+      </div>
+      <div class="nav-item" data-tab="reviews" data-title="Doctor Reviews" title="Patient reviews left on doctor profiles">
+        <i class="ti ti-message-star nav-icon" aria-hidden="true"></i> Reviews
+        <span class="nav-badge nav-badge-red" id="nav-reviews-flagged" style="display:none;">0</span>
+      </div>
+      <div class="nav-item" data-tab="tickets" data-title="Support Tickets" title="Patient and doctor support tickets">
         <i class="ti ti-headset nav-icon" aria-hidden="true"></i> Support
         <span class="nav-badge" id="nav-ticket-count">0</span>
       </div>
-      <div class="nav-item" data-tab="broadcast" data-title="Broadcast Notifications">
-        <i class="ti ti-send nav-icon" aria-hidden="true"></i> Broadcast
+
+      <div class="nav-section-label" data-section="system" onclick="toggleNavSection(this)">System &amp; Admin <i class="ti ti-chevron-down nav-section-chevron" aria-hidden="true"></i></div>
+      <div class="nav-item" data-tab="operation-logs" data-title="Operation Logs" title="Audit trail of admin actions">
+        <i class="ti ti-activity nav-icon" aria-hidden="true"></i> Operation Logs
+        <span class="nav-badge nav-badge-red" id="nav-error-logs-count" style="display:none;">0</span>
+      </div>
+      <div class="nav-item" data-tab="reports" data-title="Reports" title="Generate and download platform reports (PDF/Excel/CSV)">
+        <i class="ti ti-report nav-icon" aria-hidden="true"></i> Reports
       </div>
     </nav>
     <div class="sidebar-footer">
@@ -459,7 +462,7 @@
             <div class="sec-metric-label">Caregivers Listed</div>
           </div>
           <div class="sec-metric">
-            <i class="ti ti-support sec-metric-icon" style="color:#e65100;"></i>
+            <i class="ti ti-nurse sec-metric-icon" style="color:#e65100;"></i>
             <div class="sec-metric-val" id="sec-care-assistants">—</div>
             <div class="sec-metric-label">Care Assistants Listed</div>
           </div>
@@ -1147,7 +1150,7 @@
         <!-- Summary metrics -->
         <div class="metrics-grid" style="margin-bottom:16px;" id="maternity-stats">
           <div class="metric-card">
-            <div class="metric-icon" style="background:#fce4ec;color:#c2185b;"><i class="ti ti-pregnant"></i></div>
+            <div class="metric-icon" style="background:#fce4ec;color:#c2185b;"><i class="ti ti-baby-carriage"></i></div>
             <div class="metric-info">
               <div class="metric-value" id="mat-total">—</div>
               <div class="metric-label">Active Pregnancies</div>
@@ -1204,7 +1207,7 @@
         <!-- Active Pregnancies Table -->
         <div class="card" style="margin-bottom:20px;">
           <div class="card-header">
-            <div class="card-title"><i class="ti ti-pregnant" style="color:#c2185b;margin-right:6px;"></i>Active Pregnancy Profiles</div>
+            <div class="card-title"><i class="ti ti-baby-carriage" style="color:#c2185b;margin-right:6px;"></i>Active Pregnancy Profiles</div>
             <div style="display:flex;gap:8px;">
               <input type="text" class="form-input" id="mat-search" placeholder="Search patient..." style="width:200px;" oninput="filterMaternityPatients()" />
               <select class="form-input" id="mat-filter-risk" onchange="filterMaternityPatients()" style="width:140px;">
@@ -1900,7 +1903,7 @@
             <div class="metric-value" id="ref-stat-total">—</div>
           </div>
           <div class="metric-card">
-            <div class="metric-icon" style="background:#e6f4ea;color:#1e8e3e;"><i class="ti ti-rosette-discount-check"></i></div>
+            <div class="metric-icon" style="background:#e6f4ea;color:#1e8e3e;"><i class="ti ti-discount-check"></i></div>
             <div class="metric-label">Rewarded</div>
             <div class="metric-value" id="ref-stat-rewarded">—</div>
           </div>
@@ -3321,6 +3324,40 @@
               <span class="form-label" style="margin:0;">In-Person Consultations</span>
             </label>
           </div>
+          <div class="form-group" style="margin-top:4px;">
+            <label class="form-label">Available Days</label>
+            <div id="nutr-f-days" style="display:flex;flex-wrap:wrap;gap:10px;">
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+                <input type="checkbox" class="nutr-day-check" value="Monday" style="width:16px;height:16px;" />
+                <span class="form-label" style="margin:0;">Mon</span>
+              </label>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+                <input type="checkbox" class="nutr-day-check" value="Tuesday" style="width:16px;height:16px;" />
+                <span class="form-label" style="margin:0;">Tue</span>
+              </label>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+                <input type="checkbox" class="nutr-day-check" value="Wednesday" style="width:16px;height:16px;" />
+                <span class="form-label" style="margin:0;">Wed</span>
+              </label>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+                <input type="checkbox" class="nutr-day-check" value="Thursday" style="width:16px;height:16px;" />
+                <span class="form-label" style="margin:0;">Thu</span>
+              </label>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+                <input type="checkbox" class="nutr-day-check" value="Friday" style="width:16px;height:16px;" />
+                <span class="form-label" style="margin:0;">Fri</span>
+              </label>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+                <input type="checkbox" class="nutr-day-check" value="Saturday" style="width:16px;height:16px;" />
+                <span class="form-label" style="margin:0;">Sat</span>
+              </label>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+                <input type="checkbox" class="nutr-day-check" value="Sunday" style="width:16px;height:16px;" />
+                <span class="form-label" style="margin:0;">Sun</span>
+              </label>
+            </div>
+            <div class="form-hint">Days this nutritionist actually takes bookings on.</div>
+          </div>
         </div>
         <div class="modal-footer">
           <button class="btn-secondary" onclick="closeNutritionistModal()">Cancel</button>
@@ -4051,7 +4088,7 @@
             </div>
           </div>
           <div class="metric-card">
-            <div class="metric-icon" style="background:#f3e8fd;color:#6a1b9a;"><i class="ti ti-rosette-discount-check"></i></div>
+            <div class="metric-icon" style="background:#f3e8fd;color:#6a1b9a;"><i class="ti ti-discount-check"></i></div>
             <div class="metric-info">
               <div class="metric-value" id="stl-paid">—</div>
               <div class="metric-label">Paid Settlement</div>
@@ -4493,7 +4530,7 @@
   </div>
 </div>
 
-<script src="js/firebase-config.js?v=20260904a"></script>
-<script src="js/app.js?v=20260904a"></script>
+<script src="js/firebase-config.js?v=20260908a"></script>
+<script src="js/app.js?v=20260908a"></script>
 </body>
 </html>

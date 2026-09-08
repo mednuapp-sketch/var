@@ -4,22 +4,58 @@ import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/services/counsellor_presence_service.dart';
 import '../../../core/utils/r.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../../../shared_core/shared_core.dart';
+import '../../ambulance/widgets/status_pulse.dart';
 import '../models/counselling_session.dart';
 import '../providers/counselling_providers.dart';
+import '../services/counselling_profile_service.dart';
 
-/// Counsellor home — a live stats grid and a preview of today's sessions.
-/// Same shape as the Physiotherapy dashboard, in the module's own purple
-/// palette.
-class CounsellingDashboardScreen extends ConsumerWidget {
+/// Counsellor home — an online/offline presence toggle (mirrors the
+/// Doctor/Ambulance/Physiotherapy dashboards' own online card — patients can
+/// only find and book a counsellor who's online), a live stats grid, and a
+/// preview of today's sessions.
+class CounsellingDashboardScreen extends ConsumerStatefulWidget {
   const CounsellingDashboardScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<CounsellingDashboardScreen> createState() => _CounsellingDashboardScreenState();
+}
+
+class _CounsellingDashboardScreenState extends ConsumerState<CounsellingDashboardScreen> {
+  bool _togglingInProgress = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final uid = CounsellingProfileService.currentUid;
+    if (uid != null) CounsellorPresenceService.instance.init(uid);
+  }
+
+  @override
+  void dispose() {
+    CounsellorPresenceService.instance.setOnline(false);
+    CounsellorPresenceService.instance.dispose();
+    super.dispose();
+  }
+
+  Future<void> _toggleOnline(bool value) async {
+    if (_togglingInProgress) return;
+    setState(() => _togglingInProgress = true);
+    try {
+      await CounsellorPresenceService.instance.setOnline(value);
+    } finally {
+      if (mounted) setState(() => _togglingInProgress = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final metrics = ref.watch(counsellingDashboardMetricsProvider);
     final today = ref.watch(todayCounsellingSessionsProvider);
+    final online = ref.watch(counsellingProfileProvider).isOnline;
 
     return SharedAppShell(
       currentRoute: AppRoutes.counsellingDashboard,
@@ -27,6 +63,11 @@ class CounsellingDashboardScreen extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
         children: [
+          _OnlineHeroCard(
+            online: online,
+            onChanged: _togglingInProgress ? null : _toggleOnline,
+          ),
+          const SizedBox(height: 20),
           staticGrid(
             crossAxisCount: R.isTablet(context) ? 4 : 2,
             children: [
@@ -70,6 +111,60 @@ class CounsellingDashboardScreen extends ConsumerWidget {
             )
           else
             Column(children: today.take(3).map((s) => _SessionPreviewCard(session: s)).toList()),
+        ],
+      ),
+    );
+  }
+}
+
+class _OnlineHeroCard extends StatelessWidget {
+  final bool online;
+  final ValueChanged<bool>? onChanged;
+  const _OnlineHeroCard({required this.online, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.all(R.p(context, 20)),
+      decoration: BoxDecoration(
+        gradient: online
+            ? AppColors.onlineGradient
+            : const LinearGradient(colors: [Color(0xFF455A64), Color(0xFF607D8B)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: (online ? AppColors.online : AppColors.offline).withValues(alpha: 0.35),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          StatusPulse(color: Colors.white, size: online ? 12 : 8),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  online ? 'You are ONLINE' : 'You are OFFLINE',
+                  style: AppTextStyles.h3.copyWith(fontSize: R.sp(context, 18), fontWeight: FontWeight.w800, color: Colors.white),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  online ? 'Visible to patients • Accepting sessions' : 'Not accepting new sessions',
+                  style: AppTextStyles.bodySmall.copyWith(fontSize: R.sp(context, 12), color: Colors.white70),
+                ),
+              ],
+            ),
+          ),
+          Switch.adaptive(
+            value: online,
+            onChanged: onChanged,
+            activeThumbColor: Colors.white,
+            activeTrackColor: Colors.white38,
+          ),
         ],
       ),
     );

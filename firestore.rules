@@ -1477,6 +1477,15 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // ── Counsellors (public read; mirrored from counsellor_profiles) ─────────
+    // Written only by `onCounsellorProfileWriteForVisibility`'s Cloud
+    // Function mirror (Admin SDK, bypasses these rules), same pattern as
+    // `physiotherapists` above.
+    match /counsellors/{counsellorId} {
+      allow read: if isAuth();
+      allow write: if isAdmin();
+    }
+
     // ── Nutritionists (public read; mirrored from nutritionist_profiles) ─────
     // Written only by `onNutritionistProfileWriteForVisibility`'s Cloud
     // Function mirror (Admin SDK, bypasses these rules), same as

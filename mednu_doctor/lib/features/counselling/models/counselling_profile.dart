@@ -15,6 +15,18 @@ class CounsellingProfile {
   final bool documentsVerified;
   final String status;
 
+  /// Raw `documents` / `documentVerification` maps, keyed by canonical
+  /// docType. Kept untyped here so the shared documents layer
+  /// (`shared_core/documents`) owns their parsing for every role.
+  final Map<String, dynamic> documents;
+  final Map<String, dynamic> documentVerification;
+
+  /// Realtime presence — written by [CounsellorPresenceService]'s heartbeat,
+  /// same `isOnline`/`lastHeartbeat` shape as `doctors/{uid}` and
+  /// `ambulance_profiles/{uid}`.
+  final bool isOnline;
+  final DateTime? lastHeartbeat;
+
   const CounsellingProfile({
     required this.name,
     required this.photoUrl,
@@ -26,6 +38,10 @@ class CounsellingProfile {
     required this.experienceYears,
     required this.documentsVerified,
     this.status = 'pending',
+    this.documents = const {},
+    this.documentVerification = const {},
+    this.isOnline = false,
+    this.lastHeartbeat,
   });
 
   factory CounsellingProfile.empty() => const CounsellingProfile(
@@ -57,6 +73,12 @@ class CounsellingProfile {
       experienceYears: ((d['experienceYears'] as num?) ?? 0).toInt(),
       documentsVerified: d['documentsVerified'] as bool? ?? false,
       status: d['status'] as String? ?? 'pending',
+      documents: Map<String, dynamic>.from(
+          (d['documents'] as Map?) ?? const <String, dynamic>{}),
+      documentVerification: Map<String, dynamic>.from(
+          (d['documentVerification'] as Map?) ?? const <String, dynamic>{}),
+      isOnline: d['isOnline'] as bool? ?? false,
+      lastHeartbeat: (d['lastHeartbeat'] as Timestamp?)?.toDate(),
     );
   }
 }

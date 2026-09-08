@@ -46,6 +46,43 @@ class PhysioScreen extends ConsumerWidget {
   // "any" should still add to cart, "dismissed" should abort the add.
   static const Object _anyPhysio = Object();
 
+  /// "Talk to a Physiotherapist Now" — finds whoever's online right now
+  /// (via the same `isCurrentlyOnline` staleness check the list screen
+  /// sorts by) and jumps straight to their profile's "Book Now", which
+  /// pre-assigns them via `extraFields: {'physiotherapistId': id}` — the
+  /// existing Cloud Function mirror (`_buildSessionDoc`) marks a
+  /// pre-assigned booking already 'accepted' immediately, skipping the
+  /// unclaimed pool. If nobody is online, falls back to the browsable list
+  /// (already online-sorted) rather than blocking the patient outright.
+  Future<void> _talkToPhysioNow(BuildContext context) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+    List<PhysiotherapistModel> list;
+    try {
+      list = await PhysiotherapistService.physiotherapistsStream().first;
+    } catch (_) {
+      list = const [];
+    }
+    if (!context.mounted) return;
+    Navigator.of(context, rootNavigator: true).pop(); // dismiss loading dialog
+
+    final online = list.where((p) => p.isCurrentlyOnline).toList()
+      ..sort((a, b) => b.rating.compareTo(a.rating));
+    if (!context.mounted) return;
+    if (online.isNotEmpty) {
+      context.push(AppRoutes.physioTherapistProfile.replaceFirst(':id', online.first.id));
+    } else {
+      FeedbackService.showError(
+        context,
+        'No physiotherapist is online right now — showing everyone you can book.',
+      );
+      context.push(AppRoutes.physioTherapistList);
+    }
+  }
+
   Future<void> _book(BuildContext ctx, WidgetRef ref, Map<String, dynamic> svc) async {
     // Optional — lets the patient tie this booking to a specific
     // physiotherapist (same catalog, same fee) instead of an unassigned
@@ -237,6 +274,27 @@ class PhysioScreen extends ConsumerWidget {
             child: Padding(
               padding: AppSpacing.page(context),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                // ── Talk to a Physiotherapist Now ───────────────────────────
+                SizedBox(
+                  width: double.infinity,
+                  child: Padding(
+                    padding: EdgeInsets.only(bottom: AppSpacing.sectionGap(context)),
+                    child: ElevatedButton.icon(
+                      onPressed: () => _talkToPhysioNow(context),
+                      icon: const Icon(Icons.bolt_rounded, size: 20),
+                      label: const Text('Talk to a Physiotherapist Now'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _themeColor,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        textStyle: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 15),
+                        elevation: 3,
+                        shadowColor: _themeColor.withValues(alpha: 0.4),
+                      ),
+                    ),
+                  ),
+                ),
                 // Find a specific physiotherapist banner
                 Container(
                   margin: EdgeInsets.only(bottom: AppSpacing.sectionGap(context)),

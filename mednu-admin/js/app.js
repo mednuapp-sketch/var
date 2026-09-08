@@ -52,8 +52,10 @@ async function verifyAdminRole(uid) {
 // reads/writes for each role server-side (not present in this repo).
 let currentAdminRole = 'director';
 
-// Each list is the `data-tab` values a role may open, taken from the
-// nav-section-label groupings in index.html. `null` = every tab (Director).
+// Each list is the `data-tab` values a role may open. These are independent
+// of the nav-section-label groupings in index.html (which are purely visual
+// categorization) — a role's tabs can span multiple sections.
+// `null` = every tab (Director).
 const ROLE_TAB_ACCESS = {
   director:  null,
   finance:   ['revenue', 'wallet'],
@@ -153,6 +155,46 @@ document.querySelectorAll('.nav-item[data-tab]').forEach(item => {
   item.addEventListener('click', () => switchTab(item.dataset.tab, item.dataset.title));
 });
 
+// ---- COLLAPSIBLE NAV SECTIONS ----
+// Deliberately independent of applyRoleNavVisibility()'s item.style.display
+// logic above: collapse state is expressed as a `.nav-collapsed` class with
+// `display: none !important` in CSS, so a collapsed-but-role-visible item and
+// a role-hidden-but-expanded item both resolve correctly without the two
+// mechanisms needing to know about each other or run in any particular order.
+const NAV_COLLAPSE_STORAGE_KEY = 'mednuAdminCollapsedNavSections';
+
+function _walkNavSectionItems(labelEl, fn) {
+  let sib = labelEl.nextElementSibling;
+  while (sib && !sib.classList.contains('nav-section-label')) {
+    if (sib.classList.contains('nav-item')) fn(sib);
+    sib = sib.nextElementSibling;
+  }
+}
+
+function toggleNavSection(labelEl) {
+  const collapsed = labelEl.classList.toggle('collapsed');
+  _walkNavSectionItems(labelEl, item => item.classList.toggle('nav-collapsed', collapsed));
+  try {
+    const stored = JSON.parse(localStorage.getItem(NAV_COLLAPSE_STORAGE_KEY) || '[]');
+    const section = labelEl.dataset.section;
+    const next = collapsed
+      ? [...new Set([...stored, section])]
+      : stored.filter(s => s !== section);
+    localStorage.setItem(NAV_COLLAPSE_STORAGE_KEY, JSON.stringify(next));
+  } catch (e) { /* localStorage unavailable — collapse still works this session */ }
+}
+
+function restoreNavCollapseState() {
+  let stored = [];
+  try { stored = JSON.parse(localStorage.getItem(NAV_COLLAPSE_STORAGE_KEY) || '[]'); } catch (e) { return; }
+  document.querySelectorAll('.nav-section-label[data-section]').forEach(label => {
+    if (!stored.includes(label.dataset.section)) return;
+    label.classList.add('collapsed');
+    _walkNavSectionItems(label, item => item.classList.add('nav-collapsed'));
+  });
+}
+restoreNavCollapseState();
+
 function switchTab(tab, title) {
   if (!canAccessTab(tab)) {
     showToast('You do not have access to this section.');
@@ -183,6 +225,27 @@ function switchTab(tab, title) {
   if (tab === 'operation-logs') {
     initOperationLogs();
   }
+
+  if (tab === 'reviews') loadReviews();
+
+  // Cache-aware (no `force`): repeatedly switching between partner tabs must
+  // not re-read the whole ledger every time. The Refresh button forces.
+  if (tab === 'ambulance-partners')    loadPartnerEarnings('ambulance');
+  if (tab === 'caregiver-partners')    loadPartnerEarnings('caregiver');
+  if (tab === 'pharmacy-partners')     loadPartnerEarnings('pharmacy');
+  if (tab === 'lab-partners')          loadPartnerEarnings('lab');
+  if (tab === 'physio-partners')       loadPartnerEarnings('physiotherapy');
+  if (tab === 'counselling-partners')  loadPartnerEarnings('counselling');
+
+  if (tab === 'commission-rules' && !_commissionRulesInited) { _commissionRulesInited = true; loadCommissionRules(); }
+  if (tab === 'coupons' && !_couponsInited) { _couponsInited = true; loadCoupons(); }
+  if (tab === 'campaigns' && !_campaignsInited) {
+    _campaignsInited = true;
+    if (!_couponsInited) { _couponsInited = true; loadCoupons(); } else { populateCampaignCouponDropdown(); }
+    loadCampaigns();
+  }
+  if (tab === 'settlements' && !_settlementsInited) { _settlementsInited = true; initSettlementDashboardListeners(); }
+  if (tab === 'refunds' && !_refundsInited) { _refundsInited = true; loadRefunds(); }
 }
 
 // ---- TOAST ----
@@ -309,11 +372,6 @@ function skeletonRows(cols, rows) {
   return html;
 }
 
-function skeletonMetric(id) {
-  const el = document.getElementById(id);
-  if (el) el.innerHTML = '<span class="skeleton sk-row" style="width:70%;height:28px;display:block;"></span>';
-}
-
 // ============================================
 //   REALTIME PRO — REFRESH WITH SPINNER
 // ============================================
@@ -402,90 +460,6 @@ function loadLiveStrip() {
 // ============================================
 //   OVERVIEW
 // ============================================
-async function loadOverview() {
-  try {
-    // Doctors count
-    const doctorsSnap = await db.collection('doctors').get();
-    animateCounter(document.getElementById('stat-doctors'), doctorsSnap.size);
-    flashMetricCard('stat-doctors');
-
-    // Patients count — reads from 'users' (same collection Flutter writes to)
-    const patientsSnap = await db.collection('users').get();
-    animateCounter(document.getElementById('stat-patients'), patientsSnap.size);
-    flashMetricCard('stat-patients');
-
-    // Revenue -- aggregate from multiple collections this month
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    let totalRevenue = 0;
-    try {
-      const paymentsSnap = await db.collection('payments')
-        .where('createdAt', '>=', startOfMonth).get();
-      paymentsSnap.forEach(doc => {
-        const d = doc.data();
-        if (!d.status || d.status === 'completed' || d.status === 'success' || d.status === 'paid') {
-          totalRevenue += d.amount || 0;
-        }
-      });
-    } catch(e) { console.warn('payments fetch:', e.message); }
-    try {
-      const walletSnap = await db.collection('wallet_transactions')
-        .where('createdAt', '>=', startOfMonth)
-        .where('type', '==', 'credit').get();
-      walletSnap.forEach(doc => {
-        const d = doc.data();
-        if (d.source && d.source !== 'referral' && d.source !== 'refund') {
-          totalRevenue += d.amount || 0;
-        }
-      });
-    } catch(e) { /* wallet_transactions may not exist */ }
-    try {
-      const consultSnap = await db.collection('consultations')
-        .where('createdAt', '>=', startOfMonth)
-        .where('status', '==', 'completed').get();
-      consultSnap.forEach(doc => {
-        const d = doc.data();
-        if (d.amount && d.amount > 0 && !d.countedInPayments) totalRevenue += d.amount;
-      });
-    } catch(e) { /* consultations may not have amount field */ }
-    const revEl = document.getElementById('stat-revenue');
-    if (revEl) revEl.innerHTML = formatCurrency(totalRevenue);
-    flashMetricCard('stat-revenue');
-
-    // Open tickets
-    const ticketsSnap = await db.collection('support_tickets').where('status', '==', 'open').get();
-    animateCounter(document.getElementById('stat-tickets'), ticketsSnap.size);
-    flashMetricCard('stat-tickets');
-
-    // Pending doctors for quick list — fetch all and filter client-side
-    // so doctors registered before the status field was introduced also appear
-    const allDoctorsSnap = await db.collection('doctors').get();
-    const pendingDocs = allDoctorsSnap.docs.filter(doc => {
-      const s = doc.data().status;
-      return !s || s === 'pending';
-    }).slice(0, 5);
-    renderPendingList(pendingDocs);
-
-    // Revenue chart
-    await buildRevenueChart();
-
-    // Top medicines
-    await loadTopMedicinesOverview();
-
-    // Recent tickets
-    renderRecentTickets(allTickets.filter(t => t.status === 'open'));
-
-    // Live activity feed (new)
-    loadLiveActivityFeed();
-
-    // Revenue summary row (new)
-    updateRevenueSummaryRow();
-
-  } catch (err) {
-    console.error('Overview load error:', err);
-  }
-}
-
 // ── REALTIME REVENUE LISTENER ─────────────────────────────────────────────────
 let _revenueUnsubscribe = null;
 function startRealtimeRevenue() {
@@ -669,21 +643,6 @@ function renderPendingList(docs) {
 //   DOCTORS
 // ============================================
 let allDoctors = [];
-
-async function loadDoctors() {
-  const tbody = document.getElementById('doctors-tbody');
-  if (tbody) tbody.innerHTML = skeletonRows(7, 6);
-  try {
-    const snap = await db.collection('doctors').orderBy('createdAt', 'desc').get();
-    allDoctors = [];
-    snap.forEach(doc => allDoctors.push({ id: doc.id, ...doc.data() }));
-    renderDoctorsTable(allDoctors);
-  } catch (err) {
-    console.error('loadDoctors error:', err);
-    if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="loading" style="color:red;">Failed to load doctors. Check your connection.</td></tr>';
-    showToast('Failed to load doctors list.');
-  }
-}
 
 function renderDoctorsTable(doctors) {
   const tbody = document.getElementById('doctors-tbody');
@@ -907,7 +866,6 @@ async function saveDoctorAdmin() {
       showToast(type === 'therapist' ? 'Therapist added' : 'Doctor added');
     }
     cancelDoctorEdit();
-    loadDoctors();
   } catch (err) {
     showToast('Save failed: ' + err.message);
   } finally {
@@ -960,7 +918,6 @@ async function approveDoctor(id, btn) {
         approvedAt: firebase.firestore.FieldValue.serverTimestamp(),
       });
       showToast('Doctor approved successfully!');
-      loadDoctors(); loadOverview();
     } catch (err) {
       console.error('approveDoctor error:', err);
       btn.disabled = false; btn.textContent = 'Approve';
@@ -979,7 +936,6 @@ async function rejectDoctor(id, btn) {
         rejectedAt: firebase.firestore.FieldValue.serverTimestamp(),
       });
       showToast('Doctor rejected.');
-      loadDoctors();
     } catch (err) {
       console.error('rejectDoctor error:', err);
       btn.disabled = false; btn.textContent = 'Reject';
@@ -1309,12 +1265,6 @@ function viewSpecRequest(id) {
   modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
 }
 
-async function approveSpecRequest(id, btn) {
-  if (!confirm('Approve this specialization change? This will update the doctor\'s specialization immediately.')) return;
-  btn.disabled = true; btn.textContent = '...';
-  await _doApproveSpecRequest(id);
-}
-
 async function approveSpecRequestFromModal(id) {
   if (!confirm('Approve this specialization change? This will update the doctor\'s specialization immediately.')) return;
   document.getElementById('sr-modal')?.remove();
@@ -1349,12 +1299,6 @@ async function setSpecRequestUnderReview(id) {
   document.getElementById('sr-modal')?.remove();
   await db.collection('doctor_specialization_requests').doc(id).update({ status: 'under_review' });
   showToast('Request marked as Under Review.');
-}
-
-function promptRejectSpecRequest(id) {
-  const r = allSpecRequests.find(x => x.id === id);
-  if (!r) return;
-  _showRejectDialog(id, r);
 }
 
 function promptRejectSpecRequestFromModal(id) {
@@ -1482,13 +1426,6 @@ document.getElementById('patient-search')?.addEventListener('input', filterPatie
 // ============================================
 //   REVENUE
 // ============================================
-async function loadRevenue() {
-  const snap = await db.collection('payments').orderBy('createdAt', 'desc').get();
-  const payments = [];
-  snap.forEach(doc => payments.push({ id: doc.id, ...doc.data() }));
-  renderPaymentsTable(payments);
-  buildRevenueDetailChart(payments);
-}
 
 function renderPaymentsTable(payments) {
   const tbody = document.getElementById('payments-tbody');
@@ -1724,13 +1661,6 @@ function ticketRoleBadge(role) {
   return '';
 }
 
-async function loadTickets() {
-  const snap = await db.collection('support_tickets').orderBy('createdAt', 'desc').get();
-  allTickets = [];
-  snap.forEach(doc => allTickets.push({ id: doc.id, ...doc.data() }));
-  renderTicketsTable(allTickets);
-  document.getElementById('stat-tickets').textContent = allTickets.filter(t => t.status === 'open').length;
-}
 
 // Renders the Overview "recent tickets" widget from an already-loaded ticket
 // list — kept live by being called from loadTicketsRealtime's onSnapshot below,
@@ -2114,26 +2044,6 @@ function buildMedicinesChart(sorted) {
 let allBanners = [];
 let _editingBannerId = null;
 
-async function loadBanners() {
-  try {
-    const snap = await db.collection('banners').orderBy('createdAt', 'desc').get();
-    allBanners = [];
-    snap.forEach(doc => allBanners.push({ id: doc.id, ...doc.data() }));
-    renderBannersList(allBanners);
-    // Update nav badge with active count
-    const activeCount = allBanners.filter(b => isBannerActive(b)).length;
-    const badge = document.getElementById('nav-banner-count');
-    if (activeCount > 0) {
-      badge.textContent = activeCount;
-      badge.style.display = 'inline';
-    } else {
-      badge.style.display = 'none';
-    }
-  } catch (err) {
-    console.error('Banner load error:', err);
-  }
-}
-
 document.getElementById('banner-filter')?.addEventListener('change', e => {
   const val = e.target.value;
   const now = new Date();
@@ -2216,7 +2126,6 @@ async function toggleBanner(id, enabled) {
     if (banner) banner.isEnabled = enabled;
     showToast(enabled ? 'Banner enabled âœ“' : 'Banner disabled');
     renderBannersList(allBanners);
-    loadBanners(); // refresh badge
   } catch (err) {
     showToast('Update failed: ' + err.message);
   }
@@ -2233,7 +2142,6 @@ async function deleteBanner(id, storagePath, btn) {
     showToast('Banner deleted');
     allBanners = allBanners.filter(b => b.id !== id);
     renderBannersList(allBanners);
-    loadBanners();
   } catch (err) {
     btn.disabled = false;
     showToast('Delete failed: ' + err.message);
@@ -2421,7 +2329,6 @@ async function publishBanner() {
       showToast('Banner published âœ“');
     }
     resetBannerForm();
-    loadBanners();
   } catch (err) {
     showToast('Save failed: ' + err.message);
   } finally {
@@ -3963,8 +3870,6 @@ function initReferralSettingsListener() {
 }
 
 // Keep legacy name so existing callers still work
-function loadReferralSettings() { initReferralSettingsListener(); }
-
 // ── Save settings ────────────────────────────────────────
 async function saveReferralSettings() {
   const btn    = document.getElementById('save-referral-btn');
@@ -4035,9 +3940,6 @@ function initReferralsListener() {
 }
 
 // Keep legacy names so init block still works
-function loadReferralStats() {}
-function loadReferrals()     { initReferralsListener(); }
-
 // ── Stats update ─────────────────────────────────────────
 function _updateReferralStats(list) {
   let total = 0, rewarded = 0, pending = 0, fraud = 0, totalRewards = 0;
@@ -4218,37 +4120,6 @@ async function manuallyRewardReferral(referralId) {
 //   PATIENT FEEDBACK
 // ============================================
 let allFeedbacks = [];
-
-async function loadFeedbacks() {
-  try {
-    const snap = await db.collection('feedbacks').orderBy('createdAt', 'desc').get();
-    allFeedbacks = [];
-    snap.forEach(doc => allFeedbacks.push({ id: doc.id, ...doc.data() }));
-
-    // Summary stats
-    const total     = allFeedbacks.length;
-    const immediate = allFeedbacks.filter(f => f.type === 'immediate').length;
-    const followup  = allFeedbacks.filter(f => f.type === 'followup').length;
-    const ratings   = allFeedbacks.map(f => f.rating || 0).filter(r => r > 0);
-    const avg       = ratings.length ? (ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(1) : '—';
-
-    document.getElementById('fb-avg-rating').textContent  = avg === '—' ? '—' : `${avg} â­`;
-    document.getElementById('fb-total').textContent       = total.toLocaleString();
-    document.getElementById('fb-immediate').textContent   = immediate.toLocaleString();
-    document.getElementById('fb-followup').textContent    = followup.toLocaleString();
-
-    // Update sidebar badge
-    if (total > 0) {
-      const badge = document.getElementById('nav-feedback-count');
-      badge.textContent = total;
-      badge.style.display = 'inline-flex';
-    }
-
-    renderFeedbackTable(allFeedbacks);
-  } catch (err) {
-    console.error('Feedback load error:', err);
-  }
-}
 
 function filterFeedback() {
   const type   = document.getElementById('fb-type-filter').value;
@@ -4440,7 +4311,22 @@ let _doctorsListener = null;
 function loadDoctorsRealtime() {
   if (_doctorsListener) _doctorsListener();
   _doctorsListener = db.collection('doctors').orderBy('createdAt', 'desc').onSnapshot(snap => {
-    allDoctors = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    // Same filter as initOverviewRealtime()'s doctors-count/pending-list
+    // listener above (see its own comment for the full "why") — this table
+    // had the identical bug: every Lab/Pharmacy/Ambulance/Caregiver/... partner
+    // also writes a sparse doctors/{uid} base-identity doc, so without this
+    // filter their pending registrations showed up in the Doctors tab tagged
+    // "Doctor" (renderDoctorsTable's badge defaults to "Doctor" whenever
+    // `type !== 'therapist'`, which is always true for a partner doc — it has
+    // no `type` field at all) and "Approve" here never touched their real
+    // approval gate on `{role}_profiles/{uid}`.
+    const isDoctorDoc = (d) => {
+      const roles = Array.isArray(d.roles) ? d.roles : null;
+      return !roles || roles.length === 0 || roles.includes('doctor');
+    };
+    allDoctors = snap.docs
+      .filter(doc => isDoctorDoc(doc.data()))
+      .map(doc => ({ id: doc.id, ...doc.data() }));
     renderDoctorsTable(allDoctors);
   }, err => console.error('doctors list listener', err));
 }
@@ -4785,6 +4671,13 @@ function initDashboard() {
   buildRevenueChart();
   loadLiveActivityFeed();
   updateRevenueSummaryRow();
+  initPartnerListeners();
+  // Populate the applicable/eligible-services checkbox groups up front so
+  // they're ready no matter which tab the admin opens first.
+  renderServiceCheckboxes('coupon-services-checks', []);
+  renderServiceCheckboxes('campaign-services-checks', []);
+  couponDiscountTypeChanged();
+  buildSettlementAnalyticsCharts();
 }
 
 function updateAdminDisplayName() {
@@ -5700,12 +5593,20 @@ function initNotificationsListener() {
   if (_notifUnsubscribe) _notifUnsubscribe();
 
   // Watch service_requests for new ones
+  //
+  // 'emergency_doctor' requests are skipped here: onEmergencyDoctorRequest
+  // (functions/index.js) writes both this service_requests doc AND a
+  // dedicated admin_alerts doc for the same event, and initAdminAlertsListener
+  // already renders that as a properly-styled "🚨 Emergency Doctor Request"
+  // bell entry — including it here too just duplicated every emergency
+  // request as a second, generically-labeled notification.
   _notifUnsubscribe = db.collection('service_requests')
     .orderBy('createdAt', 'desc').limit(50)
     .onSnapshot(snap => {
       snap.docChanges().forEach(change => {
         if (change.type === 'added') {
           const d = change.doc.data();
+          if (d.type === 'emergency_doctor') return;
           const id = change.doc.id;
           if (!_seenRequestIds.has(id)) {
             addSvcReqNotif(id, d);
@@ -5714,6 +5615,7 @@ function initNotificationsListener() {
       });
       snap.forEach(doc => {
         const d = doc.data();
+        if (d.type === 'emergency_doctor') return;
         if (!_notifications.find(n => n.id === doc.id)) {
           _notifications.unshift({ id: doc.id, ...d, _read: _seenRequestIds.has(doc.id) });
         }
@@ -5788,7 +5690,7 @@ function initAdminAlertsListener() {
         const d = change.doc.data();
         if (d.isRead) return; // already handled before this session started listening
         const { title, sub } = _describeAdminAlert(d);
-        addSystemNotif('admin_alert', { id: change.doc.id, title, sub, severity: d.severity || 'high' });
+        addSystemNotif('admin_alert', { id: change.doc.id, title, sub, severity: d.severity || 'high', requestId: d.requestId || null });
       });
     }, err => console.error('Admin alerts listener error:', err));
 }
@@ -5856,6 +5758,15 @@ function handleSysNotifClick(nId, type, docId) {
   document.getElementById('notif-panel').style.display = 'none';
   const tabMap = { doctor_reg: 'doctors', appointment: 'appointments', ticket: 'tickets' };
   if (tabMap[type]) switchTab(tabMap[type], { doctors:'Doctors', appointments:'Appointments', tickets:'Support Tickets' }[type]);
+
+  // Emergency-doctor admin_alerts carry the originating service_requests id
+  // (see initNotificationsListener's skip of 'emergency_doctor' there, to
+  // avoid a duplicate bell entry) — jump straight to that request's detail,
+  // same destination the generic service-request click path used to reach.
+  if (type === 'admin_alert' && n?.requestId) {
+    switchTab('requests', 'Service Requests');
+    setTimeout(() => viewRequestDetail(n.requestId), 200);
+  }
 
   // Unlike tickets/service-requests (dismissed only client-side, per-browser),
   // `admin_alerts` docs carry a real `isRead` field the backend already
@@ -6073,11 +5984,8 @@ function renderMaternityAlerts(alerts) {
 }
 
 // Profiles, alerts and checkups are all kept live by initMaternityListeners()
-// (called once from initDashboard) — these are now just no-op-safe hooks for
-// the existing "on tab open" / "after action" / manual Refresh call sites.
-function loadMaternityOverview() {}
-function loadMaternityAlerts() {}
-
+// (called once from initDashboard) — no manual refetch is needed after a
+// write below, the onSnapshot listeners pick it up automatically.
 async function resolveAlert(alertId) {
   if (!confirm('Mark this alert as resolved?')) return;
   try {
@@ -6087,7 +5995,6 @@ async function resolveAlert(alertId) {
       resolvedAt: firebase.firestore.FieldValue.serverTimestamp()
     });
     showToast('Alert resolved');
-    loadMaternityAlerts();
   } catch(e) { showToast('Error: ' + e.message); }
 }
 
@@ -6171,7 +6078,6 @@ async function confirmAssignDoctor() {
     });
     document.getElementById('assign-doctor-modal').style.display = 'none';
     showToast('Doctor assigned successfully');
-    loadMaternityOverview();
   } catch(e) { showToast('Error: ' + e.message); }
 }
 
@@ -6183,17 +6089,8 @@ async function flagHighRisk(profileId) {
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     });
     showToast('Patient flagged as high risk');
-    loadMaternityOverview();
   } catch(e) { showToast('Error: ' + e.message); }
 }
-
-// Load maternity when tab is opened
-const _origSwitchTab = window.switchTab;
-window.switchTab = function(tab, title) {
-  _origSwitchTab && _origSwitchTab(tab, title);
-  if (tab === 'maternity') loadMaternityOverview();
-  if (tab === 'reviews')   loadReviews();
-};
 
 // ============================================
 //   DOCTOR REVIEWS
@@ -6735,28 +6632,32 @@ function initNutritionTab() {
 
 // ── Analytics counters ──────────────────────────────────────────────────────
 
-async function loadNutritionStats() {
-  try {
-    const [nSnap, aSnap, pendSnap, goalSnap] = await Promise.all([
-      db.collection('nutritionists').get(),
-      db.collection('nutrition_appointments').get(),
-      db.collection('nutrition_appointments').where('status', '==', 'pending').get(),
-      db.collection('nutrition_goals').where('isActive', '==', true).get(),
-    ]);
-    document.getElementById('nutr-stat-nutritionists').textContent = nSnap.size;
-    document.getElementById('nutr-stat-appts').textContent = aSnap.size;
-    document.getElementById('nutr-stat-pending').textContent = pendSnap.size;
-    document.getElementById('nutr-stat-goals').textContent = goalSnap.size;
-
-    // Update sidebar badge
-    const badge = document.getElementById('nav-nutrition-count');
-    if (badge && pendSnap.size > 0) {
-      badge.textContent = pendSnap.size;
-      badge.style.display = 'inline-block';
-    }
-  } catch (e) {
-    console.error('[Nutrition] loadNutritionStats error:', e);
-  }
+let _nutrStatsListeners = [];
+function loadNutritionStats() {
+  if (_nutrStatsListeners.length) return; // already live
+  _nutrStatsListeners.push(
+    db.collection('nutritionists').onSnapshot(snap => {
+      const el = document.getElementById('nutr-stat-nutritionists');
+      if (el) el.textContent = snap.size;
+    }, err => console.error('[Nutrition] stats nutritionists listener:', err)),
+    db.collection('nutrition_appointments').onSnapshot(snap => {
+      const el = document.getElementById('nutr-stat-appts');
+      if (el) el.textContent = snap.size;
+    }, err => console.error('[Nutrition] stats appointments listener:', err)),
+    db.collection('nutrition_appointments').where('status', '==', 'pending').onSnapshot(snap => {
+      const el = document.getElementById('nutr-stat-pending');
+      if (el) el.textContent = snap.size;
+      const badge = document.getElementById('nav-nutrition-count');
+      if (badge) {
+        if (snap.size > 0) { badge.textContent = snap.size; badge.style.display = 'inline-block'; }
+        else { badge.style.display = 'none'; }
+      }
+    }, err => console.error('[Nutrition] stats pending listener:', err)),
+    db.collection('nutrition_goals').where('isActive', '==', true).onSnapshot(snap => {
+      const el = document.getElementById('nutr-stat-goals');
+      if (el) el.textContent = snap.size;
+    }, err => console.error('[Nutrition] stats goals listener:', err))
+  );
 }
 
 // ── Sub-tab switcher ────────────────────────────────────────────────────────
@@ -6771,24 +6672,25 @@ function switchNutrTab(tab, btn) {
 
 // ── Nutritionists ────────────────────────────────────────────────────────────
 
-async function loadNutritionistsList() {
+let _nutritionistsListener = null;
+function loadNutritionistsList() {
   const container = document.getElementById('nutr-nutritionists-list');
-  if (!container) return;
-  container.innerHTML = '<div class="loading">Loading nutritionists…</div>';
-  try {
-    const snap = await db.collection('nutritionists').orderBy('createdAt', 'desc').get();
+  if (_nutritionistsListener) return; // already live
+  if (container) container.innerHTML = '<div class="loading">Loading nutritionists…</div>';
+  _nutritionistsListener = db.collection('nutritionists').orderBy('createdAt', 'desc').onSnapshot(snap => {
     _nutrNutritionists = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     renderNutritionistsList();
-  } catch (e) {
-    // Fallback: load without ordering if index not ready
-    try {
-      const snap = await db.collection('nutritionists').get();
+  }, err => {
+    // Fallback: listen without ordering if the index isn't ready
+    console.warn('[Nutrition] ordered nutritionists listener failed, retrying without ordering:', err.message);
+    if (_nutritionistsListener) _nutritionistsListener();
+    _nutritionistsListener = db.collection('nutritionists').onSnapshot(snap => {
       _nutrNutritionists = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       renderNutritionistsList();
-    } catch (e2) {
-      container.innerHTML = '<div class="empty-state">Error loading nutritionists: ' + escHtml(e2.message) + '</div>';
-    }
-  }
+    }, err2 => {
+      if (container) container.innerHTML = '<div class="empty-state">Error loading nutritionists: ' + escHtml(err2.message) + '</div>';
+    });
+  });
 }
 
 function renderNutritionistsList() {
@@ -6858,11 +6760,12 @@ function openAddNutritionistModal() {
   document.getElementById('nutr-f-spec').value = '';
   document.getElementById('nutr-f-exp').value = '';
   document.getElementById('nutr-f-fee').value = '';
-  document.getElementById('nutr-f-rating').value = '4.5';
+  document.getElementById('nutr-f-rating').value = '';
   document.getElementById('nutr-f-reviews').value = '0';
   document.getElementById('nutr-f-available').checked = true;
   document.getElementById('nutr-f-online').checked = true;
   document.getElementById('nutr-f-inperson').checked = false;
+  document.querySelectorAll('.nutr-day-check').forEach(cb => cb.checked = false);
   document.getElementById('nutr-modal-overlay').style.display = 'block';
   document.getElementById('nutr-modal').style.display = 'block';
 }
@@ -6883,11 +6786,13 @@ function openEditNutritionistModal(id) {
   document.getElementById('nutr-f-bio').value = n.bio || '';
   document.getElementById('nutr-f-langs').value = (n.languages || []).join(', ');
   document.getElementById('nutr-f-expertise').value = (n.expertiseAreas || []).join(', ');
-  document.getElementById('nutr-f-rating').value = n.rating || 4.5;
+  document.getElementById('nutr-f-rating').value = n.rating || 0;
   document.getElementById('nutr-f-reviews').value = n.reviewCount || 0;
   document.getElementById('nutr-f-available').checked = n.isAvailable !== false;
   document.getElementById('nutr-f-online').checked = n.isOnlineAvailable !== false;
   document.getElementById('nutr-f-inperson').checked = !!n.isInPersonAvailable;
+  const nDays = n.availableDays || [];
+  document.querySelectorAll('.nutr-day-check').forEach(cb => cb.checked = nDays.includes(cb.value));
   document.getElementById('nutr-modal-overlay').style.display = 'block';
   document.getElementById('nutr-modal').style.display = 'block';
 }
@@ -6922,12 +6827,12 @@ async function saveNutritionist() {
     bio: document.getElementById('nutr-f-bio').value.trim(),
     languages: toSplit(document.getElementById('nutr-f-langs').value),
     expertiseAreas: toSplit(document.getElementById('nutr-f-expertise').value),
-    rating: parseFloat(document.getElementById('nutr-f-rating').value) || 4.5,
+    rating: parseFloat(document.getElementById('nutr-f-rating').value) || 0,
     reviewCount: parseInt(document.getElementById('nutr-f-reviews').value) || 0,
     isAvailable: document.getElementById('nutr-f-available').checked,
     isOnlineAvailable: document.getElementById('nutr-f-online').checked,
     isInPersonAvailable: document.getElementById('nutr-f-inperson').checked,
-    availableDays: ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'],
+    availableDays: Array.from(document.querySelectorAll('.nutr-day-check:checked')).map(cb => cb.value),
     slots: {},
   };
 
@@ -6945,8 +6850,6 @@ async function saveNutritionist() {
       showToast('Nutritionist added successfully.');
     }
     closeNutritionistModal();
-    loadNutritionistsList();
-    loadNutritionStats();
   } catch (e) {
     showToast('Error saving nutritionist: ' + e.message);
   } finally {
@@ -6959,8 +6862,6 @@ async function deleteNutritionist(id, name) {
   try {
     await db.collection('nutritionists').doc(id).delete();
     showToast('Nutritionist deleted.');
-    loadNutritionistsList();
-    loadNutritionStats();
   } catch (e) {
     showToast('Error deleting: ' + e.message);
   }
@@ -6968,19 +6869,18 @@ async function deleteNutritionist(id, name) {
 
 // ── Appointments ─────────────────────────────────────────────────────────────
 
-async function loadNutritionAppointments() {
+let _nutritionAppointmentsListener = null;
+function loadNutritionAppointments() {
   const container = document.getElementById('nutr-appointments-list');
   if (!container) return;
   container.innerHTML = '<div class="loading">Loading appointments…</div>';
 
   const statusFilter = (document.getElementById('nutr-appt-filter')?.value || '').trim();
-  console.log('[Nutrition] loadNutritionAppointments start, filter:', statusFilter || 'none');
-  try {
-    let ref = db.collection('nutrition_appointments').limit(200);
-    if (statusFilter) ref = db.collection('nutrition_appointments').where('status', '==', statusFilter).limit(200);
-    const snap = await ref.get();
-    console.log('[Nutrition] appointments snap size:', snap.size);
+  if (_nutritionAppointmentsListener) _nutritionAppointmentsListener();
+  let ref = db.collection('nutrition_appointments').limit(200);
+  if (statusFilter) ref = db.collection('nutrition_appointments').where('status', '==', statusFilter).limit(200);
 
+  _nutritionAppointmentsListener = ref.onSnapshot(snap => {
     if (snap.empty) {
       container.innerHTML = '<div class="empty-state" style="padding:40px;text-align:center;color:var(--text-muted);">No appointments found.</div>';
       return;
@@ -7028,14 +6928,14 @@ async function loadNutritionAppointments() {
         </div>`;
     });
     container.innerHTML = html;
-  } catch (e) {
-    console.error('[Nutrition] loadNutritionAppointments error:', e);
+  }, err => {
+    console.error('[Nutrition] loadNutritionAppointments error:', err);
     container.innerHTML = `<div class="empty-state" style="padding:24px;text-align:center;">
       <p style="color:var(--danger);font-weight:600;">Failed to load appointments</p>
-      <p style="color:var(--text-muted);font-size:12px;">${escHtml(e.message)}</p>
+      <p style="color:var(--text-muted);font-size:12px;">${escHtml(err.message)}</p>
       <p style="color:var(--text-muted);font-size:11px;">Make sure Firestore rules are deployed: <code>firebase deploy --only firestore:rules</code></p>
     </div>`;
-  }
+  });
 }
 
 async function updateNutrApptStatus(id, status) {
@@ -7047,8 +6947,6 @@ async function updateNutrApptStatus(id, status) {
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     });
     showToast('Appointment ' + status + '.');
-    loadNutritionAppointments();
-    loadNutritionStats();
   } catch (e) {
     showToast('Error: ' + e.message);
   }
@@ -7059,8 +6957,6 @@ async function deleteNutrAppt(id) {
   try {
     await db.collection('nutrition_appointments').doc(id).delete();
     showToast('Appointment deleted.');
-    loadNutritionAppointments();
-    loadNutritionStats();
   } catch (e) {
     showToast('Error: ' + e.message);
   }
@@ -7068,22 +6964,20 @@ async function deleteNutrAppt(id) {
 
 // ── Meal Logs ────────────────────────────────────────────────────────────────
 
-async function loadMealLogs() {
+let _mealLogsListener = null;
+function loadMealLogs() {
   const container = document.getElementById('nutr-meal-logs-list');
   if (!container) return;
   container.innerHTML = '<div class="loading">Loading meal logs…</div>';
 
   const dp = document.getElementById('nutr-meal-date');
   const dateKey = dp?.value || new Date().toISOString().slice(0, 10);
-  console.log('[Nutrition] loadMealLogs start, dateKey:', dateKey);
 
-  try {
-    const snap = await db.collection('meal_tracking')
-      .where('dateKey', '==', dateKey)
-      .limit(300)
-      .get();
-    console.log('[Nutrition] meal logs snap size:', snap.size);
-
+  if (_mealLogsListener) _mealLogsListener();
+  _mealLogsListener = db.collection('meal_tracking')
+    .where('dateKey', '==', dateKey)
+    .limit(300)
+    .onSnapshot(snap => {
     if (snap.empty) {
       container.innerHTML = '<div class="empty-state" style="padding:40px;text-align:center;color:var(--text-muted);">No meal logs for ' + escHtml(dateKey) + '.</div>';
       return;
@@ -7124,14 +7018,14 @@ async function loadMealLogs() {
         </div>`;
     });
     container.innerHTML = html;
-  } catch (e) {
-    console.error('[Nutrition] loadMealLogs error:', e);
+  }, err => {
+    console.error('[Nutrition] loadMealLogs error:', err);
     container.innerHTML = `<div class="empty-state" style="padding:24px;text-align:center;">
       <p style="color:var(--danger);font-weight:600;">Failed to load meal logs</p>
-      <p style="color:var(--text-muted);font-size:12px;">${escHtml(e.message)}</p>
+      <p style="color:var(--text-muted);font-size:12px;">${escHtml(err.message)}</p>
       <p style="color:var(--text-muted);font-size:11px;">Deploy updated rules: <code>firebase deploy --only firestore:rules</code></p>
     </div>`;
-  }
+  });
 }
 
 async function deleteAdminMealLog(id) {
@@ -7139,7 +7033,6 @@ async function deleteAdminMealLog(id) {
   try {
     await db.collection('meal_tracking').doc(id).delete();
     showToast('Meal log deleted.');
-    loadMealLogs();
   } catch (e) {
     showToast('Error: ' + e.message);
   }
@@ -7159,16 +7052,17 @@ function toggleNutrGoalsFilter() {
   loadNutritionGoals();
 }
 
-async function loadNutritionGoals() {
+let _nutritionGoalsListener = null;
+function loadNutritionGoals() {
   const container = document.getElementById('nutr-goals-list');
   if (!container) return;
   container.innerHTML = '<div class="loading">Loading goals…</div>';
 
-  try {
-    let ref = db.collection('nutrition_goals').limit(150);
-    if (!_nutrGoalsShowAll) ref = db.collection('nutrition_goals').where('isActive', '==', true).limit(150);
-    const snap = await ref.get();
+  if (_nutritionGoalsListener) _nutritionGoalsListener();
+  let ref = db.collection('nutrition_goals').limit(150);
+  if (!_nutrGoalsShowAll) ref = db.collection('nutrition_goals').where('isActive', '==', true).limit(150);
 
+  _nutritionGoalsListener = ref.onSnapshot(snap => {
     const toggleLabel = _nutrGoalsShowAll ? 'Show Active Only' : 'Show All Goals';
     const headerExtra = `<div style="padding:10px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:flex-end;">
       <button class="btn-secondary" style="font-size:12px;padding:5px 12px;" onclick="toggleNutrGoalsFilter()">${escHtml(toggleLabel)}</button>
@@ -7209,10 +7103,10 @@ async function loadNutritionGoals() {
         </div>`;
     });
     container.innerHTML = html;
-  } catch (e) {
-    container.innerHTML = '<div class="empty-state" style="padding:24px;color:var(--text-muted);">Error: ' + escHtml(e.message) + '</div>';
-    console.error('[Nutrition] loadNutritionGoals error:', e);
-  }
+  }, err => {
+    container.innerHTML = '<div class="empty-state" style="padding:24px;color:var(--text-muted);">Error: ' + escHtml(err.message) + '</div>';
+    console.error('[Nutrition] loadNutritionGoals error:', err);
+  });
 }
 
 async function deactivateNutrGoal(id) {
@@ -7223,8 +7117,6 @@ async function deactivateNutrGoal(id) {
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     });
     showToast('Goal deactivated.');
-    loadNutritionGoals();
-    loadNutritionStats();
   } catch (e) {
     showToast('Error: ' + e.message);
   }
@@ -7235,8 +7127,6 @@ async function deleteNutrGoal(id) {
   try {
     await db.collection('nutrition_goals').doc(id).delete();
     showToast('Goal deleted.');
-    loadNutritionGoals();
-    loadNutritionStats();
   } catch (e) {
     showToast('Error: ' + e.message);
   }
@@ -7259,24 +7149,25 @@ const _dpColorHex = {
   orange: '#E65100', brown: '#4E342E',
 };
 
-async function loadDietPlans() {
+let _dietPlansListener = null;
+function loadDietPlans() {
   const container = document.getElementById('nutr-diet-plans-list');
-  if (!container) return;
-  container.innerHTML = '<div class="loading">Loading diet plans…</div>';
-  try {
-    const snap = await db.collection('diet_plans').orderBy('order').get();
+  if (_dietPlansListener) return; // already live
+  if (container) container.innerHTML = '<div class="loading">Loading diet plans…</div>';
+  _dietPlansListener = db.collection('diet_plans').orderBy('order').onSnapshot(snap => {
     _nutrDietPlans = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     renderDietPlans();
-  } catch (_) {
-    // Fallback without orderBy
-    try {
-      const snap = await db.collection('diet_plans').get();
+  }, err => {
+    // Fallback: listen without ordering if the index isn't ready
+    console.warn('[Nutrition] ordered diet_plans listener failed, retrying without ordering:', err.message);
+    if (_dietPlansListener) _dietPlansListener();
+    _dietPlansListener = db.collection('diet_plans').onSnapshot(snap => {
       _nutrDietPlans = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.order || 99) - (b.order || 99));
       renderDietPlans();
-    } catch (e2) {
-      container.innerHTML = '<div class="empty-state" style="padding:40px;text-align:center;color:var(--text-muted);">Error: ' + escHtml(e2.message) + '</div>';
-    }
-  }
+    }, err2 => {
+      if (container) container.innerHTML = '<div class="empty-state" style="padding:40px;text-align:center;color:var(--text-muted);">Error: ' + escHtml(err2.message) + '</div>';
+    });
+  });
 }
 
 function renderDietPlans() {
@@ -7381,7 +7272,6 @@ async function saveDietPlan() {
       showToast('Diet plan added. It will appear in the MedNU app.');
     }
     closeDietPlanModal();
-    loadDietPlans();
   } catch (e) {
     showToast('Error: ' + e.message);
   } finally {
@@ -7394,7 +7284,6 @@ async function deleteDietPlan(id, title) {
   try {
     await db.collection('diet_plans').doc(id).delete();
     showToast('Diet plan deleted.');
-    loadDietPlans();
   } catch (e) {
     showToast('Error: ' + e.message);
   }
@@ -8400,11 +8289,14 @@ const PARTNER_ROLES = {
   },
   // Physiotherapy/counselling/nutrition partners had NO admin approval UI at
   // all before this — they could register but never reach `status: 'active'`
-  // short of hand-editing Firestore. Unlike lab/pharmacy/ambulance/caregiver,
-  // these 3 roles have no document-verification step defined anywhere
-  // (`PartnerDocumentType.forRole` in mednu_doctor returns `[]` for them), so
-  // `docSlots: {}` here is intentional, not an oversight — see the
-  // `allDocsVerified` fix below that lets Approve work with zero doc slots.
+  // short of hand-editing Firestore. Nutrition genuinely has no
+  // document-verification step (`PartnerDocumentType.forRole` in
+  // mednu_doctor returns `[]` for it), so `docSlots: {}` there is
+  // intentional, not an oversight — see the `allDocsVerified` fix below that
+  // lets Approve work with zero doc slots. Physiotherapy and Counselling are
+  // both clinical/mental-health roles that treat patients directly, so both
+  // need ID + qualification proof before approval — see each one's own
+  // `docSlots` below.
   physiotherapy: {
     label:        'Physiotherapist Partner',
     collection:   'physiotherapist_profiles',
@@ -8415,7 +8307,14 @@ const PARTNER_ROLES = {
     cols:         7,
     navBadge:     'nav-physio-partners-count',
     extraFilterId:'phy-specialty-filter',
-    docSlots: {},
+    // Keys must stay identical to `PartnerDocumentType.physiotherapist` in
+    // partner_document_models.dart — they are also the
+    // `physiotherapist_documents/{uid}/{docType}.{ext}` Storage path segment
+    // and the `documents.{docType}` field on `physiotherapist_profiles`.
+    docSlots: {
+      physio_id:          'Government ID Proof',
+      physio_certificate: 'Physiotherapy Certification / Degree',
+    },
     nameOf: p => p.name || 'Unnamed partner',
     subOf:  p => (p.specialties || []).join(', ') || p.city || '—',
     extraValues: list => [...new Set([].concat(...list.map(p => p.specialties || [])).filter(Boolean))].sort(),
@@ -8436,7 +8335,14 @@ const PARTNER_ROLES = {
     cols:         5,
     navBadge:     'nav-counselling-partners-count',
     extraFilterId:'cns-specialty-filter',
-    docSlots: {},
+    // Matches `PartnerDocumentType.counsellor` in mednu_doctor's
+    // partner_document_models.dart — keys must stay identical since they are
+    // also the `counsellor_documents/{uid}/{docType}.{ext}` Storage path
+    // segment and the `documents.{docType}` field on `counsellor_profiles`.
+    docSlots: {
+      counsellor_id: 'Government ID Proof',
+      certificates:  'Certifications / Qualifications',
+    },
     nameOf: p => p.name || 'Unnamed partner',
     subOf:  p => (p.specialties || []).join(', ') || '—',
     extraValues: list => [...new Set([].concat(...list.map(p => p.specialties || [])).filter(Boolean))].sort(),
@@ -8766,12 +8672,12 @@ function approvePartner(role, id, btn) {
   const docs = (p && p.documents) || {};
   const vers = (p && p.documentVerification) || {};
   const slots = Object.keys(cfg.docSlots);
-  // A role with zero required doc slots (physiotherapy/counselling/nutrition/
-  // hospital) has nothing to verify, so it must not be treated the same as
-  // "verification incomplete" — mirrors showPartnerModal's `allDocsVerified`.
-  // This used to read `slots.length > 0 && ...`, which evaluated to `false`
-  // whenever a role had zero slots — silently blocking Approve for exactly
-  // the roles docSlots:{} was meant to exempt.
+  // A role with zero required doc slots (nutrition/hospital) has nothing to
+  // verify, so it must not be treated the same as "verification incomplete"
+  // — mirrors showPartnerModal's `allDocsVerified`. This used to read
+  // `slots.length > 0 && ...`, which evaluated to `false` whenever a role had
+  // zero slots — silently blocking Approve for exactly the roles
+  // docSlots:{} was meant to exempt.
   const allVerified = slots.length === 0 ||
     slots.every(k => _partnerDocStatus(docs[k] || null, vers[k] || null) === 'verified');
   if (!allVerified) {
@@ -9097,11 +9003,6 @@ async function _renderPartnerModalRole(uid) {
 }
 
 // ── Detail modal ─────────────────────────────────────────────────────────────
-function showAmbulancePartnerModal(id) { showPartnerModal('ambulance', id); }
-function showCaregiverPartnerModal(id) { showPartnerModal('caregiver', id); }
-function showPharmacyPartnerModal(id)  { showPartnerModal('pharmacy',  id); }
-function showLabPartnerModal(id)       { showPartnerModal('lab',       id); }
-
 const _DOC_STATUS_CHIPS = {
   verified:     { cls: 'pill pill-active',    label: 'Verified'       },
   rejected:     { cls: 'pill pill-suspended', label: 'Rejected'       },
@@ -9171,10 +9072,10 @@ function showPartnerModal(role, id) {
     return { stat, html };
   });
   const docHtml = docEntries.map(e => e.html).join('');
-  // A role with zero required doc slots (physiotherapy/counselling/nutrition
-  // — see PARTNER_ROLES comment) has nothing to verify, so it must not be
-  // treated the same as "verification incomplete"; only block Approve when
-  // there ARE slots and not all of them are verified yet.
+  // A role with zero required doc slots (nutrition/hospital — see
+  // PARTNER_ROLES comment) has nothing to verify, so it must not be treated
+  // the same as "verification incomplete"; only block Approve when there ARE
+  // slots and not all of them are verified yet.
   const allDocsVerified = docEntries.length === 0 || docEntries.every(e => e.stat === 'verified');
 
   let fields;
@@ -9261,9 +9162,10 @@ function showPartnerModal(role, id) {
   // Hospital is the one partner role that links back to an existing,
   // separately-curated `hospitals` catalog entry rather than being the
   // operational entity itself — see hospital_profiles in firestore.rules.
-  // `createProfile()` in mednu_doctor best-effort auto-matches this by the
-  // applicant's verified phone number, but a Director must confirm (or pick
-  // the right one, if no match was found) before Approve is allowed to run.
+  // `createProfile()` in mednu_doctor has the applicant pick their hospital
+  // directly during registration (falling back to a best-effort phone-number
+  // match only if they didn't), but a Director must still confirm — or pick
+  // the right one, if nothing came through — before Approve is allowed to run.
   let hospitalLinkHtml = '';
   if (role === 'hospital') {
     const options = (typeof allHospitals !== 'undefined' ? allHospitals : []).map(h =>
@@ -9278,8 +9180,8 @@ function showPartnerModal(role, id) {
         </select>
         <div style="font-size:11px;color:#888;margin-top:6px;">
           ${p.hospitalId
-            ? 'Auto-matched by phone number — confirm this is correct before approving.'
-            : 'No automatic match found for this phone number — pick the correct hospital before approving.'}
+            ? 'Linked to a hospital below — confirm this is correct before approving.'
+            : 'No hospital linked yet — pick the correct one before approving.'}
         </div>
       </div>`;
   }
@@ -9490,26 +9392,6 @@ function renderCombinedPendingList() {
   }).join('');
 }
 
-// ── Wire-up: start listeners on dashboard init, load earnings on tab open ───
-const _prevInitDashboard_partners = window.initDashboard;
-window.initDashboard = function () {
-  if (_prevInitDashboard_partners) _prevInitDashboard_partners();
-  initPartnerListeners();
-};
-
-const _prevSwitchTab_partners = window.switchTab;
-window.switchTab = function (tab, title) {
-  if (_prevSwitchTab_partners) _prevSwitchTab_partners(tab, title);
-  // Cache-aware (no `force`): repeatedly switching between partner tabs must
-  // not re-read the whole ledger every time. The Refresh button forces.
-  if (tab === 'ambulance-partners')    loadPartnerEarnings('ambulance');
-  if (tab === 'caregiver-partners')    loadPartnerEarnings('caregiver');
-  if (tab === 'pharmacy-partners')     loadPartnerEarnings('pharmacy');
-  if (tab === 'lab-partners')          loadPartnerEarnings('lab');
-  if (tab === 'physio-partners')       loadPartnerEarnings('physiotherapy');
-  if (tab === 'counselling-partners')  loadPartnerEarnings('counselling');
-};
-
 // ============================================================================
 //   PAYMENT DISTRIBUTION & SETTLEMENT ENGINE — ADMIN UI
 //   Commission Rules · Coupons · Campaigns · Settlement Dashboard · Refunds
@@ -9595,17 +9477,18 @@ async function resolveProviderName(providerId) {
 let allCommissionRules = {}; // keyed by serviceType
 let _commissionOverridesDraft = {};
 
-async function loadCommissionRules() {
-  try {
-    const snap = await db.collection('commission_rules').get();
+let _commissionRulesListener = null;
+function loadCommissionRules() {
+  if (_commissionRulesListener) return; // already live
+  _commissionRulesListener = db.collection('commission_rules').onSnapshot(snap => {
     allCommissionRules = {};
     snap.forEach(doc => { allCommissionRules[doc.id] = doc.data(); });
     renderCommissionRulesTable();
-  } catch (err) {
+  }, err => {
     console.error('Commission rules load error:', err);
     const tbody = document.getElementById('commission-rules-tbody');
     if (tbody) tbody.innerHTML = `<tr><td colspan="6" class="loading">Failed to load: ${escHtml(err.message)}</td></tr>`;
-  }
+  });
 }
 
 function renderCommissionRulesTable() {
@@ -9722,7 +9605,6 @@ async function saveCommissionRule() {
     });
     showToast('Commission rule saved ✓');
     cancelCommissionRuleEditor();
-    loadCommissionRules();
   } catch (err) {
     showToast('Save failed: ' + err.message);
   } finally {
@@ -9736,17 +9618,18 @@ async function saveCommissionRule() {
 let allCoupons = [];
 let _editingCouponCode = null;
 
-async function loadCoupons() {
-  try {
-    const snap = await db.collection('coupons').orderBy('createdAt', 'desc').get();
+let _couponsListener = null;
+function loadCoupons() {
+  if (_couponsListener) return; // already live
+  _couponsListener = db.collection('coupons').orderBy('createdAt', 'desc').onSnapshot(snap => {
     allCoupons = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     renderCouponsList(allCoupons);
     populateCampaignCouponDropdown();
-  } catch (err) {
+  }, err => {
     console.error('Coupons load error:', err);
     const tbody = document.getElementById('coupons-tbody');
     if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="loading">Failed to load: ${escHtml(err.message)}</td></tr>`;
-  }
+  });
 }
 
 function couponDiscountValueSummary(c) {
@@ -9879,7 +9762,6 @@ async function saveCoupon() {
       showToast('Coupon created ✓');
     }
     resetCouponForm();
-    loadCoupons();
   } catch (err) {
     showToast('Save failed: ' + err.message);
   } finally {
@@ -9893,10 +9775,8 @@ async function toggleCouponActive(code, active) {
     const c = allCoupons.find(x => x.code === code);
     if (c) c.active = active;
     showToast(active ? 'Coupon activated ✓' : 'Coupon deactivated');
-    loadCoupons();
   } catch (err) {
     showToast('Update failed: ' + err.message);
-    loadCoupons();
   }
 }
 
@@ -9905,7 +9785,6 @@ async function deactivateCouponConfirm(code) {
   try {
     await functions.httpsCallable('deactivateCoupon')({ code });
     showToast('Coupon deactivated');
-    loadCoupons();
   } catch (err) {
     showToast('Deactivate failed: ' + err.message);
   }
@@ -9917,23 +9796,17 @@ async function deactivateCouponConfirm(code) {
 let allCampaigns = [];
 let _editingCampaignId = null;
 
-async function loadCampaigns() {
-  try {
-    const snap = await db.collection('campaigns').orderBy('createdAt', 'desc').get();
+let _campaignsListener = null;
+function loadCampaigns() {
+  if (_campaignsListener) return; // already live
+  _campaignsListener = db.collection('campaigns').orderBy('createdAt', 'desc').onSnapshot(snap => {
     allCampaigns = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     renderCampaignsList(allCampaigns);
-  } catch (err) {
+  }, err => {
     console.error('Campaigns load error:', err);
     const el = document.getElementById('campaigns-list');
     if (el) el.innerHTML = `<div class="empty-state">Failed to load: ${escHtml(err.message)}</div>`;
-  }
-}
-
-function isCampaignActive(c, now = new Date()) {
-  if (!c.active) return false;
-  if (c.startDate && c.startDate.toDate && c.startDate.toDate() > now) return false;
-  if (c.endDate && c.endDate.toDate && c.endDate.toDate() < now) return false;
-  return true;
+  });
 }
 
 function getCampaignStatusBadge(c) {
@@ -10173,7 +10046,6 @@ async function publishCampaign() {
       showToast('Campaign published ✓');
     }
     resetCampaignForm();
-    loadCampaigns();
   } catch (err) {
     showToast('Save failed: ' + err.message);
   } finally {
@@ -10447,18 +10319,19 @@ function exportSettlementsCsv() {
 let allRefunds = [];
 let _refundLookupPayment = null;
 
-async function loadRefunds() {
-  try {
-    const snap = await db.collection('refunds').orderBy('createdAt', 'desc').get();
+let _refundsListener = null;
+function loadRefunds() {
+  if (_refundsListener) return; // already live
+  _refundsListener = db.collection('refunds').orderBy('createdAt', 'desc').onSnapshot(async snap => {
     allRefunds = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     const uniqueProviderIds = [...new Set(allRefunds.map(r => r.providerId).filter(Boolean))];
     await Promise.all(uniqueProviderIds.map(resolveProviderName));
     renderRefundsList(allRefunds);
-  } catch (err) {
+  }, err => {
     console.error('Refunds load error:', err);
     const tbody = document.getElementById('refunds-tbody');
     if (tbody) tbody.innerHTML = `<tr><td colspan="7" class="loading">Failed to load: ${escHtml(err.message)}</td></tr>`;
-  }
+  });
 }
 
 function refundStatusBadge(status) {
@@ -10537,7 +10410,6 @@ async function submitRefund() {
     document.getElementById('refund-reason').value = '';
     document.getElementById('refund-lookup-result').style.display = 'none';
     _refundLookupPayment = null;
-    loadRefunds();
   } catch (err) {
     showToast('Refund failed: ' + err.message);
   } finally {
@@ -10697,10 +10569,8 @@ function buildRefundRateChart(payments, refunds) {
 
 // ============================================
 //   TAB WIRING — Payment Distribution & Settlement Engine
-//   Wraps switchTab()/initDashboard() the same way the Partner Accounts
-//   section above does (see "Wire-up: start listeners on dashboard init,
-//   load earnings on tab open") instead of editing their bodies directly —
-//   zero risk to any of the 31 existing tabs.
+//   Lazy-init guards for the branches folded into the canonical switchTab()
+//   above (commission-rules/coupons/campaigns/settlements/refunds).
 // ============================================
 let _commissionRulesInited = false;
 let _couponsInited = false;
@@ -10708,27 +10578,3 @@ let _campaignsInited = false;
 let _settlementsInited = false;
 let _refundsInited = false;
 
-const _prevSwitchTab_settlementEngine = window.switchTab;
-window.switchTab = function (tab, title) {
-  if (_prevSwitchTab_settlementEngine) _prevSwitchTab_settlementEngine(tab, title);
-  if (tab === 'commission-rules' && !_commissionRulesInited) { _commissionRulesInited = true; loadCommissionRules(); }
-  if (tab === 'coupons' && !_couponsInited) { _couponsInited = true; loadCoupons(); }
-  if (tab === 'campaigns' && !_campaignsInited) {
-    _campaignsInited = true;
-    if (!_couponsInited) { _couponsInited = true; loadCoupons(); } else { populateCampaignCouponDropdown(); }
-    loadCampaigns();
-  }
-  if (tab === 'settlements' && !_settlementsInited) { _settlementsInited = true; initSettlementDashboardListeners(); }
-  if (tab === 'refunds' && !_refundsInited) { _refundsInited = true; loadRefunds(); }
-};
-
-const _prevInitDashboard_settlementEngine = window.initDashboard;
-window.initDashboard = function () {
-  if (_prevInitDashboard_settlementEngine) _prevInitDashboard_settlementEngine();
-  // Populate the applicable/eligible-services checkbox groups up front so
-  // they're ready no matter which tab the admin opens first.
-  renderServiceCheckboxes('coupon-services-checks', []);
-  renderServiceCheckboxes('campaign-services-checks', []);
-  couponDiscountTypeChanged();
-  buildSettlementAnalyticsCharts();
-};

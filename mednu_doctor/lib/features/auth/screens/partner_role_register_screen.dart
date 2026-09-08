@@ -74,6 +74,16 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
   final _selectedServices = <String>{};
   final _selectedCategories = <String>{};
 
+  // Hospital billing-desk — which `hospitals` catalog entry this login
+  // represents. Picked explicitly here rather than relying solely on the
+  // best-effort phone-number auto-match in HospitalProfileService, so a
+  // patient's payment (routed by hospitalId — see HospitalPaymentService)
+  // reaches the right billing desk as soon as admin approves, instead of
+  // depending on an exact-string phone match that silently misses whenever
+  // the catalog's phone field isn't formatted identically to the OTP number.
+  String? _selectedHospitalId;
+  String _selectedHospitalName = '';
+
   // Ambulance
   final _plateCtrl = TextEditingController();
   final _vehicleTypeCtrl = TextEditingController();
@@ -161,6 +171,10 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
     }
     if (_role == AppRole.pharmacy && _selectedCategories.isEmpty) {
       FeedbackService.showError(context, 'Select at least one category you stock.');
+      return;
+    }
+    if (_role == AppRole.hospital && _selectedHospitalId == null) {
+      FeedbackService.showError(context, 'Select which hospital you represent.');
       return;
     }
 
@@ -327,6 +341,8 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
           uid: uid,
           contactName: _nameCtrl.text.trim(),
           phone: _phoneCtrl.text.trim(),
+          hospitalId: _selectedHospitalId,
+          hospitalName: _selectedHospitalName,
         );
       case AppRole.doctor:
       case AppRole.admin:
@@ -529,6 +545,8 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
           _field(_phoneCtrl, 'Contact Phone', Icons.call_outlined,
               keyboardType: TextInputType.phone, locked: true),
           const SizedBox(height: 14),
+          _hospitalPickerField(),
+          const SizedBox(height: 14),
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -536,8 +554,8 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
               borderRadius: BorderRadius.circular(10),
             ),
             child: Text(
-              'Our team will confirm which hospital this account represents '
-              'before approving it, using the phone number above.',
+              'Our team will confirm this hospital before approving your '
+              'account.',
               style: AppTextStyles.caption,
             ),
           ),
@@ -907,6 +925,161 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: _addressCtrl.text.isEmpty ? AppColors.textHint : AppColors.textPrimary,
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// Opens a searchable bottom sheet of enabled `hospitals` catalog entries
+  /// and applies the pick to [_selectedHospitalId]/[_selectedHospitalName] —
+  /// the same catalog the patient app books hospitals from and admin
+  /// manages under the Hospitals tab.
+  Future<void> _pickHospital() async {
+    final snap = await FirebaseFirestore.instance
+        .collection('hospitals')
+        .where('isEnabled', isEqualTo: true)
+        .get();
+    final hospitals = snap.docs
+        .map((d) => (id: d.id, name: (d.data()['name'] as String?) ?? ''))
+        .where((h) => h.name.isNotEmpty)
+        .toList()
+      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
+    if (!mounted) return;
+    if (hospitals.isEmpty) {
+      FeedbackService.showError(
+        context,
+        'No hospitals are set up yet — contact our team to register.',
+      );
+      return;
+    }
+
+    final picked = await showModalBottomSheet<({String id, String name})>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) {
+        var query = '';
+        return StatefulBuilder(
+          builder: (sheetContext, setSheetState) {
+            final filtered = query.isEmpty
+                ? hospitals
+                : hospitals
+                    .where((h) => h.name.toLowerCase().contains(query.toLowerCase()))
+                    .toList();
+            return SafeArea(
+              child: Padding(
+                padding: EdgeInsets.only(
+                  bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 4,
+                      margin: const EdgeInsets.symmetric(vertical: 12),
+                      decoration: BoxDecoration(
+                        color: AppColors.divider,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: Text('Which hospital do you represent?',
+                          style: AppTextStyles.h4),
+                    ),
+                    const SizedBox(height: 12),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: TextField(
+                        autofocus: true,
+                        onChanged: (v) => setSheetState(() => query = v),
+                        decoration: InputDecoration(
+                          hintText: 'Search hospitals',
+                          prefixIcon: const Icon(Icons.search_rounded),
+                          filled: true,
+                          fillColor: AppColors.surfaceVariant,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Flexible(
+                      child: filtered.isEmpty
+                          ? Padding(
+                              padding: const EdgeInsets.all(24),
+                              child: Text('No matching hospitals',
+                                  style: AppTextStyles.bodyMedium
+                                      .copyWith(color: AppColors.textSecondary)),
+                            )
+                          : ListView.builder(
+                              shrinkWrap: true,
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              itemCount: filtered.length,
+                              itemBuilder: (_, i) {
+                                final h = filtered[i];
+                                return ListTile(
+                                  leading: const Icon(Icons.local_hospital_rounded,
+                                      color: AppColors.primary),
+                                  title: Text(h.name),
+                                  onTap: () => Navigator.pop(sheetContext, h),
+                                );
+                              },
+                            ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _selectedHospitalId = picked.id;
+      _selectedHospitalName = picked.name;
+    });
+  }
+
+  Widget _hospitalPickerField() {
+    return FormField<String>(
+      initialValue: _selectedHospitalId,
+      validator: (_) =>
+          _selectedHospitalId == null ? 'Select the hospital you represent' : null,
+      builder: (state) {
+        return InkWell(
+          onTap: () async {
+            await _pickHospital();
+            state.didChange(_selectedHospitalId);
+            state.validate();
+          },
+          borderRadius: BorderRadius.circular(8),
+          child: InputDecorator(
+            decoration: InputDecoration(
+              labelText: 'Hospital',
+              prefixIcon: const Icon(Icons.local_hospital_outlined, color: AppColors.textSecondary),
+              suffixIcon: const Icon(Icons.expand_more_rounded, color: AppColors.primary),
+              errorText: state.errorText,
+              helperText: 'Tap to search and select from our hospital catalog',
+            ),
+            child: Text(
+              _selectedHospitalName.isEmpty ? 'Select hospital' : _selectedHospitalName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: _selectedHospitalName.isEmpty ? AppColors.textHint : AppColors.textPrimary,
               ),
             ),
           ),

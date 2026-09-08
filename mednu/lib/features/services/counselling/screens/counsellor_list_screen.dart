@@ -1,51 +1,39 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_rating_bar/flutter_rating_bar.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_text_styles.dart';
 import '../../../../core/router/app_router.dart';
-import '../../../../core/utils/distance.dart';
 import '../../../../core/widgets/ux_widgets.dart';
-import '../../../home/providers/location_provider.dart';
-import '../models/physiotherapist_model.dart';
-import '../services/physiotherapist_service.dart';
+import '../models/counsellor_model.dart';
+import '../services/counsellor_service.dart';
 
-// ── Physiotherapy theme (matches the partner app's profile gradient) ──────────
-const _kTeal      = Color(0xFF00838F);
-const _kTealDark  = Color(0xFF006064);
-const _kTealBg    = Color(0xFFE0F7FA);
+// ── Counselling theme (matches the patient app's Counselling screen header) ──
+const _kPlum     = Color(0xFF633058);
+const _kPlumDark = Color(0xFF3D1D36);
+const _kPlumBg   = Color(0xFFF3E5F5);
 
-class PhysiotherapistListScreen extends ConsumerStatefulWidget {
-  const PhysiotherapistListScreen({super.key});
+class CounsellorListScreen extends StatefulWidget {
+  const CounsellorListScreen({super.key});
 
   @override
-  ConsumerState<PhysiotherapistListScreen> createState() => _PhysiotherapistListScreenState();
+  State<CounsellorListScreen> createState() => _CounsellorListScreenState();
 }
 
-class _PhysiotherapistListScreenState extends ConsumerState<PhysiotherapistListScreen> {
+class _CounsellorListScreenState extends State<CounsellorListScreen> {
   final _searchCtrl = TextEditingController();
   String _searchQuery = '';
   String _selectedSpecialty = 'All';
-  final Set<String> _selectedLanguages = {};
 
   static const _specialties = [
     'All',
-    'Sports Injury',
-    'Back & Neck Pain',
-    'Post-Surgery Rehab',
-    'Neuro Rehab',
-    'Joint Pain',
-    'Pediatric Physio',
-    'Geriatric Care',
-  ];
-
-  // Kept in sync with the language list offered at physiotherapist
-  // registration/profile-edit in mednu_doctor.
-  static const _allLanguages = [
-    'English', 'Telugu', 'Hindi', 'Tamil', 'Kannada',
-    'Malayalam', 'Marathi', 'Bengali',
+    'Depression & Anxiety',
+    'Stress Management',
+    'Relationship Therapy',
+    'Child & Teen Therapy',
+    'Addiction Recovery',
+    'Grief Therapy',
   ];
 
   @override
@@ -63,7 +51,7 @@ class _PhysiotherapistListScreenState extends ConsumerState<PhysiotherapistListS
           icon: const Icon(Icons.arrow_back_ios_new_rounded),
           onPressed: () => context.pop(),
         ),
-        title: const Text('Find Physiotherapist', style: AppTextStyles.h3),
+        title: const Text('Find a Counsellor', style: AppTextStyles.h3),
         centerTitle: true,
         elevation: 0,
         scrolledUnderElevation: 1,
@@ -82,7 +70,7 @@ class _PhysiotherapistListScreenState extends ConsumerState<PhysiotherapistListS
               onChanged: (v) => setState(() => _searchQuery = v.toLowerCase()),
               style: AppTextStyles.bodyMedium,
               decoration: InputDecoration(
-                hintText: 'Search by name, specialty, city...',
+                hintText: 'Search by name or specialty...',
                 hintStyle: AppTextStyles.bodyMedium.copyWith(color: context.appTextHint),
                 prefixIcon: Icon(Icons.search_rounded, color: context.appTextHint, size: 20),
                 suffixIcon: _searchCtrl.text.isNotEmpty
@@ -109,25 +97,12 @@ class _PhysiotherapistListScreenState extends ConsumerState<PhysiotherapistListS
             options: _specialties,
             isSelected: (s) => s == _selectedSpecialty,
             onTap: (s) => setState(() => _selectedSpecialty = s),
-            activeColor: _kTeal,
-          ),
-          // ── Language chips (multi-select) ─────────────────
-          _ChipRow(
-            options: _allLanguages,
-            isSelected: (lang) => _selectedLanguages.contains(lang),
-            onTap: (lang) => setState(() {
-              _selectedLanguages.contains(lang)
-                  ? _selectedLanguages.remove(lang)
-                  : _selectedLanguages.add(lang);
-            }),
-            activeColor: _kTeal,
-            showCheck: true,
           ),
           const SizedBox(height: 6),
           // ── Results ───────────────────────────────────────
           Expanded(
-            child: StreamBuilder<List<PhysiotherapistModel>>(
-              stream: PhysiotherapistService.physiotherapistsStream(),
+            child: StreamBuilder<List<CounsellorModel>>(
+              stream: CounsellorService.counsellorsStream(),
               builder: (context, snap) {
                 if (snap.connectionState == ConnectionState.waiting) {
                   return ListView(
@@ -137,7 +112,7 @@ class _PhysiotherapistListScreenState extends ConsumerState<PhysiotherapistListS
                       5,
                       (_) => const Padding(
                         padding: EdgeInsets.only(bottom: 14),
-                        child: _PhysiotherapistCardSkeleton(),
+                        child: _CounsellorCardSkeleton(),
                       ),
                     ),
                   );
@@ -145,64 +120,32 @@ class _PhysiotherapistListScreenState extends ConsumerState<PhysiotherapistListS
                 if (snap.hasError) return const AppErrorState();
 
                 final list = snap.data ?? const [];
-                final filtered = list.where((p) {
+                final filtered = list.where((c) {
                   final matchesQuery = _searchQuery.isEmpty ||
-                      p.name.toLowerCase().contains(_searchQuery) ||
-                      p.city.toLowerCase().contains(_searchQuery) ||
-                      p.specialties.any((s) => s.toLowerCase().contains(_searchQuery));
+                      c.name.toLowerCase().contains(_searchQuery) ||
+                      c.specialties.any((s) => s.toLowerCase().contains(_searchQuery));
                   final matchesSpecialty = _selectedSpecialty == 'All' ||
-                      p.specialties.any((s) => s.toLowerCase().contains(_selectedSpecialty.toLowerCase()));
-                  // Physiotherapists registered before language selection
-                  // existed have an empty `languages` list — treat them as
-                  // English-speaking, matching the default selection they'd
-                  // see on that step.
-                  final pLanguages = p.languages.isEmpty ? const ['English'] : p.languages;
-                  final matchesLanguage = _selectedLanguages.isEmpty ||
-                      _selectedLanguages.any(pLanguages.contains);
-                  return matchesQuery && matchesSpecialty && matchesLanguage;
+                      c.specialties.any((s) => s.toLowerCase().contains(_selectedSpecialty.toLowerCase()));
+                  return matchesQuery && matchesSpecialty;
                 }).toList()
-                  // Online-first: a physiotherapist actively online right now
-                  // can respond immediately, so surface them ahead of ones
-                  // who are approved but not currently reachable.
+                  // Online-first: a counsellor actively online right now can
+                  // respond immediately, so surface them ahead of ones who
+                  // are approved but not currently reachable.
                   ..sort((a, b) => (b.isCurrentlyOnline ? 1 : 0).compareTo(a.isCurrentlyOnline ? 1 : 0));
 
-                // Real distance sort/filter, same 15km convention already
-                // used by pharmacy/diagnostics/doctors — falls back to
-                // showing everyone unsorted when the patient has no
-                // location set, or a physiotherapist has none on file.
-                final myLoc = ref.watch(locationProvider);
-                List<(PhysiotherapistModel, double?)> withDistance = filtered
-                    .map((p) => (
-                          p,
-                          (myLoc.lat != null && myLoc.lng != null && p.clinicLat != null && p.clinicLng != null)
-                              ? distanceKm(myLoc.lat!, myLoc.lng!, p.clinicLat!, p.clinicLng!)
-                              : null,
-                        ))
-                    .toList();
-                if (myLoc.lat != null && myLoc.lng != null) {
-                  withDistance = withDistance.where((e) => e.$2 == null || e.$2! <= nearbyRadiusKm).toList()
-                    ..sort((a, b) {
-                      if (a.$2 == null && b.$2 == null) return 0;
-                      if (a.$2 == null) return 1;
-                      if (b.$2 == null) return -1;
-                      return a.$2!.compareTo(b.$2!);
-                    });
-                }
-
-                if (withDistance.isEmpty) {
+                if (filtered.isEmpty) {
                   return _EmptyState(query: _searchQuery);
                 }
 
                 return ListView.separated(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
                   physics: const BouncingScrollPhysics(),
-                  itemCount: withDistance.length,
+                  itemCount: filtered.length,
                   separatorBuilder: (_, __) => const SizedBox(height: 14),
-                  itemBuilder: (ctx, i) => _PhysiotherapistCard(
-                    physiotherapist: withDistance[i].$1,
-                    distanceKm: withDistance[i].$2,
+                  itemBuilder: (ctx, i) => _CounsellorCard(
+                    counsellor: filtered[i],
                     onTap: () => context.push(
-                      AppRoutes.physioTherapistProfile.replaceFirst(':id', withDistance[i].$1.id),
+                      AppRoutes.counsellingCounsellorProfile.replaceFirst(':id', filtered[i].id),
                     ),
                   ),
                 );
@@ -215,22 +158,14 @@ class _PhysiotherapistListScreenState extends ConsumerState<PhysiotherapistListS
   }
 }
 
-// ── Generic chip row (single or multi-select) ─────────────────────────────────
+// ── Specialty chip row ──────────────────────────────────────────────────────
 
 class _ChipRow extends StatelessWidget {
   final List<String> options;
   final bool Function(String) isSelected;
   final ValueChanged<String> onTap;
-  final Color activeColor;
-  final bool showCheck;
 
-  const _ChipRow({
-    required this.options,
-    required this.isSelected,
-    required this.onTap,
-    required this.activeColor,
-    this.showCheck = false,
-  });
+  const _ChipRow({required this.options, required this.isSelected, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -252,29 +187,19 @@ class _ChipRow extends StatelessWidget {
               alignment: Alignment.center,
               padding: const EdgeInsets.symmetric(horizontal: 14),
               decoration: BoxDecoration(
-                color: selected
-                    ? (showCheck ? activeColor.withValues(alpha: 0.1) : activeColor)
-                    : Colors.transparent,
+                color: selected ? _kPlum : Colors.transparent,
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: selected ? activeColor : context.appBorder),
+                border: Border.all(color: selected ? _kPlum : context.appBorder),
               ),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                if (selected && showCheck) ...[
-                  Icon(Icons.check_rounded, size: 13, color: activeColor),
-                  const SizedBox(width: 4),
-                ],
-                Text(
-                  option,
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: selected
-                        ? (showCheck ? activeColor : Colors.white)
-                        : context.appTextSecondary,
-                  ),
+              child: Text(
+                option,
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: selected ? Colors.white : context.appTextSecondary,
                 ),
-              ]),
+              ),
             ),
           );
         },
@@ -283,18 +208,17 @@ class _ChipRow extends StatelessWidget {
   }
 }
 
-// ── Physiotherapist card ────────────────────────────────────────────────────
+// ── Counsellor card ─────────────────────────────────────────────────────────
 
-class _PhysiotherapistCard extends StatelessWidget {
-  final PhysiotherapistModel physiotherapist;
-  final double? distanceKm;
+class _CounsellorCard extends StatelessWidget {
+  final CounsellorModel counsellor;
   final VoidCallback onTap;
 
-  const _PhysiotherapistCard({required this.physiotherapist, this.distanceKm, required this.onTap});
+  const _CounsellorCard({required this.counsellor, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    final p = physiotherapist;
+    final c = counsellor;
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -312,7 +236,7 @@ class _PhysiotherapistCard extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _Avatar(name: p.name, photoUrl: p.photoUrl),
+                _Avatar(name: c.name, photoUrl: c.photoUrl),
                 const SizedBox(width: 14),
                 Expanded(
                   child: Column(
@@ -320,26 +244,26 @@ class _PhysiotherapistCard extends StatelessWidget {
                     children: [
                       Row(children: [
                         Flexible(
-                          child: Text(p.name, style: AppTextStyles.labelLarge, maxLines: 1, overflow: TextOverflow.ellipsis),
+                          child: Text(c.name, style: AppTextStyles.labelLarge, maxLines: 1, overflow: TextOverflow.ellipsis),
                         ),
-                        if (p.isCurrentlyOnline) ...[
+                        if (c.isCurrentlyOnline) ...[
                           const SizedBox(width: 6),
                           const _OnlineBadge(),
                         ],
                       ]),
                       const SizedBox(height: 2),
-                      if (p.certifications.isNotEmpty)
+                      if (c.certifications.isNotEmpty)
                         Text(
-                          p.certifications.join(', '),
+                          c.certifications.join(', '),
                           style: AppTextStyles.bodySmall.copyWith(color: context.appTextSecondary),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
-                      if (p.specialties.isNotEmpty) ...[
+                      if (c.specialties.isNotEmpty) ...[
                         const SizedBox(height: 1),
                         Text(
-                          p.specialties.join(' · '),
-                          style: AppTextStyles.bodySmall.copyWith(color: _kTeal, fontWeight: FontWeight.w600),
+                          c.specialties.join(' · '),
+                          style: AppTextStyles.bodySmall.copyWith(color: _kPlum, fontWeight: FontWeight.w600),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -347,7 +271,7 @@ class _PhysiotherapistCard extends StatelessWidget {
                       const SizedBox(height: 6),
                       Row(children: [
                         RatingBarIndicator(
-                          rating: p.rating,
+                          rating: c.rating,
                           itemBuilder: (ctx, _) => const Icon(Icons.star_rounded, color: Color(0xFFF9A825)),
                           itemCount: 5,
                           itemSize: 14,
@@ -355,7 +279,7 @@ class _PhysiotherapistCard extends StatelessWidget {
                         ),
                         const SizedBox(width: 6),
                         Text(
-                          p.totalSessions > 0 ? '${p.rating.toStringAsFixed(1)} (${p.totalSessions})' : 'New',
+                          c.totalSessions > 0 ? '${c.rating.toStringAsFixed(1)} (${c.totalSessions})' : 'New',
                           style: AppTextStyles.bodySmall.copyWith(color: context.appTextSecondary),
                         ),
                       ]),
@@ -369,18 +293,8 @@ class _PhysiotherapistCard extends StatelessWidget {
               spacing: 8,
               runSpacing: 6,
               children: [
-                _InfoChip(icon: Icons.work_history_rounded, label: '${p.experienceYears} yrs exp', color: context.appTextSecondary),
-                _InfoChip(
-                  icon: Icons.location_on_rounded,
-                  label: distanceKm != null
-                      ? '${distanceKm!.toStringAsFixed(1)} km away'
-                      : p.city.isNotEmpty
-                          ? p.city
-                          : 'Home visits',
-                  color: context.appTextSecondary,
-                ),
-                if (p.languages.isNotEmpty)
-                  _InfoChip(icon: Icons.translate_rounded, label: p.languages.join(', '), color: _kTeal, bgColor: _kTealBg),
+                _InfoChip(icon: Icons.work_history_rounded, label: '${c.experienceYears} yrs exp', color: context.appTextSecondary),
+                _InfoChip(icon: Icons.videocam_rounded, label: 'Video/Chat session', color: _kPlum, bgColor: _kPlumBg),
               ],
             ),
             const SizedBox(height: 14),
@@ -390,7 +304,7 @@ class _PhysiotherapistCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('Session Rate', style: AppTextStyles.bodySmall.copyWith(color: context.appTextHint)),
-                    Text('₹${p.hourlyRate.toInt()}', style: AppTextStyles.h4.copyWith(color: _kTeal)),
+                    Text('₹${c.hourlyRate.toInt()}', style: AppTextStyles.h4.copyWith(color: _kPlum)),
                   ],
                 ),
                 const Spacer(),
@@ -399,7 +313,7 @@ class _PhysiotherapistCard extends StatelessWidget {
                   child: ElevatedButton(
                     onPressed: onTap,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: _kTeal,
+                      backgroundColor: _kPlum,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(horizontal: 24),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -451,11 +365,11 @@ class _Fallback extends StatelessWidget {
       width: 72,
       height: 72,
       decoration: const BoxDecoration(
-        gradient: LinearGradient(colors: [_kTeal, _kTealDark], begin: Alignment.topLeft, end: Alignment.bottomRight),
+        gradient: LinearGradient(colors: [_kPlum, _kPlumDark], begin: Alignment.topLeft, end: Alignment.bottomRight),
       ),
       alignment: Alignment.center,
       child: Text(
-        name.isNotEmpty ? name[0].toUpperCase() : 'P',
+        name.isNotEmpty ? name[0].toUpperCase() : 'C',
         style: const TextStyle(fontFamily: 'Poppins', fontSize: 28, fontWeight: FontWeight.w700, color: Colors.white),
       ),
     );
@@ -523,18 +437,18 @@ class _EmptyState extends StatelessWidget {
           children: [
             Container(
               padding: const EdgeInsets.all(20),
-              decoration: const BoxDecoration(color: _kTealBg, shape: BoxShape.circle),
-              child: const Icon(Icons.search_off_rounded, size: 48, color: _kTeal),
+              decoration: const BoxDecoration(color: _kPlumBg, shape: BoxShape.circle),
+              child: const Icon(Icons.search_off_rounded, size: 48, color: _kPlum),
             ),
             const SizedBox(height: 20),
             Text(
-              query.isNotEmpty ? 'No results for "$query"' : 'No physiotherapists available',
+              query.isNotEmpty ? 'No results for "$query"' : 'No counsellors available',
               style: AppTextStyles.labelLarge.copyWith(color: context.appTextPrimary),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
             Text(
-              query.isNotEmpty ? 'Try a different search term or filter' : 'Physiotherapists will appear here once added',
+              query.isNotEmpty ? 'Try a different search term or filter' : 'Counsellors will appear here once added',
               style: AppTextStyles.bodySmall.copyWith(color: context.appTextSecondary),
               textAlign: TextAlign.center,
             ),
@@ -545,8 +459,8 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
-class _PhysiotherapistCardSkeleton extends StatelessWidget {
-  const _PhysiotherapistCardSkeleton();
+class _CounsellorCardSkeleton extends StatelessWidget {
+  const _CounsellorCardSkeleton();
 
   @override
   Widget build(BuildContext context) {

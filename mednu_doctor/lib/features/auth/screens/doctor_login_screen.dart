@@ -9,6 +9,7 @@ import '../../../core/router/app_router.dart';
 import '../../../core/utils/validators.dart';
 import '../../../shared_core/models/app_role.dart';
 import '../../../shared_core/navigation/role_menu.dart';
+import '../../../shared_core/services/role_prefs.dart';
 
 class DoctorLoginScreen extends StatefulWidget {
   const DoctorLoginScreen({super.key});
@@ -456,7 +457,19 @@ class _DoctorLoginScreenState extends State<DoctorLoginScreen>
           final doctorSnap =
               await FirebaseFirestore.instance.collection('doctors').doc(uid).get();
           final roles = AppRoleX.listFrom(doctorSnap.data()?['roles']);
-          final role = roles.first;
+          // See RolePrefs.resolveActive's own doc comment: a bare
+          // `roles.first` here permanently stuck any account that was ever
+          // a Doctor before adding a second role (Lab, Pharmacy, ...) on
+          // the Doctor dashboard on every login, regardless of which role
+          // the role switcher was last set to.
+          final serverActiveRoleRaw = doctorSnap.data()?['activeRole'] as String?;
+          final role = await RolePrefs.resolveActive(
+            roles,
+            serverPreferred: serverActiveRoleRaw != null
+                ? AppRoleX.fromFirestoreValue(serverActiveRoleRaw)
+                : null,
+          );
+          if (!mounted || !context.mounted) return;
 
           // A non-doctor role's approval status lives on its own
           // `{role}_profiles/{uid}` doc, not on `doctors/{uid}` (which stays

@@ -9,6 +9,7 @@ import 'package:dio/dio.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/constants/therapy_specialties.dart';
+import '../../../core/utils/doctor_role_filter.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../../home/providers/location_provider.dart';
 import '../../home/providers/home_nav_provider.dart';
@@ -829,7 +830,14 @@ class _DoctorListView extends StatelessWidget {
           );
         }
 
-        var list = snap.data?.docs ?? [];
+        // See isDoctorAccount's own doc comment: every partner role also
+        // writes a sparse doctors/{uid} base-identity doc, so without this
+        // filter a Lab/Pharmacy/etc. account with no `specialty` field could
+        // still surface here (e.g. whenever `specialty == 'All'`) tagged as
+        // a doctor.
+        var list = (snap.data?.docs ?? [])
+            .where((doc) => isDoctorAccount(doc.data()))
+            .toList();
 
         // ── Location filter (in-person / nearby only) ─────────
         List<MapEntry<QueryDocumentSnapshot<Map<String, dynamic>>, double?>>

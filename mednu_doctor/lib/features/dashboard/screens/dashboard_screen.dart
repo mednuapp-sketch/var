@@ -11,6 +11,7 @@ import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/services/app_permissions_service.dart';
 import '../../../core/services/appointment_reminder_service.dart';
+import '../../../core/services/fcm_service.dart';
 import '../../../core/services/feedback_service.dart';
 import '../../../core/services/operation_logger.dart';
 import '../../../core/services/presence_service.dart';
@@ -73,8 +74,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _checkApprovalStatus();
     final uid = DoctorAuthService.currentUid;
     if (uid != null) PresenceService.instance.init(uid);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) AppPermissionsService.checkAndPrompt(context);
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      await AppPermissionsService.checkAndPrompt(context);
+      // Notification permission may have just been granted above — re-run
+      // registration so the FCM token is saved this session instead of
+      // requiring an app restart. FcmService.requestPermissionAndRegisterToken
+      // bailed out silently at cold start (before this sheet ever ran) for
+      // any doctor who hadn't yet granted it, which is exactly why doctors
+      // stop receiving incoming-call pushes: functions/index.js's
+      // onNewConsultation finds no fcmToken on their doc and skips the push.
+      FcmService.requestPermissionAndRegisterToken();
     });
   }
 

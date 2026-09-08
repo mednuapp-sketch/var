@@ -36,8 +36,28 @@ class PartnerDocumentType {
     PartnerDocumentType('address_proof', 'Address Proof'),
   ];
 
+  /// A mental-health role — unlike Nutritionist/Hospital (which stay
+  /// `docSlots: {}` by design, see `PARTNER_ROLES` in the admin panel), this
+  /// one needs proof of who the applicant is and that they are actually
+  /// qualified to counsel before an admin can approve them.
+  static const counsellor = <PartnerDocumentType>[
+    PartnerDocumentType('counsellor_id', 'Government ID Proof'),
+    PartnerDocumentType('certificates', 'Certifications / Qualifications'),
+  ];
+
+  /// A clinical role, same reasoning as [counsellor]: a physiotherapist
+  /// treats patients directly, so an admin needs ID + qualification proof
+  /// before approval — this used to be the one role left at `docSlots: {}`
+  /// alongside Nutritionist/Hospital, which was an intentional gap at the
+  /// time but not the right end state for a hands-on clinical role.
+  static const physiotherapist = <PartnerDocumentType>[
+    PartnerDocumentType('physio_id', 'Government ID Proof'),
+    PartnerDocumentType('physio_certificate', 'Physiotherapy Certification / Degree'),
+  ];
+
   /// `role` is the same short token used for the Storage prefix and the
-  /// `{role}_profiles` collection: 'lab' | 'pharmacy' | 'ambulance' | 'caregiver'.
+  /// `{role}_profiles` collection: 'lab' | 'pharmacy' | 'ambulance' |
+  /// 'caregiver' | 'counsellor' | 'physiotherapist'.
   static List<PartnerDocumentType> forRole(String role) {
     switch (role) {
       case 'lab':
@@ -48,6 +68,10 @@ class PartnerDocumentType {
         return ambulance;
       case 'caregiver':
         return caregiver;
+      case 'counsellor':
+        return counsellor;
+      case 'physiotherapist':
+        return physiotherapist;
       default:
         return const [];
     }

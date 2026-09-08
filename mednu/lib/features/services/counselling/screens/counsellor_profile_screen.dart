@@ -6,42 +6,39 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_text_styles.dart';
 import '../../../../core/widgets/ux_widgets.dart';
 import '../../../../core/widgets/service_booking_sheet.dart';
-import '../models/physiotherapist_model.dart';
-import '../services/physiotherapist_service.dart';
+import '../models/counsellor_model.dart';
+import '../services/counsellor_service.dart';
 
-const _kTeal     = Color(0xFF00838F);
-const _kTealDark = Color(0xFF006064);
-const _kTealBg   = Color(0xFFE0F7FA);
+const _kPlum     = Color(0xFF633058);
+const _kPlumDark = Color(0xFF3D1D36);
+const _kPlumBg   = Color(0xFFF3E5F5);
 
-/// Booking a specific physiotherapist reuses the existing generic
-/// [ServiceBookingSheet] (the same one the flat physiotherapy service
-/// catalog and every other on-demand service module already use) rather
-/// than a bespoke slot-picker screen — physio sessions don't have discrete
-/// bookable slots today (`service_requests`/`physio_sessions` just carry
-/// free-text `preferredDate`/`preferredTime`). The only difference from a
-/// generic "any available physiotherapist" request is `extraFields:
-/// {'physiotherapistId': id}`, which the Cloud Function mirror
-/// (`_buildSessionDoc`, functions/index.js) honors to skip the unclaimed
-/// pool and go straight to this specific provider.
-class PhysiotherapistProfileScreen extends StatelessWidget {
-  final String physiotherapistId;
-  const PhysiotherapistProfileScreen({super.key, required this.physiotherapistId});
+/// Booking a specific counsellor reuses the existing generic
+/// [ServiceBookingSheet] — same pattern as
+/// [PhysiotherapistProfileScreen]. The only difference from a generic "any
+/// available counsellor" request is `extraFields: {'counsellorId': id}`,
+/// which the Cloud Function mirror (`_buildSessionDoc`, functions/index.js)
+/// honors to skip the unclaimed pool and go straight to this specific
+/// counsellor.
+class CounsellorProfileScreen extends StatelessWidget {
+  final String counsellorId;
+  const CounsellorProfileScreen({super.key, required this.counsellorId});
 
-  void _bookNow(BuildContext context, PhysiotherapistModel p) {
+  void _bookNow(BuildContext context, CounsellorModel c) {
     ServiceBookingSheet.show(
       context,
-      type: 'physiotherapy',
-      serviceName: 'Physiotherapy with ${p.name}',
-      themeColor: _kTeal,
-      priceLabel: p.hourlyRate > 0 ? '₹${p.hourlyRate.toInt()}/session' : null,
-      amount: p.hourlyRate.round(),
-      paymentDescription: 'Physiotherapy session with ${p.name}',
+      type: 'counselling',
+      serviceName: 'Counselling with ${c.name}',
+      themeColor: _kPlum,
+      priceLabel: c.hourlyRate > 0 ? '₹${c.hourlyRate.toInt()}/session' : null,
+      amount: c.hourlyRate.round(),
+      paymentDescription: 'Counselling session with ${c.name}',
       serviceDetails: {
-        'title': 'Physiotherapy with ${p.name}',
-        'physiotherapistName': p.name,
-        'price': p.hourlyRate,
+        'title': 'Counselling with ${c.name}',
+        'counsellorName': c.name,
+        'price': c.hourlyRate,
       },
-      extraFields: {'physiotherapistId': p.id},
+      extraFields: {'counsellorId': c.id},
     );
   }
 
@@ -49,14 +46,14 @@ class PhysiotherapistProfileScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: context.appBackground,
-      body: StreamBuilder<PhysiotherapistModel?>(
-        stream: PhysiotherapistService.physiotherapistStream(physiotherapistId),
+      body: StreamBuilder<CounsellorModel?>(
+        stream: CounsellorService.counsellorStream(counsellorId),
         builder: (context, snap) {
           if (snap.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
-          final p = snap.data;
-          if (p == null) {
+          final c = snap.data;
+          if (c == null) {
             return Scaffold(
               backgroundColor: context.appBackground,
               appBar: AppBar(
@@ -65,7 +62,7 @@ class PhysiotherapistProfileScreen extends StatelessWidget {
               body: const AppEmptyState(
                 icon: Icons.person_off_outlined,
                 title: 'Not found',
-                message: 'This physiotherapist is no longer available.',
+                message: 'This counsellor is no longer available.',
               ),
             );
           }
@@ -75,7 +72,7 @@ class PhysiotherapistProfileScreen extends StatelessWidget {
               SliverAppBar(
                 pinned: true,
                 expandedHeight: 260,
-                backgroundColor: _kTealDark,
+                backgroundColor: _kPlumDark,
                 leading: IconButton(
                   icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
                   onPressed: () => context.pop(),
@@ -83,7 +80,7 @@ class PhysiotherapistProfileScreen extends StatelessWidget {
                 flexibleSpace: FlexibleSpaceBar(
                   background: Container(
                     decoration: const BoxDecoration(
-                      gradient: LinearGradient(colors: [_kTealDark, _kTeal], begin: Alignment.topLeft, end: Alignment.bottomRight),
+                      gradient: LinearGradient(colors: [_kPlumDark, _kPlum], begin: Alignment.topLeft, end: Alignment.bottomRight),
                     ),
                     child: SafeArea(
                       child: Padding(
@@ -93,23 +90,23 @@ class PhysiotherapistProfileScreen extends StatelessWidget {
                           children: [
                             ClipRRect(
                               borderRadius: BorderRadius.circular(20),
-                              child: p.photoUrl.isNotEmpty
-                                  ? CachedNetworkImage(imageUrl: p.photoUrl, width: 88, height: 88, fit: BoxFit.cover)
+                              child: c.photoUrl.isNotEmpty
+                                  ? CachedNetworkImage(imageUrl: c.photoUrl, width: 88, height: 88, fit: BoxFit.cover)
                                   : Container(
                                       width: 88,
                                       height: 88,
                                       color: Colors.white24,
                                       alignment: Alignment.center,
                                       child: Text(
-                                        p.name.isNotEmpty ? p.name[0].toUpperCase() : 'P',
+                                        c.name.isNotEmpty ? c.name[0].toUpperCase() : 'C',
                                         style: const TextStyle(fontFamily: 'Poppins', fontSize: 34, fontWeight: FontWeight.w700, color: Colors.white),
                                       ),
                                     ),
                             ),
                             const SizedBox(height: 12),
-                            Text(p.name,
+                            Text(c.name,
                                 style: const TextStyle(fontFamily: 'Poppins', fontSize: 19, fontWeight: FontWeight.w700, color: Colors.white)),
-                            if (p.isCurrentlyOnline) ...[
+                            if (c.isCurrentlyOnline) ...[
                               const SizedBox(height: 6),
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
@@ -126,8 +123,8 @@ class PhysiotherapistProfileScreen extends StatelessWidget {
                               ),
                             ],
                             const SizedBox(height: 4),
-                            if (p.specialties.isNotEmpty)
-                              Text(p.specialties.join(' · '),
+                            if (c.specialties.isNotEmpty)
+                              Text(c.specialties.join(' · '),
                                   style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: Colors.white70),
                                   textAlign: TextAlign.center,
                                   maxLines: 1,
@@ -135,7 +132,7 @@ class PhysiotherapistProfileScreen extends StatelessWidget {
                             const SizedBox(height: 10),
                             Row(mainAxisSize: MainAxisSize.min, children: [
                               RatingBarIndicator(
-                                rating: p.rating,
+                                rating: c.rating,
                                 itemBuilder: (ctx, _) => const Icon(Icons.star_rounded, color: Color(0xFFF9A825)),
                                 itemCount: 5,
                                 itemSize: 16,
@@ -143,7 +140,7 @@ class PhysiotherapistProfileScreen extends StatelessWidget {
                               ),
                               const SizedBox(width: 6),
                               Text(
-                                p.totalSessions > 0 ? '${p.rating.toStringAsFixed(1)} (${p.totalSessions} sessions)' : 'New',
+                                c.totalSessions > 0 ? '${c.rating.toStringAsFixed(1)} (${c.totalSessions} sessions)' : 'New',
                                 style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: Colors.white70),
                               ),
                             ]),
@@ -159,48 +156,40 @@ class PhysiotherapistProfileScreen extends StatelessWidget {
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
                     Row(children: [
-                      Expanded(child: _StatCard(icon: Icons.work_history_rounded, label: 'Experience', value: '${p.experienceYears} yrs')),
+                      Expanded(child: _StatCard(icon: Icons.work_history_rounded, label: 'Experience', value: '${c.experienceYears} yrs')),
                       const SizedBox(width: 10),
-                      Expanded(child: _StatCard(icon: Icons.event_available_rounded, label: 'Sessions', value: '${p.totalSessions}')),
+                      Expanded(child: _StatCard(icon: Icons.event_available_rounded, label: 'Sessions', value: '${c.totalSessions}')),
                       const SizedBox(width: 10),
-                      Expanded(child: _StatCard(icon: Icons.currency_rupee_rounded, label: 'Rate', value: '₹${p.hourlyRate.toInt()}')),
+                      Expanded(child: _StatCard(icon: Icons.currency_rupee_rounded, label: 'Rate', value: '₹${c.hourlyRate.toInt()}')),
                     ]),
                     const SizedBox(height: 16),
-                    if (p.certifications.isNotEmpty) ...[
+                    if (c.certifications.isNotEmpty) ...[
                       _SectionCard(
                         title: 'Certifications',
                         icon: Icons.workspace_premium_outlined,
-                        children: p.certifications
-                            .map((c) => _Pill(label: c, icon: Icons.workspace_premium_outlined))
+                        children: c.certifications
+                            .map((cert) => _Pill(label: cert, icon: Icons.workspace_premium_outlined))
                             .toList(),
                       ),
                       const SizedBox(height: 16),
                     ],
-                    if (p.specialties.isNotEmpty) ...[
+                    if (c.specialties.isNotEmpty) ...[
                       _SectionCard(
                         title: 'Specialties',
-                        icon: Icons.accessibility_new_rounded,
-                        children: p.specialties
-                            .map((s) => _Pill(label: s, icon: Icons.accessibility_new_rounded))
+                        icon: Icons.psychology_rounded,
+                        children: c.specialties
+                            .map((s) => _Pill(label: s, icon: Icons.psychology_rounded))
                             .toList(),
                       ),
                       const SizedBox(height: 16),
                     ],
                     _SectionCard(
-                      title: 'Languages Spoken',
-                      icon: Icons.translate_rounded,
-                      children: (p.languages.isEmpty ? const ['English'] : p.languages)
-                          .map((l) => _Pill(label: l, icon: Icons.translate_rounded))
-                          .toList(),
-                    ),
-                    const SizedBox(height: 16),
-                    _SectionCard(
-                      title: 'Service Area',
-                      icon: Icons.location_on_rounded,
+                      title: 'Session Format',
+                      icon: Icons.videocam_rounded,
                       wrap: false,
-                      children: [
+                      children: const [
                         Text(
-                          p.city.isNotEmpty ? p.city : 'Home visits — location confirmed at booking',
+                          'Video / chat sessions — fully confidential, from anywhere.',
                           style: AppTextStyles.bodyMedium,
                         ),
                       ],
@@ -210,12 +199,12 @@ class PhysiotherapistProfileScreen extends StatelessWidget {
                       width: double.infinity,
                       height: 52,
                       child: ElevatedButton.icon(
-                        onPressed: () => _bookNow(context, p),
+                        onPressed: () => _bookNow(context, c),
                         icon: const Icon(Icons.calendar_month_rounded, color: Colors.white),
                         label: const Text('Book Now',
                             style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 15, color: Colors.white)),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: _kTeal,
+                          backgroundColor: _kPlum,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                           elevation: 0,
                         ),
@@ -249,9 +238,9 @@ class _StatCard extends StatelessWidget {
         boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
       ),
       child: Column(children: [
-        Icon(icon, color: _kTeal, size: 20),
+        Icon(icon, color: _kPlum, size: 20),
         const SizedBox(height: 6),
-        Text(value, style: AppTextStyles.h4.copyWith(color: _kTeal)),
+        Text(value, style: AppTextStyles.h4.copyWith(color: _kPlum)),
         Text(label, style: AppTextStyles.bodySmall.copyWith(color: context.appTextHint)),
       ]),
     );
@@ -278,7 +267,7 @@ class _SectionCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
-            Icon(icon, size: 16, color: _kTeal),
+            Icon(icon, size: 16, color: _kPlum),
             const SizedBox(width: 8),
             Text(title, style: AppTextStyles.labelMedium),
           ]),
@@ -299,11 +288,11 @@ class _Pill extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(color: _kTealBg, borderRadius: BorderRadius.circular(8)),
+      decoration: BoxDecoration(color: _kPlumBg, borderRadius: BorderRadius.circular(8)),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(icon, size: 13, color: _kTeal),
+        Icon(icon, size: 13, color: _kPlum),
         const SizedBox(width: 5),
-        Text(label, style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: _kTeal, fontWeight: FontWeight.w600)),
+        Text(label, style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: _kPlum, fontWeight: FontWeight.w600)),
       ]),
     );
   }

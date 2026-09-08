@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../core/router/app_router.dart';
+import '../../core/utils/doctor_role_filter.dart';
 
 enum SearchCategory { doctor, service, speciality, labTest, hospital, medicine }
 
@@ -116,16 +117,6 @@ class SearchService {
       keywords: ['equipment', 'medical equipment', 'wheelchair', 'walker', 'oxygen', 'nebulizer', 'hospital bed', 'crutches', 'bp machine', 'rent'],
     ),
     SearchResult(
-      id: 'medicines',
-      title: 'Pharmacy',
-      subtitle: 'Order medicines online, delivered fast',
-      route: AppRoutes.medicine,
-      icon: Icons.medication_rounded,
-      color: Color(0xFF2E7D32),
-      category: SearchCategory.medicine,
-      keywords: ['medicine', 'drug', 'tablet', 'capsule', 'order medicine', 'pharmacy delivery', 'prescription delivery', 'pharmacy'],
-    ),
-    SearchResult(
       id: 'pharmacy',
       title: 'Online Pharmacy',
       subtitle: 'Upload prescription & get medicines',
@@ -133,7 +124,7 @@ class SearchService {
       icon: Icons.local_pharmacy_rounded,
       color: Color(0xFF388E3C),
       category: SearchCategory.medicine,
-      keywords: ['pharmacy', 'chemist', 'drugstore', 'upload prescription', 'medicine shop'],
+      keywords: ['pharmacy', 'chemist', 'drugstore', 'upload prescription', 'medicine shop', 'medicine', 'drug', 'tablet', 'capsule', 'order medicine', 'pharmacy delivery', 'prescription delivery'],
     ),
     SearchResult(
       id: 'emergency',
@@ -758,6 +749,11 @@ class SearchService {
       return snap.docs
           .map((d) => <String, dynamic>{'id': d.id, ...d.data()})
           .where((d) {
+        // See isDoctorAccount's own doc comment: without this filter, a
+        // Lab/Pharmacy/etc. name match surfaced here too, in the "Doctors"
+        // search results tab, tagged as a doctor.
+        if (!isDoctorAccount(d)) return false;
+
         final name = (d['name'] as String? ?? '').toLowerCase();
         final spec = (d['specialty'] as String? ??
                 d['speciality'] as String? ??

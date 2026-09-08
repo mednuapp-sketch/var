@@ -79,7 +79,7 @@ class AppColors {
   static const LinearGradient ambulanceGrad   = LinearGradient(colors: [Color(0xFFEF5350), Color(0xFF522546)], begin: Alignment.topLeft, end: Alignment.bottomRight);
   static const LinearGradient physioGrad      = LinearGradient(colors: [Color(0xFF42A5F5), Color(0xFF0D47A1)], begin: Alignment.topLeft, end: Alignment.bottomRight);
   static const LinearGradient nutritionGrad   = LinearGradient(colors: [Color(0xFF9CCC65), Color(0xFF33691E)], begin: Alignment.topLeft, end: Alignment.bottomRight);
-  static const LinearGradient counselGrad     = LinearGradient(colors: [Color(0xFF7E57C2), Color(0xFF311B92)], begin: Alignment.topLeft, end: Alignment.bottomRight);
+  static const LinearGradient counselGrad     = LinearGradient(colors: [Color(0xFF522546), Color(0xFF633058)], begin: Alignment.topLeft, end: Alignment.bottomRight);
   static const LinearGradient equipmentGrad   = LinearGradient(colors: [Color(0xFF78909C), Color(0xFF263238)], begin: Alignment.topLeft, end: Alignment.bottomRight);
   static const LinearGradient caregiverGrad   = LinearGradient(colors: [Color(0xFFA36BAC), Color(0xFF522546)], begin: Alignment.topLeft, end: Alignment.bottomRight);
   static const LinearGradient pregnancyGrad   = LinearGradient(colors: [Color(0xFF522546), Color(0xFF633058)], begin: Alignment.topLeft, end: Alignment.bottomRight);

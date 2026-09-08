@@ -38,6 +38,8 @@ import '../../features/services/physiotherapy/physio_screen.dart';
 import '../../features/services/physiotherapy/screens/physiotherapist_list_screen.dart';
 import '../../features/services/physiotherapy/screens/physiotherapist_profile_screen.dart';
 import '../../features/services/counselling/counselling_screen.dart';
+import '../../features/services/counselling/screens/counsellor_list_screen.dart';
+import '../../features/services/counselling/screens/counsellor_profile_screen.dart';
 import '../../features/services/equipment_hiring/equipment_screen.dart';
 import '../../features/services/equipment_hiring/equipment_vendors_screen.dart';
 import '../../features/services/appointment/appointment_screen.dart';
@@ -135,6 +137,8 @@ class AppRoutes {
   static const nutritionBmi                   = '/nutrition/bmi';
   static const nutritionGoals                 = '/nutrition/goals';
   static const counselling        = '/counselling';
+  static const counsellingCounsellors       = '/counselling/counsellors';
+  static const counsellingCounsellorProfile = '/counselling/counsellor/:id';
   static const equipment          = '/equipment';
   static const equipmentVendors   = '/equipment-vendors';
   static const equipmentMenu      = '/equipment-menu/:id';
@@ -339,6 +343,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (c, s) => PhysiotherapistProfileScreen(physiotherapistId: s.pathParameters['id'] ?? ''),
       ),
       GoRoute(path: AppRoutes.counselling,        builder: (c, s) => const CounsellingScreen()),
+      GoRoute(path: AppRoutes.counsellingCounsellors, builder: (c, s) => const CounsellorListScreen()),
+      GoRoute(
+        path: AppRoutes.counsellingCounsellorProfile,
+        builder: (c, s) => CounsellorProfileScreen(counsellorId: s.pathParameters['id'] ?? ''),
+      ),
       GoRoute(path: AppRoutes.equipment,          builder: (c, s) => const EquipmentScreen()),
       GoRoute(path: AppRoutes.equipmentVendors,   builder: (c, s) => const EquipmentVendorsScreen()),
       GoRoute(path: AppRoutes.equipmentMenu,      builder: (c, s) {

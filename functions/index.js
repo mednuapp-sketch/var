@@ -2761,6 +2761,7 @@ const _PROVIDER_FIELD_BY_SERVICE = {
   nursing: "caregiverId",
   home_care: "caregiverId",
   physiotherapy: "physiotherapistId",
+  counselling: "counsellorId",
 };
 
 function _round2(n) {
@@ -7032,6 +7033,37 @@ exports.onNutritionistProfileApproved = onDocumentUpdated("nutritionist_profiles
   );
 });
 
+// Nutrition appointment booking never had a trigger at all — the patient app
+// writes `nutrition_appointments` directly with `nutritionistId` already set
+// (see nutrition_service.dart's bookAppointment and the "Nutrition partner
+// access" comment above), and mednu_doctor's own
+// nutrition_appointment_service.dart doc comment says as much: "there is no
+// Cloud [Function]" backing this collection. Every other vertical pushes a
+// notification to the assigned/matched provider the moment a booking lands
+// (_sendProviderNotification / _broadcastNewJobToActiveProviders) — a
+// nutritionist only ever found out by having the app open to see the live
+// Firestore listener update. This is always a directly-picked provider (the
+// patient chooses a specific nutritionist before booking, same pre-assignment
+// model as a doctor appointment), so it always notifies one provider — never
+// broadcasts to a pool.
+exports.onNutritionAppointmentCreated = onDocumentCreated(
+  "nutrition_appointments/{appointmentId}",
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+    const data = snap.data();
+    const nutritionistId = data.nutritionistId;
+    if (!nutritionistId) return;
+
+    await _sendProviderNotification(getFirestore(), getMessaging(), nutritionistId, {
+      title: "New Appointment Booked",
+      body: `${data.userName || "A patient"} booked a ${data.consultationType || "consultation"}` +
+        (data.date ? ` on ${data.date}` : "") + (data.timeSlot ? ` at ${data.timeSlot}` : "") + ".",
+      type: "new_nutrition_appointment", serviceType: "nutrition", bookingId: event.params.appointmentId,
+    });
+  }
+);
+
 // ══════════════════════════════════════════════════════════════════════════
 // ── Physiotherapist public catalogue mirror ──────────────────────────────────
 //
@@ -7062,7 +7094,18 @@ function _physiotherapistListingDoc(profile, existingCreatedAt) {
     ...(profile.clinicLat != null && profile.clinicLng != null
       ? { clinicLat: profile.clinicLat, clinicLng: profile.clinicLng }
       : {}),
+    // `isAvailable` means "listed" (approved + active) — kept `true`
+    // unconditionally so the existing browse/schedule screens keep showing
+    // every approved physiotherapist, not just ones online right now.
+    // `isOnline`/`lastHeartbeat` are the separate realtime-presence fields
+    // PhysioPresenceService's heartbeat writes onto the source profile
+    // (mednu_doctor/core/services/physio_presence_service.dart) — mirrored
+    // through as-is so a patient-facing "online now" badge/filter can use
+    // the same staleness check the doctor Quick Connect screen already does
+    // (isOnline === true AND lastHeartbeat within the last few minutes).
     isAvailable: true,
+    isOnline: profile.isOnline === true,
+    lastHeartbeat: profile.lastHeartbeat || null,
     createdAt: existingCreatedAt || FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   };
@@ -7090,6 +7133,70 @@ exports.onPhysiotherapistProfileWriteForVisibility = onDocumentWritten(
     const existing = await listingRef.get();
     await listingRef.set(
       _physiotherapistListingDoc(profile, existing.exists ? existing.data().createdAt : null),
+      { merge: true },
+    );
+  }
+);
+// ══════════════════════════════════════════════════════════════════════════
+
+// ══════════════════════════════════════════════════════════════════════════
+// ── Counsellor public catalogue mirror ───────────────────────────────────
+//
+// Same gap as Physiotherapist above, but Counselling had it worse: there was
+// no way at all for a patient to discover a `counsellor_profiles` partner —
+// the patient app's Counselling screen only ever booked an actual Doctor
+// whose specialty happens to be Psychiatry/Psychology/Counselling. The
+// counselling_sessions booking pipeline (service_requests[type
+// 'counselling'] -> counselling_sessions, see above) already exists and
+// already honors a pre-assigned `counsellorId`; this mirror is what a
+// patient-facing browse screen needs to read from. Counsellor registration
+// collects no city/location/languages (session delivery is remote-only), so
+// unlike the physiotherapist listing doc this one carries no
+// clinicLat/clinicLng/languages fields.
+function _counsellorListingDoc(profile, existingCreatedAt) {
+  return {
+    name: profile.name || "Counsellor",
+    photoUrl: profile.photoUrl || "",
+    certifications: profile.certifications || [],
+    specialties: profile.specialties || [],
+    experienceYears: profile.experienceYears ?? 0,
+    hourlyRate: profile.hourlyRate ?? 0,
+    rating: profile.rating ?? 0,
+    totalSessions: profile.totalSessions ?? 0,
+    // See the matching comment in `_physiotherapistListingDoc` above:
+    // `isAvailable` stays `true` unconditionally (means "listed"), while
+    // `isOnline`/`lastHeartbeat` mirror CounsellorPresenceService's realtime
+    // heartbeat for an "online now" badge/filter.
+    isAvailable: true,
+    isOnline: profile.isOnline === true,
+    lastHeartbeat: profile.lastHeartbeat || null,
+    createdAt: existingCreatedAt || FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+}
+
+exports.onCounsellorProfileWriteForVisibility = onDocumentWritten(
+  "counsellor_profiles/{counsellorId}",
+  async (event) => {
+    const counsellorId = event.params.counsellorId;
+    const db = getFirestore();
+    const listingRef = db.collection("counsellors").doc(counsellorId);
+
+    const after = event.data.after;
+    if (!after.exists) {
+      await listingRef.delete().catch(() => {});
+      return;
+    }
+
+    const profile = after.data();
+    if (profile.status !== "active") {
+      await listingRef.delete().catch(() => {});
+      return;
+    }
+
+    const existing = await listingRef.get();
+    await listingRef.set(
+      _counsellorListingDoc(profile, existing.exists ? existing.data().createdAt : null),
       { merge: true },
     );
   }
@@ -7370,6 +7477,24 @@ exports.onAmbulanceProfileApproved = onDocumentUpdated("ambulance_profiles/{uid}
 exports.onCaregiverProfileApproved = onDocumentUpdated("caregiver_profiles/{uid}", async (event) => {
   await _notifyPartnerApproved(
     getFirestore(), getMessaging(), "caregiver", event.params.uid,
+    event.data.before.data(), event.data.after.data(),
+  );
+});
+
+// Physiotherapist and Counsellor never had an approval-push trigger either —
+// same gap as Doctor below, just for the two roles that only just gained a
+// document-verification step (see PartnerDocumentType.physiotherapist /
+// .counsellor in mednu_doctor's partner_document_models.dart).
+exports.onPhysiotherapistProfileApproved = onDocumentUpdated("physiotherapist_profiles/{uid}", async (event) => {
+  await _notifyPartnerApproved(
+    getFirestore(), getMessaging(), "physiotherapist", event.params.uid,
+    event.data.before.data(), event.data.after.data(),
+  );
+});
+
+exports.onCounsellorProfileApproved = onDocumentUpdated("counsellor_profiles/{uid}", async (event) => {
+  await _notifyPartnerApproved(
+    getFirestore(), getMessaging(), "counsellor", event.params.uid,
     event.data.before.data(), event.data.after.data(),
   );
 });

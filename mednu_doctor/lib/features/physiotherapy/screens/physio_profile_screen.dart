@@ -298,6 +298,16 @@ class PhysioProfileScreen extends ConsumerWidget {
               ],
             ),
           ),
+          if (PhysioProfileService.currentUid != null) ...[
+            const SizedBox(height: 16),
+            PartnerDocumentsSection(
+              role: 'physiotherapist',
+              uid: PhysioProfileService.currentUid!,
+              documents: profile.documents,
+              documentVerification: profile.documentVerification,
+              locked: profile.status == 'active',
+            ),
+          ],
         ],
       ),
     );

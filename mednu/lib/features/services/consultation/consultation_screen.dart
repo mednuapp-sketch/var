@@ -11,6 +11,7 @@ import '../../../core/constants/app_spacing.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/constants/therapy_specialties.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/utils/doctor_role_filter.dart';
 import '../../../core/utils/r.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../../intake/services/doctor_booking_flow.dart';
@@ -98,7 +99,12 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
         .snapshots()
         .listen((snap) {
       if (!mounted) return;
-      final all = snap.docs.map((doc) => _docToMap(doc)).toList();
+      // See isDoctorAccount's own doc comment: every partner role also
+      // writes a sparse doctors/{uid} base-identity doc.
+      final all = snap.docs
+          .where((doc) => isDoctorAccount(doc.data()))
+          .map((doc) => _docToMap(doc))
+          .toList();
       // Avoid triggering a rebuild when the data hasn't actually changed.
       if (_allDoctors.length == all.length &&
           _allDoctors.isNotEmpty &&
@@ -136,6 +142,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
       // _docToMap already folds the heartbeat-freshness check into 'available',
       // so this list and the Schedule tab's _allDoctors agree on who's online.
       final fresh = snap.docs
+          .where((doc) => isDoctorAccount(doc.data()))
           .map((doc) => _docToMap(doc))
           .where((doc) => doc['available'] == true)
           .toList();

@@ -652,6 +652,22 @@
       ]
     },
     {
+      "collectionGroup": "physiotherapists",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "isAvailable", "order": "ASCENDING" },
+        { "fieldPath": "rating",      "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "counsellors",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "isAvailable", "order": "ASCENDING" },
+        { "fieldPath": "rating",      "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "nutritionists",
       "queryScope": "COLLECTION",
       "fields": [
@@ -853,6 +869,14 @@
         { "fieldPath": "status",                  "order": "ASCENDING" },
         { "fieldPath": "acceptingConsultations",   "order": "ASCENDING" },
         { "fieldPath": "lastHeartbeat",           "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "caregivers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "isActive",  "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
     },
     {

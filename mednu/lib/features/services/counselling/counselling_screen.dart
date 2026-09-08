@@ -5,8 +5,11 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/services/feedback_service.dart';
 import '../../../core/utils/r.dart';
 import '../../../core/widgets/ux_widgets.dart';
+import 'models/counsellor_model.dart';
+import 'services/counsellor_service.dart';
 
 class CounsellingScreen extends StatefulWidget {
   const CounsellingScreen({super.key});
@@ -67,6 +70,46 @@ class _CounsellingScreenState extends State<CounsellingScreen> {
 
   void _talkNow() {
     context.push('${AppRoutes.consultation}?type=therapist');
+  }
+
+  /// "Talk to a Counsellor Now" — distinct from [_talkNow] above, which
+  /// connects with a licensed Doctor whose specialty happens to be
+  /// Psychiatry/Psychology (the pre-existing consultation flow). This
+  /// connects with an actual Counsellor partner instead: finds whoever's
+  /// online right now (same `isCurrentlyOnline` staleness check the list
+  /// screen sorts by) and jumps straight to their profile's "Book Now",
+  /// which pre-assigns them via `extraFields: {'counsellorId': id}` — the
+  /// existing Cloud Function mirror (`_buildSessionDoc`) marks a
+  /// pre-assigned booking already 'accepted' immediately, skipping the
+  /// unclaimed pool. If nobody is online, falls back to the browsable list
+  /// (already online-sorted) rather than blocking the patient outright.
+  Future<void> _talkToCounsellorNow() async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+    List<CounsellorModel> list;
+    try {
+      list = await CounsellorService.counsellorsStream().first;
+    } catch (_) {
+      list = const [];
+    }
+    if (!mounted) return;
+    Navigator.of(context, rootNavigator: true).pop(); // dismiss loading dialog
+
+    final online = list.where((c) => c.isCurrentlyOnline).toList()
+      ..sort((a, b) => b.rating.compareTo(a.rating));
+    if (!mounted) return;
+    if (online.isNotEmpty) {
+      context.push(AppRoutes.counsellingCounsellorProfile.replaceFirst(':id', online.first.id));
+    } else {
+      FeedbackService.showError(
+        context,
+        'No counsellor is online right now — showing everyone you can book.',
+      );
+      context.push(AppRoutes.counsellingCounsellors);
+    }
   }
 
   String? get _recommendedTitle {
@@ -288,13 +331,19 @@ class _CounsellingScreenState extends State<CounsellingScreen> {
               padding: AppSpacing.page(context),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
 
-                // ── A. "Talk to Someone Now" prominent button ──────────────
+                // ── A. "Talk to Someone Now" prominent buttons ──────────────
+                // Two distinct professional categories, both real and both
+                // bookable: a licensed Doctor (Psychiatry/Psychology
+                // specialty, via the existing consultation pipeline) and a
+                // Counsellor partner (via the counsellor_profiles /
+                // counselling_sessions pipeline). Neither replaces the
+                // other — kept as two clearly-labelled actions.
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
                     onPressed: _talkNow,
                     icon: const Icon(Icons.support_agent_rounded, size: 20),
-                    label: const Text('Talk to Someone Now'),
+                    label: const Text('Talk to a Doctor Now'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF633058),
                       foregroundColor: Colors.white,
@@ -306,7 +355,61 @@ class _CounsellingScreenState extends State<CounsellingScreen> {
                     ),
                   ),
                 ),
+                SizedBox(height: R.h(context, 10)),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _talkToCounsellorNow,
+                    icon: const Icon(Icons.bolt_rounded, size: 20),
+                    label: const Text('Talk to a Counsellor Now'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF633058),
+                      side: const BorderSide(color: Color(0xFF633058), width: 1.5),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      textStyle: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 15),
+                    ),
+                  ),
+                ),
                 SizedBox(height: AppSpacing.sectionGap(context)),
+
+                // Find a specific counsellor banner — browses the real
+                // `counsellors` catalogue (mirrored from approved
+                // `counsellor_profiles` partners), same pattern as
+                // Physiotherapy's "Find a Physiotherapist" banner.
+                Container(
+                  margin: EdgeInsets.only(bottom: AppSpacing.sectionGap(context)),
+                  child: GestureDetector(
+                    onTap: () => context.push(AppRoutes.counsellingCounsellors),
+                    child: Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(colors: [Color(0xFFF3E5F5), Color(0xFFEDE7F6)]),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: const Color(0xFF633058).withValues(alpha: 0.3)),
+                      ),
+                      child: Row(children: [
+                        Container(
+                          width: 44, height: 44,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF633058).withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(Icons.person_search_rounded, color: Color(0xFF633058), size: 26),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          const Text('Find a Counsellor', style: TextStyle(
+                              fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w700,
+                              color: Color(0xFF633058))),
+                          Text('Browse counsellors by specialty & experience',
+                              style: TextStyle(fontFamily: 'Poppins', fontSize: 11, color: context.appTextSecondary)),
+                        ])),
+                        const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Color(0xFF633058)),
+                      ]),
+                    ),
+                  ),
+                ),
 
                 // ── D. Confidential banner ──────────────────────────────────
                 Container(

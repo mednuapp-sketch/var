@@ -14,6 +14,7 @@ import '../../features/auth/screens/verification_pending_screen.dart';
 import '../../features/auth/screens/partner_role_select_screen.dart';
 import '../../features/auth/screens/partner_role_register_screen.dart';
 import '../../shared_core/models/app_role.dart';
+import '../../shared_core/services/role_prefs.dart';
 import '../../features/dashboard/screens/dashboard_screen.dart';
 import '../../features/consultations/screens/incoming_request_screen.dart';
 import '../../features/consultations/screens/doctor_video_call_screen.dart';
@@ -153,7 +154,7 @@ class _AuthChangeNotifier extends ChangeNotifier {
         .collection('doctors')
         .doc(user.uid)
         .snapshots()
-        .listen((snap) {
+        .listen((snap) async {
       // This document also receives frequent writes unrelated to routing —
       // PresenceService's online heartbeat (isOnline/acceptingConsultations/
       // lastHeartbeat, every 60s while online) and location pushes. Since
@@ -169,7 +170,27 @@ class _AuthChangeNotifier extends ChangeNotifier {
       final prevStatus = status;
 
       profileExists = snap.exists;
-      role = AppRoleX.listFrom(snap.data()?['roles']).first;
+
+      // Same precedence `roleEngineProvider` (shared_core/providers/
+      // role_providers.dart) already applies for every other screen in the
+      // app: persisted device preference > the account doc's own
+      // `activeRole` field > whichever role the account was granted first.
+      // This used to just take `roles.first` unconditionally — meaning any
+      // account that was ever a Doctor before adding a second role (Lab,
+      // Pharmacy, ...) would land back on the Doctor dashboard on every
+      // fresh login/app-restart no matter which role the role switcher was
+      // last set to, since `arrayUnion` appends new roles to the end of the
+      // array and never reorders it.
+      final roles = AppRoleX.listFrom(snap.data()?['roles']);
+      final serverActiveRoleRaw = snap.data()?['activeRole'] as String?;
+      final serverPreferred = serverActiveRoleRaw != null
+          ? AppRoleX.fromFirestoreValue(serverActiveRoleRaw)
+          : null;
+      role = await RolePrefs.resolveActive(roles, serverPreferred: serverPreferred);
+      // The signed-in account may have changed while that (fast, usually
+      // cached) read was in flight — never let a stale resolution from a
+      // previous user clobber the notifier's current state.
+      if (DoctorAuthService.currentUid != user.uid) return;
 
       if (role == AppRole.doctor) {
         status = snap.data()?['status'] as String?;

@@ -11,6 +11,7 @@ import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/utils/doctor_role_filter.dart';
 import '../providers/location_provider.dart';
 import '../providers/home_nav_provider.dart';
 import '../widgets/home_widgets.dart';
@@ -672,7 +673,10 @@ class _FindBodyState extends ConsumerState<_FindBody> {
                             .limit(50)
                             .snapshots(),
                         builder: (_, snap) {
-                          final count = snap.data?.docs.length ?? 0;
+                          final count = (snap.data?.docs ?? [])
+                              .where((doc) => isDoctorAccount(
+                                  doc.data() as Map<String, dynamic>))
+                              .length;
                           return Text(
                             count > 0 ? '$count found' : '',
                             style: AppTextStyles.bodySmall,
@@ -822,6 +826,9 @@ class _FindDoctorList extends StatelessWidget {
         final docs = snap.data?.docs ?? [];
         final filtered = docs.where((doc) {
           final data = doc.data() as Map<String, dynamic>;
+          // See isDoctorAccount's own doc comment: every partner role also
+          // writes a sparse doctors/{uid} base-identity doc.
+          if (!isDoctorAccount(data)) return false;
           final docSpec = (data['specialty'] as String? ?? '');
           final name = (data['name'] as String? ?? '').toLowerCase();
           final matchSpec = spec == 'All' || docSpec == spec;

@@ -64,7 +64,7 @@ class PharmacyInventoryScreen extends ConsumerWidget {
                       child: TextField(
                         controller: priceCtrl,
                         keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(labelText: 'Price'),
+                        decoration: const InputDecoration(labelText: 'Price *'),
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -72,10 +72,23 @@ class PharmacyInventoryScreen extends ConsumerWidget {
                       child: TextField(
                         controller: stockCtrl,
                         keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(labelText: 'Stock'),
+                        decoration: const InputDecoration(labelText: 'Stock *'),
                       ),
                     ),
                   ],
+                ),
+                const SizedBox(height: 6),
+                // A blank Stock silently defaults to 0, and a 0-stock item
+                // is invisible to patients (`isActive = stock > 0 &&
+                // !blocked` — see onPharmacyInventoryWrite in
+                // functions/index.js) even though it still shows up fine
+                // here in the pharmacy's own inventory list as "Out of
+                // stock". Without this line a pharmacist adding an item
+                // and forgetting to fill in Stock has no way to know it
+                // never reached patients at all.
+                const Text(
+                  'Price and Stock must be greater than 0 — an item with 0 stock is saved but stays hidden from patients until restocked.',
+                  style: AppTextStyles.caption,
                 ),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
@@ -97,6 +110,17 @@ class PharmacyInventoryScreen extends ConsumerWidget {
                           final price = num.tryParse(priceCtrl.text.trim()) ?? 0;
                           final stock = int.tryParse(stockCtrl.text.trim()) ?? 0;
                           if (name.isEmpty || saving) return;
+                          if (price <= 0) {
+                            FeedbackService.showError(sheetContext, 'Enter a price greater than 0.');
+                            return;
+                          }
+                          if (stock <= 0) {
+                            FeedbackService.showError(
+                              sheetContext,
+                              'Enter a stock count greater than 0 — patients can\'t see an item with 0 stock.',
+                            );
+                            return;
+                          }
                           setSheetState(() => saving = true);
                           try {
                             await PharmacyInventoryService.addItem(
@@ -241,6 +265,11 @@ class _InventoryTile extends StatelessWidget {
                     Text(item.brand, style: AppTextStyles.bodySmall),
                   const SizedBox(height: 4),
                   Text(CurrencyFormatter.format(item.price), style: AppTextStyles.bodyMedium),
+                  if (item.isOutOfStock && !item.blocked) ...[
+                    const SizedBox(height: 2),
+                    const Text('Hidden from patients until restocked',
+                        style: TextStyle(fontFamily: 'Inter', fontSize: 10.5, color: AppColors.error)),
+                  ],
                 ],
               ),
             ),

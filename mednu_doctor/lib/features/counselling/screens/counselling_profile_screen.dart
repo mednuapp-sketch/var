@@ -220,6 +220,16 @@ class CounsellingProfileScreen extends ConsumerWidget {
               ],
             ),
           ),
+          if (CounsellingProfileService.currentUid != null) ...[
+            const SizedBox(height: 16),
+            PartnerDocumentsSection(
+              role: 'counsellor',
+              uid: CounsellingProfileService.currentUid!,
+              documents: profile.documents,
+              documentVerification: profile.documentVerification,
+              locked: profile.status == 'active',
+            ),
+          ],
         ],
       ),
     );

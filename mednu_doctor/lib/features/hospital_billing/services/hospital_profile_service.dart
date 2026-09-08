@@ -11,13 +11,14 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 /// Unlike every other partner role, a hospital login isn't itself the
 /// operational entity — it links back to an existing, separately admin-
 /// curated `hospitals/{hospitalId}` catalog entry (the same one the patient
-/// app books from / pays into). `createProfile` best-effort auto-matches
-/// that catalog entry by the applicant's OTP-verified phone number so admin
-/// only has to confirm rather than hunt for it, but a Director must always
-/// confirm (or pick the right one, if no match was found) before Approve
-/// runs — see `hospital_profiles`' update rule in firestore.rules, which
-/// blocks the owner from ever setting `hospitalId`/`hospitalName`/`status`
-/// themselves.
+/// app books from / pays into, and what `hospital_bill_payments.hospitalId`
+/// is filtered by). `createProfile` takes that catalog entry from the
+/// registration form's own hospital picker (`PartnerRoleRegisterScreen`),
+/// falling back to a best-effort phone-number match only if the caller
+/// didn't pass one. Either way a Director must still confirm (or pick the
+/// right one, if nothing came through) before Approve runs — see
+/// `hospital_profiles`' update rule in firestore.rules, which blocks the
+/// owner from ever setting `hospitalId`/`hospitalName`/`status` themselves.
 class HospitalProfileService {
   HospitalProfileService._();
 
@@ -45,24 +46,39 @@ class HospitalProfileService {
 
   /// `status` is always written as `'pending'` here — see firestore.rules'
   /// `hospital_profiles` create rule, which rejects any other value.
+  ///
+  /// [hospitalId]/[hospitalName] come from the registration form's own
+  /// hospital picker (the applicant selects their hospital directly from the
+  /// catalog) — the phone-number auto-match is only a fallback for the rare
+  /// case that selection didn't happen, so a Director reviewing this
+  /// application in mednu-admin still has *something* to confirm rather than
+  /// an empty "no match found" state.
   static Future<void> createProfile({
     required String uid,
     required String contactName,
     required String phone,
+    String? hospitalId,
+    String? hospitalName,
   }) async {
     String? fcmToken;
     try {
       fcmToken = await FirebaseMessaging.instance.getToken();
     } catch (_) {}
 
-    final match = await _findCatalogMatch(phone);
+    var linkedId = hospitalId;
+    var linkedName = hospitalName;
+    if (linkedId == null) {
+      final match = await _findCatalogMatch(phone);
+      linkedId = match?.id;
+      linkedName = match?.data()['name'] as String?;
+    }
 
     await _db.collection('hospital_profiles').doc(uid).set({
       'uid': uid,
       'contactName': contactName,
       'phone': phone,
-      'hospitalId': match?.id,
-      'hospitalName': match?.data()['name'] as String?,
+      'hospitalId': linkedId,
+      'hospitalName': linkedName,
       'status': 'pending',
       'createdAt': FieldValue.serverTimestamp(),
       if (fcmToken != null) 'fcmToken': fcmToken,
