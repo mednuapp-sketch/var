@@ -9,6 +9,28 @@ final authStateProvider = StreamProvider<User?>((ref) {
   return FirebaseAuth.instance.authStateChanges();
 });
 
+/// Real-time profile doc for whoever is currently signed in. Null while
+/// signed out. This is the single source of truth the router uses to decide
+/// between /register and /dashboard — see [hasCompletedProfile].
+final authProfileProvider =
+    StreamProvider<DocumentSnapshot<Map<String, dynamic>>?>((ref) {
+  final uid = ref.watch(authStateProvider).valueOrNull?.uid;
+  if (uid == null) return Stream.value(null);
+  return FirebaseFirestore.instance.collection('users').doc(uid).snapshots();
+});
+
+/// Accept docs that have isProfileCompleted OR have a non-empty name + phone
+/// (covers older mobile-registered users before the flag was added).
+bool hasCompletedProfile(DocumentSnapshot<Map<String, dynamic>>? doc) {
+  if (doc == null || !doc.exists) return false;
+  final data = doc.data() ?? {};
+  final name = (data['name'] as String?) ?? '';
+  return (data['isProfileCompleted'] == true) ||
+      (name.isNotEmpty &&
+          ((data['phone'] as String?) ?? (data['phoneNumber'] as String?) ?? '')
+              .isNotEmpty);
+}
+
 // Stored outside Riverpod state — web session object that can't be copied
 ConfirmationResult? _pendingConfirmation;
 
@@ -90,30 +112,13 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
     state = state.copyWith(loading: true);
     try {
-      final cred = await _pendingConfirmation!.confirm(otp);
-      final uid = cred.user?.uid;
+      await _pendingConfirmation!.confirm(otp);
 
-      // Check whether this UID already has a complete profile in Firestore.
-      // Mobile app sets isProfileCompleted=true; web registration does too.
-      // If either flag is missing or doc doesn't exist → send to registration.
-      bool hasProfile = false;
-      if (uid != null) {
-        final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
-        if (doc.exists) {
-          final data = doc.data() ?? {};
-          final name = (data['name'] as String?) ?? '';
-          // Accept docs that have isProfileCompleted OR have a non-empty name
-          // (covers older mobile-registered users before the flag was added).
-          hasProfile = (data['isProfileCompleted'] == true) ||
-              (name.isNotEmpty &&
-                  ((data['phone'] as String?) ?? (data['phoneNumber'] as String?) ?? '').isNotEmpty);
-        }
-      }
-
-      state = state.copyWith(
-        step: hasProfile ? AuthStep.done : AuthStep.register,
-        loading: false,
-      );
+      // Where this lands (/register vs /dashboard) is decided by the router
+      // in real time off authProfileProvider's live Firestore listener, not
+      // here — a one-shot check here would race the authStateChanges event
+      // that confirm() just triggered and could beat this read to the punch.
+      state = state.copyWith(step: AuthStep.done, loading: false);
     } on FirebaseAuthException catch (e) {
       state = state.copyWith(
         loading: false,
@@ -134,11 +139,19 @@ class AuthNotifier extends StateNotifier<AuthState> {
     String? city,
     String? bloodGroup,
   }) async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
+    final currentUser = FirebaseAuth.instance.currentUser;
+    final uid = currentUser?.uid;
     if (uid == null) {
       state = state.copyWith(error: 'Session lost. Please verify your number again.');
       return;
     }
+    // Read the verified phone straight from the Auth user rather than the
+    // notifier's local `state.phone`, which is empty if this uid reached
+    // /register via a page reload instead of the in-tab OTP flow.
+    final verifiedPhone = currentUser?.phoneNumber ?? '+91${state.phone}';
+    final localPhone = verifiedPhone.startsWith('+91')
+        ? verifiedPhone.substring(3)
+        : verifiedPhone;
     state = state.copyWith(loading: true);
     try {
       final db = FirebaseFirestore.instance;
@@ -147,9 +160,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
         'uid': uid,
         'name': name,
         // 'phone' matches the mobile app's field name & format
-        'phone': '+91${state.phone}',
+        'phone': verifiedPhone,
         // 'phoneNumber' kept for web-side backwards compat
-        'phoneNumber': state.phone,
+        'phoneNumber': localPhone,
         'email': email ?? '',
         if (dob != null) 'dob': dob,
         if (gender != null) 'gender': gender,

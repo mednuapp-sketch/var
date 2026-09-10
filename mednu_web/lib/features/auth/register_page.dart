@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/constants/app_colors.dart';
 import 'auth_provider.dart';
@@ -67,11 +66,9 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
   Widget build(BuildContext context) {
     final authState = ref.watch(authNotifierProvider);
 
-    ref.listen(authNotifierProvider, (prev, next) {
-      if (next.step == AuthStep.done) {
-        context.go('/dashboard');
-      }
-    });
+    // No manual navigation here: once completeRegistration() writes the
+    // Firestore doc, the router's redirect reacts to authProfileProvider's
+    // live snapshot and sends the user to /dashboard itself.
 
     return Scaffold(
       backgroundColor: Colors.white,

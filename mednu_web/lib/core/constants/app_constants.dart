@@ -6,9 +6,9 @@ class AppConstants {
   static const String appDescription =
       'Book doctors, access health records, manage prescriptions — all in one place.';
 
-  static const String playStoreUrl = 'https://drive.google.com/file/d/15MNHFUUP-nBcq_St9HOqlef90MlwyQlM/view?usp=sharing';
+  static const String playStoreUrl = 'https://play.google.com/store/apps/details?id=com.mednu.mednu';
   static const String appStoreUrl  = 'https://drive.google.com/file/d/15MNHFUUP-nBcq_St9HOqlef90MlwyQlM/view?usp=sharing';
-  static const String apkDownloadUrl = 'https://drive.google.com/file/d/15MNHFUUP-nBcq_St9HOqlef90MlwyQlM/view?usp=sharing';
+  static const String apkDownloadUrl = 'https://play.google.com/store/apps/details?id=com.mednu.mednu';
 
   static const String contactEmail = 'support@mednu.in';
   static const String contactPhone = '+91 93907 58684';

@@ -8,11 +8,14 @@ import '../../features/auth/register_page.dart';
 import '../../features/dashboard/dashboard_shell.dart';
 import '../../features/landing/landing_page.dart';
 
-// Bridges Riverpod auth state into a Listenable so GoRouter can refresh
-// redirects WITHOUT recreating the entire router on each auth change.
+// Bridges Riverpod auth + live profile state into a Listenable so GoRouter
+// can refresh redirects WITHOUT recreating the entire router on each change.
 class _AuthRouterNotifier extends ChangeNotifier {
   _AuthRouterNotifier(this._ref) {
     _ref.listen<AsyncValue<dynamic>>(authStateProvider, (_, __) {
+      notifyListeners();
+    });
+    _ref.listen<AsyncValue<dynamic>>(authProfileProvider, (_, __) {
       notifyListeners();
     });
   }
@@ -32,14 +35,36 @@ final routerProvider = Provider<GoRouter>((ref) {
       // Don't redirect while Firebase is still initialising
       if (authState.isLoading) return null;
 
-      final isLoggedIn = authState.valueOrNull != null;
+      final user = authState.valueOrNull;
+      final isLoggedIn = user != null;
       final isAuthRoute = state.matchedLocation.startsWith('/login') ||
           state.matchedLocation.startsWith('/otp');
       final isRegisterRoute = state.matchedLocation.startsWith('/register');
       final isDashboard = state.matchedLocation.startsWith('/dashboard');
 
-      if (isLoggedIn && isAuthRoute) return '/dashboard';
-      if (!isLoggedIn && (isDashboard || isRegisterRoute)) return '/';
+      if (!isLoggedIn) {
+        if (isDashboard || isRegisterRoute) return '/';
+        return null;
+      }
+
+      // Signed in to Firebase Auth doesn't mean the Firestore profile exists
+      // yet — signInWithPhoneNumber's confirm() fires authStateChanges the
+      // instant it succeeds, well before we know whether this is a brand
+      // new number. Wait for the live profile doc before picking a
+      // destination, instead of guessing and sending new users straight to
+      // /dashboard with no profile.
+      final profileState = ref.read(authProfileProvider);
+      if (profileState.isLoading) return null;
+      final hasProfile = hasCompletedProfile(profileState.valueOrNull);
+
+      if (!hasProfile) {
+        if (isRegisterRoute) return null;
+        final rawPhone = user.phoneNumber ?? '';
+        final localPhone = rawPhone.startsWith('+91') ? rawPhone.substring(3) : rawPhone;
+        return '/register?phone=${Uri.encodeComponent(localPhone)}';
+      }
+
+      if (isAuthRoute || isRegisterRoute) return '/dashboard';
       return null;
     },
     routes: [

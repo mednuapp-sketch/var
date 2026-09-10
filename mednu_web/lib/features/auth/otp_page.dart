@@ -56,13 +56,9 @@ class _OtpPageState extends ConsumerState<OtpPage> {
   Widget build(BuildContext context) {
     final authState = ref.watch(authNotifierProvider);
 
-    ref.listen(authNotifierProvider, (prev, next) {
-      if (next.step == AuthStep.done) {
-        context.go('/dashboard');
-      } else if (next.step == AuthStep.register) {
-        context.go('/register?phone=${Uri.encodeComponent(next.phone)}');
-      }
-    });
+    // No manual navigation here: once confirm() succeeds, the router's
+    // redirect reacts to authProfileProvider's live snapshot and sends the
+    // user to /register or /dashboard itself — see app_router.dart.
 
     return Scaffold(
       backgroundColor: Colors.white,
