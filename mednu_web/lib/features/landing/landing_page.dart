@@ -72,7 +72,7 @@ class _LandingPageState extends State<LandingPage> {
     }
   }
 
-  void _scrollToSection(String item) {
+  void _scrollToSection(String item) async {
     // Optimistically update active immediately on click
     if (_activeSection != item) setState(() => _activeSection = item);
 
@@ -96,9 +96,23 @@ class _LandingPageState extends State<LandingPage> {
     final key = keyMap[item];
     if (key?.currentContext == null) return;
 
-    Scrollable.ensureVisible(
+    // Sections far down this long sliver list can report stale/estimated
+    // geometry until Flutter has actually laid them out near the viewport
+    // once — that's what caused a click to land one section off and need a
+    // second click to correct. A zero-duration jump first forces a real
+    // layout pass at the target, then the visible animated scroll runs
+    // against fresh, accurate geometry.
+    await Scrollable.ensureVisible(
       key!.currentContext!,
-      duration: const Duration(milliseconds: 600),
+      duration: Duration.zero,
+      alignment: 0.0,
+    );
+    if (!mounted) return;
+    final settledCtx = key.currentContext;
+    if (settledCtx == null) return;
+    await Scrollable.ensureVisible(
+      settledCtx,
+      duration: const Duration(milliseconds: 500),
       curve: Curves.easeInOut,
       alignment: 0.0,
     );
@@ -162,7 +176,7 @@ class _LandingPageState extends State<LandingPage> {
 
           SliverToBoxAdapter(
             key: _contactKey,
-            child: const WebFooter(),
+            child: WebFooter(onNavTap: _scrollToSection),
           ),
         ],
       ),

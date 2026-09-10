@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/responsive.dart';
@@ -487,7 +488,9 @@ class _BookBtnState extends State<_BookBtn> {
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
       child: GestureDetector(
-        onTap: () {},
+        // Booking requires an account, so send the visitor straight into
+        // the login flow — same entry point as "Get Started" elsewhere.
+        onTap: () => context.go('/login'),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           height: widget.compact ? 34 : 42,

@@ -2,10 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/utils/launch_utils.dart';
 import '../../../core/utils/responsive.dart';
 
 class WebFooter extends StatelessWidget {
-  const WebFooter({super.key});
+  /// Scrolls to a named section on the landing page — same callback the
+  /// navbar uses. Only a few footer links (About Us, Find Doctors) map to a
+  /// section that actually exists on this page; see _FooterLink._handleTap.
+  final void Function(String section)? onNavTap;
+  const WebFooter({super.key, this.onNavTap});
 
   static const _links = {
     'Company': ['About Us', 'Careers', 'Blog', 'Contact'],
@@ -41,7 +46,9 @@ class WebFooter extends StatelessWidget {
               child: ConstrainedBox(
                 constraints: BoxConstraints(
                     maxWidth: Responsive.maxContentWidth(context)),
-                child: isMobile ? _MobileContent() : _DesktopContent(),
+                child: isMobile
+                    ? _MobileContent(onNavTap: onNavTap)
+                    : _DesktopContent(onNavTap: onNavTap),
               ),
             ),
           ),
@@ -104,6 +111,9 @@ class WebFooter extends StatelessWidget {
 // ─── Desktop content ──────────────────────────────────────────────────────────
 
 class _DesktopContent extends StatelessWidget {
+  final void Function(String)? onNavTap;
+  const _DesktopContent({this.onNavTap});
+
   @override
   Widget build(BuildContext context) {
     return Row(
@@ -113,7 +123,7 @@ class _DesktopContent extends StatelessWidget {
         const SizedBox(width: 48),
         ...WebFooter._links.entries.map((e) => Expanded(
               flex: 2,
-              child: _LinkGroup(title: e.key, links: e.value),
+              child: _LinkGroup(title: e.key, links: e.value, onNavTap: onNavTap),
             )),
       ],
     );
@@ -121,6 +131,9 @@ class _DesktopContent extends StatelessWidget {
 }
 
 class _MobileContent extends StatelessWidget {
+  final void Function(String)? onNavTap;
+  const _MobileContent({this.onNavTap});
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -130,7 +143,7 @@ class _MobileContent extends StatelessWidget {
         const SizedBox(height: 36),
         ...WebFooter._links.entries.map((e) => Padding(
               padding: const EdgeInsets.only(bottom: 28),
-              child: _LinkGroup(title: e.key, links: e.value),
+              child: _LinkGroup(title: e.key, links: e.value, onNavTap: onNavTap),
             )),
       ],
     );
@@ -221,7 +234,8 @@ class _ContactRow extends StatelessWidget {
 class _LinkGroup extends StatelessWidget {
   final String title;
   final List<String> links;
-  const _LinkGroup({required this.title, required this.links});
+  final void Function(String)? onNavTap;
+  const _LinkGroup({required this.title, required this.links, this.onNavTap});
 
   @override
   Widget build(BuildContext context) {
@@ -237,7 +251,7 @@ class _LinkGroup extends StatelessWidget {
         const SizedBox(height: 16),
         ...links.map((l) => Padding(
               padding: const EdgeInsets.only(bottom: 10),
-              child: _FooterLink(label: l),
+              child: _FooterLink(label: l, onNavTap: onNavTap),
             )),
       ],
     );
@@ -246,7 +260,8 @@ class _LinkGroup extends StatelessWidget {
 
 class _FooterLink extends StatefulWidget {
   final String label;
-  const _FooterLink({required this.label});
+  final void Function(String)? onNavTap;
+  const _FooterLink({required this.label, this.onNavTap});
 
   @override
   State<_FooterLink> createState() => _FooterLinkState();
@@ -255,13 +270,37 @@ class _FooterLink extends StatefulWidget {
 class _FooterLinkState extends State<_FooterLink> {
   bool _hovered = false;
 
+  // Only wired where a real destination exists today. Careers, Blog,
+  // Medicines, Lab Tests, Health Records, Help Center, and FAQs have no
+  // corresponding page/content anywhere in the codebase yet — left as
+  // no-ops rather than invented placeholder content.
+  void _handleTap() {
+    switch (widget.label) {
+      case 'Privacy Policy':
+        openUrl(AppConstants.privacyPolicyUrl);
+        break;
+      case 'Terms & Conditions':
+        openUrl(AppConstants.termsUrl);
+        break;
+      case 'About Us':
+        widget.onNavTap?.call('About Us');
+        break;
+      case 'Find Doctors':
+        widget.onNavTap?.call('Doctors');
+        break;
+      case 'Contact':
+        openUrl('mailto:${AppConstants.contactEmail}');
+        break;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
       child: GestureDetector(
-        onTap: () {},
+        onTap: _handleTap,
         child: AnimatedDefaultTextStyle(
           duration: const Duration(milliseconds: 180),
           style: GoogleFonts.poppins(

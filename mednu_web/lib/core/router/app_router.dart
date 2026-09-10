@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../features/articles/article_detail_page.dart';
 import '../../features/auth/auth_provider.dart';
 import '../../features/auth/login_page.dart';
 import '../../features/auth/otp_page.dart';
@@ -98,6 +99,12 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/dashboard',
         builder: (context, state) => DashboardShell(
           onLogout: () => ref.read(authNotifierProvider.notifier).signOut(),
+        ),
+      ),
+      GoRoute(
+        path: '/article/:id',
+        builder: (context, state) => ArticleDetailPage(
+          articleId: state.pathParameters['id']!,
         ),
       ),
     ],

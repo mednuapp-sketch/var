@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MedNU Terms &amp; Conditions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #FAF7F8;
+    --surface: #FFFFFF;
+    --surface-soft: #F3E9F0;
+    --text: #2A1B26;
+    --text-secondary: #6B5563;
+    --primary: #522546;
+    --primary-2: #6B3560;
+    --on-primary: #F8F0F6;
+    --accent: #C9660F;
+    --border: #E8DEE4;
+    --link: #522546;
+
+    --font-display: "Poppins", "Segoe UI", system-ui, sans-serif;
+    --font-body: "Inter", "Segoe UI", system-ui, sans-serif;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #1C0F19;
+      --surface: #2A1523;
+      --surface-soft: #33192C;
+      --text: #F3E8EF;
+      --text-secondary: #C7AFC0;
+      --primary: #C494CD;
+      --primary-2: #A874AF;
+      --on-primary: #2A1523;
+      --accent: #FFA857;
+      --border: #4A2A40;
+      --link: #C494CD;
+    }
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 16px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  a { color: var(--link); }
+  a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+  .band {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-2) 100%);
+    color: var(--on-primary);
+    padding: 3.2rem 1.5rem 2.6rem;
+  }
+  .band-inner { max-width: 720px; margin: 0 auto; }
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: .5rem;
+    font-size: .78rem; font-weight: 600; letter-spacing: .09em;
+    text-transform: uppercase; opacity: .82;
+  }
+  .band h1 {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: clamp(1.9rem, 4vw, 2.5rem);
+    margin: .6rem 0 .35rem;
+    text-wrap: balance;
+  }
+  .band .meta { font-size: .92rem; opacity: .78; }
+
+  main { max-width: 720px; margin: 0 auto; padding: 2.6rem 1.5rem 4rem; }
+
+  .intro {
+    background: var(--surface-soft);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.2rem 1.4rem;
+    font-size: .98rem;
+    color: var(--text-secondary);
+    margin-bottom: 2.2rem;
+  }
+
+  nav.toc {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.3rem 1.5rem;
+    margin-bottom: 2.6rem;
+  }
+  nav.toc h2 {
+    font-family: var(--font-display);
+    font-size: .82rem; font-weight: 700; letter-spacing: .06em;
+    text-transform: uppercase; color: var(--text-secondary);
+    margin: 0 0 .8rem;
+  }
+  nav.toc ol { list-style: none; margin: 0; padding: 0; display: grid; gap: .5rem; }
+  nav.toc a { display: flex; gap: .6rem; text-decoration: none; color: var(--text); font-size: .93rem; padding: .15rem 0; }
+  nav.toc a:hover { color: var(--link); }
+  nav.toc .num { color: var(--text-secondary); font-variant-numeric: tabular-nums; width: 1.4rem; }
+
+  section.policy-section {
+    padding: 1.9rem 0;
+    border-top: 1px solid var(--border);
+    scroll-margin-top: 1.5rem;
+  }
+  section.policy-section:first-of-type { border-top: none; }
+
+  .section-head { display: flex; align-items: baseline; gap: .8rem; margin-bottom: .7rem; }
+  .section-head .badge {
+    font-family: var(--font-display);
+    font-weight: 800; font-size: .8rem; color: var(--primary);
+    background: var(--surface-soft); border: 1px solid var(--border);
+    border-radius: 8px; padding: .15rem .5rem; flex: none;
+  }
+  .section-head h3 { font-family: var(--font-display); font-weight: 700; font-size: 1.18rem; margin: 0; text-wrap: balance; }
+  .policy-section p { color: var(--text-secondary); margin: 0 0 .8rem; }
+  .policy-section p:last-child { margin-bottom: 0; }
+  .policy-section ul { margin: 0 0 .8rem; padding-left: 1.3rem; color: var(--text-secondary); }
+  .policy-section ul:last-child { margin-bottom: 0; }
+  .policy-section li { margin-bottom: .35rem; }
+  .policy-section li:last-child { margin-bottom: 0; }
+  .policy-section strong { color: var(--text); }
+
+  .accept-box {
+    margin-top: 1.4rem;
+    background: var(--surface-soft);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.1rem 1.3rem;
+    display: flex; align-items: flex-start; gap: .7rem;
+    font-family: var(--font-display);
+    font-weight: 700; font-size: .88rem; letter-spacing: .01em;
+    color: var(--text);
+  }
+
+  footer.contact {
+    margin-top: 2.6rem;
+    background: var(--surface-soft);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.6rem 1.6rem 1.7rem;
+  }
+  footer.contact h3 { font-family: var(--font-display); font-size: 1.05rem; margin: 0 0 .5rem; }
+  footer.contact p { color: var(--text-secondary); margin: 0 0 1rem; font-size: .93rem; }
+  .mail-btn {
+    display: inline-flex; align-items: center; gap: .5rem;
+    background: var(--surface); border: 1px solid var(--border);
+    color: var(--primary); font-weight: 600; font-size: .93rem;
+    text-decoration: none; padding: .6rem 1rem; border-radius: 10px;
+  }
+  .mail-btn:hover { border-color: var(--primary); }
+
+  .page-footer { max-width: 720px; margin: 0 auto; padding: 0 1.5rem 3rem; color: var(--text-secondary); font-size: .82rem; }
+</style>
+</head>
+<body>
+
+<div class="band">
+  <div class="band-inner">
+    <span class="eyebrow">MedNU Healthcare Services Private Limited</span>
+    <h1>Terms &amp; Conditions</h1>
+    <p class="meta">Last updated: 1 January 2025 · Applies to the MedNU patient app and website</p>
+  </div>
+</div>
+
+<main>
+  <p class="intro">
+    Please read these Terms carefully before using MedNU. By using the app or
+    this website, you agree to be bound by these Terms.
+  </p>
+
+  <nav class="toc" aria-label="Table of contents">
+    <h2>Contents</h2>
+    <ol>
+      <li><a href="#s1"><span class="num">1</span> About MedNU</a></li>
+      <li><a href="#s2"><span class="num">2</span> Eligibility</a></li>
+      <li><a href="#s3"><span class="num">3</span> User Responsibility</a></li>
+      <li><a href="#s4"><span class="num">4</span> Telemedicine Consent</a></li>
+      <li><a href="#s5"><span class="num">5</span> Diagnostics and Pharmacy Services</a></li>
+      <li><a href="#s6"><span class="num">6</span> Fees and Payments</a></li>
+      <li><a href="#s7"><span class="num">7</span> Privacy and Health Data</a></li>
+      <li><a href="#s8"><span class="num">8</span> Emergency Disclaimer</a></li>
+      <li><a href="#s9"><span class="num">9</span> Limitation of Liability</a></li>
+      <li><a href="#s10"><span class="num">10</span> Suspension of Account</a></li>
+      <li><a href="#s11"><span class="num">11</span> Intellectual Property</a></li>
+      <li><a href="#s12"><span class="num">12</span> Governing Law</a></li>
+      <li><a href="#s13"><span class="num">13</span> Consent</a></li>
+    </ol>
+  </nav>
+
+  <section class="policy-section" id="s1">
+    <div class="section-head"><span class="badge">01</span><h3>About MedNU</h3></div>
+    <p>MedNU is a technology platform that connects patients with independent
+      doctors, diagnostic centres, pharmacies, and other healthcare service
+      providers. MedNU does not provide medical treatment, diagnosis,
+      prescriptions, or healthcare services directly.</p>
+  </section>
+
+  <section class="policy-section" id="s2">
+    <div class="section-head"><span class="badge">02</span><h3>Eligibility</h3></div>
+    <p>You must be at least 18 years old to register and use the Platform. If
+      registering a minor, the parent or legal guardian shall be responsible
+      for the minor's use of the Platform.</p>
+  </section>
+
+  <section class="policy-section" id="s3">
+    <div class="section-head"><span class="badge">03</span><h3>User Responsibility</h3></div>
+    <p>You agree to:</p>
+    <ul>
+      <li>Provide accurate and complete information.</li>
+      <li>Maintain confidentiality of your login credentials and OTPs.</li>
+      <li>Use the Platform only for lawful purposes.</li>
+      <li>Provide correct medical history, reports, and health information.</li>
+    </ul>
+    <p>You shall be solely responsible for any consequences arising from
+      incorrect or incomplete information provided by you.</p>
+  </section>
+
+  <section class="policy-section" id="s4">
+    <div class="section-head"><span class="badge">04</span><h3>Telemedicine Consent</h3></div>
+    <p>By booking an online consultation, you consent to receive healthcare
+      services through video, audio, or chat as permitted under applicable
+      laws and Telemedicine Practice Guidelines.</p>
+    <p>You understand that online consultations have limitations and may
+      require physical examination or further testing.</p>
+  </section>
+
+  <section class="policy-section" id="s5">
+    <div class="section-head"><span class="badge">05</span><h3>Diagnostics and Pharmacy Services</h3></div>
+    <p>Diagnostic tests and pharmacy services are provided by independent
+      partner laboratories and pharmacies. MedNU is not responsible for the
+      accuracy of test results, medicine availability, treatment outcomes, or
+      delays caused by such partners.</p>
+  </section>
+
+  <section class="policy-section" id="s6">
+    <div class="section-head"><span class="badge">06</span><h3>Fees and Payments</h3></div>
+    <p>All applicable charges will be displayed before booking or purchase.
+      Payments are processed through secure third-party payment gateways.</p>
+    <p>Refunds and cancellations shall be governed by the applicable Refund
+      and Cancellation Policy.</p>
+  </section>
+
+  <section class="policy-section" id="s7">
+    <div class="section-head"><span class="badge">07</span><h3>Privacy and Health Data</h3></div>
+    <p>Your personal and health information will be collected, stored,
+      processed, and shared with relevant healthcare providers, laboratories,
+      and pharmacies solely for providing requested services and in
+      accordance with applicable laws and our
+      <a href="patientprivacypolicy.html">Privacy Policy</a>.</p>
+  </section>
+
+  <section class="policy-section" id="s8">
+    <div class="section-head"><span class="badge">08</span><h3>Emergency Disclaimer</h3></div>
+    <p><strong>MedNU is not an emergency medical service.</strong></p>
+    <p>For any medical emergency or life-threatening condition, immediately
+      contact emergency services or visit the nearest hospital.</p>
+  </section>
+
+  <section class="policy-section" id="s9">
+    <div class="section-head"><span class="badge">09</span><h3>Limitation of Liability</h3></div>
+    <p>MedNU acts only as a facilitator platform.</p>
+    <p>To the maximum extent permitted by law, MedNU shall not be liable for:</p>
+    <ul>
+      <li>Medical advice, diagnosis, treatment, prescriptions, or healthcare outcomes.</li>
+      <li>Acts, omissions, negligence, or misconduct of doctors, laboratories, pharmacies, or other service providers.</li>
+      <li>Indirect, incidental, consequential, or special damages arising from use of the Platform.</li>
+    </ul>
+  </section>
+
+  <section class="policy-section" id="s10">
+    <div class="section-head"><span class="badge">10</span><h3>Suspension of Account</h3></div>
+    <p>MedNU reserves the right to suspend or terminate any account found to
+      be violating these Terms, providing false information, or misusing the
+      Platform.</p>
+  </section>
+
+  <section class="policy-section" id="s11">
+    <div class="section-head"><span class="badge">11</span><h3>Intellectual Property</h3></div>
+    <p>All trademarks, logos, software, content, and intellectual property
+      associated with MedNU remain the exclusive property of MedNU and may
+      not be copied or used without prior written permission.</p>
+  </section>
+
+  <section class="policy-section" id="s12">
+    <div class="section-head"><span class="badge">12</span><h3>Governing Law</h3></div>
+    <p>These Terms shall be governed by the laws of India and subject to the
+      exclusive jurisdiction of the courts at Visakhapatnam, Andhra Pradesh.</p>
+  </section>
+
+  <section class="policy-section" id="s13">
+    <div class="section-head"><span class="badge">13</span><h3>Consent</h3></div>
+    <p>By clicking "I Accept", registering an account, or using the
+      Platform, you confirm that:</p>
+    <ul>
+      <li>You have read and understood these Terms.</li>
+      <li>You voluntarily agree to be legally bound by them.</li>
+      <li>You consent to electronic communications and electronic records.</li>
+      <li>You understand the nature and limitations of telemedicine and online healthcare services.</li>
+      <li>You agree to the collection and processing of your personal and health information for providing services through the Platform.</li>
+    </ul>
+    <div class="accept-box">
+      <span>✅</span>
+      <span>I HAVE READ, UNDERSTOOD, AND AGREE TO THESE TERMS AND CONDITIONS.</span>
+    </div>
+  </section>
+
+  <footer class="contact">
+    <h3>Questions?</h3>
+    <p>If you have questions about these Terms &amp; Conditions, please reach
+      out to us:</p>
+    <a class="mail-btn" href="mailto:mednuapp@gmail.com">✉ mednuapp@gmail.com</a>
+  </footer>
+</main>
+
+<p class="page-footer">MedNU Healthcare Services Private Limited</p>
+</body>
+</html>

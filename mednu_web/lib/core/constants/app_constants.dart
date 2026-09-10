@@ -10,6 +10,10 @@ class AppConstants {
   static const String appStoreUrl  = 'https://drive.google.com/file/d/15MNHFUUP-nBcq_St9HOqlef90MlwyQlM/view?usp=sharing';
   static const String apkDownloadUrl = 'https://play.google.com/store/apps/details?id=com.mednu.mednu';
 
+  // Same legal docs already live on the admin site — reused rather than duplicated.
+  static const String privacyPolicyUrl = 'https://mednu-healthcare-app.web.app/patientprivacypolicy.html';
+  static const String termsUrl = 'https://mednu-healthcare-app.web.app/terms.html';
+
   static const String contactEmail = 'support@mednu.in';
   static const String contactPhone = '+91 93907 58684';
   static const String contactAddress = 'MedNU Healthcare Services Pvt. Ltd., Visakhapatnam, Andhra Pradesh, India';
