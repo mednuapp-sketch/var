@@ -5693,7 +5693,7 @@ function _describeAdminAlert(a) {
 // → Web Push certificates (generate one, then paste it below) — without it
 // this quietly no-ops rather than throwing, so the rest of the dashboard is
 // unaffected.
-const ADMIN_VAPID_KEY = 'PASTE_YOUR_VAPID_KEY_HERE';
+const ADMIN_VAPID_KEY = 'BLmu6pUBnb50n2Mv92hv-vXjvTY6jNMAAyMiritoMgf-OJoeah1QzEJr52PlckIgRedC4Q6TiK-lPHzD8np4jmo';
 
 async function initAdminPushNotifications() {
   if (!ADMIN_VAPID_KEY || ADMIN_VAPID_KEY.startsWith('PASTE_')) {
