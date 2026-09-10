@@ -70,19 +70,23 @@ class CounsellingSessionService {
   }
 
   /// Claiming a session sets both `counsellorId` and `status` in one write —
-  /// a single-practitioner service with no separate check-in step.
+  /// a single-practitioner service with no separate check-in step. Also
+  /// allows confirming a session already pinned to this counsellor — see
+  /// PhysioSessionService.claim's doc comment for the full reasoning (same
+  /// widened precondition, same class of bug this closes off).
   static Future<void> claim(String sessionId, String counsellorId) => _transitionSession(
         sessionId,
-        precondition: (d) => d['counsellorId'] == null && d['status'] == 'pending',
+        precondition: (d) =>
+            (d['counsellorId'] == null || d['counsellorId'] == counsellorId) && d['status'] == 'pending',
         conflictMessage: 'This session was already taken by another counsellor.',
         buildUpdate: (d) => {'counsellorId': counsellorId, 'status': 'accepted'},
       );
 
-  /// Declining an unclaimed session — same rule branch as [claim], just with
-  /// a 'cancelled' result instead of 'accepted'.
+  /// Declining a session — same widened rule as [claim].
   static Future<void> decline(String sessionId, String counsellorId) => _transitionSession(
         sessionId,
-        precondition: (d) => d['counsellorId'] == null && d['status'] == 'pending',
+        precondition: (d) =>
+            (d['counsellorId'] == null || d['counsellorId'] == counsellorId) && d['status'] == 'pending',
         conflictMessage: 'This session is no longer available to decline.',
         buildUpdate: (d) => {'counsellorId': counsellorId, 'status': 'cancelled'},
       );

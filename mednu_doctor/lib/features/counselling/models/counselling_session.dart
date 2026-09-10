@@ -91,10 +91,29 @@ class CounsellingSession {
     );
   }
 
+  /// See PhysioSessionService's identical `_statusFrom` fix for the full
+  /// reasoning: `CounsellingSessionService.start` writes `status:
+  /// 'in_progress'` (snake_case), which never matched
+  /// `CounsellingSessionStatus.inProgress.name` ('inProgress', camelCase) —
+  /// an in-progress session silently displayed as "Pending" with
+  /// Accept/Decline again, and Accept failed with a misleading "already
+  /// taken by another counsellor" message.
   static CounsellingSessionStatus _statusFrom(String? raw) {
-    for (final s in CounsellingSessionStatus.values) {
-      if (s.name == raw) return s;
+    switch (raw) {
+      case 'pending':
+        return CounsellingSessionStatus.pending;
+      case 'accepted':
+        return CounsellingSessionStatus.accepted;
+      case 'in_progress':
+        return CounsellingSessionStatus.inProgress;
+      case 'completed':
+        return CounsellingSessionStatus.completed;
+      case 'cancelled':
+        return CounsellingSessionStatus.cancelled;
+      case 'expired':
+        return CounsellingSessionStatus.expired;
+      default:
+        return CounsellingSessionStatus.pending;
     }
-    return CounsellingSessionStatus.pending;
   }
 }

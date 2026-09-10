@@ -92,10 +92,32 @@ class PhysioSession {
     );
   }
 
+  /// `PhysioSessionService.start` writes `status: 'in_progress'` (snake_case,
+  /// matching every other status string this module ever writes/checks —
+  /// `complete`'s own precondition reads it back the same way) — but this
+  /// used to match against `PhysioSessionStatus.values`' `.name` (Dart's
+  /// enum-identifier casing, 'inProgress', camelCase). Those never matched,
+  /// so an in-progress session silently fell through to the `pending`
+  /// default: the session detail screen showed "Pending" with Accept/Decline
+  /// again, and tapping Accept correctly failed against the *real* Firestore
+  /// status ('in_progress' — not 'pending') but with the wrong, misleading
+  /// "already taken by another physiotherapist" message.
   static PhysioSessionStatus _statusFrom(String? raw) {
-    for (final s in PhysioSessionStatus.values) {
-      if (s.name == raw) return s;
+    switch (raw) {
+      case 'pending':
+        return PhysioSessionStatus.pending;
+      case 'accepted':
+        return PhysioSessionStatus.accepted;
+      case 'in_progress':
+        return PhysioSessionStatus.inProgress;
+      case 'completed':
+        return PhysioSessionStatus.completed;
+      case 'cancelled':
+        return PhysioSessionStatus.cancelled;
+      case 'expired':
+        return PhysioSessionStatus.expired;
+      default:
+        return PhysioSessionStatus.pending;
     }
-    return PhysioSessionStatus.pending;
   }
 }

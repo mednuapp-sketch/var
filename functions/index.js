@@ -326,6 +326,16 @@ exports.onSeriousComplaint = onDocumentCreated(
       isRead: false,
     });
 
+    // This write-only-no-push was the gap: every other admin_alerts producer
+    // goes through _sendAdminAlert (which pushes too); this one and
+    // onEmergencyDoctorRequest built their own structured doc directly and
+    // never pushed. See _pushToAllAdmins' comment above.
+    await _pushToAllAdmins(db, getMessaging(), {
+      title: "🚨 Serious Complaint",
+      body: `${data.patientName || "A patient"} reported an issue with Dr. ${data.doctorName || "Unknown"}.`,
+      type: "serious_complaint",
+    });
+
     console.log(`Serious complaint alert created for complaint ${event.params.complaintId}`);
   }
 );
@@ -995,6 +1005,14 @@ exports.onEmergencyDoctorRequest = onDocumentCreated(
     });
 
     await batch.commit();
+
+    // See onSeriousComplaint's identical call above — this admin_alerts
+    // producer also built its own doc directly and never pushed.
+    await _pushToAllAdmins(db, getMessaging(), {
+      title: "🚨 Emergency Doctor Request",
+      body: `${patientName || "A patient"} needs an emergency doctor now.`,
+      type: "emergency_doctor",
+    });
 
     // Mark the request as notified.
     await snap.ref.update({
@@ -2888,19 +2906,17 @@ async function _broadcastNewJobToActiveProviders(db, messaging, {
   console.log(`New-job broadcast (${type}): notified ${providerIds.length} active ${profileCollection}.`);
 }
 
-// ── Admin alert helper ────────────────────────────────────────────────────────
-// Writes to the existing `admin_alerts` collection and pushes FCM to every
-// admin with a registered token. Never throws — an alert failing to send
-// must never fail the financial operation that triggered it.
-async function _sendAdminAlert(db, messaging, opts) {
-  const { title, body, type, extraData = {} } = opts;
-  try {
-    await db.collection("admin_alerts").add({
-      title, body, type, data: extraData, isRead: false, createdAt: FieldValue.serverTimestamp(),
-    });
-  } catch (err) {
-    console.error("Failed to write admin_alerts doc:", err.message);
-  }
+// ── Admin push helper ─────────────────────────────────────────────────────────
+// Pushes FCM to every admin with a registered browser token (admins/{uid}.fcmToken,
+// self-written by mednu-admin's initAdminPushNotifications — see firestore.rules).
+// Not role-scoped: admin_alerts is a shared, cross-cutting "things that just
+// happened" feed meant for every profile including Director, same as the bell
+// it mirrors. Shared by _sendAdminAlert below and by the two admin_alerts
+// writers (onSeriousComplaint, onEmergencyDoctorRequest) that build their own
+// structured doc rather than going through _sendAdminAlert's opts shape. Never
+// throws — an alert failing to send must never fail the operation that
+// triggered it.
+async function _pushToAllAdmins(db, messaging, { title, body, type }) {
   try {
     const tokensSnap = await db.collection("admins").get();
     const tokens = tokensSnap.docs.map((d) => d.get("fcmToken")).filter(Boolean);
@@ -2910,6 +2926,21 @@ async function _sendAdminAlert(db, messaging, opts) {
   } catch (err) {
     console.error("Failed to push admin alert:", err.message);
   }
+}
+
+// ── Admin alert helper ────────────────────────────────────────────────────────
+// Writes to the existing `admin_alerts` collection and pushes FCM via
+// _pushToAllAdmins above. Never throws — see that function's note.
+async function _sendAdminAlert(db, messaging, opts) {
+  const { title, body, type, extraData = {} } = opts;
+  try {
+    await db.collection("admin_alerts").add({
+      title, body, type, data: extraData, isRead: false, createdAt: FieldValue.serverTimestamp(),
+    });
+  } catch (err) {
+    console.error("Failed to write admin_alerts doc:", err.message);
+  }
+  await _pushToAllAdmins(db, messaging, { title, body, type });
 }
 
 // ── Commission engine ─────────────────────────────────────────────────────────

@@ -91,6 +91,20 @@ class _RequestCardState extends ConsumerState<_RequestCard> {
     final request = widget.request;
     final ageMinutes = DateTime.now().difference(request.requestedAt).inMinutes;
     final remaining = (5 - ageMinutes).clamp(0, 5);
+    // Nearest-driver matching (onAmbulanceServiceRequestCreated) pins
+    // `ambulanceId` straight to this driver at creation but still writes
+    // `status: 'pending'` — there's nothing to *claim* for a matched
+    // request, but it still needs an explicit accept. AmbulanceRequestService
+    // .accept()'s precondition only covers the open-pool case
+    // (`ambulanceId == null`); a matched request needs acceptAssigned()
+    // instead (see ambulance_request_detail_screen.dart's identical
+    // isAssignedToMe dispatch) or it fails with a false "already accepted by
+    // another ambulance" — this card is the *first* place a driver sees a
+    // new request, so without this check the single most common dispatch
+    // path (a nearby driver getting matched) could never actually be
+    // accepted from here.
+    final isAssignedToMe =
+        request.ambulanceId != null && request.ambulanceId == AmbulanceProfileService.currentUid;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
@@ -163,7 +177,11 @@ class _RequestCardState extends ConsumerState<_RequestCard> {
                       ? null
                       : () async {
                           final router = GoRouter.of(context);
-                          final ok = await _run((uid) => AmbulanceRequestService.accept(request.id, uid));
+                          final ok = await _run(
+                            (uid) => isAssignedToMe
+                                ? AmbulanceRequestService.acceptAssigned(request.id, uid)
+                                : AmbulanceRequestService.accept(request.id, uid),
+                          );
                           if (!ok || !mounted) return;
                           router.push(AppRoutes.ambulanceLiveTracking, extra: {'requestId': request.id});
                         },

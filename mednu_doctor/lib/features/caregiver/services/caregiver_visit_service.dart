@@ -92,10 +92,20 @@ class CaregiverVisitService {
 
   /// Claiming a visit does NOT change its status — a claimed visit stays
   /// `scheduled` until the caregiver actually checks in on the day. Only
-  /// `caregiverId` moves, from null to the caller.
+  /// `caregiverId` moves, from null to the caller — or, if this visit was
+  /// booked straight from this caregiver's own profile card, was already the
+  /// caller (onCaregiverServiceRequestCreated pins `caregiverId` at creation
+  /// but still writes `status: 'scheduled'`, unlike the session-based
+  /// verticals whose pinned bookings start 'accepted'). Not currently called
+  /// from any screen — [checkIn] below already covers both cases and is what
+  /// the visit detail screen's "Check In" action uses — but kept correct
+  /// rather than left as a landmine matching this exact bug class (see the
+  /// identical fix in PharmacyOrderService.acceptOrder for the real-world
+  /// case where it mattered).
   static Future<void> claim(String visitId, String caregiverId) => _transitionVisit(
         visitId,
-        precondition: (d) => d['caregiverId'] == null && d['status'] == 'scheduled',
+        precondition: (d) =>
+            (d['caregiverId'] == null || d['caregiverId'] == caregiverId) && d['status'] == 'scheduled',
         conflictMessage: 'This visit was already assigned to another caregiver.',
         buildUpdate: (d) => {'caregiverId': caregiverId},
       );

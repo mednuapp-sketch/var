@@ -54,6 +54,13 @@ class _VideoCallScreenState extends State<VideoCallScreen>
   bool _isReconnecting = false;
   int _callDuration = 0;
 
+  /// True once the SDK's own auto-reconnect has given up
+  /// (`connectionStateFailed`) — distinct from `_isReconnecting`, which
+  /// covers the transient "still trying" state. Drives a retry banner
+  /// instead of leaving the call frozen with no way back.
+  bool _callFailed = false;
+  bool _retryingConnection = false;
+
   // Pre-join lobby (Google Meet-style): request camera/mic permission and
   // preview the local camera before actually publishing/joining the channel.
   bool _inLobby = true;
@@ -108,7 +115,21 @@ class _VideoCallScreenState extends State<VideoCallScreen>
       onConnectionStateChanged: (state) {
         if (!mounted) return;
         final reconnecting = state == ConnectionStateType.connectionStateReconnecting;
-        setState(() => _isReconnecting = reconnecting);
+        setState(() {
+          _isReconnecting = reconnecting;
+          if (state == ConnectionStateType.connectionStateConnected ||
+              state == ConnectionStateType.connectionStateReconnecting ||
+              state == ConnectionStateType.connectionStateConnecting) {
+            _callFailed = false;
+          }
+        });
+      },
+      onConnectionFailed: () {
+        if (!mounted) return;
+        setState(() {
+          _isReconnecting = false;
+          _callFailed = true;
+        });
       },
       onAgoraError: (code, msg) {
         if (!mounted) return;
@@ -366,6 +387,7 @@ class _VideoCallScreenState extends State<VideoCallScreen>
             _buildLocalPip(),
             _buildTopBar(),
             if (_isReconnecting) _buildReconnectBanner(),
+            if (_callFailed) _buildCallFailedBanner(),
             if (_agoraError != null) _buildAgoraErrorBanner(),
             _buildBottomControls(),
           ],
@@ -956,11 +978,82 @@ class _VideoCallScreenState extends State<VideoCallScreen>
     );
   }
 
+  // ── Call failed banner ────────────────────────────────────────────────────
+
+  Future<void> _retryConnection() async {
+    if (_retryingConnection) return;
+    setState(() => _retryingConnection = true);
+    final ok = await _agora.retryConnection();
+    if (!mounted) return;
+    setState(() {
+      _retryingConnection = false;
+      if (ok) _callFailed = false;
+    });
+    if (!ok && mounted) {
+      setState(() {
+        _callFailed = true;
+        _agoraError = 'Still unable to connect. Check your network and try again.';
+      });
+    }
+  }
+
+  Widget _buildCallFailedBanner() {
+    return Positioned(
+      top: 110,
+      left: 16,
+      right: 16,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: Colors.red.shade700.withValues(alpha: 0.92),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.wifi_off_rounded, color: Colors.white, size: 18),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Text(
+                'Call disconnected — network lost.',
+                style: TextStyle(
+                    fontFamily: 'Poppins', fontSize: 12, fontWeight: FontWeight.w500, color: Colors.white),
+              ),
+            ),
+            GestureDetector(
+              onTap: _retryingConnection ? null : _retryConnection,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: _retryingConnection
+                    ? const SizedBox(
+                        width: 12,
+                        height: 12,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.red),
+                      )
+                    : Text(
+                        'Retry',
+                        style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.red.shade700),
+                      ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // ── Agora error banner ────────────────────────────────────────────────────
 
   Widget _buildAgoraErrorBanner() {
     return Positioned(
-      top: 110,
+      top: (_isReconnecting || _callFailed) ? 164 : 110,
       left: 16,
       right: 16,
       child: Container(

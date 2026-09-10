@@ -30,6 +30,17 @@ class AgoraCallService {
   bool _isAudioOnlyMode = false;
   bool _userVideoMuted = false;
 
+  // Dual-stream mode (enabled in initialize()) lets each side independently
+  // choose the INCOMING resolution it pulls, separate from what it encodes
+  // and sends. `_handleNetworkQuality` already adapted the outgoing encode;
+  // it never touched this, so a bad network still pulled full 720p from the
+  // remote peer even while the local upload degraded. This mirrors
+  // `_currentTier` for the receive side.
+  VideoStreamType get _currentRemoteStreamType =>
+      _currentTier == _QualityTier.low || _currentTier == _QualityTier.audioOnly
+          ? VideoStreamType.videoStreamLow
+          : VideoStreamType.videoStreamHigh;
+
   final void Function(int uid) onRemoteJoined;
   final void Function(int uid) onRemoteLeft;
 
@@ -41,15 +52,27 @@ class AgoraCallService {
   /// reconnecting after a network drop.
   final void Function(ConnectionStateType state)? onConnectionStateChanged;
 
+  /// Fires when the SDK's own auto-reconnect gives up
+  /// (`connectionStateFailed`) — the UI has no other signal that the call is
+  /// truly dead rather than still retrying, so this is what drives a
+  /// "Call failed — Tap to retry" action instead of leaving a frozen screen.
+  final void Function()? onConnectionFailed;
+
   /// Fires on any Agora engine error so the UI can display a meaningful message
   /// instead of leaving the user with a silent black screen.
   final void Function(ErrorCodeType code, String message)? onAgoraError;
+
+  /// Channel this service last (successfully or attemptedly) joined — kept
+  /// so [retryConnection] can rejoin with a fresh token after
+  /// `connectionStateFailed` without the caller having to re-supply it.
+  String? _lastChannelId;
 
   AgoraCallService({
     required this.onRemoteJoined,
     required this.onRemoteLeft,
     this.onNetworkQualityChanged,
     this.onConnectionStateChanged,
+    this.onConnectionFailed,
     this.onAgoraError,
   });
 
@@ -88,10 +111,13 @@ class AgoraCallService {
       },
       onUserJoined: (_, uid, __) {
         remoteUids.add(uid);
-        // Always subscribe to the highest quality stream
+        // Subscribe at whatever quality the call is currently running at —
+        // a late joiner during an already-degraded call should get the low
+        // stream immediately, not the high one this handler used to
+        // hardcode regardless of measured network quality.
         _engine!.setRemoteVideoStreamType(
           uid: uid,
-          streamType: VideoStreamType.videoStreamHigh,
+          streamType: _currentRemoteStreamType,
         );
         onRemoteJoined(uid);
       },
@@ -110,9 +136,20 @@ class AgoraCallService {
           for (final uid in remoteUids) {
             _engine?.setRemoteVideoStreamType(
               uid: uid,
-              streamType: VideoStreamType.videoStreamHigh,
+              streamType: _currentRemoteStreamType,
             );
           }
+        }
+        // The SDK auto-retries reconnectingâ†’connected on its own; `failed`
+        // is what it transitions to once that internal retry gives up
+        // (e.g. a genuinely dead network, not just a blip). Nothing else in
+        // this service, or any call screen, was watching for this state —
+        // a call could die here and just sit frozen with no way back short
+        // of the user manually leaving. `onConnectionFailed` gives the UI a
+        // hook to show a "Call failed — Tap to retry" action instead.
+        if (state == ConnectionStateType.connectionStateFailed) {
+          isJoined = false;
+          onConnectionFailed?.call();
         }
       },
       onTokenPrivilegeWillExpire: (connection, token) async {
@@ -155,6 +192,7 @@ class AgoraCallService {
     }
 
     if (targetTier == _currentTier) return;
+    final previousTier = _currentTier;
     _currentTier = targetTier;
 
     if (targetTier == _QualityTier.audioOnly) {
@@ -162,6 +200,20 @@ class AgoraCallService {
     } else {
       if (_isAudioOnlyMode) _exitAudioFirstMode();
       _applyVideoConfig(targetTier);
+    }
+
+    // Only re-subscribe when crossing the low/high boundary — stepping
+    // between high and medium doesn't need a different incoming stream, and
+    // re-issuing an identical setRemoteVideoStreamType call on every minor
+    // fluctuation would just be wasted signalling.
+    final wasLowBand =
+        previousTier == _QualityTier.low || previousTier == _QualityTier.audioOnly;
+    final isLowBand =
+        targetTier == _QualityTier.low || targetTier == _QualityTier.audioOnly;
+    if (wasLowBand != isLowBand) {
+      for (final uid in remoteUids) {
+        _engine?.setRemoteVideoStreamType(uid: uid, streamType: _currentRemoteStreamType);
+      }
     }
 
     onNetworkQualityChanged?.call(worstIndex, _isAudioOnlyMode);
@@ -227,6 +279,7 @@ class AgoraCallService {
 
   Future<void> joinChannel(String channelId) async {
     if (isJoined || _engine == null) return;
+    _lastChannelId = channelId;
     final auth = await _fetchAuth(channelId);
     if (isJoined || _engine == null) return;
     isJoined = true;
@@ -243,6 +296,30 @@ class AgoraCallService {
         clientRoleType: ClientRoleType.clientRoleBroadcaster,
       ),
     );
+  }
+
+  /// Full leave + rejoin with a freshly-minted token, for use after
+  /// `onConnectionFailed` — the SDK's own internal retry has already given
+  /// up by that point, and the old token may well have expired during
+  /// however long the outage lasted, so a plain reconnect isn't enough.
+  /// Returns false (instead of throwing) on failure so the UI can show a
+  /// "still can't connect" message and let the user try again rather than
+  /// crashing the call screen.
+  Future<bool> retryConnection() async {
+    final channelId = _lastChannelId;
+    if (channelId == null || _engine == null) return false;
+    try {
+      if (isJoined) {
+        await _engine!.leaveChannel();
+        isJoined = false;
+      }
+      remoteUids.clear();
+      await joinChannel(channelId);
+      return true;
+    } catch (e) {
+      debugPrint('[Agora Doctor] retryConnection failed: $e');
+      return false;
+    }
   }
 
   Future<void> muteLocalAudio(bool muted) async {

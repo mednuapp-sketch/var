@@ -76,19 +76,34 @@ class PhysioSessionService {
 
   /// Claiming a session sets both `physiotherapistId` and `status` in one
   /// write — unlike Caregiver, this is a single-practitioner service with no
-  /// separate check-in step (matches Ambulance's claim shape).
+  /// separate check-in step (matches Ambulance's claim shape). Also allows
+  /// confirming a session already pinned to this physiotherapist (a patient
+  /// booked straight from this physiotherapist's own profile) — normally
+  /// that arrives already `status: 'accepted'` (see `_buildSessionDoc` in
+  /// functions/index.js, which sets status 'accepted' immediately whenever
+  /// a provider is pre-assigned) so this branch shouldn't be reachable in
+  /// the happy path, but a bare `physiotherapistId == null` precondition
+  /// here — unlike PharmacyOrderService.acceptOrder, which had exactly this
+  /// gap for pharmacy's own pinned-but-still-'pending' orders — is a
+  /// needless landmine if a pinned session is ever still 'pending' for any
+  /// reason (a retried/duplicated write, a future change to that mirror,
+  /// manual data repair, ...).
   static Future<void> claim(String sessionId, String physiotherapistId) => _transitionSession(
         sessionId,
-        precondition: (d) => d['physiotherapistId'] == null && d['status'] == 'pending',
+        precondition: (d) =>
+            (d['physiotherapistId'] == null || d['physiotherapistId'] == physiotherapistId) &&
+            d['status'] == 'pending',
         conflictMessage: 'This session was already taken by another physiotherapist.',
         buildUpdate: (d) => {'physiotherapistId': physiotherapistId, 'status': 'accepted'},
       );
 
-  /// Declining an unclaimed session — same rule branch as [claim], just with
-  /// a 'cancelled' result instead of 'accepted'.
+  /// Declining a session — same widened rule as [claim] (see its own doc
+  /// comment), just with a 'cancelled' result instead of 'accepted'.
   static Future<void> decline(String sessionId, String physiotherapistId) => _transitionSession(
         sessionId,
-        precondition: (d) => d['physiotherapistId'] == null && d['status'] == 'pending',
+        precondition: (d) =>
+            (d['physiotherapistId'] == null || d['physiotherapistId'] == physiotherapistId) &&
+            d['status'] == 'pending',
         conflictMessage: 'This session is no longer available to decline.',
         buildUpdate: (d) => {'physiotherapistId': physiotherapistId, 'status': 'cancelled'},
       );

@@ -41,8 +41,6 @@ class _CreateMPINScreenState extends ConsumerState<CreateMPINScreen>
 
   // Step slide transition
   late AnimationController _stepCtrl;
-  late Animation<Offset> _stepSlide;
-  late Animation<double> _stepFade;
 
   // Success glow
   late AnimationController _successCtrl;
@@ -70,9 +68,6 @@ class _CreateMPINScreenState extends ConsumerState<CreateMPINScreen>
 
     _stepCtrl = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 320));
-    _stepSlide = Tween(begin: const Offset(0.15, 0), end: Offset.zero).animate(
-        CurvedAnimation(parent: _stepCtrl, curve: Curves.easeOutCubic));
-    _stepFade = CurvedAnimation(parent: _stepCtrl, curve: Curves.easeOut);
 
     _successCtrl = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 500));

@@ -121,6 +121,7 @@ auth.onAuthStateChanged(async user => {
     document.getElementById('app').style.display = 'flex';
     applyRoleNavVisibility();
     initDashboard();
+    initAdminPushNotifications();
     if (!canAccessTab('overview')) {
       const landing = firstAccessibleTab();
       if (landing) switchTab(landing.tab, landing.title);
@@ -5677,6 +5678,50 @@ function _describeAdminAlert(a) {
     title: capitalize((a.type || 'alert').replace(/_/g, ' ')),
     sub: a.data ? Object.entries(a.data).map(([k, v]) => `${k}: ${v}`).join(', ') : '',
   };
+}
+
+// ── Browser push (FCM) — the other half of real-time ────────────────────────
+// The listeners above (and initNotificationsListener/initAdminAlertsListener
+// below) already give every role a live in-tab bell. This adds an OS-level
+// notification when the dashboard tab is backgrounded or closed, via the same
+// admin_alerts pipeline (_sendAdminAlert/_pushToAllAdmins, functions/index.js)
+// which already reads admins/{uid}.fcmToken — this just registers that token.
+// Called unconditionally for every profile including Director (see the
+// auth-guard call site above); admin_alerts pushes are not role-scoped.
+//
+// Needs a VAPID key from Firebase Console → Project settings → Cloud Messaging
+// → Web Push certificates (generate one, then paste it below) — without it
+// this quietly no-ops rather than throwing, so the rest of the dashboard is
+// unaffected.
+const ADMIN_VAPID_KEY = 'PASTE_YOUR_VAPID_KEY_HERE';
+
+async function initAdminPushNotifications() {
+  if (!ADMIN_VAPID_KEY || ADMIN_VAPID_KEY.startsWith('PASTE_')) {
+    console.warn('Admin push notifications disabled: set ADMIN_VAPID_KEY in app.js (Firebase Console → Project settings → Cloud Messaging → Web Push certificates).');
+    return;
+  }
+  if (!('serviceWorker' in navigator) || !firebase.messaging || !firebase.messaging.isSupported()) return;
+  try {
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') return;
+    const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+    const messaging = firebase.messaging();
+    const token = await messaging.getToken({ vapidKey: ADMIN_VAPID_KEY, serviceWorkerRegistration: registration });
+    if (token && auth.currentUser) {
+      await db.collection('admins').doc(auth.currentUser.uid).update({
+        fcmToken: token,
+        fcmTokenUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+    // Foreground (tab open/focused): the in-tab listeners already cover the
+    // underlying data live, so this just surfaces an OS toast alongside it
+    // rather than re-deriving anything from the payload.
+    messaging.onMessage(payload => {
+      showToast(payload.notification?.title || 'New alert');
+    });
+  } catch (err) {
+    console.error('initAdminPushNotifications:', err);
+  }
 }
 
 function initAdminAlertsListener() {

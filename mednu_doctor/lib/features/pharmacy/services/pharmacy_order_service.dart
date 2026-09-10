@@ -124,12 +124,20 @@ class PharmacyOrderService {
     });
   }
 
-  /// Accepts (claims) a pending order. If the source order requires a
-  /// prescription, it lands on `prescription_required` instead of jumping
-  /// straight to `verified` — the pharmacist must review it first.
+  /// Accepts a pending order — either claims it from the shared unclaimed
+  /// pool (`pharmacyId == null`, another pharmacy might grab it first) or
+  /// confirms one already pinned to this pharmacy (a patient ordered
+  /// straight from this pharmacy's own menu — see onMedicineOrderCreated's
+  /// `pinnedPharmacyId` branch in functions/index.js, which sets `status:
+  /// 'pending'` regardless of whether it pinned a pharmacy or not). Mirrors
+  /// `cancelOrder`'s precondition below — that one already allowed both
+  /// cases; this one only allowed the pool-claim case, so accepting a
+  /// pharmacy's own pinned order always failed with a "claimed by another
+  /// pharmacy" error that was never actually true.
   static Future<void> acceptOrder(String orderId, String pharmacyId) => _transitionOrder(
         orderId,
-        precondition: (d) => d['pharmacyId'] == null && d['status'] == 'pending',
+        precondition: (d) =>
+            (d['pharmacyId'] == null || d['pharmacyId'] == pharmacyId) && d['status'] == 'pending',
         conflictMessage: 'This order was already claimed by another pharmacy.',
         buildUpdate: (d) => {
           'pharmacyId': pharmacyId,

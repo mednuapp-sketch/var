@@ -114,7 +114,16 @@ service cloud.firestore {
     // ── Admins collection ───────────────────────────────────────────────────
     match /admins/{adminId} {
       allow read: if isAdmin();
-      allow write: if false; // Only Firebase Console / Cloud Functions can manage admins
+      // Only Firebase Console / Cloud Functions can manage admin accounts — the
+      // one narrow exception is an admin registering their own browser-push
+      // token for the live notification bell (see initAdminPushNotifications,
+      // mednu-admin/js/app.js, and _sendAdminAlert/_pushToAllAdmins in
+      // functions/index.js, which read this field to target every admin).
+      // `role` and everything else stays locked down — this can never be used
+      // to self-promote or touch another admin's doc.
+      allow update: if isOwner(adminId) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcmToken', 'fcmTokenUpdatedAt']);
+      allow create, delete: if false;
     }
 
     // ── Admin-generated reports (mednu-admin Reports tab) ────────────────────
@@ -702,7 +711,8 @@ service cloud.firestore {
                          doesNotModify(['status', 'isVerified', 'rating', 'totalReviews', 'documentVerification']) &&
                          (resource.data.status != 'active' || doesNotModify(['documents']))) ||
                        (adminInRoles(['hr']) &&
-                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['documentVerification'])) ||
+                         request.resource.data.diff(resource.data).affectedKeys()
+                           .hasOnly(['documentVerification', 'documentsVerified', 'updatedAt', 'updatedBy'])) ||
                        isDirector();
       allow delete: if isDirector();
 
@@ -815,7 +825,8 @@ service cloud.firestore {
                          doesNotModify(['status', 'isVerified', 'rating', 'totalReviews', 'documentVerification']) &&
                          (resource.data.status != 'active' || doesNotModify(['documents']))) ||
                        (adminInRoles(['hr']) &&
-                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['documentVerification'])) ||
+                         request.resource.data.diff(resource.data).affectedKeys()
+                           .hasOnly(['documentVerification', 'documentsVerified', 'updatedAt', 'updatedBy'])) ||
                        isDirector();
       allow delete: if isDirector();
 
@@ -922,7 +933,8 @@ service cloud.firestore {
                          doesNotModify(['status', 'isVerified', 'rating', 'totalReviews', 'totalTrips', 'documentVerification']) &&
                          (resource.data.status != 'active' || doesNotModify(['documents']))) ||
                        (adminInRoles(['hr']) &&
-                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['documentVerification'])) ||
+                         request.resource.data.diff(resource.data).affectedKeys()
+                           .hasOnly(['documentVerification', 'documentsVerified', 'updatedAt', 'updatedBy'])) ||
                        isDirector();
       allow delete: if isDirector();
     }
@@ -1015,7 +1027,8 @@ service cloud.firestore {
                          doesNotModify(['status', 'isVerified', 'rating', 'totalReviews', 'totalVisits', 'documentVerification']) &&
                          (resource.data.status != 'active' || doesNotModify(['documents']))) ||
                        (adminInRoles(['hr']) &&
-                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['documentVerification'])) ||
+                         request.resource.data.diff(resource.data).affectedKeys()
+                           .hasOnly(['documentVerification', 'documentsVerified', 'updatedAt', 'updatedBy'])) ||
                        isDirector();
       allow delete: if isDirector();
     }
@@ -1155,7 +1168,7 @@ service cloud.firestore {
 
     match /physiotherapist_profiles/{physiotherapistId} {
       allow read: if isAuth() && (
-        isOwner(physiotherapistId) || isAdmin() || resource.data.status == 'active'
+        isOwner(physiotherapistId) || adminInRoles(['hr']) || resource.data.status == 'active'
       );
       // Unlike the older partner-profile collections (whose `create` rule
       // has no field restriction at all), this requires a brand-new profile
@@ -1166,12 +1179,16 @@ service cloud.firestore {
                        request.resource.data.status == 'pending' &&
                        request.resource.data.isVerified == false;
       // See lab_profiles' update rule above for why `documents` locks once
-      // `status == 'active'`.
+      // `status == 'active'`, and for why HR is limited to
+      // documentVerification-only while approval is Director-only.
       allow update: if (isOwner(physiotherapistId) &&
                          doesNotModify(['status', 'isVerified', 'rating', 'totalReviews', 'totalSessions', 'documentVerification']) &&
                          (resource.data.status != 'active' || doesNotModify(['documents']))) ||
-                       isAdmin();
-      allow delete: if isAdmin();
+                       (adminInRoles(['hr']) &&
+                         request.resource.data.diff(resource.data).affectedKeys()
+                           .hasOnly(['documentVerification', 'documentsVerified', 'updatedAt', 'updatedBy'])) ||
+                       isDirector();
+      allow delete: if isDirector();
     }
 
     match /counselling_sessions/{sessionId} {
@@ -1205,18 +1222,23 @@ service cloud.firestore {
 
     match /counsellor_profiles/{counsellorId} {
       allow read: if isAuth() && (
-        isOwner(counsellorId) || isAdmin() || resource.data.status == 'active'
+        isOwner(counsellorId) || adminInRoles(['hr']) || resource.data.status == 'active'
       );
       // See physiotherapist_profiles' create rule above for why `status`/`isVerified`
       // can't be self-set to their "verified" values at creation.
       allow create: if isOwner(counsellorId) &&
                        request.resource.data.status == 'pending' &&
                        request.resource.data.isVerified == false;
+      // See lab_profiles' update rule above for why HR is limited to
+      // documentVerification-only while approval is Director-only.
       allow update: if (isOwner(counsellorId) &&
                          doesNotModify(['status', 'isVerified', 'rating', 'totalReviews', 'totalSessions', 'documentVerification']) &&
                          (resource.data.status != 'active' || doesNotModify(['documents']))) ||
-                       isAdmin();
-      allow delete: if isAdmin();
+                       (adminInRoles(['hr']) &&
+                         request.resource.data.diff(resource.data).affectedKeys()
+                           .hasOnly(['documentVerification', 'documentsVerified', 'updatedAt', 'updatedBy'])) ||
+                       isDirector();
+      allow delete: if isDirector();
     }
 
     // ── Booking support chat ───────────────────────────────────────────────────
@@ -1501,18 +1523,23 @@ service cloud.firestore {
     // shape as caregiver_profiles.
     match /nutritionist_profiles/{nutritionistId} {
       allow read: if isAuth() && (
-        isOwner(nutritionistId) || isAdmin() || resource.data.status == 'active'
+        isOwner(nutritionistId) || adminInRoles(['hr']) || resource.data.status == 'active'
       );
       // See lab_profiles' create rule (above) for why status/isVerified are
       // fixed here rather than left to the client.
       allow create: if isOwner(nutritionistId) &&
                        request.resource.data.status == 'pending' &&
                        request.resource.data.isVerified == false;
+      // See lab_profiles' update rule above for why HR is limited to
+      // documentVerification-only while approval is Director-only.
       allow update: if (isOwner(nutritionistId) &&
                          doesNotModify(['status', 'isVerified', 'rating', 'reviewCount', 'documentVerification']) &&
                          (resource.data.status != 'active' || doesNotModify(['documents']))) ||
-                       isAdmin();
-      allow delete: if isAdmin();
+                       (adminInRoles(['hr']) &&
+                         request.resource.data.diff(resource.data).affectedKeys()
+                           .hasOnly(['documentVerification', 'documentsVerified', 'updatedAt', 'updatedBy'])) ||
+                       isDirector();
+      allow delete: if isDirector();
     }
 
     // ── Pregnancy profiles ────────────────────────────────────────────────────
@@ -1861,6 +1888,26 @@ service cloud.firestore {
       allow read:  if isAdmin();
       allow create: if isAdmin();
       allow update, delete: if isAdmin();
+    }
+
+    // ── Admin critical alerts (mednu-admin live notification bell) ──────────────
+    // Written server-side only, by 9 Cloud Function call sites (onSeriousComplaint,
+    // onEmergencyDoctorRequest, _sendAdminAlert — failed/large payments, settlement
+    // failures). Read by every admin role via the shared bell (initAdminAlertsListener,
+    // mednu-admin/js/app.js) — not role-scoped, since emergencies/complaints/payment
+    // failures are relevant to every profile including Director. Had NO rule at all
+    // until now: an unmatched collection defaults to deny, so this onSnapshot
+    // listener (called unconditionally from initDashboard() for every role) was
+    // silently PERMISSION_DENIED for 100% of admins since the bell wiring was added.
+    match /admin_alerts/{alertId} {
+      allow read: if isAdmin();
+      allow create: if false; // Cloud Functions (Admin SDK) only
+      // Marking an alert read/unread is the only client write (see the bell's
+      // mark-one-read and mark-all-read batch write in app.js) — no other field
+      // is ever touched by a client.
+      allow update: if isAdmin() &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead']);
+      allow delete: if false;
     }
 
     // ── Order support chat (patient ↔ support during medicine delivery) ─────────
