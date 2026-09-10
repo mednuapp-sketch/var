@@ -56,9 +56,23 @@ class _OtpPageState extends ConsumerState<OtpPage> {
   Widget build(BuildContext context) {
     final authState = ref.watch(authNotifierProvider);
 
-    // No manual navigation here: once confirm() succeeds, the router's
-    // redirect reacts to authProfileProvider's live snapshot and sends the
-    // user to /register or /dashboard itself — see app_router.dart.
+    // The router's redirect also reacts to authProfileProvider (see
+    // app_router.dart), but relying on that alone left this screen stuck
+    // after a successful confirm() until a manual page reload — refreshing
+    // re-runs the router's initial redirect, which is why that "unstuck" it.
+    // Drive the transition explicitly from here too, off the same live
+    // Firestore listener, so it fires the moment sign-in actually completes.
+    ref.listen(authProfileProvider, (prev, next) {
+      final user = ref.read(authStateProvider).valueOrNull;
+      if (user == null || next.isLoading) return;
+      if (hasCompletedProfile(next.valueOrNull)) {
+        context.go('/dashboard');
+      } else {
+        final rawPhone = user.phoneNumber ?? '';
+        final localPhone = rawPhone.startsWith('+91') ? rawPhone.substring(3) : rawPhone;
+        context.go('/register?phone=${Uri.encodeComponent(localPhone.isEmpty ? widget.phone : localPhone)}');
+      }
+    });
 
     return Scaffold(
       backgroundColor: Colors.white,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/constants/app_colors.dart';
 import 'auth_provider.dart';
@@ -66,9 +67,13 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
   Widget build(BuildContext context) {
     final authState = ref.watch(authNotifierProvider);
 
-    // No manual navigation here: once completeRegistration() writes the
-    // Firestore doc, the router's redirect reacts to authProfileProvider's
-    // live snapshot and sends the user to /dashboard itself.
+    // Drive the post-registration transition explicitly off the live
+    // Firestore listener rather than relying solely on the router's
+    // refreshListenable — see the matching comment in otp_page.dart.
+    ref.listen(authProfileProvider, (prev, next) {
+      if (next.isLoading) return;
+      if (hasCompletedProfile(next.valueOrNull)) context.go('/dashboard');
+    });
 
     return Scaffold(
       backgroundColor: Colors.white,
