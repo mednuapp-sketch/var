@@ -150,7 +150,7 @@ class _LandingPageState extends State<LandingPage> {
 
           SliverToBoxAdapter(
             key: _howItWorksKey,
-            child: const HowItWorksSection(),
+            child: HowItWorksSection(onLearnMoreTap: () => _scrollToSection('Services')),
           ),
 
           SliverToBoxAdapter(

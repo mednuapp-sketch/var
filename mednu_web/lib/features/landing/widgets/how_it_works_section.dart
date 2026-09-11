@@ -4,7 +4,8 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/responsive.dart';
 
 class HowItWorksSection extends StatelessWidget {
-  const HowItWorksSection({super.key});
+  final VoidCallback? onLearnMoreTap;
+  const HowItWorksSection({super.key, this.onLearnMoreTap});
 
   static const _steps = [
     (
@@ -50,7 +51,7 @@ class HowItWorksSection extends StatelessWidget {
               BoxConstraints(maxWidth: Responsive.maxContentWidth(context)),
           child: isMobile
               ? const _MobileLayout(steps: _steps)
-              : _DesktopLayout(steps: _steps, compact: isTablet),
+              : _DesktopLayout(steps: _steps, compact: isTablet, onLearnMoreTap: onLearnMoreTap),
         ),
       ),
     );
@@ -62,14 +63,15 @@ class HowItWorksSection extends StatelessWidget {
 class _DesktopLayout extends StatelessWidget {
   final List<({String num, IconData icon, String title, String desc})> steps;
   final bool compact;
-  const _DesktopLayout({required this.steps, required this.compact});
+  final VoidCallback? onLearnMoreTap;
+  const _DesktopLayout({required this.steps, required this.compact, this.onLearnMoreTap});
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
         // Header
-        const _SectionHeader(),
+        _SectionHeader(onLearnMoreTap: onLearnMoreTap),
         SizedBox(height: compact ? 48 : 64),
         // 4-step horizontal flow
         Row(
@@ -115,7 +117,8 @@ class _MobileLayout extends StatelessWidget {
 
 class _SectionHeader extends StatelessWidget {
   final bool center;
-  const _SectionHeader({this.center = false});
+  final VoidCallback? onLearnMoreTap;
+  const _SectionHeader({this.center = false, this.onLearnMoreTap});
 
   @override
   Widget build(BuildContext context) {
@@ -169,7 +172,7 @@ class _SectionHeader extends StatelessWidget {
         ),
         if (!isMobile && !center) ...[
           const SizedBox(height: 20),
-          _LearnMoreBtn(),
+          _LearnMoreBtn(onTap: onLearnMoreTap),
         ],
       ],
     );
@@ -177,6 +180,9 @@ class _SectionHeader extends StatelessWidget {
 }
 
 class _LearnMoreBtn extends StatefulWidget {
+  final VoidCallback? onTap;
+  const _LearnMoreBtn({this.onTap});
+
   @override
   State<_LearnMoreBtn> createState() => _LearnMoreBtnState();
 }
@@ -190,7 +196,7 @@ class _LearnMoreBtnState extends State<_LearnMoreBtn> {
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
       child: GestureDetector(
-        onTap: () {},
+        onTap: widget.onTap,
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           ShaderMask(
             shaderCallback: (b) => AppColors.primaryGradient.createShader(b),
