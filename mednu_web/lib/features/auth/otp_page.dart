@@ -88,7 +88,7 @@ class _OtpPageState extends ConsumerState<OtpPage> {
                   width: 72,
                   height: 72,
                   decoration: BoxDecoration(gradient: AppColors.primaryGradient, shape: BoxShape.circle),
-                  child: const Center(child: Text('🔐', style: TextStyle(fontSize: 32))),
+                  child: const Center(child: Icon(Icons.sms_rounded, size: 32, color: Colors.white)),
                 ),
                 const SizedBox(height: 24),
                 Text(

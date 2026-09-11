@@ -7,13 +7,13 @@ import '../../../core/widgets/section_header.dart';
 class WhyMednuSection extends StatelessWidget {
   const WhyMednuSection({super.key});
 
-  static const List<Map<String, String>> _features = [
-    {'emoji': '🕐', 'title': '24/7 Healthcare', 'desc': 'Round-the-clock access to doctors, emergency support, and health resources — anytime, anywhere.'},
-    {'emoji': '✅', 'title': 'Verified Doctors', 'desc': 'Every doctor is background-checked, credential-verified, and continuously rated by patients.'},
-    {'emoji': '⚡', 'title': 'Instant Booking', 'desc': 'Book appointments in under 60 seconds. Choose time slots that work for your schedule.'},
-    {'emoji': '🚑', 'title': 'Emergency Support', 'desc': 'One tap to dispatch the nearest ambulance. Real-time tracking until help arrives.'},
-    {'emoji': '📁', 'title': 'Digital Records', 'desc': 'All prescriptions, reports, and medical history stored securely in your digital locker.'},
-    {'emoji': '🔒', 'title': 'Secure Platform', 'desc': 'Bank-level encryption protects your health data. HIPAA-compliant and privacy-first.'},
+  static const List<Map<String, dynamic>> _features = [
+    {'icon': Icons.access_time_filled_rounded, 'title': '24/7 Healthcare', 'desc': 'Round-the-clock access to doctors, emergency support, and health resources — anytime, anywhere.'},
+    {'icon': Icons.verified_rounded, 'title': 'Verified Doctors', 'desc': 'Every doctor is background-checked, credential-verified, and continuously rated by patients.'},
+    {'icon': Icons.bolt_rounded, 'title': 'Instant Booking', 'desc': 'Book appointments in under 60 seconds. Choose time slots that work for your schedule.'},
+    {'icon': Icons.local_shipping_rounded, 'title': 'Emergency Support', 'desc': 'One tap to dispatch the nearest ambulance. Real-time tracking until help arrives.'},
+    {'icon': Icons.folder_shared_rounded, 'title': 'Digital Records', 'desc': 'All prescriptions, reports, and medical history stored securely in your digital locker.'},
+    {'icon': Icons.shield_rounded, 'title': 'Secure Platform', 'desc': 'Bank-level encryption protects your health data. HIPAA-compliant and privacy-first.'},
   ];
 
   @override
@@ -68,7 +68,7 @@ class WhyMednuSection extends StatelessWidget {
 }
 
 class _FeatureCard extends StatefulWidget {
-  final Map<String, String> feature;
+  final Map<String, dynamic> feature;
   final int index;
   const _FeatureCard({required this.feature, required this.index});
 
@@ -99,14 +99,14 @@ class _FeatureCardState extends State<_FeatureCard> {
         ),
         child: isMobile
             ? Row(children: [
-                _EmojiBox(emoji: widget.feature['emoji']!, hovered: _hovered),
+                _FeatureIconBox(icon: widget.feature['icon'] as IconData, hovered: _hovered),
                 const SizedBox(width: 16),
                 Expanded(child: _CardText(feature: widget.feature)),
               ])
             : Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _EmojiBox(emoji: widget.feature['emoji']!, hovered: _hovered),
+                  _FeatureIconBox(icon: widget.feature['icon'] as IconData, hovered: _hovered),
                   const SizedBox(height: 16),
                   _CardText(feature: widget.feature),
                 ],
@@ -116,10 +116,10 @@ class _FeatureCardState extends State<_FeatureCard> {
   }
 }
 
-class _EmojiBox extends StatelessWidget {
-  final String emoji;
+class _FeatureIconBox extends StatelessWidget {
+  final IconData icon;
   final bool hovered;
-  const _EmojiBox({required this.emoji, required this.hovered});
+  const _FeatureIconBox({required this.icon, required this.hovered});
 
   @override
   Widget build(BuildContext context) {
@@ -132,13 +132,13 @@ class _EmojiBox extends StatelessWidget {
         color: hovered ? null : Colors.white.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(14),
       ),
-      child: Center(child: Text(emoji, style: const TextStyle(fontSize: 24))),
+      child: Center(child: Icon(icon, size: 24, color: Colors.white)),
     );
   }
 }
 
 class _CardText extends StatelessWidget {
-  final Map<String, String> feature;
+  final Map<String, dynamic> feature;
   const _CardText({required this.feature});
 
   @override
@@ -147,12 +147,12 @@ class _CardText extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          feature['title']!,
+          feature['title'] as String,
           style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white),
         ),
         const SizedBox(height: 6),
         Text(
-          feature['desc']!,
+          feature['desc'] as String,
           style: GoogleFonts.poppins(fontSize: 12.5, color: Colors.white60, height: 1.6),
         ),
       ],

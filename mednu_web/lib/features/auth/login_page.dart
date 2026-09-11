@@ -118,18 +118,18 @@ class _LoginHeroPanel extends StatelessWidget {
                   ),
                   const SizedBox(height: 48),
                   ...[
-                    ('🩺', 'Book appointments instantly'),
-                    ('📁', 'Access all your health records'),
-                    ('💊', 'View prescriptions & reports'),
-                    ('🔒', 'Secured with end-to-end encryption'),
+                    (Icons.calendar_month_rounded, 'Book appointments instantly'),
+                    (Icons.folder_shared_rounded, 'Access all your health records'),
+                    (Icons.medication_rounded, 'View prescriptions & reports'),
+                    (Icons.lock_rounded, 'Secured with end-to-end encryption'),
                   ].map((item) => Padding(
                     padding: const EdgeInsets.only(bottom: 16),
                     child: Row(children: [
                       Container(
                         width: 36,
                         height: 36,
-                        decoration: BoxDecoration(color: Colors.white.withOpacity(0.15), borderRadius: BorderRadius.circular(10)),
-                        child: Center(child: Text(item.$1, style: const TextStyle(fontSize: 18))),
+                        decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(10)),
+                        child: Center(child: Icon(item.$1, size: 18, color: Colors.white)),
                       ),
                       const SizedBox(width: 14),
                       Text(item.$2, style: GoogleFonts.poppins(fontSize: 14, color: Colors.white, fontWeight: FontWeight.w500)),

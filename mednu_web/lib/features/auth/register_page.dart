@@ -91,7 +91,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                     width: 72,
                     height: 72,
                     decoration: const BoxDecoration(gradient: AppColors.primaryGradient, shape: BoxShape.circle),
-                    child: const Center(child: Text('📝', style: TextStyle(fontSize: 32))),
+                    child: const Center(child: Icon(Icons.person_add_alt_1_rounded, size: 32, color: Colors.white)),
                   ),
                   const SizedBox(height: 24),
                   Text('Complete Your Profile', style: GoogleFonts.poppins(fontSize: 26, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
