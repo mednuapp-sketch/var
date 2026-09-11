@@ -75,14 +75,21 @@ class _SidebarHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 70,
+      height: collapsed ? 70 : 78,
       padding: EdgeInsets.symmetric(horizontal: collapsed ? 16 : 20),
       child: Row(
         children: [
           Image.asset('assets/images/mednu_logo.png', width: 36, height: 36, filterQuality: FilterQuality.high),
           if (!collapsed) ...[
             const SizedBox(width: 10),
-            Text('MedNU', style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: -0.5)),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('MedNU', style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: -0.5, height: 1.1)),
+                Text('Always with you', style: GoogleFonts.poppins(fontSize: 10.5, fontWeight: FontWeight.w500, color: Colors.white54, letterSpacing: 0.2)),
+              ],
+            ),
           ],
         ],
       ),

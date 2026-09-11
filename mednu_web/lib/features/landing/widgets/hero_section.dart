@@ -1075,11 +1075,15 @@ class _DoctorImage extends StatelessWidget {
                   stops: [0.0, 0.78, 1.0],
                 ).createShader(bounds),
                 child: Image.asset(
-                  'assets/images/doctor_hero.png',
+                  'assets/images/doctor_hero.webp',
                   width: totalW,
                   height: totalH,
                   fit: BoxFit.cover,
                   alignment: Alignment.topCenter,
+                  // Source is already right-sized (900x600 vs the old
+                  // 2.36MB/1536x1024 PNG) — cacheWidth still caps decode
+                  // cost on very large/high-DPI viewports.
+                  cacheWidth: 900,
                 ),
               ),
             ),

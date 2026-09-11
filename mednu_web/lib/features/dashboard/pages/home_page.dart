@@ -63,8 +63,8 @@ class DashboardHomePage extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _WelcomeCard(user: user),
-          const SizedBox(height: 24),
+          _WelcomeCard(user: user, nextAppointment: appointments.isNotEmpty ? appointments.first : null),
+          SizedBox(height: appointments.isNotEmpty ? 40 : 24),
           _QuickStats(
             isMobile: isMobile,
             upcomingCount: appointments.length,
@@ -93,7 +93,8 @@ class DashboardHomePage extends ConsumerWidget {
 
 class _WelcomeCard extends StatelessWidget {
   final Map<String, dynamic> user;
-  const _WelcomeCard({required this.user});
+  final Map<String, dynamic>? nextAppointment;
+  const _WelcomeCard({required this.user, this.nextAppointment});
 
   String _greeting() {
     final h = DateTime.now().hour;
@@ -107,53 +108,64 @@ class _WelcomeCard extends StatelessWidget {
     final name = (user['name'] as String?)?.split(' ').first ?? 'there';
     final phone = user['phoneNumber'] as String? ?? '';
 
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: AppColors.primaryGradient,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [BoxShadow(color: AppColors.primary.withValues(alpha: 0.3), blurRadius: 24, offset: const Offset(0, 8))],
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('${_greeting()}! 👋', style: GoogleFonts.poppins(fontSize: 13, color: Colors.white70)),
-                const SizedBox(height: 4),
-                Text(
-                  'Welcome back, $name',
-                  style: GoogleFonts.poppins(fontSize: 22, fontWeight: FontWeight.w800, color: Colors.white, height: 1.2),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  phone.isNotEmpty ? '+91 $phone' : 'Stay healthy!',
-                  style: GoogleFonts.poppins(fontSize: 13, color: Colors.white70, height: 1.5),
-                ),
-                const SizedBox(height: 16),
-                const Row(children: [
-                  _WelcomeChip(label: 'Book Appointment', icon: Icons.calendar_today_rounded),
-                  SizedBox(width: 10),
-                  _WelcomeChip(label: 'Find Doctor', icon: Icons.search_rounded),
-                ]),
-              ],
-            ),
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            gradient: AppColors.primaryGradient,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [BoxShadow(color: AppColors.primary.withValues(alpha: 0.3), blurRadius: 24, offset: const Offset(0, 8))],
           ),
-          const SizedBox(width: 16),
-          Container(
-            width: 72,
-            height: 72,
-            decoration: const BoxDecoration(color: Color(0x33FFFFFF), shape: BoxShape.circle),
-            child: Center(
-              child: Text(
-                name.isNotEmpty ? name[0].toUpperCase() : '?',
-                style: GoogleFonts.poppins(fontSize: 30, fontWeight: FontWeight.w800, color: Colors.white),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('${_greeting()}! 👋', style: GoogleFonts.poppins(fontSize: 13, color: Colors.white70)),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Welcome back, $name',
+                      style: GoogleFonts.poppins(fontSize: 22, fontWeight: FontWeight.w800, color: Colors.white, height: 1.2),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      phone.isNotEmpty ? '+91 $phone' : 'Stay healthy!',
+                      style: GoogleFonts.poppins(fontSize: 13, color: Colors.white70, height: 1.5),
+                    ),
+                    const SizedBox(height: 16),
+                    const Row(children: [
+                      _WelcomeChip(label: 'Book Appointment', icon: Icons.calendar_today_rounded),
+                      SizedBox(width: 10),
+                      _WelcomeChip(label: 'Find Doctor', icon: Icons.search_rounded),
+                    ]),
+                  ],
+                ),
               ),
-            ),
+              const SizedBox(width: 16),
+              Container(
+                width: 72,
+                height: 72,
+                decoration: const BoxDecoration(color: Color(0x33FFFFFF), shape: BoxShape.circle),
+                child: Center(
+                  child: Text(
+                    name.isNotEmpty ? name[0].toUpperCase() : '?',
+                    style: GoogleFonts.poppins(fontSize: 30, fontWeight: FontWeight.w800, color: Colors.white),
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+        if (nextAppointment != null)
+          Positioned(
+            right: 20,
+            bottom: -24,
+            child: _NextAppointmentFloatingCard(appointment: nextAppointment!),
+          ),
+      ],
     );
   }
 }
@@ -181,6 +193,47 @@ class _WelcomeChip extends StatelessWidget {
   }
 }
 
+class _NextAppointmentFloatingCard extends StatelessWidget {
+  final Map<String, dynamic> appointment;
+  const _NextAppointmentFloatingCard({required this.appointment});
+
+  @override
+  Widget build(BuildContext context) {
+    final doctorName = appointment['doctorName'] as String? ?? 'Doctor';
+    final date = appointment['date'] as String? ?? '';
+    final time = appointment['time'] as String? ?? '';
+    final subtitle = [date, time].where((s) => s.isNotEmpty).join(' · ');
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+      constraints: const BoxConstraints(maxWidth: 220),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.14), blurRadius: 20, offset: const Offset(0, 8)),
+        ],
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
+          child: const Icon(Icons.calendar_month_rounded, size: 17, color: AppColors.primary),
+        ),
+        const SizedBox(width: 10),
+        Flexible(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+            Text('Next: Dr. $doctorName', style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.textPrimary), maxLines: 1, overflow: TextOverflow.ellipsis),
+            if (subtitle.isNotEmpty)
+              Text(subtitle, style: GoogleFonts.poppins(fontSize: 10.5, color: AppColors.textSecondary), maxLines: 1, overflow: TextOverflow.ellipsis),
+          ]),
+        ),
+      ]),
+    );
+  }
+}
+
 // ─── Quick Stats ──────────────────────────────────────────────────────────────
 
 class _QuickStats extends StatelessWidget {
@@ -199,10 +252,10 @@ class _QuickStats extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final stats = [
-      {'emoji': '📅', 'value': '$upcomingCount', 'label': 'Upcoming Appointments', 'color': 0xFF42A5F5},
-      {'emoji': '💰', 'value': '₹${walletBalance.toStringAsFixed(0)}', 'label': 'Wallet Balance', 'color': 0xFFFFA726},
-      {'emoji': '👨‍👩‍👧', 'value': '$familyCount', 'label': 'Family Members', 'color': 0xFFEC407A},
-      {'emoji': '🏥', 'value': 'MedNU', 'label': 'Healthcare Partner', 'color': 0xFF66BB6A},
+      {'icon': Icons.calendar_month_rounded, 'value': '$upcomingCount', 'label': 'Upcoming Appointments', 'color': 0xFF42A5F5},
+      {'icon': Icons.account_balance_wallet_rounded, 'value': '₹${walletBalance.toStringAsFixed(0)}', 'label': 'Wallet Balance', 'color': 0xFFFFA726},
+      {'icon': Icons.family_restroom_rounded, 'value': '$familyCount', 'label': 'Family Members', 'color': 0xFFEC407A},
+      {'icon': Icons.local_hospital_rounded, 'value': 'MedNU', 'label': 'Healthcare Partner', 'color': 0xFF66BB6A},
     ];
 
     return GridView.builder(
@@ -257,7 +310,7 @@ class _StatCardState extends State<_StatCard> {
               width: 40,
               height: 40,
               decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
-              child: Center(child: Text(widget.stat['emoji'] as String, style: const TextStyle(fontSize: 20))),
+              child: Center(child: Icon(widget.stat['icon'] as IconData, size: 20, color: color)),
             ),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,

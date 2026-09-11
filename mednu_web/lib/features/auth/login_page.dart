@@ -85,62 +85,140 @@ class _LoginHeroPanel extends StatelessWidget {
           end: Alignment.bottomRight,
         ),
       ),
-      child: Stack(
-        children: [
-          Positioned(top: -80, left: -80, child: _Orb(size: 320, opacity: 0.12)),
-          Positioned(bottom: -60, right: -60, child: _Orb(size: 280, opacity: 0.1)),
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.all(48),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(children: [
-                    Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(12)),
-                      child: const Center(child: Text('M', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w800))),
-                    ),
-                    const SizedBox(width: 12),
-                    Text('MedNu', style: GoogleFonts.poppins(fontSize: 26, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: -0.5)),
-                  ]),
-                  const SizedBox(height: 48),
-                  Text(
-                    'Your Health,\nOur Priority.',
-                    style: GoogleFonts.poppins(fontSize: 42, fontWeight: FontWeight.w800, color: Colors.white, height: 1.15, letterSpacing: -0.5),
-                  ),
-                  const SizedBox(height: 20),
-                  Text(
-                    'Log in to access your health records,\nappointments, prescriptions, and more.',
-                    style: GoogleFonts.poppins(fontSize: 15, color: Colors.white70, height: 1.65),
-                  ),
-                  const SizedBox(height: 48),
-                  ...[
-                    (Icons.calendar_month_rounded, 'Book appointments instantly'),
-                    (Icons.folder_shared_rounded, 'Access all your health records'),
-                    (Icons.medication_rounded, 'View prescriptions & reports'),
-                    (Icons.lock_rounded, 'Secured with end-to-end encryption'),
-                  ].map((item) => Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: Row(children: [
+      child: LayoutBuilder(builder: (context, constraints) {
+        // Floating accent cards need real margin around the text column to
+        // not collide with it — only show them once the panel is wide
+        // enough (this panel only renders on tablet/desktop to begin with).
+        final showFloatingCards = constraints.maxWidth > 560;
+        return Stack(
+          children: [
+            Positioned(top: -80, left: -80, child: _Orb(size: 320, opacity: 0.12)),
+            Positioned(bottom: -60, right: -60, child: _Orb(size: 280, opacity: 0.1)),
+            if (showFloatingCards) ...[
+              Positioned(
+                top: 36,
+                right: 36,
+                child: _HeroFloatingCard(
+                  icon: Icons.verified_rounded,
+                  iconColor: const Color(0xFF2E7D32),
+                  title: 'Verified Doctors',
+                  subtitle: '1000+ specialists',
+                ),
+              ),
+              Positioned(
+                bottom: 48,
+                right: 40,
+                child: _HeroFloatingCard(
+                  icon: Icons.support_agent_rounded,
+                  iconColor: AppColors.primary,
+                  title: '24/7 Support',
+                  subtitle: "We're always here",
+                ),
+              ),
+            ],
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(48),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
                       Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(10)),
-                        child: Center(child: Icon(item.$1, size: 18, color: Colors.white)),
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(12)),
+                        child: const Center(child: Text('M', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w800))),
                       ),
-                      const SizedBox(width: 14),
-                      Text(item.$2, style: GoogleFonts.poppins(fontSize: 14, color: Colors.white, fontWeight: FontWeight.w500)),
+                      const SizedBox(width: 12),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text('MedNu', style: GoogleFonts.poppins(fontSize: 26, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: -0.5, height: 1.1)),
+                          Text('Always with you', style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.white70, letterSpacing: 0.3)),
+                        ],
+                      ),
                     ]),
-                  )),
-                ],
+                    const SizedBox(height: 48),
+                    Text(
+                      'Your Health,\nOur Priority.',
+                      style: GoogleFonts.poppins(fontSize: 42, fontWeight: FontWeight.w800, color: Colors.white, height: 1.15, letterSpacing: -0.5),
+                    ),
+                    const SizedBox(height: 20),
+                    Text(
+                      'Log in to access your health records,\nappointments, prescriptions, and more.',
+                      style: GoogleFonts.poppins(fontSize: 15, color: Colors.white70, height: 1.65),
+                    ),
+                    const SizedBox(height: 48),
+                    ...[
+                      (Icons.calendar_month_rounded, 'Book appointments instantly'),
+                      (Icons.folder_shared_rounded, 'Access all your health records'),
+                      (Icons.medication_rounded, 'View prescriptions & reports'),
+                      (Icons.lock_rounded, 'Secured with end-to-end encryption'),
+                    ].map((item) => Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: Row(children: [
+                        Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(10)),
+                          child: Center(child: Icon(item.$1, size: 18, color: Colors.white)),
+                        ),
+                        const SizedBox(width: 14),
+                        Text(item.$2, style: GoogleFonts.poppins(fontSize: 14, color: Colors.white, fontWeight: FontWeight.w500)),
+                      ]),
+                    )),
+                  ],
+                ),
               ),
             ),
-          ),
+          ],
+        );
+      }),
+    );
+  }
+}
+
+class _HeroFloatingCard extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final String subtitle;
+  const _HeroFloatingCard({
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+      constraints: const BoxConstraints(maxWidth: 190),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.18), blurRadius: 24, offset: const Offset(0, 10)),
         ],
       ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(color: iconColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
+          child: Icon(icon, size: 17, color: iconColor),
+        ),
+        const SizedBox(width: 10),
+        Flexible(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+            Text(title, style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.textPrimary), maxLines: 1, overflow: TextOverflow.ellipsis),
+            Text(subtitle, style: GoogleFonts.poppins(fontSize: 10.5, color: AppColors.textSecondary), maxLines: 1, overflow: TextOverflow.ellipsis),
+          ]),
+        ),
+      ]),
     );
   }
 }

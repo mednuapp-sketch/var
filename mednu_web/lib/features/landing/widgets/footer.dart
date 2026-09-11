@@ -162,16 +162,29 @@ class _BrandSection extends StatelessWidget {
         Row(children: [
           Image.asset('assets/images/mednu_logo.png', width: 38, height: 38, filterQuality: FilterQuality.high),
           const SizedBox(width: 10),
-          ShaderMask(
-            shaderCallback: (b) =>
-                AppColors.primaryGradient.createShader(b),
-            blendMode: BlendMode.srcIn,
-            child: Text('MedNU',
-                style: GoogleFonts.poppins(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white,
-                    letterSpacing: -0.5)),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ShaderMask(
+                shaderCallback: (b) =>
+                    AppColors.primaryGradient.createShader(b),
+                blendMode: BlendMode.srcIn,
+                child: Text('MedNU',
+                    style: GoogleFonts.poppins(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                        letterSpacing: -0.5,
+                        height: 1.1)),
+              ),
+              Text('Always with you',
+                  style: GoogleFonts.poppins(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                      color: const Color(0xFF9E9E9E),
+                      letterSpacing: 0.2)),
+            ],
           ),
         ]),
         const SizedBox(height: 16),
