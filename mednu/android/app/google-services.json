@@ -61,11 +61,51 @@
       },
       "oauth_client": [
         {
+          "client_id": "1056867138858-2sibkpm2an7tc9v12afc2vu5p7knvsd4.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.mednu.mednu",
+            "certificate_hash": "35bb0d380e48275a94d53860b8eb72d16b789f95"
+          }
+        },
+        {
           "client_id": "1056867138858-a2vi3294ip14q7g4gq2sf0jrg7nq152k.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.mednu.mednu",
             "certificate_hash": "29eff4d15cb462cb5245e8e85b6301b8344d8698"
+          }
+        },
+        {
+          "client_id": "1056867138858-cr6aakclonuijjmhgvlq5d678rggoshm.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.mednu.mednu",
+            "certificate_hash": "d3c280d1bb80ea8498a521ed42ae3c533578cdc5"
+          }
+        },
+        {
+          "client_id": "1056867138858-jqcn7t524hss4ck9r5g3bkheo36k0mcf.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.mednu.mednu",
+            "certificate_hash": "6723c98eeff6c98a26ccbebbf31972bf50b0561a"
+          }
+        },
+        {
+          "client_id": "1056867138858-q3bfne44k9jehhre399d93be5it37387.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.mednu.mednu",
+            "certificate_hash": "508d6aa59bccb45cdfa5afdedabf0c0dedd24c3b"
+          }
+        },
+        {
+          "client_id": "1056867138858-ro5t5osleqtgp94g5qelaetn6f90mhe3.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.mednu.mednu",
+            "certificate_hash": "ffaa306890785c6e8a833a20dea9893d3c639b3a"
           }
         },
         {
@@ -113,6 +153,38 @@
           "android_info": {
             "package_name": "com.mednu.mednu_doctor",
             "certificate_hash": "29eff4d15cb462cb5245e8e85b6301b8344d8698"
+          }
+        },
+        {
+          "client_id": "1056867138858-5slkv9a73kprr3jj3669jqp0pf0h1n50.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.mednu.mednu_doctor",
+            "certificate_hash": "029f20c9cda8b0b7dfc04b43661470a5d73137af"
+          }
+        },
+        {
+          "client_id": "1056867138858-b0fnbjkggsssijm9ln1f4uokk773bh3h.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.mednu.mednu_doctor",
+            "certificate_hash": "d3c280d1bb80ea8498a521ed42ae3c533578cdc5"
+          }
+        },
+        {
+          "client_id": "1056867138858-qftd39ojfukmv412i0mp13tu7g74o1hn.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.mednu.mednu_doctor",
+            "certificate_hash": "7c5d6886c25b601fd354c6097e01058b94fb0d91"
+          }
+        },
+        {
+          "client_id": "1056867138858-qhc8uns5abja8leud3it3b3emoefa31d.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.mednu.mednu_doctor",
+            "certificate_hash": "d5b0c64222373507d321c0c1b2dca904b0b61f09"
           }
         },
         {

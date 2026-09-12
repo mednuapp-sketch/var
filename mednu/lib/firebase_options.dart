@@ -56,17 +56,16 @@ class DefaultFirebaseOptions {
     projectId: 'mednu-healthcare-app',
     storageBucket: 'mednu-healthcare-app.firebasestorage.app',
   );
-
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyDzlSykM7H8c4RRPaDw-ehNSjLTstfKjDA',
-    appId: '1:1056867138858:ios:069a23eb3e74c71645b253',
+    appId: '1:1056867138858:ios:5222457c4a39e4b145b253',
     messagingSenderId: '1056867138858',
     projectId: 'mednu-healthcare-app',
     storageBucket: 'mednu-healthcare-app.firebasestorage.app',
-    iosClientId: '1056867138858-nc5t6lvorjjc8qm5bevnqgpfd7ejf492.apps.googleusercontent.com',
-    iosBundleId: 'com.example.mednu',
+    androidClientId: '1056867138858-02qunfh757npa2rdr0j7b9qjh7v2h6gt.apps.googleusercontent.com',
+    iosClientId: '1056867138858-gdv890vn07osdlbaoh27aii2nkkafakl.apps.googleusercontent.com',
+    iosBundleId: 'com.mednu.mednu',
   );
-
   static const FirebaseOptions macos = FirebaseOptions(
     apiKey: 'AIzaSyDzlSykM7H8c4RRPaDw-ehNSjLTstfKjDA',
     appId: '1:1056867138858:ios:069a23eb3e74c71645b253',
