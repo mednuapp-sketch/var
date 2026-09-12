@@ -92,6 +92,7 @@ class _PregnancyPatientDetailScreenState
                   ),
                 ],
                 flexibleSpace: FlexibleSpaceBar(
+                  collapseMode: CollapseMode.pin,
                   background: Container(
                     decoration: const BoxDecoration(
                       gradient: LinearGradient(
@@ -101,9 +102,16 @@ class _PregnancyPatientDetailScreenState
                       ),
                     ),
                     child: SafeArea(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 56, 20, 16),
-                        child: Row(
+                      bottom: false,
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          return SingleChildScrollView(
+                            physics: const ClampingScrollPhysics(),
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                              child: Padding(
+                                padding: const EdgeInsets.fromLTRB(20, 56, 20, 16),
+                                child: Row(
                           children: [
                             Container(
                               width: 60,
@@ -149,8 +157,12 @@ class _PregnancyPatientDetailScreenState
                         ),
                       ),
                     ),
-                  ),
-                ),
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
                 bottom: TabBar(
                   controller: _tab,
                   labelColor: Colors.white,
@@ -352,7 +364,15 @@ class _PregnancyPatientDetailScreenState
                   style: const TextStyle(fontSize: 10, color: AppColors.primary, fontWeight: FontWeight.w700)),
             ),
             const SizedBox(width: 8),
-            Text(mood, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+            // mood is patient-entered Firestore text with no length
+            // guarantee — Flexible so a long entry can't push the
+            // timestamp off the card or overflow the Row.
+            Flexible(
+              child: Text(mood,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+            ),
             const Spacer(),
             Text(DateFormat('dd MMM, hh:mm a').format(loggedAt),
                 style: const TextStyle(fontSize: 10, color: AppColors.textHint)),

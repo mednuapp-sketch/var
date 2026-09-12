@@ -484,7 +484,14 @@ class _NotifTile extends ConsumerWidget {
       case NotifType.appointment:
         return AppRoutes.schedule;
       case NotifType.emergencyRequest:
-        return AppRoutes.incomingRequest;
+        // Emergency SOS broadcasts to every active doctor with no assigned
+        // doctorId (see onEmergencyDoctorRequest, functions/index.js) — it
+        // was routing here to IncomingRequestScreen, which queries
+        // `consultations` filtered by `doctorId == uid` and could never
+        // show it. EmergencyRequestsScreen reads the actual
+        // `service_requests[type=emergency_doctor]` docs this notification
+        // is about.
+        return AppRoutes.emergencyRequests;
       case NotifType.review:
       case NotifType.summary:
       case NotifType.patientFollowup:

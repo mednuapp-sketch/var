@@ -88,11 +88,14 @@ class _MedicineScreenState extends ConsumerState<MedicineScreen> {
   // (see PrescriptionUploadService.uploadPending) and carries the result via
   // pendingPrescriptionProvider — cart_screen.dart's checkout reads it and
   // writes it onto the new order's initial fields.
-  Future<void> _uploadPrescription() async {
+  /// Returns whether a prescription is attached to [pendingPrescriptionProvider]
+  /// once this call resolves (true after a successful upload, false if the
+  /// patient backed out at any step).
+  Future<bool> _uploadPrescription() async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
+    if (uid == null) return false;
     final file = await showPrescriptionSourceSheet(context);
-    if (file == null || !mounted) return;
+    if (file == null || !mounted) return false;
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => PrescriptionPreviewScreen(
@@ -113,6 +116,47 @@ class _MedicineScreenState extends ConsumerState<MedicineScreen> {
         ),
       ),
     );
+    return ref.read(pendingPrescriptionProvider) != null;
+  }
+
+  /// Shown once per screen visit (skippable) so patients can attach a
+  /// prescription before browsing, instead of only via the app-bar icon.
+  /// Skipped entirely when arriving from a doctor's own e-prescription
+  /// (`widget.prescriptionMedicines`) — that's already a verified
+  /// prescription on file, nothing more to collect.
+  Future<void> _showInitialPrescriptionPrompt() async {
+    if (!mounted || ref.read(pendingPrescriptionProvider) != null) return;
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const _PrescriptionPromptSheet(),
+    );
+    if (action == 'upload') await _uploadPrescription();
+  }
+
+  /// Gate for Rx-required medicines: if skipped earlier (or never prompted)
+  /// and no prescription is attached yet, ask for one now before adding —
+  /// added to cart immediately once the upload succeeds.
+  Future<bool> _ensurePrescriptionFor(String medName) async {
+    if (ref.read(pendingPrescriptionProvider) != null) return true;
+    final proceed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Prescription Required'),
+        content: Text('$medName needs a valid prescription. Upload one now to add it to your cart.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2E7D32)),
+            child: const Text('Upload Prescription', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    if (proceed != true || !mounted) return false;
+    return _uploadPrescription();
   }
 
   void _clearPendingPrescription() {
@@ -128,6 +172,8 @@ class _MedicineScreenState extends ConsumerState<MedicineScreen> {
     if (widget.prescriptionMedicines != null && widget.prescriptionMedicines!.isNotEmpty) {
       _prescriptionMeds = List.from(widget.prescriptionMedicines!);
       _showPrescriptionMeds = true;
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _showInitialPrescriptionPrompt());
     }
     if (widget.pharmacyId != null) {
       FirebaseFirestore.instance.collection('pharmacy_profiles').doc(widget.pharmacyId).get().then((snap) {
@@ -193,7 +239,21 @@ class _MedicineScreenState extends ConsumerState<MedicineScreen> {
     return replace == true;
   }
 
+  /// Entry point for manual "Add" taps on the general catalogue: gates
+  /// Rx-required medicines behind a prescription before adding.
   Future<void> _addMedToCart(Map<String, dynamic> med) async {
+    if (med['requiresPrescription'] == true) {
+      final ok = await _ensurePrescriptionFor(med['name'] as String);
+      if (!ok || !mounted) return;
+    }
+    await _performAddToCart(med);
+  }
+
+  /// Actually adds [med] to the cart — no prescription gate. Used both by
+  /// [_addMedToCart] after the gate passes, and directly by the
+  /// doctor-e-prescription flow ([_addToCatalogueFromPrescription],
+  /// [_addAllPrescriptionMeds]), which is already a verified prescription.
+  Future<void> _performAddToCart(Map<String, dynamic> med) async {
     final sourcePharmacyId = med['sourcePharmacyId'] as String?;
     if (sourcePharmacyId != null) {
       final conflict = ref.read(cartProvider.notifier)
@@ -226,7 +286,7 @@ class _MedicineScreenState extends ConsumerState<MedicineScreen> {
     final keyword = (rxMed['name'] as String? ?? '').toLowerCase().split(' ').first;
     final med = _catalogue.where((c) => (c['name'] as String).toLowerCase().contains(keyword)).firstOrNull;
     if (med != null && _cartItemForMed(med['id'] as String) == null) {
-      _addMedToCart(med);
+      _performAddToCart(med);
     }
   }
 
@@ -561,6 +621,66 @@ class _MedicineScreenState extends ConsumerState<MedicineScreen> {
 }
 
 // ── Reusable widgets ────────────────────────────────────────────────────────
+
+/// Skippable first-touch sheet: attach a prescription before browsing, or
+/// skip and get prompted again only when an Rx-required medicine is added
+/// (see [_MedicineScreenState._ensurePrescriptionFor]).
+class _PrescriptionPromptSheet extends StatelessWidget {
+  const _PrescriptionPromptSheet();
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: context.appSurface,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 56, height: 56,
+              decoration: BoxDecoration(color: const Color(0xFF2E7D32).withValues(alpha: 0.1), shape: BoxShape.circle),
+              child: const Icon(Icons.receipt_long_rounded, color: Color(0xFF2E7D32), size: 28),
+            ),
+            const SizedBox(height: 14),
+            const Text('Have a prescription?', style: AppTextStyles.h4, textAlign: TextAlign.center),
+            const SizedBox(height: 6),
+            Text(
+              'Upload it now to order prescription medicines directly, or skip and add it later when needed.',
+              textAlign: TextAlign.center,
+              style: AppTextStyles.bodySmall.copyWith(color: context.appTextHint),
+            ),
+            const SizedBox(height: 18),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(context, 'upload'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF2E7D32),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: const Text('Upload Prescription', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, color: Colors.white)),
+              ),
+            ),
+            const SizedBox(height: 6),
+            SizedBox(
+              width: double.infinity,
+              child: TextButton(
+                onPressed: () => Navigator.pop(context, 'skip'),
+                child: Text('Skip for now', style: AppTextStyles.bodySmall.copyWith(color: context.appTextHint, fontWeight: FontWeight.w600)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 class _QtyBtn extends StatelessWidget {
   final IconData icon;

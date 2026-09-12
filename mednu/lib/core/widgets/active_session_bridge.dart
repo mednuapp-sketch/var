@@ -267,16 +267,14 @@ class _ActiveSessionBridgeState extends ConsumerState<ActiveSessionBridge>
         _cardHeightEstimate;
 
     final draggableCard = visible
-        ? GestureDetector(
-            onVerticalDragStart: (_) => _onDragStart(defaultTop),
-            onVerticalDragUpdate: _onDragUpdate,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: _BridgeCard(
-                info: info,
-                pulse: _pulse,
-                onTap: () => _onTap(info),
-              ),
+        ? Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: _BridgeCard(
+              info: info,
+              pulse: _pulse,
+              onTap: () => _onTap(info),
+              onHandleDragStart: () => _onDragStart(defaultTop),
+              onHandleDragUpdate: _onDragUpdate,
             ),
           )
         : const SizedBox.shrink();
@@ -321,8 +319,16 @@ class _BridgeCard extends StatelessWidget {
   final _BridgeInfo info;
   final Animation<double> pulse;
   final VoidCallback onTap;
+  final VoidCallback onHandleDragStart;
+  final GestureDragUpdateCallback onHandleDragUpdate;
 
-  const _BridgeCard({required this.info, required this.pulse, required this.onTap});
+  const _BridgeCard({
+    required this.info,
+    required this.pulse,
+    required this.onTap,
+    required this.onHandleDragStart,
+    required this.onHandleDragUpdate,
+  });
 
   (IconData, String, String) _content() {
     switch (info.kind) {
@@ -370,14 +376,26 @@ class _BridgeCard extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               // Grab handle — signals the card can be dragged to reposition,
-              // matching this app's bottom-sheet handle convention.
-              Container(
-                width: 32,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 8),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.4),
-                  borderRadius: BorderRadius.circular(2),
+              // matching this app's bottom-sheet handle convention. Only
+              // this small region owns the vertical-drag gesture: earlier
+              // the whole card intercepted it, which hijacked scroll swipes
+              // that merely started on the card's footprint (the card would
+              // fling to the top/bottom clamp and stick there instead of
+              // the list underneath scrolling).
+              GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onVerticalDragStart: (_) => onHandleDragStart(),
+                onVerticalDragUpdate: onHandleDragUpdate,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 6, bottom: 8),
+                  child: Container(
+                    width: 32,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.4),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
                 ),
               ),
               Row(

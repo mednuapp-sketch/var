@@ -1,7 +1,7 @@
 name: mednu
 description: MedNU - Your Family Healthcare Partner by MedNU Healthcare Services Private Limited
 publish_to: 'none'
-version: 1.0.4+10
+version: 1.0.6+12
 
 environment:
   sdk: '>=3.12.0 <4.0.0'
@@ -134,8 +134,14 @@ flutter_launcher_icons:
   adaptive_icon_foreground: "assets/images/mednu_icon_foreground.png"
 
 flutter_native_splash:
-  color: "#522546"
-  image: assets/images/mednu_splash.png
+  # Matches SplashScreen's Scaffold backgroundColor / gradient start
+  # (lib/features/splash/splash_screen.dart) exactly, so the handoff from
+  # native splash to the first Flutter frame is a seamless color match
+  # instead of a visible flash. No image: SplashScreen animates the logo
+  # in from scale/opacity zero — a static logo shown natively first would
+  # pop in, vanish, then re-animate from scratch instead of reading as one
+  # continuous reveal.
+  color: "#3A1732"
   android: true
   ios: true
   fullscreen: true

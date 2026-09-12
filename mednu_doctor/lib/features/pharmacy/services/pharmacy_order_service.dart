@@ -124,6 +124,41 @@ class PharmacyOrderService {
     });
   }
 
+  /// Resolves each of [orderId]'s line items that were sourced from this
+  /// pharmacy's own inventory (`medicineId` matching
+  /// `phinv_{pharmacyId}_{itemId}`) to its inventory doc ref and total
+  /// ordered quantity. Order items are written once, in the same batch as
+  /// the order itself, and never rewritten afterward (see
+  /// onMedicineOrderCreated in functions/index.js) — safe to read outside
+  /// the transaction the caller runs this inside of.
+  ///
+  /// Shared by [acceptOrder] (decrements stock once, when status first
+  /// leaves 'pending') and [cancelOrder]/[rejectPrescription] (restore
+  /// whatever accept decremented, since a cancelled/rejected order never
+  /// actually consumes that stock).
+  static Future<List<MapEntry<DocumentReference<Map<String, dynamic>>, int>>>
+      _ownInventoryDeltas(String orderId, String pharmacyId) async {
+    final itemsSnap = await _db
+        .collection('pharmacy_order_items')
+        .where('orderId', isEqualTo: orderId)
+        .get();
+
+    final prefix = 'phinv_${pharmacyId}_';
+    final byRef = <DocumentReference<Map<String, dynamic>>, int>{};
+    for (final doc in itemsSnap.docs) {
+      final medicineId = doc.data()['medicineId'] as String?;
+      if (medicineId == null || !medicineId.startsWith(prefix)) continue;
+      final itemId = medicineId.substring(prefix.length);
+      final ref = _db
+          .collection('pharmacy_profiles')
+          .doc(pharmacyId)
+          .collection('inventory')
+          .doc(itemId);
+      byRef[ref] = (byRef[ref] ?? 0) + ((doc.data()['count'] as num?)?.toInt() ?? 1);
+    }
+    return byRef.entries.toList();
+  }
+
   /// Accepts a pending order — either claims it from the shared unclaimed
   /// pool (`pharmacyId == null`, another pharmacy might grab it first) or
   /// confirms one already pinned to this pharmacy (a patient ordered
@@ -134,25 +169,86 @@ class PharmacyOrderService {
   /// cases; this one only allowed the pool-claim case, so accepting a
   /// pharmacy's own pinned order always failed with a "claimed by another
   /// pharmacy" error that was never actually true.
-  static Future<void> acceptOrder(String orderId, String pharmacyId) => _transitionOrder(
-        orderId,
-        precondition: (d) =>
-            (d['pharmacyId'] == null || d['pharmacyId'] == pharmacyId) && d['status'] == 'pending',
-        conflictMessage: 'This order was already claimed by another pharmacy.',
-        buildUpdate: (d) => {
-          'pharmacyId': pharmacyId,
-          'status': (d['requiresPrescription'] as bool?) == true ? 'prescription_required' : 'verified',
-        },
-      );
+  ///
+  /// Also decrements this pharmacy's own inventory stock for every line item
+  /// sourced from it (`pharmacy_order_items.medicineId` matching
+  /// `phinv_{pharmacyId}_{itemId}`), inside the same transaction as the
+  /// status write, and refuses to accept at all if any of those items don't
+  /// have enough stock left. Items with no resolvable inventory doc (an
+  /// admin-added catalogue medicine, or one sourced from a different
+  /// pharmacy via the shared claim pool) are left untouched — there is
+  /// nothing owned by this pharmacy to decrement for them.
+  static Future<void> acceptOrder(String orderId, String pharmacyId) async {
+    final orderRef = _db.collection('pharmacy_orders').doc(orderId);
+    final stockEntries = await _ownInventoryDeltas(orderId, pharmacyId);
 
-  static Future<void> cancelOrder(String orderId, String pharmacyId) => _transitionOrder(
-        orderId,
-        precondition: (d) =>
-            (d['pharmacyId'] == null || d['pharmacyId'] == pharmacyId) &&
-            !['delivered', 'cancelled'].contains(d['status']),
-        conflictMessage: 'This order can no longer be cancelled.',
-        buildUpdate: (d) => {'pharmacyId': pharmacyId, 'status': 'cancelled'},
-      );
+    await _db.runTransaction((tx) async {
+      final snap = await tx.get(orderRef);
+      if (!snap.exists) {
+        throw const PharmacyOrderConflictException('This order no longer exists.');
+      }
+      final data = snap.data()!;
+      if (!((data['pharmacyId'] == null || data['pharmacyId'] == pharmacyId) &&
+          data['status'] == 'pending')) {
+        throw const PharmacyOrderConflictException('This order was already claimed by another pharmacy.');
+      }
+
+      if (stockEntries.isNotEmpty) {
+        final invSnaps = await Future.wait(stockEntries.map((e) => tx.get(e.key)));
+        for (var i = 0; i < invSnaps.length; i++) {
+          final have = (invSnaps[i].data()?['stock'] as int?) ?? 0;
+          if (!invSnaps[i].exists || have < stockEntries[i].value) {
+            final name = invSnaps[i].data()?['name'] as String? ?? 'An item';
+            throw PharmacyOrderConflictException(
+              '$name is out of stock — update your inventory before accepting this order.',
+            );
+          }
+        }
+        for (var i = 0; i < invSnaps.length; i++) {
+          tx.update(invSnaps[i].reference, {'stock': FieldValue.increment(-stockEntries[i].value)});
+        }
+      }
+
+      tx.update(orderRef, {
+        'pharmacyId': pharmacyId,
+        'status': (data['requiresPrescription'] as bool?) == true ? 'prescription_required' : 'verified',
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    });
+  }
+
+  /// Restores whatever [acceptOrder] decremented if this order had already
+  /// been accepted (status past 'pending') — a cancelled order never
+  /// actually consumes that stock. A still-'pending' order was never
+  /// decremented, so there's nothing to restore.
+  static Future<void> cancelOrder(String orderId, String pharmacyId) async {
+    final orderRef = _db.collection('pharmacy_orders').doc(orderId);
+    final stockEntries = await _ownInventoryDeltas(orderId, pharmacyId);
+
+    await _db.runTransaction((tx) async {
+      final snap = await tx.get(orderRef);
+      if (!snap.exists) {
+        throw const PharmacyOrderConflictException('This order no longer exists.');
+      }
+      final data = snap.data()!;
+      if (!((data['pharmacyId'] == null || data['pharmacyId'] == pharmacyId) &&
+          !['delivered', 'cancelled'].contains(data['status']))) {
+        throw const PharmacyOrderConflictException('This order can no longer be cancelled.');
+      }
+
+      if (data['status'] != 'pending') {
+        for (final e in stockEntries) {
+          tx.set(e.key, {'stock': FieldValue.increment(e.value)}, SetOptions(merge: true));
+        }
+      }
+
+      tx.update(orderRef, {
+        'pharmacyId': pharmacyId,
+        'status': 'cancelled',
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    });
+  }
 
   /// Approves the patient-uploaded prescription and moves the order
   /// forward. Sets `prescriptionVerified: true`, which the Cloud Function
@@ -174,21 +270,39 @@ class PharmacyOrderService {
   /// A hard rejection — the prescription is invalid for what was ordered
   /// (e.g. wrong medicine, expired, illegible beyond re-upload) and the
   /// order is cancelled. [reason] is shown to the patient verbatim.
+  ///
+  /// 'prescription_required' is only ever reached via [acceptOrder], so
+  /// stock was unconditionally decremented already — restore it here too.
   static Future<void> rejectPrescription(
     String orderId, {
     required String pharmacyId,
     required String reason,
-  }) =>
-      _transitionOrder(
-        orderId,
-        precondition: (d) => d['pharmacyId'] == pharmacyId && d['status'] == 'prescription_required',
-        conflictMessage: 'This order is not awaiting prescription verification.',
-        buildUpdate: (d) => {
-          'status': 'cancelled',
-          'prescriptionVerified': false,
-          'prescriptionRejectedReason': reason,
-        },
-      );
+  }) async {
+    final orderRef = _db.collection('pharmacy_orders').doc(orderId);
+    final stockEntries = await _ownInventoryDeltas(orderId, pharmacyId);
+
+    await _db.runTransaction((tx) async {
+      final snap = await tx.get(orderRef);
+      if (!snap.exists) {
+        throw const PharmacyOrderConflictException('This order no longer exists.');
+      }
+      final data = snap.data()!;
+      if (!(data['pharmacyId'] == pharmacyId && data['status'] == 'prescription_required')) {
+        throw const PharmacyOrderConflictException('This order is not awaiting prescription verification.');
+      }
+
+      for (final e in stockEntries) {
+        tx.set(e.key, {'stock': FieldValue.increment(e.value)}, SetOptions(merge: true));
+      }
+
+      tx.update(orderRef, {
+        'status': 'cancelled',
+        'prescriptionVerified': false,
+        'prescriptionRejectedReason': reason,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    });
+  }
 
   /// A soft rejection — the order stays alive; the patient is asked to
   /// re-upload (e.g. a blurry photo). Deliberately does not touch `status`

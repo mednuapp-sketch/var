@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -13,23 +12,14 @@ class _PermissionInfo {
   const _PermissionInfo(this.permission, this.icon, this.title, this.reason);
 }
 
-/// Returns the correct media permission based on platform/Android version.
-/// Android 13+ uses READ_MEDIA_IMAGES (Permission.photos).
-/// Android ≤12 uses READ_EXTERNAL_STORAGE (Permission.storage).
-Permission get _mediaPermission {
-  if (Platform.isAndroid) {
-    // permission_handler maps Permission.photos → READ_MEDIA_IMAGES on API 33+
-    // and gracefully falls back on older APIs.
-    return Permission.photos;
-  }
-  return Permission.storage;
-}
-
+// No "Photos & Media" entry here: gallery/document picking goes through
+// image_picker / file_picker's system pickers, which need no runtime
+// storage/media permission. Requesting READ_MEDIA_IMAGES anyway is what
+// triggered Play Console's photo/video permissions policy flag.
 List<_PermissionInfo> get _kPermissions => [
   const _PermissionInfo(Permission.camera,       Icons.camera_alt_rounded,   'Camera',          'Take profile photos and participate in video consultations.'),
   const _PermissionInfo(Permission.microphone,   Icons.mic_rounded,          'Microphone',      'Talk with patients during live video consultations.'),
   const _PermissionInfo(Permission.location,     Icons.location_on_rounded, 'Location',        'Show your GPS position to nearby patients when you go online.'),
-  _PermissionInfo(_mediaPermission, Icons.photo_library_rounded, 'Photos & Media', 'Save prescriptions, access reports and upload profile photos.'),
   // Without this, incoming call/booking alerts have nowhere to register —
   // FcmService (see requestPermissionAndRegisterToken) skips saving the FCM
   // token entirely when this is denied, so the doctor is silently unreachable

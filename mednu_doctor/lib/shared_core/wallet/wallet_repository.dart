@@ -189,6 +189,170 @@ class SettlementWalletRepository implements WalletRepository {
   }
 }
 
+/// Physiotherapy/Counselling implementation — [SettlementWalletRepository]
+/// (`provider_wallets`/`wallet_ledger`) plus a merged read of the legacy
+/// `physio_transactions`/`counselling_transactions` ledger.
+///
+/// Why both: `onPhysioSessionStatusChange`/`onCounsellingSessionStatusChange`
+/// (functions/index.js) already call `_transitionPaymentToEligible` on every
+/// session completion, so these two roles ARE full settlement-engine
+/// participants on the backend — `provider_wallets`/`wallet_ledger` is the
+/// correct, authoritative source once real payments exist. But that backend
+/// call is a no-op until a real `payments` doc exists (see
+/// `_transitionPaymentToEligible`'s own guard), and `kRequirePayment` is
+/// still `false` — no booking has ever gone through `capturePayment` yet, so
+/// `provider_wallets` is empty for every current physiotherapist/counsellor.
+/// Meanwhile the legacy ledger credit in those same trigger functions is
+/// unconditional on every completion regardless of payment status, and is
+/// the ONLY thing populated today — it's what these two roles have always
+/// seen in their Earnings screen. Reading `provider_wallets` alone the
+/// moment payments go live would be correct going forward but would erase
+/// every already-completed session's earnings history that's visible today.
+/// Merging both, with the legacy entries clearly subtitled as "Recorded" vs
+/// the settlement engine's "Pending settlement"/"Paid out", keeps that
+/// history visible while making the settlement engine's real balance figures
+/// (which is what actually gets transferred) the authoritative `balance`/
+/// `pendingAmount`/`paidThisMonth` once they start populating.
+class SettlementWithLegacyWalletRepository implements WalletRepository {
+  final FirebaseFirestore _db;
+  final String _legacyCollection;
+  final String _legacyProviderIdField;
+
+  SettlementWithLegacyWalletRepository({
+    required String legacyCollection,
+    required String legacyProviderIdField,
+    FirebaseFirestore? firestore,
+  })  : _legacyCollection = legacyCollection,
+        _legacyProviderIdField = legacyProviderIdField,
+        _db = firestore ?? FirebaseFirestore.instance;
+
+  @override
+  Stream<WalletSummary> streamSummary(String uid) {
+    late final StreamController<WalletSummary> controller;
+    StreamSubscription? walletSub;
+    StreamSubscription? ledgerSub;
+    StreamSubscription? legacySub;
+    DateTime? nextPayoutDate;
+
+    Map<String, dynamic>? walletData;
+    List<WalletTransaction> settlementTransactions = const [];
+    List<WalletTransaction> legacyTransactions = const [];
+
+    Future<void> loadNextPayoutDate() async {
+      try {
+        final cfg = await _db.collection('settlement_config').doc('global').get();
+        final frequency = cfg.data()?['frequency'] as String? ?? 'daily';
+        final now = DateTime.now();
+        switch (frequency) {
+          case 'daily':
+            nextPayoutDate = DateTime(now.year, now.month, now.day + 1);
+            break;
+          case 'weekly':
+            nextPayoutDate = now.add(Duration(days: 8 - now.weekday));
+            break;
+          case 'monthly':
+            nextPayoutDate = DateTime(
+                now.month == 12 ? now.year + 1 : now.year, now.month == 12 ? 1 : now.month + 1, 1);
+            break;
+          default:
+            nextPayoutDate = null;
+        }
+      } catch (_) {
+        nextPayoutDate = null;
+      }
+    }
+
+    void emit() {
+      if (controller.isClosed) return;
+      final balance = (walletData?['availableBalance'] as num?) ?? 0;
+      final pending = (walletData?['pendingEarnings'] as num?) ?? 0;
+      final paidThisMonth = (walletData?['paidThisMonth'] as num?) ?? 0;
+      final combined = [...settlementTransactions, ...legacyTransactions]
+        ..sort((a, b) => b.date.compareTo(a.date));
+      controller.add(WalletSummary(
+        balance: balance,
+        pendingAmount: pending,
+        currency: 'INR',
+        transactions: combined,
+        paidThisMonth: paidThisMonth,
+        nextPayoutDate: nextPayoutDate,
+      ));
+    }
+
+    controller = StreamController<WalletSummary>.broadcast(
+      onListen: () async {
+        await loadNextPayoutDate();
+        walletSub = _db.collection('provider_wallets').doc(uid).snapshots().listen((snap) {
+          walletData = snap.data();
+          emit();
+        }, onError: (_) {});
+        ledgerSub = _db
+            .collection('wallet_ledger')
+            .where('uid', isEqualTo: uid)
+            .orderBy('createdAt', descending: true)
+            .limit(100)
+            .snapshots()
+            .listen((snap) {
+          settlementTransactions = snap.docs.map(_toSettlementTransaction).toList();
+          emit();
+        }, onError: (_) {});
+        legacySub = _db
+            .collection(_legacyCollection)
+            .where(_legacyProviderIdField, isEqualTo: uid)
+            .snapshots()
+            .listen((snap) {
+          legacyTransactions = snap.docs.map(_toLegacyTransaction).toList();
+          emit();
+        }, onError: (_) {});
+      },
+      onCancel: () {
+        walletSub?.cancel();
+        ledgerSub?.cancel();
+        legacySub?.cancel();
+      },
+    );
+
+    return controller.stream;
+  }
+
+  WalletTransaction _toSettlementTransaction(QueryDocumentSnapshot<Map<String, dynamic>> doc) {
+    final d = doc.data();
+    final amount = (d['amount'] as num?) ?? 0;
+    final category = d['category'] as String? ?? '';
+    final title = d['title'] as String? ??
+        (category == 'provider_settlement' ? 'Settlement Paid' : 'Earnings');
+    final createdAt = (d['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now();
+    return WalletTransaction(
+      id: doc.id,
+      title: title,
+      subtitle: category == 'provider_settlement' ? 'Paid out' : 'Pending settlement',
+      amount: amount,
+      type: d['type'] == 'debit' ? WalletTransactionType.debit : WalletTransactionType.credit,
+      date: createdAt,
+    );
+  }
+
+  WalletTransaction _toLegacyTransaction(QueryDocumentSnapshot<Map<String, dynamic>> doc) {
+    final d = doc.data();
+    final amount = (d['amount'] as num?) ?? 0;
+    final patientName = d['patientName'] as String? ?? 'Patient';
+    final createdAt = (d['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now();
+    return WalletTransaction(
+      id: doc.id,
+      title: 'Session — $patientName',
+      // Distinct from the settlement engine's own labels above — this is a
+      // real completed session's value, recorded before/without a real
+      // payment ever being captured for it, not yet part of any settlement
+      // batch (and never will be unless capturePayment starts running for
+      // this booking).
+      subtitle: 'Recorded',
+      amount: amount,
+      type: WalletTransactionType.credit,
+      date: createdAt,
+    );
+  }
+}
+
 /// Lab & Diagnostics implementation — legacy direct read of the immutable
 /// `lab_transactions` ledger (see `functions/index.js`,
 /// `onDiagnosticBookingStatusChange`). Superseded by

@@ -87,41 +87,106 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     } catch (_) {}
   }
 
-  void _showTimingPicker(BuildContext context) {
+  static const _customMinutesSentinel = -1;
+
+  Future<void> _showTimingPicker(BuildContext context) async {
     const options = [5, 10, 15, 30, 60, 120, 180];
-    showDialog<int>(
+    final picked = await showDialog<int>(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.r(context, 20))),
         title: const Text(
-          'Remind me before',
+          'Custom reminder',
           style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 16),
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
-          children: options.map((m) {
-            final label = _reminderMinutesLabel(m);
-            final selected = _appointmentReminderMinutes == m;
-            return ListTile(
+          children: [
+            const Text(
+              'You always get a reminder 15 minutes before. Pick an additional custom time if you\'d like one more.',
+              style: AppTextStyles.caption,
+            ),
+            SizedBox(height: R.h(context, 8)),
+            ...options.map((m) {
+              final label = _reminderMinutesLabel(m);
+              final selected = _appointmentReminderMinutes == m;
+              return ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                title: Text(label,
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                      color: selected ? AppColors.primary : null,
+                    )),
+                trailing: selected
+                    ? Icon(Icons.check_circle_rounded, color: AppColors.primary, size: R.w(context, 20))
+                    : null,
+                onTap: () => Navigator.pop(ctx, m),
+              );
+            }),
+            const Divider(height: 1),
+            ListTile(
               dense: true,
               contentPadding: EdgeInsets.zero,
-              title: Text(label,
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                    color: selected ? AppColors.primary : null,
-                  )),
-              trailing: selected
-                  ? Icon(Icons.check_circle_rounded, color: AppColors.primary, size: R.w(context, 20))
-                  : null,
-              onTap: () => Navigator.pop(ctx, m),
-            );
-          }).toList(),
+              leading: Icon(Icons.edit_rounded, color: AppColors.primary, size: R.w(context, 20)),
+              title: const Text('Custom time…',
+                  style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
+              onTap: () => Navigator.pop(ctx, _customMinutesSentinel),
+            ),
+          ],
         ),
       ),
-    ).then((picked) {
-      if (picked != null) _setReminderMinutes(picked);
-    });
+    );
+    if (picked == null) return;
+    if (picked == _customMinutesSentinel) {
+      if (!context.mounted) return;
+      final custom = await _showCustomMinutesDialog(context);
+      if (custom != null) _setReminderMinutes(custom);
+    } else {
+      _setReminderMinutes(picked);
+    }
+  }
+
+  Future<int?> _showCustomMinutesDialog(BuildContext context) {
+    final controller = TextEditingController(
+      text: _appointmentReminderMinutes == 15 ? '' : '$_appointmentReminderMinutes',
+    );
+    return showDialog<int>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.r(context, 20))),
+        title: const Text(
+          'Custom reminder time',
+          style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 16),
+        ),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          keyboardType: TextInputType.number,
+          style: const TextStyle(fontFamily: 'Poppins'),
+          decoration: const InputDecoration(
+            labelText: 'Minutes before appointment',
+            hintText: 'e.g. 45',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              final value = int.tryParse(controller.text.trim());
+              if (value != null && value > 0 && value <= 1440) {
+                Navigator.pop(ctx, value);
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _loadBiometricState() async {
@@ -407,7 +472,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   _SwitchTile(
                     Icons.alarm_rounded,
                     'Appointment Reminders',
-                    'Get notified before upcoming appointments & services',
+                    'Always 15 min before, plus your own custom time',
                     _appointmentReminder,
                     _toggleAppointmentReminder,
                     iconColor: const Color(0xFFF9943B),
@@ -765,7 +830,9 @@ class _ReminderTimingTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final label = '${_reminderMinutesLabel(minutes)} before';
+    final label = minutes == 15
+        ? '15 minutes before (default)'
+        : '15 min before + ${_reminderMinutesLabel(minutes)} before';
     return ListTile(
       onTap: onTap,
       contentPadding: EdgeInsets.symmetric(horizontal: R.p(context, 16), vertical: R.p(context, 4)),
@@ -779,7 +846,7 @@ class _ReminderTimingTile extends StatelessWidget {
         child: Icon(Icons.schedule_rounded,
             color: const Color(0xFFF9943B), size: R.w(context, 20)),
       ),
-      title: const Text('Reminder Timing', style: AppTextStyles.labelLarge),
+      title: const Text('Custom Reminder', style: AppTextStyles.labelLarge),
       subtitle: Text(label, style: AppTextStyles.caption),
       trailing: Icon(Icons.chevron_right_rounded,
           color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),

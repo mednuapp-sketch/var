@@ -9,10 +9,17 @@ import 'wallet_repository.dart';
 /// [WalletRepository] interface, so every wallet UI widget stays
 /// role-agnostic. Doctor/lab/pharmacy/ambulance/caregiver are on the real
 /// Payment Distribution & Settlement Engine (functions/index.js) via
-/// [SettlementWalletRepository] — physiotherapist/counsellor/nutritionist
-/// aren't wired into that engine yet (no commission_rules/settlement
-/// support for those service types) and keep their existing
-/// aggregation/ledger-read repositories until they are.
+/// [SettlementWalletRepository]. Physiotherapist/Counsellor are ALSO full
+/// settlement-engine participants on the backend (see
+/// onPhysioSessionStatusChange/onCounsellingSessionStatusChange calling
+/// _transitionPaymentToEligible) but use [SettlementWithLegacyWalletRepository]
+/// instead of the plain one — it merges in their legacy
+/// physio_transactions/counselling_transactions ledger so session history
+/// recorded before real payments went live doesn't disappear from their
+/// Earnings screen (see that class's own doc comment for the full reasoning).
+/// Nutritionist has its own settlement trigger too
+/// (onNutritionAppointmentSettlement) but no pre-existing history to merge,
+/// so it stays on the simpler aggregation repository for now.
 final walletRepositoryProvider = Provider<WalletRepository>((ref) {
   final role = ref.watch(roleEngineProvider).activeRole;
   switch (role) {
@@ -23,9 +30,15 @@ final walletRepositoryProvider = Provider<WalletRepository>((ref) {
     case AppRole.caregiver:
       return SettlementWalletRepository();
     case AppRole.physiotherapist:
-      return PhysioTransactionWalletRepository();
+      return SettlementWithLegacyWalletRepository(
+        legacyCollection: 'physio_transactions',
+        legacyProviderIdField: 'physiotherapistId',
+      );
     case AppRole.counsellor:
-      return CounsellingTransactionWalletRepository();
+      return SettlementWithLegacyWalletRepository(
+        legacyCollection: 'counselling_transactions',
+        legacyProviderIdField: 'counsellorId',
+      );
     case AppRole.nutritionist:
       return NutritionAppointmentWalletRepository();
     case AppRole.hospital:

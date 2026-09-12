@@ -18,6 +18,7 @@ class IncomingCallScreen extends StatefulWidget {
   final String doctorSpecialty;
   final String consultationType;
   final String doctorPhotoUrl;
+  final String providerRole;
 
   const IncomingCallScreen({
     super.key,
@@ -26,7 +27,10 @@ class IncomingCallScreen extends StatefulWidget {
     required this.doctorSpecialty,
     this.consultationType = 'Video',
     this.doctorPhotoUrl = '',
+    this.providerRole = 'doctor',
   });
+
+  String get _headingLabel => providerRole == 'doctor' ? 'Incoming Consultation' : 'Incoming Session';
 
   @override
   State<IncomingCallScreen> createState() => _IncomingCallScreenState();
@@ -322,9 +326,9 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
   Widget _buildDoctorInfo() {
     return Column(
       children: [
-        const Text(
-          'Incoming Consultation',
-          style: TextStyle(
+        Text(
+          widget._headingLabel,
+          style: const TextStyle(
               fontFamily: 'Poppins',
               fontSize: 12,
               color: Colors.white54,

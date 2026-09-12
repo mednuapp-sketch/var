@@ -34,12 +34,14 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   final title = message.notification?.title ?? message.data['title'] as String? ?? '';
   final body  = message.notification?.body  ?? message.data['body']  as String? ?? '';
 
-  // Incoming call from doctor — show full-screen call UI even when killed.
+  // Incoming call from a provider (doctor, physiotherapist, or counsellor)
+  // — show full-screen call UI even when killed.
   if (type == 'incoming_doctor_call') {
     await CallNotificationService.init();
     await CallNotificationService.showIncomingCall(
       doctorName: message.data['doctorName'] ?? 'Doctor',
       specialty:  message.data['doctorSpecialty'] ?? '',
+      providerRole: message.data['providerRole'] ?? 'doctor',
     );
     return;
   }
@@ -121,6 +123,7 @@ void _handleFcmNavigation(Map<String, dynamic> data) {
       'doctorSpecialty': data['doctorSpecialty'] ?? '',
       'consultationId':  data['consultationId']  ?? '',
       'doctorPhotoUrl':  data['doctorPhotoUrl']  ?? '',
+      'providerRole':    data['providerRole']    ?? 'doctor',
     });
     return;
   }
@@ -476,11 +479,12 @@ Future<void> _initFCM() async {
   FirebaseMessaging.onMessage.listen((message) {
     final type = message.data['type'] ?? '';
 
-    // Doctor-initiated incoming call — show full-screen call overlay.
+    // Provider-initiated incoming call — show full-screen call overlay.
     if (type == 'incoming_doctor_call') {
       CallNotificationService.showIncomingCall(
         doctorName: message.data['doctorName'] ?? 'Doctor',
         specialty:  message.data['doctorSpecialty'] ?? '',
+        providerRole: message.data['providerRole'] ?? 'doctor',
       );
       return;
     }

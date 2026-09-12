@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>MedNU Admin Panel</title>
-  <link rel="stylesheet" href="css/style.css?v=20260908a" />
+  <link rel="stylesheet" href="css/style.css?v=20260912a" />
   <!-- Tabler Icons -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css" />
   <!-- Chart.js -->
@@ -733,6 +733,9 @@
         <div class="card">
           <div class="card-header">
             <span class="card-title">All Doctors</span>
+            <button class="btn btn-outline" id="bulk-approve-doctors-btn" onclick="bulkApproveSelectedDoctors()" disabled>
+              <i class="ti ti-checks"></i> Approve Selected (<span id="doctors-selected-count">0</span>)
+            </button>
             <div style="display:flex;gap:8px;">
               <input id="doctor-search" type="text" class="search-input" placeholder="Search doctors..." />
               <select id="doctor-type-filter" class="filter-select">
@@ -752,13 +755,14 @@
           <div class="table-wrap">
             <table>
               <thead>
-                <tr>
+                <tr id="doctors-thead-row">
+                  <th style="width:32px;"><input type="checkbox" id="doctors-select-all" onchange="toggleSelectAllDoctors(this.checked)" aria-label="Select all pending doctors" /></th>
                   <th>Doctor</th><th>Type</th><th>Specialisation</th><th>Phone</th>
                   <th>Consultations</th><th>Rating</th><th>Status</th><th>Actions</th>
                 </tr>
               </thead>
               <tbody id="doctors-tbody">
-                <tr><td colspan="8" class="loading">Loading doctors...</td></tr>
+                <tr><td colspan="9" class="loading">Loading doctors...</td></tr>
               </tbody>
             </table>
           </div>
@@ -845,7 +849,7 @@
           </div>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Patient</th><th>Phone</th><th>Age</th><th>Condition</th><th>Consultations</th><th>Joined</th></tr></thead>
+              <thead><tr id="patients-thead-row"><th>Patient</th><th>Phone</th><th>Age</th><th>Gender</th><th>Plan</th><th>Joined</th></tr></thead>
               <tbody id="patients-tbody"><tr><td colspan="6" class="loading">Loading patients...</td></tr></tbody>
             </table>
           </div>
@@ -2521,7 +2525,7 @@
           <div class="table-wrap">
             <table>
               <thead>
-                <tr>
+                <tr id="appointments-thead-row">
                   <th>Patient</th>
                   <th>Doctor</th>
                   <th>Date &amp; Time</th>
@@ -3169,7 +3173,7 @@
       <div id="nutr-dp-modal" class="modal-box" style="display:none;max-width:520px;">
         <div class="modal-header">
           <span id="nutr-dp-modal-title" class="modal-title">Add Diet Plan</span>
-          <button class="modal-close" onclick="closeDietPlanModal()"><i class="ti ti-x"></i></button>
+          <button class="modal-close" aria-label="Close" onclick="closeDietPlanModal()"><i class="ti ti-x"></i></button>
         </div>
         <div class="modal-body">
           <input type="hidden" id="nutr-dp-edit-id" />
@@ -3238,7 +3242,7 @@
       <div id="nutr-modal" class="modal-box" style="display:none;max-width:640px;">
         <div class="modal-header">
           <span id="nutr-modal-title" class="modal-title">Add Nutritionist</span>
-          <button class="modal-close" onclick="closeNutritionistModal()"><i class="ti ti-x"></i></button>
+          <button class="modal-close" aria-label="Close" onclick="closeNutritionistModal()"><i class="ti ti-x"></i></button>
         </div>
         <div class="modal-body" style="max-height:72vh;overflow-y:auto;">
           <input type="hidden" id="nutr-edit-id" />
@@ -3623,6 +3627,9 @@
         <div class="card">
           <div class="card-header">
             <span class="card-title">All Ambulance Partners</span>
+            <button class="btn btn-outline" id="ap-bulk-approve-btn" onclick="bulkApproveSelectedPartners('ambulance')" disabled>
+              <i class="ti ti-checks"></i> Approve Selected (<span id="ap-selected-count">0</span>)
+            </button>
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
               <input id="ap-search" type="text" class="search-input" placeholder="Search driver / plate / phone..." oninput="filterAmbulancePartners()" />
               <select id="ap-vehicle-filter" class="filter-select" onchange="filterAmbulancePartners()">
@@ -3640,12 +3647,13 @@
             <table>
               <thead>
                 <tr>
-                  <th>Driver / Vehicle</th><th>Plate</th><th>Vehicle Type</th><th>Phone</th>
-                  <th>Trips</th><th>Rating</th><th>Status</th><th>Actions</th>
+                  <th style="width:32px;"><input type="checkbox" id="ap-select-all" onchange="toggleSelectAllPartners('ambulance', this.checked)" aria-label="Select all pending, fully-verified ambulance partners" /></th>
+                  <th id="ap-th-name" style="cursor:pointer;" onclick="_toggleSortAndReload('partner-ambulance','name','filterAmbulancePartners')">Driver / Vehicle <i id="ap-th-name-icon" class="ti ti-arrows-sort" style="font-size:11px;opacity:0.4;"></i></th><th>Plate</th><th>Vehicle Type</th><th>Phone</th>
+                  <th>Trips</th><th>Rating</th><th id="ap-th-status" style="cursor:pointer;" onclick="_toggleSortAndReload('partner-ambulance','status','filterAmbulancePartners')">Status <i id="ap-th-status-icon" class="ti ti-arrows-sort" style="font-size:11px;opacity:0.4;"></i></th><th>Actions</th>
                 </tr>
               </thead>
               <tbody id="ap-tbody">
-                <tr><td colspan="8" class="loading">Loading ambulance partners...</td></tr>
+                <tr><td colspan="9" class="loading">Loading ambulance partners...</td></tr>
               </tbody>
             </table>
           </div>
@@ -3687,6 +3695,9 @@
         <div class="card">
           <div class="card-header">
             <span class="card-title">All Care Partners</span>
+            <button class="btn btn-outline" id="cp-bulk-approve-btn" onclick="bulkApproveSelectedPartners('caregiver')" disabled>
+              <i class="ti ti-checks"></i> Approve Selected (<span id="cp-selected-count">0</span>)
+            </button>
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
               <input id="cp-search" type="text" class="search-input" placeholder="Search name / specialty..." oninput="filterCaregiverPartners()" />
               <select id="cp-specialty-filter" class="filter-select" onchange="filterCaregiverPartners()">
@@ -3704,12 +3715,13 @@
             <table>
               <thead>
                 <tr>
-                  <th>Name</th><th>Specialties</th><th>Hourly Rate</th>
-                  <th>Visits</th><th>Rating</th><th>Status</th><th>Actions</th>
+                  <th style="width:32px;"><input type="checkbox" id="cp-select-all" onchange="toggleSelectAllPartners('caregiver', this.checked)" aria-label="Select all pending, fully-verified caregiver partners" /></th>
+                  <th id="cp-th-name" style="cursor:pointer;" onclick="_toggleSortAndReload('partner-caregiver','name','filterCaregiverPartners')">Name <i id="cp-th-name-icon" class="ti ti-arrows-sort" style="font-size:11px;opacity:0.4;"></i></th><th>Specialties</th><th>Hourly Rate</th>
+                  <th>Visits</th><th>Rating</th><th id="cp-th-status" style="cursor:pointer;" onclick="_toggleSortAndReload('partner-caregiver','status','filterCaregiverPartners')">Status <i id="cp-th-status-icon" class="ti ti-arrows-sort" style="font-size:11px;opacity:0.4;"></i></th><th>Actions</th>
                 </tr>
               </thead>
               <tbody id="cp-tbody">
-                <tr><td colspan="7" class="loading">Loading caregiver partners...</td></tr>
+                <tr><td colspan="8" class="loading">Loading caregiver partners...</td></tr>
               </tbody>
             </table>
           </div>
@@ -3751,6 +3763,9 @@
         <div class="card">
           <div class="card-header">
             <span class="card-title">All Pharmacy Partners</span>
+            <button class="btn btn-outline" id="pp-bulk-approve-btn" onclick="bulkApproveSelectedPartners('pharmacy')" disabled>
+              <i class="ti ti-checks"></i> Approve Selected (<span id="pp-selected-count">0</span>)
+            </button>
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
               <input id="pp-search" type="text" class="search-input" placeholder="Search name / license / phone / email..." oninput="filterPharmacyPartners()" />
               <select id="pp-delivery-filter" class="filter-select" onchange="filterPharmacyPartners()">
@@ -3770,12 +3785,13 @@
             <table>
               <thead>
                 <tr>
-                  <th>Pharmacy</th><th>License</th><th>Phone</th><th>Delivery</th>
-                  <th>Rating</th><th>Status</th><th>Actions</th>
+                  <th style="width:32px;"><input type="checkbox" id="pp-select-all" onchange="toggleSelectAllPartners('pharmacy', this.checked)" aria-label="Select all pending, fully-verified pharmacy partners" /></th>
+                  <th id="pp-th-name" style="cursor:pointer;" onclick="_toggleSortAndReload('partner-pharmacy','name','filterPharmacyPartners')">Pharmacy <i id="pp-th-name-icon" class="ti ti-arrows-sort" style="font-size:11px;opacity:0.4;"></i></th><th>License</th><th>Phone</th><th>Delivery</th>
+                  <th>Rating</th><th id="pp-th-status" style="cursor:pointer;" onclick="_toggleSortAndReload('partner-pharmacy','status','filterPharmacyPartners')">Status <i id="pp-th-status-icon" class="ti ti-arrows-sort" style="font-size:11px;opacity:0.4;"></i></th><th>Actions</th>
                 </tr>
               </thead>
               <tbody id="pp-tbody">
-                <tr><td colspan="7" class="loading">Loading pharmacy partners...</td></tr>
+                <tr><td colspan="8" class="loading">Loading pharmacy partners...</td></tr>
               </tbody>
             </table>
           </div>
@@ -3816,6 +3832,9 @@
         <div class="card">
           <div class="card-header">
             <span class="card-title">All Lab Partners</span>
+            <button class="btn btn-outline" id="lp-bulk-approve-btn" onclick="bulkApproveSelectedPartners('lab')" disabled>
+              <i class="ti ti-checks"></i> Approve Selected (<span id="lp-selected-count">0</span>)
+            </button>
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
               <input id="lp-search" type="text" class="search-input" placeholder="Search name / license / phone / service..." oninput="filterLabPartners()" />
               <select id="lp-service-filter" class="filter-select" onchange="filterLabPartners()">
@@ -3833,12 +3852,13 @@
             <table>
               <thead>
                 <tr>
-                  <th>Lab</th><th>License</th><th>Phone</th><th>Services</th>
-                  <th>Rating</th><th>Status</th><th>Actions</th>
+                  <th style="width:32px;"><input type="checkbox" id="lp-select-all" onchange="toggleSelectAllPartners('lab', this.checked)" aria-label="Select all pending, fully-verified lab partners" /></th>
+                  <th id="lp-th-name" style="cursor:pointer;" onclick="_toggleSortAndReload('partner-lab','name','filterLabPartners')">Lab <i id="lp-th-name-icon" class="ti ti-arrows-sort" style="font-size:11px;opacity:0.4;"></i></th><th>License</th><th>Phone</th><th>Services</th>
+                  <th>Rating</th><th id="lp-th-status" style="cursor:pointer;" onclick="_toggleSortAndReload('partner-lab','status','filterLabPartners')">Status <i id="lp-th-status-icon" class="ti ti-arrows-sort" style="font-size:11px;opacity:0.4;"></i></th><th>Actions</th>
                 </tr>
               </thead>
               <tbody id="lp-tbody">
-                <tr><td colspan="7" class="loading">Loading lab partners...</td></tr>
+                <tr><td colspan="8" class="loading">Loading lab partners...</td></tr>
               </tbody>
             </table>
           </div>
@@ -3879,6 +3899,9 @@
         <div class="card">
           <div class="card-header">
             <span class="card-title">All Physiotherapist Partners</span>
+            <button class="btn btn-outline" id="phy-bulk-approve-btn" onclick="bulkApproveSelectedPartners('physiotherapy')" disabled>
+              <i class="ti ti-checks"></i> Approve Selected (<span id="phy-selected-count">0</span>)
+            </button>
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
               <input id="phy-search" type="text" class="search-input" placeholder="Search name / specialty / city..." oninput="filterPhysioPartners()" />
               <select id="phy-specialty-filter" class="filter-select" onchange="filterPhysioPartners()">
@@ -3896,12 +3919,13 @@
             <table>
               <thead>
                 <tr>
-                  <th>Physiotherapist</th><th>Specialties</th><th>Rate</th><th>Experience</th>
-                  <th>Rating</th><th>Status</th><th>Actions</th>
+                  <th style="width:32px;"><input type="checkbox" id="phy-select-all" onchange="toggleSelectAllPartners('physiotherapy', this.checked)" aria-label="Select all pending, fully-verified physiotherapist partners" /></th>
+                  <th id="phy-th-name" style="cursor:pointer;" onclick="_toggleSortAndReload('partner-physiotherapy','name','filterPhysioPartners')">Physiotherapist <i id="phy-th-name-icon" class="ti ti-arrows-sort" style="font-size:11px;opacity:0.4;"></i></th><th>Specialties</th><th>Rate</th><th>Experience</th>
+                  <th>Rating</th><th id="phy-th-status" style="cursor:pointer;" onclick="_toggleSortAndReload('partner-physiotherapy','status','filterPhysioPartners')">Status <i id="phy-th-status-icon" class="ti ti-arrows-sort" style="font-size:11px;opacity:0.4;"></i></th><th>Actions</th>
                 </tr>
               </thead>
               <tbody id="phy-tbody">
-                <tr><td colspan="7" class="loading">Loading physiotherapist partners...</td></tr>
+                <tr><td colspan="8" class="loading">Loading physiotherapist partners...</td></tr>
               </tbody>
             </table>
           </div>
@@ -3942,6 +3966,9 @@
         <div class="card">
           <div class="card-header">
             <span class="card-title">All Counsellor Partners</span>
+            <button class="btn btn-outline" id="cns-bulk-approve-btn" onclick="bulkApproveSelectedPartners('counselling')" disabled>
+              <i class="ti ti-checks"></i> Approve Selected (<span id="cns-selected-count">0</span>)
+            </button>
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
               <input id="cns-search" type="text" class="search-input" placeholder="Search name / specialty..." oninput="filterCounsellingPartners()" />
               <select id="cns-specialty-filter" class="filter-select" onchange="filterCounsellingPartners()">
@@ -3959,11 +3986,12 @@
             <table>
               <thead>
                 <tr>
-                  <th>Counsellor</th><th>Specialties</th><th>Rate</th><th>Status</th><th>Actions</th>
+                  <th style="width:32px;"><input type="checkbox" id="cns-select-all" onchange="toggleSelectAllPartners('counselling', this.checked)" aria-label="Select all pending, fully-verified counsellor partners" /></th>
+                  <th id="cns-th-name" style="cursor:pointer;" onclick="_toggleSortAndReload('partner-counselling','name','filterCounsellingPartners')">Counsellor <i id="cns-th-name-icon" class="ti ti-arrows-sort" style="font-size:11px;opacity:0.4;"></i></th><th>Specialties</th><th>Rate</th><th id="cns-th-status" style="cursor:pointer;" onclick="_toggleSortAndReload('partner-counselling','status','filterCounsellingPartners')">Status <i id="cns-th-status-icon" class="ti ti-arrows-sort" style="font-size:11px;opacity:0.4;"></i></th><th>Actions</th>
                 </tr>
               </thead>
               <tbody id="cns-tbody">
-                <tr><td colspan="5" class="loading">Loading counsellor partners...</td></tr>
+                <tr><td colspan="6" class="loading">Loading counsellor partners...</td></tr>
               </tbody>
             </table>
           </div>
@@ -3988,6 +4016,9 @@
         <div class="card">
           <div class="card-header">
             <span class="card-title">All Nutritionist Partners</span>
+            <button class="btn btn-outline" id="nut-bulk-approve-btn" onclick="bulkApproveSelectedPartners('nutrition')" disabled>
+              <i class="ti ti-checks"></i> Approve Selected (<span id="nut-selected-count">0</span>)
+            </button>
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
               <input id="nut-search" type="text" class="search-input" placeholder="Search name / qualification / specialization..." oninput="filterNutritionPartners()" />
               <select id="nut-specialization-filter" class="filter-select" onchange="filterNutritionPartners()">
@@ -4005,12 +4036,13 @@
             <table>
               <thead>
                 <tr>
-                  <th>Nutritionist</th><th>Specialization</th><th>Fee</th><th>Experience</th>
-                  <th>Rating</th><th>Status</th><th>Actions</th>
+                  <th style="width:32px;"><input type="checkbox" id="nut-select-all" onchange="toggleSelectAllPartners('nutrition', this.checked)" aria-label="Select all pending, fully-verified nutritionist partners" /></th>
+                  <th id="nut-th-name" style="cursor:pointer;" onclick="_toggleSortAndReload('partner-nutrition','name','filterNutritionPartners')">Nutritionist <i id="nut-th-name-icon" class="ti ti-arrows-sort" style="font-size:11px;opacity:0.4;"></i></th><th>Specialization</th><th>Fee</th><th>Experience</th>
+                  <th>Rating</th><th id="nut-th-status" style="cursor:pointer;" onclick="_toggleSortAndReload('partner-nutrition','status','filterNutritionPartners')">Status <i id="nut-th-status-icon" class="ti ti-arrows-sort" style="font-size:11px;opacity:0.4;"></i></th><th>Actions</th>
                 </tr>
               </thead>
               <tbody id="nut-tbody">
-                <tr><td colspan="7" class="loading">Loading nutritionist partners...</td></tr>
+                <tr><td colspan="8" class="loading">Loading nutritionist partners...</td></tr>
               </tbody>
             </table>
           </div>
@@ -4036,6 +4068,9 @@
         <div class="card">
           <div class="card-header">
             <span class="card-title">All Hospital Billing-Desk Partners</span>
+            <button class="btn btn-outline" id="hp-bulk-approve-btn" onclick="bulkApproveSelectedPartners('hospital')" disabled>
+              <i class="ti ti-checks"></i> Approve Selected (<span id="hp-selected-count">0</span>)
+            </button>
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
               <input id="hp-search" type="text" class="search-input" placeholder="Search hospital / contact / phone..." oninput="filterHospitalPartners()" />
               <select id="hp-status-filter" class="filter-select" onchange="filterHospitalPartners()">
@@ -4050,12 +4085,13 @@
             <table>
               <thead>
                 <tr>
-                  <th>Hospital</th><th>Phone</th><th>Catalog Link</th>
-                  <th>Status</th><th>Actions</th>
+                  <th style="width:32px;"><input type="checkbox" id="hp-select-all" onchange="toggleSelectAllPartners('hospital', this.checked)" aria-label="Select all pending, fully-verified hospital partners" /></th>
+                  <th id="hp-th-name" style="cursor:pointer;" onclick="_toggleSortAndReload('partner-hospital','name','filterHospitalPartners')">Hospital <i id="hp-th-name-icon" class="ti ti-arrows-sort" style="font-size:11px;opacity:0.4;"></i></th><th>Phone</th><th>Catalog Link</th>
+                  <th id="hp-th-status" style="cursor:pointer;" onclick="_toggleSortAndReload('partner-hospital','status','filterHospitalPartners')">Status <i id="hp-th-status-icon" class="ti ti-arrows-sort" style="font-size:11px;opacity:0.4;"></i></th><th>Actions</th>
                 </tr>
               </thead>
               <tbody id="hp-tbody">
-                <tr><td colspan="5" class="loading">Loading hospital partners...</td></tr>
+                <tr><td colspan="6" class="loading">Loading hospital partners...</td></tr>
               </tbody>
             </table>
           </div>
@@ -4324,7 +4360,10 @@
         </div>
 
         <div class="card">
-          <div class="card-header"><span class="card-title">All Coupons</span></div>
+          <div class="card-header">
+            <span class="card-title">All Coupons</span>
+            <input id="coupon-search" type="text" class="search-input" placeholder="Search coupons..." oninput="filterCoupons()" aria-label="Search coupons" />
+          </div>
           <div class="table-wrap">
             <table>
               <thead>
@@ -4460,6 +4499,22 @@
 
 <div id="toast" class="toast"></div>
 
+<!-- ===== CONFIRM DIALOG ===== -->
+<div id="confirm-modal-overlay" class="modal-overlay" style="display:none;" onclick="_confirmModalResolve(false)"></div>
+<div id="confirm-modal" class="modal-box" style="display:none;max-width:400px;" role="alertdialog" aria-modal="true" aria-labelledby="confirm-modal-title">
+  <div class="modal-header">
+    <span id="confirm-modal-title" class="modal-title">Confirm</span>
+    <button class="modal-close" aria-label="Cancel" onclick="_confirmModalResolve(false)"><i class="ti ti-x"></i></button>
+  </div>
+  <div class="modal-body">
+    <p id="confirm-modal-message" style="font-size:13.5px;color:var(--text-secondary);line-height:1.5;"></p>
+  </div>
+  <div class="modal-footer">
+    <button class="btn-secondary" onclick="_confirmModalResolve(false)">Cancel</button>
+    <button id="confirm-modal-confirm-btn" class="btn-primary" onclick="_confirmModalResolve(true)">Confirm</button>
+  </div>
+</div>
+
 <!-- ===== GLOBAL SEARCH MODAL ===== -->
 <div id="global-search-overlay" class="gs-overlay" onclick="closeGlobalSearch()" style="display:none;"></div>
 <div id="global-search-modal" class="gs-modal" style="display:none;" role="dialog" aria-modal="true" aria-label="Global Search">
@@ -4531,7 +4586,7 @@
   </div>
 </div>
 
-<script src="js/firebase-config.js?v=20260908a"></script>
-<script src="js/app.js?v=20260908a"></script>
+<script src="js/firebase-config.js?v=20260912a"></script>
+<script src="js/app.js?v=20260912a"></script>
 </body>
 </html>

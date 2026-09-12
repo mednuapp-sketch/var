@@ -549,12 +549,16 @@ service cloud.firestore {
 
       // Patients create walk-in consultation requests (callerType == 'patient').
       // Doctors create doctor-initiated calls from scheduled appointments (callerType == 'doctor').
+      // Physiotherapist/Counsellor sessions reuse this exact same doc shape
+      // for their own video sessions (see ProviderOutgoingCallScreen in
+      // mednu_doctor) — the caller's own uid still goes in `doctorId`
+      // either way, just held for a different role.
       // We key off callerType rather than isDoctor() to avoid exists() overhead and to support
       // accounts that appear in both users and doctors collections during development.
       allow create: if isAuth() && (
         (request.resource.data.callerType == 'patient' &&
           request.resource.data.patientId == request.auth.uid) ||
-        (request.resource.data.callerType == 'doctor' &&
+        (request.resource.data.callerType in ['doctor', 'physiotherapist', 'counsellor'] &&
           request.resource.data.doctorId == request.auth.uid)
       );
 
@@ -571,7 +575,7 @@ service cloud.firestore {
           request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly(['status', 'ringingAt', 'declinedAt', 'endedAt',
                       'startedAt', 'durationSeconds', 'doctorNotes',
-                      'missedAt', 'active'])) ||
+                      'missedAt', 'active', 'cancelledAt'])) ||
         (request.auth.token.guestAppointmentId != null &&
           resource.data.appointmentId == request.auth.token.guestAppointmentId &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'endedAt'])) ||
@@ -707,8 +711,13 @@ service cloud.firestore {
       // can't approve/activate/reject/delete the partner — that status change
       // is Director-only, matching the client-side gating in
       // mednu-admin/js/app.js (_setPartnerStatus's canApproveRegistrations()).
+      // `documentsVerified` (the roll-up boolean _writePartnerDocVerification
+      // computes) is protected here too, alongside its per-doc source of
+      // truth `documentVerification` — without this an owner could just
+      // self-declare the roll-up true directly, which is the one signal
+      // patients actually see as a trust badge, without HR ever touching it.
       allow update: if (isOwner(labId) &&
-                         doesNotModify(['status', 'isVerified', 'rating', 'totalReviews', 'documentVerification']) &&
+                         doesNotModify(['status', 'isVerified', 'rating', 'totalReviews', 'documentVerification', 'documentsVerified']) &&
                          (resource.data.status != 'active' || doesNotModify(['documents']))) ||
                        (adminInRoles(['hr']) &&
                          request.resource.data.diff(resource.data).affectedKeys()
@@ -822,7 +831,7 @@ service cloud.firestore {
       // `status == 'active'`, and for why HR is limited to
       // documentVerification-only while approval is Director-only.
       allow update: if (isOwner(pharmacyId) &&
-                         doesNotModify(['status', 'isVerified', 'rating', 'totalReviews', 'documentVerification']) &&
+                         doesNotModify(['status', 'isVerified', 'rating', 'totalReviews', 'documentVerification', 'documentsVerified']) &&
                          (resource.data.status != 'active' || doesNotModify(['documents']))) ||
                        (adminInRoles(['hr']) &&
                          request.resource.data.diff(resource.data).affectedKeys()
@@ -930,7 +939,7 @@ service cloud.firestore {
       // why HR is limited to documentVerification-only while approval is
       // Director-only.
       allow update: if (isOwner(ambulanceId) &&
-                         doesNotModify(['status', 'isVerified', 'rating', 'totalReviews', 'totalTrips', 'documentVerification']) &&
+                         doesNotModify(['status', 'isVerified', 'rating', 'totalReviews', 'totalTrips', 'documentVerification', 'documentsVerified']) &&
                          (resource.data.status != 'active' || doesNotModify(['documents']))) ||
                        (adminInRoles(['hr']) &&
                          request.resource.data.diff(resource.data).affectedKeys()
@@ -1024,7 +1033,7 @@ service cloud.firestore {
       // `status == 'active'`, and for why HR is limited to
       // documentVerification-only while approval is Director-only.
       allow update: if (isOwner(caregiverId) &&
-                         doesNotModify(['status', 'isVerified', 'rating', 'totalReviews', 'totalVisits', 'documentVerification']) &&
+                         doesNotModify(['status', 'isVerified', 'rating', 'totalReviews', 'totalVisits', 'documentVerification', 'documentsVerified']) &&
                          (resource.data.status != 'active' || doesNotModify(['documents']))) ||
                        (adminInRoles(['hr']) &&
                          request.resource.data.diff(resource.data).affectedKeys()
@@ -1182,7 +1191,7 @@ service cloud.firestore {
       // `status == 'active'`, and for why HR is limited to
       // documentVerification-only while approval is Director-only.
       allow update: if (isOwner(physiotherapistId) &&
-                         doesNotModify(['status', 'isVerified', 'rating', 'totalReviews', 'totalSessions', 'documentVerification']) &&
+                         doesNotModify(['status', 'isVerified', 'rating', 'totalReviews', 'totalSessions', 'documentVerification', 'documentsVerified']) &&
                          (resource.data.status != 'active' || doesNotModify(['documents']))) ||
                        (adminInRoles(['hr']) &&
                          request.resource.data.diff(resource.data).affectedKeys()
@@ -1232,7 +1241,7 @@ service cloud.firestore {
       // See lab_profiles' update rule above for why HR is limited to
       // documentVerification-only while approval is Director-only.
       allow update: if (isOwner(counsellorId) &&
-                         doesNotModify(['status', 'isVerified', 'rating', 'totalReviews', 'totalSessions', 'documentVerification']) &&
+                         doesNotModify(['status', 'isVerified', 'rating', 'totalReviews', 'totalSessions', 'documentVerification', 'documentsVerified']) &&
                          (resource.data.status != 'active' || doesNotModify(['documents']))) ||
                        (adminInRoles(['hr']) &&
                          request.resource.data.diff(resource.data).affectedKeys()
@@ -1533,7 +1542,7 @@ service cloud.firestore {
       // See lab_profiles' update rule above for why HR is limited to
       // documentVerification-only while approval is Director-only.
       allow update: if (isOwner(nutritionistId) &&
-                         doesNotModify(['status', 'isVerified', 'rating', 'reviewCount', 'documentVerification']) &&
+                         doesNotModify(['status', 'isVerified', 'rating', 'reviewCount', 'documentVerification', 'documentsVerified']) &&
                          (resource.data.status != 'active' || doesNotModify(['documents']))) ||
                        (adminInRoles(['hr']) &&
                          request.resource.data.diff(resource.data).affectedKeys()

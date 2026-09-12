@@ -29,6 +29,26 @@ initializeApp();
 // CallNotificationService.showIncomingCall() itself for this type in every
 // app state, so a notification payload here would make the OS additionally
 // auto-display a generic system notification alongside it.
+// Provider-initiated call types that ring the PATIENT rather than the
+// provider — originally just 'doctor' (dashboard_screen.dart's "Start
+// Consultation"); Physiotherapist/Counsellor sessions reuse the exact same
+// `consultations` doc shape and push path (see PhysioOutgoingCallScreen /
+// CounsellingOutgoingCallScreen in mednu_doctor), just with `doctorId`/
+// `doctorName`/etc. holding the provider's own identity instead of a
+// doctor's — kept in those literal field names rather than renamed to
+// `providerId` so every existing consumer (generateAgoraToken's auth check,
+// the patient app's push handler/live listener/IncomingCallScreen) needs
+// zero changes to already work for the new roles.
+const _PROVIDER_INITIATED_CALLER_TYPES = ["doctor", "physiotherapist", "counsellor"];
+
+function _providerRoleLabel(callerType) {
+  switch (callerType) {
+    case "physiotherapist": return "Physiotherapist";
+    case "counsellor": return "Counsellor";
+    default: return "Doctor";
+  }
+}
+
 async function _pushIncomingDoctorCallToPatient(data, consultationId) {
   const patientId = data.patientId;
   if (!patientId) return;
@@ -52,6 +72,7 @@ async function _pushIncomingDoctorCallToPatient(data, consultationId) {
       doctorName: data.doctorName || "Doctor",
       doctorSpecialty: data.doctorSpecialty || "",
       doctorPhotoUrl: data.doctorPhotoUrl || "",
+      providerRole: data.callerType || "doctor",
     },
     android: { priority: "high" },
     apns: {
@@ -78,7 +99,7 @@ exports.onNewConsultation = onDocumentCreated(
     if (data.status !== "pending") return;
 
     const consultationId = event.params.consultationId;
-    if (data.callerType === "doctor") {
+    if (_PROVIDER_INITIATED_CALLER_TYPES.includes(data.callerType)) {
       await _pushIncomingDoctorCallToPatient(data, consultationId);
       return;
     }
@@ -778,21 +799,24 @@ exports.onConsultationStatusChange = onDocumentUpdated(
       return;
     }
 
+    const roleLabel = _providerRoleLabel(after.callerType);
+    const roleLabelLower = roleLabel.toLowerCase();
+
     let title = "";
     let body = "";
 
     if (after.status === "ongoing") {
-      title = "Doctor accepted your request";
-      body = `${after.doctorName || "Your doctor"} is joining the call now.`;
+      title = `${roleLabel} accepted your request`;
+      body = `${after.doctorName || `Your ${roleLabelLower}`} is joining the call now.`;
     } else if (after.status === "declined") {
       title = "Request declined";
-      body = `${after.doctorName || "The doctor"} is unavailable right now. Please try again.`;
+      body = `${after.doctorName || `The ${roleLabelLower}`} is unavailable right now. Please try again.`;
     } else if (after.status === "missed") {
       title = "No answer";
-      body = "The doctor did not respond. Please try again or schedule an appointment.";
+      body = `The ${roleLabelLower} did not respond. Please try again or schedule an appointment.`;
     } else if (after.status === "completed" || after.status === "ended") {
       title = "Consultation completed";
-      body = `Your session with ${after.doctorName || "the doctor"} has ended.`;
+      body = `Your session with ${after.doctorName || `the ${roleLabelLower}`} has ended.`;
     } else {
       return; // Ignore other status values (e.g. active, cancelled).
     }
@@ -2780,6 +2804,9 @@ const _PROVIDER_FIELD_BY_SERVICE = {
   home_care: "caregiverId",
   physiotherapy: "physiotherapistId",
   counselling: "counsellorId",
+  nutrition: "nutritionistId",
+  hospital_bill: "hospitalId",
+  hospital_op: "hospitalId",
 };
 
 function _round2(n) {
@@ -3221,6 +3248,16 @@ exports.capturePayment = onCall({ enforceAppCheck: true }, async (request) => {
         if (!orderSnap || !orderSnap.exists) {
           throw new HttpsError("failed-precondition", "Payment order not found. Contact support.");
         }
+        // Bind the order to whoever created it — without this, a second
+        // signed-in user presenting the same (order_id, payment_id,
+        // signature) triplet could attribute someone else's Razorpay order
+        // to their own patientId. Requires already possessing a valid
+        // signature (only the paying client ever receives one), but costs
+        // nothing to close outright.
+        if (orderSnap.get("uid") !== uid) {
+          _logSettlement("WARNING", "capture_order_uid_mismatch", { uid, orderUid: orderSnap.get("uid") });
+          throw new HttpsError("permission-denied", "This payment order does not belong to you.");
+        }
         const orderedAmount = _round2(Number(orderSnap.get("amountPaise") || 0) / 100);
         if (Math.abs(orderedAmount - gatewayAmount) > 0.01) {
           _logSettlement("WARNING", "capture_amount_mismatch", {
@@ -3508,6 +3545,7 @@ exports.captureCartPayment = onCall({ enforceAppCheck: true }, async (request) =
       // prorated across items by each item's share of that total so
       // per-item commission still lands on the right number ────────────────
       let discount = 0;
+      let isFreeConsultation = false;
       if (couponRef) {
         const applied = _applyCoupon({
           couponSnap, redemptionSnap,
@@ -3515,6 +3553,7 @@ exports.captureCartPayment = onCall({ enforceAppCheck: true }, async (request) =
           orderAmount: originalAmount, now: new Date(),
         });
         discount = applied.discount;
+        isFreeConsultation = applied.isFreeConsultation;
       }
       const paidAmount = _round2(Math.max(0, originalAmount - discount));
 
@@ -3534,6 +3573,11 @@ exports.captureCartPayment = onCall({ enforceAppCheck: true }, async (request) =
         const gatewayAmount = _round2(paidAmount - walletPortionAmount);
         if (!orderSnap || !orderSnap.exists) {
           throw new HttpsError("failed-precondition", "Payment order not found. Contact support.");
+        }
+        // See the identical check in capturePayment above for why.
+        if (orderSnap.get("uid") !== uid) {
+          _logSettlement("WARNING", "cart_capture_order_uid_mismatch", { uid, orderUid: orderSnap.get("uid") });
+          throw new HttpsError("permission-denied", "This payment order does not belong to you.");
         }
         const orderedAmount = _round2(Number(orderSnap.get("amountPaise") || 0) / 100);
         if (Math.abs(orderedAmount - gatewayAmount) > 0.01) {
@@ -3567,7 +3611,13 @@ exports.captureCartPayment = onCall({ enforceAppCheck: true }, async (request) =
         const itemPaid = _round2(Math.max(0, it.amount - itemDiscount));
         const providerId =
           it.bookingData[_PROVIDER_FIELD_BY_SERVICE[it.serviceType]] || it.bookingData.providerId || null;
-        const { commission, providerAmount } = _computeCommissionFromRule(ruleSnaps[i], providerId, itemPaid);
+        // Same free_consultation exception as capturePayment: the provider
+        // is paid as if the original (pre-discount) price had been paid in
+        // full — this cart path previously always used `itemPaid` here,
+        // which silently zeroed out every provider's payout on a cart
+        // checkout using a free_consultation coupon instead of honouring it.
+        const itemCommissionBase = isFreeConsultation ? it.amount : itemPaid;
+        const { commission, providerAmount } = _computeCommissionFromRule(ruleSnaps[i], providerId, itemCommissionBase);
 
         tx.set(it.bookingRef, {
           ...it.bookingData,
@@ -3582,7 +3632,7 @@ exports.captureCartPayment = onCall({ enforceAppCheck: true }, async (request) =
           paymentId: it.paymentId, patientId: uid, providerId, serviceType: it.serviceType,
           bookingRef: { collection: it.bookingCollection, id: it.bookingRef.id },
           cartId, originalAmount: it.amount, discount: itemDiscount, couponCode: couponId,
-          paidAmount: itemPaid, commissionBase: itemPaid, commission, providerAmount,
+          paidAmount: itemPaid, commissionBase: itemCommissionBase, commission, providerAmount,
           commissionFinal: !!providerId,
           paymentMethod,
           razorpayPaymentId: paymentMethod === "razorpay" ? razorpay_payment_id : null,
@@ -3814,7 +3864,13 @@ exports.onAppointmentSettlement = onDocumentUpdated(
       sourceCollection: "appointments",
       sourceId: event.params.appointmentId,
       providerId: after.doctorId,
-      serviceType: after.consultationType === "video" ? "video_consultation" : "consultation",
+      // Every real writer of this field uses capitalized 'Video' (see
+      // consultation_screen.dart, doctor_profile_screen.dart's
+      // _consultationType) — this was comparing against lowercase 'video',
+      // which never matched, so every appointment silently finalized
+      // against the 'consultation' commission rule even when
+      // capturePayment had correctly billed it as 'video_consultation'.
+      serviceType: after.consultationType === "Video" ? "video_consultation" : "consultation",
     });
   }
 );
@@ -4171,6 +4227,14 @@ exports.holdSettlement = onCall({ enforceAppCheck: true }, async (request) => {
   const ref = db.collection("settlements").doc(settlementId);
   const before = (await ref.get()).data();
   if (!before) throw new HttpsError("not-found", "Settlement not found.");
+  // Unlike approveSettlement, this had no status guard at all — an admin
+  // could hold a settlement already "paid" (money already transferred,
+  // provider_wallets already updated by markSettlementPaid), silently
+  // flipping it back to "held" with nothing reversed, desyncing the record
+  // from reality. "paid" is terminal; nothing downstream of it should move.
+  if (before.status === "paid") {
+    throw new HttpsError("failed-precondition", "Cannot hold a settlement that has already been paid.");
+  }
   await ref.update({ status: "held", holdReason: reason || "No reason given", heldBy: uid, heldAt: FieldValue.serverTimestamp() });
   await db.collection("audit_logs").add(_auditLogDoc({
     actorId: uid, action: "holdSettlement", targetType: "settlements", targetId: settlementId,
@@ -4280,6 +4344,23 @@ exports.issueRefund = onCall({ enforceAppCheck: true }, async (request) => {
   if (payment.status === "refunded") {
     throw new HttpsError("failed-precondition", "This payment has already been refunded.");
   }
+  // Already batched into a settlement that hasn't been paid out yet
+  // (`settlementStatus` moves 'eligible' -> 'pending_review' in
+  // _createSettlementForProvider, then only becomes 'paid' once
+  // markSettlementPaid actually runs). The settlement's own `totalAmount`/
+  // `paymentIds` are frozen at creation and nothing re-validates them
+  // against later refunds, so refunding here without pulling this payment
+  // out of that batch first would let the provider still get paid the full
+  // batch total once it's approved — an overpayment nothing would catch.
+  // Safer to require the admin explicitly hold/deal with the settlement
+  // first than to silently risk that.
+  if (payment.settlementStatus === "pending_review") {
+    throw new HttpsError(
+      "failed-precondition",
+      "This payment is already part of a pending settlement batch. Hold or resolve that settlement " +
+      `(id: ${payment.settlementId || "unknown"}) before issuing a refund.`,
+    );
+  }
 
   // Reverse the gateway charge (or credit the wallet back) BEFORE touching
   // Firestore — a failed reversal must not leave a refund doc claiming money
@@ -4299,6 +4380,30 @@ exports.issueRefund = onCall({ enforceAppCheck: true }, async (request) => {
   const refundRef = db.collection("refunds").doc();
 
   await db.runTransaction(async (tx) => {
+    // Re-check inside the transaction — the checks above read outside any
+    // transaction, so two concurrent calls (admin double-click, or a retry)
+    // could both pass them and both reach here. Without the 'refunded'
+    // re-check, both would go on to credit the wallet a second time (no
+    // external backstop on that path, unlike Razorpay which at least has
+    // its own refund-of-a-refund rejection) and both would write a second
+    // `refunds` doc. Without the 'pending_review' re-check, a settlement
+    // batch created concurrently (between the read above and this
+    // transaction) would slip through the same overpayment gap the earlier
+    // check exists to close. Everything else read from `payment` above
+    // (paymentMethod, patientId, paidAmount, commission) is immutable after
+    // payment creation, so re-reading just these two fields is sufficient.
+    const freshPayment = (await tx.get(paymentRef)).data();
+    if (freshPayment?.status === "refunded") {
+      throw new HttpsError("failed-precondition", "This payment has already been refunded.");
+    }
+    if (freshPayment?.settlementStatus === "pending_review") {
+      throw new HttpsError(
+        "failed-precondition",
+        "This payment is already part of a pending settlement batch. Hold or resolve that settlement " +
+        `(id: ${freshPayment.settlementId || "unknown"}) before issuing a refund.`,
+      );
+    }
+
     let userSnap = null;
     if (payment.paymentMethod === "wallet" && payment.paidAmount > 0) {
       userSnap = await tx.get(db.collection("users").doc(payment.patientId));
@@ -5131,6 +5236,13 @@ exports.onMedicineOrderCreated = onDocumentCreated(
     items.forEach((item, i) => {
       batch.set(db.collection("pharmacy_order_items").doc(`${orderId}_${i}`), {
         orderId,
+        // The `medicines_catalogue` doc id this line item was ordered from —
+        // for pharmacy-sourced medicines this is `phinv_{pharmacyId}_{itemId}`
+        // (see `_pharmacyInventoryCatalogueRef` below), which
+        // PharmacyOrderService.acceptOrder (mednu_doctor) uses to decrement
+        // that pharmacy's own inventory stock. null for admin-added catalogue
+        // medicines, which carry no inventory doc to decrement.
+        medicineId: item.id || null,
         name: item.name || "Item",
         brand: item.brand || "",
         price: item.price ?? 0,
@@ -7095,6 +7207,85 @@ exports.onNutritionAppointmentCreated = onDocumentCreated(
   }
 );
 
+// ── Nutrition vertical parity with the Settlement Engine ────────────────────
+// `nutrition_appointments` captures real payment via capturePayment
+// (book_nutrition_appointment_screen.dart) but, until now, had no
+// completion -> ledger-eligible trigger — captured commission could never
+// be batched or paid out. `nutrition_appointment_detail_screen.dart`'s
+// "Mark Completed" action (_setStatus('completed', ...)) is the same
+// pending->completed edge every other vertical already keys off.
+exports.onNutritionAppointmentSettlement = onDocumentUpdated(
+  "nutrition_appointments/{appointmentId}",
+  async (event) => {
+    const before = event.data.before.data();
+    const after = event.data.after.data();
+    if (before.status === after.status) return;
+    if (after.status !== "completed" || !after.nutritionistId) return;
+
+    await _transitionPaymentToEligible(getFirestore(), {
+      sourceCollection: "nutrition_appointments",
+      sourceId: event.params.appointmentId,
+      providerId: after.nutritionistId,
+      serviceType: "nutrition",
+    });
+  }
+);
+
+// ── Hospital vertical parity with the Settlement Engine ─────────────────────
+//
+// Two independent hospital payment paths, each captures real money via
+// capturePayment but, until now, had no completion -> ledger-eligible
+// trigger — captured commission could never be batched or paid out:
+//
+//  - `hospital_bill_payments` (pay_hospital_bill_screen.dart): the billing
+//    desk's one available action is `markVerified` (HospitalPaymentService,
+//    mednu_doctor) flipping `hospitalVerified` true — that confirmation
+//    IS this vertical's completion signal (the bill was already for a
+//    real-world charge that already happened; verifying is the hospital
+//    confirming the money landed, not confirming work still to be done).
+//  - `hospital_appointments` (hospital_appointment_booking_screen.dart, a
+//    flat-fee OP registration token — kHospitalOpFee): unlike every other
+//    vertical, there is currently no mednu_doctor screen that reads or
+//    manages this collection at all, so it can never reach any status
+//    other than the 'booked' it's created with — there is no completion
+//    edge to key off. Transitioning to eligible right at booking time is
+//    the only option without inventing a status this collection has no way
+//    to ever reach; the missing hospital-side OP-queue management screen
+//    is a separate, larger gap than settlement wiring alone.
+exports.onHospitalBillPaymentVerified = onDocumentUpdated(
+  "hospital_bill_payments/{paymentId}",
+  async (event) => {
+    const before = event.data.before.data();
+    const after = event.data.after.data();
+    if (before.hospitalVerified === after.hospitalVerified) return;
+    if (after.hospitalVerified !== true || !after.hospitalId) return;
+
+    await _transitionPaymentToEligible(getFirestore(), {
+      sourceCollection: "hospital_bill_payments",
+      sourceId: event.params.paymentId,
+      providerId: after.hospitalId,
+      serviceType: "hospital_bill",
+    });
+  }
+);
+
+exports.onHospitalAppointmentCreated = onDocumentCreated(
+  "hospital_appointments/{appointmentId}",
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+    const data = snap.data();
+    if (!data.hospitalId) return;
+
+    await _transitionPaymentToEligible(getFirestore(), {
+      sourceCollection: "hospital_appointments",
+      sourceId: event.params.appointmentId,
+      providerId: data.hospitalId,
+      serviceType: "hospital_op",
+    });
+  }
+);
+
 // ══════════════════════════════════════════════════════════════════════════
 // ── Physiotherapist public catalogue mirror ──────────────────────────────────
 //
@@ -7353,8 +7544,11 @@ exports.processDueReminders = onSchedule({ schedule: "every 5 minutes", timeZone
 // tick directly against each user's settings doc instead. The app is
 // India-only (see the IST assumption on _apptSlotStartMs above), so IST is
 // hardcoded rather than requiring a new stored per-user timezone field.
-const _WATER_SPAN_MINUTES = 13 * 60; // matches _reminderSpanMinutes client-side
 const _WATER_TICK_MINUTES = 15;      // matches this function's own schedule below
+// Hard quiet-hours gate: never send outside 9 AM-11 PM, no matter what start
+// hour/interval the user picked (matches _waterWindow* client-side).
+const _WATER_WINDOW_START_MINUTES = 9 * 60;  // 9:00 AM
+const _WATER_WINDOW_END_MINUTES = 23 * 60;   // 11:00 PM
 
 function _istNowParts() {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -7388,12 +7582,15 @@ exports.sendDueWaterReminders = onSchedule({ schedule: "every 15 minutes", timeZ
     if (!uid) return;
 
     const intervalMinutes = (w.reminderIntervalHours || 2) * 60;
-    const startMinutes = (w.reminderStartHour ?? 8) * 60 + (w.reminderStartMinute ?? 0);
+    const configuredStartMinutes = (w.reminderStartHour ?? 8) * 60 + (w.reminderStartMinute ?? 0);
+    // Clamp the grid's start to the quiet-hours window so an early configured
+    // start time can't pull slots earlier than 9 AM.
+    const startMinutes = Math.max(configuredStartMinutes, _WATER_WINDOW_START_MINUTES);
 
-    // Which slot (if any) falls inside this tick's window?
+    // Which slot (if any) falls inside this tick's window? Slots stop at
+    // _WATER_WINDOW_END_MINUTES so the grid can never roll into the night.
     let matchedSlot = null;
-    for (let offset = 0; offset <= _WATER_SPAN_MINUTES; offset += intervalMinutes) {
-      const slotMinute = startMinutes + offset;
+    for (let slotMinute = startMinutes; slotMinute < _WATER_WINDOW_END_MINUTES; slotMinute += intervalMinutes) {
       if (slotMinute >= minutesOfDay && slotMinute < minutesOfDay + _WATER_TICK_MINUTES) {
         matchedSlot = slotMinute;
         break;

@@ -10,14 +10,18 @@ import '../../features/my_services/models/unified_booking.dart';
 /// reminder still arrives even if the app is fully closed by the time it's
 /// due.
 ///
-/// Doc IDs are deterministic (`{uid}_booking_{bookingId}`) so re-syncing a
-/// booking overwrites its existing reminder rather than duplicating it.
+/// Doc IDs are deterministic (`{uid}_booking_{bookingId}_{variant}`) so
+/// re-syncing a booking overwrites its existing reminders rather than
+/// duplicating them.
 class BookingReminderService {
   BookingReminderService._();
 
   static const _channelId = 'booking_reminders';
   static const _channelName = 'Appointment & Service Reminders';
   static bool _initialised = false;
+
+  /// Always sent, regardless of the patient's custom reminder setting.
+  static const _kFixedReminderMinutes = 15;
 
   /// Creates the `booking_reminders` channel the FCM push references — the
   /// old local-scheduling path created it implicitly on first zonedSchedule
@@ -50,46 +54,67 @@ class BookingReminderService {
 
   /// Cancel then re-queue reminders for the provided [bookings].
   ///
-  /// Every booking's existing reminder is cancelled first (handles stale
-  /// reminders from a previous minutesBefore setting), then a new one is
-  /// queued for each upcoming active booking.
+  /// Every booking always gets the fixed 15-minutes-before reminder. If
+  /// [customMinutesBefore] differs from that, a second reminder is queued
+  /// at the patient's own custom lead time — both fire independently.
+  /// Every booking's existing reminders are cancelled first (handles stale
+  /// reminders from a previous customMinutesBefore setting).
   static Future<void> syncReminders(
     String uid,
     List<UnifiedBooking> bookings,
-    int minutesBefore,
+    int customMinutesBefore,
   ) async {
     await _ensureInit();
     final now = DateTime.now();
 
     for (final booking in bookings) {
-      final docId = _docId(uid, booking.id);
-      await ScheduledReminderQueue.cancel(docId);
+      await ScheduledReminderQueue.cancel(_docId(uid, booking.id, 'fixed'));
+      await ScheduledReminderQueue.cancel(_docId(uid, booking.id, 'custom'));
+      // Pre-split doc id (no variant suffix) — clean up any reminder still
+      // queued from before reminders were split into fixed + custom.
+      await ScheduledReminderQueue.cancel('${uid}_booking_${booking.id}');
 
       if (!booking.isActive) continue;
 
       final serviceTime = _parseBookingTime(booking);
       if (serviceTime == null) continue;
 
-      final reminderTime = serviceTime.subtract(Duration(minutes: minutesBefore));
-      if (!reminderTime.isAfter(now)) continue;
-
-      final (:title, :body) = _buildMessage(booking, minutesBefore);
-      await ScheduledReminderQueue.queue(
-        docId: docId,
-        uid: uid,
-        role: 'patient',
-        title: title,
-        body: body,
-        channelId: _channelId,
-        fireAt: reminderTime,
-        data: {'type': 'booking', 'bookingId': booking.id},
-      );
+      await _queueOne(uid, booking, serviceTime, now, _kFixedReminderMinutes, 'fixed');
+      if (customMinutesBefore != _kFixedReminderMinutes) {
+        await _queueOne(uid, booking, serviceTime, now, customMinutesBefore, 'custom');
+      }
     }
   }
 
-  /// Cancel a single booking's reminder (e.g. after manual cancellation).
-  static Future<void> cancelReminder(String uid, String bookingId) =>
-      ScheduledReminderQueue.cancel(_docId(uid, bookingId));
+  static Future<void> _queueOne(
+    String uid,
+    UnifiedBooking booking,
+    DateTime serviceTime,
+    DateTime now,
+    int minutesBefore,
+    String variant,
+  ) async {
+    final reminderTime = serviceTime.subtract(Duration(minutes: minutesBefore));
+    if (!reminderTime.isAfter(now)) return;
+
+    final (:title, :body) = _buildMessage(booking, minutesBefore);
+    await ScheduledReminderQueue.queue(
+      docId: _docId(uid, booking.id, variant),
+      uid: uid,
+      role: 'patient',
+      title: title,
+      body: body,
+      channelId: _channelId,
+      fireAt: reminderTime,
+      data: {'type': 'booking', 'bookingId': booking.id},
+    );
+  }
+
+  /// Cancel a single booking's reminders (e.g. after manual cancellation).
+  static Future<void> cancelReminder(String uid, String bookingId) => Future.wait([
+        ScheduledReminderQueue.cancel(_docId(uid, bookingId, 'fixed')),
+        ScheduledReminderQueue.cancel(_docId(uid, bookingId, 'custom')),
+      ]);
 
   /// Cancel every booking reminder queued for this user.
   static Future<void> cancelAllReminders(String uid) async {
@@ -104,7 +129,8 @@ class BookingReminderService {
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
 
-  static String _docId(String uid, String bookingId) => '${uid}_booking_$bookingId';
+  static String _docId(String uid, String bookingId, String variant) =>
+      '${uid}_booking_${bookingId}_$variant';
 
   static DateTime? _parseBookingTime(UnifiedBooking booking) {
     try {

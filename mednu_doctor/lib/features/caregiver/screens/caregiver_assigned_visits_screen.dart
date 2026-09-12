@@ -139,11 +139,28 @@ class _TimelineTile extends StatelessWidget {
                     Text(visit.patientName, style: AppTextStyles.bodyMedium),
                     const SizedBox(height: 10),
                     Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        InfoChip(icon: Icons.schedule_rounded, label: DateFormat('d MMM, h:mm a').format(visit.scheduledAt)),
+                        // Wrap, not a fixed Row: two InfoChips (a formatted
+                        // date-time string plus a duration) sitting next to
+                        // an unwrapped fare Text with no Flexible anywhere
+                        // could exceed the card's width on narrow phones —
+                        // Wrap flows to a second line instead of throwing a
+                        // RenderFlex overflow, and keeps the fare amount
+                        // fully visible rather than risking an ellipsis
+                        // truncating money.
+                        Expanded(
+                          child: Wrap(
+                            spacing: 8,
+                            runSpacing: 6,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              InfoChip(icon: Icons.schedule_rounded, label: DateFormat('d MMM, h:mm a').format(visit.scheduledAt)),
+                              InfoChip(icon: Icons.timer_outlined, label: '${visit.durationMinutes} min'),
+                            ],
+                          ),
+                        ),
                         const SizedBox(width: 8),
-                        InfoChip(icon: Icons.timer_outlined, label: '${visit.durationMinutes} min'),
-                        const Spacer(),
                         Text(CurrencyFormatter.format(visit.fare), style: AppTextStyles.labelLarge.copyWith(color: AppColors.success)),
                       ],
                     ),

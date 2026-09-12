@@ -48,6 +48,7 @@ class CounsellingSession {
   final String id;
   final CounsellingSessionStatus status;
   final String sessionTitle;
+  final String patientId;
   final String patientName;
   final String patientPhone;
   final String address;
@@ -62,6 +63,7 @@ class CounsellingSession {
     required this.id,
     required this.status,
     required this.sessionTitle,
+    required this.patientId,
     required this.patientName,
     required this.patientPhone,
     required this.address,
@@ -79,6 +81,7 @@ class CounsellingSession {
       id: doc.id,
       status: _statusFrom(d['status'] as String?),
       sessionTitle: d['sessionTitle'] as String? ?? 'Counselling Session',
+      patientId: d['patientId'] as String? ?? '',
       patientName: d['patientName'] as String? ?? 'Patient',
       patientPhone: d['patientPhone'] as String? ?? '',
       address: d['address'] as String? ?? '',

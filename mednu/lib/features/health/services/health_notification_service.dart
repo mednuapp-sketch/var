@@ -123,23 +123,30 @@ class HealthNotificationService {
   }
 
   /// Returns the next scheduled water reminder time based on [intervalHours],
-  /// starting the daily slot grid at [startHour]:[startMinute].
+  /// starting the daily slot grid at [startHour]:[startMinute]. Mirrors the
+  /// quiet-hours gate in sendDueWaterReminders (functions/index.js) so this
+  /// preview never shows a time the server wouldn't actually send.
   static DateTime? nextReminderTime(int intervalHours,
       {int startHour = 8, int startMinute = 0}) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final startOfDay = today.add(Duration(minutes: startHour * 60 + startMinute));
-    for (int offset = 0; offset <= _reminderSpanMinutes; offset += intervalHours * 60) {
-      final candidate = startOfDay.add(Duration(minutes: offset));
+    final configuredStart = today.add(Duration(minutes: startHour * 60 + startMinute));
+    final windowStart = today.add(const Duration(minutes: _waterWindowStartMinutes));
+    final startOfDay = configuredStart.isAfter(windowStart) ? configuredStart : windowStart;
+    final windowEnd = today.add(const Duration(minutes: _waterWindowEndMinutes));
+    for (var candidate = startOfDay;
+        candidate.isBefore(windowEnd);
+        candidate = candidate.add(Duration(minutes: intervalHours * 60))) {
       if (candidate.isAfter(now)) return candidate;
     }
     // All today's slots passed — return first slot tomorrow
     return startOfDay.add(const Duration(days: 1));
   }
 
-  // Slots span 13 hours from the start time (e.g. 8 AM–9 PM by default),
-  // matching a typical waking day.
-  static const _reminderSpanMinutes = 13 * 60;
+  // Quiet-hours gate: reminders never fire outside 9 AM-11 PM, no matter what
+  // start hour/interval the user picked.
+  static const _waterWindowStartMinutes = 9 * 60;  // 9:00 AM
+  static const _waterWindowEndMinutes = 23 * 60;   // 11:00 PM
 
   static const _periodWellnessChannelId   = 'period_wellness';
   static const _periodWellnessChannelName = 'Period Wellness';

@@ -106,13 +106,16 @@ class _MedNUAppState extends ConsumerState<MedNUApp>
         }
       });
 
-      // ── Doctor-initiated incoming call listener ──────────────────────────
-      // Watches for consultations where this patient is the callee
-      // (callerType == 'doctor') and status is 'pending'.
+      // ── Provider-initiated incoming call listener ────────────────────────
+      // Watches for consultations where this patient is the callee and the
+      // call was started by whichever provider-side role, not the patient
+      // (originally doctor-only; Physiotherapist/Counsellor sessions reuse
+      // the exact same consultation doc shape and push path — see
+      // _PROVIDER_INITIATED_CALLER_TYPES in functions/index.js).
       _incomingCallSub = FirebaseFirestore.instance
           .collection('consultations')
           .where('patientId', isEqualTo: user.uid)
-          .where('callerType', isEqualTo: 'doctor')
+          .where('callerType', whereIn: ['doctor', 'physiotherapist', 'counsellor'])
           .where('status', isEqualTo: 'pending')
           .orderBy('createdAt', descending: true)
           .limit(1)
@@ -129,11 +132,13 @@ class _MedNUAppState extends ConsumerState<MedNUApp>
         final consultationType =
             data['consultationType'] as String? ?? 'Video';
         final doctorPhotoUrl = data['doctorPhotoUrl'] as String? ?? '';
+        final providerRole = data['callerType'] as String? ?? 'doctor';
 
         // Show OS notification + ringtone
         CallNotificationService.showIncomingCall(
           doctorName: doctorName,
           specialty: specialty,
+          providerRole: providerRole,
         );
 
         // Navigate to full-screen incoming call UI
@@ -145,6 +150,7 @@ class _MedNUAppState extends ConsumerState<MedNUApp>
             'doctorSpecialty': specialty,
             'consultationType': consultationType,
             'doctorPhotoUrl': doctorPhotoUrl,
+            'providerRole': providerRole,
           },
         );
       });

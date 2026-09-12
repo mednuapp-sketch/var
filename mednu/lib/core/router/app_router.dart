@@ -544,6 +544,7 @@ GoRoute(path: AppRoutes.referral,           builder: (c, s) => const ReferralScr
             doctorSpecialty:  extra['doctorSpecialty']  as String? ?? '',
             consultationType: extra['consultationType'] as String? ?? 'Video',
             doctorPhotoUrl:   extra['doctorPhotoUrl']   as String? ?? '',
+            providerRole:     extra['providerRole']     as String? ?? 'doctor',
           );
         },
       ),

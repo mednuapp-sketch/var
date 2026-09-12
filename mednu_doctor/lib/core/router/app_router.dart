@@ -17,6 +17,7 @@ import '../../shared_core/models/app_role.dart';
 import '../../shared_core/services/role_prefs.dart';
 import '../../features/dashboard/screens/dashboard_screen.dart';
 import '../../features/consultations/screens/incoming_request_screen.dart';
+import '../../features/emergency/screens/emergency_requests_screen.dart';
 import '../../features/consultations/screens/doctor_video_call_screen.dart';
 import '../../features/prescription/screens/write_prescription_screen.dart';
 import '../../features/patients/screens/patient_detail_screen.dart';
@@ -36,6 +37,8 @@ import '../../features/profile/screens/specialization_change_request_screen.dart
 import '../../features/help/screens/live_chat_screen.dart';
 import '../../features/help/screens/report_problem_screen.dart';
 import '../../features/consultations/screens/doctor_outgoing_call_screen.dart';
+import '../../features/consultations/screens/provider_outgoing_call_screen.dart';
+import '../../features/consultations/screens/provider_video_call_screen.dart';
 import '../../features/lab/screens/lab_onboarding_screen.dart';
 import '../../features/lab/screens/lab_dashboard_screen.dart';
 import '../../features/lab/screens/lab_bookings_screen.dart';
@@ -271,6 +274,7 @@ class AppRoutes {
   static const verificationPending = '/verification-pending';
   static const dashboard           = '/dashboard';
   static const incomingRequest     = '/incoming-request';
+  static const emergencyRequests   = '/emergency-requests';
   static const videoCall           = '/video-call';
   static const prescription        = '/prescription';
   static const patientDetail       = '/patient-detail';
@@ -290,6 +294,8 @@ class AppRoutes {
   static const maternityPrescription    = '/maternity-prescription';
   static const specChangeRequest        = '/spec-change-request';
   static const outgoingCall             = '/outgoing-call';
+  static const providerOutgoingCall     = '/provider-outgoing-call';
+  static const providerVideoCall        = '/provider-video-call';
 
   // ── Lab & Diagnostics partner module ─────────────────────────────────────
   static const labOnboarding       = '/lab/onboarding';
@@ -505,6 +511,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: AppRoutes.verificationPending, builder: (c, s) => const VerificationPendingScreen()),
       GoRoute(path: AppRoutes.dashboard,           builder: (c, s) => const DashboardScreen()),
       GoRoute(path: AppRoutes.incomingRequest,     builder: (c, s) => const IncomingRequestScreen()),
+      GoRoute(path: AppRoutes.emergencyRequests,   builder: (c, s) => const EmergencyRequestsScreen()),
       GoRoute(
         path: AppRoutes.videoCall,
         builder: (c, s) {
@@ -568,6 +575,30 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             patientId:      extra['patientId']      as String? ?? '',
             patientName:    extra['patientName']    as String? ?? 'Patient',
             patientPhotoUrl: extra['patientPhotoUrl'] as String? ?? '',
+          );
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.providerOutgoingCall,
+        builder: (c, s) {
+          final extra = s.extra as Map<String, dynamic>? ?? {};
+          return ProviderOutgoingCallScreen(
+            providerRole:    extra['providerRole']    as String? ?? 'physiotherapist',
+            patientId:       extra['patientId']       as String? ?? '',
+            patientName:     extra['patientName']     as String? ?? 'Patient',
+            patientPhotoUrl: extra['patientPhotoUrl'] as String? ?? '',
+            sessionId:       extra['sessionId']       as String?,
+          );
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.providerVideoCall,
+        builder: (c, s) {
+          final extra = s.extra as Map<String, dynamic>? ?? {};
+          return ProviderVideoCallScreen(
+            consultationId: extra['consultationId'] as String? ?? '',
+            providerRole:   extra['providerRole']   as String? ?? 'physiotherapist',
+            patientName:    extra['patientName']    as String? ?? 'Patient',
           );
         },
       ),

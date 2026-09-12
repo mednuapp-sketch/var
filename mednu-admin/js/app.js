@@ -257,6 +257,109 @@ function showToast(msg) {
   setTimeout(() => t.classList.remove('show'), 3000);
 }
 
+// ---- PAGINATED RENDER ----
+// Large tables cache the FULL matching dataset client-side (needed so
+// search/filter works across everything, not just the newest N -- see the
+// listeners that populate allDoctors/allPatients/etc., all intentionally
+// unbounded). This only caps how many rows get built into one innerHTML
+// write at a time; "Load more" reveals more of the already-in-memory list,
+// no extra Firestore read. Keyed by a short string per table so one shared
+// object covers every paginated table instead of a variable each.
+const PAGE_SIZE = 50;
+let _pageShown = {};
+function pageShown(key) { return _pageShown[key] || PAGE_SIZE; }
+function growPage(key) { _pageShown[key] = pageShown(key) + PAGE_SIZE; }
+function loadMoreRow(key, total, colspan, reloadFnCall) {
+  if (pageShown(key) >= total) return '';
+  return `<tr><td colspan="${colspan}" style="text-align:center;padding:14px;border-bottom:none;">
+    <button class="btn-outline" onclick="growPage('${key}');${reloadFnCall}">Load more</button>
+    <span style="color:var(--text-muted);font-size:12px;margin-left:10px;">Showing ${Math.min(pageShown(key), total)} of ${total}</span>
+  </td></tr>`;
+}
+// Same idea for non-table (card/div-list) containers.
+function loadMoreCard(key, total, reloadFnCall) {
+  if (pageShown(key) >= total) return '';
+  return `<div style="text-align:center;padding:14px;grid-column:1/-1;">
+    <button class="btn-outline" onclick="growPage('${key}');${reloadFnCall}">Load more</button>
+    <span style="color:var(--text-muted);font-size:12px;margin-left:10px;">Showing ${Math.min(pageShown(key), total)} of ${total}</span>
+  </div>`;
+}
+
+// ---- SORTABLE COLUMNS ----
+// Click a column header to sort a table's currently-filtered list by that
+// field; click again to reverse direction. Purely a client-side re-sort of
+// the array a table's filter function already produced -- doesn't touch
+// what's fetched or cached. Each table passes a small {key: getter} map so
+// fields with multiple possible source names (e.g. a doctor's specialty
+// being stored as specialty/specialisation/specialization depending on
+// when the doc was written) sort correctly instead of comparing undefined.
+let _sortState = {};
+function sortedBy(list, tableKey, getters) {
+  const state = _sortState[tableKey];
+  const get = state && getters[state.key];
+  if (!get) return list;
+  const dir = state.dir === 'desc' ? -1 : 1;
+  return [...list].sort((a, b) => {
+    const av = get(a), bv = get(b);
+    if (av < bv) return -1 * dir;
+    if (av > bv) return 1 * dir;
+    return 0;
+  });
+}
+function sortHeaderHtml(tableKey, key, label, reloadFnName) {
+  const state = _sortState[tableKey];
+  const active = state && state.key === key;
+  const icon = !active ? 'ti-arrows-sort' : (state.dir === 'asc' ? 'ti-sort-ascending' : 'ti-sort-descending');
+  return `<th style="cursor:pointer;user-select:none;white-space:nowrap;" onclick="_toggleSortAndReload('${tableKey}','${key}','${reloadFnName}')">
+    ${escHtml(label)} <i class="ti ${icon}" style="font-size:11px;opacity:${active ? '0.9' : '0.4'};margin-left:2px;"></i>
+  </th>`;
+}
+function _toggleSortAndReload(tableKey, key, reloadFnName) {
+  const state = _sortState[tableKey];
+  if (state && state.key === key) state.dir = state.dir === 'asc' ? 'desc' : 'asc';
+  else _sortState[tableKey] = { key, dir: 'asc' };
+  window[reloadFnName]();
+}
+
+// ---- DEBOUNCE ----
+// Used to wrap search/filter handlers so they don't re-filter + re-render a
+// full table on every keystroke. Only wraps the expensive call -- any
+// synchronous UI feedback (e.g. a clear-button toggle) a caller needs stays
+// outside the debounced function.
+function debounce(fn, delay) {
+  let t;
+  return function (...args) {
+    clearTimeout(t);
+    t = setTimeout(() => fn.apply(this, args), delay);
+  };
+}
+
+// ---- CONFIRM DIALOG ----
+// Promise-based replacement for the native confirm() -- resolves true/false
+// on Confirm/Cancel/Escape/backdrop-click instead of blocking the whole tab.
+let _confirmModalActiveResolve = null;
+function showConfirm(message, opts) {
+  opts = opts || {};
+  return new Promise(resolve => {
+    _confirmModalActiveResolve = resolve;
+    document.getElementById('confirm-modal-title').textContent = opts.title || (opts.danger ? 'Confirm deletion' : 'Confirm');
+    document.getElementById('confirm-modal-message').textContent = message;
+    const btn = document.getElementById('confirm-modal-confirm-btn');
+    btn.textContent = opts.confirmLabel || (opts.danger ? 'Delete' : 'Confirm');
+    btn.className = opts.danger ? 'btn-danger-solid' : 'btn-primary';
+    document.getElementById('confirm-modal-overlay').style.display = 'block';
+    document.getElementById('confirm-modal').style.display = 'flex';
+  });
+}
+function _confirmModalResolve(result) {
+  document.getElementById('confirm-modal-overlay').style.display = 'none';
+  document.getElementById('confirm-modal').style.display = 'none';
+  if (_confirmModalActiveResolve) { _confirmModalActiveResolve(result); _confirmModalActiveResolve = null; }
+}
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && _confirmModalActiveResolve) _confirmModalResolve(false);
+});
+
 // ============================================
 //   REALTIME PRO — LIVE CLOCK
 // ============================================
@@ -644,19 +747,23 @@ function renderPendingList(docs) {
 //   DOCTORS
 // ============================================
 let allDoctors = [];
+let _selectedDoctorIds = new Set();
 
 function renderDoctorsTable(doctors) {
   const tbody = document.getElementById('doctors-tbody');
   if (!doctors.length) {
-    tbody.innerHTML = '<tr><td colspan="8" class="loading">No doctors found</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" class="loading">No doctors found</td></tr>';
     return;
   }
-  tbody.innerHTML = doctors.map(d => {
+  tbody.innerHTML = doctors.slice(0, pageShown('doctors')).map(d => {
     const initials = getInitials(d.name || 'DR');
     const color = randomAvatarColor(d.name);
     const safeStatus = (d.status || 'pending').toLowerCase();
     const isTherapist = d.type === 'therapist';
+    const isPending = safeStatus === 'pending';
+    const checked = _selectedDoctorIds.has(d.id) ? 'checked' : '';
     return `<tr>
+      <td><input type="checkbox" ${isPending ? '' : 'disabled'} ${checked} onchange="toggleDoctorSelect('${escHtml(d.id)}', this.checked)" aria-label="Select ${escHtml(d.name || 'doctor')}" /></td>
       <td><div class="user-cell">
         <div class="doc-avatar" style="background:${escHtml(color.bg)};color:${escHtml(color.fg)};">${escHtml(initials)}</div>
         <div><div class="user-name">${escHtml(d.name || '—')}</div><div class="user-sub">${escHtml(d.email || '')}</div></div>
@@ -669,14 +776,36 @@ function renderDoctorsTable(doctors) {
       <td><span class="pill pill-${escHtml(safeStatus)}">${escHtml(capitalize(d.status || 'Pending'))}</span></td>
       <td>
         <button class="btn btn-outline" onclick="viewDoctor('${escHtml(d.id)}')">${(!d.status || d.status === 'pending') ? 'Review' : 'View'}</button>
-        <button class="btn btn-outline" style="margin-left:4px;" onclick="editDoctorAdmin('${escHtml(d.id)}')" title="Edit">
+        <button class="btn btn-outline" style="margin-left:4px;" onclick="editDoctorAdmin('${escHtml(d.id)}')" title="Edit" aria-label="Edit">
           <i class="ti ti-edit"></i>
         </button>
       </td>
     </tr>`;
-  }).join('');
+  }).join('') + loadMoreRow('doctors', doctors.length, 9, 'filterDoctorsTable();');
+  updateBulkApproveDoctorsButton();
 }
 
+const DOCTORS_SORT_GETTERS = {
+  name: d => (d.name || '').toLowerCase(),
+  specialty: d => (d.specialty || d.specialisation || d.specialization || '').toLowerCase(),
+  consultations: d => Number(d.consultations) || 0,
+  rating: d => Number(d.rating) || 0,
+  status: d => (d.status || 'pending').toLowerCase(),
+};
+function renderDoctorsTableHead() {
+  const row = document.getElementById('doctors-thead-row');
+  if (!row) return;
+  row.innerHTML =
+    '<th style="width:32px;"><input type="checkbox" id="doctors-select-all" onchange="toggleSelectAllDoctors(this.checked)" aria-label="Select all pending doctors" /></th>' +
+    sortHeaderHtml('doctors', 'name', 'Doctor', 'filterDoctorsTable') +
+    '<th>Type</th>' +
+    sortHeaderHtml('doctors', 'specialty', 'Specialisation', 'filterDoctorsTable') +
+    '<th>Phone</th>' +
+    sortHeaderHtml('doctors', 'consultations', 'Consultations', 'filterDoctorsTable') +
+    sortHeaderHtml('doctors', 'rating', 'Rating', 'filterDoctorsTable') +
+    sortHeaderHtml('doctors', 'status', 'Status', 'filterDoctorsTable') +
+    '<th>Actions</th>';
+}
 function filterDoctorsTable() {
   const q           = (document.getElementById('doctor-search')?.value || '').toLowerCase();
   const typeFilter   = document.getElementById('doctor-type-filter')?.value || 'all';
@@ -692,7 +821,52 @@ function filterDoctorsTable() {
       (d.email||'').toLowerCase().includes(q)
     );
   }
+  list = sortedBy(list, 'doctors', DOCTORS_SORT_GETTERS);
+  renderDoctorsTableHead();
   renderDoctorsTable(list);
+}
+
+// ---- Bulk select / approve (pending doctors only) ----
+// No Cloud Function exists for this (bulkApproveSettlements is the only
+// bulk-capable callable in the app, and its source isn't in this repo) --
+// mirrors _doApproveSpecRequest's existing db.batch() pattern instead.
+function toggleDoctorSelect(id, checked) {
+  if (checked) _selectedDoctorIds.add(id); else _selectedDoctorIds.delete(id);
+  updateBulkApproveDoctorsButton();
+}
+function toggleSelectAllDoctors(checked) {
+  _selectedDoctorIds.clear();
+  if (checked) allDoctors.filter(d => (d.status || 'pending') === 'pending').forEach(d => _selectedDoctorIds.add(d.id));
+  filterDoctorsTable();
+}
+function updateBulkApproveDoctorsButton() {
+  const btn = document.getElementById('bulk-approve-doctors-btn');
+  const countEl = document.getElementById('doctors-selected-count');
+  if (countEl) countEl.textContent = _selectedDoctorIds.size;
+  if (btn) btn.disabled = _selectedDoctorIds.size === 0;
+}
+async function bulkApproveSelectedDoctors() {
+  if (!canApproveRegistrations()) { showToast('Only Directors can approve doctors.'); return; }
+  if (!_selectedDoctorIds.size) return;
+  const ids = Array.from(_selectedDoctorIds);
+  const btn = document.getElementById('bulk-approve-doctors-btn');
+  if (btn) btn.disabled = true;
+  try {
+    const batch = db.batch();
+    ids.forEach(id => {
+      batch.update(db.collection('doctors').doc(id), {
+        status: 'active',
+        approvedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+    });
+    await batch.commit();
+    showToast(`${ids.length} doctor${ids.length !== 1 ? 's' : ''} approved ✓`);
+    _selectedDoctorIds.clear();
+    updateBulkApproveDoctorsButton();
+  } catch (err) {
+    showToast('Bulk approve failed: ' + err.message);
+    if (btn) btn.disabled = false;
+  }
 }
 
 // Add / Edit Doctor / Therapist (admin form)
@@ -1051,7 +1225,7 @@ async function approveFromModal(id) {
 
 async function rejectFromModal(id) {
   if (!canApproveRegistrations()) { showToast('Only Directors can reject doctors.'); return; }
-  if (!confirm('Are you sure you want to reject this doctor application?')) return;
+  if (!(await showConfirm('Are you sure you want to reject this doctor application?', {danger:true}))) return;
   withCooldown(`reject-${id}`, async () => {
     try {
       await db.collection('doctors').doc(id).update({
@@ -1116,7 +1290,7 @@ function filterSpecRequests() {
   renderSpecRequestsTable(list);
 }
 
-document.getElementById('sr-search')?.addEventListener('input', filterSpecRequests);
+document.getElementById('sr-search')?.addEventListener('input', debounce(filterSpecRequests, 180));
 document.getElementById('sr-status-filter')?.addEventListener('change', filterSpecRequests);
 
 function renderSpecRequestsTable(list) {
@@ -1267,7 +1441,7 @@ function viewSpecRequest(id) {
 }
 
 async function approveSpecRequestFromModal(id) {
-  if (!confirm('Approve this specialization change? This will update the doctor\'s specialization immediately.')) return;
+  if (!(await showConfirm('Approve this specialization change? This will update the doctor\'s specialization immediately.'))) return;
   document.getElementById('sr-modal')?.remove();
   await _doApproveSpecRequest(id);
 }
@@ -1347,7 +1521,7 @@ async function _submitRejectSpecRequest(id) {
 }
 
 // Doctors search & filter
-document.getElementById('doctor-search')?.addEventListener('input', filterDoctorsTable);
+document.getElementById('doctor-search')?.addEventListener('input', debounce(filterDoctorsTable, 180));
 document.getElementById('doctor-type-filter')?.addEventListener('change', filterDoctorsTable);
 document.getElementById('doctor-status-filter')?.addEventListener('change', filterDoctorsTable);
 
@@ -1373,14 +1547,33 @@ function loadPatients() {
     }, err => console.error('Patients load error:', err));
 }
 
+const PATIENTS_SORT_GETTERS = {
+  name: p => (p.name || '').toLowerCase(),
+  age: p => calcAge(p.dob) || 0,
+  gender: p => (p.gender || '').toLowerCase(),
+  joined: p => p.createdAt && p.createdAt.toDate ? p.createdAt.toDate().getTime() : 0,
+};
+function renderPatientsTableHead() {
+  const row = document.getElementById('patients-thead-row');
+  if (!row) return;
+  row.innerHTML =
+    sortHeaderHtml('patients', 'name', 'Patient', 'filterPatients') +
+    '<th>Phone</th>' +
+    sortHeaderHtml('patients', 'age', 'Age', 'filterPatients') +
+    sortHeaderHtml('patients', 'gender', 'Gender', 'filterPatients') +
+    '<th>Plan</th>' +
+    sortHeaderHtml('patients', 'joined', 'Joined', 'filterPatients');
+}
 function filterPatients() {
   const q = (document.getElementById('patient-search')?.value || '').toLowerCase();
-  const filtered = q
+  let filtered = q
     ? allPatients.filter(p =>
         (p.name  || '').toLowerCase().includes(q) ||
         (p.phone || '').toLowerCase().includes(q) ||
         (p.email || '').toLowerCase().includes(q))
     : allPatients;
+  filtered = sortedBy(filtered, 'patients', PATIENTS_SORT_GETTERS);
+  renderPatientsTableHead();
   renderPatientsTable(filtered);
 }
 
@@ -1405,7 +1598,7 @@ function renderPatientsTable(patients) {
     tbody.innerHTML = '<tr><td colspan="6" class="loading">No patients found</td></tr>';
     return;
   }
-  tbody.innerHTML = patients.map(p => {
+  tbody.innerHTML = patients.slice(0, pageShown('patients')).map(p => {
     const initials = getInitials(p.name || 'PT');
     const color = randomAvatarColor(p.name);
     return `<tr>
@@ -1419,10 +1612,10 @@ function renderPatientsTable(patients) {
       <td>${p.isPremium ? 'â­ Premium' : 'Free'}</td>
       <td>${escHtml(formatDate(p.createdAt))}</td>
     </tr>`;
-  }).join('');
+  }).join('') + loadMoreRow('patients', patients.length, 6, 'filterPatients();');
 }
 
-document.getElementById('patient-search')?.addEventListener('input', filterPatients);
+document.getElementById('patient-search')?.addEventListener('input', debounce(filterPatients, 180));
 
 // ============================================
 //   REVENUE
@@ -1697,7 +1890,7 @@ function renderRecentTickets(openTickets) {
 function renderTicketsTable(tickets) {
   const tbody = document.getElementById('tickets-tbody');
   if (!tickets.length) { tbody.innerHTML = '<tr><td colspan="7" class="loading">No tickets found</td></tr>'; return; }
-  tbody.innerHTML = tickets.map(t => {
+  tbody.innerHTML = tickets.slice(0, pageShown('tickets')).map(t => {
     const prioClass = t.priority === 'high' ? 'suspended' : t.priority === 'medium' ? 'pending' : 'review';
     const statusClass = t.status === 'open' ? 'pending' : 'active';
     const src = ticketRaisedBy(t);
@@ -1721,7 +1914,7 @@ function renderTicketsTable(tickets) {
         </div>
       </td>
     </tr>`;
-  }).join('');
+  }).join('') + loadMoreRow('tickets', tickets.length, 7, 'filterTickets();');
 }
 
 async function resolveTicket(id, btn) {
@@ -1823,13 +2016,14 @@ async function saveTicketAdminNotes(id, btn) {
   }
 }
 
-document.getElementById('ticket-filter')?.addEventListener('change', e => {
-  const val = e.target.value;
+function filterTickets() {
+  const val = document.getElementById('ticket-filter')?.value || 'all';
   const filtered = val === 'all' ? allTickets : allTickets.filter(t =>
     t.status === val || t.priority === val || ticketRaisedBy(t).role === val
   );
   renderTicketsTable(filtered);
-});
+}
+document.getElementById('ticket-filter')?.addEventListener('change', filterTickets);
 
 // ============================================
 //   REPORTS — REALTIME
@@ -2133,7 +2327,7 @@ async function toggleBanner(id, enabled) {
 }
 
 async function deleteBanner(id, storagePath, btn) {
-  if (!confirm('Delete this banner? This cannot be undone.')) return;
+  if (!(await showConfirm('Delete this banner? This cannot be undone.', {danger:true}))) return;
   btn.disabled = true;
   try {
     await db.collection('banners').doc(id).delete();
@@ -2472,7 +2666,7 @@ function filterRequests(type, btn) {
   applyRequestFilters();
 }
 
-function applyRequestFilters() {
+function _applyRequestFiltersImpl() {
   const statusFilter = document.getElementById('req-status-filter')?.value || 'all';
   const search       = (document.getElementById('req-search')?.value || '').toLowerCase();
 
@@ -2497,6 +2691,7 @@ function applyRequestFilters() {
 
   renderRequestsTable(filtered);
 }
+const applyRequestFilters = debounce(_applyRequestFiltersImpl, 180);
 
 function renderRequestsTable(requests) {
   const tbody = document.getElementById('requests-tbody');
@@ -2909,7 +3104,7 @@ function loadHospitals() {
     }, err => console.error('Hospitals load error:', err));
 }
 
-function filterHospitals() {
+function _filterHospitalsImpl() {
   const q      = (document.getElementById('hospital-search')?.value || '').toLowerCase();
   const filter = document.getElementById('hospital-type-filter')?.value || 'all';
   let filtered = allHospitals;
@@ -2922,6 +3117,7 @@ function filterHospitals() {
   else if (filter === 'disabled')  filtered = filtered.filter(h => !h.isEnabled);
   renderHospitalsList(filtered);
 }
+const filterHospitals = debounce(_filterHospitalsImpl, 180);
 
 function renderHospitalsList(hospitals) {
   const el = document.getElementById('hospitals-list');
@@ -2982,7 +3178,7 @@ async function saveHospital() {
     return;
   }
   if (dup && !dup.exact &&
-      !confirm(`"${dup.hospital.name}" already looks similar in your catalog. Save "${name}" anyway?`)) {
+      !(await showConfirm(`"${dup.hospital.name}" already looks similar in your catalog. Save "${name}" anyway?`))) {
     return;
   }
 
@@ -3077,7 +3273,7 @@ async function toggleHospital(id, enabled) {
 }
 
 async function deleteHospital(id, btn) {
-  if (!confirm('Delete this hospital? This cannot be undone.')) return;
+  if (!(await showConfirm('Delete this hospital? This cannot be undone.', {danger:true}))) return;
   btn.disabled = true;
   try {
     await db.collection('hospitals').doc(id).delete();
@@ -3111,7 +3307,7 @@ function loadBillDiscounts() {
     }, err => console.error('Bill discounts load error:', err));
 }
 
-function filterBillDiscounts() {
+function _filterBillDiscountsImpl() {
   const q      = (document.getElementById('bill-discount-search')?.value || '').toLowerCase();
   const filter = document.getElementById('bill-discount-filter')?.value || 'all';
   let filtered = allBillDiscounts;
@@ -3120,6 +3316,7 @@ function filterBillDiscounts() {
   else if (filter === 'disabled') filtered = filtered.filter(d => !d.isEnabled);
   renderBillDiscountsList(filtered);
 }
+const filterBillDiscounts = debounce(_filterBillDiscountsImpl, 180);
 
 function _billDiscountValueLabel(d) {
   return d.type === 'flat' ? `Flat ₹${d.value} off` : `${d.value}% off`;
@@ -3246,7 +3443,7 @@ async function toggleBillDiscount(id, enabled) {
 }
 
 async function deleteBillDiscount(id, btn) {
-  if (!confirm('Delete this discount? This cannot be undone.')) return;
+  if (!(await showConfirm('Delete this discount? This cannot be undone.', {danger:true}))) return;
   btn.disabled = true;
   try {
     await db.collection('hospital_bill_discounts').doc(id).delete();
@@ -3431,7 +3628,7 @@ async function toggleAmbulance(id, enabled) {
 }
 
 async function deleteAmbulance(id, btn) {
-  if (!confirm('Delete this ambulance service? This cannot be undone.')) return;
+  if (!(await showConfirm('Delete this ambulance service? This cannot be undone.', {danger:true}))) return;
   btn.disabled = true;
   try {
     await db.collection('ambulances').doc(id).delete();
@@ -3600,7 +3797,7 @@ async function toggleEquipmentVendor(id, enabled) {
 }
 
 async function deleteEquipmentVendor(id, btn) {
-  if (!confirm('Delete this equipment vendor? This cannot be undone.')) return;
+  if (!(await showConfirm('Delete this equipment vendor? This cannot be undone.', {danger:true}))) return;
   btn.disabled = true;
   try {
     await db.collection('equipment_vendors').doc(id).delete();
@@ -3656,7 +3853,7 @@ function loadHealthArticles() {
     }, err => console.error('Health articles load error:', err));
 }
 
-function filterHealthArticles() {
+function _filterHealthArticlesImpl() {
   const q        = (document.getElementById('health-article-search')?.value || '').toLowerCase();
   const category = document.getElementById('health-article-category-filter')?.value || 'all';
   const status   = document.getElementById('health-article-status-filter')?.value || 'all';
@@ -3671,6 +3868,7 @@ function filterHealthArticles() {
   else if (status === 'disabled') filtered = filtered.filter(a => !a.isEnabled);
   renderHealthArticlesList(filtered);
 }
+const filterHealthArticles = debounce(_filterHealthArticlesImpl, 180);
 
 function renderHealthArticlesList(articles) {
   const el = document.getElementById('health-articles-list');
@@ -3827,7 +4025,7 @@ async function toggleHealthArticleFeatured(id, featured) {
 }
 
 async function deleteHealthArticle(id, btn) {
-  if (!confirm('Delete this health article? This cannot be undone.')) return;
+  if (!(await showConfirm('Delete this health article? This cannot be undone.', {danger:true}))) return;
   btn.disabled = true;
   try {
     await db.collection('health_articles').doc(id).delete();
@@ -3991,7 +4189,7 @@ function _renderTopReferrers(list) {
 }
 
 // ── Filter & render referral history ─────────────────────
-function filterReferrals() {
+function _filterReferralsImpl() {
   const filter = (document.getElementById('ref-filter')?.value  || 'all');
   const search = (document.getElementById('ref-search')?.value  || '').toLowerCase().trim();
 
@@ -4006,6 +4204,7 @@ function filterReferrals() {
   }
   renderReferrals(filtered);
 }
+const filterReferrals = debounce(_filterReferralsImpl, 180);
 
 function renderReferrals(list) {
   const tbody = document.getElementById('referrals-tbody');
@@ -4043,7 +4242,7 @@ function renderReferrals(list) {
 
 // ── Fraud management ──────────────────────────────────────
 async function markReferralFraud(referralId) {
-  if (!confirm('Mark this referral as fraud? This will flag it for review.')) return;
+  if (!(await showConfirm('Mark this referral as fraud? This will flag it for review.', {danger:true}))) return;
   try {
     await db.collection('referrals').doc(referralId).update({
       status:    'fraud',
@@ -4067,7 +4266,7 @@ async function unmarkReferralFraud(referralId) {
 
 // ── Manual reward trigger (admin) ─────────────────────────
 async function manuallyRewardReferral(referralId) {
-  if (!confirm('Manually credit rewards for this referral now?')) return;
+  if (!(await showConfirm('Manually credit rewards for this referral now?'))) return;
   try {
     const snap = await db.collection('referrals').doc(referralId).get();
     if (!snap.exists) { showToast('Referral not found.'); return; }
@@ -4122,7 +4321,7 @@ async function manuallyRewardReferral(referralId) {
 // ============================================
 let allFeedbacks = [];
 
-function filterFeedback() {
+function _filterFeedbackImpl() {
   const type   = document.getElementById('fb-type-filter').value;
   const rating = document.getElementById('fb-rating-filter').value;
   const q      = (document.getElementById('fb-search').value || '').toLowerCase();
@@ -4139,6 +4338,7 @@ function filterFeedback() {
 
   renderFeedbackTable(list);
 }
+const filterFeedback = debounce(_filterFeedbackImpl, 180);
 
 function renderFeedbackTable(list) {
   const tbody = document.getElementById('feedback-tbody');
@@ -4328,7 +4528,7 @@ function loadDoctorsRealtime() {
     allDoctors = snap.docs
       .filter(doc => isDoctorDoc(doc.data()))
       .map(doc => ({ id: doc.id, ...doc.data() }));
-    renderDoctorsTable(allDoctors);
+    filterDoctorsTable();
   }, err => console.error('doctors list listener', err));
 }
 
@@ -4346,7 +4546,7 @@ function loadTicketsRealtime() {
     document.getElementById('stat-tickets').textContent = openCount;
     const badge = document.getElementById('nav-ticket-count');
     if (badge) badge.textContent = openCount;
-    renderTicketsTable(allTickets);
+    filterTickets();
     renderRecentTickets(allTickets.filter(t => t.status === 'open'));
     // Notify new open tickets
     snap.docChanges().forEach(change => {
@@ -4847,7 +5047,7 @@ async function toggleMedCatActive(id, currentlyActive) {
 }
 
 async function deleteMedCat(id) {
-  if (!confirm('Delete this medicine from the catalogue? This cannot be undone.')) return;
+  if (!(await showConfirm('Delete this medicine from the catalogue? This cannot be undone.', {danger:true}))) return;
   try {
     await db.collection('medicines_catalogue').doc(id).delete();
     showToast('Medicine deleted');
@@ -4926,7 +5126,7 @@ function initServicesListener() {
   }, err => console.error('services listener', err));
 }
 
-function filterServices() {
+function _filterServicesImpl() {
   const q      = (document.getElementById('service-search')?.value || '').toLowerCase();
   let filtered = allServices;
   if (_activeServiceCategory) filtered = filtered.filter(s => s.type === _activeServiceCategory);
@@ -4941,6 +5141,7 @@ function filterServices() {
     countEl.textContent = `${filtered.length} service${filtered.length !== 1 ? 's' : ''}`;
   }
 }
+const filterServices = debounce(_filterServicesImpl, 180);
 
 function openServiceCategory(key) {
   _activeServiceCategory = key;
@@ -4986,7 +5187,7 @@ function renderServicesList(services) {
     el.innerHTML = '<div class="empty-state"><div class="empty-icon"> </div><p>No services added yet — create one above.</p></div>';
     return;
   }
-  el.innerHTML = services.map(s => {
+  el.innerHTML = services.slice(0, pageShown('services')).map(s => {
     const tc      = svcTypeColors[s.type] || { bg: '#f3e5f5', fg: '#6a1b9a', icon: '' };
     const priceStr = s.price
       ? `₹${Number(s.price).toLocaleString('en-IN')} <span style="font-size:11px;font-weight:400;color:var(--text-muted);">${s.priceUnit ? '/ '+s.priceUnit.replace('_',' ') : ''}</span>`
@@ -5017,15 +5218,15 @@ function renderServicesList(services) {
           <input type="checkbox" ${s.isEnabled ? 'checked' : ''} onchange="toggleService('${s.id}', this.checked)" />
           <span class="toggle-switch"></span>
         </label>
-        <button class="btn btn-outline" onclick="editService('${s.id}')" title="Edit">
+        <button class="btn btn-outline" onclick="editService('${s.id}')" title="Edit" aria-label="Edit">
           <i class="ti ti-edit"></i>
         </button>
-        <button class="btn btn-reject" onclick="deleteService('${s.id}', '${escHtml(s.storagePath||'')}', this)" title="Delete">
+        <button class="btn btn-reject" onclick="deleteService('${s.id}', '${escHtml(s.storagePath||'')}', this)" title="Delete" aria-label="Delete">
           <i class="ti ti-trash"></i>
         </button>
       </div>
     </div>`;
-  }).join('');
+  }).join('') + loadMoreCard('services', services.length, 'filterServices();');
 }
 
 async function saveService() {
@@ -5183,7 +5384,7 @@ async function toggleService(id, enabled) {
 }
 
 async function deleteService(id, storagePath, btn) {
-  if (!confirm('Delete this service? This cannot be undone.')) return;
+  if (!(await showConfirm('Delete this service? This cannot be undone.', {danger:true}))) return;
   btn.disabled = true;
   try {
     await db.collection('services').doc(id).delete();
@@ -5248,7 +5449,26 @@ function updateApptBadge() {
   badge.style.display = pending > 0 ? 'inline-flex' : 'none';
 }
 
-function applyApptFilters() {
+const APPOINTMENTS_SORT_GETTERS = {
+  patient: a => (a.patientName || '').toLowerCase(),
+  doctor: a => (a.doctorName || '').toLowerCase(),
+  datetime: a => (a.date || '') + (a.time || ''),
+  status: a => (a.status || 'pending').toLowerCase(),
+  booked: a => a.createdAt && a.createdAt.toDate ? a.createdAt.toDate().getTime() : 0,
+};
+function renderAppointmentsTableHead() {
+  const row = document.getElementById('appointments-thead-row');
+  if (!row) return;
+  row.innerHTML =
+    sortHeaderHtml('appointments', 'patient', 'Patient', 'applyApptFilters') +
+    sortHeaderHtml('appointments', 'doctor', 'Doctor', 'applyApptFilters') +
+    sortHeaderHtml('appointments', 'datetime', 'Date & Time', 'applyApptFilters') +
+    '<th>Type</th>' +
+    sortHeaderHtml('appointments', 'status', 'Status', 'applyApptFilters') +
+    sortHeaderHtml('appointments', 'booked', 'Booked On', 'applyApptFilters') +
+    '<th>Actions</th>';
+}
+function _applyApptFiltersImpl() {
   const q       = (document.getElementById('appt-search')?.value || '').toLowerCase();
   const status  = document.getElementById('appt-status-filter')?.value || 'all';
   const dateF   = document.getElementById('appt-date-filter')?.value  || 'all';
@@ -5269,8 +5489,11 @@ function applyApptFilters() {
 
   const label = document.getElementById('appt-count-label');
   if (label) label.textContent = `${list.length} appointment${list.length !== 1 ? 's' : ''}`;
+  list = sortedBy(list, 'appointments', APPOINTMENTS_SORT_GETTERS);
+  renderAppointmentsTableHead();
   renderAppointmentsTable(list);
 }
+const applyApptFilters = debounce(_applyApptFiltersImpl, 180);
 
 function renderAppointmentsTable(list) {
   const tbody = document.getElementById('appointments-tbody');
@@ -5279,7 +5502,7 @@ function renderAppointmentsTable(list) {
     tbody.innerHTML = '<tr><td colspan="7" class="loading">No appointments found</td></tr>';
     return;
   }
-  tbody.innerHTML = list.map(a => {
+  tbody.innerHTML = list.slice(0, pageShown('appointments')).map(a => {
     const status = a.status || 'pending';
     const pillCls = { pending:'pending', confirmed:'confirmed', completed:'completed', cancelled:'suspended', no_show:'no_show' }[status] || 'pending';
     const patColor = randomAvatarColor(a.patientName);
@@ -5316,7 +5539,7 @@ function renderAppointmentsTable(list) {
         </div>
       </td>
     </tr>`;
-  }).join('');
+  }).join('') + loadMoreRow('appointments', list.length, 7, 'applyApptFilters();');
 }
 
 async function updateApptStatus(id, newStatus, btn) {
@@ -5436,7 +5659,7 @@ function updateWalletStats() {
   set('wallet-stat-referral', formatCurrency(referrals));
 }
 
-function filterWalletTx() {
+function _filterWalletTxImpl() {
   const q    = (document.getElementById('wallet-search')?.value || '').toLowerCase();
   const type = document.getElementById('wallet-type-filter')?.value || 'all';
   let list   = _allWalletTx;
@@ -5448,6 +5671,7 @@ function filterWalletTx() {
   );
   renderWalletTable(list);
 }
+const filterWalletTx = debounce(_filterWalletTxImpl, 180);
 
 function renderWalletTable(list) {
   const tbody = document.getElementById('wallet-tbody');
@@ -6032,7 +6256,7 @@ function renderMaternityAlerts(alerts) {
 // (called once from initDashboard) — no manual refetch is needed after a
 // write below, the onSnapshot listeners pick it up automatically.
 async function resolveAlert(alertId) {
-  if (!confirm('Mark this alert as resolved?')) return;
+  if (!(await showConfirm('Mark this alert as resolved?'))) return;
   try {
     await db.collection('pregnancy_alerts').doc(alertId).update({
       isResolved: true,
@@ -6078,7 +6302,7 @@ function renderMaternityPatients(profiles) {
   }).join('');
 }
 
-function filterMaternityPatients() {
+function _filterMaternityPatientsImpl() {
   const search = (document.getElementById('mat-search')?.value || '').toLowerCase();
   const risk = document.getElementById('mat-filter-risk')?.value || 'all';
   const filtered = _matProfiles.filter(p => {
@@ -6089,6 +6313,7 @@ function filterMaternityPatients() {
   });
   renderMaternityPatients(filtered);
 }
+const filterMaternityPatients = debounce(_filterMaternityPatientsImpl, 180);
 
 async function openAssignDoctorModal(profileId, patientName) {
   _currentAssignProfileId = profileId;
@@ -6127,7 +6352,7 @@ async function confirmAssignDoctor() {
 }
 
 async function flagHighRisk(profileId) {
-  if (!confirm('Flag this patient as High Risk? This will enable priority monitoring.')) return;
+  if (!(await showConfirm('Flag this patient as High Risk? This will enable priority monitoring.'))) return;
   try {
     await db.collection('pregnancy_profiles').doc(profileId).update({
       isHighRisk: true,
@@ -6180,7 +6405,7 @@ function loadReviews() {
   }, err => console.error('Reviews listener error:', err));
 }
 
-function applyReviewsFilter() {
+function _applyReviewsFilterImpl() {
   const statusFilter = document.getElementById('reviews-filter-status')?.value || 'all';
   const ratingFilter = document.getElementById('reviews-filter-rating')?.value || 'all';
   const searchVal    = (document.getElementById('reviews-search')?.value || '').toLowerCase();
@@ -6200,6 +6425,7 @@ function applyReviewsFilter() {
 
   renderReviewsTable(filtered);
 }
+const applyReviewsFilter = debounce(_applyReviewsFilterImpl, 180);
 
 function renderReviewsTable(reviews) {
   const tbody = document.getElementById('reviews-tbody');
@@ -6243,7 +6469,7 @@ function renderReviewsTable(reviews) {
 }
 
 async function flagReview(reviewId, btn) {
-  if (!confirm('Flag this review as policy violation? It will be hidden from patients.')) return;
+  if (!(await showConfirm('Flag this review as policy violation? It will be hidden from patients.'))) return;
   btn.disabled = true;
   try {
     await db.collection('doctor_reviews').doc(reviewId).update({ isFlagged: true });
@@ -6268,7 +6494,7 @@ async function unflagReview(reviewId, btn) {
 }
 
 async function deleteReview(reviewId, btn) {
-  if (!confirm('Permanently delete this review? This cannot be undone.')) return;
+  if (!(await showConfirm('Permanently delete this review? This cannot be undone.', {danger:true}))) return;
   btn.disabled = true;
   try {
     // Get review data first to update the rating summary
@@ -6549,7 +6775,7 @@ function renderQualityLowPerformers(doctors) {
   }).join('');
 }
 
-function filterQualityDoctors() {
+function _filterQualityDoctorsImpl() {
   const searchEl = document.getElementById('qa-doctor-search');
   const sortEl   = document.getElementById('qa-sort');
   const tbody    = document.getElementById('qa-all-doctors-tbody');
@@ -6600,6 +6826,7 @@ function filterQualityDoctors() {
       + '</tr>';
   }).join('');
 }
+const filterQualityDoctors = debounce(_filterQualityDoctorsImpl, 180);
 
 function renderQualityStarBadge(rating) {
   if (rating == null) return '—';
@@ -6738,7 +6965,7 @@ function loadNutritionistsList() {
   });
 }
 
-function renderNutritionistsList() {
+function _renderNutritionistsListImpl() {
   const container = document.getElementById('nutr-nutritionists-list');
   if (!container) return;
   const query    = (document.getElementById('nutr-search')?.value || '').toLowerCase();
@@ -6785,13 +7012,14 @@ function renderNutritionistsList() {
           <span class="${n.isAvailable ? 'nutr-badge-available' : 'nutr-badge-unavailable'}">${n.isAvailable ? 'Available' : 'Unavailable'}</span>
         </div>
         <div style="display:flex;gap:6px;flex-shrink:0;">
-          <button class="btn-icon" title="Edit" onclick="openEditNutritionistModal('${escHtml(n.id)}')"><i class="ti ti-pencil"></i></button>
-          <button class="btn-icon btn-icon-danger" title="Delete" onclick="deleteNutritionist('${escHtml(n.id)}','${escHtml(n.name || '')}')"><i class="ti ti-trash"></i></button>
+          <button class="btn-icon" title="Edit" aria-label="Edit" onclick="openEditNutritionistModal('${escHtml(n.id)}')"><i class="ti ti-pencil"></i></button>
+          <button class="btn-icon btn-icon-danger" title="Delete" aria-label="Delete" onclick="deleteNutritionist('${escHtml(n.id)}','${escHtml(n.name || '')}')"><i class="ti ti-trash"></i></button>
         </div>
       </div>`;
   });
   container.innerHTML = html;
 }
+const renderNutritionistsList = debounce(_renderNutritionistsListImpl, 180);
 
 // ── Add / Edit Nutritionist Modal ─────────────────────────────────────────────
 
@@ -6903,7 +7131,7 @@ async function saveNutritionist() {
 }
 
 async function deleteNutritionist(id, name) {
-  if (!confirm('Delete nutritionist “' + name + '”? This cannot be undone.')) return;
+  if (!(await showConfirm('Delete nutritionist “' + name + '”? This cannot be undone.', {danger:true}))) return;
   try {
     await db.collection('nutritionists').doc(id).delete();
     showToast('Nutritionist deleted.');
@@ -6950,15 +7178,15 @@ function loadNutritionAppointments() {
       let actionBtns = '';
       if (a.status === 'pending') {
         actionBtns = `
-          <button class="btn-icon" title="Confirm" style="background:#e8f5e9;color:#2e7d32;border:none;" onclick="updateNutrApptStatus('${escHtml(id)}','confirmed')"><i class="ti ti-check"></i></button>
-          <button class="btn-icon btn-icon-danger" title="Cancel" onclick="updateNutrApptStatus('${escHtml(id)}','cancelled')"><i class="ti ti-x"></i></button>`;
+          <button class="btn-icon" title="Confirm" aria-label="Confirm" style="background:#e8f5e9;color:#2e7d32;border:none;" onclick="updateNutrApptStatus('${escHtml(id)}','confirmed')"><i class="ti ti-check"></i></button>
+          <button class="btn-icon btn-icon-danger" title="Cancel" aria-label="Cancel" onclick="updateNutrApptStatus('${escHtml(id)}','cancelled')"><i class="ti ti-x"></i></button>`;
       } else if (a.status === 'confirmed') {
         actionBtns = `
-          <button class="btn-icon" title="Mark Completed" style="background:#e3f2fd;color:#1565c0;border:none;" onclick="updateNutrApptStatus('${escHtml(id)}','completed')"><i class="ti ti-circle-check"></i></button>
-          <button class="btn-icon btn-icon-danger" title="Cancel" onclick="updateNutrApptStatus('${escHtml(id)}','cancelled')"><i class="ti ti-x"></i></button>`;
+          <button class="btn-icon" title="Mark Completed" aria-label="Mark Completed" style="background:#e3f2fd;color:#1565c0;border:none;" onclick="updateNutrApptStatus('${escHtml(id)}','completed')"><i class="ti ti-circle-check"></i></button>
+          <button class="btn-icon btn-icon-danger" title="Cancel" aria-label="Cancel" onclick="updateNutrApptStatus('${escHtml(id)}','cancelled')"><i class="ti ti-x"></i></button>`;
       } else {
         actionBtns = `
-          <button class="btn-icon btn-icon-danger" title="Delete" onclick="deleteNutrAppt('${escHtml(id)}')"><i class="ti ti-trash"></i></button>`;
+          <button class="btn-icon btn-icon-danger" title="Delete" aria-label="Delete" onclick="deleteNutrAppt('${escHtml(id)}')"><i class="ti ti-trash"></i></button>`;
       }
 
       html += `
@@ -6985,7 +7213,7 @@ function loadNutritionAppointments() {
 
 async function updateNutrApptStatus(id, status) {
   const labels = { confirmed: 'Confirm', completed: 'Complete', cancelled: 'Cancel' };
-  if (!confirm(`${labels[status] || 'Update'} this appointment?`)) return;
+  if (!(await showConfirm(`${labels[status] || 'Update'} this appointment?`))) return;
   try {
     await db.collection('nutrition_appointments').doc(id).update({
       status,
@@ -6998,7 +7226,7 @@ async function updateNutrApptStatus(id, status) {
 }
 
 async function deleteNutrAppt(id) {
-  if (!confirm('Permanently delete this appointment record?')) return;
+  if (!(await showConfirm('Permanently delete this appointment record?', {danger:true}))) return;
   try {
     await db.collection('nutrition_appointments').doc(id).delete();
     showToast('Appointment deleted.');
@@ -7058,7 +7286,7 @@ function loadMealLogs() {
           <span style="color:#2e7d32;">${escHtml(String(Math.round(m.carbs || 0)))}g</span>
           <span style="color:#7b1fa2;">${escHtml(String(Math.round(m.fat || 0)))}g</span>
           <span>
-            <button class="btn-icon btn-icon-danger" title="Delete" onclick="deleteAdminMealLog('${escHtml(id)}')"><i class="ti ti-trash"></i></button>
+            <button class="btn-icon btn-icon-danger" title="Delete" aria-label="Delete" onclick="deleteAdminMealLog('${escHtml(id)}')"><i class="ti ti-trash"></i></button>
           </span>
         </div>`;
     });
@@ -7074,7 +7302,7 @@ function loadMealLogs() {
 }
 
 async function deleteAdminMealLog(id) {
-  if (!confirm('Delete this meal log entry?')) return;
+  if (!(await showConfirm('Delete this meal log entry?', {danger:true}))) return;
   try {
     await db.collection('meal_tracking').doc(id).delete();
     showToast('Meal log deleted.');
@@ -7142,8 +7370,8 @@ function loadNutritionGoals() {
           <span>${g.currentWeight ? escHtml(String(g.currentWeight)) + ' kg' : '—'}</span>
           <span>${statusBadge}</span>
           <span style="display:flex;gap:5px;">
-            ${isActive ? `<button class="btn-icon" title="Deactivate" style="background:#fff8e1;color:#f57f17;border:none;" onclick="deactivateNutrGoal('${escHtml(id)}')"><i class="ti ti-player-pause"></i></button>` : ''}
-            <button class="btn-icon btn-icon-danger" title="Delete" onclick="deleteNutrGoal('${escHtml(id)}')"><i class="ti ti-trash"></i></button>
+            ${isActive ? `<button class="btn-icon" title="Deactivate" aria-label="Deactivate" style="background:#fff8e1;color:#f57f17;border:none;" onclick="deactivateNutrGoal('${escHtml(id)}')"><i class="ti ti-player-pause"></i></button>` : ''}
+            <button class="btn-icon btn-icon-danger" title="Delete" aria-label="Delete" onclick="deleteNutrGoal('${escHtml(id)}')"><i class="ti ti-trash"></i></button>
           </span>
         </div>`;
     });
@@ -7155,7 +7383,7 @@ function loadNutritionGoals() {
 }
 
 async function deactivateNutrGoal(id) {
-  if (!confirm('Deactivate this nutrition goal?')) return;
+  if (!(await showConfirm('Deactivate this nutrition goal?'))) return;
   try {
     await db.collection('nutrition_goals').doc(id).update({
       isActive: false,
@@ -7168,7 +7396,7 @@ async function deactivateNutrGoal(id) {
 }
 
 async function deleteNutrGoal(id) {
-  if (!confirm('Permanently delete this nutrition goal?')) return;
+  if (!(await showConfirm('Permanently delete this nutrition goal?', {danger:true}))) return;
   try {
     await db.collection('nutrition_goals').doc(id).delete();
     showToast('Goal deleted.');
@@ -7241,8 +7469,8 @@ function renderDietPlans() {
           <span class="${active ? 'nutr-badge-available' : 'nutr-badge-unavailable'}">${active ? 'Active' : 'Hidden'}</span>
         </div>
         <div style="display:flex;gap:6px;flex-shrink:0;">
-          <button class="btn-icon" title="Edit" onclick="openEditDietPlanModal('${escHtml(p.id)}')"><i class="ti ti-pencil"></i></button>
-          <button class="btn-icon btn-icon-danger" title="Delete" onclick="deleteDietPlan('${escHtml(p.id)}','${escHtml(p.title || '')}')"><i class="ti ti-trash"></i></button>
+          <button class="btn-icon" title="Edit" aria-label="Edit" onclick="openEditDietPlanModal('${escHtml(p.id)}')"><i class="ti ti-pencil"></i></button>
+          <button class="btn-icon btn-icon-danger" title="Delete" aria-label="Delete" onclick="deleteDietPlan('${escHtml(p.id)}','${escHtml(p.title || '')}')"><i class="ti ti-trash"></i></button>
         </div>
       </div>`;
   });
@@ -7325,7 +7553,7 @@ async function saveDietPlan() {
 }
 
 async function deleteDietPlan(id, title) {
-  if (!confirm('Delete diet plan "' + title + '"?')) return;
+  if (!(await showConfirm('Delete diet plan "' + title + '"?', {danger:true}))) return;
   try {
     await db.collection('diet_plans').doc(id).delete();
     showToast('Diet plan deleted.');
@@ -7839,7 +8067,7 @@ function initCaregiversListener() {
     }, err => console.error('[Caregivers]', err));
 }
 
-function filterCaregivers() {
+function _filterCaregiversImpl() {
   const q          = (document.getElementById('caregiver-search')?.value || '').toLowerCase();
   const typeFilter = document.getElementById('caregiver-type-filter')?.value || 'all';
   const genderFilter = document.getElementById('caregiver-gender-filter')?.value || 'all';
@@ -7857,6 +8085,7 @@ function filterCaregivers() {
   );
   renderCaregiversList(list);
 }
+const filterCaregivers = debounce(_filterCaregiversImpl, 180);
 
 function renderCaregiversList(list) {
   const el = document.getElementById('caregivers-list');
@@ -8004,7 +8233,7 @@ async function toggleCaregiver(id, isActive) {
 }
 
 async function deleteCaregiver(id, btn) {
-  if (!confirm('Delete this caregiver? This cannot be undone.')) return;
+  if (!(await showConfirm('Delete this caregiver? This cannot be undone.', {danger:true}))) return;
   btn.disabled = true;
   try {
     await db.collection('caregivers').doc(id).delete();
@@ -8040,7 +8269,7 @@ function initCareAssistantsListener() {
     }, err => console.error('[CareAssistants]', err));
 }
 
-function filterCareAssistants() {
+function _filterCareAssistantsImpl() {
   const q            = (document.getElementById('care-assistant-search')?.value || '').toLowerCase();
   const genderFilter  = document.getElementById('care-assistant-gender-filter')?.value || 'all';
   const statusFilter  = document.getElementById('care-assistant-status-filter')?.value || 'all';
@@ -8056,6 +8285,7 @@ function filterCareAssistants() {
   );
   renderCareAssistantsList(list);
 }
+const filterCareAssistants = debounce(_filterCareAssistantsImpl, 180);
 
 function renderCareAssistantsList(list) {
   const el = document.getElementById('care-assistants-list');
@@ -8202,7 +8432,7 @@ async function toggleCareAssistant(id, isActive) {
 }
 
 async function deleteCareAssistant(id, btn) {
-  if (!confirm('Delete this care assistant? This cannot be undone.')) return;
+  if (!(await showConfirm('Delete this care assistant? This cannot be undone.', {danger:true}))) return;
   btn.disabled = true;
   try {
     await db.collection('care_assistants').doc(id).delete();
@@ -8232,7 +8462,7 @@ const PARTNER_ROLES = {
     txField:      'ambulanceId',
     tab:          'ambulance-partners',
     prefix:       'ap',
-    cols:         8,
+    cols:         9,
     navBadge:     'nav-ambulance-partners-count',
     extraFilterId:'ap-vehicle-filter',
     // Canonical docType keys — these must match
@@ -8261,7 +8491,7 @@ const PARTNER_ROLES = {
     txField:      'caregiverId',
     tab:          'caregiver-partners',
     prefix:       'cp',
-    cols:         7,
+    cols:         8,
     navBadge:     'nav-caregiver-partners-count',
     extraFilterId:'cp-specialty-filter',
     docSlots: {
@@ -8285,7 +8515,7 @@ const PARTNER_ROLES = {
     txField:      'pharmacyId',
     tab:          'pharmacy-partners',
     prefix:       'pp',
-    cols:         7,
+    cols:         8,
     navBadge:     'nav-pharmacy-partners-count',
     extraFilterId:'pp-delivery-filter',
     docSlots: {
@@ -8314,7 +8544,7 @@ const PARTNER_ROLES = {
     txField:      'labId',
     tab:          'lab-partners',
     prefix:       'lp',
-    cols:         7,
+    cols:         8,
     navBadge:     'nav-lab-partners-count',
     extraFilterId:'lp-service-filter',
     docSlots: {
@@ -8349,7 +8579,7 @@ const PARTNER_ROLES = {
     txField:      'physiotherapistId',
     tab:          'physio-partners',
     prefix:       'phy',
-    cols:         7,
+    cols:         8,
     navBadge:     'nav-physio-partners-count',
     extraFilterId:'phy-specialty-filter',
     // Keys must stay identical to `PartnerDocumentType.physiotherapist` in
@@ -8377,7 +8607,7 @@ const PARTNER_ROLES = {
     txField:      'counsellorId',
     tab:          'counselling-partners',
     prefix:       'cns',
-    cols:         5,
+    cols:         6,
     navBadge:     'nav-counselling-partners-count',
     extraFilterId:'cns-specialty-filter',
     // Matches `PartnerDocumentType.counsellor` in mednu_doctor's
@@ -8409,7 +8639,7 @@ const PARTNER_ROLES = {
     txField:      null,
     tab:          'nutrition-partners',
     prefix:       'nut',
-    cols:         7,
+    cols:         8,
     navBadge:     'nav-nutrition-partners-count',
     extraFilterId:'nut-specialization-filter',
     docSlots: {},
@@ -8435,7 +8665,7 @@ const PARTNER_ROLES = {
     txField:      null,
     tab:          'hospital-partners',
     prefix:       'hp',
-    cols:         5,
+    cols:         6,
     navBadge:     'nav-hospital-partners-count',
     extraFilterId:null,
     docSlots: {},
@@ -8532,17 +8762,21 @@ function filterPartnerTable(role) {
   if (status !== 'all') list = list.filter(p => partnerStatusOf(p) === status);
   if (extra  !== 'all') list = list.filter(p => cfg.extraMatch(p, extra));
   if (q)                list = list.filter(p => cfg.searchMatch(p, q));
+  list = sortedBy(list, 'partner-' + role, {
+    name: p => (cfg.nameOf(p) || '').toLowerCase(),
+    status: p => partnerStatusOf(p),
+  });
   renderPartnerTable(role, list);
 }
 
-function filterAmbulancePartners()  { filterPartnerTable('ambulance');    }
-function filterCaregiverPartners()  { filterPartnerTable('caregiver');    }
-function filterPharmacyPartners()   { filterPartnerTable('pharmacy');     }
-function filterLabPartners()        { filterPartnerTable('lab');         }
-function filterPhysioPartners()     { filterPartnerTable('physiotherapy');}
-function filterCounsellingPartners(){ filterPartnerTable('counselling'); }
-function filterNutritionPartners()  { filterPartnerTable('nutrition');   }
-function filterHospitalPartners()   { filterPartnerTable('hospital');    }
+const filterAmbulancePartners   = debounce(() => filterPartnerTable('ambulance'), 180);
+const filterCaregiverPartners   = debounce(() => filterPartnerTable('caregiver'), 180);
+const filterPharmacyPartners    = debounce(() => filterPartnerTable('pharmacy'), 180);
+const filterLabPartners         = debounce(() => filterPartnerTable('lab'), 180);
+const filterPhysioPartners      = debounce(() => filterPartnerTable('physiotherapy'), 180);
+const filterCounsellingPartners = debounce(() => filterPartnerTable('counselling'), 180);
+const filterNutritionPartners   = debounce(() => filterPartnerTable('nutrition'), 180);
+const filterHospitalPartners    = debounce(() => filterPartnerTable('hospital'), 180);
 
 // ── Table rendering ──────────────────────────────────────────────────────────
 function partnerActionsCell(role, p) {
@@ -8562,6 +8796,83 @@ function partnerActionsCell(role, p) {
     `<button class="btn btn-outline" style="margin-left:4px;" onclick="showPartnerModal('${role}','${id}')">${st === 'pending' ? 'Review' : 'View'}</button>`;
 }
 
+// ---- Bulk select / approve (pending + fully-verified partners only) ----
+// A Set per role (8 tables coexist) rather than one flat Set. Eligibility
+// mirrors approvePartner()'s own gate exactly (every required document
+// verified; for hospital specifically, already linked to a catalog entry --
+// bulk-approve has no per-row modal to pick one, so a not-yet-linked
+// hospital login simply isn't bulk-approvable).
+let _selectedPartnerIds = new Map();
+function _partnerSelSet(role) {
+  if (!_selectedPartnerIds.has(role)) _selectedPartnerIds.set(role, new Set());
+  return _selectedPartnerIds.get(role);
+}
+function _partnerBulkEligible(role, p) {
+  if (partnerStatusOf(p) !== 'pending') return false;
+  const cfg = PARTNER_ROLES[role];
+  const docs = (p && p.documents) || {};
+  const vers = (p && p.documentVerification) || {};
+  const slots = Object.keys(cfg.docSlots);
+  const allVerified = slots.length === 0 ||
+    slots.every(k => _partnerDocStatus(docs[k] || null, vers[k] || null) === 'verified');
+  if (!allVerified) return false;
+  if (role === 'hospital' && !p.hospitalId) return false;
+  return true;
+}
+function togglePartnerSelect(role, id, checked) {
+  const set = _partnerSelSet(role);
+  if (checked) set.add(id); else set.delete(id);
+  updateBulkApprovePartnersButton(role);
+}
+function toggleSelectAllPartners(role, checked) {
+  const set = _partnerSelSet(role);
+  set.clear();
+  if (checked) (_partnerData[role] || []).filter(p => _partnerBulkEligible(role, p)).forEach(p => set.add(p.id));
+  filterPartnerTable(role);
+}
+function updateBulkApprovePartnersButton(role) {
+  const cfg = PARTNER_ROLES[role];
+  const btn = document.getElementById(cfg.prefix + '-bulk-approve-btn');
+  const countEl = document.getElementById(cfg.prefix + '-selected-count');
+  const size = _partnerSelSet(role).size;
+  if (countEl) countEl.textContent = size;
+  if (btn) btn.disabled = size === 0;
+}
+async function bulkApproveSelectedPartners(role) {
+  if (!canApproveRegistrations()) { showToast('Only Directors can approve/reject partner registrations.'); return; }
+  const cfg = PARTNER_ROLES[role];
+  const set = _partnerSelSet(role);
+  if (!set.size) return;
+  const ids = Array.from(set);
+  const btn = document.getElementById(cfg.prefix + '-bulk-approve-btn');
+  if (btn) btn.disabled = true;
+  try {
+    const batch = db.batch();
+    let count = 0;
+    ids.forEach(id => {
+      const p = (_partnerData[role] || []).find(x => x.id === id);
+      if (!p || !_partnerBulkEligible(role, p)) return; // defensive re-check, state could be stale
+      const payload = {
+        status: 'active',
+        approvedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedBy: auth.currentUser?.email || 'admin',
+      };
+      if (role === 'hospital') { payload.hospitalId = p.hospitalId; payload.hospitalName = p.hospitalName || ''; }
+      batch.update(db.collection(cfg.collection).doc(id), payload);
+      count++;
+    });
+    if (count === 0) { showToast('None of the selected are still eligible to approve.'); if (btn) btn.disabled = false; return; }
+    await batch.commit();
+    showToast(`${count} ${cfg.label.toLowerCase()}${count !== 1 ? 's' : ''} approved ✓`);
+    set.clear();
+    updateBulkApprovePartnersButton(role);
+  } catch (err) {
+    showToast('Bulk approve failed: ' + err.message);
+    if (btn) btn.disabled = false;
+  }
+}
+
 function renderPartnerTable(role, list) {
   const cfg   = PARTNER_ROLES[role];
   const tbody = document.getElementById(cfg.prefix + '-tbody');
@@ -8570,16 +8881,20 @@ function renderPartnerTable(role, list) {
     tbody.innerHTML = `<tr><td colspan="${cfg.cols}" class="loading">No ${escHtml(cfg.label.toLowerCase())}s found</td></tr>`;
     return;
   }
-  tbody.innerHTML = list.map(p => {
+  const pageKey = 'partner-' + role;
+  tbody.innerHTML = list.slice(0, pageShown(pageKey)).map(p => {
     const st     = partnerStatusOf(p);
     const name   = cfg.nameOf(p);
     const color  = randomAvatarColor(name);
     const avatar = `<div class="doc-avatar" style="background:${escHtml(color.bg)};color:${escHtml(color.fg)};">${escHtml(getInitials(name))}</div>`;
     const statusCell = `<td><span class="pill pill-${escHtml(st)}">${escHtml(capitalize(st))}</span></td>`;
     const actions    = `<td>${partnerActionsCell(role, p)}</td>`;
+    const eligible   = _partnerBulkEligible(role, p);
+    const checkboxCell = `<td><input type="checkbox" ${eligible ? '' : 'disabled'} ${_partnerSelSet(role).has(p.id) ? 'checked' : ''} onchange="togglePartnerSelect('${role}','${escHtml(p.id)}', this.checked)" aria-label="Select ${escHtml(name)}" /></td>`;
 
     if (role === 'ambulance') {
       return `<tr>
+        ${checkboxCell}
         <td><div class="user-cell">${avatar}
           <div><div class="user-name">${escHtml(p.driverName || '—')}</div>
           <div class="user-sub">${escHtml(p.driverLicense || '')}</div></div></div></td>
@@ -8595,6 +8910,7 @@ function renderPartnerTable(role, list) {
       const specs = (p.specialties || []).slice(0, 3)
         .map(s => `<span class="svc-type-badge" style="background:#f3e5f5;color:#6a1b9a;">${escHtml(s)}</span>`).join(' ');
       return `<tr>
+        ${checkboxCell}
         <td><div class="user-cell">${avatar}
           <div><div class="user-name">${escHtml(p.name || '—')}</div>
           <div class="user-sub">${escHtml(p.experienceYears ? p.experienceYears + ' yrs experience' : '')}</div></div></div></td>
@@ -8609,6 +8925,7 @@ function renderPartnerTable(role, list) {
       const svcs = (p.servicesOffered || []).slice(0, 3)
         .map(s => `<span class="svc-type-badge" style="background:#e0f2f1;color:#00695c;">${escHtml(s)}</span>`).join(' ');
       return `<tr>
+        ${checkboxCell}
         <td><div class="user-cell">${avatar}
           <div><div class="user-name">${escHtml(p.name || '—')}</div>
           <div class="user-sub">${escHtml(p.email || p.address || '')}</div></div></div></td>
@@ -8623,6 +8940,7 @@ function renderPartnerTable(role, list) {
       const specs = (p.specialties || []).slice(0, 3)
         .map(s => `<span class="svc-type-badge" style="background:#e8f5e9;color:#2e7d32;">${escHtml(s)}</span>`).join(' ');
       return `<tr>
+        ${checkboxCell}
         <td><div class="user-cell">${avatar}
           <div><div class="user-name">${escHtml(p.name || '—')}</div>
           <div class="user-sub">${escHtml(p.city || '')}</div></div></div></td>
@@ -8637,6 +8955,7 @@ function renderPartnerTable(role, list) {
       const specs = (p.specialties || []).slice(0, 3)
         .map(s => `<span class="svc-type-badge" style="background:#ede7f6;color:#4527a0;">${escHtml(s)}</span>`).join(' ');
       return `<tr>
+        ${checkboxCell}
         <td><div class="user-cell">${avatar}
           <div><div class="user-name">${escHtml(p.name || '—')}</div>
           <div class="user-sub">${escHtml(p.experienceYears ? p.experienceYears + ' yrs experience' : '')}</div></div></div></td>
@@ -8647,6 +8966,7 @@ function renderPartnerTable(role, list) {
     }
     if (role === 'nutrition') {
       return `<tr>
+        ${checkboxCell}
         <td><div class="user-cell">${avatar}
           <div><div class="user-name">${escHtml(p.name || '—')}</div>
           <div class="user-sub">${escHtml(p.qualification || '')}</div></div></div></td>
@@ -8659,6 +8979,7 @@ function renderPartnerTable(role, list) {
     }
     if (role === 'hospital') {
       return `<tr>
+        ${checkboxCell}
         <td><div class="user-cell">${avatar}
           <div><div class="user-name">${escHtml(p.hospitalName || 'Not linked yet')}</div>
           <div class="user-sub">${escHtml(p.contactName || '')}</div></div></div></td>
@@ -8671,6 +8992,7 @@ function renderPartnerTable(role, list) {
     }
     // pharmacy
     return `<tr>
+      ${checkboxCell}
       <td><div class="user-cell">${avatar}
         <div><div class="user-name">${escHtml(p.name || '—')}</div>
         <div class="user-sub">${escHtml(p.email || p.address || '')}</div></div></div></td>
@@ -8682,7 +9004,17 @@ function renderPartnerTable(role, list) {
       <td>${partnerRatingCell(p)}</td>
       ${statusCell}${actions}
     </tr>`;
-  }).join('');
+  }).join('') + loadMoreRow(pageKey, list.length, cfg.cols, `filterPartnerTable('${role}');`);
+  updateSortIcon(cfg.prefix + '-th-name-icon', pageKey, 'name');
+  updateSortIcon(cfg.prefix + '-th-status-icon', pageKey, 'status');
+}
+function updateSortIcon(iconId, tableKey, key) {
+  const el = document.getElementById(iconId);
+  if (!el) return;
+  const state = _sortState[tableKey];
+  const active = state && state.key === key;
+  el.className = 'ti ' + (!active ? 'ti-arrows-sort' : (state.dir === 'asc' ? 'ti-sort-ascending' : 'ti-sort-descending'));
+  el.style.opacity = active ? '0.9' : '0.4';
 }
 
 // ── Status actions (approve / reject / activate / deactivate) ───────────────
@@ -8768,13 +9100,13 @@ function approveHospitalPartner(id, btn) {
   });
 }
 
-function deactivatePartner(role, id, btn) {
-  if (!confirm('Deactivate this partner? They will lose access to new jobs until reactivated.')) return;
+async function deactivatePartner(role, id, btn) {
+  if (!(await showConfirm('Deactivate this partner? They will lose access to new jobs until reactivated.'))) return;
   _setPartnerStatus(role, id, 'suspended', btn, PARTNER_ROLES[role].label + ' deactivated');
 }
 
-function rejectPartner(role, id, btn) {
-  if (!confirm('Reject this partner application?')) return;
+async function rejectPartner(role, id, btn) {
+  if (!(await showConfirm('Reject this partner application?', {danger:true}))) return;
   _setPartnerStatus(role, id, 'suspended', btn, PARTNER_ROLES[role].label + ' rejected');
 }
 
@@ -9614,7 +9946,7 @@ function renderCommissionOverridesDraft() {
     return `<div style="display:flex;align-items:center;gap:8px;font-size:12.5px;background:#f8fafc;padding:6px 10px;border-radius:8px;">
       <span style="flex:1;font-family:monospace;">${escHtml(pid)}</span>
       <span>${escHtml(o.type)} · ${valLabel}</span>
-      <button class="btn btn-reject" style="padding:3px 8px;" onclick="removeCommissionOverride('${escHtml(pid)}')" title="Remove override"><i class="ti ti-x"></i></button>
+      <button class="btn btn-reject" style="padding:3px 8px;" onclick="removeCommissionOverride('${escHtml(pid)}')" title="Remove override" aria-label="Remove override"><i class="ti ti-x"></i></button>
     </div>`;
   }).join('');
 }
@@ -9668,7 +10000,7 @@ function loadCoupons() {
   if (_couponsListener) return; // already live
   _couponsListener = db.collection('coupons').orderBy('createdAt', 'desc').onSnapshot(snap => {
     allCoupons = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    renderCouponsList(allCoupons);
+    filterCoupons();
     populateCampaignCouponDropdown();
   }, err => {
     console.error('Coupons load error:', err);
@@ -9686,6 +10018,17 @@ function couponDiscountValueSummary(c) {
   return `₹${c.discountValue || 0}`; // flat
 }
 
+function _filterCouponsImpl() {
+  const q = (document.getElementById('coupon-search')?.value || '').toLowerCase();
+  let list = allCoupons;
+  if (q) list = list.filter(c =>
+    (c.code || '').toLowerCase().includes(q) ||
+    (c.title || '').toLowerCase().includes(q)
+  );
+  renderCouponsList(list);
+}
+const filterCoupons = debounce(_filterCouponsImpl, 180);
+
 function renderCouponsList(coupons) {
   const tbody = document.getElementById('coupons-tbody');
   if (!tbody) return;
@@ -9693,7 +10036,7 @@ function renderCouponsList(coupons) {
     tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No coupons yet — create one above.</td></tr>';
     return;
   }
-  tbody.innerHTML = coupons.map(c => {
+  tbody.innerHTML = coupons.slice(0, pageShown('coupons')).map(c => {
     const validity = (c.startDate || c.endDate)
       ? `${c.startDate ? formatDate(c.startDate) : 'Anytime'} → ${c.endDate ? formatDate(c.endDate) : 'No end'}`
       : 'No date restriction';
@@ -9715,11 +10058,11 @@ function renderCouponsList(coupons) {
         </label>
       </td>
       <td style="white-space:nowrap;">
-        <button class="btn btn-outline" onclick="editCoupon('${escHtml(c.code)}')" title="Edit coupon"><i class="ti ti-edit"></i></button>
-        <button class="btn btn-reject" onclick="deactivateCouponConfirm('${escHtml(c.code)}')" title="Deactivate coupon (soft delete — preserves redemption history)"><i class="ti ti-ban"></i></button>
+        <button class="btn btn-outline" onclick="editCoupon('${escHtml(c.code)}')" title="Edit coupon" aria-label="Edit coupon"><i class="ti ti-edit"></i></button>
+        <button class="btn btn-reject" onclick="deactivateCouponConfirm('${escHtml(c.code)}')" title="Deactivate coupon (soft delete — preserves redemption history)" aria-label="Deactivate coupon"><i class="ti ti-ban"></i></button>
       </td>
     </tr>`;
-  }).join('');
+  }).join('') + loadMoreRow('coupons', coupons.length, 8, 'filterCoupons();');
 }
 
 function couponDiscountTypeChanged() {
@@ -9826,7 +10169,7 @@ async function toggleCouponActive(code, active) {
 }
 
 async function deactivateCouponConfirm(code) {
-  if (!confirm(`Deactivate coupon ${code}? This preserves its redemption history — it cannot be permanently deleted.`)) return;
+  if (!(await showConfirm(`Deactivate coupon ${code}? This preserves its redemption history — it cannot be permanently deleted.`))) return;
   try {
     await functions.httpsCallable('deactivateCoupon')({ code });
     showToast('Coupon deactivated');
@@ -9879,7 +10222,7 @@ function renderCampaignsList(campaigns) {
     el.innerHTML = '<div class="empty-state"><div class="empty-icon"><i class="ti ti-rocket"></i></div><p>No campaigns yet — create one above.</p></div>';
     return;
   }
-  el.innerHTML = campaigns.map(c => {
+  el.innerHTML = campaigns.slice(0, pageShown('campaigns')).map(c => {
     const name = c.name ? escHtml(c.name) : '<em style="color:var(--text-muted)">Untitled Campaign</em>';
     const startStr = c.startDate ? formatDate(c.startDate) : null;
     const endStr = c.endDate ? formatDate(c.endDate) : null;
@@ -9902,11 +10245,11 @@ function renderCampaignsList(campaigns) {
           <input type="checkbox" ${c.active ? 'checked' : ''} onchange="toggleCampaignActive('${c.id}', this.checked)" />
           <span class="toggle-switch"></span>
         </label>
-        <button class="btn btn-outline" onclick="editCampaign('${c.id}')" title="Edit campaign"><i class="ti ti-edit"></i></button>
-        <button class="btn btn-reject" onclick="deleteCampaign('${c.id}', '${escHtml(c.storagePath || '')}', this)" title="Delete campaign"><i class="ti ti-trash"></i></button>
+        <button class="btn btn-outline" onclick="editCampaign('${c.id}')" title="Edit campaign" aria-label="Edit campaign"><i class="ti ti-edit"></i></button>
+        <button class="btn btn-reject" onclick="deleteCampaign('${c.id}', '${escHtml(c.storagePath || '')}', this)" title="Delete campaign" aria-label="Delete campaign"><i class="ti ti-trash"></i></button>
       </div>
     </div>`;
-  }).join('');
+  }).join('') + loadMoreCard('campaigns', campaigns.length, 'renderCampaignsList(allCampaigns);');
 }
 
 async function toggleCampaignActive(id, active) {
@@ -9922,7 +10265,7 @@ async function toggleCampaignActive(id, active) {
 }
 
 async function deleteCampaign(id, storagePath, btn) {
-  if (!confirm('Delete this campaign? This cannot be undone.')) return;
+  if (!(await showConfirm('Delete this campaign? This cannot be undone.', {danger:true}))) return;
   btn.disabled = true;
   try {
     await db.collection('campaigns').doc(id).delete();
@@ -10196,15 +10539,15 @@ function renderSettlementsTable() {
     const providerName = _providerNameCache[s.providerId] || s.providerId || '—';
     const selectable = ['pending', 'held'].includes(s.status);
     const checked = _selectedSettlementIds.has(s.id) ? 'checked' : '';
-    let actions = `<button class="btn btn-outline" onclick="toggleSettlementDetails('${s.id}')" title="View payment IDs"><i class="ti ti-eye"></i></button>`;
+    let actions = `<button class="btn btn-outline" onclick="toggleSettlementDetails('${s.id}')" title="View payment IDs" aria-label="View payment IDs"><i class="ti ti-eye"></i></button>`;
     if (selectable) {
-      actions += ` <button class="btn btn-outline" onclick="approveSettlementRow('${s.id}')" title="Approve"><i class="ti ti-check"></i></button>`;
+      actions += ` <button class="btn btn-outline" onclick="approveSettlementRow('${s.id}')" title="Approve" aria-label="Approve"><i class="ti ti-check"></i></button>`;
     }
     if (s.status === 'pending') {
-      actions += ` <button class="btn btn-reject" onclick="holdSettlementRow('${s.id}')" title="Hold"><i class="ti ti-player-pause"></i></button>`;
+      actions += ` <button class="btn btn-reject" onclick="holdSettlementRow('${s.id}')" title="Hold" aria-label="Hold"><i class="ti ti-player-pause"></i></button>`;
     }
     if (s.status === 'approved') {
-      actions += ` <button class="btn-publish" style="padding:6px 12px;font-size:12px;" onclick="markSettlementPaidRow('${s.id}')" title="Mark Paid"><i class="ti ti-cash"></i> Mark Paid</button>`;
+      actions += ` <button class="btn-publish" style="padding:6px 12px;font-size:12px;" onclick="markSettlementPaidRow('${s.id}')" title="Mark Paid" aria-label="Mark Paid"><i class="ti ti-cash"></i> Mark Paid</button>`;
     }
     return `<tr>
       <td><input type="checkbox" ${selectable ? '' : 'disabled'} ${checked} onchange="toggleSettlementSelect('${s.id}', this.checked)" /></td>
@@ -10391,7 +10734,7 @@ function renderRefundsList(refunds) {
     tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No refunds issued yet.</td></tr>';
     return;
   }
-  tbody.innerHTML = refunds.map(r => {
+  tbody.innerHTML = refunds.slice(0, pageShown('refunds')).map(r => {
     const providerName = r.providerId ? (_providerNameCache[r.providerId] || r.providerId) : '—';
     return `<tr>
       <td style="font-family:monospace;font-size:11px;">${escHtml(r.paymentId || '')}</td>
@@ -10402,7 +10745,7 @@ function renderRefundsList(refunds) {
       <td>${refundStatusBadge(r.status)}</td>
       <td>${formatDate(r.createdAt)}</td>
     </tr>`;
-  }).join('');
+  }).join('') + loadMoreRow('refunds', refunds.length, 7, 'renderRefundsList(allRefunds);');
 }
 
 async function lookupRefundPayment() {

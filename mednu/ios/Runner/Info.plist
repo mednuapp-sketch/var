@@ -1,110 +1,103 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
-<dict>
-	<key>CFBundleDevelopmentRegion</key>
-	<string>$(DEVELOPMENT_LANGUAGE)</string>
-	<key>CFBundleDisplayName</key>
-	<string>MedNU</string>
-	<key>CFBundleExecutable</key>
-	<string>$(EXECUTABLE_NAME)</string>
-	<key>CFBundleIdentifier</key>
-	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
-	<key>CFBundleInfoDictionaryVersion</key>
-	<string>6.0</string>
-	<key>CFBundleName</key>
-	<string>mednu</string>
-	<key>CFBundlePackageType</key>
-	<string>APPL</string>
-	<key>CFBundleShortVersionString</key>
-	<string>$(FLUTTER_BUILD_NAME)</string>
-	<key>CFBundleSignature</key>
-	<string>????</string>
-	<key>CFBundleVersion</key>
-	<string>$(FLUTTER_BUILD_NUMBER)</string>
-	<key>LSRequiresIPhoneOS</key>
-	<true/>
-
-	<!-- ── Orientation — portrait only (matches main.dart lock) ── -->
-	<key>UISupportedInterfaceOrientations</key>
-	<array>
-		<string>UIInterfaceOrientationPortrait</string>
-	</array>
-	<key>UISupportedInterfaceOrientations~ipad</key>
-	<array>
-		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationPortraitUpsideDown</string>
-	</array>
-
-	<key>UILaunchStoryboardName</key>
-	<string>LaunchScreen</string>
-	<key>UIMainStoryboardFile</key>
-	<string>Main</string>
-
-	<!-- ── Performance ── -->
-	<key>CADisableMinimumFrameDurationOnPhone</key>
-	<true/>
-	<key>UIApplicationSupportsIndirectInputEvents</key>
-	<true/>
-
-	<!-- ── Location ── -->
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>MedNU needs your location to show nearby doctors, hospitals, pharmacies, and for home service deliveries.</string>
-	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>MedNU needs your location for emergency services and real-time home visit tracking.</string>
-	<key>NSLocationAlwaysUsageDescription</key>
-	<string>MedNU needs your location for emergency services and real-time home visit tracking.</string>
-
-	<!-- ── Camera & Media ── -->
-	<key>NSCameraUsageDescription</key>
-	<string>MedNU needs camera access for video consultations with doctors and uploading medical documents.</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>MedNU needs microphone access for audio and video consultations with doctors.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>MedNU needs access to your photo library to upload profile pictures and medical documents.</string>
-	<key>NSPhotoLibraryAddOnlyUsageDescription</key>
-	<string>MedNU needs permission to save medical reports and documents to your photo library.</string>
-
-	<!-- ── Contacts ── -->
-	<key>NSContactsUsageDescription</key>
-	<string>MedNU needs access to your contacts to quickly add emergency contacts and family members.</string>
-
-	<!-- ── Health ── -->
-	<key>NSHealthShareUsageDescription</key>
-	<string>MedNU reads your health data (steps, heart rate) to provide personalised health insights.</string>
-	<key>NSHealthUpdateUsageDescription</key>
-	<string>MedNU writes health goals and wellness data to Apple Health.</string>
-
-	<!-- ── Face ID / Biometrics ── -->
-	<key>NSFaceIDUsageDescription</key>
-	<string>MedNU uses Face ID for quick and secure login.</string>
-
-	<!-- ── Background Modes (FCM + notifications) ── -->
-	<key>UIBackgroundModes</key>
-	<array>
-		<string>fetch</string>
-		<string>remote-notification</string>
-	</array>
-
-	<!-- ── Firebase Cloud Messaging ── -->
-	<key>FirebaseAppDelegateProxyEnabled</key>
-	<false/>
-
-	<!-- ── Guest call-join deep link (mednu://join?a=&t=&exp=) ──
+	<dict>
+		<key>CFBundleDevelopmentRegion</key>
+		<string>$(DEVELOPMENT_LANGUAGE)</string>
+		<key>CFBundleDisplayName</key>
+		<string>MedNU</string>
+		<key>CFBundleExecutable</key>
+		<string>$(EXECUTABLE_NAME)</string>
+		<key>CFBundleIdentifier</key>
+		<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+		<key>CFBundleInfoDictionaryVersion</key>
+		<string>6.0</string>
+		<key>CFBundleName</key>
+		<string>mednu</string>
+		<key>CFBundlePackageType</key>
+		<string>APPL</string>
+		<key>CFBundleShortVersionString</key>
+		<string>$(FLUTTER_BUILD_NAME)</string>
+		<key>CFBundleSignature</key>
+		<string>????</string>
+		<key>CFBundleVersion</key>
+		<string>$(FLUTTER_BUILD_NUMBER)</string>
+		<key>LSRequiresIPhoneOS</key>
+		<true/>
+		<!-- ── Orientation — portrait only (matches main.dart lock) ── -->
+		<key>UISupportedInterfaceOrientations</key>
+		<array>
+			<string>UIInterfaceOrientationPortrait</string>
+		</array>
+		<key>UISupportedInterfaceOrientations~ipad</key>
+		<array>
+			<string>UIInterfaceOrientationPortrait</string>
+			<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		</array>
+		<key>UILaunchStoryboardName</key>
+		<string>LaunchScreen</string>
+		<key>UIMainStoryboardFile</key>
+		<string>Main</string>
+		<!-- ── Performance ── -->
+		<key>CADisableMinimumFrameDurationOnPhone</key>
+		<true/>
+		<key>UIApplicationSupportsIndirectInputEvents</key>
+		<true/>
+		<!-- ── Location ── -->
+		<key>NSLocationWhenInUseUsageDescription</key>
+		<string>MedNU needs your location to show nearby doctors, hospitals, pharmacies, and for home service deliveries.</string>
+		<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+		<string>MedNU needs your location for emergency services and real-time home visit tracking.</string>
+		<key>NSLocationAlwaysUsageDescription</key>
+		<string>MedNU needs your location for emergency services and real-time home visit tracking.</string>
+		<!-- ── Camera & Media ── -->
+		<key>NSCameraUsageDescription</key>
+		<string>MedNU needs camera access for video consultations with doctors and uploading medical documents.</string>
+		<key>NSMicrophoneUsageDescription</key>
+		<string>MedNU needs microphone access for audio and video consultations with doctors.</string>
+		<key>NSPhotoLibraryUsageDescription</key>
+		<string>MedNU needs access to your photo library to upload profile pictures and medical documents.</string>
+		<key>NSPhotoLibraryAddOnlyUsageDescription</key>
+		<string>MedNU needs permission to save medical reports and documents to your photo library.</string>
+		<!-- ── Contacts ── -->
+		<key>NSContactsUsageDescription</key>
+		<string>MedNU needs access to your contacts to quickly add emergency contacts and family members.</string>
+		<!-- ── Health ── -->
+		<key>NSHealthShareUsageDescription</key>
+		<string>MedNU reads your health data (steps, heart rate) to provide personalised health insights.</string>
+		<key>NSHealthUpdateUsageDescription</key>
+		<string>MedNU writes health goals and wellness data to Apple Health.</string>
+		<!-- ── Face ID / Biometrics ── -->
+		<key>NSFaceIDUsageDescription</key>
+		<string>MedNU uses Face ID for quick and secure login.</string>
+		<!-- ── Background Modes (FCM + notifications) ── -->
+		<key>UIBackgroundModes</key>
+		<array>
+			<string>fetch</string>
+			<string>remote-notification</string>
+		</array>
+		<!-- ── Firebase Cloud Messaging ── -->
+		<key>FirebaseAppDelegateProxyEnabled</key>
+		<false/>
+		<!-- ── Guest call-join deep link (mednu://join?a=&t=&exp=) ──
 	     Custom URL scheme, not a Universal Link — no domain/hosting needed;
 	     only works once the app is already installed, which it must be
 	     anyway for the native Agora video call to run. See
 	     _handleGuestDeepLink in main.dart. -->
-	<key>CFBundleURLTypes</key>
-	<array>
-		<dict>
-			<key>CFBundleURLName</key>
-			<string>com.mednu.guestjoin</string>
-			<key>CFBundleURLSchemes</key>
-			<array>
-				<string>mednu</string>
-			</array>
-		</dict>
-	</array>
-</dict>
+		<key>CFBundleURLTypes</key>
+		<array>
+			<dict>
+				<key>CFBundleURLName</key>
+				<string>com.mednu.guestjoin</string>
+				<key>CFBundleURLSchemes</key>
+				<array>
+					<string>mednu</string>
+				</array>
+			</dict>
+		</array>
+		<key>UIStatusBarHidden</key>
+		<true/>
+		<key>UIViewControllerBasedStatusBarAppearance</key>
+		<false/>
+	</dict>
 </plist>

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
+import '../../../core/router/app_router.dart';
 import '../../../core/services/feedback_service.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../../../shared_core/shared_core.dart';
@@ -32,6 +34,19 @@ class CounsellingSessionDetailScreen extends ConsumerWidget {
     if (!opened && context.mounted) {
       FeedbackService.showError(context, 'Could not start a call on this device.');
     }
+  }
+
+  void _startVideoSession(BuildContext context, CounsellingSession session) {
+    if (session.patientId.isEmpty) {
+      FeedbackService.showError(context, 'Patient details are still loading — try again in a moment.');
+      return;
+    }
+    context.push(AppRoutes.providerOutgoingCall, extra: {
+      'providerRole': 'counsellor',
+      'patientId': session.patientId,
+      'patientName': session.patientName,
+      'sessionId': session.id,
+    });
   }
 
   @override
@@ -105,6 +120,12 @@ class CounsellingSessionDetailScreen extends ConsumerWidget {
                           ],
                         ),
                       ),
+                      IconButton.filled(
+                        onPressed: () => _startVideoSession(context, session),
+                        icon: const Icon(Icons.videocam_rounded),
+                        style: IconButton.styleFrom(backgroundColor: AppColors.primary),
+                      ),
+                      const SizedBox(width: 8),
                       IconButton.filled(
                         onPressed: () => _call(context, session.patientPhone),
                         icon: const Icon(Icons.call_rounded),

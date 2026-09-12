@@ -87,13 +87,28 @@ class _TripTimelineTile extends StatelessWidget {
                     Text(trip.patientName, style: AppTextStyles.bodyMedium),
                     const SizedBox(height: 10),
                     Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        InfoChip(icon: Icons.social_distance_rounded, label: '${trip.distanceKm} km'),
+                        // Wrap, not a fixed Row: three InfoChips next to an
+                        // unwrapped fare Text with no Flexible anywhere
+                        // could exceed the card's width on narrow phones —
+                        // Wrap flows to a second line instead of throwing a
+                        // RenderFlex overflow, and keeps the fare amount
+                        // fully visible rather than risking an ellipsis
+                        // truncating money.
+                        Expanded(
+                          child: Wrap(
+                            spacing: 8,
+                            runSpacing: 6,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              InfoChip(icon: Icons.social_distance_rounded, label: '${trip.distanceKm} km'),
+                              InfoChip(icon: Icons.timer_outlined, label: '${trip.durationMinutes} min'),
+                              InfoChip(icon: Icons.star_rounded, label: trip.rating.toStringAsFixed(1), color: AppColors.warning),
+                            ],
+                          ),
+                        ),
                         const SizedBox(width: 8),
-                        InfoChip(icon: Icons.timer_outlined, label: '${trip.durationMinutes} min'),
-                        const SizedBox(width: 8),
-                        InfoChip(icon: Icons.star_rounded, label: trip.rating.toStringAsFixed(1), color: AppColors.warning),
-                        const Spacer(),
                         Text(CurrencyFormatter.format(trip.fare), style: AppTextStyles.labelLarge.copyWith(color: AppColors.success)),
                       ],
                     ),

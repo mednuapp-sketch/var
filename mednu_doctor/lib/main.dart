@@ -265,6 +265,17 @@ class _MedNUDoctorAppState extends ConsumerState<MedNUDoctorApp>
           if (mounted) router.go(AppRoutes.dashboard);
         });
         break;
+      case 'emergency_doctor_request':
+        // This is the loud, full-screen-intent alert every active doctor
+        // gets on a patient SOS (onEmergencyDoctorRequest, functions/
+        // index.js) — the most likely way a doctor ever interacts with one
+        // is tapping this push directly, not browsing to the notification
+        // bell first. Previously fell through to the default no-op, so
+        // tapping it did nothing at all.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) router.go(AppRoutes.emergencyRequests);
+        });
+        break;
       default:
         break;
     }

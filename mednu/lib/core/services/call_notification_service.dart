@@ -68,12 +68,18 @@ class CallNotificationService {
   static Future<void> showIncomingCall({
     required String doctorName,
     String specialty = '',
+    String providerRole = 'doctor',
   }) async {
     final body = specialty.isNotEmpty ? specialty : 'Tap to accept or decline';
+    // 'Dr.' only makes sense for an actual doctor call — Physiotherapist/
+    // Counsellor calls (same consultation doc shape, see
+    // _PROVIDER_INITIATED_CALLER_TYPES in functions/index.js) show the
+    // plain name instead so a physio calling doesn't read as "Dr. Priya".
+    final titlePrefix = providerRole == 'doctor' ? 'Dr. ' : '';
 
     await _plugin.show(
       _notifId++,
-      '📞 Dr. $doctorName is calling',
+      '📞 $titlePrefix$doctorName is calling',
       body,
       NotificationDetails(
         android: AndroidNotificationDetails(

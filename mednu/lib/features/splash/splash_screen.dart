@@ -70,7 +70,13 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   }
 
   Future<void> _navigate() async {
-    await Future.delayed(const Duration(milliseconds: 1500));
+    // Was 1500ms — pure dead time with no functional purpose (not waiting on
+    // anything), stacked on top of Firebase/App Check init before this
+    // screen even painted. The logo's own fade+scale intro (mFade/mScale
+    // above) finishes forming by t=0.45 of the 2000ms _intro controller —
+    // 900ms — so this now waits just long enough to see the logo land
+    // before checking auth/navigating, instead of an arbitrary long pause.
+    await Future.delayed(const Duration(milliseconds: 900));
     if (!mounted) return;
     final prefs = await SharedPreferences.getInstance();
     final accepted = prefs.getBool('terms_accepted') ?? false;

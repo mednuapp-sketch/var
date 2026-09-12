@@ -3,10 +3,12 @@
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <uses-permission android:name="android.permission.USE_FINGERPRINT" />
     <uses-permission android:name="android.permission.CAMERA" />
-    <!-- Gallery access: Android 13+ uses READ_MEDIA_IMAGES; older versions use READ_EXTERNAL_STORAGE -->
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
+    <!-- No storage/media permissions: gallery and document picking go through
+         image_picker / file_picker's system pickers (Android Photo Picker /
+         SAF), which grant scoped URI access without READ_MEDIA_IMAGES,
+         READ_MEDIA_VIDEO, or (READ|WRITE)_EXTERNAL_STORAGE. Declaring those
+         broad permissions unused is what Play Console's "Photo and video
+         permissions" policy check flags. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <!-- Location permissions for doctor GPS tracking (foreground only — background requires policy form) -->
