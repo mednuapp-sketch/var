@@ -251,27 +251,38 @@ class _AppointmentScreenState extends State<AppointmentScreen>
       return slotDateTime.add(const Duration(minutes: 30)).isBefore(today);
     }
 
-    // Upcoming: booked & date is today or future — sorted closest first
+    // 'checked_in' is a hospital-OP-only intermediate status (a reception
+    // check-in) between 'booked' and 'completed' — still shown as
+    // upcoming/confirmed until the visit is actually completed.
+    bool isStillUpcoming(Map<String, dynamic> d) =>
+        d['status'] == 'booked' || d['status'] == 'checked_in';
+
+    // Upcoming: booked/checked-in & date is today or future — sorted closest first
     final upcoming =
         docs
-            .where((d) => d['status'] == 'booked' && !isDatePast(d.data()))
+            .where((d) => isStillUpcoming(d.data()) && !isDatePast(d.data()))
             .toList()
           ..sort(
             (a, b) => _apptSortKey(a.data()).compareTo(_apptSortKey(b.data())),
           );
-    // Past: completed OR booked but date already passed — newest first
+    // Past: completed OR booked/checked-in but date already passed — newest first
     final past =
         docs
             .where(
               (d) =>
                   d['status'] == 'completed' ||
-                  (d['status'] == 'booked' && isDatePast(d.data())),
+                  (isStillUpcoming(d.data()) && isDatePast(d.data())),
             )
             .toList()
           ..sort(
             (a, b) => _apptSortKey(b.data()).compareTo(_apptSortKey(a.data())),
           );
-    final cancelled = docs.where((d) => d['status'] == 'cancelled').toList()
+    // 'no_show' (hospital-OP-only — the patient never turned up) has no
+    // dedicated tab; grouped with Cancelled the same way caregiver's
+    // 'missed' visits fold into the patient-facing 'cancelled' bucket.
+    final cancelled = docs
+        .where((d) => d['status'] == 'cancelled' || d['status'] == 'no_show')
+        .toList()
       ..sort(
         (a, b) => _apptSortKey(b.data()).compareTo(_apptSortKey(a.data())),
       );
@@ -402,10 +413,15 @@ class _AppointmentScreenState extends State<AppointmentScreen>
         final actualStatus = data['status'] as String? ?? '';
         final isUpcoming = statusLabel == 'Confirmed';
         final isCompleted = statusLabel == 'Completed';
-        // Past tab may contain booked-but-past appointments — show correct badge
-        final badgeLabel = (isCompleted && actualStatus == 'booked')
-            ? 'Past'
-            : statusLabel;
+        // Past tab may contain booked-but-past appointments — show correct
+        // badge; hospital-OP-only statuses get their own specific label too.
+        final badgeLabel = actualStatus == 'checked_in'
+            ? 'Checked In'
+            : actualStatus == 'no_show'
+                ? 'No Show'
+                : (isCompleted && actualStatus == 'booked')
+                    ? 'Past'
+                    : statusLabel;
 
         final dateStr = data['date'] as String? ?? '';
         final parsedDate = _parseApptDate(dateStr);
@@ -1589,6 +1605,12 @@ class _ScheduledJoinSectionState extends State<_ScheduledJoinSection>
         // can be authorized against this consultation once it exists.
         if ((data['guestPhone'] as String? ?? '').trim().isNotEmpty)
           'guestPhone': (data['guestPhone'] as String).trim(),
+        // Carried over so records_screen.dart's per-family-member Records
+        // tab (`.where('memberId', ...)`) picks up this consultation —
+        // otherwise a consult booked "for" a family member always shows up
+        // under the account holder's own history instead.
+        if ((data['memberId'] as String? ?? '').trim().isNotEmpty)
+          'memberId': (data['memberId'] as String).trim(),
       });
       batch.update(db.collection('appointments').doc(widget.appointmentId), {
         'consultationId': consultRef.id,

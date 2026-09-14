@@ -1232,9 +1232,11 @@ async function _sendPatientNotification(db, messaging, patientId, opts) {
 
 // ── Appointment Status Change ────────────────────────────────────────────────
 //
-// Fires on every status transition in the appointments collection.
-// Handles: booked, accepted/confirmed, rejected, rescheduled, started,
-//          prescription_uploaded, completed, cancelled.
+// Fires on every status transition in the appointments collection. Booking
+// is instant by design — there is no doctor accept/reject step, so only
+// booked (incl. reschedule), completed and cancelled are ever actually
+// written by either app. Handles exactly those three; anything else falls
+// through to `default: return`.
 exports.onAppointmentStatusChange = onDocumentUpdated(
   "appointments/{appointmentId}",
   async (event) => {
@@ -1269,7 +1271,7 @@ exports.onAppointmentStatusChange = onDocumentUpdated(
     // app only cancels its own queued reminders on a doctor-initiated
     // cancel/complete action, so without this a patient cancelling never
     // reaches the doctor's queued reminders.
-    if (doctorId && ["rejected", "declined", "cancelled", "completed"].includes(after.status)) {
+    if (doctorId && ["cancelled", "completed"].includes(after.status)) {
       try {
         const batch = db.batch();
         batch.delete(db.collection("scheduled_reminders").doc(`${doctorId}_appt_${apptId}_reminder`));
@@ -1311,40 +1313,6 @@ exports.onAppointmentStatusChange = onDocumentUpdated(
             : `Your appointment with Dr. ${doctorName} has been successfully booked.`;
           type  = "appointment_booked";
         }
-        break;
-      case "confirmed":
-      case "accepted":
-        title = "Appointment Confirmed";
-        body  = formattedDt
-          ? `Your appointment with Dr. ${doctorName} is confirmed for ${formattedDt}.`
-          : `Dr. ${doctorName} accepted your appointment.`;
-        type  = "appointment_accepted";
-        break;
-      case "rejected":
-      case "declined":
-        title = "Appointment Rejected";
-        body  = `Your appointment with Dr. ${doctorName} was not accepted. Please book another slot.`;
-        type  = "appointment_rejected";
-        break;
-      case "rescheduled":
-        title = "Appointment Rescheduled";
-        body  = formattedDt
-          ? `Your appointment with Dr. ${doctorName} has been rescheduled to ${formattedDt}.`
-          : `Your appointment with Dr. ${doctorName} has been rescheduled.`;
-        type  = "appointment_rescheduled";
-        break;
-      case "started":
-      case "call_started":
-        title = "Doctor is Calling You";
-        body  = `Dr. ${doctorName} is calling you now. Tap to join.`;
-        type  = "doctor_started_call";
-        actionType = "open_call";
-        break;
-      case "prescription_uploaded":
-        title = "Prescription Ready";
-        body  = `Your prescription from Dr. ${doctorName} is ready. Tap to view.`;
-        type  = "prescription_uploaded";
-        actionType = "open_prescription";
         break;
       case "completed":
         title = "Consultation Completed";
@@ -5621,6 +5589,79 @@ exports.cleanupStalePharmacyOrders = onSchedule({ schedule: "every 60 minutes", 
   _logPharmacy("INFO", "stale_cleanup_cancelled", { count: updated, skippedConcurrentlyModified: skipped });
 });
 
+// Mirrors PharmacyOrderService._ownInventoryDeltas (Dart) — resolves each
+// pharmacy_order_items line back to that pharmacy's own inventory doc
+// (`phinv_{pharmacyId}_{itemId}`), so this and the app's own
+// accept/cancel/reject stock transactions stay reading the same shape.
+async function _ownPharmacyInventoryDeltas(db, orderId, pharmacyId) {
+  const itemsSnap = await db.collection("pharmacy_order_items").where("orderId", "==", orderId).get();
+  const prefix = `phinv_${pharmacyId}_`;
+  const byRefPath = new Map();
+  for (const doc of itemsSnap.docs) {
+    const medicineId = doc.get("medicineId");
+    if (!medicineId || !medicineId.startsWith(prefix)) continue;
+    const itemId = medicineId.slice(prefix.length);
+    const ref = db.collection("pharmacy_profiles").doc(pharmacyId).collection("inventory").doc(itemId);
+    byRefPath.set(ref.path, { ref, delta: (byRefPath.get(ref.path)?.delta || 0) + (Number(doc.get("count")) || 1) });
+  }
+  return [...byRefPath.values()];
+}
+
+// ── 4b) Stale prescription-required cleanup ─────────────────────────────────
+// acceptOrder (pharmacy_order_service.dart) decrements stock the moment an
+// order moves pending -> prescription_required — but until now nothing ever
+// timed that state out. If the patient never uploads (or the pharmacy never
+// acts on) the prescription, the order sat open forever with its stock
+// permanently locked. Same 24h window as every other stale-pending sweep in
+// this file; restores stock in the same transaction as the cancel so a
+// crash mid-run can't credit stock without also cancelling (or vice versa).
+exports.cleanupStalePharmacyPrescriptionOrders = onSchedule({ schedule: "every 60 minutes", timeZone: "UTC" }, async () => {
+  const db = getFirestore();
+  const cutoff = Timestamp.fromDate(new Date(Date.now() - _PHARMACY_STALE_PENDING_HOURS * 60 * 60 * 1000));
+
+  const staleSnap = await db.collection("pharmacy_orders")
+    .where("status", "==", "prescription_required")
+    .where("createdAt", "<", cutoff)
+    .limit(200)
+    .get();
+
+  if (staleSnap.empty) {
+    _logPharmacy("INFO", "stale_prescription_cleanup_none_found");
+    return;
+  }
+
+  let updated = 0;
+  let skipped = 0;
+  for (const doc of staleSnap.docs) {
+    const pharmacyId = doc.get("pharmacyId");
+    try {
+      const deltas = pharmacyId ? await _ownPharmacyInventoryDeltas(db, doc.id, pharmacyId) : [];
+      await db.runTransaction(async (tx) => {
+        const snap = await tx.get(doc.ref);
+        if (!snap.exists || snap.get("status") !== "prescription_required") {
+          throw new Error("CONCURRENTLY_MODIFIED");
+        }
+        for (const { ref, delta } of deltas) {
+          tx.set(ref, { stock: FieldValue.increment(delta) }, { merge: true });
+        }
+        tx.update(doc.ref, {
+          status: "cancelled",
+          prescriptionVerified: false,
+          prescriptionRejectedReason: "No prescription was uploaded in time, so this order was automatically cancelled.",
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      });
+      updated++;
+    } catch (err) {
+      skipped++;
+      if (err.message !== "CONCURRENTLY_MODIFIED") {
+        _logPharmacy("ERROR", "stale_prescription_cleanup_failed", { orderId: doc.id, error: err.message });
+      }
+    }
+  }
+  _logPharmacy("INFO", "stale_prescription_cleanup_cancelled", { count: updated, skippedConcurrentlyModified: skipped });
+});
+
 // ── 5) Mirror a pharmacy's own inventory into the patient-facing catalogue ──
 //
 // `pharmacy_profiles/{pharmacyId}/inventory` is a pharmacy's private stock
@@ -7244,14 +7285,14 @@ exports.onNutritionAppointmentSettlement = onDocumentUpdated(
 //    real-world charge that already happened; verifying is the hospital
 //    confirming the money landed, not confirming work still to be done).
 //  - `hospital_appointments` (hospital_appointment_booking_screen.dart, a
-//    flat-fee OP registration token — kHospitalOpFee): unlike every other
-//    vertical, there is currently no mednu_doctor screen that reads or
-//    manages this collection at all, so it can never reach any status
-//    other than the 'booked' it's created with — there is no completion
-//    edge to key off. Transitioning to eligible right at booking time is
-//    the only option without inventing a status this collection has no way
-//    to ever reach; the missing hospital-side OP-queue management screen
-//    is a separate, larger gap than settlement wiring alone.
+//    flat-fee OP registration token — kHospitalOpFee): now has a real
+//    mednu_doctor queue screen (HospitalAppointmentsScreen) driving
+//    booked -> checked_in -> completed/no_show, so `completed` is this
+//    vertical's real completion signal too — see
+//    onHospitalAppointmentStatusChange below, which is what now calls
+//    _transitionPaymentToEligible (onHospitalAppointmentCreated no longer
+//    does, since booking is no longer the same moment the OP visit
+//    actually happens).
 exports.onHospitalBillPaymentVerified = onDocumentUpdated(
   "hospital_bill_payments/{paymentId}",
   async (event) => {
@@ -7269,6 +7310,27 @@ exports.onHospitalBillPaymentVerified = onDocumentUpdated(
   }
 );
 
+// A hospital billing-desk login isn't itself the earning/operational entity
+// — it links to a shared `hospitals/{hospitalId}` catalog id (potentially
+// more than one active login per hospital), so notifying "the hospital"
+// means fanning out to every `hospital_profiles` doc with a matching
+// hospitalId, same shape as _broadcastNewJobToActiveProviders but filtered
+// to one hospital instead of every active provider in a whole vertical.
+async function _notifyHospitalStaff(db, messaging, hospitalId, opts) {
+  if (!hospitalId) return;
+  let snap;
+  try {
+    snap = await db.collection("hospital_profiles")
+      .where("hospitalId", "==", hospitalId)
+      .where("status", "==", "active")
+      .get();
+  } catch (err) {
+    console.error(`Hospital staff notify: failed to query hospital_profiles for ${hospitalId}:`, err.message);
+    return;
+  }
+  await Promise.all(snap.docs.map((d) => _sendProviderNotification(db, messaging, d.id, opts)));
+}
+
 exports.onHospitalAppointmentCreated = onDocumentCreated(
   "hospital_appointments/{appointmentId}",
   async (event) => {
@@ -7277,12 +7339,66 @@ exports.onHospitalAppointmentCreated = onDocumentCreated(
     const data = snap.data();
     if (!data.hospitalId) return;
 
-    await _transitionPaymentToEligible(getFirestore(), {
-      sourceCollection: "hospital_appointments",
-      sourceId: event.params.appointmentId,
-      providerId: data.hospitalId,
-      serviceType: "hospital_op",
+    await _notifyHospitalStaff(getFirestore(), getMessaging(), data.hospitalId, {
+      title: "New OP Appointment",
+      body: `${data.patientName || "A patient"} booked an OP visit` +
+        (data.date ? ` on ${data.date}` : "") + (data.time ? ` at ${data.time}` : "") + ".",
+      type: "new_hospital_appointment", serviceType: "hospital_op", bookingId: event.params.appointmentId,
     });
+  }
+);
+
+// Drives the OP queue's patient-facing notifications and, on `completed`,
+// the same settlement-eligible transition every other vertical fires on its
+// own completion edge (see the "Hospital vertical parity" comment above).
+exports.onHospitalAppointmentStatusChange = onDocumentUpdated(
+  "hospital_appointments/{appointmentId}",
+  async (event) => {
+    const before = event.data.before.data();
+    const after = event.data.after.data();
+    if (before.status === after.status) return;
+
+    const patientId = after.patientId;
+    const appointmentId = event.params.appointmentId;
+
+    if (patientId) {
+      let title = "";
+      let body = "";
+      let type = "";
+      switch (after.status) {
+        case "checked_in":
+          title = "Checked In";
+          body = `You've been checked in at ${after.hospitalName || "the hospital"}. Please wait to be called.`;
+          type = "hospital_appointment_checked_in";
+          break;
+        case "completed":
+          title = "OP Visit Completed";
+          body = `Your OP visit at ${after.hospitalName || "the hospital"} is complete.`;
+          type = "hospital_appointment_completed";
+          break;
+        case "no_show":
+          title = "Marked as No-Show";
+          body = `${after.hospitalName || "The hospital"} marked your OP appointment as a no-show.`;
+          type = "hospital_appointment_no_show";
+          break;
+        default:
+          break;
+      }
+      if (title) {
+        await _sendPatientNotification(getFirestore(), getMessaging(), patientId, {
+          title, body, type, serviceType: "hospital_op", bookingId: appointmentId, actionType: "open_appointment",
+        });
+      }
+    }
+
+    if (after.status === "completed" && after.hospitalId) {
+      await _transitionPaymentToEligible(getFirestore(), {
+        sourceCollection: "hospital_appointments",
+        sourceId: appointmentId,
+        providerId: after.hospitalId,
+        serviceType: "hospital_op",
+      });
+    }
   }
 );
 

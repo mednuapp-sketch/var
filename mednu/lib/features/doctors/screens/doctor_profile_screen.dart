@@ -556,6 +556,11 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
           'duration':         duration,
           'fee':              amount,
           'status':           'booked',
+          // Lets records_screen.dart's per-family-member Records tab filter
+          // (`.where('memberId', isEqualTo: ...)`) actually find prescriptions/
+          // reports born from this consultation — see write_prescription_screen.dart,
+          // which copies this straight from the appointment doc.
+          if (bookingForMember != null) 'memberId': bookingForMember['id'] as String? ?? '',
           if (bookingForMember != null && guestPhone.isNotEmpty) 'guestPhone': guestPhone,
         },
       },

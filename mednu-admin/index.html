@@ -4096,6 +4096,45 @@
             </table>
           </div>
         </div>
+
+        <!-- Live OP appointments + bill payments — previously only visible
+             inside each hospital's own mednu_doctor login, admin had no
+             cross-hospital view of either collection at all. onSnapshot-backed
+             (initHospitalActivityListeners), same live pattern as the
+             partner table above. -->
+        <div class="card" style="margin-top:16px;">
+          <div class="card-header">
+            <span class="card-title">Live OP Appointments (all hospitals)</span>
+            <span id="hosp-appt-count-label" style="font-size:12px;color:var(--text-secondary);">0 appointments</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Patient</th><th>Hospital</th><th>Date / Time</th><th>OP Token</th><th>Status</th><th>Fee</th></tr>
+              </thead>
+              <tbody id="hosp-appt-tbody">
+                <tr><td colspan="6" class="loading">Loading OP appointments...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:16px;">
+          <div class="card-header">
+            <span class="card-title">Live Bill Payments (all hospitals)</span>
+            <span id="hosp-bill-count-label" style="font-size:12px;color:var(--text-secondary);">0 payments</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Patient</th><th>Hospital</th><th>Bill Amount</th><th>Paid</th><th>Verified</th><th>Date</th></tr>
+              </thead>
+              <tbody id="hosp-bill-tbody">
+                <tr><td colspan="6" class="loading">Loading bill payments...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
 
       <!-- ===== SETTLEMENT DASHBOARD TAB ===== -->

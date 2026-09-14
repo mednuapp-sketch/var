@@ -4873,6 +4873,7 @@ function initDashboard() {
   loadLiveActivityFeed();
   updateRevenueSummaryRow();
   initPartnerListeners();
+  initHospitalActivityListeners();
   // Populate the applicable/eligible-services checkbox groups up front so
   // they're ready no matter which tab the admin opens first.
   renderServiceCheckboxes('coupon-services-checks', []);
@@ -8690,6 +8691,96 @@ function partnerRatingCell(p) {
   return (p.totalReviews > 0 && p.rating > 0)
     ? `★ ${escHtml(Number(p.rating).toFixed(1))} <span style="font-size:11px;color:#9E9E9E;">(${escHtml(String(p.totalReviews))})</span>`
     : '<span style="color:#BDBDBD;font-size:12px;">No reviews</span>';
+}
+
+// ── Hospital OP appointments + bill payments — realtime, cross-hospital ─────
+// Unlike every other vertical (lab/pharmacy/caregiver/physio/counselling/
+// nutrition all get a live admin view via PARTNER_ROLES + the generic
+// service_requests listener above), hospital_appointments and
+// hospital_bill_payments had NO admin-facing listener at all — admin could
+// only see either collection by logging into a specific hospital's own
+// mednu_doctor billing-desk account. These two listeners close that gap on
+// the existing "Hospital Partners" tab (see index.html) rather than a new
+// tab, since that's already where admin manages this vertical.
+let _hospApptUnsubscribe = null;
+let _hospBillUnsubscribe = null;
+
+function initHospitalActivityListeners() {
+  if (_hospApptUnsubscribe) _hospApptUnsubscribe();
+  if (_hospBillUnsubscribe) _hospBillUnsubscribe();
+
+  _hospApptUnsubscribe = db.collection('hospital_appointments')
+    .orderBy('createdAt', 'desc')
+    .limit(200)
+    .onSnapshot(snap => {
+      const rows = [];
+      snap.forEach(doc => rows.push({ id: doc.id, ...doc.data() }));
+      renderHospitalAppointmentsTable(rows);
+    }, err => console.error('Hospital appointments listener error:', err));
+
+  _hospBillUnsubscribe = db.collection('hospital_bill_payments')
+    .orderBy('createdAt', 'desc')
+    .limit(200)
+    .onSnapshot(snap => {
+      const rows = [];
+      snap.forEach(doc => rows.push({ id: doc.id, ...doc.data() }));
+      renderHospitalBillPaymentsTable(rows);
+    }, err => console.error('Hospital bill payments listener error:', err));
+}
+
+// statusPillClass() only knows the generic service_requests vocabulary —
+// map this vertical's own statuses onto the closest equivalent so the same
+// CSS pill colors apply (booked~pending, checked_in~accepted/in-progress,
+// no_show~rejected — a bad outcome, same visual weight as a rejection).
+const _HOSP_APPT_TO_GENERIC_STATUS = {
+  booked: 'pending', checked_in: 'accepted', completed: 'completed',
+  no_show: 'rejected', cancelled: 'cancelled',
+};
+
+function renderHospitalAppointmentsTable(rows) {
+  const tbody = document.getElementById('hosp-appt-tbody');
+  const label = document.getElementById('hosp-appt-count-label');
+  if (label) label.textContent = `${rows.length} appointment${rows.length !== 1 ? 's' : ''}`;
+  if (!tbody) return;
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="loading">No OP appointments yet</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(a => {
+    const status = a.status || 'booked';
+    const pillClass = statusPillClass(_HOSP_APPT_TO_GENERIC_STATUS[status] || 'pending');
+    return `<tr>
+      <td>${escHtml(a.patientName || '—')}</td>
+      <td>${escHtml(a.hospitalName || '—')}</td>
+      <td>${escHtml(a.date || '—')} ${escHtml(a.time || '')}</td>
+      <td>${escHtml(a.opToken || '—')}</td>
+      <td><span class="pill pill-${pillClass}">${capitalize(status.replace('_', ' '))}</span></td>
+      <td>₹${escHtml(String(a.fee ?? '—'))}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderHospitalBillPaymentsTable(rows) {
+  const tbody = document.getElementById('hosp-bill-tbody');
+  const label = document.getElementById('hosp-bill-count-label');
+  if (label) label.textContent = `${rows.length} payment${rows.length !== 1 ? 's' : ''}`;
+  if (!tbody) return;
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="loading">No bill payments yet</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(p => {
+    const verified = p.hospitalVerified === true;
+    const received = p.createdAt ? formatDate(p.createdAt) : '—';
+    return `<tr>
+      <td>${escHtml(p.patientName || p.patientId || '—')}</td>
+      <td>${escHtml(p.hospitalName || '—')}</td>
+      <td>₹${escHtml(String(p.billAmount ?? '—'))}</td>
+      <td>₹${escHtml(String(p.finalAmount ?? p.billAmount ?? '—'))}</td>
+      <td><span class="pill pill-${verified ? 'completed' : 'pending'}">${verified ? 'Verified' : 'Pending'}</span></td>
+      <td style="font-size:12px;color:var(--text-secondary);">${received}</td>
+    </tr>`;
+  }).join('');
 }
 
 // ── Realtime listeners ───────────────────────────────────────────────────────

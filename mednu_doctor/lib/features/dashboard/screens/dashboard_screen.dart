@@ -1627,6 +1627,11 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
           // once it exists — the link itself is issued at booking time,
           // before this doc is created.
           if (guestPhone.isNotEmpty) 'guestPhone': guestPhone,
+          // Carried over so the patient's per-family-member Records tab
+          // (records_screen.dart) picks up this consultation instead of it
+          // always landing under the account holder's own history.
+          if ((data['memberId'] as String? ?? '').trim().isNotEmpty)
+            'memberId': (data['memberId'] as String).trim(),
         });
 
         // Patient notification so their background listener fires

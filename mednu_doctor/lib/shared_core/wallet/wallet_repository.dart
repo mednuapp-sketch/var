@@ -93,8 +93,26 @@ class DoctorAppointmentWalletRepository implements WalletRepository {
 class SettlementWalletRepository implements WalletRepository {
   final FirebaseFirestore _db;
 
+  /// Resolves the uid this role logs in with to the id the settlement engine
+  /// actually keys `provider_wallets`/`wallet_ledger` by. Every role except
+  /// Hospital settles by its own uid (the default, an identity resolve).
+  /// Hospital settles by the `hospitals/{hospitalId}` catalog id instead — a
+  /// billing-desk login isn't itself the earning entity (see
+  /// _PROVIDER_FIELD_BY_SERVICE in functions/index.js and
+  /// isHospitalPartnerFor() in firestore.rules) — so [HospitalWalletRepository]
+  /// overrides this to look up `hospital_profiles/{uid}.hospitalId` first.
+  final Future<String> Function(FirebaseFirestore db, String uid) resolveProviderId;
+
   SettlementWalletRepository({FirebaseFirestore? firestore})
-      : _db = firestore ?? FirebaseFirestore.instance;
+      : _db = firestore ?? FirebaseFirestore.instance,
+        resolveProviderId = _identityProviderId;
+
+  SettlementWalletRepository._withResolver(
+    this.resolveProviderId, {
+    FirebaseFirestore? firestore,
+  }) : _db = firestore ?? FirebaseFirestore.instance;
+
+  static Future<String> _identityProviderId(FirebaseFirestore db, String uid) async => uid;
 
   @override
   Stream<WalletSummary> streamSummary(String uid) {
@@ -147,13 +165,14 @@ class SettlementWalletRepository implements WalletRepository {
     controller = StreamController<WalletSummary>.broadcast(
       onListen: () async {
         await loadNextPayoutDate();
-        walletSub = _db.collection('provider_wallets').doc(uid).snapshots().listen((snap) {
+        final providerId = await resolveProviderId(_db, uid);
+        walletSub = _db.collection('provider_wallets').doc(providerId).snapshots().listen((snap) {
           walletData = snap.data();
           emit();
         }, onError: (_) {});
         ledgerSub = _db
             .collection('wallet_ledger')
-            .where('uid', isEqualTo: uid)
+            .where('uid', isEqualTo: providerId)
             .orderBy('createdAt', descending: true)
             .limit(100)
             .snapshots()
@@ -186,6 +205,29 @@ class SettlementWalletRepository implements WalletRepository {
       type: d['type'] == 'debit' ? WalletTransactionType.debit : WalletTransactionType.credit,
       date: createdAt,
     );
+  }
+}
+
+/// Hospital's [SettlementWalletRepository] variant — resolves the
+/// billing-desk uid to its linked `hospitals/{hospitalId}` catalog id (via
+/// `hospital_profiles/{uid}.hospitalId`) before reading
+/// `provider_wallets`/`wallet_ledger`, since that's what the settlement
+/// engine actually keys hospital earnings by. Falls back to the raw uid if
+/// the profile doc or its `hospitalId` isn't there yet (e.g. still pending
+/// Director approval) — the wallet just reads as empty until then, same as
+/// any other role would.
+class HospitalWalletRepository extends SettlementWalletRepository {
+  HospitalWalletRepository({FirebaseFirestore? firestore})
+      : super._withResolver(_resolveHospitalId, firestore: firestore);
+
+  static Future<String> _resolveHospitalId(FirebaseFirestore db, String uid) async {
+    try {
+      final profile = await db.collection('hospital_profiles').doc(uid).get();
+      final hospitalId = profile.data()?['hospitalId'] as String?;
+      return (hospitalId != null && hospitalId.isNotEmpty) ? hospitalId : uid;
+    } catch (_) {
+      return uid;
+    }
   }
 }
 
@@ -650,13 +692,14 @@ class CounsellingTransactionWalletRepository implements WalletRepository {
   }
 }
 
-/// Nutrition implementation — unlike every ledger-backed repository above,
-/// there is no Cloud Function mirror for Nutrition (see functions/index.js's
-/// "Nutrition partner access" note — nutrition_appointments is written
-/// directly by the patient app with no intermediate collection). "Earnings"
-/// is therefore a client-side aggregation over `nutrition_appointments.fee`,
-/// exactly like [DoctorAppointmentWalletRepository] aggregates over
-/// `appointments.fee` — a second reader, not a schema change.
+/// Superseded — nutritionist now settles through the real Payment
+/// Distribution & Settlement Engine (`onNutritionAppointmentSettlement` in
+/// functions/index.js writes `provider_wallets`/`wallet_ledger` like every
+/// other role), so [walletRepositoryProvider] routes it to
+/// [SettlementWalletRepository] instead. Left unreferenced rather than
+/// deleted; this client-side aggregation over `nutrition_appointments.fee`
+/// never reflected commission deductions or actual payout status, only the
+/// raw booked fee.
 class NutritionAppointmentWalletRepository implements WalletRepository {
   final FirebaseFirestore _db;
 

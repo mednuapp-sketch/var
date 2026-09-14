@@ -93,6 +93,8 @@ import '../../features/nutrition/screens/nutrition_appointment_detail_screen.dar
 import '../../features/nutrition/screens/nutrition_earnings_screen.dart';
 import '../../features/nutrition/screens/nutrition_profile_screen.dart';
 import '../../features/hospital_billing/screens/hospital_payments_screen.dart';
+import '../../features/hospital_billing/screens/hospital_appointments_screen.dart';
+import '../../features/hospital_billing/screens/hospital_earnings_screen.dart';
 
 /// Bridges Firebase's auth stream into a [Listenable] so GoRouter's
 /// [refreshListenable] re-evaluates the redirect on every auth state change.
@@ -366,6 +368,8 @@ class AppRoutes {
 
   // ── Hospital billing-desk partner module ──────────────────────────────────
   static const hospitalPayments = '/hospital/payments';
+  static const hospitalAppointments = '/hospital/appointments';
+  static const hospitalEarnings = '/hospital/earnings';
 }
 
 // Routes that unauthenticated users may visit.
@@ -777,6 +781,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
       // ── Hospital billing-desk partner module ──────────────────────────────
       GoRoute(path: AppRoutes.hospitalPayments, pageBuilder: (c, s) => const NoTransitionPage(child: HospitalPaymentsScreen())),
+      GoRoute(path: AppRoutes.hospitalAppointments, pageBuilder: (c, s) => const NoTransitionPage(child: HospitalAppointmentsScreen())),
+      GoRoute(path: AppRoutes.hospitalEarnings, pageBuilder: (c, s) => const NoTransitionPage(child: HospitalEarningsScreen())),
     ],
   );
 });

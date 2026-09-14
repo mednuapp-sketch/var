@@ -6,13 +6,14 @@ final bannerRepositoryProvider = Provider<BannerRepository>((ref) {
   return BannerRepository();
 });
 
-/// Fetches the currently active promotional banner once per provider lifetime.
-/// Returns null if no active banner exists or on any network error.
-final activeBannerProvider = FutureProvider<BannerModel?>((ref) async {
-  return ref.read(bannerRepositoryProvider).fetchActiveBanner();
+/// Live-streams the currently active promotional banner — an admin
+/// enabling/disabling it is reflected immediately, no re-fetch needed.
+final activeBannerProvider = StreamProvider<BannerModel?>((ref) {
+  return ref.watch(bannerRepositoryProvider).streamActiveBanner();
 });
 
-/// Fetches every currently active banner for the home screen's ad carousel.
-final activeBannersProvider = FutureProvider<List<BannerModel>>((ref) async {
-  return ref.read(bannerRepositoryProvider).fetchActiveBanners();
+/// Live-streams every currently active banner for the home screen's ad
+/// carousel.
+final activeBannersProvider = StreamProvider<List<BannerModel>>((ref) {
+  return ref.watch(bannerRepositoryProvider).streamActiveBanners();
 });

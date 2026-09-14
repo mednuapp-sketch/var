@@ -5,24 +5,23 @@ import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../../../shared_core/shared_core.dart';
-import '../providers/nutrition_providers.dart';
 
-/// Earnings — hero total + recent completed appointments. Backed by the
-/// real Payment Distribution & Settlement Engine via `walletSummaryProvider`,
-/// which resolves to `SettlementWalletRepository` for this role — the same
-/// `provider_wallets`/`wallet_ledger` docs `onNutritionAppointmentSettlement`
-/// (functions/index.js) writes.
-class NutritionEarningsScreen extends ConsumerWidget {
-  const NutritionEarningsScreen({super.key});
+/// Earnings — hero total + recent settlement activity across both hospital
+/// revenue streams (OP tokens + verified bill payments). Backed by the real
+/// Payment Distribution & Settlement Engine via `walletSummaryProvider`,
+/// which resolves to `HospitalWalletRepository` for this role — it reads
+/// `provider_wallets`/`wallet_ledger` keyed by this login's linked
+/// `hospitalId`, the same doc `onHospitalAppointmentStatusChange` and
+/// `onHospitalBillPaymentVerified` (functions/index.js) write.
+class HospitalEarningsScreen extends ConsumerWidget {
+  const HospitalEarningsScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final summary = ref.watch(walletSummaryProvider);
-    final history = ref.watch(nutritionAppointmentHistoryProvider);
-    final completedCount = history.where((a) => a.status.name == 'completed').length;
 
     return SharedAppShell(
-      currentRoute: AppRoutes.nutritionEarnings,
+      currentRoute: AppRoutes.hospitalEarnings,
       title: 'Earnings',
       body: summary.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -44,7 +43,7 @@ class NutritionEarningsScreen extends ConsumerWidget {
                   const SizedBox(height: 6),
                   Text('₹${data.balance.toInt()}', style: AppTextStyles.onPrimaryH2.copyWith(fontSize: 30)),
                   const SizedBox(height: 4),
-                  Text('$completedCount appointments completed', style: AppTextStyles.onPrimaryBody),
+                  Text('${data.transactions.length} settlement entries', style: AppTextStyles.onPrimaryBody),
                   if (data.pendingAmount > 0) ...[
                     const SizedBox(height: 2),
                     Text('₹${data.pendingAmount.toInt()} pending', style: AppTextStyles.onPrimaryBody),
@@ -59,7 +58,7 @@ class NutritionEarningsScreen extends ConsumerWidget {
               const AppEmptyState(
                 icon: Icons.receipt_long_outlined,
                 title: 'No earnings yet',
-                message: 'Completed appointments will show up here.',
+                message: 'Completed OP visits and verified bill payments will show up here.',
               )
             else
               ...data.transactions.take(20).map((t) => PremiumCard(
@@ -70,7 +69,7 @@ class NutritionEarningsScreen extends ConsumerWidget {
                           width: 40,
                           height: 40,
                           decoration: BoxDecoration(color: AppColors.success.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
-                          child: const Icon(Icons.restaurant_menu_rounded, color: AppColors.success, size: 20),
+                          child: const Icon(Icons.local_hospital_rounded, color: AppColors.success, size: 20),
                         ),
                         const SizedBox(width: 12),
                         Expanded(

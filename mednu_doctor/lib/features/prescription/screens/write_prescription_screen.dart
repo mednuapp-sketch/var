@@ -397,6 +397,30 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
           .where((l) => l.isNotEmpty)
           .toList();
 
+      // Carried over so records_screen.dart's per-family-member Records tab
+      // (`.where('memberId', ...)`) picks this prescription up — otherwise
+      // a consult booked "for" a family member always lands under the
+      // account holder's own history instead. Prefer the consultation doc
+      // (more specific to this exact session) and fall back to the
+      // appointment for offline/in-person prescriptions with no consultation.
+      String? memberId;
+      try {
+        if (widget.consultationId?.isNotEmpty == true) {
+          final snap = await FirebaseFirestore.instance
+              .collection('consultations')
+              .doc(widget.consultationId!)
+              .get();
+          memberId = snap.data()?['memberId'] as String?;
+        }
+        if ((memberId == null || memberId.isEmpty) && widget.appointmentId?.isNotEmpty == true) {
+          final snap = await FirebaseFirestore.instance
+              .collection('appointments')
+              .doc(widget.appointmentId!)
+              .get();
+          memberId = snap.data()?['memberId'] as String?;
+        }
+      } catch (_) {}
+
       final prescriptionData = {
         'rxId':                  rxId,
         'doctorId':              uid,
@@ -425,6 +449,7 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
         'followUpDays':          followUpDaysVal,
         'appointmentId':         widget.appointmentId,
         'consultationId':        widget.consultationId,
+        if (memberId != null && memberId.isNotEmpty) 'memberId': memberId,
         'isOfflinePrescription': !widget.sessionValidated && widget.allowOffline,
         'status':                'active',
         'createdAt':             FieldValue.serverTimestamp(),

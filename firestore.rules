@@ -106,6 +106,17 @@ service cloud.firestore {
         get(/databases/$(database)/documents/hospital_profiles/$(request.auth.uid)).data.status == 'active';
     }
 
+    // Same as isHospitalPartner() but also pins the check to a specific
+    // hospitals/{hospitalId} catalog entry — a billing-desk login is not
+    // itself the earning entity (see hospital_profiles below), so any rule
+    // scoping a doc by `hospitalId` (bill payments, OP appointments,
+    // provider_wallets/wallet_ledger keyed by hospitalId) needs this instead
+    // of a bare isOwner()/isHospitalPartner() check.
+    function isHospitalPartnerFor(hospitalId) {
+      return isHospitalPartner() &&
+        get(/databases/$(database)/documents/hospital_profiles/$(request.auth.uid)).data.hospitalId == hospitalId;
+    }
+
     // Validate that a write doesn't modify protected fields
     function doesNotModify(fields) {
       return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
@@ -293,24 +304,39 @@ service cloud.firestore {
     }
 
     // ── Hospital OP appointments ────────────────────────────────────────────
-    // Created server-side only, via capturePayment/captureCartPayment
-    // (functions/index.js) writing under bookingCollection:
-    // 'hospital_appointments' — the Admin SDK there bypasses these rules
-    // entirely, so `allow create: if false` below doesn't block booking.
-    // The client only ever reads (My Appointments list/stream in
-    // appointment_screen.dart) and cancels (status update), so this is a
-    // read/cancel-only slice of the /appointments rules above, minus
+    // Via capturePayment/captureCartPayment (functions/index.js) when
+    // kRequirePayment is true — the Admin SDK there bypasses these rules
+    // entirely. While kRequirePayment is false (current default, see
+    // mednu's payment_config.dart), PaymentScreen's no-pay path writes this
+    // doc directly from the client instead, so `create` must allow that too
+    // (mirrors hospital_bill_payments' create rule above) — it was
+    // previously hardcoded `false`, which silently broke every OP booking
+    // made through the no-pay path.
+    // The patient can read/cancel their own booking (only while it's still
+    // 'booked' or 'checked_in' — cancelling a finished visit makes no
+    // sense); a hospital billing-desk login scoped to this hospitalId runs
+    // the OP queue (checked_in -> completed/no_show) from
+    // HospitalAppointmentsScreen (mednu_doctor) — mirrors the
+    // caregiver/physio/counselling accept+status-update pattern, minus
     // doctorId/guest handling which doesn't apply to a walk-in OP visit.
     match /hospital_appointments/{appointmentId} {
       allow get: if isAuth() && (
         resource.data.patientId == request.auth.uid ||
-        isAdmin()
+        isAdmin() ||
+        isHospitalPartnerFor(resource.data.hospitalId)
       );
       allow list: if isAuth();
-      allow create: if false;
+      allow create: if isAuth() && request.resource.data.patientId == request.auth.uid;
       allow update: if isAuth() && (
         (resource.data.patientId == request.auth.uid &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt'])) ||
+          resource.data.status in ['booked', 'checked_in'] &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt']) &&
+          request.resource.data.status == 'cancelled') ||
+        (isHospitalPartnerFor(resource.data.hospitalId) &&
+          resource.data.status in ['booked', 'checked_in'] &&
+          request.resource.data.status in ['checked_in', 'completed', 'no_show'] &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['status', 'updatedAt', 'checkedInAt', 'completedAt', 'noShowAt'])) ||
         isAdmin()
       );
       allow delete: if isAdmin();
@@ -411,15 +437,13 @@ service cloud.firestore {
       allow read:   if isAuth() && (
         resource.data.patientId == request.auth.uid ||
         isAdmin() ||
-        (isHospitalPartner() &&
-          resource.data.hospitalId == get(/databases/$(database)/documents/hospital_profiles/$(request.auth.uid)).data.hospitalId)
+        isHospitalPartnerFor(resource.data.hospitalId)
       );
       // A hospital's own billing-desk login may mark a payment it can see as
       // verified — and *only* that field pair, never the amounts/patientId/
       // discount the payment itself records. This is the "how do hospitals
       // verify this payment" action surfaced on HospitalPaymentsScreen (mednu_doctor).
-      allow update: if isAuth() && isHospitalPartner() &&
-        resource.data.hospitalId == get(/databases/$(database)/documents/hospital_profiles/$(request.auth.uid)).data.hospitalId &&
+      allow update: if isAuth() && isHospitalPartnerFor(resource.data.hospitalId) &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['hospitalVerified', 'hospitalVerifiedAt']);
       allow delete: if false;
     }
@@ -1402,7 +1426,12 @@ service cloud.firestore {
     // ── Provider wallets — real-time balance doc, one per provider, any ────────
     // vertical (doctor/lab/pharmacy/ambulance/caregiver share this collection)
     match /provider_wallets/{providerId} {
-      allow read: if isOwner(providerId) || isAdmin();
+      // Every vertical except Hospital is keyed by the provider's own uid,
+      // so isOwner(providerId) covers them. Hospital is the one exception —
+      // `providerId` there is the hospitals/{hospitalId} catalog id, not any
+      // billing-desk login's uid (see _PROVIDER_FIELD_BY_SERVICE in
+      // functions/index.js), so it needs the hospitalId-scoped check too.
+      allow read: if isOwner(providerId) || isAdmin() || isHospitalPartnerFor(providerId);
       allow write: if false; // settlement engine (Admin SDK) only
     }
 
@@ -1809,8 +1838,10 @@ service cloud.firestore {
     // Cloud Function transaction as the users/{uid} balance update. Written by
     // the Admin SDK only — same convention as lab_transactions et al.
     match /wallet_ledger/{entryId} {
+      // See provider_wallets above — Hospital ledger entries are written
+      // with `uid: hospitalId` (the catalog id), not a billing-desk uid.
       allow read: if isAuth() && (
-        resource.data.uid == request.auth.uid || isAdmin()
+        resource.data.uid == request.auth.uid || isAdmin() || isHospitalPartnerFor(resource.data.uid)
       );
       allow write: if false;
     }

@@ -280,15 +280,24 @@ List<NavItem> buildMenuForRole(AppRole role) {
         ),
       ];
     case AppRole.hospital:
-      // Read-only: payment status is set server-side by the patient app's
-      // payment pipeline, there's nothing else for the billing desk to do —
-      // one destination, no Earnings/Profile items like the other roles.
       return const [
+        NavItem(
+          label: 'Appointments',
+          icon: Icons.event_note_outlined,
+          activeIcon: Icons.event_note_rounded,
+          route: AppRoutes.hospitalAppointments,
+        ),
         NavItem(
           label: 'Payments',
           icon: Icons.receipt_long_outlined,
           activeIcon: Icons.receipt_long_rounded,
           route: AppRoutes.hospitalPayments,
+        ),
+        NavItem(
+          label: 'Earnings',
+          icon: Icons.account_balance_wallet_outlined,
+          activeIcon: Icons.account_balance_wallet_rounded,
+          route: AppRoutes.hospitalEarnings,
         ),
       ];
     case AppRole.admin:
