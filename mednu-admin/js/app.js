@@ -59,13 +59,13 @@ let currentAdminRole = 'director';
 const ROLE_TAB_ACCESS = {
   director:  null,
   finance:   ['revenue', 'wallet'],
-  marketing: ['banners', 'referrals'],
+  marketing: ['banners', 'web-ads', 'referrals'],
   support:   ['reports', 'tickets', 'broadcast'],
   hr:        [
     'ambulance-partners', 'caregiver-partners', 'pharmacy-partners', 'lab-partners',       // Partner Accounts
     'physio-partners', 'counselling-partners', 'nutrition-partners',                        // Partner Accounts (cont.)
     'revenue', 'wallet',                                                            // Finance
-    'banners', 'referrals',                                                         // Marketing
+    'banners', 'web-ads', 'referrals',                                              // Marketing
     'reports', 'tickets', 'broadcast',                                              // Support
     'quality-analytics', 'feedback', 'reviews',                                     // Quality
   ],
@@ -5100,7 +5100,7 @@ function svcTypeLabel(type) {
   const m = {
     diagnostics:'Diagnostics', lab_tests:'Lab Tests', physiotherapy:'Physiotherapy',
     care_assistant:'Care Assistant', caregivers:'Caregivers', equipment:'Equipment',
-    consultation:'Consultation', nutrition:'Nutrition', counselling:'Counselling',
+    consultation:'Consultation', nutrition:'Dietician', counselling:'Counselling',
     medicine_delivery:'Medicine Delivery',
   };
   return m[type] || capitalize(type || 'Service');
@@ -6983,7 +6983,7 @@ function _renderNutritionistsListImpl() {
   });
 
   if (list.length === 0) {
-    container.innerHTML = '<div class="empty-state" style="padding:40px;text-align:center;color:var(--text-muted);">No nutritionists found. <a href="#" onclick="openAddNutritionistModal();return false;" style="color:#2e7d32;">Add the first one</a></div>';
+    container.innerHTML = '<div class="empty-state" style="padding:40px;text-align:center;color:var(--text-muted);">No dieticians found. <a href="#" onclick="openAddNutritionistModal();return false;" style="color:#2e7d32;">Add the first one</a></div>';
     return;
   }
 
@@ -7025,7 +7025,7 @@ const renderNutritionistsList = debounce(_renderNutritionistsListImpl, 180);
 // ── Add / Edit Nutritionist Modal ─────────────────────────────────────────────
 
 function openAddNutritionistModal() {
-  document.getElementById('nutr-modal-title').textContent = 'Add Nutritionist';
+  document.getElementById('nutr-modal-title').textContent = 'Add Dietician';
   document.getElementById('nutr-edit-id').value = '';
   ['nutr-f-name','nutr-f-qual','nutr-f-city','nutr-f-clinic','nutr-f-photo','nutr-f-bio','nutr-f-langs','nutr-f-expertise'].forEach(id => {
     const el = document.getElementById(id);
@@ -7047,7 +7047,7 @@ function openAddNutritionistModal() {
 function openEditNutritionistModal(id) {
   const n = _nutrNutritionists.find(x => x.id === id);
   if (!n) return;
-  document.getElementById('nutr-modal-title').textContent = 'Edit Nutritionist';
+  document.getElementById('nutr-modal-title').textContent = 'Edit Dietician';
   document.getElementById('nutr-edit-id').value = id;
   document.getElementById('nutr-f-name').value = n.name || '';
   document.getElementById('nutr-f-qual').value = n.qualification || '';
@@ -7117,25 +7117,25 @@ async function saveNutritionist() {
   try {
     if (editId) {
       await db.collection('nutritionists').doc(editId).update({ ...data, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
-      showToast('Nutritionist updated successfully.');
+      showToast('Dietician updated successfully.');
     } else {
       data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
       await db.collection('nutritionists').add(data);
-      showToast('Nutritionist added successfully.');
+      showToast('Dietician added successfully.');
     }
     closeNutritionistModal();
   } catch (e) {
-    showToast('Error saving nutritionist: ' + e.message);
+    showToast('Error saving dietician: ' + e.message);
   } finally {
     btn.innerHTML = orig; btn.disabled = false;
   }
 }
 
 async function deleteNutritionist(id, name) {
-  if (!(await showConfirm('Delete nutritionist “' + name + '”? This cannot be undone.', {danger:true}))) return;
+  if (!(await showConfirm('Delete dietician “' + name + '”? This cannot be undone.', {danger:true}))) return;
   try {
     await db.collection('nutritionists').doc(id).delete();
-    showToast('Nutritionist deleted.');
+    showToast('Dietician deleted.');
   } catch (e) {
     showToast('Error deleting: ' + e.message);
   }
@@ -7169,7 +7169,7 @@ function loadNutritionAppointments() {
 
     let html = `
       <div class="appt-row-header">
-        <span>Patient</span><span>Nutritionist</span><span>Date</span><span>Time</span><span>Type</span><span>Status</span><span>Actions</span>
+        <span>Patient</span><span>Dietician</span><span>Date</span><span>Time</span><span>Type</span><span>Status</span><span>Actions</span>
       </div>`;
     docs.forEach(doc => {
       const a = doc.data();
@@ -8565,14 +8565,12 @@ const PARTNER_ROLES = {
   },
   // Physiotherapy/counselling/nutrition partners had NO admin approval UI at
   // all before this — they could register but never reach `status: 'active'`
-  // short of hand-editing Firestore. Nutrition genuinely has no
-  // document-verification step (`PartnerDocumentType.forRole` in
-  // mednu_doctor returns `[]` for it), so `docSlots: {}` there is
-  // intentional, not an oversight — see the `allDocsVerified` fix below that
-  // lets Approve work with zero doc slots. Physiotherapy and Counselling are
-  // both clinical/mental-health roles that treat patients directly, so both
-  // need ID + qualification proof before approval — see each one's own
-  // `docSlots` below.
+  // short of hand-editing Firestore. Physiotherapy, Counselling, and Nutrition
+  // are all roles that interact directly with patients, so each needs ID +
+  // qualification proof before approval — see each one's own `docSlots`
+  // below (the `allDocsVerified` check below reads this generically, so any
+  // role can still be left at `docSlots: {}` if it genuinely needs no
+  // verification, as Hospital is).
   physiotherapy: {
     label:        'Physiotherapist Partner',
     collection:   'physiotherapist_profiles',
@@ -8634,7 +8632,7 @@ const PARTNER_ROLES = {
   // txCollection stays null and the earnings card/refresh is omitted for
   // this role rather than pointed at a collection that doesn't exist.
   nutrition: {
-    label:        'Nutritionist Partner',
+    label:        'Dietician Partner',
     collection:   'nutritionist_profiles',
     txCollection: null,
     txField:      null,
@@ -8643,7 +8641,14 @@ const PARTNER_ROLES = {
     cols:         8,
     navBadge:     'nav-nutrition-partners-count',
     extraFilterId:'nut-specialization-filter',
-    docSlots: {},
+    // Keys must stay identical to `PartnerDocumentType.nutritionist` in
+    // partner_document_models.dart — they are also the
+    // `nutritionist_documents/{uid}/{docType}.{ext}` Storage path segment
+    // and the `documents.{docType}` field on `nutritionist_profiles`.
+    docSlots: {
+      nutritionist_id:       'Government ID Proof',
+      nutrition_certificate: 'Nutrition / Dietetics Certification',
+    },
     nameOf: p => p.name || 'Unnamed partner',
     subOf:  p => p.specialization || p.qualification || '—',
     extraValues: list => [...new Set(list.map(p => p.specialization).filter(Boolean))].sort(),
@@ -8655,8 +8660,9 @@ const PARTNER_ROLES = {
       (p.city || '').toLowerCase().includes(q),
   },
   // A hospital billing-desk login has no earnings ledger and nothing to
-  // verify (no docSlots — see the nutrition comment above for why that's
-  // safe) — it exists only to read `hospital_bill_payments` for the
+  // verify (no docSlots — safe because the `allDocsVerified` check below
+  // reads `docSlots` generically and treats zero slots as trivially
+  // satisfied) — it exists only to read `hospital_bill_payments` for the
   // `hospitalId` it's linked to, so patients/staff at the desk can confirm a
   // payment landed. See firestore.rules' hospital_profiles + isHospitalPartner().
   hospital: {
@@ -9000,12 +9006,15 @@ function renderPartnerTable(role, list) {
     if (role === 'caregiver') {
       const specs = (p.specialties || []).slice(0, 3)
         .map(s => `<span class="svc-type-badge" style="background:#f3e5f5;color:#6a1b9a;">${escHtml(s)}</span>`).join(' ');
+      const listedAs = p.serviceType === 'care_assistant'
+        ? `<span class="svc-type-badge" style="background:#EFE1EC;color:#522546;">Care Assistant</span>`
+        : `<span class="svc-type-badge" style="background:#EFE1EC;color:#522546;">Caregiver</span>`;
       return `<tr>
         ${checkboxCell}
         <td><div class="user-cell">${avatar}
           <div><div class="user-name">${escHtml(p.name || '—')}</div>
           <div class="user-sub">${escHtml(p.experienceYears ? p.experienceYears + ' yrs experience' : '')}</div></div></div></td>
-        <td>${specs || '—'}</td>
+        <td>${listedAs} ${specs}</td>
         <td>${p.hourlyRate ? escHtml(formatCurrency(p.hourlyRate)) + '/hr' : '—'}</td>
         <td>${escHtml(String(p.totalVisits || 0))}</td>
         <td>${partnerRatingCell(p)}</td>
@@ -9558,6 +9567,11 @@ function showPartnerModal(role, id) {
     ];
   } else if (role === 'caregiver') {
     fields = [
+      ['Phone',          p.phone || '—'],
+      ['Email',          p.email || '—'],
+      ['Listed As',      p.serviceType === 'care_assistant' ? 'Care Assistant' : 'Caregiver'],
+      ['Gender',         p.gender || '—'],
+      ['Service Area',   p.city || '—'],
       ['Hourly Rate',    p.hourlyRate ? formatCurrency(p.hourlyRate) + '/hr' : '—'],
       ['Experience',     p.experienceYears ? p.experienceYears + ' yrs' : '—'],
       ['Specialties',    (p.specialties || []).join(', ') || '—'],
@@ -9576,7 +9590,11 @@ function showPartnerModal(role, id) {
     ];
   } else if (role === 'physiotherapy') {
     fields = [
-      ['Hourly Rate',    p.hourlyRate ? formatCurrency(p.hourlyRate) + '/hr' : '—'],
+      ['Phone',          p.phone || '—'],
+      ['Email',          p.email || '—'],
+      ['Online Rate',    p.onlineRate ? formatCurrency(p.onlineRate) + '/session' : 'Not offered'],
+      ['Home Visit Rate', p.homeRate ? formatCurrency(p.homeRate) + '/session' : 'Not offered'],
+      ['In-Clinic Rate', p.clinicRate ? formatCurrency(p.clinicRate) + '/session' : 'Not offered'],
       ['Experience',     p.experienceYears ? p.experienceYears + ' yrs' : '—'],
       ['Specialties',    (p.specialties || []).join(', ') || '—'],
       ['Certifications', (p.certifications || []).join(', ') || '—'],
@@ -9596,6 +9614,8 @@ function showPartnerModal(role, id) {
     ];
   } else if (role === 'nutrition') {
     fields = [
+      ['Phone',             p.phone || '—'],
+      ['Email',             p.email || '—'],
       ['Qualification',    p.qualification || '—'],
       ['Specialization',   p.specialization || '—'],
       ['Experience',       p.experienceYears ? p.experienceYears + ' yrs' : '—'],
@@ -9779,7 +9799,7 @@ const _PENDING_ROLE_BADGES = {
   lab:           { label: 'Lab',        bg: '#e0f2f1', fg: '#00695c' },
   physiotherapy: { label: 'Physio',     bg: '#e8f5e9', fg: '#2e7d32' },
   counselling:   { label: 'Counsellor', bg: '#ede7f6', fg: '#4527a0' },
-  nutrition:     { label: 'Nutrition',  bg: '#fff3e0', fg: '#ef6c00' },
+  nutrition:     { label: 'Dietician',  bg: '#fff3e0', fg: '#ef6c00' },
 };
 
 // Where each role's own full verification tab lives — used so a group's
@@ -9794,7 +9814,7 @@ const _PENDING_ROLE_NAV = {
   lab:           { tab: 'lab-partners',        title: 'Lab Partners' },
   physiotherapy: { tab: 'physio-partners',     title: 'Physiotherapist Partners' },
   counselling:   { tab: 'counselling-partners',title: 'Counsellor Partners' },
-  nutrition:     { tab: 'nutrition-partners',  title: 'Nutritionist Partners' },
+  nutrition:     { tab: 'nutrition-partners',  title: 'Dietician Partners' },
 };
 
 const PENDING_ROWS_PER_GROUP = 4;
