@@ -40,7 +40,7 @@ class HowItWorksSection extends StatelessWidget {
     final isTablet = Responsive.isTablet(context);
 
     return Container(
-      color: const Color(0xFFF8F9FB),
+      color: const Color(0xFFF7F4F6),
       padding: EdgeInsets.symmetric(
         horizontal: Responsive.horizontalPadding(context),
         vertical: isMobile ? 56 : 88,
@@ -152,7 +152,7 @@ class _SectionHeader extends StatelessWidget {
           style: GoogleFonts.poppins(
             fontSize: isMobile ? 26 : 34,
             fontWeight: FontWeight.w800,
-            color: const Color(0xFF1A1A2E),
+            color: const Color(0xFF33172C),
             letterSpacing: -0.5,
             height: 1.2,
           ),
@@ -165,7 +165,7 @@ class _SectionHeader extends StatelessWidget {
             textAlign: textAlign,
             style: GoogleFonts.poppins(
               fontSize: isMobile ? 14 : 15,
-              color: const Color(0xFF757575),
+              color: const Color(0xFF7A6472),
               height: 1.7,
             ),
           ),
@@ -256,7 +256,7 @@ class _StepCardState extends State<_StepCard> {
           border: Border.all(
             color: _hovered
                 ? AppColors.primary.withValues(alpha: 0.25)
-                : const Color(0xFFEEEEEE),
+                : const Color(0xFFEDE3EA),
             width: 1.5,
           ),
           boxShadow: _hovered
@@ -288,8 +288,8 @@ class _StepCardState extends State<_StepCard> {
                     gradient: _hovered
                         ? AppColors.primaryGradient
                         : const LinearGradient(colors: [
-                            Color(0xFFF5F5F5),
-                            Color(0xFFEEEEEE)
+                            Color(0xFFF1E7EE),
+                            Color(0xFFEDE3EA)
                           ]),
                     borderRadius: BorderRadius.circular(14),
                   ),
@@ -328,7 +328,7 @@ class _StepCardState extends State<_StepCard> {
               style: GoogleFonts.poppins(
                 fontSize: widget.compact ? 14 : 15.5,
                 fontWeight: FontWeight.w700,
-                color: const Color(0xFF1A1A2E),
+                color: const Color(0xFF33172C),
               ),
             ),
             const SizedBox(height: 8),
@@ -336,7 +336,7 @@ class _StepCardState extends State<_StepCard> {
               widget.step.desc,
               style: GoogleFonts.poppins(
                 fontSize: widget.compact ? 12 : 13,
-                color: const Color(0xFF757575),
+                color: const Color(0xFF7A6472),
                 height: 1.65,
               ),
             ),
@@ -360,7 +360,7 @@ class _StepCardMobile extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFEEEEEE), width: 1),
+        border: Border.all(color: const Color(0xFFEDE3EA), width: 1),
         boxShadow: const [
           BoxShadow(
               color: Color(0x08000000),
@@ -390,7 +390,7 @@ class _StepCardMobile extends StatelessWidget {
                       style: GoogleFonts.poppins(
                           fontSize: 15,
                           fontWeight: FontWeight.w700,
-                          color: const Color(0xFF1A1A2E))),
+                          color: const Color(0xFF33172C))),
                   const Spacer(),
                   Container(
                     padding: const EdgeInsets.symmetric(
@@ -415,7 +415,7 @@ class _StepCardMobile extends StatelessWidget {
                 Text(step.desc,
                     style: GoogleFonts.poppins(
                         fontSize: 13,
-                        color: const Color(0xFF757575),
+                        color: const Color(0xFF7A6472),
                         height: 1.6)),
               ],
             ),

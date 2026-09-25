@@ -51,7 +51,12 @@ class HealthPage extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 48),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          const Text('❤️', style: TextStyle(fontSize: 56)),
+          Container(
+            width: 72,
+            height: 72,
+            decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.08), shape: BoxShape.circle),
+            child: const Icon(Icons.favorite_rounded, size: 32, color: AppColors.primary),
+          ),
           const SizedBox(height: 16),
           Text('Sign in to view health data',
               style: GoogleFonts.poppins(
@@ -88,7 +93,7 @@ class _HealthContent extends StatelessWidget {
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
-            const Text('📱', style: TextStyle(fontSize: 20)),
+            const Icon(Icons.monitor_heart_rounded, size: 20, color: AppColors.primary),
             const SizedBox(width: 10),
             Text('Vital Signs & Tracking',
                 style: GoogleFonts.poppins(
@@ -108,10 +113,10 @@ class _HealthContent extends StatelessWidget {
             mainAxisSpacing: 12,
             childAspectRatio: 1.2,
             children: const [
-              _VitalPlaceholder(emoji: '❤️', label: 'Blood Pressure'),
-              _VitalPlaceholder(emoji: '🩸', label: 'Blood Sugar'),
-              _VitalPlaceholder(emoji: '⚖️', label: 'BMI'),
-              _VitalPlaceholder(emoji: '🏃', label: 'Steps Today'),
+              _VitalPlaceholder(icon: Icons.favorite_rounded, label: 'Blood Pressure'),
+              _VitalPlaceholder(icon: Icons.water_drop_rounded, label: 'Blood Sugar'),
+              _VitalPlaceholder(icon: Icons.monitor_weight_rounded, label: 'BMI'),
+              _VitalPlaceholder(icon: Icons.directions_run_rounded, label: 'Steps Today'),
             ],
           ),
         ]),
@@ -137,12 +142,12 @@ class _MedicalInfoCard extends StatelessWidget {
             ? allergies.split(',').map((e) => e.trim()).toList()
             : <String>[];
 
-    final rows = <(String, String, String)>[];
-    if (age != null) rows.add(('🎂', 'Age', '$age years'));
-    if (height.isNotEmpty) rows.add(('📏', 'Height', height));
-    if (weight.isNotEmpty) rows.add(('⚖️', 'Weight', weight));
+    final rows = <(IconData, String, String)>[];
+    if (age != null) rows.add((Icons.cake_rounded, 'Age', '$age years'));
+    if (height.isNotEmpty) rows.add((Icons.height_rounded, 'Height', height));
+    if (weight.isNotEmpty) rows.add((Icons.monitor_weight_rounded, 'Weight', weight));
     if (chronicConditions.isNotEmpty) {
-      rows.add(('💊', 'Chronic Conditions', chronicConditions));
+      rows.add((Icons.medication_rounded, 'Chronic Conditions', chronicConditions));
     }
 
     return Container(
@@ -171,7 +176,7 @@ class _MedicalInfoCard extends StatelessWidget {
           ...rows.map((item) => Padding(
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 child: Row(children: [
-                  Text(item.$1, style: const TextStyle(fontSize: 18)),
+                  Icon(item.$1, size: 18, color: AppColors.primary),
                   const SizedBox(width: 12),
                   Expanded(
                       child: Text(item.$2,
@@ -194,7 +199,7 @@ class _MedicalInfoCard extends StatelessWidget {
           const Divider(height: 1),
           const SizedBox(height: 14),
           Row(children: [
-            const Text('⚠️', style: TextStyle(fontSize: 16)),
+            const Icon(Icons.warning_amber_rounded, size: 17, color: AppColors.error),
             const SizedBox(width: 8),
             Text('Known Allergies',
                 style: GoogleFonts.poppins(
@@ -227,9 +232,9 @@ class _MedicalInfoCard extends StatelessWidget {
 }
 
 class _VitalPlaceholder extends StatelessWidget {
-  final String emoji;
+  final IconData icon;
   final String label;
-  const _VitalPlaceholder({required this.emoji, required this.label});
+  const _VitalPlaceholder({required this.icon, required this.label});
 
   @override
   Widget build(BuildContext context) {
@@ -244,7 +249,7 @@ class _VitalPlaceholder extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(emoji, style: const TextStyle(fontSize: 22)),
+          Icon(icon, size: 22, color: AppColors.primary),
           Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(label,
                 style: GoogleFonts.poppins(

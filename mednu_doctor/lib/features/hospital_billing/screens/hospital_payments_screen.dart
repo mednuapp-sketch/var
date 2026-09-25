@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
-import '../../../core/widgets/ux_widgets.dart';
+import '../../../core/router/app_router.dart';
+import '../../../shared_core/shared_core.dart';
 import '../../auth/services/doctor_auth_service.dart';
 import '../services/hospital_payment_service.dart';
 import '../services/hospital_profile_service.dart';
@@ -21,42 +22,34 @@ class HospitalPaymentsScreen extends StatelessWidget {
     final uid = DoctorAuthService.currentUid;
     if (uid == null) return const SizedBox.shrink();
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: CustomScrollView(
-        slivers: [
-          const GradientSliverAppBar(
-            headerIcon: Icons.receipt_long_rounded,
-            title: 'Bill Payments',
-            subtitle: 'Live patient payment confirmations',
-            expandedHeight: 110,
-          ),
-          SliverToBoxAdapter(
-            child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-              stream: HospitalProfileService.profileStream(uid),
-              builder: (context, profileSnap) {
-                final profile = profileSnap.data?.data();
-                final hospitalId = profile?['hospitalId'] as String?;
-                final hospitalName = profile?['hospitalName'] as String?;
+    return SharedAppShell(
+      currentRoute: AppRoutes.hospitalPayments,
+      title: 'Bill Payments',
+      body: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+          stream: HospitalProfileService.profileStream(uid),
+          builder: (context, profileSnap) {
+            final profile = profileSnap.data?.data();
+            final hospitalId = profile?['hospitalId'] as String?;
+            final hospitalName = profile?['hospitalName'] as String?;
 
-                if (profileSnap.connectionState == ConnectionState.waiting) {
-                  return const Padding(
-                    padding: EdgeInsets.all(40),
-                    child: Center(child: CircularProgressIndicator()),
-                  );
-                }
+            if (profileSnap.connectionState == ConnectionState.waiting) {
+              return const Padding(
+                padding: EdgeInsets.all(40),
+                child: Center(child: CircularProgressIndicator()),
+              );
+            }
 
-                if (hospitalId == null || hospitalId.isEmpty) {
-                  return _NotLinkedNotice(
-                    hasHospitalName: (hospitalName ?? '').isNotEmpty,
-                  );
-                }
+            if (hospitalId == null || hospitalId.isEmpty) {
+              return _NotLinkedNotice(
+                hasHospitalName: (hospitalName ?? '').isNotEmpty,
+              );
+            }
 
-                return _PaymentsList(hospitalId: hospitalId, hospitalName: hospitalName);
-              },
-            ),
-          ),
-        ],
+            return _PaymentsList(hospitalId: hospitalId, hospitalName: hospitalName);
+          },
+        ),
       ),
     );
   }
@@ -104,7 +97,16 @@ class _PaymentsList extends StatelessWidget {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-          child: Text(hospitalName ?? 'Your hospital', style: AppTextStyles.sectionTitle),
+          child: Text(
+            hospitalName ?? 'Your hospital',
+            style: AppTextStyles.sectionTitle,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        const Padding(
+          padding: EdgeInsets.fromLTRB(16, 0, 16, 4),
+          child: Text('Live patient payment confirmations', style: AppTextStyles.bodySmall),
         ),
         StreamBuilder<List<HospitalBillPayment>>(
           stream: HospitalPaymentService.streamForHospital(hospitalId),
@@ -208,18 +210,26 @@ class _PaymentCardState extends State<_PaymentCard> {
                   children: [
                     Row(
                       children: [
-                        Text('₹${payment.finalAmount.toStringAsFixed(0)} paid',
-                            style: AppTextStyles.labelLarge),
+                        Flexible(
+                          child: Text('₹${payment.finalAmount.toStringAsFixed(0)} paid',
+                              style: AppTextStyles.labelLarge,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis),
+                        ),
                         if (payment.discountLabel != null) ...[
                           const SizedBox(width: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: AppColors.primarySoft,
-                              borderRadius: BorderRadius.circular(6),
+                          Flexible(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: AppColors.primarySoft,
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(payment.discountLabel!,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTextStyles.labelSmall.copyWith(color: AppColors.primary)),
                             ),
-                            child: Text(payment.discountLabel!,
-                                style: AppTextStyles.labelSmall.copyWith(color: AppColors.primary)),
                           ),
                         ],
                       ],
@@ -250,7 +260,14 @@ class _PaymentCardState extends State<_PaymentCard> {
               children: [
                 const Icon(Icons.task_alt_rounded, color: AppColors.success, size: 16),
                 const SizedBox(width: 6),
-                Text('Verified by your desk', style: AppTextStyles.labelSmall.copyWith(color: AppColors.success)),
+                Flexible(
+                  child: Text(
+                    'Verified by your desk',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.labelSmall.copyWith(color: AppColors.success),
+                  ),
+                ),
               ],
             )
           else

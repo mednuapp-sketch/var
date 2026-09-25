@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import '../../../core/constants/app_colors.dart';
 import 'care_note.dart';
 import 'care_task.dart';
 
@@ -72,18 +73,21 @@ extension CareTypeX on CareType {
     }
   }
 
+  // Brand plum family throughout — distinct shades for at-a-glance category
+  // recognition without reaching outside the palette (per-module rainbow
+  // coding was replaced app-wide with this module's own brand colors).
   Color get color {
     switch (this) {
       case CareType.elderlyCare:
-        return const Color(0xFF00695C);
+        return AppColors.primary;
       case CareType.postSurgery:
-        return const Color(0xFFAD1457);
+        return AppColors.secondaryDark;
       case CareType.physiotherapy:
-        return const Color(0xFF1565C0);
+        return AppColors.secondary;
       case CareType.medicationManagement:
-        return const Color(0xFFEF6C00);
+        return AppColors.primaryDark;
       case CareType.generalNursing:
-        return const Color(0xFF6A1B9A);
+        return AppColors.primaryLight;
     }
   }
 }

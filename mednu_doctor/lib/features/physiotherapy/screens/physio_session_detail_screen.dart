@@ -37,10 +37,46 @@ class PhysioSessionDetailScreen extends ConsumerWidget {
     }
   }
 
+  /// `preferredDate` is free text in `d/M/yyyy` form (see ServiceBookingSheet
+  /// / mednu's `_pickDate`), not a Timestamp — parsed defensively and only
+  /// ever used to *block* a too-early call, never to block a legitimate one:
+  /// an empty or unparseable date (an ASAP/no-schedule session, or a format
+  /// this doesn't recognize) always allows starting the call rather than
+  /// risking a false block. Gated by day, not exact time — `preferredTime`
+  /// comes from `TimeOfDay.format(context)`, which is locale-dependent and
+  /// too fragile to parse reliably; blocking anything before the scheduled
+  /// *day* already fixes the reported bug (a session booked days out
+  /// connecting immediately) without that risk.
+  DateTime? _scheduledDay(PhysioSession session) {
+    final parts = session.preferredDate.trim().split('/');
+    if (parts.length != 3) return null;
+    final d = int.tryParse(parts[0]);
+    final m = int.tryParse(parts[1]);
+    final y = int.tryParse(parts[2]);
+    if (d == null || m == null || y == null) return null;
+    try {
+      return DateTime(y, m, d);
+    } catch (_) {
+      return null;
+    }
+  }
+
   void _startVideoSession(BuildContext context, PhysioSession session) {
     if (session.patientId.isEmpty) {
       FeedbackService.showError(context, 'Patient details are still loading — try again in a moment.');
       return;
+    }
+    final scheduledDay = _scheduledDay(session);
+    if (scheduledDay != null) {
+      final today = DateTime.now();
+      final todayDay = DateTime(today.year, today.month, today.day);
+      if (scheduledDay.isAfter(todayDay)) {
+        FeedbackService.showError(
+          context,
+          'This session is scheduled for ${session.preferredDate} — you can start the call on that day.',
+        );
+        return;
+      }
     }
     context.push(AppRoutes.providerOutgoingCall, extra: {
       'providerRole': 'physiotherapist',

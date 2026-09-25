@@ -15,7 +15,15 @@ class PhysiotherapistModel {
   final int experienceYears;
   final double rating;
   final int totalSessions;
+  /// "Starting from" figure — the cheapest of [onlineRate]/[clinicRate]/
+  /// [homeRate] that's actually offered, computed server-side (see
+  /// PhysioProfileService._startingFrom in mednu_doctor). Kept for list-card
+  /// display; booking a specific mode uses the per-mode rate instead.
   final num hourlyRate;
+  final num onlineRate;
+  /// 0 means this physiotherapist doesn't offer in-clinic appointments.
+  final num clinicRate;
+  final num homeRate;
   final String city;
   final List<String> languages;
   final double? clinicLat;
@@ -44,6 +52,9 @@ class PhysiotherapistModel {
     required this.rating,
     required this.totalSessions,
     required this.hourlyRate,
+    this.onlineRate = 0,
+    this.clinicRate = 0,
+    this.homeRate = 0,
     required this.city,
     required this.languages,
     this.clinicLat,
@@ -65,6 +76,9 @@ class PhysiotherapistModel {
       rating: (d['rating'] as num?)?.toDouble() ?? 0.0,
       totalSessions: (d['totalSessions'] as num?)?.toInt() ?? 0,
       hourlyRate: (d['hourlyRate'] as num?) ?? 0,
+      onlineRate: (d['onlineRate'] as num?) ?? 0,
+      clinicRate: (d['clinicRate'] as num?) ?? 0,
+      homeRate: (d['homeRate'] as num?) ?? 0,
       city: d['city'] as String? ?? '',
       languages: ((d['languages'] as List?) ?? const []).whereType<String>().toList(),
       clinicLat: (d['clinicLat'] as num?)?.toDouble(),

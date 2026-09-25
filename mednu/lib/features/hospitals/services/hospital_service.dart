@@ -10,11 +10,18 @@ class Hospital {
   final bool isEnabled;
 
   /// Google Places `place_id`, set only when this entry was added via the
-  /// admin's "Search Google Maps" picker rather than typed freehand — lets
-  /// [NearbyHospitalService] match it against a Google nearby-search result
-  /// exactly instead of falling back to fuzzy name matching. Null for
-  /// entries added before that picker existed.
+  /// admin's "Search Google Maps" picker rather than typed freehand. Kept
+  /// for hospitals added that way before location capture existed.
   final String? placeId;
+
+  /// Set by `onHospitalProfileApproved` (functions/index.js) once a
+  /// hospital billing-desk applicant's registration is approved — the
+  /// location they picked on the map picker at registration
+  /// (`PartnerRoleRegisterScreen` in mednu_doctor). Null until then, so a
+  /// freshly-registered or admin-only-added hospital just shows without a
+  /// distance in the patient app rather than a wrong one.
+  final double? latitude;
+  final double? longitude;
 
   const Hospital({
     required this.id,
@@ -25,6 +32,8 @@ class Hospital {
     required this.isEmergency,
     required this.isEnabled,
     this.placeId,
+    this.latitude,
+    this.longitude,
   });
 
   factory Hospital.fromFirestore(DocumentSnapshot doc) {
@@ -39,6 +48,8 @@ class Hospital {
       // Default true so hospitals saved before this field was introduced still appear
       isEnabled: (d['isEnabled'] as bool?) ?? true,
       placeId: d['placeId'] as String?,
+      latitude: (d['latitude'] as num?)?.toDouble(),
+      longitude: (d['longitude'] as num?)?.toDouble(),
     );
   }
 }

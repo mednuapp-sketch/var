@@ -59,7 +59,7 @@ class WeeklyEarningsChart extends StatelessWidget {
                     toY: values[i],
                     width: 18,
                     borderRadius: BorderRadius.circular(6),
-                    gradient: LinearGradient(
+                    gradient: const LinearGradient(
                       colors: [AppColors.primary, AppColors.primaryLight],
                       begin: Alignment.bottomCenter,
                       end: Alignment.topCenter,

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/services/feedback_service.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../../../shared_core/shared_core.dart';
 import '../models/diagnostic_booking.dart';
@@ -22,6 +23,8 @@ class LabDashboardScreen extends ConsumerStatefulWidget {
 }
 
 class _LabDashboardScreenState extends ConsumerState<LabDashboardScreen> {
+  bool _togglingAccepting = false;
+
   @override
   void initState() {
     super.initState();
@@ -34,6 +37,19 @@ class _LabDashboardScreenState extends ConsumerState<LabDashboardScreen> {
     final exists = await LabProfileService.profileExists(uid);
     if (!mounted || exists) return;
     context.go(AppRoutes.labOnboarding);
+  }
+
+  Future<void> _toggleAccepting(bool value) async {
+    final uid = LabProfileService.currentUid;
+    if (uid == null || _togglingAccepting) return;
+    setState(() => _togglingAccepting = true);
+    try {
+      await LabProfileService.updateAcceptingBookings(uid, value);
+    } catch (_) {
+      if (mounted) FeedbackService.showError(context, 'Could not update booking availability.');
+    } finally {
+      if (mounted) setState(() => _togglingAccepting = false);
+    }
   }
 
   @override
@@ -87,6 +103,19 @@ class _LabDashboardScreenState extends ConsumerState<LabDashboardScreen> {
                       ),
                     ),
               loading: () => const CardLoadingState(itemCount: 1, cardHeight: 72),
+              error: (_, __) => const SizedBox(),
+            ),
+            profileAsync.when(
+              data: (profile) => profile == null
+                  ? const SizedBox()
+                  : Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: _AcceptingBookingsCard(
+                        accepting: profile.acceptingBookings,
+                        onChanged: _togglingAccepting ? null : _toggleAccepting,
+                      ),
+                    ),
+              loading: () => const SizedBox(),
               error: (_, __) => const SizedBox(),
             ),
             SharedWalletSummaryCard(onTap: () => context.push(AppRoutes.labEarnings)),
@@ -177,6 +206,66 @@ class _LabDashboardScreenState extends ConsumerState<LabDashboardScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// "Accepting New Bookings" availability toggle — Lab's order-fulfillment
+/// equivalent of Doctor's ONLINE/OFFLINE presence card. Unlike Doctor,
+/// there's no GPS/location component here: this just flips
+/// `lab_profiles/{uid}.acceptingBookings`, gating whether the lab shows up
+/// for new diagnostic bookings. Styled as a `PremiumCard` row to match the
+/// rest of this dashboard's card language rather than a full gradient hero.
+class _AcceptingBookingsCard extends StatelessWidget {
+  final bool accepting;
+  final ValueChanged<bool>? onChanged;
+  const _AcceptingBookingsCard({required this.accepting, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = accepting ? AppColors.success : AppColors.textHint;
+    return PremiumCard(
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              accepting ? Icons.check_circle_rounded : Icons.pause_circle_filled_rounded,
+              color: color,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  accepting ? 'Accepting New Bookings' : 'Not Accepting Bookings',
+                  style: AppTextStyles.labelLarge,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  accepting ? 'Visible for new diagnostic test bookings' : 'Hidden from new booking requests',
+                  style: AppTextStyles.bodySmall,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Switch.adaptive(
+            value: accepting,
+            onChanged: onChanged,
+            activeThumbColor: AppColors.success,
+          ),
+        ],
       ),
     );
   }

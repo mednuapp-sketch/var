@@ -129,4 +129,56 @@ class ImageUploadService {
       await _storage.ref().child('doctors/$uid/profile.jpg').delete();
     } catch (_) {}
   }
+
+  /// Uploads a non-doctor partner's profile photo to
+  /// `{profileCollection}/{uid}/profile.jpg` and returns the download URL.
+  /// [profileCollection] should match the Firestore profile collection name
+  /// (e.g. 'lab_profiles', 'pharmacy_profiles') — see storage.rules, which
+  /// grants public read / owner write on that same path per role.
+  static Future<String> uploadPartnerProfileImage({
+    required String profileCollection,
+    required File imageFile,
+    required String uid,
+    void Function(double progress)? onProgress,
+  }) async {
+    final ref = _storage.ref().child('$profileCollection/$uid/profile.jpg');
+    final task = ref.putFile(
+      imageFile,
+      SettableMetadata(contentType: 'image/jpeg'),
+    );
+
+    if (onProgress != null) {
+      task.snapshotEvents.listen((snap) {
+        if (snap.totalBytes > 0) {
+          onProgress(snap.bytesTransferred / snap.totalBytes);
+        }
+      });
+    }
+
+    final snapshot = await task;
+
+    if (snapshot.state != TaskState.success) {
+      throw Exception(
+        'Upload failed (state: ${snapshot.state}). '
+        'Check your Firebase Storage security rules.',
+      );
+    }
+
+    // Permanent token-free URL — profile.jpg is publicly readable so the
+    // stored URL never expires when the auth session changes.
+    final signedUrl = await ref.getDownloadURL();
+    final uri = Uri.parse(signedUrl);
+    return uri.replace(queryParameters: {'alt': 'media'}).toString();
+  }
+
+  /// Deletes `{profileCollection}/{uid}/profile.jpg` from Storage. Silently
+  /// ignores errors.
+  static Future<void> deletePartnerProfileImage({
+    required String profileCollection,
+    required String uid,
+  }) async {
+    try {
+      await _storage.ref().child('$profileCollection/$uid/profile.jpg').delete();
+    } catch (_) {}
+  }
 }

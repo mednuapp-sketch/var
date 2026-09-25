@@ -2,7 +2,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
+import '../../../core/router/app_router.dart';
 import '../../../core/widgets/ux_widgets.dart';
+import '../../../shared_core/shared_core.dart';
 import '../../auth/services/doctor_auth_service.dart';
 import '../services/hospital_appointment_service.dart';
 import '../services/hospital_profile_service.dart';
@@ -18,56 +20,48 @@ class HospitalAppointmentsScreen extends StatelessWidget {
     final uid = DoctorAuthService.currentUid;
     if (uid == null) return const SizedBox.shrink();
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: CustomScrollView(
-        slivers: [
-          const GradientSliverAppBar(
-            headerIcon: Icons.event_note_rounded,
-            title: 'OP Appointments',
-            subtitle: 'Live walk-in queue',
-            expandedHeight: 110,
-          ),
-          SliverToBoxAdapter(
-            child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-              stream: HospitalProfileService.profileStream(uid),
-              builder: (context, profileSnap) {
-                final profile = profileSnap.data?.data();
-                final hospitalId = profile?['hospitalId'] as String?;
-                final hospitalName = profile?['hospitalName'] as String?;
+    return SharedAppShell(
+      currentRoute: AppRoutes.hospitalAppointments,
+      title: 'OP Appointments',
+      body: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+          stream: HospitalProfileService.profileStream(uid),
+          builder: (context, profileSnap) {
+            final profile = profileSnap.data?.data();
+            final hospitalId = profile?['hospitalId'] as String?;
+            final hospitalName = profile?['hospitalName'] as String?;
 
-                if (profileSnap.connectionState == ConnectionState.waiting) {
-                  return const Padding(
-                    padding: EdgeInsets.all(40),
-                    child: Center(child: CircularProgressIndicator()),
-                  );
-                }
+            if (profileSnap.connectionState == ConnectionState.waiting) {
+              return const Padding(
+                padding: EdgeInsets.all(40),
+                child: Center(child: CircularProgressIndicator()),
+              );
+            }
 
-                if (hospitalId == null || hospitalId.isEmpty) {
-                  return const Padding(
-                    padding: EdgeInsets.fromLTRB(20, 48, 20, 20),
-                    child: Column(
-                      children: [
-                        Icon(Icons.hourglass_top_rounded, size: 48, color: AppColors.textHint),
-                        SizedBox(height: 16),
-                        Text('Awaiting hospital link', style: AppTextStyles.h4, textAlign: TextAlign.center),
-                        SizedBox(height: 8),
-                        Text(
-                          'Our team is confirming which hospital this account represents. '
-                          'OP bookings will appear here once that\'s done.',
-                          style: AppTextStyles.bodySmall,
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
+            if (hospitalId == null || hospitalId.isEmpty) {
+              return const Padding(
+                padding: EdgeInsets.fromLTRB(20, 48, 20, 20),
+                child: Column(
+                  children: [
+                    Icon(Icons.hourglass_top_rounded, size: 48, color: AppColors.textHint),
+                    SizedBox(height: 16),
+                    Text('Awaiting hospital link', style: AppTextStyles.h4, textAlign: TextAlign.center),
+                    SizedBox(height: 8),
+                    Text(
+                      'Our team is confirming which hospital this account represents. '
+                      'OP bookings will appear here once that\'s done.',
+                      style: AppTextStyles.bodySmall,
+                      textAlign: TextAlign.center,
                     ),
-                  );
-                }
+                  ],
+                ),
+              );
+            }
 
-                return _QueueList(hospitalId: hospitalId, hospitalName: hospitalName);
-              },
-            ),
-          ),
-        ],
+            return _QueueList(hospitalId: hospitalId, hospitalName: hospitalName);
+          },
+        ),
       ),
     );
   }
@@ -85,7 +79,16 @@ class _QueueList extends StatelessWidget {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-          child: Text(hospitalName ?? 'Your hospital', style: AppTextStyles.sectionTitle),
+          child: Text(
+            hospitalName ?? 'Your hospital',
+            style: AppTextStyles.sectionTitle,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        const Padding(
+          padding: EdgeInsets.fromLTRB(16, 0, 16, 4),
+          child: Text('Live walk-in queue', style: AppTextStyles.bodySmall),
         ),
         StreamBuilder<List<HospitalAppointment>>(
           stream: HospitalAppointmentService.streamForHospital(hospitalId),
@@ -180,11 +183,12 @@ class _AppointmentCardState extends State<_AppointmentCard> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(a.patientName, style: AppTextStyles.labelLarge),
-                    Text(a.opToken, style: AppTextStyles.caption),
+                    Text(a.patientName, style: AppTextStyles.labelLarge, maxLines: 2, overflow: TextOverflow.ellipsis),
+                    Text(a.opToken, style: AppTextStyles.caption, maxLines: 1, overflow: TextOverflow.ellipsis),
                   ],
                 ),
               ),
+              const SizedBox(width: 8),
               StatusBadge(label: meta.label, color: meta.color),
             ],
           ),
@@ -195,7 +199,14 @@ class _AppointmentCardState extends State<_AppointmentCard> {
             children: [
               const Icon(Icons.schedule_rounded, size: 14, color: AppColors.textHint),
               const SizedBox(width: 6),
-              Text('${a.date} · ${a.time}', style: AppTextStyles.bodySmall),
+              Expanded(
+                child: Text(
+                  '${a.date} · ${a.time}',
+                  style: AppTextStyles.bodySmall,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
             ],
           ),
           if (a.reasonForVisit.isNotEmpty) ...[

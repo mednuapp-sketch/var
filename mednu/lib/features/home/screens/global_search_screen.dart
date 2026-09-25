@@ -512,7 +512,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen>
     ),
     SearchResult(
       id: '_b_nutrition',
-      title: 'Nutrition and Diet',
+      title: 'Diet & Dietician',
       subtitle: '',
       route: AppRoutes.nutrition,
       icon: Icons.restaurant_menu_rounded,

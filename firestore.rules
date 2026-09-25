@@ -155,6 +155,10 @@ service cloud.firestore {
       // written exclusively by Cloud Functions via the Admin SDK (which bypasses
       // these rules). No client write, legitimate or otherwise, may touch them.
       // role and createdAt remain protected for the same reason.
+      // whatsappOptIn / whatsappPhone / language / whatsappOptInUpdatedAt
+      // (functions/whatsapp/) need no addition here — they aren't in the
+      // doesNotModify() blocklist below, so the owner can already write them
+      // like any other profile field.
       allow update: if isOwner(userId) &&
                        doesNotModify(['role', 'createdAt',
                                       'walletBalance', 'mednuMoneyBalance', 'referralPoints']);
@@ -482,11 +486,29 @@ service cloud.firestore {
     // ── Health education articles (public read, admin write) ────────────────
     // Patients may bump the view counter; everything else is admin-only.
     match /health_articles/{articleId} {
-      allow read: if isAuth();
+      allow read: if true; // Shown on the public web landing page & article pages, logged out or in
+
       allow update: if isAdmin() ||
         (isAuth() &&
          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['views']));
       allow create, delete: if isAdmin();
+    }
+
+    // ── Website ads (landing-page ad slot; separate from app banners) ────────
+    // The public site may only read ENABLED ads; the admin panel (marketing/hr)
+    // reads and writes everything.
+    match /web_ads/{adId} {
+      allow read:  if resource.data.isEnabled == true || adminInRoles(['marketing', 'hr']);
+      allow write: if adminInRoles(['marketing', 'hr']);
+    }
+
+    // ── Newsletter signups from the public website (create-only, admin read) ─
+    match /newsletter_subscribers/{subscriberId} {
+      allow create: if request.resource.data.keys().hasOnly(['email', 'createdAt', 'source']) &&
+                       request.resource.data.email is string &&
+                       request.resource.data.email.size() < 200 &&
+                       request.resource.data.email.matches('^[^@ ]+@[^@ ]+[.][^@ ]+$');
+      allow read, update, delete: if isAdmin();
     }
 
     // ── Promotional banners (public read, admin write) ──────────────────────
@@ -1808,6 +1830,18 @@ service cloud.firestore {
       // was written) without failing the whole batch on a not-found doc.
       allow read, delete: if isAuth() &&
         (resource == null || resource.data.uid == request.auth.uid);
+    }
+
+    // ── WhatsApp send logs (Cloud Functions only) ──────────────────────────────
+    // Written/read only by functions/whatsapp/ (Admin SDK bypasses these
+    // rules) as the idempotency lock for notifyOnce() and the delivery-status
+    // landing spot for inbound webhook receipts. No client of either app ever
+    // needs to read or write this collection. Already covered by the
+    // `match /{document=**} { allow read, write: if false; }` catch-all at
+    // the bottom of this file — stated explicitly here too so it can't be
+    // silently broken by a future change to that catch-all.
+    match /whatsapp_logs/{logId} {
+      allow read, write: if false;
     }
 
     // ── Doctor notifications ──────────────────────────────────────────────────

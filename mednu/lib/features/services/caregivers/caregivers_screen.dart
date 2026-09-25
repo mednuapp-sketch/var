@@ -40,17 +40,19 @@ class CaregiversScreen extends ConsumerStatefulWidget {
 }
 
 class _CaregiversScreenState extends ConsumerState<CaregiversScreen> {
+  // Brand plum family throughout — distinct shades for at-a-glance type
+  // recognition without reaching outside the palette.
   static const _palette = [
-    Color(0xFF522546), Color(0xFF1565C0), Color(0xFF2E7D32),
-    Color(0xFF6A1B9A), Color(0xFF0097A7), Color(0xFFE65100),
+    AppColors.primary, AppColors.secondary, AppColors.primaryDark,
+    AppColors.secondaryLight, AppColors.primaryLight, AppColors.secondaryDark,
   ];
 
   Color _colorFor(String type) {
     switch (type.toLowerCase()) {
-      case 'nurse':           return const Color(0xFF1565C0);
-      case 'maid':            return const Color(0xFF522546);
-      case 'attendant':       return const Color(0xFF2E7D32);
-      case 'physiotherapist': return const Color(0xFFE65100);
+      case 'nurse':           return AppColors.primary;
+      case 'maid':            return AppColors.secondary;
+      case 'attendant':       return AppColors.primaryDark;
+      case 'physiotherapist': return AppColors.secondaryLight;
       default:                return _palette[0];
     }
   }
@@ -513,7 +515,6 @@ class _CaregiversScreenState extends ConsumerState<CaregiversScreen> {
                     else
                       ...filtered.map((c) {
                         final color      = c['color'] as Color;
-                        final rating     = c['rating'] as double;
                         final isVerified = c['isVerified'] as bool;
                         return Container(
                           margin: EdgeInsets.only(bottom: R.h(context, 12)),
@@ -615,11 +616,9 @@ class _CaregiversScreenState extends ConsumerState<CaregiversScreen> {
                             Wrap(spacing: 6, runSpacing: 4, children: [
                               _Badge(label: c['type'] as String, color: color),
                               if ((c['gender'] as String).isNotEmpty)
-                                _Badge(label: c['gender'] as String, color: const Color(0xFF6A1B9A)),
+                                _Badge(label: c['gender'] as String, color: AppColors.secondary),
                               if ((c['exp'] as String).isNotEmpty)
-                                _Badge(label: '${c['exp']} exp', color: const Color(0xFF0097A7)),
-                              if (rating > 0)
-                                _Badge(label: '⭐ ${rating.toStringAsFixed(1)}', color: Colors.amber.shade700),
+                                _Badge(label: '${c['exp']} exp', color: AppColors.primaryDark),
                             ]),
                           ]),
                         );

@@ -2,9 +2,12 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/services/image_upload_service.dart';
+import '../../../core/services/whatsapp_opt_in_service.dart';
+import '../../../core/widgets/whatsapp_opt_in_tile.dart';
 import '../providers/auth_provider.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
@@ -25,6 +28,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
 
   String  _selectedGender    = 'Male';
   bool    _isLoading         = false;
+  bool    _whatsappOptIn     = false;
   File?   _profileImage;
   double  _uploadProgress    = 0;
 
@@ -164,6 +168,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
     }
 
     setState(() => _isLoading = true);
+    final languageCode = context.locale.languageCode;
     try {
       String? photoUrl;
       if (_profileImage != null) {
@@ -189,8 +194,23 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
         await ref.read(authProvider.notifier).updatePhotoUrl(photoUrl);
       }
 
+      // Written as a separate merge write, strictly after the account's
+      // own batch.set() above has committed — that write replaces the
+      // whole `users` doc, so writing this any earlier would just get
+      // wiped out by it.
+      if (_whatsappOptIn) {
+        final uid = ref.read(authProvider).user?.uid;
+        if (uid != null) {
+          await WhatsAppOptInService.save(
+            uid: uid,
+            value: true,
+            language: languageCode,
+          );
+        }
+      }
+
       if (!mounted) return;
-      context.go(AppRoutes.createMpin, extra: {'mode': 'setup'});
+      context.go(AppRoutes.home);
     } catch (e) {
       if (!mounted) return;
       _showError(e.toString().replaceFirst('Exception: ', ''));
@@ -435,7 +455,13 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                             prefix: Icons.location_city_outlined,
                           ),
 
-                          const SizedBox(height: 24),
+                          const SizedBox(height: 8),
+                          WhatsAppOptInTile(
+                            value: _whatsappOptIn,
+                            onChanged: (v) => setState(() => _whatsappOptIn = v),
+                          ),
+
+                          const SizedBox(height: 16),
 
                           // ── Upload progress ───────────────────────────
                           if (_isLoading && _uploadProgress > 0 && _uploadProgress < 1) ...[

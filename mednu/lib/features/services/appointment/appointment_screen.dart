@@ -860,6 +860,7 @@ class _AppointmentScreenState extends State<AppointmentScreen>
             .doc(docId)
             .update({
               'status': 'cancelled',
+              'cancelledBy': 'patient',
               'updatedAt': FieldValue.serverTimestamp(),
             });
         // Slot availability is derived from appointments where status == 'booked';

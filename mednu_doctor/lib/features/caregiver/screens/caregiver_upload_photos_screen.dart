@@ -145,7 +145,7 @@ class _CaregiverUploadPhotosScreenState extends ConsumerState<CaregiverUploadPho
                   style: AppTextStyles.bodyMedium,
                 ),
                 const SizedBox(height: 4),
-                Text(
+                const Text(
                   'JPG, PNG or HEIC · up to ${_maxPhotoSizeMb}MB each',
                   style: AppTextStyles.caption,
                 ),

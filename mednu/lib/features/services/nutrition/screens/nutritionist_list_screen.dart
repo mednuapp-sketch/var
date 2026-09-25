@@ -43,10 +43,10 @@ class _NutritionistListScreenState
     'Weight Loss',
     'Diabetes Diet',
     'Heart Healthy',
-    'Pregnancy Nutrition',
-    'Sports Nutrition',
+    'Pregnancy Diet',
+    'Sports Diet',
     'PCOS Diet',
-    'Child Nutrition',
+    'Child Diet',
     'Oncology Diet',
   ];
 
@@ -732,7 +732,7 @@ class _EmptyState extends StatelessWidget {
             Text(
               query.isNotEmpty
                   ? 'No results for "$query"'
-                  : 'No nutritionists available',
+                  : 'No dieticians available',
               style: AppTextStyles.labelLarge
                   .copyWith(color: context.appTextPrimary),
               textAlign: TextAlign.center,

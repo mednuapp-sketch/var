@@ -4,9 +4,11 @@ import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/services/feedback_service.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../../../shared_core/shared_core.dart';
 import '../models/pharmacy_order.dart';
+import '../models/pharmacy_profile.dart';
 import '../providers/pharmacy_providers.dart';
 import '../services/pharmacy_profile_service.dart';
 
@@ -22,6 +24,8 @@ class PharmacyDashboardScreen extends ConsumerStatefulWidget {
 }
 
 class _PharmacyDashboardScreenState extends ConsumerState<PharmacyDashboardScreen> {
+  bool _togglingAccepting = false;
+
   @override
   void initState() {
     super.initState();
@@ -34,6 +38,71 @@ class _PharmacyDashboardScreenState extends ConsumerState<PharmacyDashboardScree
     final exists = await PharmacyProfileService.profileExists(uid);
     if (!mounted || exists) return;
     context.go(AppRoutes.pharmacyOnboarding);
+  }
+
+  Future<void> _toggleAccepting(String uid, bool value) async {
+    setState(() => _togglingAccepting = true);
+    try {
+      await PharmacyProfileService.updateProfile(uid, {'acceptingOrders': value});
+      if (!mounted) return;
+      FeedbackService.showSuccess(
+        context,
+        value ? 'You are now accepting new orders' : 'New orders paused',
+      );
+    } catch (_) {
+      if (mounted) FeedbackService.showError(context, 'Could not update — please try again.');
+    } finally {
+      if (mounted) setState(() => _togglingAccepting = false);
+    }
+  }
+
+  Widget _acceptingOrdersCard(PharmacyProfile profile) {
+    final isOn = profile.acceptingOrders;
+    final color = isOn ? AppColors.success : AppColors.textHint;
+    return PremiumCard(
+      margin: const EdgeInsets.only(bottom: 16),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(11),
+            ),
+            child: Icon(
+              isOn ? Icons.storefront_rounded : Icons.storefront_outlined,
+              color: color,
+              size: 22,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Accepting New Orders', style: AppTextStyles.labelLarge),
+                Text(
+                  isOn ? 'Visible in the order queue' : 'Paused — new orders are hidden',
+                  style: AppTextStyles.caption,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          _togglingAccepting
+              ? const SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2.5),
+                )
+              : Switch(
+                  value: isOn,
+                  onChanged: (v) => _toggleAccepting(profile.uid, v),
+                ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -83,6 +152,11 @@ class _PharmacyDashboardScreenState extends ConsumerState<PharmacyDashboardScree
                       ),
                     ),
               loading: () => const CardLoadingState(itemCount: 1, cardHeight: 72),
+              error: (_, __) => const SizedBox(),
+            ),
+            profileAsync.when(
+              data: (profile) => profile == null ? const SizedBox() : _acceptingOrdersCard(profile),
+              loading: () => const SizedBox(),
               error: (_, __) => const SizedBox(),
             ),
             SharedWalletSummaryCard(onTap: () => context.push(AppRoutes.pharmacyEarnings)),

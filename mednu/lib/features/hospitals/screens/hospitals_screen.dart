@@ -16,18 +16,16 @@ import '../services/nearby_hospital_service.dart';
 
 enum _LocStatus { idle, loading, denied, ready }
 
-enum _SortMode { distance, rating }
+enum _SortMode { distance, name }
 
-enum _HospitalFilter { all, nearby, openNow, emergency, specialty }
+enum _HospitalFilter { all, nearby, emergency }
 
 extension _FilterLabel on _HospitalFilter {
   String get label {
     switch (this) {
       case _HospitalFilter.all:       return 'All';
       case _HospitalFilter.nearby:    return 'Nearby';
-      case _HospitalFilter.openNow:   return 'Open Now';
       case _HospitalFilter.emergency: return 'Emergency 24/7';
-      case _HospitalFilter.specialty: return 'MedNU Partner';
     }
   }
 
@@ -35,15 +33,21 @@ extension _FilterLabel on _HospitalFilter {
     switch (this) {
       case _HospitalFilter.all:       return Icons.apps_rounded;
       case _HospitalFilter.nearby:    return Icons.near_me_rounded;
-      case _HospitalFilter.openNow:   return Icons.access_time_rounded;
       case _HospitalFilter.emergency: return Icons.emergency_rounded;
-      case _HospitalFilter.specialty: return Icons.verified_rounded;
     }
   }
 }
 
 // ── Main Screen ───────────────────────────────────────────────────────────────
 
+/// Lists this account's registered `hospitals` catalog only — no generic
+/// "nearby hospitals" discovery. It used to merge in a live Google Places
+/// nearby-search so patients could see every hospital around them, but that
+/// let patients try to book/pay a hospital MedNU has no relationship with;
+/// now only hospitals admin has added (and enabled) ever appear here.
+/// Distance is computed locally from the patient's own position against
+/// each hospital's stored `latitude`/`longitude` (see
+/// [NearbyHospitalService]) rather than from a Google API call.
 class HospitalsScreen extends StatefulWidget {
   final String? initialQuery;
   const HospitalsScreen({super.key, this.initialQuery});
@@ -64,10 +68,10 @@ class _HospitalsScreenState extends State<HospitalsScreen> {
   List<Hospital> _mednuHospitals = [];
   StreamSubscription<List<Hospital>>? _mednuSub;
 
-  List<Map<String, dynamic>>? _rawGooglePlaces;
-  List<NearbyHospital>? _mergedHospitals;
-  bool _isFetchingNearby = false;
-  String? _fetchError;
+  /// Null only until the `hospitals` stream's first snapshot arrives —
+  /// after that it's always a (possibly empty) list, recomputed whenever
+  /// the catalog or the patient's own position changes.
+  List<NearbyHospital>? _hospitals;
 
   String _query = '';
   double _radiusKm = 0;
@@ -84,17 +88,7 @@ class _HospitalsScreenState extends State<HospitalsScreen> {
     _mednuSub = HospitalService.stream().listen((hospitals) {
       if (!mounted) return;
       _mednuHospitals = hospitals;
-      if (_rawGooglePlaces != null && _userLat != null && _userLng != null) {
-        final merged = nearbyHospitalService.mergeResults(
-          userLat: _userLat!,
-          userLng: _userLng!,
-          rawGooglePlaces: _rawGooglePlaces!,
-          mednuHospitals: _mednuHospitals,
-        );
-        setState(() => _mergedHospitals = merged);
-      } else if (_mergedHospitals == null) {
-        setState(() {});
-      }
+      _recomputeDisplayList();
     });
     _initLocation();
   }
@@ -142,53 +136,24 @@ class _HospitalsScreenState extends State<HospitalsScreen> {
       _userLat = pos.latitude;
       _userLng = pos.longitude;
       setState(() => _locStatus = _LocStatus.ready);
-      await _fetchNearby();
+      _recomputeDisplayList();
     } catch (_) {
       if (mounted) setState(() => _locStatus = _LocStatus.denied);
     }
   }
 
-  Future<void> _fetchNearby() async {
-    if (_userLat == null || _isFetchingNearby) return;
+  void _recomputeDisplayList() {
     setState(() {
-      _isFetchingNearby = true;
-      _fetchError = null;
-    });
-    try {
-      final raw = await nearbyHospitalService.fetchRawGoogle(
-        userLat: _userLat!,
-        userLng: _userLng!,
-        radiusMeters: 15000,
-      );
-      if (!mounted) return;
-      _rawGooglePlaces = raw;
-      final merged = nearbyHospitalService.mergeResults(
-        userLat: _userLat!,
-        userLng: _userLng!,
-        rawGooglePlaces: raw,
+      _hospitals = nearbyHospitalService.fromHospitals(
         mednuHospitals: _mednuHospitals,
+        userLat: _userLat,
+        userLng: _userLng,
       );
-      setState(() => _mergedHospitals = merged);
-    } catch (e) {
-      if (mounted) setState(() => _fetchError = e.toString());
-    } finally {
-      if (mounted) setState(() => _isFetchingNearby = false);
-    }
+    });
   }
 
   List<NearbyHospital> get _displayList {
-    var src = _mergedHospitals ??
-        _mednuHospitals
-            .map((h) => NearbyHospital(
-                  id: h.id,
-                  name: h.name,
-                  address: h.address,
-                  phone: h.phone,
-                  mapsUrl: h.mapsUrl,
-                  isEmergency: h.isEmergency,
-                  isMednu: true,
-                ))
-            .toList();
+    var src = _hospitals ?? const <NearbyHospital>[];
 
     if (_query.isNotEmpty) {
       src = src
@@ -206,20 +171,15 @@ class _HospitalsScreenState extends State<HospitalsScreen> {
       case _HospitalFilter.nearby:
         src = src.where((h) => h.distanceKm != null && h.distanceKm! <= 5.0).toList();
         break;
-      case _HospitalFilter.openNow:
-        break;
       case _HospitalFilter.emergency:
         src = src.where((h) => h.isEmergency).toList();
-        break;
-      case _HospitalFilter.specialty:
-        src = src.where((h) => h.isMednu).toList();
         break;
       case _HospitalFilter.all:
         break;
     }
     src.sort((a, b) {
-      if (_sort == _SortMode.rating) {
-        return (b.rating ?? 0).compareTo(a.rating ?? 0);
+      if (_sort == _SortMode.name) {
+        return a.name.toLowerCase().compareTo(b.name.toLowerCase());
       }
       return (a.distanceKm ?? double.infinity)
           .compareTo(b.distanceKm ?? double.infinity);
@@ -259,16 +219,18 @@ class _HospitalsScreenState extends State<HospitalsScreen> {
   @override
   Widget build(BuildContext context) {
     final hospitals = _displayList;
-    final mednuCount = hospitals.where((h) => h.isMednu).length;
-    final isLoading = (_locStatus == _LocStatus.loading || _locStatus == _LocStatus.idle) ||
-        (_isFetchingNearby && _mergedHospitals == null);
+    final isLoading = _hospitals == null;
 
     return Scaffold(
       backgroundColor: context.appBackground,
       body: RefreshIndicator(
         color: AppColors.primary,
         onRefresh: () async {
-          if (_locStatus == _LocStatus.ready) await _fetchNearby();
+          if (_locStatus != _LocStatus.ready) {
+            await _initLocation();
+          } else {
+            _recomputeDisplayList();
+          }
         },
         child: CustomScrollView(
           controller: _scrollController,
@@ -292,7 +254,7 @@ class _HospitalsScreenState extends State<HospitalsScreen> {
                 // Sort toggle
                 GestureDetector(
                   onTap: () => setState(() => _sort = _sort == _SortMode.distance
-                      ? _SortMode.rating
+                      ? _SortMode.name
                       : _SortMode.distance),
                   child: Container(
                     margin: EdgeInsets.only(right: R.p(context, 4)),
@@ -307,13 +269,13 @@ class _HospitalsScreenState extends State<HospitalsScreen> {
                         Icon(
                           _sort == _SortMode.distance
                               ? Icons.near_me_rounded
-                              : Icons.star_rounded,
+                              : Icons.sort_by_alpha_rounded,
                           color: Colors.white,
                           size: R.w(context, 13),
                         ),
                         SizedBox(width: R.p(context, 4)),
                         Text(
-                          _sort == _SortMode.distance ? 'Distance' : 'Rating',
+                          _sort == _SortMode.distance ? 'Distance' : 'Name',
                           style: AppTextStyles.labelSmall
                               .copyWith(color: Colors.white),
                         ),
@@ -321,23 +283,9 @@ class _HospitalsScreenState extends State<HospitalsScreen> {
                     ),
                   ),
                 ),
-                if (_locStatus == _LocStatus.ready)
-                  IconButton(
-                    icon: _isFetchingNearby
-                        ? SizedBox(
-                            width: R.w(context, 18),
-                            height: R.h(context, 18),
-                            child: const CircularProgressIndicator(
-                                strokeWidth: 2, color: Colors.white))
-                        : Icon(Icons.refresh_rounded,
-                            color: Colors.white, size: R.w(context, 22)),
-                    onPressed: _isFetchingNearby ? null : _fetchNearby,
-                    tooltip: 'Refresh',
-                  ),
               ],
               flexibleSpace: _HospitalHeader(
                 totalCount: hospitals.length,
-                mednuCount: mednuCount,
                 isLoading: isLoading,
                 locStatus: _locStatus,
               ),
@@ -496,16 +444,6 @@ class _HospitalsScreenState extends State<HospitalsScreen> {
                 ),
               )
 
-            // ── Fetch error ───────────────────────────────────────────────────
-            else if (_fetchError != null && _mergedHospitals == null)
-              SliverFillRemaining(
-                child: AppErrorState(
-                  message:
-                      'Unable to load nearby hospitals.\nCheck your connection and try again.',
-                  onRetry: _fetchNearby,
-                ),
-              )
-
             // ── Empty state ───────────────────────────────────────────────────
             else if (hospitals.isEmpty)
               SliverFillRemaining(
@@ -518,7 +456,7 @@ class _HospitalsScreenState extends State<HospitalsScreen> {
                       ? 'Try a different search term or clear the filter.'
                       : _radiusKm > 0
                           ? 'No hospitals within ${_radiusKm.toInt()} km. Try a larger radius.'
-                          : 'Hospitals will appear once location is available.',
+                          : 'No registered hospitals yet — check back soon.',
                   actionLabel: _query.isNotEmpty
                       ? 'Clear Search'
                       : _radiusKm > 0
@@ -578,13 +516,11 @@ class _HospitalsScreenState extends State<HospitalsScreen> {
 
 class _HospitalHeader extends StatelessWidget {
   final int totalCount;
-  final int mednuCount;
   final bool isLoading;
   final _LocStatus locStatus;
 
   const _HospitalHeader({
     required this.totalCount,
-    required this.mednuCount,
     required this.isLoading,
     required this.locStatus,
   });
@@ -650,7 +586,7 @@ class _HospitalHeader extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Nearby Hospitals',
+                              'Hospitals',
                               style: TextStyle(
                                 fontFamily: 'Poppins',
                                 fontSize: 20,
@@ -659,7 +595,7 @@ class _HospitalHeader extends StatelessWidget {
                               ),
                             ),
                             Text(
-                              'Find nearby hospitals & MedNU partners',
+                              'Our registered hospital partners',
                               style: TextStyle(
                                 fontFamily: 'Poppins',
                                 fontSize: 12,
@@ -705,13 +641,6 @@ class _HospitalHeader extends StatelessWidget {
                           icon: Icons.apartment_rounded,
                           label: '$totalCount Hospitals',
                         ),
-                        SizedBox(width: R.p(context, 10)),
-                        if (mednuCount > 0)
-                          _StatPill(
-                            icon: Icons.verified_rounded,
-                            label: '$mednuCount MedNU',
-                            isGreen: true,
-                          ),
                       ],
                     ),
                   ],
@@ -732,21 +661,13 @@ class _HospitalHeader extends StatelessWidget {
 class _StatPill extends StatelessWidget {
   final IconData icon;
   final String label;
-  final bool isGreen;
-  const _StatPill({required this.icon, required this.label, this.isGreen = false});
+  const _StatPill({required this.icon, required this.label});
 
   @override
   Widget build(BuildContext context) {
-    final Color bg, border, fg;
-    if (isGreen) {
-      bg = const Color(0xFF2E7D32).withValues(alpha: 0.25);
-      border = const Color(0xFF43A047).withValues(alpha: 0.5);
-      fg = const Color(0xFFA5D6A7);
-    } else {
-      bg = Colors.white.withValues(alpha: 0.15);
-      border = Colors.white.withValues(alpha: 0.25);
-      fg = Colors.white;
-    }
+    final bg = Colors.white.withValues(alpha: 0.15);
+    final border = Colors.white.withValues(alpha: 0.25);
+    const fg = Colors.white;
     return Container(
       padding: EdgeInsets.symmetric(horizontal: R.p(context, 10), vertical: R.p(context, 5)),
       decoration: BoxDecoration(
@@ -760,7 +681,7 @@ class _StatPill extends StatelessWidget {
           Icon(icon, size: R.w(context, 12), color: fg),
           SizedBox(width: R.p(context, 5)),
           Text(label,
-              style: TextStyle(
+              style: const TextStyle(
                 fontFamily: 'Poppins',
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
@@ -860,7 +781,7 @@ class _LocationBanner extends StatelessWidget {
                 ),
                 SizedBox(height: R.h(context, 2)),
                 const Text(
-                  'Enable location to find hospitals near you',
+                  'Enable location to sort hospitals by distance',
                   style: TextStyle(
                     fontFamily: 'Poppins',
                     fontSize: 11,

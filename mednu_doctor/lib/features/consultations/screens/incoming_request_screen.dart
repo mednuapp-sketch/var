@@ -40,6 +40,10 @@ class _IncomingRequestScreenState extends State<IncomingRequestScreen>
   String _patientPhotoUrl = '';
   String _chiefComplaint = '';
   String _consultationType = 'Video';
+  // 'doctor' | 'physiotherapist' | 'counsellor' — see ProviderOutgoingCallScreen
+  // (mednu_doctor) and PhysiotherapistProfileScreen._connectNow (mednu) for
+  // the two ends of the non-doctor path this now also has to route.
+  String _callerType = 'doctor';
 
   StreamSubscription<QuerySnapshot>? _sub;
 
@@ -149,6 +153,18 @@ class _IncomingRequestScreenState extends State<IncomingRequestScreen>
         _patientPhotoUrl = data['patientPhotoUrl'] as String? ?? '';
         _chiefComplaint = data['chiefComplaint'] as String? ?? '';
         _consultationType = data['consultationType'] as String? ?? 'Video';
+        // `callerType` on a provider-initiated call already holds the
+        // provider's own role ('physiotherapist'/'counsellor'), but on a
+        // patient-initiated quick-connect (this screen's normal case) it's
+        // always 'patient' — the caller's type, not the callee's — so the
+        // provider role has to come from the explicit `providerRole` field
+        // instead (set by PhysiotherapistProfileScreen._connectNow in
+        // mednu). Absent on every existing doctor quick-connect doc, so the
+        // default stays 'doctor' exactly as before this field existed.
+        final providerRole = data['providerRole'] as String?;
+        final callerType = data['callerType'] as String?;
+        _callerType = providerRole ??
+            (callerType != null && callerType != 'patient' ? callerType : 'doctor');
         _loading = false;
         if (isNewCall) {
           _countdown = 30;
@@ -230,10 +246,21 @@ class _IncomingRequestScreenState extends State<IncomingRequestScreen>
       return;
     }
     if (!mounted) return;
-    context.push(AppRoutes.videoCall, extra: {
-      'consultationId': _consultationId!,
-      'patientName': _patientName,
-    });
+    if (_callerType == 'doctor') {
+      context.push(AppRoutes.videoCall, extra: {
+        'consultationId': _consultationId!,
+        'patientName': _patientName,
+      });
+    } else {
+      // Physiotherapist/counsellor — same call mechanics, stripped of the
+      // doctor-only clinical features (see ProviderVideoCallScreen's own
+      // doc comment).
+      context.push(AppRoutes.providerVideoCall, extra: {
+        'consultationId': _consultationId!,
+        'providerRole': _callerType,
+        'patientName': _patientName,
+      });
+    }
   }
 
   Future<void> _declineCall() async {
@@ -488,7 +515,7 @@ class _IncomingRequestScreenState extends State<IncomingRequestScreen>
     return Column(
       children: [
         Text(
-          'Incoming Consultation',
+          _callerType == 'doctor' ? 'Incoming Consultation' : 'Incoming Session',
           style: AppTextStyles.caption.copyWith(
               fontSize: 12, color: Colors.white54, letterSpacing: 1.2),
         ),

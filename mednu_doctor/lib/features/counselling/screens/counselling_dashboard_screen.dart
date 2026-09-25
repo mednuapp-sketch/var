@@ -75,7 +75,7 @@ class _CounsellingDashboardScreenState extends ConsumerState<CounsellingDashboar
                 value: '${metrics.todaySessions}',
                 label: "Today's Sessions",
                 icon: Icons.event_note_rounded,
-                colors: const [Color(0xFF5E35B1), Color(0xFF4527A0)],
+                colors: const [AppColors.primary, AppColors.secondary],
               ),
               GradientStatCard(
                 value: '${metrics.completedToday}',

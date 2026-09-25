@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_colors.dart';
 
@@ -7,6 +8,7 @@ class DashboardSidebar extends StatelessWidget {
   final ValueChanged<int> onItemSelected;
   final VoidCallback onLogout;
   final bool collapsed;
+  final int unreadCount;
 
   const DashboardSidebar({
     super.key,
@@ -14,6 +16,7 @@ class DashboardSidebar extends StatelessWidget {
     required this.onItemSelected,
     required this.onLogout,
     this.collapsed = false,
+    this.unreadCount = 0,
   });
 
   static const List<_SidebarItem> _items = [
@@ -23,7 +26,6 @@ class DashboardSidebar extends StatelessWidget {
     _SidebarItem(icon: Icons.account_balance_wallet_rounded, label: 'Wallet'),
     _SidebarItem(icon: Icons.people_rounded, label: 'Family'),
     _SidebarItem(icon: Icons.favorite_rounded, label: 'Health'),
-    _SidebarItem(icon: Icons.card_giftcard_rounded, label: 'Referrals'),
     _SidebarItem(icon: Icons.notifications_rounded, label: 'Notifications'),
     _SidebarItem(icon: Icons.person_rounded, label: 'Profile'),
   ];
@@ -34,7 +36,7 @@ class DashboardSidebar extends StatelessWidget {
       duration: const Duration(milliseconds: 280),
       width: collapsed ? 72 : 256,
       decoration: const BoxDecoration(
-        color: Color(0xFF1A1A2E),
+        color: Color(0xFF33172C),
         border: Border(right: BorderSide(color: Color(0x1AFFFFFF))),
       ),
       child: Column(
@@ -49,6 +51,7 @@ class DashboardSidebar extends StatelessWidget {
                 item: _items[i],
                 selected: selectedIndex == i,
                 collapsed: collapsed,
+                badge: _items[i].label == 'Notifications' ? unreadCount : 0,
                 onTap: () => onItemSelected(i),
               ),
             ),
@@ -74,24 +77,30 @@ class _SidebarHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: collapsed ? 70 : 78,
-      padding: EdgeInsets.symmetric(horizontal: collapsed ? 16 : 20),
-      child: Row(
-        children: [
-          Image.asset('assets/images/mednu_logo.png', width: 36, height: 36, filterQuality: FilterQuality.high),
-          if (!collapsed) ...[
-            const SizedBox(width: 10),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text('MedNU', style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: -0.5, height: 1.1)),
-                Text('Always with you', style: GoogleFonts.poppins(fontSize: 10.5, fontWeight: FontWeight.w500, color: Colors.white54, letterSpacing: 0.2)),
+    return Tooltip(
+      message: 'Back to website home',
+      child: GestureDetector(
+        onTap: () => context.go('/'),
+        child: Container(
+          height: collapsed ? 70 : 78,
+          padding: EdgeInsets.symmetric(horizontal: collapsed ? 16 : 20),
+          child: Row(
+            children: [
+              Image.asset('assets/images/mednu_logo.png', width: 36, height: 36, filterQuality: FilterQuality.high),
+              if (!collapsed) ...[
+                const SizedBox(width: 10),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('MedNU', style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: -0.5, height: 1.1)),
+                    Text('Always with you', style: GoogleFonts.poppins(fontSize: 10.5, fontWeight: FontWeight.w500, color: Colors.white70, letterSpacing: 0.2)),
+                  ],
+                ),
               ],
-            ),
-          ],
-        ],
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -101,12 +110,14 @@ class _SidebarNavItem extends StatefulWidget {
   final _SidebarItem item;
   final bool selected;
   final bool collapsed;
+  final int badge;
   final VoidCallback onTap;
 
   const _SidebarNavItem({
     required this.item,
     required this.selected,
     required this.collapsed,
+    required this.badge,
     required this.onTap,
   });
 
@@ -143,7 +154,7 @@ class _SidebarNavItemState extends State<_SidebarNavItem> {
             Icon(
               widget.item.icon,
               size: 20,
-              color: widget.selected ? Colors.white : (widget.selected || _hovered ? Colors.white70 : const Color(0xFF4A6080)),
+              color: widget.selected ? Colors.white : (widget.selected || _hovered ? Colors.white70 : const Color(0xFFC7AFC0)),
             ),
             if (!widget.collapsed) ...[
               const SizedBox(width: 12),
@@ -152,15 +163,15 @@ class _SidebarNavItemState extends State<_SidebarNavItem> {
                 style: GoogleFonts.poppins(
                   fontSize: 13.5,
                   fontWeight: widget.selected ? FontWeight.w600 : FontWeight.w500,
-                  color: widget.selected ? Colors.white : (_hovered ? Colors.white70 : const Color(0xFF4A6080)),
+                  color: widget.selected ? Colors.white : (_hovered ? Colors.white70 : const Color(0xFFC7AFC0)),
                 ),
               ),
-              if (widget.item.label == 'Notifications') ...[
+              if (widget.badge > 0) ...[
                 const Spacer(),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                   decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(10)),
-                  child: Text('3', style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white)),
+                  child: Text(widget.badge > 99 ? '99+' : '${widget.badge}', style: GoogleFonts.poppins(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white)),
                 ),
               ],
             ],
@@ -198,7 +209,7 @@ class _LogoutButtonState extends State<_LogoutButton> {
             borderRadius: BorderRadius.circular(12),
           ),
           child: Row(children: [
-            Icon(Icons.logout_rounded, size: 20, color: _hovered ? Colors.redAccent : const Color(0xFF4A6080)),
+            Icon(Icons.logout_rounded, size: 20, color: _hovered ? Colors.redAccent : const Color(0xFFC7AFC0)),
             if (!widget.collapsed) ...[
               const SizedBox(width: 12),
               Text(
@@ -206,7 +217,7 @@ class _LogoutButtonState extends State<_LogoutButton> {
                 style: GoogleFonts.poppins(
                   fontSize: 13.5,
                   fontWeight: FontWeight.w500,
-                  color: _hovered ? Colors.redAccent : const Color(0xFF4A6080),
+                  color: _hovered ? Colors.redAccent : const Color(0xFFC7AFC0),
                 ),
               ),
             ],

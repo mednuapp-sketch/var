@@ -728,7 +728,7 @@ class NutritionAppointmentWalletRepository implements WalletRepository {
           balance += fee;
           transactions.add(WalletTransaction(
             id: doc.id,
-            title: 'Nutrition session — $patientName',
+            title: 'Dietician session — $patientName',
             subtitle: 'Completed',
             amount: fee,
             type: WalletTransactionType.credit,

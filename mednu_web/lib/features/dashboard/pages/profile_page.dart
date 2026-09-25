@@ -1,9 +1,12 @@
 import 'dart:async';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/responsive.dart';
 import '../../../core/widgets/gradient_button.dart';
@@ -34,6 +37,7 @@ class _ProfilePageState extends State<ProfilePage> {
   bool _loading = true;
   bool _saving = false;
   bool _hydrated = false;
+  bool _uploadingPhoto = false;
 
   @override
   void initState() {
@@ -128,6 +132,43 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
+  Future<void> _pickAndUploadPhoto() async {
+    if (_uid.isEmpty || _uploadingPhoto) return;
+    final XFile? picked = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 800,
+      maxHeight: 800,
+      imageQuality: 85,
+    );
+    if (picked == null) return;
+
+    setState(() => _uploadingPhoto = true);
+    try {
+      final bytes = await picked.readAsBytes();
+      final ref = FirebaseStorage.instance.ref('users/$_uid/profile.jpg');
+      await ref.putData(bytes, SettableMetadata(contentType: 'image/jpeg'));
+      final url = await ref.getDownloadURL();
+      await FirebaseFirestore.instance.collection('users').doc(_uid).update({'photoUrl': url});
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Profile photo updated'),
+          backgroundColor: AppColors.success,
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Could not upload photo: $e'),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _uploadingPhoto = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isMobile = Responsive.isMobile(context);
@@ -145,7 +186,12 @@ class _ProfilePageState extends State<ProfilePage> {
         else
           isMobile
               ? Column(children: [
-                  _ProfileCard(name: name, status: status),
+                  _ProfileCard(
+                    name: name, status: status,
+                    photoUrl: _user['photoUrl'] as String? ?? '',
+                    uploadingPhoto: _uploadingPhoto,
+                    onChangePhoto: _pickAndUploadPhoto,
+                  ),
                   const SizedBox(height: 20),
                   _ProfileForm(
                     nameCtrl: _nameCtrl, emailCtrl: _emailCtrl, dobCtrl: _dobCtrl,
@@ -155,7 +201,12 @@ class _ProfilePageState extends State<ProfilePage> {
                   ),
                 ])
               : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Expanded(flex: 2, child: _ProfileCard(name: name, status: status)),
+                  Expanded(flex: 2, child: _ProfileCard(
+                    name: name, status: status,
+                    photoUrl: _user['photoUrl'] as String? ?? '',
+                    uploadingPhoto: _uploadingPhoto,
+                    onChangePhoto: _pickAndUploadPhoto,
+                  )),
                   const SizedBox(width: 24),
                   Expanded(flex: 5, child: _ProfileForm(
                     nameCtrl: _nameCtrl, emailCtrl: _emailCtrl, dobCtrl: _dobCtrl,
@@ -172,7 +223,16 @@ class _ProfilePageState extends State<ProfilePage> {
 class _ProfileCard extends StatelessWidget {
   final String name;
   final String status;
-  const _ProfileCard({required this.name, required this.status});
+  final String photoUrl;
+  final bool uploadingPhoto;
+  final VoidCallback onChangePhoto;
+  const _ProfileCard({
+    required this.name,
+    required this.status,
+    required this.photoUrl,
+    required this.uploadingPhoto,
+    required this.onChangePhoto,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -193,13 +253,28 @@ class _ProfileCard extends StatelessWidget {
             width: 88,
             height: 88,
             decoration: const BoxDecoration(gradient: AppColors.primaryGradient, shape: BoxShape.circle),
-            child: Center(child: Text(initial, style: GoogleFonts.poppins(fontSize: 32, fontWeight: FontWeight.w800, color: Colors.white))),
+            child: ClipOval(
+              child: uploadingPhoto
+                  ? const Center(child: SizedBox(width: 26, height: 26, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)))
+                  : photoUrl.isNotEmpty
+                      ? CachedNetworkImage(
+                          imageUrl: photoUrl,
+                          width: 88,
+                          height: 88,
+                          fit: BoxFit.cover,
+                          errorWidget: (_, __, ___) => Center(child: Text(initial, style: GoogleFonts.poppins(fontSize: 32, fontWeight: FontWeight.w800, color: Colors.white))),
+                        )
+                      : Center(child: Text(initial, style: GoogleFonts.poppins(fontSize: 32, fontWeight: FontWeight.w800, color: Colors.white))),
+            ),
           ),
-          Container(
-            width: 28,
-            height: 28,
-            decoration: BoxDecoration(color: AppColors.primary, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2)),
-            child: const Icon(Icons.camera_alt_rounded, size: 14, color: Colors.white),
+          GestureDetector(
+            onTap: uploadingPhoto ? null : onChangePhoto,
+            child: Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(color: AppColors.primary, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2)),
+              child: const Icon(Icons.camera_alt_rounded, size: 14, color: Colors.white),
+            ),
           ),
         ]),
         const SizedBox(height: 14),
@@ -216,11 +291,6 @@ class _ProfileCard extends StatelessWidget {
         StreamBuilder<int>(
           stream: _countStream('prescriptions', 'patientId'),
           builder: (context, snap) => _ProfileStat('Prescriptions', '${snap.data ?? 0}'),
-        ),
-        const SizedBox(height: 8),
-        StreamBuilder<int>(
-          stream: _countStream('referrals', 'referrerId'),
-          builder: (context, snap) => _ProfileStat('Referrals', '${snap.data ?? 0}'),
         ),
         const SizedBox(height: 16),
         if (isVerified)

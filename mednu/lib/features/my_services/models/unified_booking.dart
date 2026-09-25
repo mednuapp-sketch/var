@@ -18,6 +18,7 @@ enum BookingStatus {
   inProgress,
   consultationStarted,
   sampleCollected,
+  reportReady,
   delivered,
   completed,
   cancelled,
@@ -38,6 +39,7 @@ extension BookingStatusX on BookingStatus {
       case BookingStatus.inProgress:          return 'In Progress';
       case BookingStatus.consultationStarted: return 'Started';
       case BookingStatus.sampleCollected:     return 'Sample Collected';
+      case BookingStatus.reportReady:         return 'Report Ready';
       case BookingStatus.delivered:           return 'Delivered';
       case BookingStatus.completed:           return 'Completed';
       case BookingStatus.cancelled:           return 'Cancelled';
@@ -126,6 +128,11 @@ class UnifiedBooking {
       case 'arrived':             return BookingStatus.inProgress;
       case 'consultation_started':return BookingStatus.consultationStarted;
       case 'sample_collected':    return BookingStatus.sampleCollected;
+      // Lab module only (`report_uploaded` mirrored onto service_requests —
+      // see _LAB_TO_SERVICE_REQUEST_STATUS in functions/index.js). Previously
+      // unhandled here, which silently fell through to `pending` and made a
+      // ready report look like the booking hadn't even started yet.
+      case 'report_ready':        return BookingStatus.reportReady;
       case 'verified':            return BookingStatus.verified;
       case 'packed':              return BookingStatus.packed;
       case 'out_for_delivery':    return BookingStatus.outForDelivery;
@@ -225,10 +232,10 @@ class UnifiedBooking {
     return UnifiedBooking(
       id: id,
       source: BookingSource.nutrition,
-      serviceType: 'Nutrition Consultation',
-      serviceName: d['nutritionistName'] as String? ?? 'Nutritionist',
+      serviceType: 'Dietician Consultation',
+      serviceName: d['nutritionistName'] as String? ?? 'Dietician',
       providerName: d['nutritionistName'] as String?,
-      providerSpecialty: 'Nutritionist',
+      providerSpecialty: 'Dietician',
       date: d['date'] as String? ?? '',
       time: d['timeSlot'] as String? ?? '',
       status: _parseStatus(d['status'] as String?),
@@ -353,6 +360,7 @@ class UnifiedBooking {
         BookingStatus.inProgress,
         BookingStatus.consultationStarted,
         BookingStatus.rescheduled,
+        BookingStatus.reportReady,
       }.contains(status);
 
   bool get isCompleted =>
@@ -381,6 +389,18 @@ class UnifiedBooking {
   }
 
   int _currentStepIndex(int stepCount) {
+    // Diagnostics runs a denser, lab-specific pipeline (see _timelineSteps
+    // below) that the generic index scheme underneath doesn't fit — e.g. its
+    // 'assigned' step means "technician dispatched", not "final step", and
+    // it has a distinct 'processing' step the generic scheme has no slot
+    // for. Mapped directly against the raw status instead of forcing it
+    // through the universal numbering other booking types share.
+    if (source == BookingSource.serviceRequest) {
+      final type = (rawData['type'] as String? ?? '').toLowerCase();
+      if (type == 'diagnostics' || type == 'lab_test') {
+        return _diagnosticsStepIndex();
+      }
+    }
     switch (status) {
       case BookingStatus.pending:
       case BookingStatus.requested:           return 0;
@@ -394,9 +414,29 @@ class UnifiedBooking {
       case BookingStatus.inProgress:
       case BookingStatus.consultationStarted: return 3;
       case BookingStatus.sampleCollected:
+      case BookingStatus.reportReady:
       case BookingStatus.delivered:
       case BookingStatus.completed:           return stepCount - 1;
       case BookingStatus.cancelled:           return 0;
+    }
+  }
+
+  /// Mirrors the Lab Partner app's own pipeline 1:1 — see
+  /// `DiagnosticBookingStatus` in mednu_doctor's diagnostic_booking.dart and
+  /// `_LAB_TO_SERVICE_REQUEST_STATUS` in functions/index.js for the two ends
+  /// of the mirror this reads.
+  int _diagnosticsStepIndex() {
+    switch (status) {
+      case BookingStatus.pending:
+      case BookingStatus.requested:   return 0; // Test Requested
+      case BookingStatus.confirmed:   return 1; // Booking Accepted
+      case BookingStatus.assigned:    return 2; // Technician Dispatched
+      case BookingStatus.sampleCollected: return 3; // Sample Collected
+      case BookingStatus.inProgress:  return 4; // Processing
+      case BookingStatus.reportReady:
+      case BookingStatus.completed:   return 5; // Report Ready
+      case BookingStatus.cancelled:   return 0;
+      default:                        return 0;
     }
   }
 
@@ -418,10 +458,10 @@ class UnifiedBooking {
         ];
       case BookingSource.nutrition:
         return [
-          {'title': 'Session Requested', 'desc': 'Your nutrition booking was submitted'},
-          {'title': 'Nutritionist Confirmed', 'desc': 'Your session has been confirmed'},
+          {'title': 'Session Requested', 'desc': 'Your dietician booking was submitted'},
+          {'title': 'Dietician Confirmed', 'desc': 'Your session has been confirmed'},
           {'title': 'Session In Progress', 'desc': 'Consultation is currently active'},
-          {'title': 'Session Completed', 'desc': 'Your nutrition session is complete'},
+          {'title': 'Session Completed', 'desc': 'Your dietician session is complete'},
         ];
       case BookingSource.serviceRequest:
         final type = (rawData['type'] as String? ?? '').toLowerCase();
@@ -436,8 +476,10 @@ class UnifiedBooking {
         if (type == 'diagnostics' || type == 'lab_test') {
           return [
             {'title': 'Test Requested', 'desc': 'Diagnostic test booking submitted'},
-            {'title': 'Slot Confirmed', 'desc': 'Your test slot is confirmed'},
+            {'title': 'Booking Accepted', 'desc': 'The lab has accepted your test booking'},
+            {'title': 'Technician Dispatched', 'desc': 'A technician is on the way to collect your sample'},
             {'title': 'Sample Collected', 'desc': 'Sample collection completed'},
+            {'title': 'Processing', 'desc': 'Your sample is being tested at the lab'},
             {'title': 'Report Ready', 'desc': 'Your test report is available'},
           ];
         }

@@ -38,7 +38,7 @@ class CareAssistantScreen extends ConsumerStatefulWidget {
 }
 
 class _CareAssistantScreenState extends ConsumerState<CareAssistantScreen> {
-  static const _themeColor = Color(0xFFE65100);
+  static const _themeColor = AppColors.primary;
 
   // Duration tiers offered by every assistant; each maps to a rate field on
   // the Firestore doc. Selecting one drives both the displayed price and the
@@ -189,11 +189,7 @@ class _CareAssistantScreenState extends ConsumerState<CareAssistantScreen> {
                 flexibleSpace: FlexibleSpaceBar(
                   background: Container(
                     decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [Color(0xFFE65100), Color(0xFFFFA726)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
+                      gradient: AppColors.heroBannerGradient,
                     ),
                     child: SafeArea(
                       child: LayoutBuilder(
@@ -412,11 +408,11 @@ class _CareAssistantScreenState extends ConsumerState<CareAssistantScreen> {
                             const SizedBox(height: 10),
                             Wrap(spacing: 6, runSpacing: 4, children: [
                               if ((a['gender'] as String).isNotEmpty)
-                                _Badge(label: a['gender'] as String, color: const Color(0xFF6A1B9A)),
+                                _Badge(label: a['gender'] as String, color: AppColors.secondaryDark),
                               if ((a['experience'] as String).isNotEmpty)
-                                _Badge(label: '${a['experience']} exp', color: const Color(0xFF0097A7)),
+                                _Badge(label: '${a['experience']} exp', color: AppColors.primaryDark),
                               if (rating > 0)
-                                _Badge(label: '⭐ ${rating.toStringAsFixed(1)}', color: Colors.amber.shade700),
+                                _Badge(label: '⭐ ${rating.toStringAsFixed(1)}', color: AppColors.secondary),
                             ]),
                           ]),
                         );
@@ -484,10 +480,10 @@ class _Chip extends StatelessWidget {
       duration: const Duration(milliseconds: 150),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: selected ? const Color(0xFFE65100) : context.appSurface,
+        color: selected ? AppColors.primary : context.appSurface,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: selected ? const Color(0xFFE65100) : context.appBorder,
+          color: selected ? AppColors.primary : context.appBorder,
         ),
       ),
       child: Text(label,

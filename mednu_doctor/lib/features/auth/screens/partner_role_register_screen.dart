@@ -2,9 +2,11 @@ import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
@@ -92,10 +94,37 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
   final _driverLicenseCtrl = TextEditingController();
   final _equipmentCtrl = TextEditingController();
 
-  // Caregiver
+  // Caregiver / Physiotherapist / Nutritionist
   final _certificationsCtrl = TextEditingController();
   final _specialtiesCtrl = TextEditingController();
   final _hourlyRateCtrl = TextEditingController();
+
+  // Caregiver only — which patient-facing listing this profile mirrors into
+  // (see `onCaregiverProfileWriteForVisibility`, functions/index.js) and the
+  // gender shown/filtered on that listing. Neither was ever collected before,
+  // so a new caregiver's `care_assistants`/`caregivers` listing was missing
+  // both fields until edited later.
+  String _caregiverServiceType = 'caregiver';
+  String _caregiverGender = 'Female';
+  // Shared across Caregiver/Physiotherapist/Nutritionist — the admin panel's
+  // partner detail view shows "Experience" for all three (see app.js's
+  // per-role `fields` list) but only one role's fields ever render per
+  // screen instance, so one controller is enough.
+  final _experienceCtrl = TextEditingController();
+
+  // Nutritionist — city has no map picker (the profile stores no lat/lng
+  // for this role, unlike Lab/Pharmacy/Physiotherapist), so it's a plain
+  // text field rather than `_addressPickerField`.
+  final _cityCtrl = TextEditingController();
+  final _bioCtrl = TextEditingController();
+
+  // Physiotherapist — priced per consultation mode rather than one flat
+  // rate. Online and home-visit are offered by default; in-clinic is
+  // opt-in (not every physiotherapist has a clinic to see patients at).
+  final _onlineRateCtrl = TextEditingController();
+  final _homeRateCtrl = TextEditingController();
+  final _clinicRateCtrl = TextEditingController();
+  bool _offersClinicVisit = false;
 
   // Nutritionist (languages spoken — matches the doctor registration list so
   // the patient app's language filter has one consistent set of values).
@@ -106,6 +135,7 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
   final _selectedLanguages = <String>{'English'};
 
   bool _saving = false;
+  bool _termsAccepted = false;
 
   // Verification documents, keyed by canonical docType — picked here and
   // held locally, uploaded once the profile document exists (during
@@ -141,6 +171,12 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
     _certificationsCtrl.dispose();
     _specialtiesCtrl.dispose();
     _hourlyRateCtrl.dispose();
+    _experienceCtrl.dispose();
+    _cityCtrl.dispose();
+    _bioCtrl.dispose();
+    _onlineRateCtrl.dispose();
+    _homeRateCtrl.dispose();
+    _clinicRateCtrl.dispose();
     super.dispose();
   }
 
@@ -177,6 +213,10 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
       FeedbackService.showError(context, 'Select which hospital you represent.');
       return;
     }
+    if (!_termsAccepted) {
+      FeedbackService.showError(context, 'Please accept the Terms & Conditions to proceed.');
+      return;
+    }
 
     final uid = DoctorAuthService.currentUid;
     if (uid == null) {
@@ -200,6 +240,8 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
       if (existingSnap.exists) {
         await doctorRef.update({
           'roles': FieldValue.arrayUnion([_role.firestoreValue]),
+          'termsAccepted': true,
+          'termsAcceptedAt': FieldValue.serverTimestamp(),
         });
       } else {
         await doctorRef.set({
@@ -210,6 +252,8 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
               : FirebaseAuth.instance.currentUser?.phoneNumber ?? '',
           'status': 'pending',
           'roles': [_role.firestoreValue],
+          'termsAccepted': true,
+          'termsAcceptedAt': FieldValue.serverTimestamp(),
           'createdAt': FieldValue.serverTimestamp(),
         });
       }
@@ -306,6 +350,14 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
           certifications: _csv(_certificationsCtrl),
           specialties: _csv(_specialtiesCtrl),
           hourlyRate: num.tryParse(_hourlyRateCtrl.text.trim()) ?? 0,
+          experienceYears: int.tryParse(_experienceCtrl.text.trim()) ?? 0,
+          phone: _phoneCtrl.text.trim(),
+          email: _emailCtrl.text.trim(),
+          gender: _caregiverGender,
+          serviceType: _caregiverServiceType,
+          city: _addressCity,
+          lat: _addressLat,
+          lng: _addressLng,
         );
       case AppRole.physiotherapist:
         return PhysioProfileService.createProfile(
@@ -313,11 +365,16 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
           name: _nameCtrl.text.trim(),
           certifications: _csv(_certificationsCtrl),
           specialties: _csv(_specialtiesCtrl),
-          hourlyRate: num.tryParse(_hourlyRateCtrl.text.trim()) ?? 0,
+          onlineRate: num.tryParse(_onlineRateCtrl.text.trim()) ?? 0,
+          homeRate: num.tryParse(_homeRateCtrl.text.trim()) ?? 0,
+          clinicRate: _offersClinicVisit ? (num.tryParse(_clinicRateCtrl.text.trim()) ?? 0) : 0,
+          experienceYears: int.tryParse(_experienceCtrl.text.trim()) ?? 0,
           city: _addressCity,
           clinicLat: _addressLat,
           clinicLng: _addressLng,
           languages: _selectedLanguages.toList(),
+          phone: _phoneCtrl.text.trim(),
+          email: _emailCtrl.text.trim(),
         );
       case AppRole.counsellor:
         return CounsellingProfileService.createProfile(
@@ -335,6 +392,11 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
           specialization: _specialtiesCtrl.text.trim(),
           consultationFee: num.tryParse(_hourlyRateCtrl.text.trim()) ?? 0,
           languages: _selectedLanguages.toList(),
+          experienceYears: int.tryParse(_experienceCtrl.text.trim()) ?? 0,
+          city: _cityCtrl.text.trim(),
+          bio: _bioCtrl.text.trim(),
+          phone: _phoneCtrl.text.trim(),
+          email: _emailCtrl.text.trim(),
         );
       case AppRole.hospital:
         return HospitalProfileService.createProfile(
@@ -343,6 +405,8 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
           phone: _phoneCtrl.text.trim(),
           hospitalId: _selectedHospitalId,
           hospitalName: _selectedHospitalName,
+          latitude: _addressLat,
+          longitude: _addressLng,
         );
       case AppRole.doctor:
       case AppRole.admin:
@@ -387,12 +451,14 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
                 delegate: SliverChildListDelegate([
                   ..._fieldsForRole(),
                   ..._documentFieldsForRole(),
-                  const SizedBox(height: 30),
+                  const SizedBox(height: 22),
+                  _termsCheckbox(),
+                  const SizedBox(height: 20),
                   GradientButton(
                     label: 'Submit for Approval',
                     icon: Icons.send_rounded,
                     isLoading: _saving,
-                    onTap: _saving ? null : _submit,
+                    onTap: (_saving || !_termsAccepted) ? null : _submit,
                   ),
                   const SizedBox(height: 10),
                   Center(
@@ -524,7 +590,46 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
         ];
       case AppRole.caregiver:
         return [
+          const Text('I am registering as a', style: AppTextStyles.h4),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              (value: 'caregiver', label: 'Caregiver — home care & assistance'),
+              (value: 'care_assistant', label: 'Care Assistant — hospital escort & errands'),
+            ].map((opt) => FilterChip(
+                  label: Text(opt.label),
+                  selected: _caregiverServiceType == opt.value,
+                  onSelected: (_) => setState(() => _caregiverServiceType = opt.value),
+                  selectedColor: AppColors.primary.withValues(alpha: 0.14),
+                  checkmarkColor: AppColors.primary,
+                )).toList(),
+          ),
+          const SizedBox(height: 20),
           _field(_nameCtrl, 'Full Name', Icons.person_outline),
+          const SizedBox(height: 14),
+          _field(_phoneCtrl, 'Contact Phone', Icons.call_outlined,
+              keyboardType: TextInputType.phone, locked: true),
+          const SizedBox(height: 14),
+          _field(_emailCtrl, 'Email Address', Icons.mail_outline_rounded,
+              keyboardType: TextInputType.emailAddress, required: false),
+          const SizedBox(height: 14),
+          const Text('Gender', style: AppTextStyles.h4),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: ['Female', 'Male'].map((g) => FilterChip(
+                  label: Text(g),
+                  selected: _caregiverGender == g,
+                  onSelected: (_) => setState(() => _caregiverGender = g),
+                  selectedColor: AppColors.primary.withValues(alpha: 0.14),
+                  checkmarkColor: AppColors.primary,
+                )).toList(),
+          ),
+          const SizedBox(height: 14),
+          _addressPickerField('Service Area (city you serve)'),
           const SizedBox(height: 14),
           _field(_certificationsCtrl, 'Certifications (comma separated)',
               Icons.workspace_premium_outlined,
@@ -537,6 +642,10 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
           _field(_hourlyRateCtrl, 'Hourly Rate (₹)',
               Icons.currency_rupee_rounded,
               keyboardType: TextInputType.number),
+          const SizedBox(height: 14),
+          _field(_experienceCtrl, 'Years of Experience',
+              Icons.timeline_rounded,
+              keyboardType: TextInputType.number),
         ];
       case AppRole.hospital:
         return [
@@ -546,6 +655,8 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
               keyboardType: TextInputType.phone, locked: true),
           const SizedBox(height: 14),
           _hospitalPickerField(),
+          const SizedBox(height: 14),
+          _addressPickerField('Hospital Location (for distance in the patient app)'),
           const SizedBox(height: 14),
           Container(
             padding: const EdgeInsets.all(12),
@@ -564,6 +675,12 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
         return [
           _field(_nameCtrl, 'Full Name', Icons.person_outline),
           const SizedBox(height: 14),
+          _field(_phoneCtrl, 'Contact Phone', Icons.call_outlined,
+              keyboardType: TextInputType.phone, locked: true),
+          const SizedBox(height: 14),
+          _field(_emailCtrl, 'Email Address', Icons.mail_outline_rounded,
+              keyboardType: TextInputType.emailAddress, required: false),
+          const SizedBox(height: 14),
           _field(_certificationsCtrl, 'Certifications (comma separated)',
               Icons.workspace_premium_outlined,
               maxLines: 2, required: false),
@@ -571,9 +688,39 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
           _field(_specialtiesCtrl, 'Specialties (comma separated)',
               Icons.accessibility_new_outlined,
               maxLines: 2, required: false),
+          const SizedBox(height: 22),
+          const Text('Session Fees', style: AppTextStyles.h4),
+          const SizedBox(height: 4),
+          const Text(
+            'Set a fee for each way you see patients. Online and home-visit '
+            'are required; in-clinic is optional.',
+            style: AppTextStyles.caption,
+          ),
+          const SizedBox(height: 10),
+          _field(_onlineRateCtrl, 'Online Video Consultation Fee (₹)',
+              Icons.videocam_outlined,
+              keyboardType: TextInputType.number),
           const SizedBox(height: 14),
-          _field(_hourlyRateCtrl, 'Session Rate (₹)',
-              Icons.currency_rupee_rounded,
+          _field(_homeRateCtrl, 'Home Visit Fee (₹)',
+              Icons.home_outlined,
+              keyboardType: TextInputType.number),
+          const SizedBox(height: 6),
+          SwitchListTile.adaptive(
+            contentPadding: EdgeInsets.zero,
+            value: _offersClinicVisit,
+            onChanged: (v) => setState(() => _offersClinicVisit = v),
+            title: Text('I also offer in-clinic appointments',
+                style: AppTextStyles.labelLarge),
+          ),
+          if (_offersClinicVisit) ...[
+            const SizedBox(height: 8),
+            _field(_clinicRateCtrl, 'In-Clinic Appointment Fee (₹)',
+                Icons.local_hospital_outlined,
+                keyboardType: TextInputType.number),
+          ],
+          const SizedBox(height: 14),
+          _field(_experienceCtrl, 'Years of Experience',
+              Icons.timeline_rounded,
               keyboardType: TextInputType.number),
           const SizedBox(height: 14),
           _addressPickerField('Clinic / Home-visit Base Address'),
@@ -621,6 +768,12 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
         return [
           _field(_nameCtrl, 'Full Name', Icons.person_outline),
           const SizedBox(height: 14),
+          _field(_phoneCtrl, 'Contact Phone', Icons.call_outlined,
+              keyboardType: TextInputType.phone, locked: true),
+          const SizedBox(height: 14),
+          _field(_emailCtrl, 'Email Address', Icons.mail_outline_rounded,
+              keyboardType: TextInputType.emailAddress, required: false),
+          const SizedBox(height: 14),
           _field(_certificationsCtrl, 'Qualifications (e.g. RD, MSc Nutrition)',
               Icons.workspace_premium_outlined,
               maxLines: 2, required: false),
@@ -632,6 +785,16 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
           _field(_hourlyRateCtrl, 'Consultation Fee (₹)',
               Icons.currency_rupee_rounded,
               keyboardType: TextInputType.number),
+          const SizedBox(height: 14),
+          _field(_experienceCtrl, 'Years of Experience',
+              Icons.timeline_rounded,
+              keyboardType: TextInputType.number),
+          const SizedBox(height: 14),
+          _field(_cityCtrl, 'City', Icons.location_on_outlined),
+          const SizedBox(height: 14),
+          _field(_bioCtrl, 'Short Bio (shown to patients)',
+              Icons.info_outline_rounded,
+              maxLines: 3, required: false),
           const SizedBox(height: 22),
           const Text('Languages Spoken', style: AppTextStyles.h4),
           const SizedBox(height: 10),
@@ -838,6 +1001,63 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
           ),
         );
       },
+    );
+  }
+
+  Future<void> _openTerms() async {
+    final uri = Uri.parse('https://mednu.in/terms');
+    try {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {}
+  }
+
+  /// Gates [_submit] — enforced there via [_termsAccepted], not just
+  /// visually here. Every non-Doctor role funnels through this one screen,
+  /// so a single checkbox covers Lab/Pharmacy/Ambulance/Caregiver/
+  /// Physiotherapist/Nutritionist/Hospital at once.
+  Widget _termsCheckbox() {
+    return InkWell(
+      onTap: () => setState(() => _termsAccepted = !_termsAccepted),
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceVariant,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: _termsAccepted ? AppColors.primary : AppColors.border,
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Checkbox(
+              value: _termsAccepted,
+              onChanged: (v) => setState(() => _termsAccepted = v ?? false),
+              activeColor: AppColors.primary,
+            ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: RichText(
+                  text: TextSpan(
+                    style: AppTextStyles.bodySmall.copyWith(color: AppColors.textPrimary),
+                    children: [
+                      const TextSpan(text: 'I have read and agree to the '),
+                      TextSpan(
+                        text: 'Terms & Conditions',
+                        style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700),
+                        recognizer: TapGestureRecognizer()..onTap = _openTerms,
+                      ),
+                      const TextSpan(text: ' for registering as a MedNU partner.'),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

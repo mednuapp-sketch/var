@@ -55,7 +55,7 @@
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Theme -->
-  <meta name="theme-color" content="#C2185B">
+  <meta name="theme-color" content="#522546">
 
   <!-- Favicon — SVG for modern browsers, PNG fallback -->
   <link rel="icon" type="image/svg+xml" href="favicon.svg"/>
@@ -70,7 +70,7 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body {
-      background: #F7F4F8;
+      background: #F7F4F6;
       font-family: 'Poppins', sans-serif;
       overscroll-behavior-y: none;
       overflow: hidden;
@@ -81,36 +81,45 @@
       position: fixed; inset: 0;
       display: flex; flex-direction: column;
       align-items: center; justify-content: center;
-      background: linear-gradient(135deg, #FFF5F9, #F5EEFF);
+      background: linear-gradient(135deg, #F7F4F6, #F1E7EE);
       z-index: 9999;
     }
-    .loader-logo {
+    .loader-logo-wrap {
       width: 80px; height: 80px;
-      object-fit: contain;
+      overflow: hidden;
+      border-radius: 22px;
       margin-bottom: 20px;
       animation: pulse 1.5s ease-in-out infinite;
     }
+    .loader-logo {
+      /* Source PNG has ~9-10% transparent padding baked in (app-icon safe
+         zone) — scale up to crop that out so the badge fills the box
+         edge-to-edge instead of floating with a visible gap. */
+      width: 100%; height: 100%;
+      object-fit: cover;
+      transform: scale(1.24);
+    }
     .loader-title {
       font-size: 26px; font-weight: 800;
-      background: linear-gradient(135deg, #C2185B, #7B1FA2);
+      background: linear-gradient(135deg, #522546, #633058);
       -webkit-background-clip: text; -webkit-text-fill-color: transparent;
       background-clip: text;
     }
-    .loader-subtitle { font-size: 13px; color: #9E9E9E; margin-top: 8px; }
+    .loader-subtitle { font-size: 13px; color: #7A6472; margin-top: 8px; }
     .loader-bar {
       width: 200px; height: 3px;
-      background: #F0E6FF; border-radius: 2px;
+      background: #E4D9E1; border-radius: 2px;
       margin-top: 24px; overflow: hidden;
     }
     .loader-progress {
       height: 100%;
-      background: linear-gradient(90deg, #C2185B, #7B1FA2);
+      background: linear-gradient(90deg, #522546, #633058);
       border-radius: 2px;
       animation: load 2s ease-in-out infinite;
     }
     @keyframes pulse {
-      0%, 100% { transform: scale(1); box-shadow: 0 8px 24px rgba(194,24,91,0.3); }
-      50% { transform: scale(1.05); box-shadow: 0 12px 32px rgba(194,24,91,0.5); }
+      0%, 100% { transform: scale(1); box-shadow: 0 8px 24px rgba(82,37,70,0.3); }
+      50% { transform: scale(1.05); box-shadow: 0 12px 32px rgba(82,37,70,0.5); }
     }
     @keyframes load {
       0% { width: 0; } 70% { width: 100%; } 100% { width: 100%; opacity: 0; }
@@ -119,7 +128,7 @@
 </head>
 <body>
   <div id="loading">
-    <img class="loader-logo" src="assets/assets/images/mednu_logo.png" alt="MedNU">
+    <div class="loader-logo-wrap"><img class="loader-logo" src="assets/assets/images/mednu_logo.png" alt="MedNU"></div>
     <div class="loader-title">MedNU</div>
     <div class="loader-subtitle">Your Healthcare Companion</div>
     <div class="loader-bar"><div class="loader-progress"></div></div>

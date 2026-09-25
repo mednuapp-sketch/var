@@ -16,6 +16,20 @@ class CaregiverProfile {
   final double? lat;
   final double? lng;
   final bool documentsVerified;
+  final String gender;
+
+  /// Real, persisted on-duty/availability flag — `caregiver_profiles/{uid}.
+  /// isOnDuty`. Toggled from the Dashboard's duty switch via
+  /// [CaregiverProfileService.updateOnDuty] and read back live through
+  /// `caregiverOnDutyProvider`, so it survives app restart and actually
+  /// reflects what the matching pipeline sees, unlike the old session-local
+  /// flag it replaced.
+  final bool isOnDuty;
+
+  /// 'caregiver' | 'care_assistant' — which patient-facing listing
+  /// (`caregivers` vs `care_assistants`, see `functions/index.js`'
+  /// `onCaregiverProfileWriteForVisibility`) this profile mirrors into.
+  final String serviceType;
 
   /// Admin-approval status: 'pending' | 'active'. Distinct from
   /// [documentsVerified] (a per-document flag) — this is the account-level
@@ -44,6 +58,9 @@ class CaregiverProfile {
     this.status = 'pending',
     this.documents = const {},
     this.documentVerification = const {},
+    this.gender = '',
+    this.serviceType = 'caregiver',
+    this.isOnDuty = false,
   });
 
   /// What the Profile screen renders before the partner has completed
@@ -86,6 +103,9 @@ class CaregiverProfile {
           (d['documents'] as Map?) ?? const <String, dynamic>{}),
       documentVerification: Map<String, dynamic>.from(
           (d['documentVerification'] as Map?) ?? const <String, dynamic>{}),
+      gender: d['gender'] as String? ?? '',
+      serviceType: d['serviceType'] as String? ?? 'caregiver',
+      isOnDuty: d['isOnDuty'] as bool? ?? false,
     );
   }
 }

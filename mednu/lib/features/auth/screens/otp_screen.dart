@@ -11,14 +11,12 @@ import '../providers/auth_provider.dart';
 class OtpScreen extends ConsumerStatefulWidget {
   final String phone;
   final bool isExistingUser;
-  final String mode;
   final Map<String, dynamic>? signupData;
 
   const OtpScreen({
     super.key,
     required this.phone,
     this.isExistingUser = false,
-    this.mode = '',
     this.signupData,
   });
 
@@ -102,16 +100,12 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
       await Future.delayed(const Duration(milliseconds: 700));
       if (!mounted) return;
 
-      if (widget.mode == 'resetMpin') {
-        context.go(AppRoutes.createMpin, extra: {'mode': 'reset'});
+      final hasProfile = await ref.read(authProvider.notifier).hasCompleteProfile();
+      if (!mounted) return;
+      if (hasProfile) {
+        context.go(AppRoutes.home);
       } else {
-        final status = await ref.read(authProvider.notifier).checkUserStatus();
-        if (!mounted) return;
-        if (status == 'hasMpin' || status == 'noMpin') {
-          context.go(AppRoutes.home);
-        } else {
-          context.go(AppRoutes.termsAccept, extra: {'phone': widget.phone});
-        }
+        context.go(AppRoutes.termsAccept, extra: {'phone': widget.phone});
       }
     } catch (e) {
       if (!mounted) return;

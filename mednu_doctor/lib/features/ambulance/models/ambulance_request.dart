@@ -115,6 +115,16 @@ class AmbulanceRequest {
   /// AmbulanceRequestService.acceptAssigned.
   final String? ambulanceId;
 
+  /// Free-text reason when the doc carries one (patient cancellation, auto
+  /// no-show, admin action). Nothing in the partner client writes this — a
+  /// plain decline stamps only `status: 'cancelled'` — so it is usually null
+  /// and the UI must treat it as optional.
+  final String? cancelReason;
+
+  /// Last server-side write time. For a cancelled request this is the best
+  /// available "when did it get cancelled/declined" signal.
+  final DateTime? updatedAt;
+
   const AmbulanceRequest({
     required this.id,
     required this.type,
@@ -130,6 +140,8 @@ class AmbulanceRequest {
     required this.fare,
     required this.requestedAt,
     this.ambulanceId,
+    this.cancelReason,
+    this.updatedAt,
   });
 
   /// Parses an `ambulance_requests` document. Unknown/missing enum strings
@@ -156,7 +168,20 @@ class AmbulanceRequest {
           (d['createdAt'] as Timestamp?)?.toDate() ??
           DateTime.now(),
       ambulanceId: d['ambulanceId'] as String?,
+      cancelReason: _reasonFrom(d),
+      updatedAt: (d['cancelledAt'] as Timestamp?)?.toDate() ??
+          (d['updatedAt'] as Timestamp?)?.toDate(),
     );
+  }
+
+  /// Tolerates the several spellings the Cloud Functions / other clients use
+  /// for a cancellation reason; blank strings count as absent.
+  static String? _reasonFrom(Map<String, dynamic> d) {
+    for (final key in const ['cancelReason', 'cancellationReason', 'rejectReason', 'declineReason']) {
+      final v = d[key];
+      if (v is String && v.trim().isNotEmpty) return v.trim();
+    }
+    return null;
   }
 
   static AmbulanceRequestStatus _statusFrom(String? raw) {
@@ -188,5 +213,7 @@ class AmbulanceRequest {
         fare: fare,
         requestedAt: requestedAt,
         ambulanceId: ambulanceId,
+        cancelReason: cancelReason,
+        updatedAt: updatedAt,
       );
 }

@@ -18,6 +18,14 @@ class PharmacyProfile {
   final double rating;
   final int totalReviews;
 
+  /// Order-fulfillment availability — a simple on/off toggle the pharmacy
+  /// controls from its dashboard (not GPS-based; a pharmacy is a fixed
+  /// storefront, not a field role). When `false`, the pharmacy should be
+  /// treated as paused for new order assignment. Defaults to `true` so
+  /// existing docs written before this field existed still show as
+  /// available.
+  final bool acceptingOrders;
+
   /// Raw `documents` / `documentVerification` maps, keyed by canonical
   /// docType. Kept untyped here so the shared documents layer
   /// (`shared_core/documents`) owns their parsing for every role.
@@ -41,6 +49,7 @@ class PharmacyProfile {
     required this.photoUrl,
     required this.rating,
     required this.totalReviews,
+    this.acceptingOrders = true,
     this.documents = const {},
     this.documentVerification = const {},
   });
@@ -66,6 +75,7 @@ class PharmacyProfile {
       photoUrl: (d['photoUrl'] as String?) ?? '',
       rating: ((d['rating'] as num?) ?? 0).toDouble(),
       totalReviews: (d['totalReviews'] as int?) ?? 0,
+      acceptingOrders: (d['acceptingOrders'] as bool?) ?? true,
       documents: Map<String, dynamic>.from(
           (d['documents'] as Map?) ?? const <String, dynamic>{}),
       documentVerification: Map<String, dynamic>.from(

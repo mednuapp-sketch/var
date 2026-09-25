@@ -41,7 +41,7 @@ class LabProfileService {
   }) async {
     String? fcmToken;
     try {
-      fcmToken = await FirebaseMessaging.instance.getToken();
+      fcmToken = await FirebaseMessaging.instance.getToken().timeout(const Duration(seconds: 5));
     } catch (_) {}
 
     await _db.collection('lab_profiles').doc(uid).set({
@@ -58,6 +58,7 @@ class LabProfileService {
       'isVerified': false,
       'status': 'pending',
       'photoUrl': '',
+      'acceptingBookings': true,
       'rating': 0.0,
       'totalReviews': 0,
       'createdAt': FieldValue.serverTimestamp(),
@@ -67,4 +68,14 @@ class LabProfileService {
 
   static Future<void> updateProfile(String uid, Map<String, dynamic> data) =>
       _db.collection('lab_profiles').doc(uid).update(data);
+
+  /// Sets just `photoUrl` — used by the avatar upload/remove flow on
+  /// [LabProfileScreen], mirroring `HospitalProfileService.updatePhotoUrl`.
+  static Future<void> updatePhotoUrl(String uid, String photoUrl) =>
+      _db.collection('lab_profiles').doc(uid).update({'photoUrl': photoUrl});
+
+  /// Sets `acceptingBookings` — the lab's own "Accepting New Bookings"
+  /// availability toggle (order-fulfillment based, no location component).
+  static Future<void> updateAcceptingBookings(String uid, bool value) =>
+      _db.collection('lab_profiles').doc(uid).update({'acceptingBookings': value});
 }

@@ -22,6 +22,15 @@ class PhysioProfileService {
   static Stream<DocumentSnapshot<Map<String, dynamic>>> profileStream(String uid) =>
       _db.collection('physiotherapist_profiles').doc(uid).snapshots();
 
+  /// The single number older display spots (dashboard stat, patient list
+  /// card) still read as `hourlyRate` — the cheapest of whichever modes are
+  /// actually offered (a 0 rate means "not offered", so it's excluded
+  /// rather than winning the min() trivially). 0 if nothing is offered yet.
+  static num _startingFrom(num onlineRate, num clinicRate, num homeRate) {
+    final offered = [onlineRate, clinicRate, homeRate].where((r) => r > 0);
+    return offered.isEmpty ? 0 : offered.reduce((a, b) => a < b ? a : b);
+  }
+
   /// `status`/`isVerified` are deliberately fixed here — see
   /// firestore.rules' `physiotherapist_profiles` create rule, which rejects
   /// a self-registration attempting to set either to their "verified" values.
@@ -31,25 +40,34 @@ class PhysioProfileService {
     String photoUrl = '',
     List<String> certifications = const [],
     List<String> specialties = const [],
-    num hourlyRate = 0,
+    num onlineRate = 0,
+    num clinicRate = 0,
+    num homeRate = 0,
     int experienceYears = 0,
     String city = '',
     double? clinicLat,
     double? clinicLng,
     List<String> languages = const [],
+    String phone = '',
+    String email = '',
   }) async {
     String? fcmToken;
     try {
-      fcmToken = await FirebaseMessaging.instance.getToken();
+      fcmToken = await FirebaseMessaging.instance.getToken().timeout(const Duration(seconds: 5));
     } catch (_) {}
 
     await _db.collection('physiotherapist_profiles').doc(uid).set({
       'uid': uid,
       'name': name,
+      'phone': phone,
+      'email': email,
       'photoUrl': photoUrl,
       'certifications': certifications,
       'specialties': specialties,
-      'hourlyRate': hourlyRate,
+      'onlineRate': onlineRate,
+      'clinicRate': clinicRate,
+      'homeRate': homeRate,
+      'hourlyRate': _startingFrom(onlineRate, clinicRate, homeRate),
       'city': city,
       if (clinicLat != null && clinicLng != null) 'clinicLat': clinicLat,
       if (clinicLat != null && clinicLng != null) 'clinicLng': clinicLng,
@@ -70,4 +88,9 @@ class PhysioProfileService {
   /// rejected by `firestore.rules` for a self-update.
   static Future<void> updateProfile(String uid, Map<String, dynamic> data) =>
       _db.collection('physiotherapist_profiles').doc(uid).set(data, SetOptions(merge: true));
+
+  static Future<void> updatePhotoUrl(String uid, String photoUrl) =>
+      _db.collection('physiotherapist_profiles').doc(uid).set({
+        'photoUrl': photoUrl,
+      }, SetOptions(merge: true));
 }

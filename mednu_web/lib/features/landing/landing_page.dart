@@ -3,9 +3,9 @@ import 'widgets/navbar.dart';
 import 'widgets/hero_section.dart';
 import 'widgets/stats_bar_section.dart';
 import 'widgets/how_it_works_section.dart';
+import 'widgets/ad_section.dart';
+import 'widgets/provider_section.dart';
 import 'widgets/services_section.dart';
-import 'widgets/doctors_section.dart';
-import 'widgets/hospitals_section.dart';
 import 'widgets/why_mednu_section.dart';
 import 'widgets/health_articles_section.dart';
 import 'widgets/testimonials_section.dart';
@@ -26,7 +26,6 @@ class _LandingPageState extends State<LandingPage> {
   final GlobalKey _heroKey        = GlobalKey();
   final GlobalKey _servicesKey    = GlobalKey();
   final GlobalKey _howItWorksKey  = GlobalKey();
-  final GlobalKey _doctorsKey     = GlobalKey();
   final GlobalKey _aboutKey       = GlobalKey();
   final GlobalKey _contactKey     = GlobalKey();
 
@@ -35,7 +34,6 @@ class _LandingPageState extends State<LandingPage> {
     ('Home',         _heroKey),
     ('How It Works', _howItWorksKey),
     ('Services',     _servicesKey),
-    ('Doctors',      _doctorsKey),
     ('About Us',     _aboutKey),
     ('Contact',      _contactKey),
   ];
@@ -88,7 +86,6 @@ class _LandingPageState extends State<LandingPage> {
     final keyMap = <String, GlobalKey>{
       'Services':     _servicesKey,
       'How It Works': _howItWorksKey,
-      'Doctors':      _doctorsKey,
       'About Us':     _aboutKey,
       'Contact':      _contactKey,
     };
@@ -155,15 +152,10 @@ class _LandingPageState extends State<LandingPage> {
 
           SliverToBoxAdapter(
             key: _servicesKey,
-            child: const ServicesSection(),
+            child: ServicesSection(onServiceTap: widget.onLoginTap),
           ),
 
-          SliverToBoxAdapter(
-            key: _doctorsKey,
-            child: const DoctorsSection(),
-          ),
-
-          const SliverToBoxAdapter(child: HospitalsSection()),
+          const SliverToBoxAdapter(child: AdSection()),
 
           SliverToBoxAdapter(
             key: _aboutKey,
@@ -173,6 +165,7 @@ class _LandingPageState extends State<LandingPage> {
           const SliverToBoxAdapter(child: HealthArticlesSection()),
           const SliverToBoxAdapter(child: TestimonialsSection()),
           const SliverToBoxAdapter(child: DownloadAppSection()),
+          const SliverToBoxAdapter(child: ProviderSection()),
 
           SliverToBoxAdapter(
             key: _contactKey,

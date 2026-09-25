@@ -55,9 +55,9 @@ extension AppRoleX on AppRole {
       case AppRole.counsellor:
         return 'Counsellor';
       case AppRole.nutritionist:
-        return 'Nutritionist';
+        return 'Dietician';
       case AppRole.hospital:
-        return 'Hospital Billing Desk';
+        return 'Hospital';
       case AppRole.admin:
         return 'Admin';
     }
@@ -83,7 +83,7 @@ extension AppRoleX on AppRole {
       case AppRole.counsellor:
         return 'Mental health & counselling';
       case AppRole.nutritionist:
-        return 'Diet & nutrition consultations';
+        return 'Dietician consultations';
       case AppRole.hospital:
         return 'Confirm patient bill payments';
       case AppRole.admin:

@@ -40,7 +40,7 @@ class PharmacyProfileService {
   }) async {
     String? fcmToken;
     try {
-      fcmToken = await FirebaseMessaging.instance.getToken();
+      fcmToken = await FirebaseMessaging.instance.getToken().timeout(const Duration(seconds: 5));
     } catch (_) {}
 
     await _db.collection('pharmacy_profiles').doc(uid).set({
@@ -60,6 +60,7 @@ class PharmacyProfileService {
       'photoUrl': '',
       'rating': 0.0,
       'totalReviews': 0,
+      'acceptingOrders': true,
       'createdAt': FieldValue.serverTimestamp(),
       if (fcmToken != null) 'fcmToken': fcmToken,
     });
@@ -67,4 +68,7 @@ class PharmacyProfileService {
 
   static Future<void> updateProfile(String uid, Map<String, dynamic> data) =>
       _db.collection('pharmacy_profiles').doc(uid).update(data);
+
+  static Future<void> updatePhotoUrl(String uid, String url) =>
+      _db.collection('pharmacy_profiles').doc(uid).update({'photoUrl': url});
 }

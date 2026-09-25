@@ -5,28 +5,59 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/utils/r.dart';
+import '../../../core/services/feedback_service.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../../../shared_core/shared_core.dart';
+import '../../ambulance/widgets/status_pulse.dart';
 import '../models/nutrition_appointment.dart';
 import '../providers/nutrition_providers.dart';
+import '../services/nutritionist_profile_service.dart';
 
 /// Nutritionist home — a live stats grid and a preview of today's
 /// appointments. Same shape as the Physiotherapy/Counselling dashboards, in
 /// the module's own green palette.
-class NutritionDashboardScreen extends ConsumerWidget {
+class NutritionDashboardScreen extends ConsumerStatefulWidget {
   const NutritionDashboardScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<NutritionDashboardScreen> createState() => _NutritionDashboardScreenState();
+}
+
+class _NutritionDashboardScreenState extends ConsumerState<NutritionDashboardScreen> {
+  bool _toggling = false;
+
+  Future<void> _toggleOnline(bool value) async {
+    final uid = NutritionistProfileService.currentUid;
+    if (uid == null || _toggling) return;
+    setState(() => _toggling = true);
+    try {
+      await NutritionistProfileService.setOnlineStatus(uid, value);
+    } catch (_) {
+      if (mounted) {
+        FeedbackService.showError(context, "Couldn't update your availability. Please try again.");
+      }
+    } finally {
+      if (mounted) setState(() => _toggling = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final metrics = ref.watch(nutritionDashboardMetricsProvider);
     final today = ref.watch(todayNutritionAppointmentsProvider);
+    final online = ref.watch(nutritionOnlineStatusProvider);
 
     return SharedAppShell(
       currentRoute: AppRoutes.nutritionDashboard,
-      title: 'Nutrition Dashboard',
+      title: 'Dietician Dashboard',
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
         children: [
+          _OnlineHeroCard(
+            online: online,
+            onChanged: _toggling ? null : _toggleOnline,
+          ),
+          const SizedBox(height: 20),
           staticGrid(
             crossAxisCount: R.isTablet(context) ? 4 : 2,
             children: [
@@ -34,7 +65,7 @@ class NutritionDashboardScreen extends ConsumerWidget {
                 value: '${metrics.todayAppointments}',
                 label: "Today's Appointments",
                 icon: Icons.event_note_rounded,
-                colors: const [Color(0xFF2E7D32), Color(0xFF1B5E20)],
+                colors: const [AppColors.primary, AppColors.secondary],
               ),
               GradientStatCard(
                 value: '${metrics.completedToday}',
@@ -70,6 +101,72 @@ class NutritionDashboardScreen extends ConsumerWidget {
             )
           else
             Column(children: today.take(3).map((a) => _AppointmentPreviewCard(appointment: a)).toList()),
+        ],
+      ),
+    );
+  }
+}
+
+class _OnlineHeroCard extends StatelessWidget {
+  final bool online;
+  final ValueChanged<bool>? onChanged;
+  const _OnlineHeroCard({required this.online, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.all(R.p(context, 20)),
+      decoration: BoxDecoration(
+        gradient: online
+            ? AppColors.onlineGradient
+            : const LinearGradient(
+                colors: [Color(0xFF455A64), Color(0xFF607D8B)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: (online ? AppColors.online : AppColors.offline).withValues(alpha: 0.35),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          StatusPulse(color: Colors.white, size: online ? 12 : 8),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  online ? 'You are AVAILABLE' : 'You are UNAVAILABLE',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.h3.copyWith(
+                      fontSize: R.sp(context, 18), fontWeight: FontWeight.w800, color: Colors.white),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  online
+                      ? 'Open for video consults • Accepting new bookings'
+                      : 'Not accepting new consult bookings',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.bodySmall
+                      .copyWith(fontSize: R.sp(context, 12), color: Colors.white70),
+                ),
+              ],
+            ),
+          ),
+          Switch.adaptive(
+            value: online,
+            onChanged: onChanged,
+            activeThumbColor: Colors.white,
+            activeTrackColor: Colors.white38,
+          ),
         ],
       ),
     );

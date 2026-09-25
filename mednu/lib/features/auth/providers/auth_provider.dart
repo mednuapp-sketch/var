@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
-import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -8,14 +6,6 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../referral/referral_service.dart';
-
-// ── MPIN hash: SHA-256(uid:mpin:MEDNU_V1) ────────────────────────────────────
-// Per-user salt (uid) prevents rainbow-table attacks.
-// Never stored in plain text anywhere.
-String _hashMpin(String mpin, String uid) {
-  final bytes = utf8.encode('$uid:$mpin:MEDNU_V1');
-  return sha256.convert(bytes).toString();
-}
 
 // ── Referral code generator ───────────────────────────────────────────────────
 String generateReferralCode(String name, String uid) {
@@ -39,16 +29,12 @@ class AuthState {
   final bool isLoading;
   final String? error;
   final String? verificationId;
-  final int loginAttempts;
-  final DateTime? lockedUntil;
 
   const AuthState({
     this.user,
     this.isLoading = false,
     this.error,
     this.verificationId,
-    this.loginAttempts = 0,
-    this.lockedUntil,
   });
 
   AuthState copyWith({
@@ -56,16 +42,12 @@ class AuthState {
     bool? isLoading,
     String? error,
     String? verificationId,
-    int? loginAttempts,
-    DateTime? lockedUntil,
   }) =>
       AuthState(
         user: user ?? this.user,
         isLoading: isLoading ?? this.isLoading,
         error: error,
         verificationId: verificationId ?? this.verificationId,
-        loginAttempts: loginAttempts ?? this.loginAttempts,
-        lockedUntil: lockedUntil ?? this.lockedUntil,
       );
 }
 
@@ -81,44 +63,32 @@ class AuthNotifier extends StateNotifier<AuthState> {
   PhoneAuthCredential? _autoVerifiedCredential;
   int? _resendToken;
 
-  // Lock policy
-  static const _maxAttempts = 5;
-  static const _lockMinutes = 15;
-
   AuthNotifier() : super(const AuthState()) {
     _auth.authStateChanges().listen((user) {
       state = state.copyWith(user: user);
     });
   }
 
-  // ── Check if current authenticated user has a Firestore profile ──────────
-  // Called AFTER OTP verification when request.auth is populated.
-  // Returns true = existing user → show MPIN
-  // 'new'     → no doc OR incomplete profile → go to registration
-  // 'hasMpin' → complete profile + mpinHash → go to MPIN screen
-  // 'noMpin'  → complete profile but no mpinHash → go to create MPIN
-  Future<String> checkUserStatus() async {
+  // ── Check if current authenticated user has a complete Firestore profile ──
+  // Called AFTER OTP verification when request.auth is populated. False means
+  // no doc, or one missing a field completeRegistration always writes — either
+  // way the caller should send the user through registration.
+  Future<bool> hasCompleteProfile() async {
     final uid = _auth.currentUser?.uid;
-    if (uid == null) return 'new';
+    if (uid == null) return false;
     try {
       final doc = await _db
           .collection('users')
           .doc(uid)
           .get(const GetOptions(source: Source.server));
-      if (!doc.exists) return 'new';
+      if (!doc.exists) return false;
       final data = doc.data() ?? {};
-
-      // Required fields from completeRegistration — if any missing, re-register
-      final hasProfile =
-          (data['name'] as String?)?.isNotEmpty == true &&
+      return (data['name'] as String?)?.isNotEmpty == true &&
           (data['phone'] as String?)?.isNotEmpty == true &&
           (data['gender'] as String?)?.isNotEmpty == true &&
           (data['dob'] as String?)?.isNotEmpty == true;
-
-      if (!hasProfile) return 'new';
-      return (data['mpinHash'] as String?) != null ? 'hasMpin' : 'noMpin';
     } catch (_) {
-      return 'new';
+      return false;
     }
   }
 
@@ -196,7 +166,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   // ── Complete Registration (new user, after OTP) ───────────────────────────
-  // Creates 5 Firestore collections atomically. MPIN is set separately.
+  // Creates 5 Firestore collections atomically.
   Future<void> completeRegistration({
     required String name,
     required String phone,
@@ -242,10 +212,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         'referralCode':       myReferralCode,
         'referralPoints':     0,
         'rewardPoints':       0,
-        'loginAttempts':      0,
         if (fcmToken != null) 'fcmToken': fcmToken,
-        // mpinHash is written by createMpin() — kept separate so the batch
-        // succeeds even if the user closes the app before setting MPIN.
       });
 
       batch.set(_db.collection('wallet').doc(uid), {
@@ -284,128 +251,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
-  // ── Create / Reset MPIN ───────────────────────────────────────────────────
-  Future<void> createMpin(String mpin) async {
-    state = state.copyWith(isLoading: true, error: null);
-    try {
-      final uid = _auth.currentUser?.uid;
-      if (uid == null) throw Exception('Not authenticated.');
-
-      final mpinHash = _hashMpin(mpin, uid);
-      await _db.collection('users').doc(uid).update({
-        'mpinHash':      mpinHash,
-        'mpinCreatedAt': FieldValue.serverTimestamp(),
-        'updatedAt':     FieldValue.serverTimestamp(),
-        'loginAttempts': 0,
-        'lockedUntil':   FieldValue.delete(),
-      });
-
-      state = state.copyWith(isLoading: false, loginAttempts: 0, lockedUntil: null);
-    } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
-      rethrow;
-    }
-  }
-
-  // ── Verify MPIN ───────────────────────────────────────────────────────────
-  // Returns true if correct, false otherwise.
-  // Handles lockout logic and FCM refresh on success.
-  Future<bool> verifyMpin(String mpin) async {
-    state = state.copyWith(isLoading: true, error: null);
-    try {
-      final uid = _auth.currentUser?.uid;
-      if (uid == null) throw Exception('Session expired. Please sign in again.');
-
-      final doc = await _db.collection('users').doc(uid).get();
-      final data = doc.data() ?? {};
-
-      // ── Lockout check ────────────────────────────────────────────────────
-      final lockedUntilTs = data['lockedUntil'];
-      if (lockedUntilTs != null) {
-        final lockedUntil = (lockedUntilTs as Timestamp).toDate();
-        if (DateTime.now().isBefore(lockedUntil)) {
-          final remaining = lockedUntil.difference(DateTime.now()).inMinutes + 1;
-          state = state.copyWith(
-            isLoading: false,
-            lockedUntil: lockedUntil,
-            error: 'Account locked. Try again in $remaining minute(s).',
-          );
-          return false;
-        }
-        // Lock expired — clear it
-        await _db.collection('users').doc(uid).update({
-          'lockedUntil': FieldValue.delete(), 'loginAttempts': 0,
-        });
-      }
-
-      final storedHash = data['mpinHash'] as String?;
-      final attempts = (data['loginAttempts'] as int?) ?? 0;
-
-      if (storedHash == null) {
-        state = state.copyWith(
-            isLoading: false, error: 'MPIN not set. Please create one.');
-        return false;
-      }
-
-      final inputHash = _hashMpin(mpin, uid);
-
-      if (inputHash == storedHash) {
-        // ── Correct MPIN ──────────────────────────────────────────────────
-        String? fcmToken;
-        try { fcmToken = await FirebaseMessaging.instance.getToken(); } catch (_) {}
-        await _db.collection('users').doc(uid).update({
-          'loginAttempts': 0,
-          'lockedUntil':   FieldValue.delete(),
-          'lastLogin':     FieldValue.serverTimestamp(),
-          if (fcmToken != null) 'fcmToken': fcmToken,
-        });
-        _auditLogin(uid, success: true);
-        state = state.copyWith(
-            isLoading: false, loginAttempts: 0, lockedUntil: null);
-        return true;
-      } else {
-        // ── Wrong MPIN ────────────────────────────────────────────────────
-        final newAttempts = attempts + 1;
-        _auditLogin(uid, success: false);
-
-        if (newAttempts >= _maxAttempts) {
-          final lockUntil =
-              DateTime.now().add(const Duration(minutes: _lockMinutes));
-          await _db.collection('users').doc(uid).update({
-            'loginAttempts': newAttempts,
-            'lockedUntil':   Timestamp.fromDate(lockUntil),
-          });
-          state = state.copyWith(
-            isLoading: false,
-            loginAttempts: newAttempts,
-            lockedUntil: lockUntil,
-            error:
-                'Too many attempts. Account locked for $_lockMinutes minutes.',
-          );
-        } else {
-          await _db
-              .collection('users')
-              .doc(uid)
-              .update({'loginAttempts': newAttempts});
-          final remaining = _maxAttempts - newAttempts;
-          state = state.copyWith(
-            isLoading: false,
-            loginAttempts: newAttempts,
-            error: 'Incorrect MPIN. $remaining attempt(s) left.',
-          );
-        }
-        return false;
-      }
-    } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
-      return false;
-    }
-  }
-
   // ── Sign out ──────────────────────────────────────────────────────────────
   Future<void> signOut() async {
     await _auth.signOut();
-    await _sec.delete(key: 'mpin_set');
     state = const AuthState();
   }
 
@@ -529,19 +377,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
   List<Map<String, dynamic>> _parseFamilyList(dynamic raw) {
     if (raw is! List) return [];
     return raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
-  }
-
-  void _auditLogin(String uid, {required bool success}) {
-    _db
-        .collection('login_audit')
-        .doc(uid)
-        .collection('events')
-        .add({
-      'success':   success,
-      'method':    'mpin',
-      'timestamp': FieldValue.serverTimestamp(),
-      'expiresAt': Timestamp.fromDate(DateTime.now().add(const Duration(days: 365))),
-    }).ignore();
   }
 
   String _friendlyError(String code) => switch (code) {

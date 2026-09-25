@@ -38,15 +38,21 @@ class CaregiverProfileService {
     String city = '',
     double? lat,
     double? lng,
+    String phone = '',
+    String email = '',
+    String gender = '',
+    String serviceType = 'caregiver',
   }) async {
     String? fcmToken;
     try {
-      fcmToken = await FirebaseMessaging.instance.getToken();
+      fcmToken = await FirebaseMessaging.instance.getToken().timeout(const Duration(seconds: 5));
     } catch (_) {}
 
     await _db.collection('caregiver_profiles').doc(uid).set({
       'uid': uid,
       'name': name,
+      'phone': phone,
+      'email': email,
       'photoUrl': photoUrl,
       'certifications': certifications,
       'specialties': specialties,
@@ -54,10 +60,13 @@ class CaregiverProfileService {
       'documentsVerified': false,
       'status': 'pending',
       'isVerified': false,
+      'isOnDuty': false,
       'rating': 0.0,
       'totalReviews': 0,
       'totalVisits': 0,
       'experienceYears': experienceYears,
+      'gender': gender,
+      'serviceType': serviceType,
       'city': city,
       if (lat != null && lng != null) 'lat': lat,
       if (lat != null && lng != null) 'lng': lng,
@@ -71,4 +80,24 @@ class CaregiverProfileService {
   /// inflate its own stats.
   static Future<void> updateProfile(String uid, Map<String, dynamic> data) =>
       _db.collection('caregiver_profiles').doc(uid).set(data, SetOptions(merge: true));
+
+  /// Persists the Dashboard's on-duty/availability toggle. Not in
+  /// firestore.rules' protected-fields list for this collection, so a
+  /// self-write is allowed. Read back live via `caregiverOnDutyProvider`,
+  /// which watches the same [profileStream] this field lives on — so every
+  /// screen reflects real server-side state instead of a local flag.
+  static Future<void> updateOnDuty(String uid, bool value) =>
+      _db.collection('caregiver_profiles').doc(uid).set({
+        'isOnDuty': value,
+      }, SetOptions(merge: true));
+
+  /// `photoUrl` isn't in firestore.rules' protected-fields list for this
+  /// collection either, so a self-write is allowed — same trust boundary as
+  /// [updateOnDuty]/[updateProfile]. Used by [CaregiverProfileScreen]'s
+  /// avatar upload/remove flow, mirroring `HospitalProfileService.
+  /// updatePhotoUrl`.
+  static Future<void> updatePhotoUrl(String uid, String photoUrl) =>
+      _db.collection('caregiver_profiles').doc(uid).set({
+        'photoUrl': photoUrl,
+      }, SetOptions(merge: true));
 }

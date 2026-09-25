@@ -1,10 +1,15 @@
 import 'dart:async';
+import 'dart:io';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/services/feedback_service.dart';
+import '../../../core/services/image_upload_service.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../../../shared_core/shared_core.dart';
 import '../../location/models/precise_address.dart';
@@ -21,13 +26,34 @@ import '../services/nutritionist_profile_service.dart';
 /// `onNutritionistProfileWriteForVisibility` (functions/index.js) mirrors
 /// into the patient-facing `nutritionists/{uid}` catalogue entry — before
 /// that, a nutritionist simply isn't findable or bookable by patients.
-class NutritionProfileScreen extends ConsumerWidget {
+///
+/// The hero avatar is tap-to-change (bottom sheet → gallery/camera/remove,
+/// upload-progress ring), mirroring `HospitalProfileScreen`'s avatar flow.
+class NutritionProfileScreen extends ConsumerStatefulWidget {
   const NutritionProfileScreen({super.key});
 
   static const _allLanguages = [
     'English', 'Telugu', 'Hindi', 'Tamil', 'Kannada',
     'Malayalam', 'Marathi', 'Bengali',
   ];
+
+  @override
+  ConsumerState<NutritionProfileScreen> createState() => _NutritionProfileScreenState();
+}
+
+class _NutritionProfileScreenState extends ConsumerState<NutritionProfileScreen> {
+  // Photo upload state
+  File? _localImage;
+  bool _uploading = false;
+  double _uploadProgress = 0;
+  String? _currentPhotoUrl;
+  bool _photoSynced = false;
+
+  void _syncPhoto(NutritionistProfile profile) {
+    if (_photoSynced) return;
+    _photoSynced = true;
+    _currentPhotoUrl = profile.photoUrl;
+  }
 
   Future<void> _edit(BuildContext context, NutritionistProfile current) async {
     final uid = NutritionistProfileService.currentUid;
@@ -56,7 +82,7 @@ class NutritionProfileScreen extends ConsumerWidget {
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (dialogContext, setDialogState) => AlertDialog(
-          title: const Text('Nutritionist Details'),
+          title: const Text('Dietician Details'),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -183,18 +209,251 @@ class NutritionProfileScreen extends ConsumerWidget {
     }
   }
 
+  // ── Photo picker ──────────────────────────────────────────
+
+  void _showPhotoOptions() {
+    final hasPhoto = (_currentPhotoUrl != null && _currentPhotoUrl!.isNotEmpty) || _localImage != null;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 20),
+                decoration: BoxDecoration(
+                  color: AppColors.divider,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const Text('Profile Photo', style: AppTextStyles.h4),
+              const SizedBox(height: 20),
+              _PhotoSheetOption(
+                icon: Icons.photo_library_rounded,
+                label: 'Choose from Gallery',
+                color: AppColors.primary,
+                onTap: () {
+                  Navigator.pop(context);
+                  _pickAndUpload(ImageSource.gallery);
+                },
+              ),
+              const SizedBox(height: 12),
+              _PhotoSheetOption(
+                icon: Icons.camera_alt_rounded,
+                label: 'Take a Photo',
+                color: AppColors.secondary,
+                onTap: () {
+                  Navigator.pop(context);
+                  _pickAndUpload(ImageSource.camera);
+                },
+              ),
+              if (hasPhoto) ...[
+                const SizedBox(height: 12),
+                _PhotoSheetOption(
+                  icon: Icons.delete_outline_rounded,
+                  label: 'Remove Photo',
+                  color: AppColors.error,
+                  onTap: () {
+                    Navigator.pop(context);
+                    _removePhoto();
+                  },
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickAndUpload(ImageSource source) async {
+    final uid = NutritionistProfileService.currentUid;
+    if (uid == null) return;
+
+    File? file;
+    try {
+      file = source == ImageSource.gallery
+          ? await ImageUploadService.pickFromGallery()
+          : await ImageUploadService.pickFromCamera();
+    } catch (e) {
+      if (!mounted) return;
+      FeedbackService.showError(context, 'Could not open picker: ${e.toString().replaceAll('Exception: ', '')}');
+      return;
+    }
+    if (file == null || !mounted) return;
+
+    setState(() {
+      _localImage = file;
+      _uploading = true;
+      _uploadProgress = 0;
+    });
+
+    try {
+      final url = await ImageUploadService.uploadPartnerProfileImage(
+        profileCollection: 'nutritionist_profiles',
+        imageFile: file,
+        uid: uid,
+        onProgress: (p) {
+          if (mounted) setState(() => _uploadProgress = p);
+        },
+      );
+      if (!mounted) return;
+      await NutritionistProfileService.updatePhotoUrl(uid, url);
+      if (!mounted) return;
+      setState(() {
+        _currentPhotoUrl = url;
+        _uploading = false;
+      });
+      FeedbackService.showSuccess(context, 'Profile photo updated!');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _uploading = false;
+        _localImage = null;
+      });
+      FeedbackService.showError(context, 'Upload failed: ${e.toString().replaceAll('Exception: ', '')}');
+    }
+  }
+
+  Future<void> _removePhoto() async {
+    final uid = NutritionistProfileService.currentUid;
+    if (uid == null) return;
+
+    setState(() => _uploading = true);
+    try {
+      await ImageUploadService.deletePartnerProfileImage(profileCollection: 'nutritionist_profiles', uid: uid);
+      await NutritionistProfileService.updatePhotoUrl(uid, '');
+      if (!mounted) return;
+      setState(() {
+        _currentPhotoUrl = '';
+        _localImage = null;
+        _uploading = false;
+      });
+      FeedbackService.showSuccess(context, 'Profile photo removed.');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _uploading = false);
+      FeedbackService.showError(context, 'Remove failed: ${e.toString().replaceAll('Exception: ', '')}');
+    }
+  }
+
+  // ── Avatar widget ─────────────────────────────────────────
+
+  Widget _buildAvatar(NutritionistProfile profile) {
+    final hasNetwork = _currentPhotoUrl != null && _currentPhotoUrl!.isNotEmpty;
+    const size = 76.0;
+
+    Widget imageCircle;
+    if (_localImage != null) {
+      imageCircle = CircleAvatar(radius: size / 2, backgroundImage: FileImage(_localImage!));
+    } else if (hasNetwork) {
+      imageCircle = CachedNetworkImage(
+        imageUrl: _currentPhotoUrl!,
+        imageBuilder: (_, imageProvider) => CircleAvatar(radius: size / 2, backgroundImage: imageProvider),
+        placeholder: (_, __) => AppAvatar(name: profile.name, size: size),
+        errorWidget: (_, __, ___) => AppAvatar(name: profile.name, size: size),
+      );
+    } else {
+      imageCircle = AppAvatar(name: profile.name, size: size);
+    }
+
+    return GestureDetector(
+      onTap: _uploading ? null : _showPhotoOptions,
+      child: Column(
+        children: [
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              Container(
+                width: size,
+                height: size,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 3),
+                ),
+                child: ClipOval(child: imageCircle),
+              ),
+              if (_uploading)
+                Container(
+                  width: size,
+                  height: size,
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.45),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Center(
+                    child: SizedBox(
+                      width: 30,
+                      height: 30,
+                      child: CircularProgressIndicator(
+                        value: _uploadProgress > 0 ? _uploadProgress : null,
+                        color: Colors.white,
+                        strokeWidth: 3,
+                      ),
+                    ),
+                  ),
+                ),
+              if (!_uploading)
+                Positioned(
+                  bottom: 0,
+                  right: 0,
+                  child: Container(
+                    width: 24,
+                    height: 24,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: AppColors.primary, width: 2),
+                    ),
+                    child: const Icon(Icons.camera_alt_rounded, color: AppColors.primary, size: 12),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            _uploading
+                ? (_uploadProgress > 0
+                    ? 'Uploading ${(_uploadProgress * 100).toStringAsFixed(0)}%...'
+                    : 'Uploading...')
+                : 'Tap to change photo',
+            style: AppTextStyles.bodySmall.copyWith(
+              fontSize: 11,
+              color: Colors.white70,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final profile = ref.watch(nutritionistProfileProvider).valueOrNull ?? NutritionistProfile.empty();
+    _syncPhoto(profile);
 
     return SharedAppShell(
       currentRoute: AppRoutes.nutritionProfile,
-      title: 'Nutritionist Profile',
+      title: 'Dietician Profile',
       extraActions: [
         IconButton(
           icon: const Icon(Icons.edit_outlined, color: AppColors.textPrimary),
           onPressed: () => _edit(context, profile),
           tooltip: 'Edit profile',
+        ),
+        IconButton(
+          icon: const Icon(Icons.settings_outlined, color: AppColors.textPrimary),
+          onPressed: () => context.push(AppRoutes.nutritionSettings),
+          tooltip: 'Settings',
         ),
       ],
       body: ListView(
@@ -222,13 +481,13 @@ class NutritionProfileScreen extends ConsumerWidget {
             width: double.infinity,
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(colors: [Color(0xFF2E7D32), Color(0xFF1B5E20)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+              gradient: const LinearGradient(colors: [AppColors.primaryDark, AppColors.primary, AppColors.secondary], begin: Alignment.topLeft, end: Alignment.bottomRight),
               borderRadius: BorderRadius.circular(24),
               boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 18, offset: const Offset(0, 8))],
             ),
             child: Column(
               children: [
-                SharedProfileAvatar(name: profile.name, size: 76, isVerified: profile.documentsVerified),
+                _buildAvatar(profile),
                 const SizedBox(height: 14),
                 Text(profile.name, style: const TextStyle(fontFamily: 'Inter', fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white)),
                 if (profile.specialization.isNotEmpty) ...[
@@ -282,6 +541,16 @@ class NutritionProfileScreen extends ConsumerWidget {
               ),
             ),
           ],
+          if (NutritionistProfileService.currentUid != null) ...[
+            const SizedBox(height: 16),
+            PartnerDocumentsSection(
+              role: 'nutritionist',
+              uid: NutritionistProfileService.currentUid!,
+              documents: profile.documents,
+              documentVerification: profile.documentVerification,
+              locked: profile.status == 'active',
+            ),
+          ],
         ],
       ),
     );
@@ -305,4 +574,55 @@ class _HeroStat extends StatelessWidget {
       ],
     );
   }
+}
+
+class _PhotoSheetOption extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+  const _PhotoSheetOption({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.06),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: color, size: 20),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  label,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: color,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
 }

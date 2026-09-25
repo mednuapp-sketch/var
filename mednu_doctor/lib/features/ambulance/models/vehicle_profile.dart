@@ -14,6 +14,10 @@ class VehicleProfile {
   final double rating;
   final int totalTrips;
 
+  /// Vehicle/driver avatar shown at the top of the Vehicle Profile screen.
+  /// Empty string means "no photo uploaded" (renders initials instead).
+  final String photoUrl;
+
   /// Admin-approval status: 'pending' | 'active'. Distinct from
   /// [documentsVerified] (a per-document flag) — this is the account-level
   /// gate the router and the Documents section's `locked` state key off.
@@ -38,6 +42,7 @@ class VehicleProfile {
     this.status = 'pending',
     this.documents = const {},
     this.documentVerification = const {},
+    this.photoUrl = '',
   });
 
   /// What the Vehicle Profile screen renders before the partner has
@@ -75,6 +80,7 @@ class VehicleProfile {
           (d['documents'] as Map?) ?? const <String, dynamic>{}),
       documentVerification: Map<String, dynamic>.from(
           (d['documentVerification'] as Map?) ?? const <String, dynamic>{}),
+      photoUrl: d['photoUrl'] as String? ?? '',
     );
   }
 }

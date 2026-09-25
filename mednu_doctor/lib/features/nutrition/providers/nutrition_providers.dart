@@ -69,6 +69,15 @@ final nutritionistProfileProvider = StreamProvider.autoDispose<NutritionistProfi
       .map((snap) => snap.exists ? NutritionistProfile.fromFirestore(snap) : NutritionistProfile.empty());
 });
 
+/// Live remote/video-consult availability, derived from the same
+/// `nutritionist_profiles/{uid}` stream — mirrors Counselling's online
+/// presence toggle, but as a plain persisted preference field rather than a
+/// connection-presence signal (nutrition consults are pre-booked, not
+/// picked up live). Powers [NutritionDashboardScreen]'s availability card.
+final nutritionOnlineStatusProvider = Provider.autoDispose<bool>((ref) {
+  return ref.watch(nutritionistProfileProvider).valueOrNull?.isOnline ?? false;
+});
+
 // ── Earnings ─────────────────────────────────────────────────────────────
 
 class NutritionDashboardMetrics {

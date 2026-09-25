@@ -754,6 +754,7 @@ _StatusMeta _resolveStatusInfo(BookingStatus status) {
         Icons.play_circle_rounded,
       );
     case BookingStatus.sampleCollected:
+    case BookingStatus.reportReady:
     case BookingStatus.delivered:
     case BookingStatus.completed:
       return _StatusMeta(

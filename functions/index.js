@@ -2577,131 +2577,6 @@ exports.grantReferralReward = onCall({ enforceAppCheck: true }, async (request) 
   }
 });
 
-// ── MPIN Login: Verify MPIN + Issue Firebase Custom Token ────────────────────
-//
-// Enables passwordless login on any device without OTP.
-// Flow: client sends phone + raw MPIN → function computes SHA-256 hash
-// server-side → compares against users/{uid}.mpinHash → issues custom token.
-// Lockout (5 attempts / 15 min) is enforced here just like verifyMpin() in Dart.
-//
-// Request data: { phone: "+919876543210", mpin: "1234" }
-// Response:     { customToken: string }
-exports.verifyMpinAndIssueToken = onCall(async (request) => {
-  const { phone, mpin } = request.data || {};
-
-  if (!phone || !/^\+91\d{10}$/.test(phone)) {
-    throw new HttpsError("invalid-argument", "Invalid phone number.");
-  }
-  if (!mpin || !/^\d{4}$/.test(mpin)) {
-    throw new HttpsError("invalid-argument", "Invalid MPIN format.");
-  }
-
-  const db   = getFirestore();
-  const auth = getAuth();
-
-  // 1. Resolve uid — fast path via phone_index, fallback via Firebase Auth
-  let uid;
-  const phoneSnap = await db.collection("phone_index").doc(phone).get();
-  if (phoneSnap.exists && phoneSnap.data().uid) {
-    uid = phoneSnap.data().uid;
-  } else {
-    // phone_index missing for users who registered before the index was added.
-    // Resolve uid from Firebase Auth directly.
-    try {
-      uid = (await auth.getUserByPhoneNumber(phone)).uid;
-    } catch (err) {
-      if (err.code === "auth/user-not-found") {
-        throw new HttpsError("not-found", "No account found for this number.");
-      }
-      throw new HttpsError("internal", "Authentication lookup failed.");
-    }
-  }
-
-  // 2. Fetch user doc for stored hash + lockout state
-  const userSnap = await db.collection("users").doc(uid).get();
-  if (!userSnap.exists) {
-    throw new HttpsError("not-found", "Account not found.");
-  }
-  const data = userSnap.data();
-
-  // 3. Lockout check
-  const lockedUntilTs = data.lockedUntil;
-  if (lockedUntilTs) {
-    const lockedUntil = lockedUntilTs.toDate();
-    if (new Date() < lockedUntil) {
-      const remaining = Math.ceil((lockedUntil - new Date()) / 60000);
-      throw new HttpsError(
-        "resource-exhausted",
-        `Account locked. Try again in ${remaining} minute(s).`
-      );
-    }
-    // Lock expired — clear it
-    await db.collection("users").doc(uid).update({
-      lockedUntil: FieldValue.delete(),
-      loginAttempts: 0,
-    });
-  }
-
-  const storedHash = data.mpinHash;
-  if (!storedHash) {
-    throw new HttpsError(
-      "failed-precondition",
-      "MPIN not set. Please use OTP to log in."
-    );
-  }
-
-  // 4. Compute hash server-side — same algorithm as Dart: SHA-256(uid:mpin:MEDNU_V1)
-  const inputHash = crypto
-    .createHash("sha256")
-    .update(`${uid}:${mpin}:MEDNU_V1`)
-    .digest("hex");
-
-  const attempts = data.loginAttempts || 0;
-  const MAX_ATTEMPTS = 5;
-  const LOCK_MINUTES = 15;
-
-  if (inputHash !== storedHash) {
-    // Wrong MPIN — increment attempts, possibly lock
-    const newAttempts = attempts + 1;
-    if (newAttempts >= MAX_ATTEMPTS) {
-      const lockUntil = new Date(Date.now() + LOCK_MINUTES * 60 * 1000);
-      await db.collection("users").doc(uid).update({
-        loginAttempts: newAttempts,
-        lockedUntil: Timestamp.fromDate(lockUntil),
-      });
-      throw new HttpsError(
-        "resource-exhausted",
-        `Too many attempts. Account locked for ${LOCK_MINUTES} minutes.`
-      );
-    }
-    await db.collection("users").doc(uid).update({ loginAttempts: newAttempts });
-    const remaining = MAX_ATTEMPTS - newAttempts;
-    throw new HttpsError(
-      "unauthenticated",
-      `Incorrect MPIN. ${remaining} attempt(s) left.`
-    );
-  }
-
-  // 5. Correct MPIN — reset attempts, update lastLogin, issue token
-  await db.collection("users").doc(uid).update({
-    loginAttempts: 0,
-    lockedUntil: FieldValue.delete(),
-    lastLogin: FieldValue.serverTimestamp(),
-  });
-
-  // Heal phone_index if it was missing so the fast path works next time.
-  if (!phoneSnap.exists || !phoneSnap.data().uid) {
-    db.collection("phone_index").doc(phone).set(
-      { hasMpin: true, uid, updatedAt: FieldValue.serverTimestamp() },
-      { merge: true }
-    ).catch(() => {});
-  }
-
-  const customToken = await auth.createCustomToken(uid);
-  console.log(`MPIN login success for uid ${uid}`);
-  return { customToken };
-});
-
 // ═══════════════════════════════════════════════════════════════════════════════
 // PAYMENT DISTRIBUTION & SETTLEMENT ENGINE
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -6340,18 +6215,20 @@ exports.onCaregiverServiceRequestCreated = onDocumentCreated(
       : 60;
 
     // A visit booked from a specific caregiver's own profile card (see
-    // caregivers_screen.dart's `sourceCaregiverId`) pins straight to them
-    // instead of dropping into the unclaimed pool — same reasoning as Lab's
-    // `sourceLabId` handling. Falls back to the pool if that caregiver is no
-    // longer active by the time the patient checks out.
+    // caregivers_screen.dart's `sourceCaregiverId`, or care_assistant_screen.dart's
+    // `assistantId` — same pin, two screens, never unified into one field name)
+    // pins straight to them instead of dropping into the unclaimed pool — same
+    // reasoning as Lab's `sourceLabId` handling. Falls back to the pool if that
+    // caregiver is no longer active by the time the patient checks out.
+    const sourcePartnerId = details.sourceCaregiverId || details.assistantId || null;
     let pinnedCaregiverId = null;
-    if (details.sourceCaregiverId) {
-      const caregiverSnap = await db.collection("caregiver_profiles").doc(details.sourceCaregiverId).get();
+    if (sourcePartnerId) {
+      const caregiverSnap = await db.collection("caregiver_profiles").doc(sourcePartnerId).get();
       if (caregiverSnap.exists && caregiverSnap.data().status === "active") {
-        pinnedCaregiverId = details.sourceCaregiverId;
+        pinnedCaregiverId = sourcePartnerId;
       } else {
         _logCaregiver("WARNING", "source_caregiver_inactive_falling_back_to_pool", {
-          requestId, sourceCaregiverId: details.sourceCaregiverId,
+          requestId, sourceCaregiverId: sourcePartnerId,
         });
       }
     }
@@ -6566,35 +6443,39 @@ exports.cleanupStaleCaregiverVisits = onSchedule({ schedule: "every 60 minutes",
 });
 
 // ── Profile visibility mirror ────────────────────────────────────────────────
-// `caregivers_screen.dart` (mednu) browses a top-level `caregivers` collection
+// `caregivers_screen.dart` and `care_assistant_screen.dart` (mednu) each
+// browse their own top-level collection (`caregivers` / `care_assistants`)
 // that, before this, nothing ever wrote — approval only sent a push
-// notification. Mirrors `caregiver_profiles/{uid}` into `caregivers/{uid}`
+// notification. Mirrors `caregiver_profiles/{uid}` into whichever listing
+// collection matches the partner's own `serviceType` choice at registration
 // (same doc id, 1:1 — no subcollection involved, unlike Lab/Pharmacy's
-// per-item inventory) whenever it's active, so a real registered-and-approved
-// caregiver actually shows up to patients, and disappears again if suspended.
+// per-item inventory) whenever the profile is active, so a real
+// registered-and-approved partner actually shows up to patients, and
+// disappears again if suspended. A partner only ever has ONE listing doc at a
+// time — if `serviceType` changes, the stale copy in the other collection is
+// deleted in the same write.
 //
-// Field mapping is lossy in one direction: `caregiver_profiles` has no
-// `gender`/`location` fields at all (never collected at registration), so
-// those are left blank — the patient screen already renders gracefully
-// without them, and nothing here fabricates a value data doesn't support.
 // `type` (Nurse/Maid/...) is approximated from the first entry in
-// `specialties` for the same reason — there's no dedicated role field.
+// `specialties` for `caregivers` listings, since there's no dedicated role
+// field — same as before this comment was updated.
+const _CAREGIVER_LISTING_COLLECTIONS = { caregiver: "caregivers", care_assistant: "care_assistants" };
+
+function _caregiverServiceType(profile) {
+  return profile.serviceType === "care_assistant" ? "care_assistant" : "caregiver";
+}
+
 function _caregiverListingDoc(profile, existingCreatedAt) {
   const specialties = Array.isArray(profile.specialties) ? profile.specialties : [];
   const hourlyRate = profile.hourlyRate ?? 0;
-  return {
+  const shared = {
     name: profile.name || "Caregiver",
     photoUrl: profile.photoUrl || "",
-    type: specialties.length > 0 ? specialties[0] : "Caregiver",
-    specialty: specialties.length > 0 ? specialties.join(", ") : "Home Care",
+    gender: profile.gender || "",
     experience: `${profile.experienceYears ?? 0} yrs`,
-    ratePerDay: Math.round(hourlyRate * 8),
-    ratePerHour: hourlyRate,
-    ratePer12Hr: Math.round(hourlyRate * 12),
     rating: profile.rating ?? 0,
-    // Patient-side caregivers_screen.dart already reads `location` (a
-    // pre-existing field name distinct from `city` used by the other
-    // verticals) — matching it here rather than introducing a second name.
+    // Patient-side screens already read `location` (a pre-existing field name
+    // distinct from `city` used by the other verticals) — matching it here
+    // rather than introducing a second name.
     location: profile.city || "",
     ...(profile.lat != null && profile.lng != null
       ? { lat: profile.lat, lng: profile.lng }
@@ -6604,6 +6485,31 @@ function _caregiverListingDoc(profile, existingCreatedAt) {
     createdAt: existingCreatedAt || FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   };
+
+  if (_caregiverServiceType(profile) === "care_assistant") {
+    // care_assistant_screen.dart's 4 duration tiers have no dedicated rate
+    // fields on the shared registration form (just one `hourlyRate`), so the
+    // longer tiers are derived from it — same lossy-but-functional approach
+    // the shift-rate fields below already use for the Caregiver listing.
+    return {
+      ...shared,
+      specialty: specialties.length > 0 ? specialties.join(", ") : "Home & Hospital Assistance",
+      bio: "",
+      rateHourly: hourlyRate,
+      rateHalfDay: Math.round(hourlyRate * 4),
+      rateFullDay: Math.round(hourlyRate * 8),
+      rateMultiDay: Math.round(hourlyRate * 8),
+    };
+  }
+
+  return {
+    ...shared,
+    type: specialties.length > 0 ? specialties[0] : "Caregiver",
+    specialty: specialties.length > 0 ? specialties.join(", ") : "Home Care",
+    ratePerDay: Math.round(hourlyRate * 8),
+    ratePerHour: hourlyRate,
+    ratePer12Hr: Math.round(hourlyRate * 12),
+  };
 }
 
 exports.onCaregiverProfileWriteForVisibility = onDocumentWritten(
@@ -6611,21 +6517,32 @@ exports.onCaregiverProfileWriteForVisibility = onDocumentWritten(
   async (event) => {
     const caregiverId = event.params.caregiverId;
     const db = getFirestore();
-    const listingRef = db.collection("caregivers").doc(caregiverId);
 
     const after = event.data.after;
     if (!after.exists) {
-      await listingRef.delete().catch(() => {});
+      await Promise.all(
+        Object.values(_CAREGIVER_LISTING_COLLECTIONS)
+          .map((col) => db.collection(col).doc(caregiverId).delete().catch(() => {})),
+      );
       _logCaregiver("INFO", "listing_mirror_deleted", { caregiverId });
       return;
     }
 
     const profile = after.data();
+    const targetCollection = _CAREGIVER_LISTING_COLLECTIONS[_caregiverServiceType(profile)];
+    const staleCollection = Object.values(_CAREGIVER_LISTING_COLLECTIONS)
+      .find((col) => col !== targetCollection);
+    const listingRef = db.collection(targetCollection).doc(caregiverId);
+
+    // Always clear any listing left behind in the other collection — covers
+    // both a serviceType switch and (below) a pending/suspended profile.
+    await db.collection(staleCollection).doc(caregiverId).delete().catch(() => {});
+
     if (profile.status !== "active") {
-      // Pending/suspended caregivers stay out of the patient list until
-      // (re)approved. `caregivers.isActive` is redundant with the doc simply
-      // not existing, but keeping the field lets the patient query stay a
-      // plain `where('isActive', '==', true)` if this ever needs to become a
+      // Pending/suspended partners stay out of the patient list until
+      // (re)approved. `isActive` is redundant with the doc simply not
+      // existing, but keeping the field lets the patient query stay a plain
+      // `where('isActive', '==', true)` if this ever needs to become a
       // sweep-based mirror (subcollection-style) instead of 1:1 later.
       await listingRef.delete().catch(() => {});
       return;
@@ -6636,7 +6553,7 @@ exports.onCaregiverProfileWriteForVisibility = onDocumentWritten(
       _caregiverListingDoc(profile, existing.exists ? existing.data().createdAt : null),
       { merge: true },
     );
-    _logCaregiver("INFO", "listing_mirror_synced", { caregiverId });
+    _logCaregiver("INFO", "listing_mirror_synced", { caregiverId, targetCollection });
   }
 );
 
@@ -7425,6 +7342,9 @@ function _physiotherapistListingDoc(profile, existingCreatedAt) {
     specialties: profile.specialties || [],
     experienceYears: profile.experienceYears ?? 0,
     hourlyRate: profile.hourlyRate ?? 0,
+    onlineRate: profile.onlineRate ?? 0,
+    clinicRate: profile.clinicRate ?? 0,
+    homeRate: profile.homeRate ?? 0,
     rating: profile.rating ?? 0,
     totalSessions: profile.totalSessions ?? 0,
     city: profile.city || "",
@@ -7843,6 +7763,30 @@ exports.onCounsellorProfileApproved = onDocumentUpdated("counsellor_profiles/{ui
   );
 });
 
+// Copies the location a hospital billing-desk applicant picked at
+// registration (hospital_profiles/{uid}.latitude/longitude) onto the shared
+// `hospitals/{hospitalId}` catalog entry once a Director approves the
+// account — firestore.rules only allows admin writes to `hospitals`, so the
+// client can never do this itself. Runs on every status change rather than
+// once, so a later re-approval (or an admin editing the linked hospital)
+// still gets the latest coordinates picked at registration.
+exports.onHospitalProfileApproved = onDocumentUpdated("hospital_profiles/{uid}", async (event) => {
+  const before = event.data.before.data();
+  const after = event.data.after.data();
+  if (before.status === after.status) return;
+  if (after.status !== "active") return;
+
+  const hospitalId = after.hospitalId;
+  const lat = after.latitude;
+  const lng = after.longitude;
+  if (!hospitalId || typeof lat !== "number" || typeof lng !== "number") return;
+
+  await getFirestore().collection("hospitals").doc(hospitalId).set(
+    { latitude: lat, longitude: lng },
+    { merge: true },
+  );
+});
+
 // Doctor accounts use the exact same `doctors/{uid}.status: 'pending' ->
 // 'active'` convention as every partner profile (see doctor_auth_service.dart
 // registration + mednu-admin's approve action) but, unlike the 5 partner
@@ -8062,3 +8006,25 @@ exports.generateAgoraToken = onCall({ secrets: ["AGORA_APP_CERTIFICATE"] }, asyn
 
   return { token, uid: assignedUid, expiresAt: privilegeExpiredTs };
 });
+
+// ── WhatsApp Cloud API notifications ─────────────────────────────────────
+// See functions/whatsapp/ — a self-contained module (config, templates,
+// Graph API client, dedupe-safe sender, Firestore triggers, reminder
+// scheduler, inbound webhook). Does NOT call initializeApp() itself; it
+// reuses the app already initialized at the top of this file via
+// getFirestore()/getApp(). Exported functions:
+//   onAppointmentWritten, onOrderWritten, onLabServiceRequestWritten,
+//   onPaymentWritten, onSettlementWritten (Firestore triggers)
+//   sendAppointmentReminders (every-10-minutes scheduler)
+//   waWebhook (inbound webhook — GET verification + POST statuses/messages)
+const waTriggers = require("./whatsapp/triggers");
+const waReminders = require("./whatsapp/reminders");
+const waWebhookModule = require("./whatsapp/webhook");
+
+exports.onAppointmentWritten = waTriggers.onAppointmentWritten;
+exports.onOrderWritten = waTriggers.onOrderWritten;
+exports.onLabServiceRequestWritten = waTriggers.onLabServiceRequestWritten;
+exports.onPaymentWritten = waTriggers.onPaymentWritten;
+exports.onSettlementWritten = waTriggers.onSettlementWritten;
+exports.sendAppointmentReminders = waReminders.sendAppointmentReminders;
+exports.waWebhook = waWebhookModule.waWebhook;

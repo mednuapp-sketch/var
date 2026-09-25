@@ -1,10 +1,15 @@
 import 'dart:async';
+import 'dart:io';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/services/feedback_service.dart';
+import '../../../core/services/image_upload_service.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../../../shared_core/shared_core.dart';
 import '../../location/models/precise_address.dart';
@@ -21,13 +26,267 @@ import '../services/physio_profile_service.dart';
 /// `isPhysiotherapistPartner()` start returning true (once an admin flips
 /// `status` to 'active') — i.e. what lets this account see unclaimed
 /// sessions at all.
-class PhysioProfileScreen extends ConsumerWidget {
+class PhysioProfileScreen extends ConsumerStatefulWidget {
   const PhysioProfileScreen({super.key});
 
+  @override
+  ConsumerState<PhysioProfileScreen> createState() => _PhysioProfileScreenState();
+}
+
+class _PhysioProfileScreenState extends ConsumerState<PhysioProfileScreen> {
   static const _allLanguages = [
     'English', 'Telugu', 'Hindi', 'Tamil', 'Kannada',
     'Malayalam', 'Marathi', 'Bengali',
   ];
+
+  // Photo upload state. The persisted URL is read live from the profile
+  // stream (physioProfileProvider) so avatar changes made elsewhere show up
+  // in real time; only the in-flight local preview is held here.
+  File? _localImage;
+  bool _uploading = false;
+  double _uploadProgress = 0;
+
+  // ── Photo picker ──────────────────────────────────────────
+
+  void _showPhotoOptions(String currentPhotoUrl) {
+    final hasPhoto = currentPhotoUrl.isNotEmpty || _localImage != null;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 20),
+                decoration: BoxDecoration(
+                  color: AppColors.divider,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const Text('Profile Photo', style: AppTextStyles.h4),
+              const SizedBox(height: 20),
+              _PhotoSheetOption(
+                icon: Icons.photo_library_rounded,
+                label: 'Choose from Gallery',
+                color: AppColors.primary,
+                onTap: () {
+                  Navigator.pop(context);
+                  _pickAndUpload(ImageSource.gallery);
+                },
+              ),
+              const SizedBox(height: 12),
+              _PhotoSheetOption(
+                icon: Icons.camera_alt_rounded,
+                label: 'Take a Photo',
+                color: AppColors.secondary,
+                onTap: () {
+                  Navigator.pop(context);
+                  _pickAndUpload(ImageSource.camera);
+                },
+              ),
+              if (hasPhoto) ...[
+                const SizedBox(height: 12),
+                _PhotoSheetOption(
+                  icon: Icons.delete_outline_rounded,
+                  label: 'Remove Photo',
+                  color: AppColors.error,
+                  onTap: () {
+                    Navigator.pop(context);
+                    _removePhoto();
+                  },
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickAndUpload(ImageSource source) async {
+    final uid = PhysioProfileService.currentUid;
+    if (uid == null) return;
+
+    File? file;
+    try {
+      file = source == ImageSource.gallery
+          ? await ImageUploadService.pickFromGallery()
+          : await ImageUploadService.pickFromCamera();
+    } catch (e) {
+      if (!mounted) return;
+      FeedbackService.showError(context, 'Could not open picker: ${e.toString().replaceAll('Exception: ', '')}');
+      return;
+    }
+    if (file == null || !mounted) return;
+
+    setState(() {
+      _localImage = file;
+      _uploading = true;
+      _uploadProgress = 0;
+    });
+
+    try {
+      final url = await ImageUploadService.uploadPartnerProfileImage(
+        profileCollection: 'physiotherapist_profiles',
+        imageFile: file,
+        uid: uid,
+        onProgress: (p) {
+          if (mounted) setState(() => _uploadProgress = p);
+        },
+      );
+      if (!mounted) return;
+      await PhysioProfileService.updatePhotoUrl(uid, url);
+      if (!mounted) return;
+      setState(() => _uploading = false);
+      FeedbackService.showSuccess(context, 'Profile photo updated!');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _uploading = false;
+        _localImage = null;
+      });
+      FeedbackService.showError(context, 'Upload failed: ${e.toString().replaceAll('Exception: ', '')}');
+    }
+  }
+
+  Future<void> _removePhoto() async {
+    final uid = PhysioProfileService.currentUid;
+    if (uid == null) return;
+
+    setState(() => _uploading = true);
+    try {
+      await ImageUploadService.deletePartnerProfileImage(profileCollection: 'physiotherapist_profiles', uid: uid);
+      await PhysioProfileService.updatePhotoUrl(uid, '');
+      if (!mounted) return;
+      setState(() {
+        _localImage = null;
+        _uploading = false;
+      });
+      FeedbackService.showSuccess(context, 'Profile photo removed.');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _uploading = false);
+      FeedbackService.showError(context, 'Remove failed: ${e.toString().replaceAll('Exception: ', '')}');
+    }
+  }
+
+  // ── Avatar widget ─────────────────────────────────────────
+
+  Widget _buildAvatar(PhysioProfile profile) {
+    final hasNetwork = profile.photoUrl.isNotEmpty;
+
+    Widget imageCircle;
+    if (_localImage != null) {
+      imageCircle = CircleAvatar(radius: 38, backgroundImage: FileImage(_localImage!));
+    } else if (hasNetwork) {
+      imageCircle = CachedNetworkImage(
+        imageUrl: profile.photoUrl,
+        imageBuilder: (_, imageProvider) => CircleAvatar(radius: 38, backgroundImage: imageProvider),
+        placeholder: (_, __) => AppAvatar(name: profile.name, size: 76),
+        errorWidget: (_, __, ___) => AppAvatar(name: profile.name, size: 76),
+      );
+    } else {
+      imageCircle = AppAvatar(name: profile.name, size: 76);
+    }
+
+    return GestureDetector(
+      onTap: _uploading ? null : () => _showPhotoOptions(profile.photoUrl),
+      child: Column(
+        children: [
+          Stack(
+            clipBehavior: Clip.none,
+            alignment: Alignment.center,
+            children: [
+              Container(
+                width: 76,
+                height: 76,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 3),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.25),
+                      blurRadius: 14,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: ClipOval(child: imageCircle),
+              ),
+              if (profile.documentsVerified && !_uploading)
+                Positioned(
+                  right: -2,
+                  top: -2,
+                  child: Container(
+                    width: 22,
+                    height: 22,
+                    decoration: BoxDecoration(
+                      color: AppColors.success,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 1.6),
+                    ),
+                    child: const Icon(Icons.verified_rounded, size: 14, color: Colors.white),
+                  ),
+                ),
+              if (_uploading)
+                Container(
+                  width: 76,
+                  height: 76,
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.45),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Center(
+                    child: SizedBox(
+                      width: 30,
+                      height: 30,
+                      child: CircularProgressIndicator(
+                        value: _uploadProgress > 0 ? _uploadProgress : null,
+                        color: Colors.white,
+                        strokeWidth: 3,
+                      ),
+                    ),
+                  ),
+                ),
+              if (!_uploading)
+                Positioned(
+                  bottom: 0,
+                  right: 0,
+                  child: Container(
+                    width: 24,
+                    height: 24,
+                    decoration: BoxDecoration(
+                      color: AppColors.primary,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 2),
+                    ),
+                    child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 12),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            _uploading
+                ? (_uploadProgress > 0
+                    ? 'Uploading ${(_uploadProgress * 100).toStringAsFixed(0)}%...'
+                    : 'Uploading...')
+                : 'Tap to change photo',
+            style: const TextStyle(fontFamily: 'Inter', fontSize: 11, color: Colors.white70),
+          ),
+        ],
+      ),
+    );
+  }
 
   Future<void> _edit(BuildContext context, PhysioProfile current) async {
     final uid = PhysioProfileService.currentUid;
@@ -40,8 +299,13 @@ class PhysioProfileScreen extends ConsumerWidget {
         text: current.name == 'Complete your profile' ? '' : current.name);
     final certifications = TextEditingController(text: current.certifications.join(', '));
     final specialties = TextEditingController(text: current.specialties.join(', '));
-    final hourlyRate =
-        TextEditingController(text: current.hourlyRate == 0 ? '' : '${current.hourlyRate}');
+    final onlineRate =
+        TextEditingController(text: current.onlineRate == 0 ? '' : '${current.onlineRate}');
+    final homeRate =
+        TextEditingController(text: current.homeRate == 0 ? '' : '${current.homeRate}');
+    final clinicRate =
+        TextEditingController(text: current.clinicRate == 0 ? '' : '${current.clinicRate}');
+    var offersClinicVisit = current.clinicRate > 0;
     final experienceYears = TextEditingController(
         text: current.experienceYears == 0 ? '' : '${current.experienceYears}');
     var city = current.city;
@@ -76,10 +340,27 @@ class PhysioProfileScreen extends ConsumerWidget {
                   ),
                 ),
                 TextField(
-                  controller: hourlyRate,
+                  controller: onlineRate,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Hourly rate (₹)'),
+                  decoration: const InputDecoration(labelText: 'Online video consultation fee (₹)'),
                 ),
+                TextField(
+                  controller: homeRate,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Home visit fee (₹)'),
+                ),
+                SwitchListTile.adaptive(
+                  contentPadding: EdgeInsets.zero,
+                  value: offersClinicVisit,
+                  onChanged: (v) => setDialogState(() => offersClinicVisit = v),
+                  title: const Text('Offers in-clinic appointments'),
+                ),
+                if (offersClinicVisit)
+                  TextField(
+                    controller: clinicRate,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: 'In-clinic appointment fee (₹)'),
+                  ),
                 TextField(
                   controller: experienceYears,
                   keyboardType: TextInputType.number,
@@ -158,7 +439,9 @@ class PhysioProfileScreen extends ConsumerWidget {
       name.dispose();
       certifications.dispose();
       specialties.dispose();
-      hourlyRate.dispose();
+      onlineRate.dispose();
+      homeRate.dispose();
+      clinicRate.dispose();
       experienceYears.dispose();
     }));
 
@@ -167,7 +450,11 @@ class PhysioProfileScreen extends ConsumerWidget {
     List<String> split(TextEditingController c) =>
         c.text.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
 
-    final rate = num.tryParse(hourlyRate.text.trim()) ?? 0;
+    final online = num.tryParse(onlineRate.text.trim()) ?? 0;
+    final home = num.tryParse(homeRate.text.trim()) ?? 0;
+    final clinic = offersClinicVisit ? (num.tryParse(clinicRate.text.trim()) ?? 0) : 0;
+    final startingFrom = [online, clinic, home].where((r) => r > 0).fold<num?>(
+        null, (min, r) => min == null || r < min ? r : min) ?? 0;
     final years = int.tryParse(experienceYears.text.trim()) ?? 0;
 
     try {
@@ -179,7 +466,10 @@ class PhysioProfileScreen extends ConsumerWidget {
           'name': name.text.trim(),
           'certifications': split(certifications),
           'specialties': split(specialties),
-          'hourlyRate': rate,
+          'onlineRate': online,
+          'clinicRate': clinic,
+          'homeRate': home,
+          'hourlyRate': startingFrom,
           'experienceYears': years,
           'city': city,
           if (clinicLat != null && clinicLng != null) 'clinicLat': clinicLat,
@@ -192,7 +482,9 @@ class PhysioProfileScreen extends ConsumerWidget {
           name: name.text.trim(),
           certifications: split(certifications),
           specialties: split(specialties),
-          hourlyRate: rate,
+          onlineRate: online,
+          clinicRate: clinic,
+          homeRate: home,
           experienceYears: years,
           city: city,
           clinicLat: clinicLat,
@@ -209,7 +501,7 @@ class PhysioProfileScreen extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final profile = ref.watch(physioProfileProvider);
 
     return SharedAppShell(
@@ -221,6 +513,11 @@ class PhysioProfileScreen extends ConsumerWidget {
           onPressed: () => _edit(context, profile),
           tooltip: 'Edit profile',
         ),
+        IconButton(
+          icon: const Icon(Icons.settings_outlined, color: AppColors.textPrimary),
+          onPressed: () => context.push(AppRoutes.physioSettings),
+          tooltip: 'Settings',
+        ),
       ],
       body: ListView(
         padding: const EdgeInsets.all(16),
@@ -229,13 +526,13 @@ class PhysioProfileScreen extends ConsumerWidget {
             width: double.infinity,
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(colors: [Color(0xFF00838F), Color(0xFF006064)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+              gradient: const LinearGradient(colors: [AppColors.primaryDark, AppColors.primary, AppColors.secondary], begin: Alignment.topLeft, end: Alignment.bottomRight),
               borderRadius: BorderRadius.circular(24),
               boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 18, offset: const Offset(0, 8))],
             ),
             child: Column(
               children: [
-                SharedProfileAvatar(name: profile.name, size: 76, isVerified: profile.documentsVerified),
+                _buildAvatar(profile),
                 const SizedBox(height: 14),
                 Text(profile.name, style: const TextStyle(fontFamily: 'Inter', fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white)),
                 const SizedBox(height: 4),
@@ -248,7 +545,7 @@ class PhysioProfileScreen extends ConsumerWidget {
                     Container(width: 1, height: 30, color: Colors.white24),
                     _HeroStat(label: 'Sessions', value: '${profile.totalSessions}', icon: Icons.event_note_rounded),
                     Container(width: 1, height: 30, color: Colors.white24),
-                    _HeroStat(label: 'Rate/hr', value: '₹${profile.hourlyRate}', icon: Icons.currency_rupee_rounded),
+                    _HeroStat(label: 'From', value: '₹${profile.hourlyRate}', icon: Icons.currency_rupee_rounded),
                   ],
                 ),
               ],
@@ -331,4 +628,52 @@ class _HeroStat extends StatelessWidget {
       ],
     );
   }
+}
+
+class _PhotoSheetOption extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+  const _PhotoSheetOption({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.06),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: color, size: 20),
+              ),
+              const SizedBox(width: 14),
+              Text(
+                label,
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: color,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
 }

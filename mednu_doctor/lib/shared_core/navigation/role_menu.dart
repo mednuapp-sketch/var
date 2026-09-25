@@ -282,6 +282,12 @@ List<NavItem> buildMenuForRole(AppRole role) {
     case AppRole.hospital:
       return const [
         NavItem(
+          label: 'Dashboard',
+          icon: Icons.space_dashboard_outlined,
+          activeIcon: Icons.space_dashboard_rounded,
+          route: AppRoutes.hospitalDashboard,
+        ),
+        NavItem(
           label: 'Appointments',
           icon: Icons.event_note_outlined,
           activeIcon: Icons.event_note_rounded,
@@ -298,6 +304,12 @@ List<NavItem> buildMenuForRole(AppRole role) {
           icon: Icons.account_balance_wallet_outlined,
           activeIcon: Icons.account_balance_wallet_rounded,
           route: AppRoutes.hospitalEarnings,
+        ),
+        NavItem(
+          label: 'Profile',
+          icon: Icons.person_outline_rounded,
+          activeIcon: Icons.person_rounded,
+          route: AppRoutes.hospitalProfile,
         ),
       ];
     case AppRole.admin:

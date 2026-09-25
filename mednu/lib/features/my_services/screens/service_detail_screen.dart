@@ -1169,6 +1169,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
       case BookingStatus.consultationStarted:
         return (const Color(0xFF00838F), const Color(0xFF006064));
       case BookingStatus.sampleCollected:
+      case BookingStatus.reportReady:
       case BookingStatus.delivered:
       case BookingStatus.completed:
         return (AppColors.success, const Color(0xFF1B5E20));
@@ -1200,6 +1201,8 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
         return Icons.medical_services_rounded;
       case BookingStatus.sampleCollected:
         return Icons.science_rounded;
+      case BookingStatus.reportReady:
+        return Icons.description_rounded;
       case BookingStatus.delivered:
         return Icons.local_shipping_rounded;
       case BookingStatus.completed:
@@ -1234,6 +1237,8 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
         return 'Consultation is live right now';
       case BookingStatus.sampleCollected:
         return 'Sample has been collected successfully';
+      case BookingStatus.reportReady:
+        return 'Your test report is ready to view';
       case BookingStatus.delivered:
         return 'Service has been delivered to you';
       case BookingStatus.completed:

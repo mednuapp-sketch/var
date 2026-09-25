@@ -6,11 +6,6 @@ import '../models/visit.dart';
 import '../services/caregiver_profile_service.dart';
 import '../services/caregiver_visit_service.dart';
 
-/// True while the caregiver is marked on-duty/available. Local,
-/// session-only state — nothing server-side consumes it yet, and inventing a
-/// field for it would mean a schema change this module isn't allowed to make.
-final caregiverOnDutyProvider = StateProvider<bool>((ref) => true);
-
 // ── Raw realtime sources ─────────────────────────────────────────────────
 //
 // Two separate queries rather than one: the unclaimed assignment pool is
@@ -143,6 +138,16 @@ final caregiverProfileProvider = Provider.autoDispose<CaregiverProfile>((ref) {
   return ref.watch(caregiverProfileDocProvider).valueOrNull ?? CaregiverProfile.empty();
 });
 
+/// Real, persisted on-duty/availability flag — derived from the same
+/// [caregiverProfileDocProvider] stream as [caregiverProfileProvider], so the
+/// Dashboard's duty switch shows live `caregiver_profiles/{uid}.isOnDuty`
+/// instead of a session-local flag. Toggling it writes through
+/// [CaregiverProfileService.updateOnDuty]; this provider then reflects the
+/// change the moment Firestore's snapshot listener delivers it back.
+final caregiverOnDutyProvider = Provider.autoDispose<bool>((ref) {
+  return ref.watch(caregiverProfileDocProvider).valueOrNull?.isOnDuty ?? false;
+});
+
 // ── Earnings ─────────────────────────────────────────────────────────────
 
 /// Mon..Sun totals for the current week, derived from real completed visits.
@@ -165,30 +170,77 @@ final weeklyCaregiverEarningsProvider = Provider.autoDispose<List<double>>((ref)
   return buckets;
 });
 
+class CaregiverEarningsBreakdown {
+  final num todayEarnings;
+  final num weekEarnings;
+  final num monthEarnings;
+  final num avgPerVisit;
+
+  const CaregiverEarningsBreakdown({
+    required this.todayEarnings,
+    required this.weekEarnings,
+    required this.monthEarnings,
+    required this.avgPerVisit,
+  });
+}
+
+/// Today/week/month totals for the Earnings screen's stat cards — bucketed
+/// client-side from the exact same completed-visit history
+/// [weeklyCaregiverEarningsProvider] derives its bar chart from. Mirrors
+/// `HospitalEarningsScreen`'s todayEarnings/weekEarnings/monthEarnings
+/// aggregation; there's still no `caregiver_transactions` ledger to query
+/// instead, so this stays a client-side extension of the same source rather
+/// than a new one.
+final caregiverEarningsBreakdownProvider =
+    Provider.autoDispose<CaregiverEarningsBreakdown>((ref) {
+  final history = ref.watch(visitHistoryProvider);
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final weekStart = today.subtract(Duration(days: today.weekday - 1));
+  final monthStart = DateTime(now.year, now.month, 1);
+
+  num todayEarnings = 0;
+  num weekEarnings = 0;
+  num monthEarnings = 0;
+  int monthVisits = 0;
+  for (final v in history) {
+    if (v.status != VisitStatus.completed) continue;
+    final day = DateTime(v.scheduledAt.year, v.scheduledAt.month, v.scheduledAt.day);
+    if (day.isBefore(monthStart)) continue;
+    monthEarnings += v.fare;
+    monthVisits++;
+    if (!day.isBefore(weekStart)) weekEarnings += v.fare;
+    if (!day.isBefore(today)) todayEarnings += v.fare;
+  }
+
+  return CaregiverEarningsBreakdown(
+    todayEarnings: todayEarnings,
+    weekEarnings: weekEarnings,
+    monthEarnings: monthEarnings,
+    avgPerVisit: monthVisits > 0 ? (monthEarnings / monthVisits).round() : 0,
+  );
+});
+
 class CaregiverDashboardMetrics {
   final int todayVisits;
   final int completedToday;
   final num todayEarnings;
-  final double rating;
 
   const CaregiverDashboardMetrics({
     required this.todayVisits,
     required this.completedToday,
     required this.todayEarnings,
-    required this.rating,
   });
 }
 
 final caregiverDashboardMetricsProvider =
     Provider.autoDispose<CaregiverDashboardMetrics>((ref) {
   final today = ref.watch(todayVisitsProvider);
-  final profile = ref.watch(caregiverProfileProvider);
   final completedToday = today.where((v) => v.status == VisitStatus.completed).toList();
 
   return CaregiverDashboardMetrics(
     todayVisits: today.length,
     completedToday: completedToday.length,
     todayEarnings: completedToday.fold<num>(0, (s, v) => s + v.fare),
-    rating: profile.rating,
   );
 });

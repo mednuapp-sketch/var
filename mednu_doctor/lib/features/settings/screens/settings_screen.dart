@@ -10,6 +10,8 @@ import '../../../core/router/app_router.dart';
 import '../../../core/services/appointment_reminder_service.dart';
 import '../../auth/services/doctor_auth_service.dart';
 import '../../security/services/biometric_service.dart';
+import '../../../shared_core/whatsapp/whatsapp_opt_in_service.dart';
+import '../../../shared_core/settings/account_settings_items.dart';
 import '../../../core/widgets/ux_widgets.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -25,6 +27,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _notifAppointments     = true;
   bool _notifConsultations    = true;
   bool _notifPayments         = true;
+  bool _whatsappOptIn         = false;
   int  _apptReminderMinutes   = 15;
   bool _loading = true;
   String _appVersion = '';
@@ -52,6 +55,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           setState(() {
             _doctorName     = profile?['name'] as String?;
             _doctorSpecialty = profile?['specialty'] as String?;
+            _whatsappOptIn  = profile?['whatsappOptIn'] == true;
           });
         }
       } catch (_) {}
@@ -68,6 +72,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _appVersion           = info != null ? '${info.version}+${info.buildNumber}' : '1.0.0';
         _loading              = false;
       });
+    }
+  }
+
+  Future<void> _toggleWhatsAppOptIn(bool value) async {
+    final uid = DoctorAuthService.currentUid;
+    if (uid == null) return;
+    setState(() => _whatsappOptIn = value);
+    try {
+      await WhatsAppOptInService.save(collection: 'doctors', uid: uid, value: value);
+    } catch (_) {
+      if (mounted) setState(() => _whatsappOptIn = !value);
     }
   }
 
@@ -309,6 +324,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             },
                           ),
                           _divider(),
+                          _ToggleTile(
+                            icon: Icons.chat_rounded,
+                            iconColor: const Color(0xFF25D366),
+                            title: 'WhatsApp Notifications',
+                            subtitle: 'Get booking & payout updates on WhatsApp',
+                            value: _whatsappOptIn,
+                            onChanged: _toggleWhatsAppOptIn,
+                          ),
+                          _divider(),
                           _SettingsTile(
                             icon: Icons.schedule_rounded,
                             iconColor: const Color(0xFF1565C0),
@@ -413,6 +437,53 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             if (!mounted) return;
                             router.go(AppRoutes.login);
                           },
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // ── Delete Account ─────────────────────────────────
+                      FadeInSlide(
+                        delay: const Duration(milliseconds: 260),
+                        child: Column(
+                          children: [
+                            SizedBox(
+                              width: double.infinity,
+                              child: TextButton.icon(
+                                onPressed: () => AccountSettingsItems
+                                    .confirmAndRequestDeletion(context,
+                                        role: 'doctor'),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: Colors.red.shade400,
+                                  minimumSize:
+                                      const Size(double.infinity, 48),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                ),
+                                icon: const Icon(
+                                    Icons.delete_forever_outlined,
+                                    size: 20),
+                                label: const Flexible(
+                                  child: Text(
+                                    'Delete Account',
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Permanently delete your account and personal data.',
+                              textAlign: TextAlign.center,
+                              style: AppTextStyles.bodySmall
+                                  .copyWith(color: AppColors.textHint),
+                            ),
+                          ],
                         ),
                       ),
                       const SizedBox(height: 8),

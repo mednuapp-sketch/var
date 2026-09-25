@@ -389,7 +389,7 @@ class _PhysiotherapistCard extends StatelessWidget {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Session Rate', style: AppTextStyles.bodySmall.copyWith(color: context.appTextHint)),
+                    Text('Starting From', style: AppTextStyles.bodySmall.copyWith(color: context.appTextHint)),
                     Text('₹${p.hourlyRate.toInt()}', style: AppTextStyles.h4.copyWith(color: _kTeal)),
                   ],
                 ),

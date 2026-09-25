@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/utils/launch_utils.dart';
 import '../../../core/utils/responsive.dart';
 
 String get _uid => FirebaseAuth.instance.currentUser?.uid ?? '';
@@ -27,9 +28,12 @@ class PrescriptionsPage extends StatelessWidget {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text('Prescriptions',
             style: GoogleFonts.poppins(
-                fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                fontSize: 22,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary)),
         Text('All your doctor prescriptions in one place',
-            style: GoogleFonts.poppins(fontSize: 13, color: AppColors.textSecondary)),
+            style: GoogleFonts.poppins(
+                fontSize: 13, color: AppColors.textSecondary)),
         const SizedBox(height: 24),
         Expanded(
           child: _uid.isEmpty
@@ -64,14 +68,25 @@ class PrescriptionsPage extends StatelessWidget {
   Widget _emptyState() {
     return Center(
       child: Column(mainAxisSize: MainAxisSize.min, children: [
-        const Text('💊', style: TextStyle(fontSize: 56)),
+        Container(
+          width: 72,
+          height: 72,
+          decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.08),
+              shape: BoxShape.circle),
+          child: const Icon(Icons.medication_rounded,
+              size: 32, color: AppColors.primary),
+        ),
         const SizedBox(height: 16),
         Text('No prescriptions yet',
             style: GoogleFonts.poppins(
-                fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary)),
         const SizedBox(height: 8),
         Text('Your doctor prescriptions will appear here',
-            style: GoogleFonts.poppins(fontSize: 13, color: AppColors.textSecondary)),
+            style: GoogleFonts.poppins(
+                fontSize: 13, color: AppColors.textSecondary)),
       ]),
     );
   }
@@ -104,64 +119,95 @@ class _PrescriptionCardState extends State<_PrescriptionCard> {
     final hasFile = (d['fileUrl'] as String? ?? '').isNotEmpty;
 
     return MouseRegion(
+      cursor: hasFile ? SystemMouseCursors.click : MouseCursor.defer,
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-              color: _hovered ? AppColors.primary.withValues(alpha: 0.3) : AppColors.border),
-          boxShadow: _hovered
-              ? [BoxShadow(color: AppColors.primary.withValues(alpha: 0.1), blurRadius: 16, offset: const Offset(0, 4))]
-              : [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8)],
-        ),
-        child: Row(children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              color: isPdf
-                  ? AppColors.error.withValues(alpha: 0.1)
-                  : AppColors.info.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Center(
-              child: Text(
-                isPdf ? '📄' : '💊',
-                style: const TextStyle(fontSize: 26),
+      child: GestureDetector(
+        onTap: hasFile ? () => openUrl(d['fileUrl'] as String) : null,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+                color: _hovered
+                    ? AppColors.primary.withValues(alpha: 0.3)
+                    : AppColors.border),
+            boxShadow: _hovered
+                ? [
+                    BoxShadow(
+                        color: AppColors.primary.withValues(alpha: 0.1),
+                        blurRadius: 16,
+                        offset: const Offset(0, 4))
+                  ]
+                : [
+                    BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.03),
+                        blurRadius: 8)
+                  ],
+          ),
+          child: Row(children: [
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: isPdf
+                    ? AppColors.error.withValues(alpha: 0.1)
+                    : AppColors.info.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Center(
+                child: Icon(
+                  isPdf
+                      ? Icons.picture_as_pdf_rounded
+                      : Icons.medication_rounded,
+                  size: 26,
+                  color: isPdf ? AppColors.error : AppColors.info,
+                ),
               ),
             ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(doctorName,
-                  style: GoogleFonts.poppins(
-                      fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-              const SizedBox(height: 2),
-              if (diagnosis.isNotEmpty)
-                Text(diagnosis,
-                    style: GoogleFonts.poppins(
-                        fontSize: 13, color: AppColors.primary, fontWeight: FontWeight.w500)),
-              const SizedBox(height: 6),
-              Wrap(spacing: 16, children: [
-                if (dateStr.isNotEmpty)
-                  _ChipInfo(icon: Icons.calendar_today_rounded, label: dateStr),
-                if (medicineCount > 0)
-                  _ChipInfo(
-                      icon: Icons.medication_rounded,
-                      label: '$medicineCount ${medicineCount == 1 ? 'medicine' : 'medicines'}'),
-                if (hasFile)
-                  _ChipInfo(
-                      icon: isPdf ? Icons.picture_as_pdf_rounded : Icons.image_rounded,
-                      label: isPdf ? 'PDF' : 'Image'),
-              ]),
-            ]),
-          ),
-        ]),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(doctorName,
+                        style: GoogleFonts.poppins(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary)),
+                    const SizedBox(height: 2),
+                    if (diagnosis.isNotEmpty)
+                      Text(diagnosis,
+                          style: GoogleFonts.poppins(
+                              fontSize: 13,
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w500)),
+                    const SizedBox(height: 6),
+                    Wrap(spacing: 16, children: [
+                      if (dateStr.isNotEmpty)
+                        _ChipInfo(
+                            icon: Icons.calendar_today_rounded, label: dateStr),
+                      if (medicineCount > 0)
+                        _ChipInfo(
+                            icon: Icons.medication_rounded,
+                            label:
+                                '$medicineCount ${medicineCount == 1 ? 'medicine' : 'medicines'}'),
+                      if (hasFile)
+                        _ChipInfo(
+                            icon: isPdf
+                                ? Icons.picture_as_pdf_rounded
+                                : Icons.image_rounded,
+                            label: isPdf ? 'PDF' : 'Image'),
+                    ]),
+                  ]),
+            ),
+            if (hasFile)
+              const Icon(Icons.open_in_new_rounded,
+                  size: 18, color: AppColors.primary),
+          ]),
+        ),
       ),
     );
   }
@@ -169,7 +215,21 @@ class _PrescriptionCardState extends State<_PrescriptionCard> {
 
 String _formatTs(Timestamp ts) {
   final d = ts.toDate();
-  const months = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const months = [
+    '',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec'
+  ];
   return '${d.day} ${months[d.month]} ${d.year}';
 }
 
@@ -183,7 +243,9 @@ class _ChipInfo extends StatelessWidget {
     return Row(mainAxisSize: MainAxisSize.min, children: [
       Icon(icon, size: 12, color: AppColors.textSecondary),
       const SizedBox(width: 4),
-      Text(label, style: GoogleFonts.poppins(fontSize: 11, color: AppColors.textSecondary)),
+      Text(label,
+          style: GoogleFonts.poppins(
+              fontSize: 11, color: AppColors.textSecondary)),
     ]);
   }
 }

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/responsive.dart';
+import '../widgets/book_appointment_dialog.dart';
 
 // ─── Providers ────────────────────────────────────────────────────────────────
 
@@ -44,7 +45,8 @@ final walletProvider = StreamProvider<double>((ref) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 class DashboardHomePage extends ConsumerWidget {
-  const DashboardHomePage({super.key});
+  final void Function(int) onNavigate;
+  const DashboardHomePage({super.key, required this.onNavigate});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -74,15 +76,17 @@ class DashboardHomePage extends ConsumerWidget {
           const SizedBox(height: 24),
           isMobile
               ? Column(children: [
-                  _UpcomingAppointmentsCard(appointments: appointments, loading: appointmentsAsync.isLoading),
+                  _UpcomingAppointmentsCard(appointments: appointments, loading: appointmentsAsync.isLoading, onViewAll: () => onNavigate(1)),
                   const SizedBox(height: 20),
                   _EmptyHealthCard(),
                 ])
-              : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Expanded(flex: 3, child: _UpcomingAppointmentsCard(appointments: appointments, loading: appointmentsAsync.isLoading)),
-                  const SizedBox(width: 20),
-                  Expanded(flex: 2, child: _EmptyHealthCard()),
-                ]),
+              : IntrinsicHeight(
+                  child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                    Expanded(flex: 3, child: _UpcomingAppointmentsCard(appointments: appointments, loading: appointmentsAsync.isLoading, onViewAll: () => onNavigate(1))),
+                    const SizedBox(width: 20),
+                    Expanded(flex: 2, child: _EmptyHealthCard()),
+                  ]),
+                ),
         ],
       ),
     );
@@ -136,10 +140,18 @@ class _WelcomeCard extends StatelessWidget {
                       style: GoogleFonts.poppins(fontSize: 13, color: Colors.white70, height: 1.5),
                     ),
                     const SizedBox(height: 16),
-                    const Row(children: [
-                      _WelcomeChip(label: 'Book Appointment', icon: Icons.calendar_today_rounded),
-                      SizedBox(width: 10),
-                      _WelcomeChip(label: 'Find Doctor', icon: Icons.search_rounded),
+                    Row(children: [
+                      _WelcomeChip(
+                        label: 'Book Appointment',
+                        icon: Icons.calendar_today_rounded,
+                        onTap: () => showBookAppointmentDialog(context),
+                      ),
+                      const SizedBox(width: 10),
+                      _WelcomeChip(
+                        label: 'Find Doctor',
+                        icon: Icons.search_rounded,
+                        onTap: () => showBookAppointmentDialog(context),
+                      ),
                     ]),
                   ],
                 ),
@@ -173,22 +185,26 @@ class _WelcomeCard extends StatelessWidget {
 class _WelcomeChip extends StatelessWidget {
   final String label;
   final IconData icon;
-  const _WelcomeChip({required this.label, required this.icon});
+  final VoidCallback onTap;
+  const _WelcomeChip({required this.label, required this.icon, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      decoration: BoxDecoration(
-        color: const Color(0x33FFFFFF),
-        borderRadius: BorderRadius.circular(30),
-        border: Border.all(color: const Color(0x4DFFFFFF)),
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: const Color(0x33FFFFFF),
+          borderRadius: BorderRadius.circular(30),
+          border: Border.all(color: const Color(0x4DFFFFFF)),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, size: 13, color: Colors.white),
+          const SizedBox(width: 6),
+          Text(label, style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white)),
+        ]),
       ),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(icon, size: 13, color: Colors.white),
-        const SizedBox(width: 6),
-        Text(label, style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white)),
-      ]),
     );
   }
 }
@@ -252,10 +268,10 @@ class _QuickStats extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final stats = [
-      {'icon': Icons.calendar_month_rounded, 'value': '$upcomingCount', 'label': 'Upcoming Appointments', 'color': 0xFF42A5F5},
-      {'icon': Icons.account_balance_wallet_rounded, 'value': '₹${walletBalance.toStringAsFixed(0)}', 'label': 'Wallet Balance', 'color': 0xFFFFA726},
-      {'icon': Icons.family_restroom_rounded, 'value': '$familyCount', 'label': 'Family Members', 'color': 0xFFEC407A},
-      {'icon': Icons.local_hospital_rounded, 'value': 'MedNU', 'label': 'Healthcare Partner', 'color': 0xFF66BB6A},
+      {'icon': Icons.calendar_month_rounded, 'value': '$upcomingCount', 'label': 'Upcoming Appointments', 'color': 0xFF522546},
+      {'icon': Icons.account_balance_wallet_rounded, 'value': '₹${walletBalance.toStringAsFixed(0)}', 'label': 'Wallet Balance', 'color': 0xFF633058},
+      {'icon': Icons.family_restroom_rounded, 'value': '$familyCount', 'label': 'Family Members', 'color': 0xFF522546},
+      {'icon': Icons.local_hospital_rounded, 'value': 'MedNU', 'label': 'Healthcare Partner', 'color': 0xFF633058},
     ];
 
     return GridView.builder(
@@ -331,8 +347,9 @@ class _StatCardState extends State<_StatCard> {
 class _UpcomingAppointmentsCard extends StatelessWidget {
   final List<Map<String, dynamic>> appointments;
   final bool loading;
+  final VoidCallback onViewAll;
 
-  const _UpcomingAppointmentsCard({required this.appointments, required this.loading});
+  const _UpcomingAppointmentsCard({required this.appointments, required this.loading, required this.onViewAll});
 
   @override
   Widget build(BuildContext context) {
@@ -352,7 +369,7 @@ class _UpcomingAppointmentsCard extends StatelessWidget {
             const Spacer(),
             if (appointments.isNotEmpty)
               TextButton(
-                onPressed: () {},
+                onPressed: onViewAll,
                 child: Text('View All', style: GoogleFonts.poppins(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.w600)),
               ),
           ]),
@@ -364,7 +381,7 @@ class _UpcomingAppointmentsCard extends StatelessWidget {
             ),)
           else if (appointments.isEmpty)
             const _EmptyState(
-              emoji: '📅',
+              icon: Icons.event_busy_rounded,
               title: 'No upcoming appointments',
               subtitle: 'Book a consultation with a doctor to get started',
             )
@@ -446,7 +463,7 @@ class _EmptyHealthCard extends StatelessWidget {
           Text('Health Summary', style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
           const SizedBox(height: 16),
           const _EmptyState(
-            emoji: '❤️',
+            icon: Icons.favorite_rounded,
             title: 'No health data yet',
             subtitle: 'Your vitals and health records will appear here after your first consultation',
           ),
@@ -459,11 +476,11 @@ class _EmptyHealthCard extends StatelessWidget {
 // ─── Empty State ──────────────────────────────────────────────────────────────
 
 class _EmptyState extends StatelessWidget {
-  final String emoji;
+  final IconData icon;
   final String title;
   final String subtitle;
 
-  const _EmptyState({required this.emoji, required this.title, required this.subtitle});
+  const _EmptyState({required this.icon, required this.title, required this.subtitle});
 
   @override
   Widget build(BuildContext context) {
@@ -472,7 +489,12 @@ class _EmptyState extends StatelessWidget {
       child: Center(
         child: Column(
           children: [
-            Text(emoji, style: const TextStyle(fontSize: 36)),
+            Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.08), shape: BoxShape.circle),
+              child: Icon(icon, size: 28, color: AppColors.primary),
+            ),
             const SizedBox(height: 12),
             Text(title, style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
             const SizedBox(height: 6),

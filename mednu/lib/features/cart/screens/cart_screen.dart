@@ -83,7 +83,16 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                       })
                   .toList(),
               'total': medicineItems.fold<int>(0, (s, i) => s + i.totalAmount),
-              'status': 'confirmed',
+              // Was hardcoded 'confirmed' — every medicine order showed as
+              // confirmed to the patient the instant it was placed, even
+              // though the pharmacy hasn't accepted/verified it yet (see
+              // onMedicineOrderCreated in functions/index.js, which always
+              // starts the mirrored pharmacy_orders doc at 'pending'). This
+              // now matches that: the order stays 'pending' — shown to the
+              // patient as "Order Under Review" (order_detail_screen.dart) —
+              // until the pharmacy actually moves it to 'verified'/etc via
+              // onPharmacyOrderStatusChange.
+              'status': 'pending',
               'deliveryAddress': d.address,
               'deliveryName': d.name,
               'deliveryPhone': d.phone,

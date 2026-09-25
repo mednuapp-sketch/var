@@ -8,7 +8,18 @@ class PhysioProfile {
   final String photoUrl;
   final List<String> certifications;
   final List<String> specialties;
+  /// Kept as a "starting from" figure for older display spots (dashboard
+  /// stat, patient list card) — derived from the cheapest of
+  /// [onlineRate]/[clinicRate]/[homeRate] whenever the profile is written
+  /// via `PhysioProfileService.createProfile`/`updateProfile`, never edited
+  /// directly.
   final num hourlyRate;
+  final num onlineRate;
+  /// 0 means this physiotherapist doesn't offer in-clinic appointments —
+  /// unlike [onlineRate]/[homeRate], this one is genuinely optional per the
+  /// registration form.
+  final num clinicRate;
+  final num homeRate;
   final double rating;
   final int totalSessions;
   final int experienceYears;
@@ -41,6 +52,9 @@ class PhysioProfile {
     required this.certifications,
     required this.specialties,
     required this.hourlyRate,
+    this.onlineRate = 0,
+    this.clinicRate = 0,
+    this.homeRate = 0,
     required this.rating,
     required this.totalSessions,
     required this.experienceYears,
@@ -82,6 +96,9 @@ class PhysioProfile {
           .map((e) => e.toString())
           .toList(),
       hourlyRate: (d['hourlyRate'] as num?) ?? 0,
+      onlineRate: (d['onlineRate'] as num?) ?? 0,
+      clinicRate: (d['clinicRate'] as num?) ?? 0,
+      homeRate: (d['homeRate'] as num?) ?? 0,
       rating: ((d['rating'] as num?) ?? 0).toDouble(),
       totalSessions: ((d['totalSessions'] as num?) ?? 0).toInt(),
       experienceYears: ((d['experienceYears'] as num?) ?? 0).toInt(),

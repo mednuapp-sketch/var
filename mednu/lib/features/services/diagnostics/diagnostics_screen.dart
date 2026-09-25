@@ -832,6 +832,7 @@ class _DiagnosticBookingCard extends StatelessWidget {
       case BookingStatus.sampleCollected:
         return (const Color(0xFFE0F7FA), const Color(0xFF00838F));
       case BookingStatus.completed:
+      case BookingStatus.reportReady:
       case BookingStatus.delivered:
         return (const Color(0xFFE8F5E9), AppColors.success);
       case BookingStatus.cancelled:

@@ -19,7 +19,7 @@ import '../widgets/prescription_card.dart';
 // patient-self-updatable fields. Nothing server-side was missing — only this
 // button.
 const _kCancellableStatuses = {
-  'confirmed', 'prescription_required', 'verified', 'packed', 'out_for_delivery',
+  'pending', 'confirmed', 'prescription_required', 'verified', 'packed', 'out_for_delivery',
 };
 
 Future<void> _cancelOrder(BuildContext context, String orderId) async {
@@ -254,6 +254,8 @@ class _SummaryCard extends StatelessWidget {
 
   String _statusLabel(String status) {
     switch (status) {
+      case 'pending':
+        return 'Order Under Review';
       case 'confirmed':
         return 'Confirmed';
       case 'verified':
@@ -279,6 +281,7 @@ class _SummaryCard extends StatelessWidget {
         return AppColors.success;
       case 'cancelled':
         return AppColors.error;
+      case 'pending':
       case 'prescription_required':
         return AppColors.warning;
       case 'out_for_delivery':

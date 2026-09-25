@@ -48,6 +48,7 @@ import '../../features/lab/screens/lab_sample_collection_screen.dart';
 import '../../features/lab/screens/lab_reports_screen.dart';
 import '../../features/lab/screens/lab_earnings_screen.dart';
 import '../../features/lab/screens/lab_profile_screen.dart';
+import '../../features/lab/screens/lab_settings_screen.dart';
 import '../../features/pharmacy/screens/pharmacy_onboarding_screen.dart';
 import '../../features/pharmacy/screens/pharmacy_dashboard_screen.dart';
 import '../../features/pharmacy/screens/pharmacy_orders_screen.dart';
@@ -82,19 +83,24 @@ import '../../features/physiotherapy/screens/physio_sessions_screen.dart';
 import '../../features/physiotherapy/screens/physio_session_detail_screen.dart';
 import '../../features/physiotherapy/screens/physio_earnings_screen.dart';
 import '../../features/physiotherapy/screens/physio_profile_screen.dart';
+import '../../features/physiotherapy/screens/physio_settings_screen.dart';
 import '../../features/counselling/screens/counselling_dashboard_screen.dart';
 import '../../features/counselling/screens/counselling_sessions_screen.dart';
 import '../../features/counselling/screens/counselling_session_detail_screen.dart';
 import '../../features/counselling/screens/counselling_earnings_screen.dart';
 import '../../features/counselling/screens/counselling_profile_screen.dart';
+import '../../features/counselling/screens/counselling_settings_screen.dart';
 import '../../features/nutrition/screens/nutrition_dashboard_screen.dart';
 import '../../features/nutrition/screens/nutrition_appointments_screen.dart';
 import '../../features/nutrition/screens/nutrition_appointment_detail_screen.dart';
 import '../../features/nutrition/screens/nutrition_earnings_screen.dart';
 import '../../features/nutrition/screens/nutrition_profile_screen.dart';
+import '../../features/nutrition/screens/nutrition_settings_screen.dart';
 import '../../features/hospital_billing/screens/hospital_payments_screen.dart';
 import '../../features/hospital_billing/screens/hospital_appointments_screen.dart';
 import '../../features/hospital_billing/screens/hospital_earnings_screen.dart';
+import '../../features/hospital_billing/screens/hospital_dashboard_screen.dart';
+import '../../features/hospital_billing/screens/hospital_profile_screen.dart';
 
 /// Bridges Firebase's auth stream into a [Listenable] so GoRouter's
 /// [refreshListenable] re-evaluates the redirect on every auth state change.
@@ -309,6 +315,7 @@ class AppRoutes {
   static const labReports          = '/lab/reports';
   static const labEarnings         = '/lab/earnings';
   static const labProfile          = '/lab/profile';
+  static const labSettings         = '/lab/settings';
 
   // ── Pharmacy & Medical Equipment partner module ──────────────────────────
   static const pharmacyOnboarding               = '/pharmacy/onboarding';
@@ -351,6 +358,7 @@ class AppRoutes {
   static const physioSessionDetail   = '/physio/session-detail';
   static const physioEarnings        = '/physio/earnings';
   static const physioProfile         = '/physio/profile';
+  static const physioSettings        = '/physio/settings';
 
   // ── Counselling partner module (Firestore-backed) ────────────────────────
   static const counsellingDashboard     = '/counselling/dashboard';
@@ -358,6 +366,7 @@ class AppRoutes {
   static const counsellingSessionDetail = '/counselling/session-detail';
   static const counsellingEarnings      = '/counselling/earnings';
   static const counsellingProfile       = '/counselling/profile';
+  static const counsellingSettings      = '/counselling/settings';
 
   // ── Nutrition partner module (admin-provisioned, no onboarding step) ─────
   static const nutritionDashboard           = '/nutrition/dashboard';
@@ -365,11 +374,14 @@ class AppRoutes {
   static const nutritionAppointmentDetail   = '/nutrition/appointment-detail';
   static const nutritionEarnings            = '/nutrition/earnings';
   static const nutritionProfile             = '/nutrition/profile';
+  static const nutritionSettings            = '/nutrition/settings';
 
   // ── Hospital billing-desk partner module ──────────────────────────────────
   static const hospitalPayments = '/hospital/payments';
   static const hospitalAppointments = '/hospital/appointments';
   static const hospitalEarnings = '/hospital/earnings';
+  static const hospitalDashboard = '/hospital/dashboard';
+  static const hospitalProfile = '/hospital/profile';
 }
 
 // Routes that unauthenticated users may visit.
@@ -653,6 +665,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: AppRoutes.labReports,          pageBuilder: (c, s) => const NoTransitionPage(child: LabReportsScreen())),
       GoRoute(path: AppRoutes.labEarnings,         pageBuilder: (c, s) => const NoTransitionPage(child: LabEarningsScreen())),
       GoRoute(path: AppRoutes.labProfile,          pageBuilder: (c, s) => const NoTransitionPage(child: LabProfileScreen())),
+      GoRoute(path: AppRoutes.labSettings,         builder: (c, s) => const LabSettingsScreen()),
 
       // ── Pharmacy & Medical Equipment partner module ──────────────────────
       GoRoute(path: AppRoutes.pharmacyOnboarding, builder: (c, s) => const PharmacyOnboardingScreen()),
@@ -752,6 +765,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(path: AppRoutes.physioEarnings, pageBuilder: (c, s) => const NoTransitionPage(child: PhysioEarningsScreen())),
       GoRoute(path: AppRoutes.physioProfile,  pageBuilder: (c, s) => const NoTransitionPage(child: PhysioProfileScreen())),
+      GoRoute(path: AppRoutes.physioSettings, builder: (c, s) => const PhysioSettingsScreen()),
 
       // ── Counselling partner module ────────────────────────────────────────
       GoRoute(path: AppRoutes.counsellingDashboard, pageBuilder: (c, s) => const NoTransitionPage(child: CounsellingDashboardScreen())),
@@ -765,6 +779,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(path: AppRoutes.counsellingEarnings, pageBuilder: (c, s) => const NoTransitionPage(child: CounsellingEarningsScreen())),
       GoRoute(path: AppRoutes.counsellingProfile,  pageBuilder: (c, s) => const NoTransitionPage(child: CounsellingProfileScreen())),
+      GoRoute(path: AppRoutes.counsellingSettings, builder: (c, s) => const CounsellingSettingsScreen()),
 
       // ── Nutrition partner module ──────────────────────────────────────────
       GoRoute(path: AppRoutes.nutritionDashboard,    pageBuilder: (c, s) => const NoTransitionPage(child: NutritionDashboardScreen())),
@@ -778,11 +793,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(path: AppRoutes.nutritionEarnings, pageBuilder: (c, s) => const NoTransitionPage(child: NutritionEarningsScreen())),
       GoRoute(path: AppRoutes.nutritionProfile,  pageBuilder: (c, s) => const NoTransitionPage(child: NutritionProfileScreen())),
+      GoRoute(path: AppRoutes.nutritionSettings, builder: (c, s) => const NutritionSettingsScreen()),
 
       // ── Hospital billing-desk partner module ──────────────────────────────
       GoRoute(path: AppRoutes.hospitalPayments, pageBuilder: (c, s) => const NoTransitionPage(child: HospitalPaymentsScreen())),
       GoRoute(path: AppRoutes.hospitalAppointments, pageBuilder: (c, s) => const NoTransitionPage(child: HospitalAppointmentsScreen())),
       GoRoute(path: AppRoutes.hospitalEarnings, pageBuilder: (c, s) => const NoTransitionPage(child: HospitalEarningsScreen())),
+      GoRoute(path: AppRoutes.hospitalDashboard, pageBuilder: (c, s) => const NoTransitionPage(child: HospitalDashboardScreen())),
+      GoRoute(path: AppRoutes.hospitalProfile, pageBuilder: (c, s) => const NoTransitionPage(child: HospitalProfileScreen())),
     ],
   );
 });

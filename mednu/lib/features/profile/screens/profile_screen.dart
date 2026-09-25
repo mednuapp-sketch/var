@@ -647,6 +647,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               _FavouriteDoctorsCard(uid: uid),
               SizedBox(height: R.h(context, 16)),
 
+              // My Documents entry (Aadhaar, Life Insurance, etc.)
+              const _MyDocumentsCard(),
+              SizedBox(height: R.h(context, 16)),
+
               // Referral & Rewards entry
               _ReferralEntryCard(uid: uid),
               SizedBox(height: R.h(context, 16)),
@@ -762,6 +766,62 @@ class _FamilyMembersRow extends StatelessWidget {
                   ]);
                 },
               ),
+      ),
+    );
+  }
+}
+
+// ── My Documents Card ──────────────────────────────────────
+class _MyDocumentsCard extends StatelessWidget {
+  const _MyDocumentsCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => context.push(AppRoutes.myDocuments),
+      child: Container(
+        padding: EdgeInsets.all(R.p(context, 14)),
+        decoration: BoxDecoration(
+          color: context.appSurface,
+          borderRadius: BorderRadius.circular(R.r(context, 14)),
+          border: Border.all(color: context.appBorder),
+        ),
+        child: Row(children: [
+          Container(
+            width: R.w(context, 40),
+            height: R.h(context, 40),
+            decoration: BoxDecoration(
+              color: const Color(0xFFE3F2FD),
+              borderRadius: BorderRadius.circular(R.r(context, 10)),
+            ),
+            child: Icon(Icons.folder_shared_rounded,
+                color: const Color(0xFF1565C0), size: R.w(context, 20)),
+          ),
+          SizedBox(width: R.w(context, 12)),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'My Documents',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                SizedBox(height: R.h(context, 2)),
+                Text(
+                  'Aadhaar card, life insurance & more',
+                  style: AppTextStyles.bodySmall
+                      .copyWith(color: context.appTextSecondary),
+                ),
+              ],
+            ),
+          ),
+          Icon(Icons.arrow_forward_ios_rounded,
+              size: R.w(context, 14), color: context.appTextHint),
+        ]),
       ),
     );
   }

@@ -32,14 +32,14 @@ const List<Map<String, dynamic>> _fallbackPlans = [
     'price': '₹1,100/month',
   },
   {
-    'title': 'Pregnancy Nutrition',
+    'title': 'Pregnancy Diet',
     'desc': 'Balanced diet for mother & baby',
     'iconKey': 'pregnant_woman',
     'colorKey': 'purple',
     'price': '₹1,500/month',
   },
   {
-    'title': 'Sports Nutrition',
+    'title': 'Sports Diet',
     'desc': 'Optimize performance & recovery',
     'iconKey': 'fitness_center',
     'colorKey': 'blue',
@@ -166,7 +166,7 @@ class _NutritionSliverAppBar extends StatelessWidget {
                                 child: Icon(Icons.restaurant_rounded, color: Colors.white, size: R.w(context, 26)),
                               ),
                               SizedBox(height: R.h(context, 10)),
-                              const Text('Nutrition & Diet', style: AppTextStyles.onPrimaryH2),
+                              const Text('Diet & Dietician', style: AppTextStyles.onPrimaryH2),
                               SizedBox(height: R.h(context, 2)),
                               const Text(
                                 'Expert dietitian consultations & plans',

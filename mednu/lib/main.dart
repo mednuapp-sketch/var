@@ -263,15 +263,13 @@ Future<void> _openPrescriptionFromNotification(
 /// screen yet" — splash is still deciding, or the user is mid-auth. A launch
 /// deep link fired while one of these is on screen would either be
 /// immediately overwritten by splash's own `context.go(...)` or would bypass
-/// the MPIN/OTP gate, so we wait for the app to leave them instead.
+/// the OTP gate, so we wait for the app to leave them instead.
 const _preLandingRoutes = <String>{
   AppRoutes.splash,
   AppRoutes.onboarding,
   AppRoutes.login,
   AppRoutes.otp,
   AppRoutes.register,
-  AppRoutes.mpin,
-  AppRoutes.createMpin,
 };
 
 /// Handles a deep link from a notification tap that launched the app from a
@@ -287,9 +285,9 @@ const _preLandingRoutes = <String>{
 /// to be mounted *and* the app to have left the pre-landing routes, then
 /// navigates once. It reduces — it does not eliminate — the drop rate: if
 /// the window elapses (very slow device, or the user is sitting on the
-/// terms-acceptance / MPIN screen) the link is dropped, but now with an
-/// explicit warning so the failure mode is observable in Crashlytics rather
-/// than silent.
+/// terms-acceptance screen) the link is dropped, but now with an explicit
+/// warning so the failure mode is observable in Crashlytics rather than
+/// silent.
 Future<void> _navigateOnLaunchNotification(Map<String, dynamic> data) async {
   const pollInterval = Duration(milliseconds: 150);
   // Generous relative to splash's own ~1.5 s hand-off, but still bounded.
@@ -337,8 +335,8 @@ Future<void> _navigateOnLaunchNotification(Map<String, dynamic> data) async {
 /// screen (so it doesn't get immediately overwritten by splash's own
 /// ~1.5s-delayed context.go — see _navigateOnLaunchNotification above for
 /// the same race on the FCM side) but, unlike that FCM path, does NOT wait
-/// for the user to be authenticated or past login/OTP/MPIN — a guest may
-/// never pass through any of those.
+/// for the user to be authenticated or past login/OTP — a guest may never
+/// pass through either.
 Future<void> _handleGuestDeepLink(Uri uri) async {
   if (uri.host != 'join') return;
   final appointmentId = uri.queryParameters['a'];

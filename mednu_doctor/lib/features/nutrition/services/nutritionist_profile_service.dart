@@ -28,15 +28,19 @@ class NutritionistProfileService {
     String bio = '',
     String city = '',
     List<String> languages = const [],
+    String phone = '',
+    String email = '',
   }) async {
     String? fcmToken;
     try {
-      fcmToken = await FirebaseMessaging.instance.getToken();
+      fcmToken = await FirebaseMessaging.instance.getToken().timeout(const Duration(seconds: 5));
     } catch (_) {}
 
     await _db.collection('nutritionist_profiles').doc(uid).set({
       'uid': uid,
       'name': name,
+      'phone': phone,
+      'email': email,
       'qualification': qualification,
       'specialization': specialization,
       'experienceYears': experienceYears,
@@ -59,4 +63,23 @@ class NutritionistProfileService {
   /// inflate its own stats.
   static Future<void> updateProfile(String uid, Map<String, dynamic> data) =>
       _db.collection('nutritionist_profiles').doc(uid).set(data, SetOptions(merge: true));
+
+  /// `photoUrl` isn't in firestore.rules' protected-fields list for this
+  /// collection (`status`/`isVerified`/`rating`/`reviewCount`/
+  /// `documentVerification`/`documentsVerified` only), so a self-write is
+  /// allowed. Used by [NutritionProfileScreen]'s avatar upload/remove flow,
+  /// mirroring `HospitalProfileService.updatePhotoUrl`.
+  static Future<void> updatePhotoUrl(String uid, String photoUrl) =>
+      _db.collection('nutritionist_profiles').doc(uid).set({
+        'photoUrl': photoUrl,
+      }, SetOptions(merge: true));
+
+  /// Remote/video-consult availability toggle — also not in the protected-
+  /// fields list, so a self-write is always allowed regardless of
+  /// approval `status`. Used by [NutritionDashboardScreen]'s availability
+  /// card; read back live via `nutritionistProfileProvider`.
+  static Future<void> setOnlineStatus(String uid, bool isOnline) =>
+      _db.collection('nutritionist_profiles').doc(uid).set({
+        'isOnline': isOnline,
+      }, SetOptions(merge: true));
 }

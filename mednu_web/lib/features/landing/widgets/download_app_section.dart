@@ -1,6 +1,7 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/utils/launch_utils.dart';
@@ -17,7 +18,7 @@ class DownloadAppSection extends StatelessWidget {
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
-          colors: [Color(0xFF1A1A2E), Color(0xFF16213E), Color(0xFF0F3460)],
+          colors: [Color(0xFF33172C), Color(0xFF3D1D36), Color(0xFF522546)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -134,7 +135,7 @@ class _BrandVisual extends StatelessWidget {
           'Healthcare App',
           style: GoogleFonts.poppins(
             fontSize: mobile ? 13 : 14,
-            color: Colors.white54,
+            color: Colors.white70,
             fontWeight: FontWeight.w400,
           ),
         ),
@@ -243,7 +244,7 @@ class _TextContent extends StatelessWidget {
           textAlign: textAlign,
           style: GoogleFonts.poppins(
             fontSize: compact ? 13 : 14.5,
-            color: Colors.white60,
+            color: Colors.white70,
             height: 1.7,
           ),
         ),
@@ -277,7 +278,7 @@ class _StatChip extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           ShaderMask(
-            shaderCallback: (b) => AppColors.primaryGradient.createShader(b),
+            shaderCallback: (b) => const LinearGradient(colors: [Colors.white, Color(0xFFE9CFEE)]).createShader(b),
             blendMode: BlendMode.srcIn,
             child: Text(
               stat.value,
@@ -290,7 +291,7 @@ class _StatChip extends StatelessWidget {
           Text(stat.label,
               style: GoogleFonts.poppins(
                   fontSize: 11,
-                  color: Colors.white54,
+                  color: Colors.white70,
                   fontWeight: FontWeight.w500)),
         ],
       ),
@@ -315,9 +316,11 @@ class _StorePanel extends StatelessWidget {
           const SizedBox(height: 12),
           Text('Scan to download',
               style: GoogleFonts.poppins(
-                  fontSize: 12, color: Colors.white54)),
-          const SizedBox(height: 20),
+                  fontSize: 12, color: Colors.white70)),
+          const SizedBox(height: 16),
         ],
+        _ContactUsBtn(),
+        SizedBox(height: mobile ? 20 : 16),
         _PlayStoreBtn(),
         const SizedBox(height: 10),
         _AppStoreBtn(),
@@ -326,7 +329,7 @@ class _StorePanel extends StatelessWidget {
   }
 }
 
-// ─── QR Code ──────────────────────────────────────────────────────────────────
+// ─── QR Code — real, scannable, links to the Play Store listing ───────────────
 
 class _QRCodeWidget extends StatelessWidget {
   final double size;
@@ -349,59 +352,161 @@ class _QRCodeWidget extends StatelessWidget {
         ],
       ),
       padding: const EdgeInsets.all(8),
-      child: CustomPaint(painter: _QRPainter()),
+      child: QrImageView(
+        data: AppConstants.apkDownloadUrl,
+        version: QrVersions.auto,
+        backgroundColor: Colors.white,
+        eyeStyle: const QrEyeStyle(eyeShape: QrEyeShape.square, color: Color(0xFF33172C)),
+        dataModuleStyle: const QrDataModuleStyle(dataModuleShape: QrDataModuleShape.square, color: Color(0xFF33172C)),
+      ),
     );
   }
 }
 
-class _QRPainter extends CustomPainter {
+// ─── Contact Us ───────────────────────────────────────────────────────────────
+
+class _ContactUsBtn extends StatefulWidget {
   @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = const Color(0xFF1A1A2E)
-      ..style = PaintingStyle.fill;
-    final lightPaint = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.fill;
+  State<_ContactUsBtn> createState() => _ContactUsBtnState();
+}
 
-    // Fill background
-    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), lightPaint);
+class _ContactUsBtnState extends State<_ContactUsBtn> {
+  bool _hovered = false;
 
-    final cell = size.width / 10;
-    final rng = math.Random(42);
-
-    // Draw random QR-like cells with corner finders
-    for (int r = 0; r < 10; r++) {
-      for (int c = 0; c < 10; c++) {
-        final x = c * cell;
-        final y = r * cell;
-        // Corner finder patterns (7x7 logic simplified to 3x3 boxes)
-        bool isFinderTL = (r < 4 && c < 4);
-        bool isFinderTR = (r < 4 && c >= 6);
-        bool isFinderBL = (r >= 6 && c < 4);
-
-        if (isFinderTL || isFinderTR || isFinderBL) {
-          bool isBorder = (r == 0 || r == 3 || c == 0 || c == 3) ||
-              (r == 6 || r == 9 || c == 6 || c == 9) ||
-              (r >= 6 && r <= 9 && (c == 0 || c == 3));
-          bool isInner = (r == 1 || r == 2) && (c == 1 || c == 2);
-          bool isInnerTR = (r == 1 || r == 2) && (c == 7 || c == 8);
-          bool isInnerBL = (r >= 7 && r <= 8) && (c == 1 || c == 2);
-
-          if (isBorder || isInner || isInnerTR || isInnerBL) {
-            canvas.drawRect(
-                Rect.fromLTWH(x + 0.5, y + 0.5, cell - 1, cell - 1), paint);
-          }
-        } else if (rng.nextBool()) {
-          canvas.drawRect(
-              Rect.fromLTWH(x + 0.5, y + 0.5, cell - 1, cell - 1), paint);
-        }
-      }
-    }
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTap: () => _showContactSheet(context),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          width: 180,
+          height: 44,
+          decoration: BoxDecoration(
+            color: _hovered ? Colors.white.withValues(alpha: 0.14) : Colors.white.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.white.withValues(alpha: _hovered ? 0.3 : 0.18), width: 1),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.headset_mic_rounded, size: 16, color: Colors.white),
+              const SizedBox(width: 8),
+              Text('Contact Us',
+                  style: GoogleFonts.poppins(fontSize: 13.5, fontWeight: FontWeight.w600, color: Colors.white)),
+            ],
+          ),
+        ),
+      ),
+    );
   }
+}
+
+void _showContactSheet(BuildContext context) {
+  showModalBottomSheet(
+    context: context,
+    backgroundColor: Colors.white,
+    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+    builder: (_) => const _ContactSheet(),
+  );
+}
+
+class _ContactSheet extends StatelessWidget {
+  const _ContactSheet();
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  Widget build(BuildContext context) {
+    final options = <(FaIconData, String, String, VoidCallback)>[
+      (FontAwesomeIcons.phone, 'Call us', AppConstants.contactPhone,
+          () => openUrl('tel:${AppConstants.contactPhone.replaceAll(' ', '')}')),
+      (FontAwesomeIcons.envelope, 'Email us', AppConstants.contactEmail,
+          () => openUrl('mailto:${AppConstants.contactEmail}')),
+      if (AppConstants.whatsappNumber.isNotEmpty)
+        (
+          FontAwesomeIcons.whatsapp,
+          'WhatsApp',
+          AppConstants.whatsappNumber,
+          () => openUrl('https://wa.me/${AppConstants.whatsappNumber.replaceAll(RegExp(r'[^0-9]'), '')}'),
+        ),
+      if (AppConstants.instagramUrl.isNotEmpty)
+        (FontAwesomeIcons.instagram, 'Instagram', '@mednu', () => openUrl(AppConstants.instagramUrl)),
+      if (AppConstants.facebookUrl.isNotEmpty)
+        (FontAwesomeIcons.facebook, 'Facebook', 'MedNU', () => openUrl(AppConstants.facebookUrl)),
+    ];
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              Expanded(
+                child: Text('Contact MedNU',
+                    style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+              ),
+              GestureDetector(
+                onTap: () => Navigator.pop(context),
+                child: Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(color: AppColors.background, borderRadius: BorderRadius.circular(8)),
+                  child: const Icon(Icons.close_rounded, size: 16, color: AppColors.textSecondary),
+                ),
+              ),
+            ]),
+            const SizedBox(height: 6),
+            Text('Reach us directly through any of these channels',
+                style: GoogleFonts.poppins(fontSize: 13, color: AppColors.textSecondary)),
+            const SizedBox(height: 20),
+            ...options.map((o) => _ContactOptionTile(icon: o.$1, label: o.$2, value: o.$3, onTap: o.$4)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ContactOptionTile extends StatelessWidget {
+  final FaIconData icon;
+  final String label;
+  final String value;
+  final VoidCallback onTap;
+  const _ContactOptionTile({required this.icon, required this.label, required this.value, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.background,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(gradient: AppColors.primaryGradient, borderRadius: BorderRadius.circular(12)),
+            child: Center(child: FaIcon(icon, size: 17, color: Colors.white)),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(label, style: GoogleFonts.poppins(fontSize: 13.5, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+              Text(value, style: GoogleFonts.poppins(fontSize: 12, color: AppColors.textSecondary)),
+            ]),
+          ),
+          const Icon(Icons.chevron_right_rounded, color: AppColors.textHint, size: 18),
+        ]),
+      ),
+    );
+  }
 }
 
 // ─── Play Store Button ────────────────────────────────────────────────────────

@@ -1,4 +1,6 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
@@ -15,7 +17,6 @@ class WebFooter extends StatelessWidget {
   static const _links = {
     'Company': ['About Us', 'Careers', 'Blog', 'Contact'],
     'Services': [
-      'Find Doctors',
       'Medicines',
       'Lab Tests',
       'Health Records'
@@ -33,7 +34,7 @@ class WebFooter extends StatelessWidget {
     final isMobile = Responsive.isMobile(context);
 
     return Container(
-      color: const Color(0xFFF8F9FB),
+      color: const Color(0xFFF7F4F6),
       child: Column(
         children: [
           // Main footer content
@@ -56,7 +57,7 @@ class WebFooter extends StatelessWidget {
           // Divider
           Container(
             height: 1,
-            color: const Color(0xFFEEEEEE),
+            color: const Color(0xFFEDE3EA),
           ),
 
           // Newsletter bar
@@ -75,11 +76,11 @@ class WebFooter extends StatelessWidget {
             ),
           ),
 
-          Container(height: 1, color: const Color(0xFFEEEEEE)),
+          Container(height: 1, color: const Color(0xFFEDE3EA)),
 
           // Bottom bar
           Container(
-            color: const Color(0xFFF8F9FB),
+            color: const Color(0xFFF7F4F6),
             padding: EdgeInsets.symmetric(
               horizontal: Responsive.horizontalPadding(context),
               vertical: 20,
@@ -182,7 +183,7 @@ class _BrandSection extends StatelessWidget {
                   style: GoogleFonts.poppins(
                       fontSize: 11,
                       fontWeight: FontWeight.w500,
-                      color: const Color(0xFF9E9E9E),
+                      color: const Color(0xFF7A6472),
                       letterSpacing: 0.2)),
             ],
           ),
@@ -192,27 +193,29 @@ class _BrandSection extends StatelessWidget {
           "India's most trusted healthcare platform. Connecting patients with verified doctors across the country.",
           style: GoogleFonts.poppins(
               fontSize: 13,
-              color: const Color(0xFF757575),
+              color: const Color(0xFF7A6472),
               height: 1.7),
         ),
         const SizedBox(height: 20),
-        const _ContactRow(
+        _ContactRow(
             icon: Icons.email_outlined,
-            text: AppConstants.contactEmail),
+            text: AppConstants.contactEmail,
+            onTap: () => openUrl('mailto:${AppConstants.contactEmail}')),
         const SizedBox(height: 6),
-        const _ContactRow(
+        _ContactRow(
             icon: Icons.phone_outlined,
-            text: AppConstants.contactPhone),
+            text: AppConstants.contactPhone,
+            onTap: () => openUrl('tel:${AppConstants.contactPhone.replaceAll(' ', '')}')),
         const SizedBox(height: 6),
         Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           const Icon(Icons.location_on_outlined,
-              size: 14, color: Color(0xFFBDBDBD)),
+              size: 14, color: Color(0xFF857080)),
           const SizedBox(width: 6),
           Flexible(
             child: Text(AppConstants.contactAddress,
                 style: GoogleFonts.poppins(
                     fontSize: 12,
-                    color: const Color(0xFF9E9E9E),
+                    color: const Color(0xFF7A6472),
                     height: 1.5)),
           ),
         ]),
@@ -221,24 +224,39 @@ class _BrandSection extends StatelessWidget {
   }
 }
 
-class _ContactRow extends StatelessWidget {
+class _ContactRow extends StatefulWidget {
   final IconData icon;
   final String text;
-  const _ContactRow({required this.icon, required this.text});
+  final VoidCallback onTap;
+  const _ContactRow({required this.icon, required this.text, required this.onTap});
+
+  @override
+  State<_ContactRow> createState() => _ContactRowState();
+}
+
+class _ContactRowState extends State<_ContactRow> {
+  bool _hovered = false;
 
   @override
   Widget build(BuildContext context) {
-    return Row(children: [
-      Icon(icon, size: 14, color: const Color(0xFFBDBDBD)),
-      const SizedBox(width: 6),
-      Flexible(
-        child: Text(text,
-            overflow: TextOverflow.ellipsis,
-            maxLines: 1,
-            style: GoogleFonts.poppins(
-                fontSize: 12, color: const Color(0xFF757575))),
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(widget.icon, size: 14, color: _hovered ? AppColors.primary : const Color(0xFF857080)),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(widget.text,
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+                style: GoogleFonts.poppins(
+                    fontSize: 12, color: _hovered ? AppColors.primary : const Color(0xFF7A6472))),
+          ),
+        ]),
       ),
-    ]);
+    );
   }
 }
 
@@ -259,7 +277,7 @@ class _LinkGroup extends StatelessWidget {
             style: GoogleFonts.poppins(
                 fontSize: 14,
                 fontWeight: FontWeight.w700,
-                color: const Color(0xFF1A1A2E),
+                color: const Color(0xFF33172C),
                 letterSpacing: 0.2)),
         const SizedBox(height: 16),
         ...links.map((l) => Padding(
@@ -298,9 +316,6 @@ class _FooterLinkState extends State<_FooterLink> {
       case 'About Us':
         widget.onNavTap?.call('About Us');
         break;
-      case 'Find Doctors':
-        widget.onNavTap?.call('Doctors');
-        break;
       case 'Contact':
         openUrl('mailto:${AppConstants.contactEmail}');
         break;
@@ -318,7 +333,7 @@ class _FooterLinkState extends State<_FooterLink> {
           duration: const Duration(milliseconds: 180),
           style: GoogleFonts.poppins(
             fontSize: 13,
-            color: _hovered ? AppColors.primary : const Color(0xFF757575),
+            color: _hovered ? AppColors.primary : const Color(0xFF7A6472),
             fontWeight: FontWeight.w400,
           ),
           child: Text(widget.label),
@@ -347,10 +362,36 @@ class _NewsletterState extends State<_Newsletter> {
     super.dispose();
   }
 
-  void _submit() {
-    if (_ctrl.text.isNotEmpty) {
-      setState(() => _sent = true);
+  Future<void> _submit() async {
+    final email = _ctrl.text.trim().toLowerCase();
+    final valid = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email);
+    final messenger = ScaffoldMessenger.of(context);
+    if (!valid) {
+      messenger.showSnackBar(SnackBar(
+        content: Text('Please enter a valid email address', style: GoogleFonts.poppins(fontSize: 13)),
+        backgroundColor: AppColors.error,
+        behavior: SnackBarBehavior.floating,
+      ));
+      return;
     }
+    try {
+      await FirebaseFirestore.instance.collection('newsletter_subscribers').doc(email.replaceAll('/', '_')).set({
+        'email': email,
+        'source': 'web',
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    } on FirebaseException catch (e) {
+      // An already-subscribed address can't be re-created (rules are create-only) — that's still a success.
+      if (e.code != 'permission-denied') {
+        messenger.showSnackBar(SnackBar(
+          content: Text('Could not subscribe. Please try again.', style: GoogleFonts.poppins(fontSize: 13)),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+        ));
+        return;
+      }
+    }
+    if (mounted) setState(() => _sent = true);
   }
 
   @override
@@ -388,11 +429,11 @@ class _NewsletterText extends StatelessWidget {
           style: GoogleFonts.poppins(
               fontSize: 15,
               fontWeight: FontWeight.w700,
-              color: const Color(0xFF1A1A2E))),
+              color: const Color(0xFF33172C))),
       const SizedBox(height: 4),
       Text('Get health tips, updates and exclusive offers',
           style: GoogleFonts.poppins(
-              fontSize: 13, color: const Color(0xFF9E9E9E))),
+              fontSize: 13, color: const Color(0xFF7A6472))),
     ]);
   }
 }
@@ -434,7 +475,7 @@ class _NewsletterInput extends StatelessWidget {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0xFFE0E0E0), width: 1.5),
+            border: Border.all(color: const Color(0xFFE4D9E1), width: 1.5),
             boxShadow: const [
               BoxShadow(
                   color: Color(0x08000000),
@@ -445,11 +486,11 @@ class _NewsletterInput extends StatelessWidget {
           child: TextField(
             controller: ctrl,
             style: GoogleFonts.poppins(
-                fontSize: 13, color: const Color(0xFF1A1A2E)),
+                fontSize: 13, color: const Color(0xFF33172C)),
             decoration: InputDecoration(
               hintText: 'Enter your email address',
               hintStyle: GoogleFonts.poppins(
-                  fontSize: 13, color: const Color(0xFFBDBDBD)),
+                  fontSize: 13, color: const Color(0xFF857080)),
               border: InputBorder.none,
               contentPadding: const EdgeInsets.symmetric(
                   horizontal: 16, vertical: 14),
@@ -485,11 +526,14 @@ class _NewsletterInput extends StatelessWidget {
 // ─── Social Row ───────────────────────────────────────────────────────────────
 
 class _SocialRow extends StatelessWidget {
-  static const _socials = [
-    (icon: Icons.facebook_rounded, label: 'Facebook'),
-    (icon: Icons.camera_alt_rounded, label: 'Instagram'),
-    (icon: Icons.alternate_email_rounded, label: 'Twitter'),
-    (icon: Icons.business_rounded, label: 'LinkedIn'),
+  static final _socials = [
+    (icon: FontAwesomeIcons.instagram, label: 'Instagram', url: AppConstants.instagramUrl),
+    (icon: FontAwesomeIcons.facebook, label: 'Facebook', url: AppConstants.facebookUrl),
+    (
+      icon: FontAwesomeIcons.whatsapp,
+      label: 'WhatsApp',
+      url: AppConstants.whatsappNumber.isEmpty ? '' : 'https://wa.me/${AppConstants.whatsappNumber.replaceAll(RegExp(r'[^0-9]'), '')}',
+    ),
   ];
 
   @override
@@ -497,15 +541,16 @@ class _SocialRow extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children:
-          _socials.map((s) => _SocialBtn(icon: s.icon, label: s.label)).toList(),
+          _socials.map((s) => _SocialBtn(icon: s.icon, label: s.label, url: s.url)).toList(),
     );
   }
 }
 
 class _SocialBtn extends StatefulWidget {
-  final IconData icon;
+  final FaIconData icon;
   final String label;
-  const _SocialBtn({required this.icon, required this.label});
+  final String url;
+  const _SocialBtn({required this.icon, required this.label, required this.url});
 
   @override
   State<_SocialBtn> createState() => _SocialBtnState();
@@ -516,38 +561,36 @@ class _SocialBtnState extends State<_SocialBtn> {
 
   @override
   Widget build(BuildContext context) {
+    // Handle not filled in yet — show it, but there's nowhere to send a tap.
+    final isLive = widget.url.isNotEmpty;
+
     return MouseRegion(
+      cursor: isLive ? SystemMouseCursors.click : SystemMouseCursors.basic,
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
       child: Tooltip(
-        message: widget.label,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          margin: const EdgeInsets.only(left: 8),
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            color: _hovered
-                ? AppColors.primary.withValues(alpha: 0.1)
-                : Colors.white,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: _hovered
-                  ? AppColors.primary.withValues(alpha: 0.3)
-                  : const Color(0xFFE0E0E0),
-              width: 1,
+        message: isLive ? widget.label : '${widget.label} — coming soon',
+        child: GestureDetector(
+          onTap: isLive ? () => openUrl(widget.url) : null,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            margin: const EdgeInsets.only(left: 10),
+            transform: Matrix4.translationValues(0, _hovered ? -3 : 0, 0),
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              gradient: AppColors.primaryGradient,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primary.withValues(alpha: _hovered ? 0.4 : 0.22),
+                  blurRadius: _hovered ? 16 : 8,
+                  offset: const Offset(0, 5),
+                ),
+              ],
             ),
-            boxShadow: _hovered
-                ? [
-                    BoxShadow(
-                        color: AppColors.primary.withValues(alpha: 0.1),
-                        blurRadius: 8)
-                  ]
-                : [],
+            child: Center(child: FaIcon(widget.icon, size: 18, color: Colors.white)),
           ),
-          child: Icon(widget.icon,
-              size: 17,
-              color: _hovered ? AppColors.primary : const Color(0xFF9E9E9E)),
         ),
       ),
     );
@@ -564,7 +607,7 @@ class _CopyrightText extends StatelessWidget {
       overflow: TextOverflow.ellipsis,
       maxLines: 1,
       style: GoogleFonts.poppins(
-          fontSize: 12, color: const Color(0xFF9E9E9E)),
+          fontSize: 12, color: const Color(0xFF7A6472)),
     );
   }
 }

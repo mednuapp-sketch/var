@@ -81,7 +81,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
         ),
         _Faq(
           q: 'Is the MedNU Wallet safe?',
-          a: 'Yes. Your wallet is secured with your MPIN and all transactions are encrypted. Wallet credits are non-transferable and expire after 12 months of account inactivity.',
+          a: 'Yes. Your wallet is only accessible from your OTP-verified account and all transactions are encrypted. Wallet credits are non-transferable and expire after 12 months of account inactivity.',
         ),
         _Faq(
           q: 'How do I add money to my wallet?',
@@ -101,10 +101,6 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
         _Faq(
           q: 'The app is not loading. What should I do?',
           a: 'Try the following: (1) Check your internet connection. (2) Force-close the app and reopen. (3) Clear the app cache from Settings. (4) Update to the latest version. If the issue persists, contact support.',
-        ),
-        _Faq(
-          q: 'How do I reset my MPIN?',
-          a: 'Go to Settings → Security → Change MPIN. You will need to verify your phone number via OTP before setting a new MPIN.',
         ),
         _Faq(
           q: 'How do I delete my account?',

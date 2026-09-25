@@ -1764,6 +1764,7 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
             .doc(docId)
             .update({
           'status': 'cancelled',
+          'cancelledBy': 'doctor',
           'updatedAt': FieldValue.serverTimestamp(),
         });
         // Cancel the queued reminders for this appointment.

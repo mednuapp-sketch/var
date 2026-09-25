@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/responsive.dart';
+import '../../../core/widgets/gradient_button.dart';
+import '../widgets/book_appointment_dialog.dart';
 
 String get _uid => FirebaseAuth.instance.currentUser?.uid ?? '';
 
@@ -49,26 +51,46 @@ class _AppointmentsPageState extends State<AppointmentsPage>
         children: [
           Row(children: [
             Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('My Appointments',
-                    style: GoogleFonts.poppins(
-                        fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-                Text('Track all your doctor visits',
-                    style: GoogleFonts.poppins(fontSize: 13, color: AppColors.textSecondary)),
-              ]),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('My Appointments',
+                        style: GoogleFonts.poppins(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary)),
+                    Text('Track all your doctor visits',
+                        style: GoogleFonts.poppins(
+                            fontSize: 13, color: AppColors.textSecondary)),
+                  ]),
+            ),
+            GradientButton(
+              label: isMobile ? 'Book' : 'Book Appointment',
+              onTap: () => showBookAppointmentDialog(context),
+              width: isMobile ? 92 : 190,
+              height: 40,
+              fontSize: 13,
+              icon: Icons.add_rounded,
             ),
           ]),
           const SizedBox(height: 24),
           TabBar(
             controller: _tab,
             isScrollable: isMobile,
-            tabs: const [Tab(text: 'Upcoming'), Tab(text: 'Completed'), Tab(text: 'Cancelled')],
-            labelStyle: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600),
-            unselectedLabelStyle: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w500),
+            tabs: const [
+              Tab(text: 'Upcoming'),
+              Tab(text: 'Completed'),
+              Tab(text: 'Cancelled')
+            ],
+            labelStyle:
+                GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600),
+            unselectedLabelStyle:
+                GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w500),
             labelColor: AppColors.primary,
             unselectedLabelColor: AppColors.textSecondary,
             indicator: UnderlineTabIndicator(
-              borderSide: const BorderSide(color: AppColors.primary, width: 2.5),
+              borderSide:
+                  const BorderSide(color: AppColors.primary, width: 2.5),
               borderRadius: BorderRadius.circular(2),
             ),
             indicatorSize: TabBarIndicatorSize.label,
@@ -87,7 +109,8 @@ class _AppointmentsPageState extends State<AppointmentsPage>
                       if (snap.hasError) {
                         return Center(
                           child: Text('Error loading appointments',
-                              style: GoogleFonts.poppins(color: AppColors.error)),
+                              style:
+                                  GoogleFonts.poppins(color: AppColors.error)),
                         );
                       }
                       final docs = snap.data?.docs ?? [];
@@ -97,22 +120,24 @@ class _AppointmentsPageState extends State<AppointmentsPage>
                         final dateStr = d['date'] as String? ?? '';
                         final parsed = _parseDate(dateStr);
                         if (parsed == null) return false;
-                        return parsed.isBefore(DateTime(now.year, now.month, now.day));
+                        return parsed
+                            .isBefore(DateTime(now.year, now.month, now.day));
                       }
 
                       final upcoming = docs
-                          .where((d) => d['status'] == 'booked' && !isPast(d.data()))
-                          .map((d) => d.data())
+                          .where((d) =>
+                              d['status'] == 'booked' && !isPast(d.data()))
+                          .map((d) => {...d.data(), 'id': d.id})
                           .toList();
                       final completed = docs
                           .where((d) =>
                               d['status'] == 'completed' ||
                               (d['status'] == 'booked' && isPast(d.data())))
-                          .map((d) => d.data())
+                          .map((d) => {...d.data(), 'id': d.id})
                           .toList();
                       final cancelled = docs
                           .where((d) => d['status'] == 'cancelled')
-                          .map((d) => d.data())
+                          .map((d) => {...d.data(), 'id': d.id})
                           .toList();
 
                       return TabBarView(
@@ -137,12 +162,16 @@ DateTime? _parseDate(String raw) {
   try {
     // try ISO yyyy-MM-dd
     final parts = raw.split('-');
-    if (parts.length == 3) return DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+    if (parts.length == 3)
+      return DateTime(
+          int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
   } catch (_) {}
   try {
     // try "dd/MM/yyyy"
     final parts = raw.split('/');
-    if (parts.length == 3) return DateTime(int.parse(parts[2]), int.parse(parts[1]), int.parse(parts[0]));
+    if (parts.length == 3)
+      return DateTime(
+          int.parse(parts[2]), int.parse(parts[1]), int.parse(parts[0]));
   } catch (_) {}
   return null;
 }
@@ -150,7 +179,21 @@ DateTime? _parseDate(String raw) {
 String _formatDate(String raw) {
   final d = _parseDate(raw);
   if (d == null) return raw;
-  const months = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const months = [
+    '',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec'
+  ];
   return '${d.day} ${months[d.month]} ${d.year}';
 }
 
@@ -178,13 +221,25 @@ class _EmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Column(mainAxisSize: MainAxisSize.min, children: [
-        const Text('📅', style: TextStyle(fontSize: 56)),
+        Container(
+          width: 72,
+          height: 72,
+          decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.08),
+              shape: BoxShape.circle),
+          child: const Icon(Icons.event_busy_rounded,
+              size: 32, color: AppColors.primary),
+        ),
         const SizedBox(height: 16),
         Text('No appointments',
-            style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+            style: GoogleFonts.poppins(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary)),
         const SizedBox(height: 8),
         Text('Your $type appointments will appear here',
-            style: GoogleFonts.poppins(fontSize: 13, color: AppColors.textSecondary)),
+            style: GoogleFonts.poppins(
+                fontSize: 13, color: AppColors.textSecondary)),
       ]),
     );
   }
@@ -218,13 +273,14 @@ class _AppointmentCardState extends State<_AppointmentCard> {
     final isVideo = consultType.toLowerCase().contains('video');
 
     final statusColor = {
-      'Confirmed': AppColors.success,
-      'booked': AppColors.success,
-      'completed': AppColors.accent,
-      'Completed': AppColors.accent,
-      'cancelled': AppColors.error,
-      'Cancelled': AppColors.error,
-    }[status] ?? AppColors.info;
+          'Confirmed': AppColors.success,
+          'booked': AppColors.success,
+          'completed': AppColors.accent,
+          'Completed': AppColors.accent,
+          'cancelled': AppColors.error,
+          'Cancelled': AppColors.error,
+        }[status] ??
+        AppColors.info;
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
@@ -240,31 +296,53 @@ class _AppointmentCardState extends State<_AppointmentCard> {
                   ? AppColors.primary.withValues(alpha: 0.3)
                   : AppColors.border),
           boxShadow: _hovered
-              ? [BoxShadow(color: AppColors.primary.withValues(alpha: 0.1), blurRadius: 16, offset: const Offset(0, 6))]
-              : [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8)],
+              ? [
+                  BoxShadow(
+                      color: AppColors.primary.withValues(alpha: 0.1),
+                      blurRadius: 16,
+                      offset: const Offset(0, 6))
+                ]
+              : [
+                  BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.03),
+                      blurRadius: 8)
+                ],
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
             Container(
               width: 52,
               height: 52,
-              decoration: BoxDecoration(gradient: AppColors.primaryGradient, borderRadius: BorderRadius.circular(14)),
+              decoration: BoxDecoration(
+                  gradient: AppColors.primaryGradient,
+                  borderRadius: BorderRadius.circular(14)),
               child: Center(
                 child: Text(
                   doctorName.isNotEmpty ? doctorName[0].toUpperCase() : 'D',
-                  style: GoogleFonts.poppins(fontSize: 22, fontWeight: FontWeight.w800, color: Colors.white),
+                  style: GoogleFonts.poppins(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white),
                 ),
               ),
             ),
             const SizedBox(width: 14),
             Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(doctorName,
-                    style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-                if (specialty.isNotEmpty)
-                  Text(specialty,
-                      style: GoogleFonts.poppins(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.w500)),
-              ]),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(doctorName,
+                        style: GoogleFonts.poppins(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary)),
+                    if (specialty.isNotEmpty)
+                      Text(specialty,
+                          style: GoogleFonts.poppins(
+                              fontSize: 12,
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w500)),
+                  ]),
             ),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
@@ -272,29 +350,117 @@ class _AppointmentCardState extends State<_AppointmentCard> {
                   color: statusColor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(20)),
               child: Text(status,
-                  style: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.w700, color: statusColor)),
+                  style: GoogleFonts.poppins(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: statusColor)),
             ),
           ]),
           const SizedBox(height: 16),
           Container(
             padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(color: AppColors.background, borderRadius: BorderRadius.circular(12)),
+            decoration: BoxDecoration(
+                color: AppColors.background,
+                borderRadius: BorderRadius.circular(12)),
             child: Wrap(spacing: 24, runSpacing: 10, children: [
-              if (date.isNotEmpty) _InfoItem(icon: Icons.calendar_today_rounded, label: date),
-              if (time.isNotEmpty) _InfoItem(icon: Icons.access_time_rounded, label: time),
+              if (date.isNotEmpty)
+                _InfoItem(icon: Icons.calendar_today_rounded, label: date),
+              if (time.isNotEmpty)
+                _InfoItem(icon: Icons.access_time_rounded, label: time),
               _InfoItem(
-                  icon: isVideo ? Icons.videocam_rounded : Icons.local_hospital_outlined,
+                  icon: isVideo
+                      ? Icons.videocam_rounded
+                      : Icons.local_hospital_outlined,
                   label: isVideo ? 'Video' : 'In-Person'),
-              if (feeStr.isNotEmpty) _InfoItem(icon: Icons.currency_rupee_rounded, label: feeStr),
+              if (feeStr.isNotEmpty)
+                _InfoItem(icon: Icons.currency_rupee_rounded, label: feeStr),
             ]),
           ),
+          if (widget.type == 'upcoming' &&
+              (d['id'] as String? ?? '').isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerRight,
+              child: OutlinedButton.icon(
+                onPressed: () =>
+                    _confirmCancel(context, d['id'] as String, doctorName),
+                icon: const Icon(Icons.close_rounded, size: 16),
+                label: Text('Cancel appointment',
+                    style: GoogleFonts.poppins(
+                        fontSize: 12.5, fontWeight: FontWeight.w600)),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.error,
+                  side:
+                      BorderSide(color: AppColors.error.withValues(alpha: 0.4)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                ),
+              ),
+            ),
+          ],
         ]),
       ),
     );
   }
 }
 
-String _capitalize(String s) => s.isEmpty ? s : '${s[0].toUpperCase()}${s.substring(1)}';
+Future<void> _confirmCancel(
+    BuildContext context, String id, String doctorName) async {
+  final messenger = ScaffoldMessenger.of(context);
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: Text('Cancel appointment?',
+          style:
+              GoogleFonts.poppins(fontSize: 17, fontWeight: FontWeight.w700)),
+      content: Text('Your appointment with $doctorName will be cancelled.',
+          style: GoogleFonts.poppins(
+              fontSize: 13.5, color: AppColors.textSecondary, height: 1.5)),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, false),
+          child: Text('Keep it',
+              style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, true),
+          child: Text('Yes, cancel',
+              style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.w700, color: AppColors.error)),
+        ),
+      ],
+    ),
+  );
+  if (ok != true) return;
+  try {
+    await FirebaseFirestore.instance.collection('appointments').doc(id).update({
+      'status': 'cancelled',
+      'cancelReason': 'Cancelled by patient',
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+    messenger.showSnackBar(SnackBar(
+      content: Text('Appointment cancelled',
+          style: GoogleFonts.poppins(fontSize: 13)),
+      backgroundColor: AppColors.success,
+      behavior: SnackBarBehavior.floating,
+    ));
+  } catch (_) {
+    messenger.showSnackBar(SnackBar(
+      content: Text('Could not cancel. Please try again.',
+          style: GoogleFonts.poppins(fontSize: 13)),
+      backgroundColor: AppColors.error,
+      behavior: SnackBarBehavior.floating,
+    ));
+  }
+}
+
+String _capitalize(String s) =>
+    s.isEmpty ? s : '${s[0].toUpperCase()}${s.substring(1)}';
 
 class _InfoItem extends StatelessWidget {
   final IconData icon;
@@ -307,7 +473,10 @@ class _InfoItem extends StatelessWidget {
       Icon(icon, size: 13, color: AppColors.primary),
       const SizedBox(width: 5),
       Text(label,
-          style: GoogleFonts.poppins(fontSize: 12, color: AppColors.textSecondary, fontWeight: FontWeight.w500)),
+          style: GoogleFonts.poppins(
+              fontSize: 12,
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w500)),
     ]);
   }
 }

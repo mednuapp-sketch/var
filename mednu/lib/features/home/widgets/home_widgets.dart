@@ -1379,12 +1379,12 @@ class _ServiceGridState extends State<ServiceGrid> {
       'Book Now',
     ),
     const _Service(
-      'Nutrition and Diet',
+      'Diet & Dietician',
       Icons.restaurant_rounded,
       AppColors.nutritionGrad,
       AppRoutes.nutrition,
       null,
-      'Personalised diet plans from nutritionists',
+      'Personalised diet plans from dieticians',
       'Get Plan',
     ),
     const _Service(

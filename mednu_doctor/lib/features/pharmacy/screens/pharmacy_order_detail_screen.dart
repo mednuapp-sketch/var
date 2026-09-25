@@ -252,6 +252,15 @@ class _PharmacyOrderDetailScreenState extends ConsumerState<PharmacyOrderDetailS
     switch (order.status) {
       case PharmacyOrderStatus.pending:
         return [
+          // The top InfoChip only ever said "Prescription attached" as text
+          // — a pharmacy had no way to actually look at it before deciding
+          // whether to accept, unlike every later status once
+          // 'prescription_required' is reached. Shown here too now, so
+          // accept/decline is an informed decision, not a blind one.
+          if (order.hasPrescription) ...[
+            _PrescriptionPreview(order: order),
+            const SizedBox(height: 16),
+          ],
           Row(
             children: [
               Expanded(

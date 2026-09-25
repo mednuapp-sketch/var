@@ -47,6 +47,8 @@ export 'documents/partner_document_service.dart';
 export 'documents/partner_document_upload_card.dart';
 
 // Settings
+export 'settings/account_deletion_service.dart';
+export 'settings/account_settings_items.dart';
 export 'settings/settings_models.dart';
 export 'settings/settings_widgets.dart';
 export 'settings/shared_settings_screen.dart';

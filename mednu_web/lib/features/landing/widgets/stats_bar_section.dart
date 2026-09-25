@@ -70,7 +70,7 @@ class _DesktopStats extends StatelessWidget {
           if (i < stats.length - 1)
             const SizedBox(
               height: 48,
-              child: VerticalDivider(width: 1, color: Color(0xFFF0F0F0)),
+              child: VerticalDivider(width: 1, color: Color(0xFFEDE3EA)),
             ),
         ],
       ],
@@ -135,7 +135,7 @@ class _StatPillar extends StatelessWidget {
                   style: GoogleFonts.poppins(
                     fontSize: isMobile ? 12.5 : 14,
                     fontWeight: FontWeight.w700,
-                    color: const Color(0xFF1A1A2E),
+                    color: const Color(0xFF33172C),
                   ),
                 ),
                 const SizedBox(height: 3),
@@ -145,7 +145,7 @@ class _StatPillar extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.poppins(
                     fontSize: isMobile ? 10.5 : 12,
-                    color: const Color(0xFF9E9E9E),
+                    color: const Color(0xFF7A6472),
                     height: 1.4,
                   ),
                 ),

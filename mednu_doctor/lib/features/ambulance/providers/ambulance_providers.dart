@@ -91,6 +91,63 @@ final activeRequestProvider = Provider.autoDispose<AmbulanceRequest?>((ref) {
   return null;
 });
 
+// ── Job-list tabs (Active / Completed / Cancelled) ───────────────────────
+//
+// These expose `AsyncValue` (unlike the plain-list providers above) so the
+// tabbed job list can distinguish loading and error from a genuinely empty
+// tab. They reuse the two live request streams and the trips stream that
+// already exist — no extra Firestore listeners, and no new query shapes:
+// every query stays a single-field `where` (or the already-declared
+// `ambulance_trips` composite index), and `firestore.rules` permits each
+// read for the owning partner (`ambulanceId == auth.uid`) or, for the open
+// dispatch pool, any ambulance partner.
+
+const _liveStatuses = {
+  AmbulanceRequestStatus.pending,
+  AmbulanceRequestStatus.accepted,
+  AmbulanceRequestStatus.enRoute,
+  AmbulanceRequestStatus.arrived,
+};
+
+/// Active/Pending tab: unclaimed pool + this partner's own runs that are
+/// still live (pending, accepted, en route, arrived), newest first.
+final activeJobsProvider = Provider.autoDispose<AsyncValue<List<AmbulanceRequest>>>((ref) {
+  final available = ref.watch(availableAmbulanceRequestsProvider);
+  final mine = ref.watch(myAmbulanceRequestsProvider);
+
+  // Either stream failing means the list would be silently incomplete.
+  if (available.hasError && !available.hasValue) {
+    return AsyncValue.error(available.error!, available.stackTrace ?? StackTrace.empty);
+  }
+  if (mine.hasError && !mine.hasValue) {
+    return AsyncValue.error(mine.error!, mine.stackTrace ?? StackTrace.empty);
+  }
+  if (!available.hasValue && !mine.hasValue) return const AsyncValue.loading();
+
+  final byId = <String, AmbulanceRequest>{};
+  for (final r in available.valueOrNull ?? const <AmbulanceRequest>[]) {
+    byId[r.id] = r;
+  }
+  for (final r in mine.valueOrNull ?? const <AmbulanceRequest>[]) {
+    byId[r.id] = r;
+  }
+  final items = byId.values.where((r) => _liveStatuses.contains(r.status)).toList()
+    ..sort((a, b) => b.requestedAt.compareTo(a.requestedAt));
+  return AsyncValue.data(items);
+});
+
+/// Cancelled tab: requests this partner declined (`reject` stamps
+/// `ambulanceId` and sets `cancelled`) or that were cancelled after being
+/// pinned/claimed. Derived from the partner's own-requests stream, sorted by
+/// most recent activity.
+final cancelledJobsProvider = Provider.autoDispose<AsyncValue<List<AmbulanceRequest>>>((ref) {
+  return ref.watch(myAmbulanceRequestsProvider).whenData((all) {
+    final items = all.where((r) => r.status == AmbulanceRequestStatus.cancelled).toList()
+      ..sort((a, b) => (b.updatedAt ?? b.requestedAt).compareTo(a.updatedAt ?? a.requestedAt));
+    return items;
+  });
+});
+
 /// Realtime single-document stream. Backing the by-id lookup with its own
 /// doc listener (rather than scanning the merged list) means a detail screen
 /// stays live even once the request has left both list queries — e.g. after

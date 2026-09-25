@@ -134,9 +134,7 @@ String _profileRouteForRole(AppRole role) {
     case AppRole.nutritionist:
       return AppRoutes.nutritionProfile;
     case AppRole.hospital:
-      // No dedicated profile screen for this role (see role_menu.dart) — the
-      // avatar just routes to Payments, one of its nav destinations.
-      return AppRoutes.hospitalPayments;
+      return AppRoutes.hospitalDashboard;
     case AppRole.admin:
       return AppRoutes.editProfile;
   }

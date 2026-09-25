@@ -1,4 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -11,6 +13,7 @@ import '../../../core/constants/app_text_styles.dart';
 import '../../../core/providers/theme_provider.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/services/booking_reminder_service.dart';
+import '../../../core/services/whatsapp_opt_in_service.dart';
 import '../../../core/utils/r.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../my_services/services/my_services_service.dart';
@@ -39,6 +42,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _biometricSupported = false;
   bool _locationAccess = true;
   bool _loadingBiometric = true;
+  bool _whatsappOptIn = false;
   String _appVersion = '';
 
   @override
@@ -47,6 +51,33 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _loadBiometricState();
     _loadAppVersion();
     _loadReminderSettings();
+    _loadWhatsAppOptIn();
+  }
+
+  Future<void> _loadWhatsAppOptIn() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    try {
+      final snap = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      if (mounted) {
+        setState(() => _whatsappOptIn = snap.data()?['whatsappOptIn'] == true);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _toggleWhatsAppOptIn(bool value) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    setState(() => _whatsappOptIn = value);
+    try {
+      await WhatsAppOptInService.save(
+        uid: uid,
+        value: value,
+        language: context.locale.languageCode,
+      );
+    } catch (_) {
+      if (mounted) setState(() => _whatsappOptIn = !value);
+    }
   }
 
   Future<void> _loadReminderSettings() async {
@@ -484,6 +515,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       onTap: () => _showTimingPicker(context),
                     ),
                   ],
+                  const Divider(height: 1, indent: 62),
+                  _SwitchTile(
+                    Icons.chat_rounded,
+                    'whatsapp_optin.title'.tr(),
+                    'whatsapp_optin.subtitle'.tr(),
+                    _whatsappOptIn,
+                    _toggleWhatsAppOptIn,
+                    iconColor: const Color(0xFF25D366),
+                  ),
                 ]),
 
                 SizedBox(height: R.h(context, 20)),

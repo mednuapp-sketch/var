@@ -5,11 +5,13 @@ import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/services/feedback_service.dart';
 import '../../../core/utils/r.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../../../shared_core/shared_core.dart';
 import '../models/visit.dart';
 import '../providers/caregiver_providers.dart';
+import '../services/caregiver_profile_service.dart';
 import '../widgets/duty_pulse.dart';
 
 /// Caregiver home — an on-duty hero card, live stats grid, and a preview
@@ -40,7 +42,7 @@ class CaregiverDashboardScreen extends ConsumerWidget {
                 value: '${metrics.todayVisits}',
                 label: "Today's Visits",
                 icon: Icons.event_note_rounded,
-                colors: const [Color(0xFF00695C), Color(0xFF004D40)],
+                colors: const [AppColors.primary, AppColors.secondary],
               ),
               GradientStatCard(
                 value: '${metrics.completedToday}',
@@ -53,12 +55,6 @@ class CaregiverDashboardScreen extends ConsumerWidget {
                 label: "Today's Earnings",
                 icon: Icons.account_balance_wallet_rounded,
                 colors: const [AppColors.accent, AppColors.accentDark],
-              ),
-              GradientStatCard(
-                value: metrics.rating.toStringAsFixed(1),
-                label: 'Caregiver Rating',
-                icon: Icons.star_rounded,
-                colors: const [AppColors.primary, AppColors.secondary],
               ),
             ],
           ),
@@ -82,12 +78,27 @@ class CaregiverDashboardScreen extends ConsumerWidget {
   }
 }
 
-class _DutyHeroCard extends ConsumerWidget {
+class _DutyHeroCard extends StatelessWidget {
   final bool onDuty;
   const _DutyHeroCard({required this.onDuty});
 
+  Future<void> _toggle(BuildContext context, bool value) async {
+    final uid = CaregiverProfileService.currentUid;
+    if (uid == null) {
+      FeedbackService.showError(context, 'You are not signed in.');
+      return;
+    }
+    try {
+      await CaregiverProfileService.updateOnDuty(uid, value);
+    } catch (_) {
+      if (context.mounted) {
+        FeedbackService.showError(context, "Couldn't update duty status. Please try again.");
+      }
+    }
+  }
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     return Container(
       padding: EdgeInsets.all(R.p(context, 20)),
       decoration: BoxDecoration(
@@ -125,7 +136,7 @@ class _DutyHeroCard extends ConsumerWidget {
           ),
           Switch.adaptive(
             value: onDuty,
-            onChanged: (v) => ref.read(caregiverOnDutyProvider.notifier).state = v,
+            onChanged: (v) => _toggle(context, v),
             activeThumbColor: Colors.white,
             activeTrackColor: Colors.white38,
           ),

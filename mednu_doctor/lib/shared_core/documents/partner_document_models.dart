@@ -55,9 +55,18 @@ class PartnerDocumentType {
     PartnerDocumentType('physio_certificate', 'Physiotherapy Certification / Degree'),
   ];
 
+  /// Nutrition was originally left at `docSlots: {}` alongside Hospital,
+  /// treated as not needing verification since a dietician doesn't provide
+  /// hands-on clinical treatment. Brought in line with Counsellor/
+  /// Physiotherapist (ID + qualification proof) on request.
+  static const nutritionist = <PartnerDocumentType>[
+    PartnerDocumentType('nutritionist_id', 'Government ID Proof'),
+    PartnerDocumentType('nutrition_certificate', 'Nutrition / Dietetics Certification'),
+  ];
+
   /// `role` is the same short token used for the Storage prefix and the
   /// `{role}_profiles` collection: 'lab' | 'pharmacy' | 'ambulance' |
-  /// 'caregiver' | 'counsellor' | 'physiotherapist'.
+  /// 'caregiver' | 'counsellor' | 'physiotherapist' | 'nutritionist'.
   static List<PartnerDocumentType> forRole(String role) {
     switch (role) {
       case 'lab':
@@ -72,6 +81,8 @@ class PartnerDocumentType {
         return counsellor;
       case 'physiotherapist':
         return physiotherapist;
+      case 'nutritionist':
+        return nutritionist;
       default:
         return const [];
     }

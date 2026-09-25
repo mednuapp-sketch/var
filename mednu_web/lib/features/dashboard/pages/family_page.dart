@@ -79,7 +79,12 @@ class FamilyPage extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 48),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          const Text('👨‍👩‍👧‍👦', style: TextStyle(fontSize: 56)),
+          Container(
+            width: 72,
+            height: 72,
+            decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.08), shape: BoxShape.circle),
+            child: const Icon(Icons.family_restroom_rounded, size: 32, color: AppColors.primary),
+          ),
           const SizedBox(height: 16),
           Text('No family members added',
               style: GoogleFonts.poppins(

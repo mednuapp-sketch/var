@@ -180,9 +180,9 @@ class BookingReminderService {
           body:  'Your $service is scheduled in $timeLabel.',
         );
       case BookingSource.nutrition:
-        final provider = booking.providerName ?? 'your nutritionist';
+        final provider = booking.providerName ?? 'your dietician';
         return (
-          title: 'Nutrition Session in $timeLabel',
+          title: 'Dietician Session in $timeLabel',
           body:  'Your session with $provider starts in $timeLabel.',
         );
       case BookingSource.medicineOrder:

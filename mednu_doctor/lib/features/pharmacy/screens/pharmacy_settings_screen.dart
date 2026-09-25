@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -8,6 +9,9 @@ import '../../../core/router/app_router.dart';
 import '../../../core/services/feedback_service.dart';
 import '../../../core/widgets/mednu_components.dart';
 import '../../../shared_core/shared_core.dart';
+import '../../../shared_core/whatsapp/whatsapp_opt_in_service.dart';
+import '../../security/services/biometric_service.dart';
+import '../services/pharmacy_profile_service.dart';
 
 /// First real consumer of `SharedSettingsScreen`/`SettingsSectionData` from
 /// Shared Core — every item here is a genuinely working action (no
@@ -23,13 +27,48 @@ class PharmacySettingsScreen extends StatefulWidget {
 class _PharmacySettingsScreenState extends State<PharmacySettingsScreen> {
   bool _notifyNewOrders = true;
   bool _notifyDeliveryUpdates = true;
+  bool _whatsappOptIn = false;
   String _appVersion = '';
+
+  // Biometric lock state — device-local, independent of the profile stream.
+  bool _biometricEnabled = false;
+  bool _biometricSupported = false;
 
   @override
   void initState() {
     super.initState();
     _loadPrefs();
     _loadVersion();
+    _loadWhatsAppOptIn();
+    _loadBiometricState();
+  }
+
+  Future<void> _loadBiometricState() async {
+    final enabled = await BiometricService.isBiometricEnabled();
+    final supported = await BiometricService.isDeviceSupported();
+    if (!mounted) return;
+    setState(() {
+      _biometricEnabled = enabled;
+      _biometricSupported = supported;
+    });
+  }
+
+  Future<void> _toggleBiometric(bool value) async {
+    if (value) {
+      final ok = await BiometricService.authenticate(
+        reason: 'Verify your identity to enable biometric lock',
+      );
+      if (!ok) {
+        if (mounted) {
+          FeedbackService.showError(context, 'Authentication failed — biometric lock not enabled');
+        }
+        return;
+      }
+    }
+    await BiometricService.setBiometricEnabled(value);
+    if (!mounted) return;
+    setState(() => _biometricEnabled = value);
+    FeedbackService.showSuccess(context, value ? 'Biometric lock enabled' : 'Biometric lock disabled');
   }
 
   Future<void> _loadPrefs() async {
@@ -39,6 +78,26 @@ class _PharmacySettingsScreenState extends State<PharmacySettingsScreen> {
       _notifyNewOrders = prefs.getBool('pharmacy_notif_new_orders') ?? true;
       _notifyDeliveryUpdates = prefs.getBool('pharmacy_notif_delivery') ?? true;
     });
+  }
+
+  Future<void> _loadWhatsAppOptIn() async {
+    final uid = PharmacyProfileService.currentUid;
+    if (uid == null) return;
+    try {
+      final doc = await FirebaseFirestore.instance.collection('pharmacy_profiles').doc(uid).get();
+      if (mounted) setState(() => _whatsappOptIn = doc.data()?['whatsappOptIn'] == true);
+    } catch (_) {}
+  }
+
+  Future<void> _toggleWhatsAppOptIn(bool value) async {
+    final uid = PharmacyProfileService.currentUid;
+    if (uid == null) return;
+    setState(() => _whatsappOptIn = value);
+    try {
+      await WhatsAppOptInService.save(collection: 'pharmacy_profiles', uid: uid, value: value);
+    } catch (_) {
+      if (mounted) setState(() => _whatsappOptIn = !value);
+    }
   }
 
   Future<void> _loadVersion() async {
@@ -107,6 +166,29 @@ class _PharmacySettingsScreenState extends State<PharmacySettingsScreen> {
                 _setPref('pharmacy_notif_delivery', v);
               },
             ),
+            SettingsItemData(
+              icon: Icons.chat_outlined,
+              title: 'WhatsApp Notifications',
+              subtitle: 'Get order & payout updates on WhatsApp',
+              trailing: SettingsItemTrailing.toggle,
+              toggleValue: _whatsappOptIn,
+              onToggle: _toggleWhatsAppOptIn,
+            ),
+          ],
+        ),
+        SettingsSectionData(
+          title: 'Security',
+          items: [
+            SettingsItemData(
+              icon: Icons.fingerprint_rounded,
+              title: 'Biometric Lock',
+              subtitle: _biometricSupported
+                  ? 'Lock app when sent to background'
+                  : 'Not supported on this device',
+              trailing: SettingsItemTrailing.toggle,
+              toggleValue: _biometricEnabled,
+              onToggle: _biometricSupported ? _toggleBiometric : null,
+            ),
           ],
         ),
         SettingsSectionData(
@@ -129,6 +211,7 @@ class _PharmacySettingsScreenState extends State<PharmacySettingsScreen> {
               trailing: SettingsItemTrailing.value,
               valueText: _appVersion.isEmpty ? '—' : _appVersion,
             ),
+            ...AccountSettingsItems.legal(context),
           ],
         ),
         SettingsSectionData(
@@ -141,6 +224,7 @@ class _PharmacySettingsScreenState extends State<PharmacySettingsScreen> {
               trailing: SettingsItemTrailing.none,
               onTap: _signOut,
             ),
+            AccountSettingsItems.deleteAccount(context, role: 'pharmacy'),
           ],
         ),
       ],

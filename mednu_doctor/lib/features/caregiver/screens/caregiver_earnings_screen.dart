@@ -20,7 +20,9 @@ class CaregiverEarningsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final weekly = ref.watch(weeklyCaregiverEarningsProvider);
     final history = ref.watch(visitHistoryProvider);
+    final breakdown = ref.watch(caregiverEarningsBreakdownProvider);
     final total = weekly.fold<double>(0, (s, v) => s + v);
+    final completedCount = history.where((v) => v.status == VisitStatus.completed).length;
 
     return SharedAppShell(
       currentRoute: AppRoutes.caregiverEarnings,
@@ -42,9 +44,28 @@ class CaregiverEarningsScreen extends ConsumerWidget {
                 const SizedBox(height: 6),
                 Text('₹${total.toInt()}', style: AppTextStyles.onPrimaryH2.copyWith(fontSize: 30)),
                 const SizedBox(height: 4),
-                Text('${history.length} visits completed', style: AppTextStyles.onPrimaryBody),
+                Text('$completedCount visits completed', style: AppTextStyles.onPrimaryBody),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _EarnStat('₹${breakdown.todayEarnings.toInt()}', 'Today'),
+                    Container(width: 1, height: 40, color: Colors.white24),
+                    _EarnStat('₹${breakdown.weekEarnings.toInt()}', 'This Week'),
+                    Container(width: 1, height: 40, color: Colors.white24),
+                    _EarnStat('₹${breakdown.monthEarnings.toInt()}', 'This Month'),
+                  ],
+                ),
               ],
             ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              _QuickEarnCard('Avg/Visit (Month)', '₹${breakdown.avgPerVisit}', Icons.bar_chart_rounded, const Color(0xFF1565C0)),
+              const SizedBox(width: 12),
+              _QuickEarnCard('Completed Visits', '$completedCount', Icons.task_alt_rounded, AppColors.success),
+            ],
           ),
           const SizedBox(height: 20),
           PremiumCard(
@@ -88,4 +109,49 @@ class CaregiverEarningsScreen extends ConsumerWidget {
       ),
     );
   }
+}
+
+class _EarnStat extends StatelessWidget {
+  final String value, label;
+  const _EarnStat(this.value, this.label);
+
+  @override
+  Widget build(BuildContext context) => Flexible(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(value, style: const TextStyle(fontFamily: 'Inter', fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white)),
+            ),
+            Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontFamily: 'Inter', fontSize: 11, color: Colors.white70)),
+          ],
+        ),
+      );
+}
+
+class _QuickEarnCard extends StatelessWidget {
+  final String label, value;
+  final IconData icon;
+  final Color color;
+  const _QuickEarnCard(this.label, this.value, this.icon, this.color);
+
+  @override
+  Widget build(BuildContext context) => Expanded(
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.divider)),
+          child: Column(
+            children: [
+              Icon(icon, color: color, size: 20),
+              const SizedBox(height: 4),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(value, style: TextStyle(fontFamily: 'Inter', fontSize: 13, fontWeight: FontWeight.w800, color: color)),
+              ),
+              Text(label, textAlign: TextAlign.center, style: AppTextStyles.caption, maxLines: 2, overflow: TextOverflow.ellipsis),
+            ],
+          ),
+        ),
+      );
 }

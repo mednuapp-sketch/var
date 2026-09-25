@@ -179,8 +179,8 @@ class SearchService {
     ),
     SearchResult(
       id: 'nutrition',
-      title: 'Nutrition and Diet',
-      subtitle: 'Diet plans and nutrition guidance',
+      title: 'Diet & Dietician',
+      subtitle: 'Diet plans and dietician guidance',
       route: AppRoutes.nutrition,
       icon: Icons.restaurant_menu_rounded,
       color: Color(0xFF558B2F),
@@ -379,7 +379,7 @@ class SearchService {
     ),
     SearchResult(
       id: 'nutritionists',
-      title: 'Find Nutritionists',
+      title: 'Find Dieticians',
       subtitle: 'Book a certified dietitian',
       route: AppRoutes.nutritionNutritionists,
       icon: Icons.restaurant_rounded,

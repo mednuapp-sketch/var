@@ -36,10 +36,39 @@ class CounsellingSessionDetailScreen extends ConsumerWidget {
     }
   }
 
+  /// See PhysioSessionDetailScreen._scheduledDay's doc comment — identical
+  /// reasoning applies here (same `d/M/yyyy` free-text field, same
+  /// day-level-only gating, same fail-open-on-unparseable default).
+  DateTime? _scheduledDay(CounsellingSession session) {
+    final parts = session.preferredDate.trim().split('/');
+    if (parts.length != 3) return null;
+    final d = int.tryParse(parts[0]);
+    final m = int.tryParse(parts[1]);
+    final y = int.tryParse(parts[2]);
+    if (d == null || m == null || y == null) return null;
+    try {
+      return DateTime(y, m, d);
+    } catch (_) {
+      return null;
+    }
+  }
+
   void _startVideoSession(BuildContext context, CounsellingSession session) {
     if (session.patientId.isEmpty) {
       FeedbackService.showError(context, 'Patient details are still loading — try again in a moment.');
       return;
+    }
+    final scheduledDay = _scheduledDay(session);
+    if (scheduledDay != null) {
+      final today = DateTime.now();
+      final todayDay = DateTime(today.year, today.month, today.day);
+      if (scheduledDay.isAfter(todayDay)) {
+        FeedbackService.showError(
+          context,
+          'This session is scheduled for ${session.preferredDate} — you can start the call on that day.',
+        );
+        return;
+      }
     }
     context.push(AppRoutes.providerOutgoingCall, extra: {
       'providerRole': 'counsellor',

@@ -24,7 +24,7 @@ class WhyMednuSection extends StatelessWidget {
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
-          colors: [Color(0xFF1A1A2E), Color(0xFF2D1B4E)],
+          colors: [Color(0xFF33172C), Color(0xFF522546)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -39,11 +39,14 @@ class WhyMednuSection extends StatelessWidget {
           child: Column(
             children: [
               const SectionHeader(
-                tag: 'Why MedNU',
+                tag: 'About MedNU',
                 title: 'Healthcare Reimagined\nFor You',
                 subtitle: 'We\'re not just an app. We\'re your complete healthcare partner.',
                 alignment: CrossAxisAlignment.center,
+                lightMode: true,
               ),
+              SizedBox(height: isMobile ? 32 : 48),
+              _VisionMission(isMobile: isMobile),
               SizedBox(height: isMobile ? 36 : 56),
               GridView.builder(
                 shrinkWrap: true,
@@ -62,6 +65,86 @@ class WhyMednuSection extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _VisionMission extends StatelessWidget {
+  final bool isMobile;
+  const _VisionMission({required this.isMobile});
+
+  @override
+  Widget build(BuildContext context) {
+    final cards = [
+      (
+        icon: Icons.remove_red_eye_rounded,
+        title: 'Our Vision',
+        body: 'A world where quality healthcare is never out of reach — where every '
+            'person, in every city and town, can consult a trusted doctor, get the '
+            'right medicine, and manage their health with confidence, on their own terms.',
+      ),
+      (
+        icon: Icons.flag_rounded,
+        title: 'Our Mission',
+        body: 'To make healthcare simple, accessible, and dependable for every family — '
+            'connecting patients with verified doctors, pharmacies, and diagnostic '
+            'services through one secure platform, and standing by them 24/7 when it matters most.',
+      ),
+    ];
+
+    final children = cards.map((c) => Expanded(child: _VisionMissionCard(data: c))).toList();
+
+    return isMobile
+        ? Column(children: [
+            for (int i = 0; i < children.length; i++) ...[
+              _VisionMissionCard(data: cards[i]),
+              if (i < children.length - 1) const SizedBox(height: 16),
+            ],
+          ])
+        : IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (int i = 0; i < children.length; i++) ...[
+                  children[i],
+                  if (i < children.length - 1) const SizedBox(width: 20),
+                ],
+              ],
+            ),
+          );
+  }
+}
+
+class _VisionMissionCard extends StatelessWidget {
+  final ({IconData icon, String title, String body}) data;
+  const _VisionMissionCard({required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(gradient: AppColors.primaryGradient, borderRadius: BorderRadius.circular(12)),
+              child: Icon(data.icon, size: 22, color: Colors.white),
+            ),
+            const SizedBox(width: 12),
+            Text(data.title, style: GoogleFonts.poppins(fontSize: 17, fontWeight: FontWeight.w700, color: Colors.white)),
+          ]),
+          const SizedBox(height: 14),
+          Text(data.body, style: GoogleFonts.poppins(fontSize: 13, color: Colors.white70, height: 1.7)),
+        ],
       ),
     );
   }
@@ -148,12 +231,16 @@ class _CardText extends StatelessWidget {
       children: [
         Text(
           feature['title'] as String,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white),
         ),
         const SizedBox(height: 6),
         Text(
           feature['desc'] as String,
-          style: GoogleFonts.poppins(fontSize: 12.5, color: Colors.white60, height: 1.6),
+          maxLines: 4,
+          overflow: TextOverflow.ellipsis,
+          style: GoogleFonts.poppins(fontSize: 12.5, color: Colors.white70, height: 1.6),
         ),
       ],
     );
@@ -188,7 +275,7 @@ class _TrustBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(children: [
       ShaderMask(
-        shaderCallback: (b) => AppColors.primaryGradient.createShader(b),
+        shaderCallback: (b) => const LinearGradient(colors: [Colors.white, Color(0xFFE9CFEE)]).createShader(b),
         child: Text(
           value,
           style: GoogleFonts.poppins(fontSize: 28, fontWeight: FontWeight.w800, color: Colors.white),
@@ -196,7 +283,7 @@ class _TrustBadge extends StatelessWidget {
       ),
       Text(
         label,
-        style: GoogleFonts.poppins(fontSize: 12, color: Colors.white60, fontWeight: FontWeight.w500),
+        style: GoogleFonts.poppins(fontSize: 12, color: Colors.white70, fontWeight: FontWeight.w500),
       ),
     ]);
   }

@@ -4,9 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/constants/app_colors.dart';
-import '../../core/utils/responsive.dart';
 import '../../core/widgets/gradient_button.dart';
 import 'auth_provider.dart';
+import 'auth_shell.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
   final VoidCallback? onBack;
@@ -16,25 +16,20 @@ class LoginPage extends ConsumerStatefulWidget {
   ConsumerState<LoginPage> createState() => _LoginPageState();
 }
 
-class _LoginPageState extends ConsumerState<LoginPage> with TickerProviderStateMixin {
+class _LoginPageState extends ConsumerState<LoginPage> {
   final _phoneCtrl = TextEditingController();
   final _formKey = GlobalKey<FormState>();
-  late AnimationController _fadeCtrl;
-  late Animation<double> _fadeAnim;
-
-  @override
-  void initState() {
-    super.initState();
-    _fadeCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 600));
-    _fadeAnim = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOut);
-    _fadeCtrl.forward();
-  }
 
   @override
   void dispose() {
     _phoneCtrl.dispose();
-    _fadeCtrl.dispose();
     super.dispose();
+  }
+
+  void _submit() {
+    if (_formKey.currentState!.validate()) {
+      ref.read(authNotifierProvider.notifier).sendOtp(_phoneCtrl.text.trim());
+    }
   }
 
   @override
@@ -47,308 +42,56 @@ class _LoginPageState extends ConsumerState<LoginPage> with TickerProviderStateM
       }
     });
 
-    return Scaffold(
-      body: Row(
-        children: [
-          if (!Responsive.isMobile(context)) Expanded(flex: 5, child: _LoginHeroPanel()),
-          Expanded(
-            flex: 4,
-            child: FadeTransition(
-              opacity: _fadeAnim,
-              child: _LoginFormPanel(
-                formKey: _formKey,
-                phoneCtrl: _phoneCtrl,
-                authState: authState,
-                onSendOtp: () {
-                  if (_formKey.currentState!.validate()) {
-                    ref.read(authNotifierProvider.notifier).sendOtp(_phoneCtrl.text.trim());
-                  }
-                },
-                onBack: widget.onBack ?? () {},
-              ),
+    return AuthShell(
+      onBack: widget.onBack,
+      child: Form(
+        key: _formKey,
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              gradient: AppColors.primaryGradient,
+              borderRadius: BorderRadius.circular(18),
+              boxShadow: [BoxShadow(color: AppColors.primary.withValues(alpha: 0.35), blurRadius: 20, offset: const Offset(0, 8))],
             ),
+            child: const Icon(Icons.phone_iphone_rounded, color: Colors.white, size: 26),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _LoginHeroPanel extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Color(0xFFC2185B), Color(0xFF7B1FA2)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      child: LayoutBuilder(builder: (context, constraints) {
-        // Floating accent cards need real margin around the text column to
-        // not collide with it — only show them once the panel is wide
-        // enough (this panel only renders on tablet/desktop to begin with).
-        final showFloatingCards = constraints.maxWidth > 560;
-        return Stack(
-          children: [
-            Positioned(top: -80, left: -80, child: _Orb(size: 320, opacity: 0.12)),
-            Positioned(bottom: -60, right: -60, child: _Orb(size: 280, opacity: 0.1)),
-            if (showFloatingCards) ...[
-              Positioned(
-                top: 36,
-                right: 36,
-                child: _HeroFloatingCard(
-                  icon: Icons.verified_rounded,
-                  iconColor: const Color(0xFF2E7D32),
-                  title: 'Verified Doctors',
-                  subtitle: '1000+ specialists',
-                ),
-              ),
-              Positioned(
-                bottom: 48,
-                right: 40,
-                child: _HeroFloatingCard(
-                  icon: Icons.support_agent_rounded,
-                  iconColor: AppColors.primary,
-                  title: '24/7 Support',
-                  subtitle: "We're always here",
-                ),
-              ),
-            ],
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.all(48),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(children: [
-                      Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(12)),
-                        child: const Center(child: Text('M', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w800))),
-                      ),
-                      const SizedBox(width: 12),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text('MedNu', style: GoogleFonts.poppins(fontSize: 26, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: -0.5, height: 1.1)),
-                          Text('Always with you', style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.white70, letterSpacing: 0.3)),
-                        ],
-                      ),
-                    ]),
-                    const SizedBox(height: 48),
-                    Text(
-                      'Your Health,\nOur Priority.',
-                      style: GoogleFonts.poppins(fontSize: 42, fontWeight: FontWeight.w800, color: Colors.white, height: 1.15, letterSpacing: -0.5),
-                    ),
-                    const SizedBox(height: 20),
-                    Text(
-                      'Log in to access your health records,\nappointments, prescriptions, and more.',
-                      style: GoogleFonts.poppins(fontSize: 15, color: Colors.white70, height: 1.65),
-                    ),
-                    const SizedBox(height: 48),
-                    ...[
-                      (Icons.calendar_month_rounded, 'Book appointments instantly'),
-                      (Icons.folder_shared_rounded, 'Access all your health records'),
-                      (Icons.medication_rounded, 'View prescriptions & reports'),
-                      (Icons.lock_rounded, 'Secured with end-to-end encryption'),
-                    ].map((item) => Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: Row(children: [
-                        Container(
-                          width: 36,
-                          height: 36,
-                          decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(10)),
-                          child: Center(child: Icon(item.$1, size: 18, color: Colors.white)),
-                        ),
-                        const SizedBox(width: 14),
-                        Text(item.$2, style: GoogleFonts.poppins(fontSize: 14, color: Colors.white, fontWeight: FontWeight.w500)),
-                      ]),
-                    )),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        );
-      }),
-    );
-  }
-}
-
-class _HeroFloatingCard extends StatelessWidget {
-  final IconData icon;
-  final Color iconColor;
-  final String title;
-  final String subtitle;
-  const _HeroFloatingCard({
-    required this.icon,
-    required this.iconColor,
-    required this.title,
-    required this.subtitle,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-      constraints: const BoxConstraints(maxWidth: 190),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.18), blurRadius: 24, offset: const Offset(0, 10)),
-        ],
-      ),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Container(
-          width: 34,
-          height: 34,
-          decoration: BoxDecoration(color: iconColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
-          child: Icon(icon, size: 17, color: iconColor),
-        ),
-        const SizedBox(width: 10),
-        Flexible(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-            Text(title, style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.textPrimary), maxLines: 1, overflow: TextOverflow.ellipsis),
-            Text(subtitle, style: GoogleFonts.poppins(fontSize: 10.5, color: AppColors.textSecondary), maxLines: 1, overflow: TextOverflow.ellipsis),
-          ]),
-        ),
-      ]),
-    );
-  }
-}
-
-class _Orb extends StatelessWidget {
-  final double size;
-  final double opacity;
-  const _Orb({required this.size, required this.opacity});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: Colors.white.withOpacity(opacity),
-      ),
-    );
-  }
-}
-
-class _LoginFormPanel extends StatelessWidget {
-  final GlobalKey<FormState> formKey;
-  final TextEditingController phoneCtrl;
-  final AuthState authState;
-  final VoidCallback onSendOtp;
-  final VoidCallback onBack;
-
-  const _LoginFormPanel({
-    required this.formKey,
-    required this.phoneCtrl,
-    required this.authState,
-    required this.onSendOtp,
-    required this.onBack,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: Colors.white,
-      child: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(40),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 440),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(children: [
-                    GestureDetector(
-                      onTap: onBack,
-                      child: Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(color: AppColors.background, borderRadius: BorderRadius.circular(12)),
-                        child: const Icon(Icons.arrow_back_rounded, size: 20, color: AppColors.textPrimary),
-                      ),
-                    ),
-                    if (Responsive.isMobile(context)) ...[
-                      const SizedBox(width: 12),
-                      Row(children: [
-                        Container(
-                          width: 32,
-                          height: 32,
-                          decoration: BoxDecoration(gradient: AppColors.primaryGradient, borderRadius: BorderRadius.circular(8)),
-                          child: const Center(child: Text('M', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800))),
-                        ),
-                        const SizedBox(width: 8),
-                        Text('MedNu', style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.primary)),
-                      ]),
-                    ],
-                  ]),
-                  const SizedBox(height: 36),
-                  authState.step == AuthStep.phone
-                      ? _PhoneForm(formKey: formKey, phoneCtrl: phoneCtrl, authState: authState, onSendOtp: onSendOtp)
-                      : const SizedBox.shrink(),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _PhoneForm extends StatelessWidget {
-  final GlobalKey<FormState> formKey;
-  final TextEditingController phoneCtrl;
-  final AuthState authState;
-  final VoidCallback onSendOtp;
-
-  const _PhoneForm({
-    required this.formKey,
-    required this.phoneCtrl,
-    required this.authState,
-    required this.onSendOtp,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Form(
-      key: formKey,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Welcome Back! 👋', style: GoogleFonts.poppins(fontSize: 28, fontWeight: FontWeight.w800, color: AppColors.textPrimary, height: 1.2)),
+          const SizedBox(height: 22),
+          Text('Welcome back',
+              style: GoogleFonts.poppins(fontSize: 30, fontWeight: FontWeight.w800, color: AppColors.textPrimary, height: 1.15, letterSpacing: -0.8)),
           const SizedBox(height: 8),
-          Text('Enter your mobile number to receive a secure OTP', style: GoogleFonts.poppins(fontSize: 14, color: AppColors.textSecondary, height: 1.5)),
-          const SizedBox(height: 36),
-          Text('Mobile Number', style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+          Text('Enter your mobile number and we\'ll text you a secure one-time code.',
+              style: GoogleFonts.poppins(fontSize: 13.5, color: AppColors.textSecondary, height: 1.6)),
+          const SizedBox(height: 30),
+          Text('Mobile number', style: GoogleFonts.poppins(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
           const SizedBox(height: 8),
           TextFormField(
-            controller: phoneCtrl,
+            controller: _phoneCtrl,
             keyboardType: TextInputType.phone,
+            autofocus: true,
+            onFieldSubmitted: (_) => _submit(),
             inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(10)],
+            style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w600, letterSpacing: 1.2, color: AppColors.textPrimary),
             decoration: InputDecoration(
-              prefixIcon: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14),
+              filled: true,
+              fillColor: AppColors.background,
+              hintText: '98765 43210',
+              hintStyle: GoogleFonts.poppins(fontSize: 16, color: AppColors.textHint, letterSpacing: 1.2),
+              contentPadding: const EdgeInsets.symmetric(vertical: 18),
+              prefixIcon: Padding(
+                padding: const EdgeInsets.only(left: 16, right: 12),
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  const Text('🇮🇳', style: TextStyle(fontSize: 18)),
-                  const SizedBox(width: 8),
-                  Text('+91', style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
-                  const SizedBox(width: 8),
-                  Container(width: 1, height: 20, color: AppColors.border),
+                  Text('+91', style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.primary)),
+                  const SizedBox(width: 12),
+                  Container(width: 1, height: 22, color: AppColors.border),
                 ]),
               ),
-              hintText: '98765 43210',
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: AppColors.border)),
+              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: AppColors.primary, width: 1.6)),
+              errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: AppColors.error)),
+              focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: AppColors.error, width: 1.6)),
             ),
             validator: (v) {
               if (v == null || v.isEmpty) return 'Please enter your mobile number';
@@ -356,14 +99,14 @@ class _PhoneForm extends StatelessWidget {
               return null;
             },
           ),
-          const SizedBox(height: 12),
-          if (authState.error != null)
+          if (authState.error != null) ...[
+            const SizedBox(height: 14),
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: AppColors.error.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppColors.error.withOpacity(0.3)),
+                color: AppColors.error.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
               ),
               child: Row(children: [
                 const Icon(Icons.error_outline, color: AppColors.error, size: 16),
@@ -371,82 +114,32 @@ class _PhoneForm extends StatelessWidget {
                 Expanded(child: Text(authState.error!, style: GoogleFonts.poppins(fontSize: 12, color: AppColors.error))),
               ]),
             ),
+          ],
           const SizedBox(height: 24),
-          SizedBox(
-            width: double.infinity,
-            child: authState.loading
-                ? Container(
-                    height: 52,
-                    decoration: BoxDecoration(gradient: AppColors.primaryGradient, borderRadius: BorderRadius.circular(14)),
-                    child: const Center(child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))),
-                  )
-                : GradientButton(label: 'Send OTP', onTap: onSendOtp, width: double.infinity, icon: Icons.send_rounded),
-          ),
-          const SizedBox(height: 32),
-          _OrDivider(),
-          const SizedBox(height: 24),
-          _GoogleSignInButton(),
-          const SizedBox(height: 32),
+          authState.loading
+              ? Container(
+                  height: 54,
+                  decoration: BoxDecoration(gradient: AppColors.primaryGradient, borderRadius: BorderRadius.circular(16)),
+                  child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                    const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)),
+                    const SizedBox(width: 12),
+                    Text('Sending code…', style: GoogleFonts.poppins(fontSize: 14.5, fontWeight: FontWeight.w600, color: Colors.white)),
+                  ]),
+                )
+              : GradientButton(label: 'Get OTP', onTap: _submit, width: double.infinity, height: 54, icon: Icons.arrow_forward_rounded, borderRadius: BorderRadius.circular(16)),
+          const SizedBox(height: 22),
+          Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            const Icon(Icons.lock_outline_rounded, size: 14, color: AppColors.textHint),
+            const SizedBox(width: 6),
+            Text('Secured with one-time verification', style: GoogleFonts.poppins(fontSize: 11.5, color: AppColors.textHint)),
+          ]),
+          const SizedBox(height: 14),
           Center(
-            child: Text(
-              'By continuing, you agree to our Terms of Service\nand Privacy Policy',
-              textAlign: TextAlign.center,
-              style: GoogleFonts.poppins(fontSize: 11, color: AppColors.textHint, height: 1.5),
-            ),
+            child: Text('By continuing, you agree to our Terms of Service and Privacy Policy',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.poppins(fontSize: 11, color: AppColors.textHint, height: 1.5)),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _OrDivider extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Row(children: [
-      const Expanded(child: Divider()),
-      Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: Text('or', style: GoogleFonts.poppins(fontSize: 13, color: AppColors.textHint)),
-      ),
-      const Expanded(child: Divider()),
-    ]);
-  }
-}
-
-class _GoogleSignInButton extends StatefulWidget {
-  @override
-  State<_GoogleSignInButton> createState() => _GoogleSignInButtonState();
-}
-
-class _GoogleSignInButtonState extends State<_GoogleSignInButton> {
-  bool _hovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
-      child: GestureDetector(
-        onTap: () {},
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          width: double.infinity,
-          height: 52,
-          decoration: BoxDecoration(
-            color: _hovered ? AppColors.background : Colors.white,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: _hovered ? AppColors.border : AppColors.divider, width: 1.5),
-            boxShadow: _hovered ? [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 8, offset: const Offset(0, 2))] : [],
-          ),
-          child: Center(
-            child: Row(mainAxisSize: MainAxisSize.min, children: [
-              const Text('G', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Color(0xFF4285F4))),
-              const SizedBox(width: 10),
-              Text('Continue with Google', style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
-            ]),
-          ),
-        ),
+        ]),
       ),
     );
   }

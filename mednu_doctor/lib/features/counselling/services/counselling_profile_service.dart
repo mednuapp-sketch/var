@@ -36,7 +36,7 @@ class CounsellingProfileService {
   }) async {
     String? fcmToken;
     try {
-      fcmToken = await FirebaseMessaging.instance.getToken();
+      fcmToken = await FirebaseMessaging.instance.getToken().timeout(const Duration(seconds: 5));
     } catch (_) {}
 
     await _db.collection('counsellor_profiles').doc(uid).set({
@@ -62,4 +62,9 @@ class CounsellingProfileService {
   /// rejected by `firestore.rules` for a self-update.
   static Future<void> updateProfile(String uid, Map<String, dynamic> data) =>
       _db.collection('counsellor_profiles').doc(uid).set(data, SetOptions(merge: true));
+
+  /// Persists the Storage download URL for `counsellor_profiles/{uid}/profile.jpg`
+  /// (or clears it when [photoUrl] is empty, after a removal).
+  static Future<void> updatePhotoUrl(String uid, String photoUrl) =>
+      _db.collection('counsellor_profiles').doc(uid).set({'photoUrl': photoUrl}, SetOptions(merge: true));
 }

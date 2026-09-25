@@ -75,7 +75,7 @@ class _PhysioDashboardScreenState extends ConsumerState<PhysioDashboardScreen> {
                 value: '${metrics.todaySessions}',
                 label: "Today's Sessions",
                 icon: Icons.event_note_rounded,
-                colors: const [Color(0xFF00838F), Color(0xFF006064)],
+                colors: const [AppColors.primary, AppColors.secondary],
               ),
               GradientStatCard(
                 value: '${metrics.completedToday}',

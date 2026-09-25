@@ -35,6 +35,7 @@ class HealthArticlesSection extends StatelessWidget {
               StreamBuilder<List<HealthArticle>>(
                 stream: HealthArticleService.stream(),
                 builder: (context, snap) {
+                  if (snap.hasError) return const SizedBox.shrink();
                   if (!snap.hasData) {
                     return const Padding(
                       padding: EdgeInsets.symmetric(vertical: 40),

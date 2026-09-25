@@ -17,6 +17,12 @@ class LabProfile {
   final double rating;
   final int totalReviews;
 
+  /// Simple order-fulfillment availability flag — "Accepting New Bookings".
+  /// Lab has no GPS/location presence concept like Doctor; this just gates
+  /// whether the lab shows up for new diagnostic bookings. Defaults to
+  /// `true` for existing docs that predate this field.
+  final bool acceptingBookings;
+
   /// Raw `documents` / `documentVerification` maps, keyed by canonical
   /// docType. Kept untyped here so the shared documents layer
   /// (`shared_core/documents`) owns their parsing for every role.
@@ -39,6 +45,7 @@ class LabProfile {
     required this.photoUrl,
     required this.rating,
     required this.totalReviews,
+    this.acceptingBookings = true,
     this.documents = const {},
     this.documentVerification = const {},
   });
@@ -63,6 +70,7 @@ class LabProfile {
       photoUrl: (d['photoUrl'] as String?) ?? '',
       rating: ((d['rating'] as num?) ?? 0).toDouble(),
       totalReviews: (d['totalReviews'] as int?) ?? 0,
+      acceptingBookings: (d['acceptingBookings'] as bool?) ?? true,
       documents: Map<String, dynamic>.from(
           (d['documents'] as Map?) ?? const <String, dynamic>{}),
       documentVerification: Map<String, dynamic>.from(

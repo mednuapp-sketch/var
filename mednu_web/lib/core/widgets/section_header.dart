@@ -23,7 +23,7 @@ class SectionHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final isMobile = Responsive.isMobile(context);
     final isCenter = alignment == CrossAxisAlignment.center;
-    final subtitleColor = lightMode ? Colors.white60 : AppColors.textSecondary;
+    final subtitleColor = lightMode ? Colors.white70 : AppColors.textSecondary;
     final tagColor = lightMode ? Colors.white70 : AppColors.primary;
     final tagBg1 = lightMode
         ? Colors.white.withValues(alpha: 0.15)

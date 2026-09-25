@@ -219,7 +219,7 @@ class _ProfileScaffold extends StatelessWidget {
                     child: Text(
                       nutritionist.bio.isNotEmpty
                           ? nutritionist.bio
-                          : 'Certified nutrition expert helping patients achieve their dietary and wellness goals through evidence-based nutrition science.',
+                          : 'Certified dietician helping patients achieve their dietary and wellness goals through evidence-based nutrition science.',
                       style: AppTextStyles.bodyMedium.copyWith(
                           color: context.appTextSecondary, height: 1.6),
                     ),

@@ -40,7 +40,7 @@ class AmbulanceProfileService {
   }) async {
     String? fcmToken;
     try {
-      fcmToken = await FirebaseMessaging.instance.getToken();
+      fcmToken = await FirebaseMessaging.instance.getToken().timeout(const Duration(seconds: 5));
     } catch (_) {}
 
     await _db.collection('ambulance_profiles').doc(uid).set({
@@ -67,4 +67,12 @@ class AmbulanceProfileService {
   /// inflate its own stats.
   static Future<void> updateProfile(String uid, Map<String, dynamic> data) =>
       _db.collection('ambulance_profiles').doc(uid).set(data, SetOptions(merge: true));
+
+  /// Persists the vehicle/driver avatar URL after an upload or removal —
+  /// only `photoUrl` is affected, same trust boundary as [updateProfile].
+  /// Mirrors `HospitalProfileService.updatePhotoUrl`.
+  static Future<void> updatePhotoUrl(String uid, String photoUrl) =>
+      _db.collection('ambulance_profiles').doc(uid).set({
+        'photoUrl': photoUrl,
+      }, SetOptions(merge: true));
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
@@ -33,11 +34,8 @@ class PartnerRoleSelectScreen extends StatelessWidget {
   bool get _isAddingToExistingAccount => existingRoles.isNotEmpty;
 
   /// The self-registerable roles, in the order they are offered.
-  /// [AppRole.nutritionist] is deliberately absent, same reasoning as
-  /// [AppRole.admin]: `nutritionists/{uid}` is an admin-curated catalogue
-  /// the patient app books directly from, so that role is never
-  /// self-registerable here — an admin grants it alongside the catalogue
-  /// entry. See firestore.rules' Phase A scope note for the full reasoning.
+  /// [AppRole.counsellor] is deliberately absent — counselling accounts are
+  /// no longer offered from this picker.
   static const _allSelectableRoles = <AppRole>[
     AppRole.doctor,
     AppRole.lab,
@@ -45,9 +43,8 @@ class PartnerRoleSelectScreen extends StatelessWidget {
     AppRole.ambulance,
     AppRole.caregiver,
     AppRole.physiotherapist,
-    AppRole.counsellor,
-    AppRole.nutritionist,
     AppRole.hospital,
+    AppRole.nutritionist,
   ];
 
   List<AppRole> get _offeredRoles => _isAddingToExistingAccount
@@ -86,12 +83,20 @@ class PartnerRoleSelectScreen extends StatelessWidget {
       appBar: AppBar(
         title: Text(
           _isAddingToExistingAccount ? 'Add a Service' : 'Join MedNU',
-          style: AppTextStyles.h4.copyWith(color: Colors.white),
+          style: AppTextStyles.h4.copyWith(
+            color: Colors.white,
+            fontWeight: FontWeight.w800,
+          ),
         ),
         automaticallyImplyLeading: _isAddingToExistingAccount,
         iconTheme: const IconThemeData(color: Colors.white),
-        backgroundColor: Colors.transparent,
+        // Solid fallback so the title never sits on the light Scaffold
+        // background if the gradient flexibleSpace fails to paint before
+        // first frame (e.g. during the status-bar/edge-to-edge transition) —
+        // the gradient below still draws over this on every normal frame.
+        backgroundColor: AppColors.primary,
         elevation: 0,
+        systemOverlayStyle: SystemUiOverlayStyle.light,
         shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
         ),
@@ -170,38 +175,36 @@ class PartnerRoleSelectScreen extends StatelessWidget {
                         // scrollable grid inside an outer scrollable installs
                         // a competing drag recognizer that stalls the outer
                         // scroll (see project notes on this recurring bug
-                        // class). A trailing odd card spans full width as a
-                        // single featured row instead of leaving a dangling
-                        // half-empty row.
+                        // class). Every card is the same size regardless of
+                        // position — a trailing odd card keeps its slot next
+                        // to an empty spacer rather than stretching full
+                        // width, so the grid never mixes square and
+                        // rectangular cards.
                         for (var i = 0; i < roles.length; i += 2)
                           Padding(
                             padding: const EdgeInsets.only(bottom: 14),
                             child: FadeInSlide(
                               delay: Duration(milliseconds: 120 + (i ~/ 2) * 70),
-                              child: i + 1 < roles.length
-                                  ? Row(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Expanded(
-                                          child: _RoleCard(
-                                            role: roles[i],
-                                            onTap: () => _onRoleTap(context, roles[i]),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 14),
-                                        Expanded(
-                                          child: _RoleCard(
-                                            role: roles[i + 1],
-                                            onTap: () => _onRoleTap(context, roles[i + 1]),
-                                          ),
-                                        ),
-                                      ],
-                                    )
-                                  : _RoleCard(
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: _RoleCard(
                                       role: roles[i],
                                       onTap: () => _onRoleTap(context, roles[i]),
-                                      featured: true,
                                     ),
+                                  ),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: i + 1 < roles.length
+                                        ? _RoleCard(
+                                            role: roles[i + 1],
+                                            onTap: () => _onRoleTap(context, roles[i + 1]),
+                                          )
+                                        : const SizedBox.shrink(),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         const SizedBox(height: 10),
@@ -335,12 +338,7 @@ class _RoleCard extends StatelessWidget {
   final AppRole role;
   final VoidCallback onTap;
 
-  /// True for a trailing odd card spanning the full grid width — laid out
-  /// horizontally instead of stacked, so it reads as an intentional
-  /// featured row rather than a half-empty last line.
-  final bool featured;
-
-  const _RoleCard({required this.role, required this.onTap, this.featured = false});
+  const _RoleCard({required this.role, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -366,14 +364,14 @@ class _RoleCard extends StatelessWidget {
     );
 
     final iconBadge = Container(
-      width: featured ? 52 : 46,
-      height: featured ? 52 : 46,
+      width: 46,
+      height: 46,
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.20),
         borderRadius: BorderRadius.circular(15),
         border: Border.all(color: Colors.white.withValues(alpha: 0.28)),
       ),
-      child: Icon(role.icon, color: Colors.white, size: featured ? 26 : 23),
+      child: Icon(role.icon, color: Colors.white, size: 23),
     );
 
     final arrowBadge = Container(
@@ -391,7 +389,7 @@ class _RoleCard extends StatelessWidget {
       maxLines: 2,
       overflow: TextOverflow.ellipsis,
       style: AppTextStyles.labelLarge.copyWith(
-        fontSize: featured ? 16 : 15,
+        fontSize: 15,
         fontWeight: FontWeight.w800,
         color: Colors.white,
         height: 1.2,
@@ -400,7 +398,7 @@ class _RoleCard extends StatelessWidget {
 
     final subtitle = Text(
       role.subtitle,
-      maxLines: featured ? 1 : 2,
+      maxLines: 2,
       overflow: TextOverflow.ellipsis,
       style: TextStyle(
         fontFamily: 'Inter',
@@ -435,43 +433,21 @@ class _RoleCard extends StatelessWidget {
                 ),
               ),
               Padding(
-                padding: featured
-                    ? const EdgeInsets.fromLTRB(18, 16, 16, 16)
-                    : const EdgeInsets.fromLTRB(16, 18, 14, 16),
-                child: featured
-                    ? Row(
-                        children: [
-                          iconBadge,
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                label,
-                                const SizedBox(height: 3),
-                                subtitle,
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          arrowBadge,
-                        ],
-                      )
-                    : Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [iconBadge, arrowBadge],
-                          ),
-                          const SizedBox(height: 16),
-                          label,
-                          const SizedBox(height: 3),
-                          subtitle,
-                        ],
-                      ),
+                padding: const EdgeInsets.fromLTRB(16, 18, 14, 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [iconBadge, arrowBadge],
+                    ),
+                    const SizedBox(height: 16),
+                    label,
+                    const SizedBox(height: 3),
+                    subtitle,
+                  ],
+                ),
               ),
             ],
           ),

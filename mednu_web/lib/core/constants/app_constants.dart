@@ -8,6 +8,7 @@ class AppConstants {
 
   static const String playStoreUrl = 'https://play.google.com/store/apps/details?id=com.mednu.mednu';
   static const String appStoreUrl  = 'https://drive.google.com/file/d/15MNHFUUP-nBcq_St9HOqlef90MlwyQlM/view?usp=sharing';
+  static const String partnerAppUrl = 'https://play.google.com/store/apps/details?id=com.mednu.mednu_doctor';
   static const String apkDownloadUrl = 'https://play.google.com/store/apps/details?id=com.mednu.mednu';
 
   // Same legal docs already live on the admin site — reused rather than duplicated.
@@ -18,8 +19,14 @@ class AppConstants {
   static const String contactPhone = '+91 93907 58684';
   static const String contactAddress = 'MedNU Healthcare Services Pvt. Ltd., Visakhapatnam, Andhra Pradesh, India';
 
+  // Left blank on purpose — fill in with the real handles/number when ready.
+  // The footer social icons only render/link once these are non-empty.
+  static const String instagramUrl = '';
+  static const String facebookUrl = '';
+  static const String whatsappNumber = '';
+
   static const List<String> navItems = [
-    'Home', 'Services', 'How It Works', 'Doctors', 'About Us', 'Contact',
+    'Home', 'Services', 'How It Works', 'About Us', 'Contact',
   ];
 
   static const List<Map<String, String>> services = [
@@ -29,7 +36,7 @@ class AppConstants {
     {'title': 'Diagnostics', 'icon': '🏥', 'color': 'orange'},
     {'title': 'Ambulance', 'icon': '🚑', 'color': 'red'},
     {'title': 'Pregnancy Care', 'icon': '🤱', 'color': 'pink'},
-    {'title': 'Nutrition', 'icon': '🥗', 'color': 'green'},
+    {'title': 'Dietician', 'icon': '🥗', 'color': 'green'},
     {'title': 'Physiotherapy', 'icon': '💪', 'color': 'blue'},
     {'title': 'Caregivers', 'icon': '👩‍⚕️', 'color': 'pink'},
     {'title': 'Medical Equipment', 'icon': '🩻', 'color': 'slate'},

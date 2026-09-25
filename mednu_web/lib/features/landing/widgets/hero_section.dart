@@ -43,7 +43,13 @@ class _HeroSectionState extends State<HeroSection>
     final isTablet = Responsive.isTablet(context);
 
     return Container(
-      color: Colors.white,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Colors.white, Color(0xFFF7F0F5), Color(0xFFEFE1EC)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
       padding: EdgeInsets.only(
         left: Responsive.horizontalPadding(context),
         right: Responsive.horizontalPadding(context),
@@ -132,7 +138,7 @@ class _HeroContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final titleSize = isMobile ? 32.0 : isTablet ? 38.0 : 50.0;
+    final titleSize = isMobile ? 34.0 : isTablet ? 42.0 : 60.0;
 
     return Column(
       crossAxisAlignment:
@@ -173,9 +179,9 @@ class _HeroContent extends StatelessWidget {
               style: GoogleFonts.poppins(
                 fontSize: titleSize,
                 fontWeight: FontWeight.w800,
-                color: const Color(0xFF1A1A2E),
-                height: 1.18,
-                letterSpacing: -0.5,
+                color: const Color(0xFF33172C),
+                height: 1.08,
+                letterSpacing: -1.5,
               ),
             ),
             ShaderMask(
@@ -190,8 +196,8 @@ class _HeroContent extends StatelessWidget {
                   fontSize: titleSize,
                   fontWeight: FontWeight.w800,
                   color: Colors.white,
-                  height: 1.18,
-                  letterSpacing: -0.5,
+                  height: 1.08,
+                  letterSpacing: -1.5,
                 ),
               ),
             ),
@@ -208,7 +214,7 @@ class _HeroContent extends StatelessWidget {
                 isMobile ? TextAlign.center : TextAlign.left,
             style: GoogleFonts.poppins(
               fontSize: isMobile ? 14 : 15.5,
-              color: const Color(0xFF757575),
+              color: const Color(0xFF7A6472),
               height: 1.8,
               fontWeight: FontWeight.w400,
             ),
@@ -325,7 +331,7 @@ class _TrustRow extends StatelessWidget {
             _AvatarBubble(offset: 0, color: AppColors.primary),
             _AvatarBubble(offset: 22, color: AppColors.secondary),
             _AvatarBubble(
-                offset: 44, color: Color(0xFF00897B)),
+                offset: 44, color: Color(0xFFA36BAC)),
           ]),
         ),
         const SizedBox(width: 10),
@@ -334,7 +340,7 @@ class _TrustRow extends StatelessWidget {
               style: GoogleFonts.poppins(
                   fontSize: 12.5,
                   fontWeight: FontWeight.w600,
-                  color: const Color(0xFF212121))),
+                  color: const Color(0xFF33172C))),
           Row(children: [
             ...List.generate(
                 5,
@@ -345,12 +351,12 @@ class _TrustRow extends StatelessWidget {
                 style: GoogleFonts.poppins(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
-                    color: const Color(0xFF424242))),
+                    color: const Color(0xFF33172C))),
             const SizedBox(width: 3),
             Text('(2.5k reviews)',
                 style: GoogleFonts.poppins(
                     fontSize: 11,
-                    color: const Color(0xFF9E9E9E))),
+                    color: const Color(0xFF7A6472))),
           ]),
         ]),
       ],
@@ -535,7 +541,7 @@ class _PhoneMockup extends StatelessWidget {
       width: w,
       height: h,
       decoration: BoxDecoration(
-        color: const Color(0xFF1A1A2E),
+        color: const Color(0xFF33172C),
         borderRadius: BorderRadius.circular(36),
         border: Border.all(
             color: Colors.white.withValues(alpha: 0.12), width: 1.5),
@@ -593,7 +599,7 @@ class _StatusBar extends StatelessWidget {
     return Container(
       width: w,
       height: 24,
-      color: const Color(0xFF1A1A2E),
+      color: const Color(0xFF33172C),
       padding: const EdgeInsets.symmetric(horizontal: 18),
       child: Row(children: [
         Text('9:31',
@@ -656,11 +662,11 @@ class _AppHeader extends StatelessWidget {
                   style: GoogleFonts.poppins(
                       fontSize: w * 0.063,
                       fontWeight: FontWeight.w700,
-                      color: const Color(0xFF1A1A2E))),
+                      color: const Color(0xFF33172C))),
               Text('How are you feeling today?',
                   style: GoogleFonts.poppins(
                       fontSize: w * 0.042,
-                      color: const Color(0xFF9E9E9E))),
+                      color: const Color(0xFF7A6472))),
             ],
           ),
         ),
@@ -669,10 +675,10 @@ class _AppHeader extends StatelessWidget {
             width: w * 0.11,
             height: w * 0.11,
             decoration: BoxDecoration(
-                color: const Color(0xFFF5F5F5),
+                color: const Color(0xFFF1E7EE),
                 borderRadius: BorderRadius.circular(8)),
             child: Icon(Icons.notifications_none_rounded,
-                size: w * 0.065, color: const Color(0xFF424242)),
+                size: w * 0.065, color: const Color(0xFF33172C)),
           ),
           const SizedBox(width: 6),
           Container(
@@ -706,18 +712,18 @@ class _SearchBar extends StatelessWidget {
       child: Container(
         height: w * 0.12,
         decoration: BoxDecoration(
-          color: const Color(0xFFF5F5F5),
+          color: const Color(0xFFF1E7EE),
           borderRadius: BorderRadius.circular(10),
         ),
         padding: EdgeInsets.symmetric(horizontal: w * 0.04),
         child: Row(children: [
           Icon(Icons.search_rounded,
-              size: w * 0.065, color: const Color(0xFFBDBDBD)),
+              size: w * 0.065, color: const Color(0xFF857080)),
           SizedBox(width: w * 0.03),
           Text('Search doctors, medicines…',
               style: GoogleFonts.poppins(
                   fontSize: w * 0.04,
-                  color: const Color(0xFFBDBDBD))),
+                  color: const Color(0xFF857080))),
         ]),
       ),
     );
@@ -810,7 +816,7 @@ class _ServicesRow extends StatelessWidget {
               style: GoogleFonts.poppins(
                   fontSize: w * 0.05,
                   fontWeight: FontWeight.w700,
-                  color: const Color(0xFF1A1A2E))),
+                  color: const Color(0xFF33172C))),
           const Spacer(),
           Text('View all',
               style: GoogleFonts.poppins(
@@ -836,7 +842,7 @@ class _ServicesRow extends StatelessWidget {
                     Text(item.label,
                         style: GoogleFonts.poppins(
                             fontSize: w * 0.036,
-                            color: const Color(0xFF424242),
+                            color: const Color(0xFF33172C),
                             fontWeight: FontWeight.w500)),
                   ]))
               .toList(),
@@ -864,7 +870,7 @@ class _AppointmentCard extends StatelessWidget {
                 style: GoogleFonts.poppins(
                     fontSize: w * 0.048,
                     fontWeight: FontWeight.w700,
-                    color: const Color(0xFF1A1A2E))),
+                    color: const Color(0xFF33172C))),
             const Spacer(),
             Text('View all',
                 style: GoogleFonts.poppins(
@@ -879,7 +885,7 @@ class _AppointmentCard extends StatelessWidget {
                 color: const Color(0xFFF8F9FA),
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
-                    color: const Color(0xFFEEEEEE), width: 1)),
+                    color: const Color(0xFFEDE3EA), width: 1)),
             child: Row(children: [
               Container(
                 width: w * 0.11,
@@ -903,11 +909,11 @@ class _AppointmentCard extends StatelessWidget {
                         style: GoogleFonts.poppins(
                             fontSize: w * 0.046,
                             fontWeight: FontWeight.w700,
-                            color: const Color(0xFF1A1A2E))),
+                            color: const Color(0xFF33172C))),
                     Text('Cardiologist',
                         style: GoogleFonts.poppins(
                             fontSize: w * 0.036,
-                            color: const Color(0xFF9E9E9E))),
+                            color: const Color(0xFF7A6472))),
                   ],
                 ),
               ),
@@ -917,12 +923,12 @@ class _AppointmentCard extends StatelessWidget {
                   Row(children: [
                     Icon(Icons.calendar_today_rounded,
                         size: w * 0.036,
-                        color: const Color(0xFF9E9E9E)),
+                        color: const Color(0xFF7A6472)),
                     const SizedBox(width: 2),
                     Text('Tomorrow',
                         style: GoogleFonts.poppins(
                             fontSize: w * 0.032,
-                            color: const Color(0xFF9E9E9E))),
+                            color: const Color(0xFF7A6472))),
                   ]),
                   Text('11:30 AM',
                       style: GoogleFonts.poppins(
@@ -955,7 +961,7 @@ class _BottomNav extends StatelessWidget {
       height: 46,
       decoration: const BoxDecoration(
         color: Colors.white,
-        border: Border(top: BorderSide(color: Color(0xFFF0F0F0), width: 1)),
+        border: Border(top: BorderSide(color: Color(0xFFEDE3EA), width: 1)),
       ),
       padding: EdgeInsets.symmetric(horizontal: w * 0.04),
       child: Row(
@@ -979,7 +985,7 @@ class _BottomNav extends StatelessWidget {
                         size: w * 0.09,
                         color: item.active
                             ? AppColors.primary
-                            : const Color(0xFFBDBDBD)),
+                            : const Color(0xFF857080)),
                   ],
                 ))
             .toList(),
@@ -1014,7 +1020,7 @@ class _FloatingCard extends StatelessWidget {
               blurRadius: 20,
               offset: const Offset(0, 6)),
         ],
-        border: Border.all(color: const Color(0xFFF0F0F0), width: 1),
+        border: Border.all(color: const Color(0xFFEDE3EA), width: 1),
       ),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         Container(
@@ -1031,10 +1037,10 @@ class _FloatingCard extends StatelessWidget {
               style: GoogleFonts.poppins(
                   fontSize: 11.5,
                   fontWeight: FontWeight.w700,
-                  color: const Color(0xFF1A1A2E))),
+                  color: const Color(0xFF33172C))),
           Text(subtitle,
               style: GoogleFonts.poppins(
-                  fontSize: 10, color: const Color(0xFF9E9E9E))),
+                  fontSize: 10, color: const Color(0xFF7A6472))),
         ]),
       ]),
     );
@@ -1104,7 +1110,7 @@ class _DoctorImage extends StatelessWidget {
                       blurRadius: 16,
                       offset: const Offset(0, 5)),
                 ],
-                border: Border.all(color: const Color(0xFFF0F0F0), width: 1),
+                border: Border.all(color: const Color(0xFFEDE3EA), width: 1),
               ),
               child: Row(mainAxisSize: MainAxisSize.min, children: [
                 Container(
@@ -1124,10 +1130,10 @@ class _DoctorImage extends StatelessWidget {
                         style: GoogleFonts.poppins(
                             fontSize: 10,
                             fontWeight: FontWeight.w700,
-                            color: const Color(0xFF1A1A2E))),
+                            color: const Color(0xFF33172C))),
                     Text('MBBS, MD · 8 yrs exp',
                         style: GoogleFonts.poppins(
-                            fontSize: 9, color: const Color(0xFF9E9E9E))),
+                            fontSize: 9, color: const Color(0xFF7A6472))),
                   ],
                 ),
               ]),

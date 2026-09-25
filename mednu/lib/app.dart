@@ -15,6 +15,7 @@ import 'core/services/battery_optimization_service.dart';
 import 'core/services/booking_reminder_service.dart';
 import 'features/my_services/services/my_services_service.dart';
 import 'features/my_services/models/unified_booking.dart';
+import 'features/health/screens/follow_up_prompt_screen.dart';
 import 'features/security/services/biometric_service.dart';
 import 'features/security/screens/lock_screen.dart';
 import 'features/health/services/health_notification_service.dart';
@@ -39,11 +40,21 @@ class _MedNUAppState extends ConsumerState<MedNUApp>
   StreamSubscription<QuerySnapshot>? _incomingCallSub;
   StreamSubscription<String>? _tokenRefreshSub;
   StreamSubscription<List<UnifiedBooking>>? _bookingReminderSub;
+  StreamSubscription<QuerySnapshot>? _doctorCompletionSub;
+  StreamSubscription<QuerySnapshot>? _nutritionCompletionSub;
+  StreamSubscription<QuerySnapshot>? _physioCompletionSub;
   bool _initialNotifLoad = true;
   List<UnifiedBooking>? _pendingReminderBookings;
   bool _reminderSyncRunning = false;
 
   String? _lastAlertedCallId;
+
+  // Per-collection previous-status cache used to detect a live transition
+  // into 'completed' (see _watchFollowUpCompletion) rather than firing on
+  // bookings that were already completed before this listener attached.
+  final Map<String, String> _lastAppointmentStatus = {};
+  final Map<String, String> _lastNutritionStatus = {};
+  final Map<String, String> _lastPhysioStatus = {};
 
   @override
   void initState() {
@@ -58,10 +69,16 @@ class _MedNUAppState extends ConsumerState<MedNUApp>
       _notifSub?.cancel();
       _incomingCallSub?.cancel();
       _bookingReminderSub?.cancel();
+      _doctorCompletionSub?.cancel();
+      _nutritionCompletionSub?.cancel();
+      _physioCompletionSub?.cancel();
       _initialNotifLoad = true;
       _lastAlertedCallId = null;
       _pendingReminderBookings = null;
       _reminderSyncRunning = false;
+      _lastAppointmentStatus.clear();
+      _lastNutritionStatus.clear();
+      _lastPhysioStatus.clear();
 
       if (user == null) {
         FirebaseCrashlytics.instance.setUserIdentifier('');
@@ -167,7 +184,97 @@ class _MedNUAppState extends ConsumerState<MedNUApp>
           MyServicesService.allBookingsStream().listen((bookings) {
         _queueReminderSync(user.uid, bookings);
       });
+
+      // ── Post-session follow-up nudge (Doctor / Dietician / Physio) ───────
+      // Real-time, so it fires the moment a booking flips to 'completed'
+      // regardless of what screen the patient is on — mirrors the incoming
+      // call listener above. Physiotherapy in particular has no client-side
+      // "session ended" event (its completion is set by the partner app /a
+      // Cloud Function), so this listener is the only place that can catch
+      // it live.
+      _doctorCompletionSub = _watchFollowUpCompletion(
+        query: FirebaseFirestore.instance
+            .collection('appointments')
+            .where('patientId', isEqualTo: user.uid),
+        lastStatus: _lastAppointmentStatus,
+        source: FollowUpSource.doctor,
+      );
+      _nutritionCompletionSub = _watchFollowUpCompletion(
+        query: FirebaseFirestore.instance
+            .collection('nutrition_appointments')
+            .where('userId', isEqualTo: user.uid),
+        lastStatus: _lastNutritionStatus,
+        source: FollowUpSource.nutrition,
+      );
+      _physioCompletionSub = _watchFollowUpCompletion(
+        query: FirebaseFirestore.instance
+            .collection('service_requests')
+            .where('patientId', isEqualTo: user.uid)
+            .where('type', isEqualTo: 'physiotherapy'),
+        lastStatus: _lastPhysioStatus,
+        source: FollowUpSource.physio,
+      );
     });
+  }
+
+  /// Watches [query] for a booking that transitions into `status ==
+  /// 'completed'` while the listener is attached, and shows the follow-up
+  /// prompt for it. Bookings that are already 'completed' in the very first
+  /// snapshot (Firestore reports these as `DocumentChangeType.added`, not
+  /// `modified`) are deliberately skipped — this only reacts to completions
+  /// the patient experiences live, in this session.
+  StreamSubscription<QuerySnapshot> _watchFollowUpCompletion({
+    required Query<Map<String, dynamic>> query,
+    required Map<String, String> lastStatus,
+    required FollowUpSource source,
+  }) {
+    return query.snapshots().listen((snap) {
+      for (final change in snap.docChanges) {
+        final data = change.doc.data();
+        if (data == null) continue;
+        final newStatus = data['status'] as String? ?? '';
+        final oldStatus = lastStatus[change.doc.id];
+        lastStatus[change.doc.id] = newStatus;
+        if (change.type == DocumentChangeType.modified &&
+            oldStatus != 'completed' &&
+            newStatus == 'completed') {
+          _showFollowUpPrompt(source, data);
+        }
+      }
+    });
+  }
+
+  void _showFollowUpPrompt(FollowUpSource source, Map<String, dynamic> data) {
+    if (!mounted) return;
+    String providerId;
+    String providerName;
+    String? providerSpecialty;
+    switch (source) {
+      case FollowUpSource.doctor:
+        providerId = data['doctorId'] as String? ?? '';
+        providerName = data['doctorName'] as String? ?? 'your doctor';
+        providerSpecialty = data['doctorSpecialty'] as String?;
+      case FollowUpSource.nutrition:
+        providerId = data['nutritionistId'] as String? ?? '';
+        providerName = data['nutritionistName'] as String? ?? 'your dietician';
+      case FollowUpSource.physio:
+        providerId = data['assignedTo'] as String? ?? '';
+        providerName =
+            data['assignedToName'] as String? ?? 'your physiotherapist';
+    }
+    // No provider to follow up with (e.g. a physio request never got
+    // assigned before being marked completed) — nothing useful to show.
+    if (providerId.isEmpty) return;
+
+    ref.read(appRouterProvider).push(
+      AppRoutes.followUpPrompt,
+      extra: {
+        'source': source,
+        'providerId': providerId,
+        'providerName': providerName,
+        'providerSpecialty': providerSpecialty,
+      },
+    );
   }
 
   // Latest-wins queue: a new snapshot while a sync is in flight just replaces
@@ -247,6 +354,9 @@ class _MedNUAppState extends ConsumerState<MedNUApp>
     _incomingCallSub?.cancel();
     _tokenRefreshSub?.cancel();
     _bookingReminderSub?.cancel();
+    _doctorCompletionSub?.cancel();
+    _nutritionCompletionSub?.cancel();
+    _physioCompletionSub?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }

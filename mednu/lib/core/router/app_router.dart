@@ -7,8 +7,6 @@ import '../../features/auth/screens/phone_entry_screen.dart';
 import '../../features/auth/screens/otp_screen.dart';
 import '../../features/auth/screens/terms_accept_screen.dart';
 import '../../features/auth/screens/register_screen.dart';
-import '../../features/auth/screens/mpin_screen.dart';
-import '../../features/auth/screens/create_mpin_screen.dart';
 import '../../features/home/screens/home_screen.dart';
 import '../../features/services/consultation/consultation_screen.dart';
 import '../../features/services/consultation/video_call_screen.dart';
@@ -57,6 +55,7 @@ import '../../features/wallet/screens/wallet_screen.dart';
 import '../../features/notifications/screens/notifications_screen.dart';
 import '../../features/profile/screens/profile_screen.dart';
 import '../../features/profile/screens/family_management_screen.dart';
+import '../../features/profile/screens/my_documents_screen.dart';
 import '../../features/profile/screens/family_member_detail_screen.dart';
 import '../../features/profile/screens/settings_screen.dart';
 import '../../features/education/screens/education_screen.dart';
@@ -64,6 +63,7 @@ import '../../features/health/screens/health_dashboard_screen.dart';
 import '../../features/health/screens/period_tracker_screen.dart';
 import '../../features/health/screens/water_reminder_screen.dart';
 import '../../features/health/screens/post_consultation_screen.dart';
+import '../../features/health/screens/follow_up_prompt_screen.dart';
 import '../../features/health/screens/prescription_viewer_screen.dart';
 import '../../features/tracking/screens/order_tracking_screen.dart';
 import '../../features/payment/screens/payment_screen.dart';
@@ -105,8 +105,6 @@ class AppRoutes {
   static const otp                = '/otp';
   static const termsAccept        = '/terms-accept';
   static const register           = '/register';
-  static const mpin               = '/mpin';
-  static const createMpin         = '/create-mpin';
   static const home               = '/home';
   static const doctors            = '/doctors';
   static const doctorProfile      = '/doctors/:id';
@@ -155,6 +153,7 @@ class AppRoutes {
   static const family             = '/profile/family';
   static const familyMemberDetail = '/profile/family/member';
   static const favouriteDoctors   = '/profile/favourites';
+  static const myDocuments        = '/profile/documents';
   static const settings           = '/profile/settings';
   static const education          = '/education';
   static const healthDashboard    = '/health';
@@ -212,6 +211,9 @@ class AppRoutes {
   // Realtime calling
   static const outgoingCall = '/call/outgoing';
   static const incomingCall = '/call/incoming';
+
+  // Post-session follow-up nudge (Doctor / Dietician / Physiotherapist)
+  static const followUpPrompt = '/follow-up-prompt';
 }
 
 /// Global navigator key — allows navigation from outside the widget tree
@@ -234,7 +236,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           return OtpScreen(
             phone:          extra['phone']          as String? ?? '',
             isExistingUser: extra['isExistingUser'] as bool?   ?? false,
-            mode:           extra['mode']           as String? ?? '',
           );
         },
       ),
@@ -250,23 +251,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (c, s) {
           final extra = s.extra as Map<String, dynamic>? ?? {};
           return RegisterScreen(phone: extra['phone'] as String? ?? '');
-        },
-      ),
-      GoRoute(
-        path: AppRoutes.mpin,
-        builder: (c, s) {
-          final extra = s.extra as Map<String, dynamic>? ?? {};
-          return MPINScreen(
-            phone: extra['phone'] as String? ?? '',
-            mode:  extra['mode']  as String? ?? 'unlock',
-          );
-        },
-      ),
-      GoRoute(
-        path: AppRoutes.createMpin,
-        builder: (c, s) {
-          final extra = s.extra as Map<String, dynamic>? ?? {};
-          return CreateMPINScreen(mode: extra['mode'] as String? ?? 'setup');
         },
       ),
       GoRoute(path: AppRoutes.home,               builder: (c, s) => const HomeScreen()),
@@ -402,6 +386,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: AppRoutes.notifications,      builder: (c, s) => const NotificationsScreen()),
       GoRoute(path: AppRoutes.profile,            builder: (c, s) => const ProfileScreen()),
       GoRoute(path: AppRoutes.favouriteDoctors,   builder: (c, s) => const FavouriteDoctorsScreen()),
+      GoRoute(path: AppRoutes.myDocuments,        builder: (c, s) => const MyDocumentsScreen()),
       GoRoute(path: AppRoutes.family,             builder: (c, s) => const FamilyManagementScreen()),
       GoRoute(path: AppRoutes.familyMemberDetail, builder: (c, s) => FamilyMemberDetailScreen(member: s.extra as Map<String, dynamic>? ?? {})),
       GoRoute(path: AppRoutes.settings,           builder: (c, s) => const SettingsScreen()),
@@ -545,6 +530,18 @@ GoRoute(path: AppRoutes.referral,           builder: (c, s) => const ReferralScr
             consultationType: extra['consultationType'] as String? ?? 'Video',
             doctorPhotoUrl:   extra['doctorPhotoUrl']   as String? ?? '',
             providerRole:     extra['providerRole']     as String? ?? 'doctor',
+          );
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.followUpPrompt,
+        builder: (c, s) {
+          final extra = s.extra as Map<String, dynamic>? ?? {};
+          return FollowUpPromptScreen(
+            source: extra['source'] as FollowUpSource? ?? FollowUpSource.doctor,
+            providerId: extra['providerId'] as String? ?? '',
+            providerName: extra['providerName'] as String? ?? '',
+            providerSpecialty: extra['providerSpecialty'] as String?,
           );
         },
       ),

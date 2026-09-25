@@ -32,7 +32,7 @@ class _ArticleDetailPageState extends State<ArticleDetailPage> {
           if (snap.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator(color: AppColors.primary));
           }
-          final article = snap.data;
+          final article = snap.hasError ? null : snap.data;
           if (article == null) {
             return _NotFound(onBack: () => context.go('/'));
           }

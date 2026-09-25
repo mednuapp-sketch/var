@@ -26,6 +26,18 @@ class NutritionistProfile {
   final Map<String, dynamic> documents;
   final Map<String, dynamic> documentVerification;
 
+  /// Profile photo — `{profileCollection}/{uid}/profile.jpg` in Storage (see
+  /// storage.rules), written by `NutritionProfileScreen`'s avatar
+  /// upload/remove flow via `NutritionistProfileService.updatePhotoUrl`.
+  final String? photoUrl;
+
+  /// Remote/video-consult availability — mirrors Counselling's online
+  /// presence toggle, but persisted as a plain preference field (not a
+  /// connection-presence signal) since nutrition consults are booked ahead
+  /// rather than picked up live. Not in firestore.rules' protected-fields
+  /// list for this collection, so a self-write is always allowed.
+  final bool isOnline;
+
   const NutritionistProfile({
     required this.name,
     required this.qualification,
@@ -43,6 +55,8 @@ class NutritionistProfile {
     this.status = 'pending',
     this.documents = const {},
     this.documentVerification = const {},
+    this.photoUrl,
+    this.isOnline = false,
   });
 
   factory NutritionistProfile.empty() => const NutritionistProfile(
@@ -57,12 +71,14 @@ class NutritionistProfile {
         rating: 0,
         reviewCount: 0,
         documentsVerified: false,
+        photoUrl: null,
+        isOnline: false,
       );
 
   factory NutritionistProfile.fromFirestore(DocumentSnapshot<Object?> doc) {
     final d = (doc.data() as Map<String, dynamic>?) ?? const {};
     return NutritionistProfile(
-      name: d['name'] as String? ?? 'Nutritionist',
+      name: d['name'] as String? ?? 'Dietician',
       qualification: d['qualification'] as String? ?? '',
       specialization: d['specialization'] as String? ?? '',
       experienceYears: ((d['experienceYears'] as num?) ?? 0).toInt(),
@@ -80,6 +96,8 @@ class NutritionistProfile {
           (d['documents'] as Map?) ?? const <String, dynamic>{}),
       documentVerification: Map<String, dynamic>.from(
           (d['documentVerification'] as Map?) ?? const <String, dynamic>{}),
+      photoUrl: d['photoUrl'] as String?,
+      isOnline: d['isOnline'] as bool? ?? false,
     );
   }
 }

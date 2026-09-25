@@ -107,6 +107,11 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       final db  = FirebaseFirestore.instance;
 
       // ── Step 1: Cache check (instant, offline) ───────────────────────────
+      // A live Firebase session + a complete Firestore profile means this
+      // person has already proven who they are — OTP is only ever required
+      // again on a brand-new login (fresh install, signed out, or a session
+      // Firebase itself has invalidated), never just because time has
+      // passed since the app was last opened.
       try {
         final cached = await db
             .collection('users')
@@ -114,12 +119,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
             .get(const GetOptions(source: Source.cache));
         if (!mounted) return;
         if (cached.exists) {
-          final data = cached.data() ?? {};
-          if (data['mpinHash'] != null) {
-            context.go(AppRoutes.home);
-          } else {
-            context.go(AppRoutes.createMpin, extra: {'mode': 'setup'});
-          }
+          context.go(AppRoutes.home);
           return;
         }
       } on FirebaseException catch (_) {
@@ -137,17 +137,12 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
             .timeout(const Duration(seconds: 6));
         if (!mounted) return;
         if (doc.exists) {
-          final data = doc.data() ?? {};
-          if (data['mpinHash'] != null) {
-            context.go(AppRoutes.home);
-          } else {
-            context.go(AppRoutes.createMpin, extra: {'mode': 'setup'});
-          }
+          context.go(AppRoutes.home);
           return;
         }
         // Firebase session exists but no Firestore profile yet — most often
         // the user closed the app mid-registration. Resume registration
-        // instead of force-signing-out: this mirrors checkUserStatus() in
+        // instead of force-signing-out: this mirrors hasCompleteProfile() in
         // auth_provider.dart (used on the OTP screen for the same "no doc"
         // case), which also keeps the session alive rather than kicking the
         // user back to a fresh phone/OTP login. Forcing a sign-out here was

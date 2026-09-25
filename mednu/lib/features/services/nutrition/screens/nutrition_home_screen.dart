@@ -126,7 +126,7 @@ class NutritionHomeScreen extends ConsumerWidget {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Text('Nutrition & Diet', style: AppTextStyles.onPrimaryH2),
+                                    Text('Diet & Dietician', style: AppTextStyles.onPrimaryH2),
                                     Text('Your daily wellness hub', style: AppTextStyles.onPrimaryBody),
                                   ],
                                 ),

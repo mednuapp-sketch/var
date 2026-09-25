@@ -1326,7 +1326,7 @@ class _NotifTile extends ConsumerWidget {
       'physiotherapy': 'Physio',
       'hospital': 'Hospital',
       'pregnancy': 'Pregnancy',
-      'nutrition': 'Nutrition',
+      'nutrition': 'Dietician',
       'quick_connect': 'Quick Connect',
       'counselling': 'Counselling',
       'general': 'General',

@@ -72,7 +72,7 @@ class DoctorAuthService {
   }) async {
     String? fcmToken;
     try {
-      fcmToken = await FirebaseMessaging.instance.getToken();
+      fcmToken = await FirebaseMessaging.instance.getToken().timeout(const Duration(seconds: 5));
     } catch (_) {}
 
     await _db.collection('doctors').doc(uid).set({
@@ -100,6 +100,8 @@ class DoctorAuthService {
       'totalConsultations': 0,
       'documents': documentUrls,
       'declarationAccepted': true,
+      'termsAccepted': true,
+      'termsAcceptedAt': FieldValue.serverTimestamp(),
       'createdAt': FieldValue.serverTimestamp(),
       if (fcmToken != null) 'fcmToken': fcmToken,
     });

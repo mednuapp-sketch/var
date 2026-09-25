@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/constants/app_colors.dart';
 import 'auth_provider.dart';
+import 'auth_shell.dart';
 
 class OtpPage extends ConsumerStatefulWidget {
   final String phone;
@@ -74,122 +75,100 @@ class _OtpPageState extends ConsumerState<OtpPage> {
       }
     });
 
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(40),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 440),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Container(
-                  width: 72,
-                  height: 72,
-                  decoration: BoxDecoration(gradient: AppColors.primaryGradient, shape: BoxShape.circle),
-                  child: const Center(child: Icon(Icons.sms_rounded, size: 32, color: Colors.white)),
-                ),
-                const SizedBox(height: 24),
-                Text(
-                  'Verify Your Number',
-                  style: GoogleFonts.poppins(fontSize: 26, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'We\'ve sent a 6-digit OTP to\n+91 ${widget.phone}',
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.poppins(fontSize: 14, color: AppColors.textSecondary, height: 1.6),
-                ),
-                const SizedBox(height: 36),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(6, (i) => _OtpBox(
-                    controller: _ctrls[i],
-                    focusNode: _nodes[i],
-                    onChanged: (v) => _onDigit(i, v),
-                    autoFocus: i == 0,
-                  )),
-                ),
-                const SizedBox(height: 12),
-                if (authState.error != null)
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: AppColors.error.withOpacity(0.08),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: AppColors.error.withOpacity(0.3)),
-                    ),
-                    child: Row(children: [
-                      const Icon(Icons.error_outline, color: AppColors.error, size: 16),
-                      const SizedBox(width: 8),
-                      Expanded(child: Text(authState.error!, style: GoogleFonts.poppins(fontSize: 12, color: AppColors.error))),
-                    ]),
-                  ),
-                const SizedBox(height: 28),
-                SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: authState.loading
-                      ? Container(
-                          decoration: BoxDecoration(gradient: AppColors.primaryGradient, borderRadius: BorderRadius.circular(14)),
-                          child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                            const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)),
-                            const SizedBox(width: 12),
-                            Text('Verifying…', style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white)),
-                          ]),
-                        )
-                      : Container(
-                          decoration: BoxDecoration(
-                            color: AppColors.background,
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: AppColors.border),
-                          ),
-                          child: Center(
-                            child: Text(
-                              'Enter all 6 digits to verify automatically',
-                              style: GoogleFonts.poppins(fontSize: 13, color: AppColors.textHint),
-                            ),
-                          ),
-                        ),
-                ),
-                const SizedBox(height: 24),
-                Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  Text("Didn't receive OTP? ", style: GoogleFonts.poppins(fontSize: 13, color: AppColors.textSecondary)),
-                  StreamBuilder(
-                    key: ValueKey(_timerKey),
-                    stream: _timer,
-                    builder: (context, snap) {
-                      final seconds = snap.data ?? 59;
-                      if (seconds <= 0) {
-                        return GestureDetector(
-                          onTap: () {
-                            setState(() => _timerKey++);
-                            for (final c in _ctrls) c.clear();
-                            _nodes[0].requestFocus();
-                            ref.read(authNotifierProvider.notifier).sendOtp(widget.phone);
-                          },
-                          child: Text('Resend OTP', style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary)),
-                        );
-                      }
-                      return Text('Resend in ${seconds}s', style: GoogleFonts.poppins(fontSize: 13, color: AppColors.textHint));
-                    },
-                  ),
-                ]),
-                const SizedBox(height: 20),
-                TextButton.icon(
-                  onPressed: () {
-                    ref.read(authNotifierProvider.notifier).goBack();
-                    context.go('/login');
-                  },
-                  icon: const Icon(Icons.arrow_back_rounded, size: 16),
-                  label: Text('Change number', style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.textSecondary)),
-                ),
-              ],
+    return AuthShell(
+      onBack: () {
+        ref.read(authNotifierProvider.notifier).goBack();
+        context.go('/login');
+      },
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Container(
+          width: 56,
+          height: 56,
+          decoration: BoxDecoration(
+            gradient: AppColors.primaryGradient,
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: [BoxShadow(color: AppColors.primary.withValues(alpha: 0.35), blurRadius: 20, offset: const Offset(0, 8))],
+          ),
+          child: const Icon(Icons.sms_rounded, color: Colors.white, size: 26),
+        ),
+        const SizedBox(height: 22),
+        Text('Verify your number',
+            style: GoogleFonts.poppins(fontSize: 30, fontWeight: FontWeight.w800, color: AppColors.textPrimary, height: 1.15, letterSpacing: -0.8)),
+        const SizedBox(height: 8),
+        Text('Enter the 6-digit code sent to +91 ${widget.phone}',
+            style: GoogleFonts.poppins(fontSize: 13.5, color: AppColors.textSecondary, height: 1.6)),
+        const SizedBox(height: 28),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: List.generate(6, (i) => _OtpBox(
+            controller: _ctrls[i],
+            focusNode: _nodes[i],
+            onChanged: (v) => _onDigit(i, v),
+            autoFocus: i == 0,
+          )),
+        ),
+        if (authState.error != null) ...[
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.error.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
             ),
+            child: Row(children: [
+              const Icon(Icons.error_outline, color: AppColors.error, size: 16),
+              const SizedBox(width: 8),
+              Expanded(child: Text(authState.error!, style: GoogleFonts.poppins(fontSize: 12, color: AppColors.error))),
+            ]),
+          ),
+        ],
+        const SizedBox(height: 24),
+        Container(
+          height: 54,
+          decoration: BoxDecoration(
+            gradient: authState.loading ? AppColors.primaryGradient : null,
+            color: authState.loading ? null : AppColors.background,
+            borderRadius: BorderRadius.circular(16),
+            border: authState.loading ? null : Border.all(color: AppColors.border),
+          ),
+          child: Center(
+            child: authState.loading
+                ? Row(mainAxisSize: MainAxisSize.min, children: [
+                    const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)),
+                    const SizedBox(width: 12),
+                    Text('Verifying…', style: GoogleFonts.poppins(fontSize: 14.5, fontWeight: FontWeight.w600, color: Colors.white)),
+                  ])
+                : Text('Verifies automatically when you enter all 6 digits',
+                    style: GoogleFonts.poppins(fontSize: 12.5, color: AppColors.textHint)),
           ),
         ),
-      ),
+        const SizedBox(height: 22),
+        Center(
+          child: Wrap(alignment: WrapAlignment.center, crossAxisAlignment: WrapCrossAlignment.center, children: [
+            Text("Didn't get the code? ", style: GoogleFonts.poppins(fontSize: 13, color: AppColors.textSecondary)),
+            StreamBuilder(
+              key: ValueKey(_timerKey),
+              stream: _timer,
+              builder: (context, snap) {
+                final seconds = snap.data ?? 59;
+                if (seconds <= 0) {
+                  return GestureDetector(
+                    onTap: () {
+                      setState(() => _timerKey++);
+                      for (final c in _ctrls) { c.clear(); }
+                      _nodes[0].requestFocus();
+                      ref.read(authNotifierProvider.notifier).sendOtp(widget.phone);
+                    },
+                    child: Text('Resend OTP', style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.primary)),
+                  );
+                }
+                return Text('Resend in ${seconds}s', style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textHint));
+              },
+            ),
+          ]),
+        ),
+      ]),
     );
   }
 }
@@ -209,10 +188,9 @@ class _OtpBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 48,
-      height: 56,
-      margin: const EdgeInsets.symmetric(horizontal: 5),
+    return SizedBox(
+      width: 46,
+      height: 58,
       child: TextFormField(
         controller: controller,
         focusNode: focusNode,
@@ -224,13 +202,19 @@ class _OtpBox extends StatelessWidget {
         style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
         decoration: InputDecoration(
           counterText: '',
+          filled: true,
+          fillColor: AppColors.background,
           contentPadding: EdgeInsets.zero,
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: AppColors.border),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
             borderSide: const BorderSide(color: AppColors.border),
           ),
           focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(14),
             borderSide: const BorderSide(color: AppColors.primary, width: 2),
           ),
         ),

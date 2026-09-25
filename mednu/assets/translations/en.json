@@ -1,1 +1,6 @@
-{}
+{
+  "whatsapp_optin": {
+    "title": "Get booking & order updates on WhatsApp",
+    "subtitle": "We'll send appointment and order updates to your WhatsApp. Reply STOP anytime to unsubscribe."
+  }
+}

@@ -94,12 +94,83 @@ service firebase.storage {
       allow read: if isAuth();
     }
 
+    // ── Partner profile photos: {role}_profiles/{uid}/profile.jpg ───────────
+    // Mirrors the doctors/{uid}/profile.jpg rule above for the other 8
+    // service-provider roles (see ImageUploadService.uploadPartnerProfileImage).
+    // Public read so patients can see partner avatars without an expiring token.
+    match /lab_profiles/{uid}/profile.jpg {
+      allow read:  if true;
+      allow write: if isOwner(uid)
+                   && request.resource.size < 5 * 1024 * 1024
+                   && isImage();
+    }
+
+    match /pharmacy_profiles/{uid}/profile.jpg {
+      allow read:  if true;
+      allow write: if isOwner(uid)
+                   && request.resource.size < 5 * 1024 * 1024
+                   && isImage();
+    }
+
+    match /ambulance_profiles/{uid}/profile.jpg {
+      allow read:  if true;
+      allow write: if isOwner(uid)
+                   && request.resource.size < 5 * 1024 * 1024
+                   && isImage();
+    }
+
+    match /caregiver_profiles/{uid}/profile.jpg {
+      allow read:  if true;
+      allow write: if isOwner(uid)
+                   && request.resource.size < 5 * 1024 * 1024
+                   && isImage();
+    }
+
+    match /counsellor_profiles/{uid}/profile.jpg {
+      allow read:  if true;
+      allow write: if isOwner(uid)
+                   && request.resource.size < 5 * 1024 * 1024
+                   && isImage();
+    }
+
+    match /nutritionist_profiles/{uid}/profile.jpg {
+      allow read:  if true;
+      allow write: if isOwner(uid)
+                   && request.resource.size < 5 * 1024 * 1024
+                   && isImage();
+    }
+
+    match /physiotherapist_profiles/{uid}/profile.jpg {
+      allow read:  if true;
+      allow write: if isOwner(uid)
+                   && request.resource.size < 5 * 1024 * 1024
+                   && isImage();
+    }
+
+    match /hospital_profiles/{uid}/profile.jpg {
+      allow read:  if true;
+      allow write: if isOwner(uid)
+                   && request.resource.size < 5 * 1024 * 1024
+                   && isImage();
+    }
+
     // ── Lab reports uploaded by patients: reports/{uid}/... ─────────────────
     match /reports/{uid}/{allPaths=**} {
       allow read:  if isAuth() && (request.auth.uid == uid || isAdmin());
       allow write: if isOwner(uid)
                    && request.resource.size < 10 * 1024 * 1024
                    && isDocument();
+    }
+
+    // ── Personal KYC documents: documents/{uid}/{aadhaar|lifeInsurance}.jpg ──
+    // Uploaded by the patient from Profile > My Documents. Private like
+    // reports/{uid} above — only the owner and admin can read.
+    match /documents/{uid}/{allPaths=**} {
+      allow read:  if isAuth() && (request.auth.uid == uid || isAdmin());
+      allow write: if isOwner(uid)
+                   && request.resource.size < 10 * 1024 * 1024
+                   && isDocument();
+      allow delete: if isOwner(uid);
     }
 
     // ── Prescription photos sent to pharmacy: prescriptions/{uid}/... ────────
@@ -251,6 +322,19 @@ service firebase.storage {
       allow write: if isOwner(uid)
                    && request.resource.size < 20 * 1024 * 1024
                    && isDocument();
+    }
+
+    match /nutritionist_documents/{uid}/{allPaths=**} {
+      allow read:  if isAuth() && (isOwner(uid) || isAdmin());
+      allow write: if isOwner(uid)
+                   && request.resource.size < 20 * 1024 * 1024
+                   && isDocument();
+    }
+
+    // Landing-page ad images — same public-read / admin-only-write model.
+    match /web_ads/{allPaths=**} {
+      allow read:  if true;
+      allow write: if isAdmin() && request.resource.size < 5 * 1024 * 1024;
     }
 
     // ── Promotional banners ───────────────────────────────────────────────────

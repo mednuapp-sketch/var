@@ -59,10 +59,12 @@ class HospitalProfileService {
     required String phone,
     String? hospitalId,
     String? hospitalName,
+    double? latitude,
+    double? longitude,
   }) async {
     String? fcmToken;
     try {
-      fcmToken = await FirebaseMessaging.instance.getToken();
+      fcmToken = await FirebaseMessaging.instance.getToken().timeout(const Duration(seconds: 5));
     } catch (_) {}
 
     var linkedId = hospitalId;
@@ -82,6 +84,13 @@ class HospitalProfileService {
       'status': 'pending',
       'createdAt': FieldValue.serverTimestamp(),
       if (fcmToken != null) 'fcmToken': fcmToken,
+      // Picked on the registration form's map picker — copied onto the
+      // shared `hospitals/{hospitalId}` catalog entry by
+      // onHospitalProfileApproved once a Director approves this account, so
+      // the patient app can show real distance without calling Google
+      // Places for every hospital in the catalog.
+      if (latitude != null) 'latitude': latitude,
+      if (longitude != null) 'longitude': longitude,
     });
   }
 
@@ -95,5 +104,15 @@ class HospitalProfileService {
       _db.collection('hospital_profiles').doc(uid).set({
         'contactName': contactName,
         'phone': phone,
+      }, SetOptions(merge: true));
+
+  /// `photoUrl` isn't in firestore.rules' protected-fields list for this
+  /// collection (`status`/`hospitalId`/`hospitalName` only), so a self-write
+  /// is allowed — same trust boundary as [updateContactInfo]. Used by
+  /// [HospitalProfileScreen]'s avatar upload/remove flow, mirroring
+  /// `DoctorAuthService.updatePhotoUrl`.
+  static Future<void> updatePhotoUrl(String uid, String photoUrl) =>
+      _db.collection('hospital_profiles').doc(uid).set({
+        'photoUrl': photoUrl,
       }, SetOptions(merge: true));
 }
