@@ -14,6 +14,12 @@ class HospitalProfile {
   final String status;
   final String? photoUrl;
 
+  /// `documents.{docType}` (written by the partner app on upload) and
+  /// `documentVerification.{docType}` (admin-only) — same shape every other
+  /// partner role uses, see `PartnerDocumentType.hospital`.
+  final Map<String, dynamic> documents;
+  final Map<String, dynamic> documentVerification;
+
   const HospitalProfile({
     required this.uid,
     required this.contactName,
@@ -22,6 +28,8 @@ class HospitalProfile {
     required this.hospitalName,
     required this.status,
     required this.photoUrl,
+    this.documents = const {},
+    this.documentVerification = const {},
   });
 
   /// Whether a Director has linked this desk login to a real
@@ -46,6 +54,10 @@ class HospitalProfile {
       hospitalName: d['hospitalName'] as String?,
       status: d['status'] as String? ?? 'pending',
       photoUrl: d['photoUrl'] as String?,
+      documents: Map<String, dynamic>.from(
+          (d['documents'] as Map?) ?? const <String, dynamic>{}),
+      documentVerification: Map<String, dynamic>.from(
+          (d['documentVerification'] as Map?) ?? const <String, dynamic>{}),
     );
   }
 }

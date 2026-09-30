@@ -16,17 +16,22 @@ class PartnerDocumentType {
 
   static const lab = <PartnerDocumentType>[
     PartnerDocumentType('lab_license', 'Lab License'),
+    PartnerDocumentType('pathologist_registration', 'Pathologist Registration Certificate'),
     PartnerDocumentType('address_proof', 'Address Proof'),
   ];
 
   static const pharmacy = <PartnerDocumentType>[
     PartnerDocumentType('pharmacy_license', 'Pharmacy License'),
+    PartnerDocumentType('pharmacist_registration', 'Registered Pharmacist Certificate'),
     PartnerDocumentType('address_proof', 'Address Proof'),
   ];
 
   static const ambulance = <PartnerDocumentType>[
     PartnerDocumentType('vehicle_registration', 'Vehicle Registration'),
     PartnerDocumentType('driver_license', 'Driver License'),
+    PartnerDocumentType('vehicle_insurance', 'Vehicle Insurance'),
+    PartnerDocumentType('vehicle_fitness', 'Vehicle Fitness Certificate'),
+    PartnerDocumentType('emt_certificate', 'EMT / Paramedic Certificate'),
     PartnerDocumentType('address_proof', 'Address Proof'),
   ];
 
@@ -64,9 +69,20 @@ class PartnerDocumentType {
     PartnerDocumentType('nutrition_certificate', 'Nutrition / Dietetics Certification'),
   ];
 
+  /// A hospital billing-desk login can read every bill payment filed against
+  /// the `hospitals/{hospitalId}` entry it's linked to, so admin needs proof
+  /// the hospital is real and that this person is authorised to act for it —
+  /// not just a phone number that happens to match the catalog entry.
+  static const hospital = <PartnerDocumentType>[
+    PartnerDocumentType('hospital_registration', 'Hospital Registration Certificate'),
+    PartnerDocumentType('authorization_letter', 'Authorization Letter (on Hospital Letterhead)'),
+    PartnerDocumentType('hospital_contact_id', 'Contact Person Government ID'),
+  ];
+
   /// `role` is the same short token used for the Storage prefix and the
   /// `{role}_profiles` collection: 'lab' | 'pharmacy' | 'ambulance' |
-  /// 'caregiver' | 'counsellor' | 'physiotherapist' | 'nutritionist'.
+  /// 'caregiver' | 'counsellor' | 'physiotherapist' | 'nutritionist' |
+  /// 'hospital'.
   static List<PartnerDocumentType> forRole(String role) {
     switch (role) {
       case 'lab':
@@ -83,6 +99,8 @@ class PartnerDocumentType {
         return physiotherapist;
       case 'nutritionist':
         return nutritionist;
+      case 'hospital':
+        return hospital;
       default:
         return const [];
     }

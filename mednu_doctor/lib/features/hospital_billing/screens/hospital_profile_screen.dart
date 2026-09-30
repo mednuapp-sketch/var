@@ -437,6 +437,15 @@ class _HospitalProfileScreenState extends ConsumerState<HospitalProfileScreen> {
               ),
               const SizedBox(height: 16),
 
+              PartnerDocumentsSection(
+                role: 'hospital',
+                uid: profile.uid,
+                documents: profile.documents,
+                documentVerification: profile.documentVerification,
+                locked: profile.isActive,
+              ),
+              const SizedBox(height: 16),
+
               _sectionCard(
                 icon: Icons.security_rounded,
                 title: 'Security',

@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import '../models/pharmacy_order.dart';
 
 /// Thrown when a status-changing action can't proceed because the order's
 /// current state no longer matches what the caller expected — most
@@ -367,6 +368,14 @@ class PharmacyOrderService {
     required String pharmacyId,
     required File file,
   }) async {
+    // Fail fast before uploading anything if the prescription is already
+    // accepted — the transaction precondition below re-checks atomically.
+    final current = await _db.collection('pharmacy_orders').doc(orderId).get();
+    if (PharmacyOrder.prescriptionLockedIn(current.data() ?? const {})) {
+      throw const PharmacyOrderConflictException(
+          'This prescription has already been accepted and can no longer be changed.');
+    }
+
     final fileName = file.path.split(Platform.pathSeparator).last;
     final storagePath =
         'pharmacy_prescriptions/$orderId/${DateTime.now().millisecondsSinceEpoch}_$fileName';
@@ -374,12 +383,28 @@ class PharmacyOrderService {
     await ref.putFile(file);
     final downloadUrl = await ref.getDownloadURL();
 
-    await _transitionOrder(
-      orderId,
-      precondition: (d) => d['pharmacyId'] == pharmacyId,
-      conflictMessage: 'You no longer own this order.',
-      buildUpdate: (d) => {'prescriptionUrl': downloadUrl},
-    );
+    try {
+      await _transitionOrder(
+        orderId,
+        precondition: (d) => d['pharmacyId'] == pharmacyId && !PharmacyOrder.prescriptionLockedIn(d),
+        conflictMessage: 'This prescription has already been accepted and can no longer be changed.',
+        // `prescriptionSource: 'pharmacy'` is what tells onPharmacyOrderStatusChange
+        // to mirror this copy onto the patient's order (functions/index.js).
+        buildUpdate: (d) => {
+          'prescriptionUrl': downloadUrl,
+          'prescriptionFileType': fileName.toLowerCase().endsWith('.pdf') ? 'pdf' : 'image',
+          'prescriptionUploadedAt': FieldValue.serverTimestamp(),
+          'prescriptionSource': 'pharmacy',
+          'prescriptionVerified': null,
+          'prescriptionRejectedReason': null,
+        },
+      );
+    } catch (_) {
+      try {
+        await ref.delete();
+      } catch (_) {}
+      rethrow;
+    }
     return downloadUrl;
   }
 }

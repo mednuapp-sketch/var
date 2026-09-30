@@ -184,4 +184,13 @@ class PharmacyOrder {
 
   bool get isUnclaimed => pharmacyId == null;
   bool get hasPrescription => prescriptionUrl != null;
+
+  /// Once accepted (verified, or anywhere past verification / closed) the
+  /// prescription is frozen for both pharmacy and patient. Mirrors
+  /// `_pharmacyPrescriptionLocked` in firestore.rules, which enforces it.
+  static const prescriptionLockedStatuses = {'verified', 'packed', 'out_for_delivery', 'delivered', 'cancelled'};
+  static bool prescriptionLockedIn(Map<String, dynamic> d) =>
+      d['prescriptionVerified'] == true || prescriptionLockedStatuses.contains(d['status']);
+  bool get isPrescriptionLocked =>
+      prescriptionVerified == true || prescriptionLockedStatuses.contains(status.firestoreValue);
 }

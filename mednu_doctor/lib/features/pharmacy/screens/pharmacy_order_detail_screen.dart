@@ -247,6 +247,34 @@ class _PharmacyOrderDetailScreenState extends ConsumerState<PharmacyOrderDetailS
 
   List<Widget> _buildActions(PharmacyOrder order, String? uid) {
     if (uid == null) return const [];
+    return [
+      // Read-only once accepted: preview stays visible, but no attach /
+      // replace action exists at any later stage. Updates live via the
+      // realtime orderDetailProvider stream.
+      if (order.isPrescriptionLocked && order.hasPrescription) ...[
+        _PrescriptionPreview(order: order),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            const Icon(Icons.lock_rounded, size: 16, color: AppColors.success),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                order.status == PharmacyOrderStatus.cancelled
+                    ? 'Order cancelled — the prescription can no longer be changed or removed.'
+                    : 'Prescription accepted — it can no longer be changed or removed.',
+                style: AppTextStyles.caption,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+      ],
+      ..._buildStatusActions(order, uid),
+    ];
+  }
+
+  List<Widget> _buildStatusActions(PharmacyOrder order, String uid) {
     final isMine = order.pharmacyId == uid;
 
     switch (order.status) {
