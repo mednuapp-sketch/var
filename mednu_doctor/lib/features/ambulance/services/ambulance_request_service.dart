@@ -114,17 +114,29 @@ class AmbulanceRequestService {
         buildUpdate: (d) => {'status': 'accepted'},
       );
 
-  /// Declining a request nobody has claimed yet. Stamps `ambulanceId` so the
-  /// owning-partner update rule keeps applying to the resulting doc, exactly
-  /// like `LabBookingService.rejectBooking` does.
-  static Future<void> reject(String requestId, String ambulanceId) => _transitionRequest(
-        requestId,
-        precondition: (d) =>
-            (d['ambulanceId'] == null || d['ambulanceId'] == ambulanceId) &&
-            d['status'] == 'pending',
-        conflictMessage: 'This request is no longer available to decline.',
-        buildUpdate: (d) => {'ambulanceId': ambulanceId, 'status': 'cancelled'},
-      );
+  /// Declining never cancels the patient's emergency on its own:
+  ///  - a request matched to this driver is flagged `declineRequested`, and
+  ///    the Cloud Function hands it to the next-nearest online driver
+  ///    (cancelling + refunding only if nobody is left);
+  ///  - an open-pool request just gets this driver's uid in `declinedBy`,
+  ///    hiding it from them while other drivers can still accept it.
+  static Future<void> reject(String requestId, String ambulanceId) {
+    final ref = _db.collection('ambulance_requests').doc(requestId);
+    return _db.runTransaction((tx) async {
+      final snap = await tx.get(ref);
+      final d = snap.data();
+      if (d == null || d['status'] != 'pending') {
+        throw const AmbulanceRequestConflictException('This request is no longer available to decline.');
+      }
+      if (d['ambulanceId'] == ambulanceId) {
+        tx.update(ref, {'declineRequested': true, 'updatedAt': FieldValue.serverTimestamp()});
+      } else if (d['ambulanceId'] == null) {
+        tx.update(ref, {'declinedBy': FieldValue.arrayUnion([ambulanceId])});
+      } else {
+        throw const AmbulanceRequestConflictException('This request was already taken by another driver.');
+      }
+    });
+  }
 
   static Future<void> startEnRoute(String requestId, {required String ambulanceId}) =>
       _transitionRequest(

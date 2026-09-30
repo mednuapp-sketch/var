@@ -35,7 +35,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
         ),
         _Faq(
           q: 'Is my health data secure?',
-          a: 'Yes. MedNU uses end-to-end encryption and follows HIPAA-compliant data practices. Your health information is never shared with third parties without your explicit consent.',
+          a: 'Yes. Your data is encrypted in transit and at rest, and access is restricted by role. Your health information is never shared with third parties without your explicit consent.',
         ),
         _Faq(
           q: 'How do I change my language?',

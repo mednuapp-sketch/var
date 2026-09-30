@@ -497,6 +497,7 @@ class _CardActions extends StatelessWidget {
     final canTrack = const {
       BookingStatus.assigned,
       BookingStatus.onTheWay,
+      BookingStatus.arrived,
       BookingStatus.inProgress,
       BookingStatus.consultationStarted,
     }.contains(status);
@@ -745,6 +746,7 @@ _StatusMeta _resolveStatusInfo(BookingStatus status) {
         Icons.person_pin_rounded,
       );
     case BookingStatus.onTheWay:
+    case BookingStatus.arrived:
     case BookingStatus.inProgress:
     case BookingStatus.consultationStarted:
     case BookingStatus.outForDelivery:

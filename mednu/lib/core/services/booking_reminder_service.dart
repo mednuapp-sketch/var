@@ -201,6 +201,11 @@ class BookingReminderService {
         return (
           title: 'Hospital Bill Payment Update',
           body:  'Your hospital bill payment has an update.',
+        );      case BookingSource.hospitalAppointment:
+        final hospital = booking.providerName ?? 'the hospital';
+        return (
+          title: 'OP Visit in $timeLabel',
+          body:  'Your OP visit at $hospital is in $timeLabel. Carry your OP token.',
         );
     }
   }

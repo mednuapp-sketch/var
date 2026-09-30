@@ -24,6 +24,7 @@ class MyServicesService {
       _nutritionStream(uid),
       _ordersStream(uid),
       _hospitalBillPaymentsStream(uid),
+      _hospitalAppointmentsStream(uid),
     ]);
   }
 
@@ -47,6 +48,8 @@ class MyServicesService {
           return UnifiedBooking.fromOrder(d, snap.id);
         case BookingSource.hospitalBillPayment:
           return UnifiedBooking.fromHospitalBillPayment(d, snap.id);
+        case BookingSource.hospitalAppointment:
+          return UnifiedBooking.fromHospitalAppointment(d, snap.id);
       }
     });
   }
@@ -145,6 +148,20 @@ class MyServicesService {
         .handleError((e) => debugPrint('MyServicesService: service_requests stream error: $e'))
         .map((s) => s.docs
             .map((d) => UnifiedBooking.fromServiceRequest(d.data(), d.id))
+            .toList());
+  }
+
+  /// No orderBy (the merge sorts), so this needs no composite index — same
+  /// query appointment_screen.dart already runs on this collection.
+  static Stream<List<UnifiedBooking>> _hospitalAppointmentsStream(String uid) {
+    return _db
+        .collection('hospital_appointments')
+        .where('patientId', isEqualTo: uid)
+        .limit(_historyLimit)
+        .snapshots()
+        .handleError((e) => debugPrint('MyServicesService: hospital_appointments stream error: $e'))
+        .map((s) => s.docs
+            .map((d) => UnifiedBooking.fromHospitalAppointment(d.data(), d.id))
             .toList());
   }
 
@@ -253,6 +270,7 @@ class MyServicesService {
       case BookingSource.nutrition:      return 'nutrition_appointments';
       case BookingSource.medicineOrder:  return 'orders';
       case BookingSource.hospitalBillPayment: return 'hospital_bill_payments';
+      case BookingSource.hospitalAppointment: return 'hospital_appointments';
     }
   }
 }

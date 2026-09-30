@@ -407,7 +407,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             iconColor: const Color(0xFF1565C0),
                             title: 'Privacy Policy',
                             onTap: () =>
-                                _openUrl('https://mednu.in/privacy-policy'),
+                                _openUrl('https://mednu.in/partner-privacy-policy'),
                           ),
                           _divider(),
                           _SettingsTile(

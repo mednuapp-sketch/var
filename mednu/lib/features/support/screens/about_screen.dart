@@ -127,13 +127,13 @@ class _AboutScreenState extends State<AboutScreen> {
                     borderRadius: BorderRadius.circular(R.r(context, 18)),
                   ),
                   child: const Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
-                    _Stat('50K+', 'Patients'),
+                    _Stat('8', 'Services'),
                     _StatDivider(),
-                    _Stat('500+', 'Doctors'),
+                    _Stat('3', 'Languages'),
                     _StatDivider(),
-                    _Stat('100+', 'Hospitals'),
+                    _Stat('Video', 'Consults'),
                     _StatDivider(),
-                    _Stat('4.8★', 'Rating'),
+                    _Stat('2026', 'Launch'),
                   ]),
                 ),
 

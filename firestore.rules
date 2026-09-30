@@ -718,7 +718,8 @@ service cloud.firestore {
       return [
         'patientId', 'patientName', 'patientPhone', 'address',
         'preferredDate', 'preferredTime', 'notes', 'testName',
-        'price', 'amount', 'type', 'sourceRequestId', 'createdAt'
+        'price', 'amount', 'type', 'sourceRequestId', 'createdAt',
+        'cancelledBy'
       ];
     }
 
@@ -860,7 +861,8 @@ service cloud.firestore {
     function _pharmacyOrderImmutableFields() {
       return [
         'sourceCollection', 'sourceId', 'orderType', 'patientId', 'patientName',
-        'patientPhone', 'deliveryAddress', 'itemCount', 'totalAmount', 'createdAt'
+        'patientPhone', 'deliveryAddress', 'itemCount', 'totalAmount', 'createdAt',
+        'cancelledBy'
       ];
     }
 
@@ -1014,7 +1016,8 @@ service cloud.firestore {
       return [
         'sourceRequestId', 'type', 'patientId', 'patientName', 'patientPhone',
         'pickupAddress', 'dropAddress', 'distanceKm', 'etaMinutes', 'fare',
-        'emergencyType', 'requestedAt', 'createdAt'
+        'emergencyType', 'requestedAt', 'createdAt',
+        'cancelledBy'
       ];
     }
 
@@ -1090,7 +1093,15 @@ service cloud.firestore {
         (resource.data.ambulanceId == null && isAmbulancePartner() &&
           request.resource.data.ambulanceId == request.auth.uid &&
           doesNotModify(_ambulanceRequestImmutableFields()) &&
-          request.resource.data.status in ['accepted', 'cancelled'])
+          request.resource.data.status in ['accepted', 'cancelled']) ||
+        // Declining from the open pool only hides it from this driver — it
+        // adds their uid to `declinedBy` and nothing else, so other drivers
+        // can still take it (AmbulanceRequestService.reject).
+        (resource.data.ambulanceId == null && isAmbulancePartner() &&
+          resource.data.status == 'pending' &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['declinedBy']) &&
+          request.resource.data.declinedBy.toSet() ==
+            resource.data.get('declinedBy', []).toSet().union([request.auth.uid].toSet()))
       );
       // Created only by the Cloud Function mirror (Admin SDK bypasses rules).
       allow create, delete: if isAdmin();
@@ -1118,7 +1129,8 @@ service cloud.firestore {
       return [
         'sourceRequestId', 'sourceType', 'type', 'patientId', 'patientName',
         'patientAge', 'address', 'scheduledAt', 'durationMinutes', 'fare',
-        'createdAt'
+        'createdAt',
+        'cancelledBy'
       ];
     }
 
@@ -1249,7 +1261,8 @@ service cloud.firestore {
       return [
         'sourceRequestId', 'type', 'patientId', 'patientName', 'patientPhone',
         'address', 'preferredDate', 'preferredTime', 'notes', 'price',
-        'amount', 'sessionTitle', 'createdAt'
+        'amount', 'sessionTitle', 'createdAt',
+        'cancelledBy'
       ];
     }
 
@@ -1583,6 +1596,15 @@ service cloud.firestore {
     }
 
     // ── Nutrition appointments ────────────────────────────────────────────────
+    function _validNutritionTransition(before, after) {
+      let allowed = {
+        'pending':     ['confirmed', 'cancelled'],
+        'confirmed':   ['in_progress', 'cancelled'],
+        'in_progress': ['completed', 'cancelled'],
+      };
+      return before == after || (before in allowed && after in allowed[before]);
+    }
+
     match /nutrition_appointments/{apptId} {
       // The nutritionist is chosen by the patient at booking time (like a
       // doctor appointment, unlike the claim-from-a-pool pattern every other
@@ -1598,13 +1620,22 @@ service cloud.firestore {
         isAdmin()
       );
       allow create: if isAuth() && request.resource.data.userId == request.auth.uid;
+      // Status moves only along the real pipeline — a nutritionist can't jump
+      // straight to 'completed' (which makes the payout eligible, see
+      // onNutritionAppointmentSettlement), and a patient can only cancel an
+      // appointment that hasn't started.
       allow update: if isAuth() && (
         (resource.data.userId == request.auth.uid &&
           request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['status', 'updatedAt'])) ||
+            .hasOnly(['status', 'updatedAt']) &&
+          (doesNotModify(['status']) ||
+            (request.resource.data.status == 'cancelled' &&
+             resource.data.status in ['pending', 'confirmed']))) ||
         (resource.data.nutritionistId == request.auth.uid &&
           request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['status', 'updatedAt', 'providerNotes'])) ||
+            .hasOnly(['status', 'updatedAt', 'providerNotes', 'cancelledBy']) &&
+          request.resource.data.get('cancelledBy', 'provider') == 'provider' &&
+          _validNutritionTransition(resource.data.status, request.resource.data.status)) ||
         isAdmin()
       );
       allow delete: if isAdmin();

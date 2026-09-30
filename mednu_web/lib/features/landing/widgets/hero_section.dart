@@ -336,28 +336,15 @@ class _TrustRow extends StatelessWidget {
         ),
         const SizedBox(width: 10),
         Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Trusted by 50,000+ users',
+          Text('Launching October 2026',
               style: GoogleFonts.poppins(
                   fontSize: 12.5,
                   fontWeight: FontWeight.w600,
                   color: const Color(0xFF33172C))),
-          Row(children: [
-            ...List.generate(
-                5,
-                (_) => const Icon(Icons.star_rounded,
-                    size: 13, color: Color(0xFFFB8C00))),
-            const SizedBox(width: 5),
-            Text('4.8',
-                style: GoogleFonts.poppins(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF33172C))),
-            const SizedBox(width: 3),
-            Text('(2.5k reviews)',
-                style: GoogleFonts.poppins(
-                    fontSize: 11,
-                    color: const Color(0xFF7A6472))),
-          ]),
+          Text('Doctors, labs, pharmacy & more in one app',
+              style: GoogleFonts.poppins(
+                  fontSize: 11,
+                  color: const Color(0xFF7A6472))),
         ]),
       ],
     );

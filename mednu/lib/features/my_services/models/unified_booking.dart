@@ -8,6 +8,7 @@ enum BookingSource {
   nutrition,
   medicineOrder,
   hospitalBillPayment,
+  hospitalAppointment,
 }
 
 enum BookingStatus {
@@ -16,6 +17,7 @@ enum BookingStatus {
   confirmed,
   assigned,
   onTheWay,
+  arrived,
   inProgress,
   consultationStarted,
   sampleCollected,
@@ -37,6 +39,7 @@ extension BookingStatusX on BookingStatus {
       case BookingStatus.confirmed:           return 'Confirmed';
       case BookingStatus.assigned:            return 'Assigned';
       case BookingStatus.onTheWay:            return 'On the Way';
+      case BookingStatus.arrived:             return 'Arrived';
       case BookingStatus.inProgress:          return 'In Progress';
       case BookingStatus.consultationStarted: return 'Started';
       case BookingStatus.sampleCollected:     return 'Sample Collected';
@@ -116,17 +119,13 @@ class UnifiedBooking {
       case 'booked':              return BookingStatus.confirmed;
       case 'assigned':            return BookingStatus.assigned;
       case 'on_the_way':          return BookingStatus.onTheWay;
+      // Emergency doctor: the doctor has picked up the request
+      // (emergency_requests_screen.dart in the partner app).
+      case 'acknowledged':        return BookingStatus.confirmed;
       case 'in_progress':
-      case 'started':
-      // 'arrived' (ambulance-specific — the driver has reached the pickup
-      // point but the trip isn't complete yet) has no dedicated enum value:
-      // adding one would require a case in every exhaustive switch over
-      // BookingStatus across this app (9 switches, 5 files). Mapping it to
-      // inProgress is a pre-existing-bug fix, not a regression — without
-      // this case it silently fell through to the `default: pending`
-      // branch below, showing "Pending" to a patient whose ambulance had
-      // already arrived.
-      case 'arrived':             return BookingStatus.inProgress;
+      case 'started':             return BookingStatus.inProgress;
+      // Ambulance: the driver has reached the pickup point.
+      case 'arrived':             return BookingStatus.arrived;
       case 'consultation_started':return BookingStatus.consultationStarted;
       case 'sample_collected':    return BookingStatus.sampleCollected;
       // Lab module only (`report_uploaded` mirrored onto service_requests —
@@ -145,6 +144,30 @@ class UnifiedBooking {
       case 'rescheduled':         return BookingStatus.rescheduled;
       case 'requested':           return BookingStatus.requested;
       default:                    return BookingStatus.pending;
+    }
+  }
+
+  /// Video consultations run their own call-lifecycle vocabulary (written
+  /// by the partner app's incoming_request_screen / *_video_call_screen) —
+  /// kept separate from [_parseStatus] so 'active' etc. don't change meaning
+  /// for other booking types.
+  static BookingStatus _parseConsultationStatus(String? s) {
+    switch (s) {
+      case 'ongoing':  return BookingStatus.confirmed;           // doctor accepted, joining
+      case 'active':   return BookingStatus.consultationStarted; // both in the call
+      case 'ended':    return BookingStatus.completed;
+      case 'declined':
+      case 'missed':   return BookingStatus.cancelled;
+      default:         return _parseStatus(s);
+    }
+  }
+
+  static BookingStatus _parseHospitalAppointmentStatus(String? s) {
+    switch (s) {
+      case 'booked':     return BookingStatus.confirmed;
+      case 'checked_in': return BookingStatus.inProgress;
+      case 'no_show':    return BookingStatus.cancelled;
+      default:           return _parseStatus(s);
     }
   }
 
@@ -181,6 +204,28 @@ class UnifiedBooking {
     );
   }
 
+  /// Hospital OP token bookings (hospital_appointments) — updated live by the
+  /// partner app's hospital billing desk (check-in / complete / no-show).
+  factory UnifiedBooking.fromHospitalAppointment(Map<String, dynamic> d, String id) {
+    return UnifiedBooking(
+      id: id,
+      source: BookingSource.hospitalAppointment,
+      serviceType: 'Hospital OP Visit',
+      serviceName: d['hospitalName'] as String? ?? 'Hospital OP Visit',
+      providerName: d['hospitalName'] as String?,
+      providerPhone: d['hospitalPhone'] as String?,
+      date: d['date'] as String? ?? '',
+      time: d['time'] as String? ?? '',
+      status: _parseHospitalAppointmentStatus(d['status'] as String?),
+      address: d['hospitalAddress'] as String?,
+      notes: d['reasonForVisit'] as String?,
+      amount: (d['fee'] as num?)?.toDouble() ?? (d['amount'] as num?)?.toDouble(),
+      rawData: d,
+      createdAt: _tsToDate(d['createdAt']),
+      updatedAt: _tsToDate(d['updatedAt']),
+    );
+  }
+
   factory UnifiedBooking.fromConsultation(Map<String, dynamic> d, String id) {
     return UnifiedBooking(
       id: id,
@@ -192,7 +237,7 @@ class UnifiedBooking {
           d['doctorSpecialty'] as String? ?? d['specialty'] as String?,
       date: d['scheduledDate'] as String? ?? d['date'] as String? ?? '',
       time: d['scheduledTime'] as String? ?? d['time'] as String? ?? '',
-      status: _parseStatus(d['status'] as String?),
+      status: _parseConsultationStatus(d['status'] as String?),
       notes: d['notes'] as String?,
       amount: (d['fee'] as num?)?.toDouble(),
       rawData: d,
@@ -239,7 +284,7 @@ class UnifiedBooking {
       providerSpecialty: 'Dietician',
       date: d['date'] as String? ?? '',
       time: d['timeSlot'] as String? ?? '',
-      status: _parseStatus(d['status'] as String?),
+      status: _parseConsultationStatus(d['status'] as String?),
       notes: d['notes'] as String?,
       amount: (d['fee'] as num?)?.toDouble(),
       rawData: d,
@@ -371,6 +416,7 @@ class UnifiedBooking {
         BookingStatus.confirmed,
         BookingStatus.assigned,
         BookingStatus.onTheWay,
+        BookingStatus.arrived,
         BookingStatus.inProgress,
         BookingStatus.consultationStarted,
         BookingStatus.rescheduled,
@@ -415,6 +461,14 @@ class UnifiedBooking {
         return _diagnosticsStepIndex();
       }
     }
+    if (source == BookingSource.hospitalAppointment) {
+      switch (rawData['status']) {
+        case 'booked':     return 1;
+        case 'checked_in': return 2;
+        case 'completed':  return 3;
+        default:           return 0;
+      }
+    }
     switch (status) {
       case BookingStatus.pending:
       case BookingStatus.requested:           return 0;
@@ -425,6 +479,7 @@ class UnifiedBooking {
       case BookingStatus.assigned:
       case BookingStatus.outForDelivery:      return 2;
       case BookingStatus.onTheWay:
+      case BookingStatus.arrived:
       case BookingStatus.inProgress:
       case BookingStatus.consultationStarted: return 3;
       case BookingStatus.sampleCollected:
@@ -525,6 +580,14 @@ class UnifiedBooking {
         return [
           {'title': 'Bill Paid', 'desc': 'Your payment was received successfully'},
           {'title': 'Verified by Hospital', 'desc': 'The hospital has confirmed your payment'},
+        ];
+      case BookingSource.hospitalAppointment:
+        // Indexed by raw status in _hospitalAppointmentStepIndex.
+        return [
+          {'title': 'OP Token Booked', 'desc': 'Your OP visit is booked'},
+          {'title': 'Booking Confirmed', 'desc': 'Show your OP token at the reception'},
+          {'title': 'Checked In', 'desc': 'Please wait to be called'},
+          {'title': 'Visit Completed', 'desc': 'Your OP visit is complete'},
         ];
     }
   }

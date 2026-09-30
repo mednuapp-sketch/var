@@ -29,8 +29,11 @@ final availableAmbulanceRequestsProvider =
     StreamProvider.autoDispose<List<AmbulanceRequest>>((ref) {
   final uid = AmbulanceProfileService.currentUid;
   if (uid == null) return Stream.value(const []);
-  return AmbulanceRequestService.availableRequestsStream()
-      .map((snap) => snap.docs.map(AmbulanceRequest.fromFirestore).toList());
+  // Requests this driver declined stay in the shared pool for everyone else.
+  return AmbulanceRequestService.availableRequestsStream().map((snap) => snap.docs
+      .where((d) => !((d.data()['declinedBy'] as List?)?.contains(uid) ?? false))
+      .map(AmbulanceRequest.fromFirestore)
+      .toList());
 });
 
 final myAmbulanceRequestsProvider =
@@ -38,7 +41,12 @@ final myAmbulanceRequestsProvider =
   final uid = AmbulanceProfileService.currentUid;
   if (uid == null) return Stream.value(const []);
   return AmbulanceRequestService.myRequestsStream(uid).map((snap) {
-    final items = snap.docs.map(AmbulanceRequest.fromFirestore).toList()
+    // A declined request disappears at once, before the Cloud Function has
+    // finished handing it to the next driver.
+    final items = snap.docs
+        .where((d) => d.data()['declineRequested'] != true)
+        .map(AmbulanceRequest.fromFirestore)
+        .toList()
       ..sort((a, b) => b.requestedAt.compareTo(a.requestedAt));
     return items;
   });

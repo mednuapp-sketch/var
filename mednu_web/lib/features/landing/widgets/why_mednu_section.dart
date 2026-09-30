@@ -13,7 +13,7 @@ class WhyMednuSection extends StatelessWidget {
     {'icon': Icons.bolt_rounded, 'title': 'Instant Booking', 'desc': 'Book appointments in under 60 seconds. Choose time slots that work for your schedule.'},
     {'icon': Icons.local_shipping_rounded, 'title': 'Emergency Support', 'desc': 'One tap to dispatch the nearest ambulance. Real-time tracking until help arrives.'},
     {'icon': Icons.folder_shared_rounded, 'title': 'Digital Records', 'desc': 'All prescriptions, reports, and medical history stored securely in your digital locker.'},
-    {'icon': Icons.shield_rounded, 'title': 'Secure Platform', 'desc': 'Bank-level encryption protects your health data. HIPAA-compliant and privacy-first.'},
+    {'icon': Icons.shield_rounded, 'title': 'Secure Platform', 'desc': 'Your health data is encrypted in transit and at rest, with role-based access controls. Privacy-first by design.'},
   ];
 
   @override
@@ -256,11 +256,10 @@ class _TrustBadges extends StatelessWidget {
       runSpacing: 24,
       alignment: WrapAlignment.center,
       children: const [
-        _TrustBadge(value: '50K+', label: 'Patients Served'),
-        _TrustBadge(value: '1,200+', label: 'Verified Doctors'),
-        _TrustBadge(value: '200+', label: 'Hospitals'),
-        _TrustBadge(value: '4.9 ★', label: 'Average Rating'),
-        _TrustBadge(value: '98%', label: 'Satisfaction Rate'),
+        _TrustBadge(value: '8', label: 'Care Services'),
+        _TrustBadge(value: '3', label: 'Languages'),
+        _TrustBadge(value: 'Video', label: 'Consultations'),
+        _TrustBadge(value: 'Oct 2026', label: 'Launch'),
       ],
     );
   }

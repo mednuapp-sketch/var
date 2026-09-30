@@ -1351,8 +1351,25 @@ exports.onServiceRequestStatusChange = onDocumentUpdated(
     const after  = event.data.after.data();
     if (before.status === after.status) return;
 
-    // Emergency doctor is handled by onEmergencyDoctorRequest — skip here.
-    if ((after.type || after.serviceType) === "emergency_doctor") return;
+    // Emergency doctor creation is handled by onEmergencyDoctorRequest. The
+    // one later status the patient must hear about is a doctor picking it up
+    // ("Mark Handled" in the partner app's emergency_requests_screen.dart).
+    if ((after.type || after.serviceType) === "emergency_doctor") {
+      const emergencyPatientId = after.patientId || after.userId;
+      if (after.status === "acknowledged" && emergencyPatientId) {
+        const who = after.acknowledgedByName ? `Dr. ${after.acknowledgedByName}` : "A MedNU doctor";
+        await _sendPatientNotification(getFirestore(), getMessaging(), emergencyPatientId, {
+          title: "Doctor Responding",
+          body: `${who} has picked up your emergency request and will contact you shortly.`,
+          type: "emergency_acknowledged",
+          serviceType: "emergency_doctor",
+          bookingId: event.params.requestId,
+          actionType: "open_service",
+          extraData: { status: after.status },
+        });
+      }
+      return;
+    }
     // Internal-only status values — no user-facing notification needed.
     if (["duplicate", "notified", "pending"].includes(after.status)) return;
 
@@ -4179,6 +4196,15 @@ exports.issueRefund = onCall({ enforceAppCheck: true }, async (request) => {
   if (typeof paymentId !== "string" || !paymentId.trim()) {
     throw new HttpsError("invalid-argument", "paymentId is required.");
   }
+  return _refundPayment(db, paymentId, reason, uid);
+});
+
+// Shared by the admin panel (issueRefund above) and automatic refunds when a
+// provider declines/cancels (_autoRefundBooking below) so both move money
+// through exactly the same checks. `actorId` is the admin uid or
+// "system:auto_refund".
+async function _refundPayment(db, paymentId, reason, actorId) {
+  const uid = actorId;
 
   const paymentRef = db.collection("payments").doc(paymentId);
   const paymentSnap = await paymentRef.get();
@@ -4306,7 +4332,50 @@ exports.issueRefund = onCall({ enforceAppCheck: true }, async (request) => {
   }
 
   return { success: true, refundId: refundRef.id, status: refundStatus };
-});
+}
+
+// ── Automatic refunds (provider-side decline / cancel / expiry) ───────────
+// The patient picked one provider; if that provider declines, cancels, or
+// never responds, the booking fails through no fault of the patient, so the
+// full amount is refunded straight away rather than waiting on an admin.
+// Patient-initiated cancels are excluded: the patient-cancel mirrors stamp
+// `cancelledBy: "patient"` on the provider-side doc. Anything that can't be
+// refunded automatically (already in a pending settlement batch, gateway
+// failure) raises an admin alert so it's handled manually via issueRefund.
+async function _autoRefundBooking(db, sourceCollection, sourceId, reason) {
+  let paymentId = null;
+  try {
+    const src = await db.collection(sourceCollection).doc(sourceId).get();
+    paymentId = src.exists ? src.get("paymentId") : null;
+    if (!paymentId) return; // unpaid / pay-later booking — nothing to refund.
+
+    // Claim first so a redelivered trigger can't call the gateway twice.
+    const paymentRef = db.collection("payments").doc(paymentId);
+    const claimed = await db.runTransaction(async (tx) => {
+      const p = (await tx.get(paymentRef)).data();
+      if (!p || p.status !== "completed" || p.autoRefundClaimedAt) return false;
+      tx.update(paymentRef, { autoRefundClaimedAt: FieldValue.serverTimestamp() });
+      return true;
+    });
+    if (!claimed) return;
+
+    await _refundPayment(db, paymentId, reason, "system:auto_refund");
+    _logSettlement("INFO", "auto_refund_issued", { paymentId, sourceCollection, sourceId });
+  } catch (err) {
+    _logSettlement("ERROR", "auto_refund_failed", { paymentId, sourceCollection, sourceId, error: err.message });
+    _sendAdminAlert(db, getMessaging(), {
+      title: "Auto-Refund Needs Manual Action",
+      body: `Booking ${sourceId} was declined by the provider but could not be refunded automatically: ${err.message}`,
+      type: "auto_refund_failed", extraData: { paymentId: paymentId || "", sourceId },
+    }).catch(() => {});
+  }
+}
+
+async function _autoRefundOnProviderFailure(db, before, after, failStatuses, sourceCollection, sourceId, reason) {
+  if (before.status === after.status || !failStatuses.includes(after.status)) return;
+  if (after.cancelledBy === "patient") return;
+  await _autoRefundBooking(db, sourceCollection, sourceId, reason);
+}
 
 // ══════════════════════════════════════════════════════════════════════════
 // ── Lab & Diagnostics module ────────────────────────────────────────────────
@@ -4481,7 +4550,7 @@ exports.onDiagnosticServiceRequestCancelled = onDocumentUpdated(
         _logLab("INFO", "cancel_mirror_skipped_terminal", { requestId, currentStatus });
         return;
       }
-      tx.update(bookingRef, { status: "cancelled", updatedAt: FieldValue.serverTimestamp() });
+      tx.update(bookingRef, { status: "cancelled", cancelledBy: "patient", updatedAt: FieldValue.serverTimestamp() });
     });
     _logLab("INFO", "diagnostic_booking_cancelled_by_patient", { requestId });
   }
@@ -4501,6 +4570,8 @@ exports.onDiagnosticBookingStatusChange = onDocumentUpdated(
     const db = getFirestore();
 
     const statusChanged = before.status !== after.status;
+    await _autoRefundOnProviderFailure(db, before, after, ["rejected", "expired", "cancelled"], "service_requests",
+      after.sourceRequestId || bookingId, "The lab declined or could not take this booking");
     const technicianChanged = before.technicianName !== after.technicianName;
     const reportChanged = before.reportUrl !== after.reportUrl;
 
@@ -5316,7 +5387,7 @@ async function _mirrorPharmacyCancellation(db, orderId, { medicine = false } = {
     // enforces that on `orders`, but `orders` can lag the pharmacy by a
     // mirror hop). If the pharmacy packed first, the cancel loses.
     if (medicine && ["packed", "out_for_delivery"].includes(currentStatus)) return currentStatus;
-    tx.update(pharmacyOrderRef, { status: "cancelled", updatedAt: FieldValue.serverTimestamp() });
+    tx.update(pharmacyOrderRef, { status: "cancelled", cancelledBy: "patient", updatedAt: FieldValue.serverTimestamp() });
     return null;
   });
   if (refusedStatus) {
@@ -5370,6 +5441,8 @@ exports.onPharmacyOrderStatusChange = onDocumentUpdated(
     const deliveryPersonChanged = before.deliveryPersonName !== after.deliveryPersonName;
     const prescriptionDecisionChanged = before.prescriptionVerified !== after.prescriptionVerified;
     const isMedicine = after.sourceCollection === "orders";
+    await _autoRefundOnProviderFailure(db, before, after, ["cancelled"],
+      after.sourceCollection || "orders", after.sourceId || orderId, "The pharmacy declined or cancelled this order");
 
     // Remembered and rethrown at the end (see the Lab mirror) so a failed
     // mirror never skips the notification or the ledger credit below, while
@@ -5922,6 +5995,54 @@ exports.onAmbulanceServiceRequestCreated = onDocumentCreated(
   }
 );
 
+// ── 1a) A matched driver tapped Decline ──────────────────────────────────────
+// The partner app flags `declineRequested` instead of cancelling (see
+// AmbulanceRequestService.reject). Treated exactly like a timeout, just
+// immediate: hand the request to the next-nearest online driver who hasn't
+// been tried or declined. Only when nobody is left is it cancelled — which
+// the status mirror shows the patient as declined, and which refunds them
+// (_autoRefundOnProviderFailure).
+async function _redispatchDeclinedAmbulance(db, requestId) {
+  const ref = db.collection("ambulance_requests").doc(requestId);
+  const snap = await ref.get();
+  const d = snap.data();
+  if (!d || d.status !== "pending" || !d.declineRequested) return;
+
+  const decliner = d.ambulanceId || null;
+  const declinedBy = [...new Set([...(d.declinedBy || []), decliner].filter(Boolean))];
+  const tried = [...new Set([...(d.matchAttempts || []), ...declinedBy])];
+  const next = await _findNearestOnlineAmbulance(db, d.pickupLat, d.pickupLng, tried);
+
+  try {
+    if (next) {
+      await ref.update({
+        ambulanceId: next,
+        matchAttempts: [...new Set([...(d.matchAttempts || []), next])],
+        declinedBy,
+        declineRequested: FieldValue.delete(),
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { lastUpdateTime: snap.updateTime });
+      await _sendProviderNotification(db, getMessaging(), next, {
+        title: "🚑 New Ambulance Request",
+        body: "A new ambulance request needs your response now.",
+        type: "new_ambulance_request", serviceType: "ambulance", bookingId: requestId,
+      });
+      _logAmbulance("INFO", "declined_request_reassigned", { requestId, decliner, next });
+    } else {
+      await ref.update({
+        status: "cancelled",
+        cancelReason: "No ambulance available nearby",
+        declinedBy,
+        declineRequested: FieldValue.delete(),
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { lastUpdateTime: snap.updateTime });
+      _logAmbulance("WARNING", "declined_request_no_driver_left", { requestId, decliner });
+    }
+  } catch {
+    _logAmbulance("INFO", "declined_request_changed_concurrently", { requestId });
+  }
+}
+
 // ── 1b) Reassign a matched-but-unanswered request ────────────────────────────
 // A request pinned to the nearest driver above still needs that driver to
 // actually tap Accept. If they don't within the timeout — asleep, busy,
@@ -5960,7 +6081,8 @@ exports.reassignStaleAmbulanceAssignments = onSchedule(
       if (updatedAt > cutoff.toDate()) continue; // matched recently — not stale yet.
 
       const tried = Array.isArray(data.matchAttempts) ? data.matchAttempts : [];
-      const next = await _findNearestOnlineAmbulance(db, data.pickupLat, data.pickupLng, tried);
+      const excluded = [...new Set([...tried, ...(data.declinedBy || [])])];
+      const next = await _findNearestOnlineAmbulance(db, data.pickupLat, data.pickupLng, excluded);
 
       try {
         await doc.ref.update(
@@ -6018,7 +6140,7 @@ exports.onAmbulanceServiceRequestCancelled = onDocumentUpdated(
         _logAmbulance("INFO", "cancel_mirror_skipped_terminal", { requestId, currentStatus });
         return;
       }
-      tx.update(requestRef, { status: "cancelled", updatedAt: FieldValue.serverTimestamp() });
+      tx.update(requestRef, { status: "cancelled", cancelledBy: "patient", updatedAt: FieldValue.serverTimestamp() });
     });
     _logAmbulance("INFO", "ambulance_request_cancelled_by_patient", { requestId });
   }
@@ -6037,7 +6159,13 @@ exports.onAmbulanceRequestStatusChange = onDocumentUpdated(
     const requestId = event.params.requestId;
     const db = getFirestore();
 
+    if (!before.declineRequested && after.declineRequested) {
+      await _redispatchDeclinedAmbulance(db, requestId);
+      return;
+    }
     const statusChanged = before.status !== after.status;
+    await _autoRefundOnProviderFailure(db, before, after, ["cancelled"], "service_requests",
+      after.sourceRequestId || requestId, "No ambulance could take this request");
     const claimChanged = before.ambulanceId !== after.ambulanceId;
 
     // Remembered and rethrown at the end (see the Lab mirror) so a mirror
@@ -6392,7 +6520,7 @@ exports.onCaregiverServiceRequestCancelled = onDocumentUpdated(
         _logCaregiver("INFO", "cancel_mirror_skipped_terminal", { requestId, currentStatus });
         return;
       }
-      tx.update(visitRef, { status: "cancelled", updatedAt: FieldValue.serverTimestamp() });
+      tx.update(visitRef, { status: "cancelled", cancelledBy: "patient", updatedAt: FieldValue.serverTimestamp() });
     });
     _logCaregiver("INFO", "caregiver_visit_cancelled_by_patient", { requestId });
   }
@@ -6411,6 +6539,8 @@ exports.onCaregiverVisitStatusChange = onDocumentUpdated(
     const db = getFirestore();
 
     const statusChanged = before.status !== after.status;
+    await _autoRefundOnProviderFailure(db, before, after, ["cancelled", "missed"], "service_requests",
+      after.sourceRequestId || visitId, "The caregiver cancelled or missed this visit");
     const claimChanged = before.caregiverId !== after.caregiverId;
 
     // Remembered and rethrown at the end (see the Lab mirror) so a mirror
@@ -6823,7 +6953,7 @@ exports.onPhysioServiceRequestCancelled = onDocumentUpdated(
         _logPhysio("INFO", "cancel_mirror_skipped_terminal", { requestId, currentStatus });
         return;
       }
-      tx.update(sessionRef, { status: "cancelled", updatedAt: FieldValue.serverTimestamp() });
+      tx.update(sessionRef, { status: "cancelled", cancelledBy: "patient", updatedAt: FieldValue.serverTimestamp() });
     });
     _logPhysio("INFO", "physio_session_cancelled_by_patient", { requestId });
   }
@@ -6842,6 +6972,8 @@ exports.onPhysioSessionStatusChange = onDocumentUpdated(
     const db = getFirestore();
 
     const statusChanged = before.status !== after.status;
+    await _autoRefundOnProviderFailure(db, before, after, ["cancelled", "expired"], "service_requests",
+      after.sourceRequestId || sessionId, "The physiotherapist declined or could not take this session");
     const claimChanged = before.physiotherapistId !== after.physiotherapistId;
 
     let mirrorError = null;
@@ -7018,7 +7150,7 @@ exports.onCounsellingServiceRequestCancelled = onDocumentUpdated(
         _logCounselling("INFO", "cancel_mirror_skipped_terminal", { requestId, currentStatus });
         return;
       }
-      tx.update(sessionRef, { status: "cancelled", updatedAt: FieldValue.serverTimestamp() });
+      tx.update(sessionRef, { status: "cancelled", cancelledBy: "patient", updatedAt: FieldValue.serverTimestamp() });
     });
     _logCounselling("INFO", "counselling_session_cancelled_by_patient", { requestId });
   }
@@ -7036,6 +7168,8 @@ exports.onCounsellingSessionStatusChange = onDocumentUpdated(
     const db = getFirestore();
 
     const statusChanged = before.status !== after.status;
+    await _autoRefundOnProviderFailure(db, before, after, ["cancelled", "expired"], "service_requests",
+      after.sourceRequestId || sessionId, "The counsellor declined or could not take this session");
     const claimChanged = before.counsellorId !== after.counsellorId;
 
     let mirrorError = null;
@@ -7234,6 +7368,48 @@ exports.onNutritionAppointmentCreated = onDocumentCreated(
         (data.date ? ` on ${data.date}` : "") + (data.timeSlot ? ` at ${data.timeSlot}` : "") + ".",
       type: "new_nutrition_appointment", serviceType: "nutrition", bookingId: event.params.appointmentId,
     });
+  }
+);
+
+// ── Nutrition status -> patient push ─────────────────────────────────────────
+// Patients read nutrition_appointments directly (no mirror), so the screen is
+// already live; this adds the push every other vertical sends. A cancel also
+// tells the nutritionist, since either side may have made it.
+exports.onNutritionAppointmentStatusChange = onDocumentUpdated(
+  "nutrition_appointments/{appointmentId}",
+  async (event) => {
+    const before = event.data.before.data();
+    const after  = event.data.after.data();
+    if (before.status === after.status) return;
+    const db = getFirestore();
+    const messaging = getMessaging();
+    const appointmentId = event.params.appointmentId;
+    const who = after.nutritionistName || "Your nutritionist";
+    const when = (after.date ? ` on ${after.date}` : "") + (after.timeSlot ? ` at ${after.timeSlot}` : "");
+    const messages = {
+      confirmed:   ["Appointment Confirmed", `${who} confirmed your appointment${when}.`],
+      in_progress: ["Session Started", `${who} has started your session.`],
+      completed:   ["Session Completed", `Your session with ${who} is complete. Tap to rate it.`],
+      cancelled:   ["Appointment Cancelled", `Your nutrition appointment${when} was cancelled.`],
+    };
+    const msg = messages[after.status];
+    if (msg && after.userId) {
+      await _sendPatientNotification(db, messaging, after.userId, {
+        title: msg[0], body: msg[1], type: `nutrition_${after.status}`,
+        serviceType: "nutrition", bookingId: appointmentId, actionType: "open_service",
+        extraData: { status: after.status },
+      });
+    }
+    if (after.status === "cancelled" && after.cancelledBy === "provider") {
+      await _autoRefundBooking(db, "nutrition_appointments", appointmentId, "The nutritionist cancelled this appointment");
+    }
+    if (after.status === "cancelled" && after.nutritionistId) {
+      await _sendProviderNotification(db, messaging, after.nutritionistId, {
+        title: "Appointment Cancelled",
+        body: `${after.userName || "A patient"}'s appointment${when} was cancelled.`,
+        type: "nutrition_cancelled", serviceType: "nutrition", bookingId: appointmentId,
+      });
+    }
   }
 );
 

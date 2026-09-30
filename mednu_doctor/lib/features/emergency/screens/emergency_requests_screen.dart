@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -74,6 +75,10 @@ class EmergencyRequestsScreen extends ConsumerWidget {
       await FirebaseFirestore.instance.collection('service_requests').doc(requestId).update({
         'status': 'acknowledged',
         'reason': 'Marked handled by a doctor',
+        // Lets the patient's push/My Services name who picked it up.
+        'acknowledgedBy': FirebaseAuth.instance.currentUser?.uid,
+        'acknowledgedByName': FirebaseAuth.instance.currentUser?.displayName,
+        'acknowledgedAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
     } catch (e) {

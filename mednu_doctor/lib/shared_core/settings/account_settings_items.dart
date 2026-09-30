@@ -15,7 +15,7 @@ import 'settings_models.dart';
 class AccountSettingsItems {
   AccountSettingsItems._();
 
-  static const privacyPolicyUrl = 'https://mednu.in/privacy-policy';
+  static const privacyPolicyUrl = 'https://mednu.in/partner-privacy-policy';
   static const termsUrl = 'https://mednu.in/terms';
 
   static Future<void> _open(BuildContext context, String url) async {

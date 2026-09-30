@@ -28,6 +28,9 @@ class NutritionAppointmentService {
   static Future<void> updateStatus(String id, String status) {
     return _appointments.doc(id).update({
       'status': status,
+      // Marks a nutritionist-side cancel so the patient is auto-refunded
+      // (onNutritionAppointmentStatusChange); patient cancels never set it.
+      if (status == 'cancelled') 'cancelledBy': 'provider',
       'updatedAt': FieldValue.serverTimestamp(),
     });
   }

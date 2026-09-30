@@ -196,10 +196,10 @@ class _TextContent extends StatelessWidget {
   const _TextContent({required this.compact, this.center = false});
 
   static const _stats = [
-    (value: '50K+', label: 'Happy Users'),
-    (value: '1000+', label: 'Verified Doctors'),
-    (value: '20K+', label: 'Orders Delivered'),
-    (value: '4.8/5', label: 'App Rating'),
+    (value: '8', label: 'Care Services'),
+    (value: '3', label: 'Languages'),
+    (value: 'Video', label: 'Consultations'),
+    (value: 'Oct 2026', label: 'Launch'),
   ];
 
   @override

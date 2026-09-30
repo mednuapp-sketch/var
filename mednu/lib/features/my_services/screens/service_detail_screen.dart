@@ -1164,6 +1164,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
       case BookingStatus.packed:
         return (const Color(0xFF6A1B9A), const Color(0xFF3D1D36));
       case BookingStatus.onTheWay:
+      case BookingStatus.arrived:
       case BookingStatus.outForDelivery:
         return (const Color(0xFF00695C), const Color(0xFF004D40));
       case BookingStatus.inProgress:
@@ -1195,6 +1196,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
       case BookingStatus.packed:
         return Icons.inventory_2_rounded;
       case BookingStatus.onTheWay:
+      case BookingStatus.arrived:
       case BookingStatus.outForDelivery:
         return Icons.directions_run_rounded;
       case BookingStatus.inProgress:
@@ -1230,6 +1232,8 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
         return 'Your order has been packed';
       case BookingStatus.onTheWay:
         return 'Provider is on the way to you';
+      case BookingStatus.arrived:
+        return 'Your provider has arrived';
       case BookingStatus.outForDelivery:
         return 'Your order is out for delivery';
       case BookingStatus.inProgress:
@@ -1629,6 +1633,7 @@ class _LiveStatusDot extends StatelessWidget {
     BookingStatus.confirmed,
     BookingStatus.assigned,
     BookingStatus.onTheWay,
+    BookingStatus.arrived,
     BookingStatus.inProgress,
     BookingStatus.consultationStarted,
   };
@@ -1749,6 +1754,11 @@ class _ServiceInfo {
       case BookingSource.hospitalBillPayment:
         return const _ServiceInfo(
           icon: Icons.receipt_long_rounded,
+          gradient: AppColors.hospitalGrad,
+        );
+      case BookingSource.hospitalAppointment:
+        return const _ServiceInfo(
+          icon: Icons.local_hospital_rounded,
           gradient: AppColors.hospitalGrad,
         );
     }

@@ -63,6 +63,18 @@
         "firebase.json",
         "**/.*"
       ],
+      "redirects": [
+        {
+          "source": "/privacy-policy",
+          "destination": "https://mednu-healthcare-app.web.app/patientprivacypolicy.html",
+          "type": 302
+        },
+        {
+          "source": "/partner-privacy-policy",
+          "destination": "https://mednu-healthcare-app.web.app/doctorprivacypolicy.html",
+          "type": 302
+        }
+      ],
       "rewrites": [
         {
           "source": "**",
