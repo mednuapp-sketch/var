@@ -148,7 +148,10 @@ function parseApptDateTime(dateStr, timeStr) {
       if (period === "PM" && h !== 12) h += 12;
       if (period === "AM" && h === 12) h = 0;
     }
-    const date = new Date(y, mo - 1, d, h, m);
+    // The strings are IST wall-clock time, but Cloud Functions run in UTC —
+    // build the instant explicitly as IST (UTC+5:30) so formatWhen() (which
+    // renders in Asia/Kolkata) prints the same time the patient booked.
+    const date = new Date(Date.UTC(y, mo - 1, d, h, m) - 330 * 60 * 1000);
     return Number.isNaN(date.getTime()) ? null : date;
   } catch (_) {
     return null;

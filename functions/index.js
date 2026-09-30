@@ -5182,6 +5182,14 @@ exports.onEquipmentServiceRequestCreated = onDocumentCreated(
   }
 );
 
+// Once the pharmacy accepts a prescription it is frozen for both sides —
+// same definition as _orderPrescriptionLocked in firestore.rules and
+// isPrescriptionLocked in both apps.
+const _PRESCRIPTION_LOCKED_STATUSES = ["verified", "packed", "out_for_delivery", "delivered", "cancelled"];
+function _pharmacyPrescriptionLocked(po) {
+  return po.prescriptionVerified === true || _PRESCRIPTION_LOCKED_STATUSES.includes(po.status);
+}
+
 // ── 2b) Mirror a patient's prescription upload onto pharmacy_orders ─────────
 // Patients upload directly onto their own `orders` doc (see
 // firestore.rules — patient can self-write prescriptionUrl/
@@ -5230,18 +5238,45 @@ exports.onOrderPrescriptionUploaded = onDocumentUpdated(
       return;
     }
 
-    // A fresh upload (or a removal) always invalidates any prior
-    // verification decision on BOTH copies — pharmacy_orders (so the
-    // pharmacist doesn't see a stale "rejected" badge next to a brand-new
-    // file) and the source `orders` doc itself (reset separately below).
-    await pharmacyOrderRef.update({
-      prescriptionUrl: after.prescriptionUrl ?? null,
-      prescriptionFileType: after.prescriptionFileType ?? null,
-      prescriptionUploadedAt: after.prescriptionUploadedAt ?? FieldValue.serverTimestamp(),
-      prescriptionVerified: null,
-      prescriptionRejectedReason: null,
-      updatedAt: FieldValue.serverTimestamp(),
+    // Runs as a transaction so a pharmacist verifying at the same moment
+    // can't slip between the lock check and the mirror write.
+    //  - already in sync (the pharmacy's own copy mirrored onto `orders`, or
+    //    our own revert below) -> nothing to do, and no verdict reset;
+    //  - prescription already accepted -> refuse: the patient's write landed
+    //    in the gap before the lock reached `orders` (firestore.rules only
+    //    see `orders`), so put the accepted file back;
+    //  - otherwise mirror, and a fresh upload restarts verification.
+    const outcome = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(pharmacyOrderRef);
+      const po = snap.data();
+      if ((after.prescriptionUrl ?? null) === (po.prescriptionUrl ?? null)) return "in_sync";
+      if (_pharmacyPrescriptionLocked(po)) return { locked: po };
+      tx.update(pharmacyOrderRef, {
+        prescriptionUrl: after.prescriptionUrl ?? null,
+        prescriptionFileType: after.prescriptionFileType ?? null,
+        prescriptionUploadedAt: after.prescriptionUploadedAt ?? FieldValue.serverTimestamp(),
+        prescriptionSource: after.prescriptionUrl ? "patient" : null,
+        prescriptionVerified: null,
+        prescriptionRejectedReason: null,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      return "mirrored";
     });
+
+    if (outcome === "in_sync") return;
+    if (outcome.locked) {
+      const po = outcome.locked;
+      await db.collection("orders").doc(orderId).update({
+        prescriptionUrl: po.prescriptionUrl ?? null,
+        prescriptionFileType: po.prescriptionFileType ?? null,
+        prescriptionUploadedAt: po.prescriptionUploadedAt ?? null,
+        prescriptionAttachedBy: po.prescriptionUrl ? (po.prescriptionSource === "pharmacy" ? "pharmacy" : "patient") : null,
+        prescriptionVerified: po.prescriptionVerified ?? null,
+        prescriptionRejectedReason: po.prescriptionRejectedReason ?? null,
+      });
+      _logPharmacy("WARNING", "prescription_change_refused_locked", { orderId, status: po.status });
+      return;
+    }
     _logPharmacy("INFO", "prescription_mirrored_to_pharmacy", { orderId });
 
     // Reset verification state on the source doc too — idempotent (only
@@ -5267,18 +5302,32 @@ exports.onOrderPrescriptionUploaded = onDocumentUpdated(
 // No cycle: trigger #3's reverse mirror writes 'cancelled' onto the source,
 // which re-fires this function, but by then pharmacy_orders is already
 // 'cancelled' and the terminal-state guard below makes it a no-op.
-async function _mirrorPharmacyCancellation(db, orderId) {
+async function _mirrorPharmacyCancellation(db, orderId, { medicine = false } = {}) {
   const pharmacyOrderRef = db.collection("pharmacy_orders").doc(orderId);
-  await db.runTransaction(async (tx) => {
+  const refusedStatus = await db.runTransaction(async (tx) => {
     const orderSnap = await tx.get(pharmacyOrderRef);
-    if (!orderSnap.exists) return;
+    if (!orderSnap.exists) return null;
     const currentStatus = orderSnap.data().status;
     if (["delivered", "cancelled"].includes(currentStatus)) {
       _logPharmacy("INFO", "cancel_mirror_skipped_terminal", { orderId, currentStatus });
-      return;
+      return null;
     }
+    // Medicine orders are only cancellable until packed (firestore.rules
+    // enforces that on `orders`, but `orders` can lag the pharmacy by a
+    // mirror hop). If the pharmacy packed first, the cancel loses.
+    if (medicine && ["packed", "out_for_delivery"].includes(currentStatus)) return currentStatus;
     tx.update(pharmacyOrderRef, { status: "cancelled", updatedAt: FieldValue.serverTimestamp() });
+    return null;
   });
+  if (refusedStatus) {
+    await db.collection("orders").doc(orderId).update({
+      status: _PHARMACY_TO_ORDER_STATUS[refusedStatus],
+      cancelReason: FieldValue.delete(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    _logPharmacy("WARNING", "patient_cancel_refused_already_packed", { orderId, refusedStatus });
+    return;
+  }
   _logPharmacy("INFO", "pharmacy_order_cancelled_by_patient", { orderId });
 }
 
@@ -5289,7 +5338,7 @@ exports.onMedicineOrderCancelledByPatient = onDocumentUpdated(
     const after  = event.data.after.data();
     if (before.status === after.status) return;
     if (after.status !== "cancelled") return;
-    await _mirrorPharmacyCancellation(getFirestore(), event.params.orderId);
+    await _mirrorPharmacyCancellation(getFirestore(), event.params.orderId, { medicine: true });
   }
 );
 
@@ -5351,6 +5400,29 @@ exports.onPharmacyOrderStatusChange = onDocumentUpdated(
           );
         }
       }
+    }
+
+    // ── Pharmacy-attached prescription copy (medicine orders only) ────────
+    // uploadPrescriptionPhoto marks its write with prescriptionSource:
+    // 'pharmacy'; patient uploads mirrored in by onOrderPrescriptionUploaded
+    // carry 'patient' and are skipped here, so this never echoes. The
+    // resulting `orders` write re-fires onOrderPrescriptionUploaded, which
+    // sees both copies in sync and does nothing.
+    if (isMedicine && after.prescriptionSource === "pharmacy" &&
+        before.prescriptionUrl !== after.prescriptionUrl) {
+      await db.collection(after.sourceCollection).doc(after.sourceId || orderId).update({
+        prescriptionUrl: after.prescriptionUrl ?? null,
+        prescriptionFileType: after.prescriptionFileType ?? null,
+        prescriptionUploadedAt: after.prescriptionUploadedAt ?? FieldValue.serverTimestamp(),
+        prescriptionAttachedBy: "pharmacy",
+        updatedAt: FieldValue.serverTimestamp(),
+      }).then(
+        () => _logPharmacy("INFO", "pharmacy_prescription_mirrored_to_order", { orderId }),
+        (err) => {
+          _logPharmacy("ERROR", "pharmacy_prescription_mirror_failed", { orderId, error: err.message });
+          mirrorError = err;
+        },
+      );
     }
 
     // ── Prescription decision (medicine orders only) ──────────────────────
