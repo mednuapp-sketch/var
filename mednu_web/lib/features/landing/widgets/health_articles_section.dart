@@ -1,5 +1,5 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import '../../../core/widgets/net_image.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_colors.dart';
@@ -104,13 +104,13 @@ class _ArticleCardState extends State<_ArticleCard> {
               ClipRRect(
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
                 child: a.imageUrl.isNotEmpty
-                    ? CachedNetworkImage(
-                        imageUrl: a.imageUrl,
+                    ? NetImage(
+                        url: a.imageUrl,
                         height: 120,
                         width: double.infinity,
                         fit: BoxFit.cover,
-                        placeholder: (context, url) => _ImageFallback(),
-                        errorWidget: (context, url, error) => _ImageFallback(),
+                        placeholder: _ImageFallback(),
+                        fallback: _ImageFallback(),
                       )
                     : _ImageFallback(),
               ),
@@ -200,13 +200,13 @@ class _ArticleCardHorizontal extends StatelessWidget {
           ClipRRect(
             borderRadius: const BorderRadius.horizontal(left: Radius.circular(16)),
             child: a.imageUrl.isNotEmpty
-                ? CachedNetworkImage(
-                    imageUrl: a.imageUrl,
+                ? NetImage(
+                    url: a.imageUrl,
                     width: 80,
                     height: 90,
                     fit: BoxFit.cover,
-                    placeholder: (context, url) => _HorizontalImageFallback(),
-                    errorWidget: (context, url, error) => _HorizontalImageFallback(),
+                    placeholder: _HorizontalImageFallback(),
+                    fallback: _HorizontalImageFallback(),
                   )
                 : _HorizontalImageFallback(),
           ),

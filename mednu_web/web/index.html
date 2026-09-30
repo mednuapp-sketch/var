@@ -127,6 +127,74 @@
   </style>
 </head>
 <body>
+<!--
+  MedNU — crawlable content for search engines
+  Paste this block in web/index.html right AFTER the opening <body> tag.
+  Visitors see it for a moment as a branded loading screen; it removes itself
+  as soon as Flutter draws its first frame. Google/Bing/Brave read the text.
+-->
+<style>
+  #mednu-seo{position:fixed;inset:0;z-index:9999;overflow:auto;background:#522546;color:#fff;
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;line-height:1.6;
+    display:flex;justify-content:center;padding:48px 20px}
+  #mednu-seo .wrap{max-width:720px;width:100%}
+  #mednu-seo h1{font-size:2.4rem;margin:0 0 4px;letter-spacing:.5px}
+  #mednu-seo h1 span{color:#F2A8D8}
+  #mednu-seo .tag{color:#F2A8D8;font-weight:600;margin:0 0 24px}
+  #mednu-seo h2{font-size:1.2rem;margin:28px 0 8px;color:#F2A8D8}
+  #mednu-seo ul{padding-left:20px;margin:0}
+  #mednu-seo a{color:#F2A8D8}
+  #mednu-seo footer{margin-top:32px;font-size:.85rem;opacity:.8}
+</style>
+
+<main id="mednu-seo">
+  <div class="wrap">
+    <h1>Med<span>NU</span></h1>
+    <p class="tag">Always With You — Your Healthcare Companion</p>
+
+    <p>
+      <strong>MedNU</strong> is an Indian healthcare platform that helps you find and
+      book verified doctors online, on time. Consult a doctor, get digital
+      prescriptions, and manage all your appointments from one app — in
+      English, Telugu and Hindi.
+    </p>
+
+    <h2>What you can do with MedNU</h2>
+    <ul>
+      <li>Book appointments with verified doctors and hospitals</li>
+      <li>Video consultations with doctors from home</li>
+      <li>Digital prescriptions you can access anytime</li>
+      <li>Manage upcoming and past appointments in one place</li>
+      <li>24/7 emergency support</li>
+    </ul>
+
+    <h2>For doctors — MedNU Service</h2>
+    <p>
+      Doctors and healthcare providers use the <strong>MedNU Service</strong> app to
+      manage their availability, appointments, consultations and payouts.
+    </p>
+
+    <h2>Get the app</h2>
+    <p>
+      Download <strong>MedNU</strong> for patients and <strong>MedNU Service</strong> for
+      doctors on Android and iOS.
+    </p>
+
+    <footer>
+      © 2026 MedNU Healthcare Services Private Limited · Visakhapatnam, Andhra Pradesh, India ·
+      <a href="mailto:admin@mednu.in">admin@mednu.in</a>
+    </footer>
+  </div>
+</main>
+
+<script>
+  // Hide the crawlable splash once the Flutter app has painted.
+  window.addEventListener('flutter-first-frame', function () {
+    var el = document.getElementById('mednu-seo');
+    if (el) el.remove();
+  });
+</script>
+
   <div id="loading">
     <div class="loader-logo-wrap"><img class="loader-logo" src="assets/assets/images/mednu_logo.png" alt="MedNU"></div>
     <div class="loader-title">MedNU</div>

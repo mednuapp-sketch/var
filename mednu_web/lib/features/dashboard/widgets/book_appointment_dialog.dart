@@ -1,8 +1,8 @@
 import 'dart:math';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import '../../../core/widgets/net_image.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
@@ -450,12 +450,12 @@ class _DoctorAvatar extends StatelessWidget {
         borderRadius: BorderRadius.circular(size * 0.3),
         child: doctor.photoUrl.isEmpty
             ? initials
-            : CachedNetworkImage(
-                imageUrl: doctor.photoUrl,
+            : NetImage(
+                url: doctor.photoUrl,
                 width: size,
                 height: size,
                 fit: BoxFit.cover,
-                errorWidget: (_, __, ___) => initials,
+                fallback: initials,
               ),
       ),
     );

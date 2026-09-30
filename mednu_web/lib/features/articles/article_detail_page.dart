@@ -1,5 +1,5 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import '../../core/widgets/net_image.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -138,13 +138,13 @@ class _ArticleBody extends StatelessWidget {
                     if (article.imageUrl.isNotEmpty)
                       ClipRRect(
                         borderRadius: BorderRadius.circular(20),
-                        child: CachedNetworkImage(
-                          imageUrl: article.imageUrl,
+                        child: NetImage(
+                          url: article.imageUrl,
                           width: double.infinity,
                           height: 360,
                           fit: BoxFit.cover,
-                          placeholder: (context, url) => Container(height: 360, color: AppColors.background),
-                          errorWidget: (context, url, error) => Container(height: 360, color: AppColors.background),
+                          placeholder: Container(height: 360, color: AppColors.background),
+                          fallback: Container(height: 360, color: AppColors.background),
                         ),
                       )
                     else

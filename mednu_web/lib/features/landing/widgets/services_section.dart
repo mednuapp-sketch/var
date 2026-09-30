@@ -14,85 +14,85 @@ class ServicesSection extends StatelessWidget {
         Icons.emergency_rounded,
         'Emergency',
         'Immediate 24/7 help in a medical emergency',
-        'Call Now'
+        'Get the app'
       ),
       (
         Icons.video_call_rounded,
         'Consultation',
         'Video or in-clinic consults with top doctors',
-        'Book Now'
+        'Get the app'
       ),
       (
         Icons.medication_liquid_rounded,
         'Pharmacy',
         'Medicines delivered to your doorstep',
-        'Order Now'
+        'Get the app'
       ),
       (
         Icons.science_rounded,
         'Diagnostics',
         'X-Ray, MRI, CT, ECG & lab tests at home',
-        'Book Test'
+        'Get the app'
       ),
       (
         Icons.pregnant_woman_rounded,
         'Pregnancy',
         'Track your pregnancy journey week by week',
-        'Track Now'
+        'Get the app'
       ),
       (
         Icons.local_shipping_rounded,
         'Ambulance',
         'Emergency ambulance dispatched to your location',
-        'Call Now'
+        'Get the app'
       ),
       (
         Icons.support_agent_rounded,
         'Care Assist',
         'A health assistant on call whenever you need one',
-        'Try Now'
+        'Get the app'
       ),
       (
         Icons.elderly_rounded,
         'Caregivers',
         'Trained attendants & caregiver support at home',
-        'Hire Now'
+        'Get the app'
       ),
       (
         Icons.fitness_center_rounded,
         'Physiotherapy',
         'Physiotherapy & rehabilitation sessions',
-        'Book Now'
+        'Get the app'
       ),
       (
         Icons.restaurant_rounded,
         'Diet & Dietician',
         'Personalised diet plans from dieticians',
-        'Get Plan'
+        'Get the app'
       ),
       (
         Icons.psychology_rounded,
         'Therapy and Counselling',
         'Mental health support & therapy sessions',
-        'Book Now'
+        'Get the app'
       ),
       (
         Icons.medical_services_rounded,
         'Equipment',
         'Rent or buy medical equipment online',
-        'Browse'
+        'Get the app'
       ),
       (
         Icons.local_hospital_rounded,
         'Nearby Hospitals',
         'Locate hospitals nearby & pay bills with instant discounts',
-        'Explore'
+        'Get the app'
       ),
       (
         Icons.receipt_long_rounded,
         'Pay Hospital Bill',
         'Pay hospital bills online with instant discounts',
-        'Pay Now'
+        'Get the app'
       ),
     ];
     return [

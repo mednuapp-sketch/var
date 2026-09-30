@@ -28,6 +28,7 @@ class _LandingPageState extends State<LandingPage> {
   final GlobalKey _howItWorksKey  = GlobalKey();
   final GlobalKey _aboutKey       = GlobalKey();
   final GlobalKey _contactKey     = GlobalKey();
+  final GlobalKey _downloadKey    = GlobalKey();
 
   // Ordered list matching page layout — used for scroll detection
   late final List<(String, GlobalKey)> _sectionOrder = [
@@ -88,6 +89,7 @@ class _LandingPageState extends State<LandingPage> {
       'How It Works': _howItWorksKey,
       'About Us':     _aboutKey,
       'Contact':      _contactKey,
+      'Download':     _downloadKey,
     };
 
     final key = keyMap[item];
@@ -140,7 +142,7 @@ class _LandingPageState extends State<LandingPage> {
 
           SliverToBoxAdapter(
             key: _heroKey,
-            child: HeroSection(onGetStarted: widget.onLoginTap),
+            child: HeroSection(onGetStarted: () => _scrollToSection('Download')),
           ),
 
           const SliverToBoxAdapter(child: StatsBarSection()),
@@ -152,7 +154,7 @@ class _LandingPageState extends State<LandingPage> {
 
           SliverToBoxAdapter(
             key: _servicesKey,
-            child: ServicesSection(onServiceTap: widget.onLoginTap),
+            child: ServicesSection(onServiceTap: () => _scrollToSection('Download')),
           ),
 
           const SliverToBoxAdapter(child: AdSection()),
@@ -164,7 +166,7 @@ class _LandingPageState extends State<LandingPage> {
 
           const SliverToBoxAdapter(child: HealthArticlesSection()),
           const SliverToBoxAdapter(child: TestimonialsSection()),
-          const SliverToBoxAdapter(child: DownloadAppSection()),
+          SliverToBoxAdapter(key: _downloadKey, child: const DownloadAppSection()),
           const SliverToBoxAdapter(child: ProviderSection()),
 
           SliverToBoxAdapter(

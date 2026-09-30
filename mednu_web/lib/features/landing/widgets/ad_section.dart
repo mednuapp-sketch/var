@@ -1,10 +1,10 @@
 import 'dart:async';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/launch_utils.dart';
+import '../../../core/widgets/net_image.dart';
 import '../../../core/utils/responsive.dart';
 
 class _Ad {
@@ -132,13 +132,19 @@ class _AdCardState extends State<_AdCard> {
           child: ClipRRect(
             borderRadius: BorderRadius.circular(24),
             child: Stack(children: [
-              CachedNetworkImage(
-                imageUrl: ad.imageUrl,
-                width: double.infinity,
-                fit: BoxFit.fitWidth,
-                placeholder: (_, __) => Container(height: 180, color: AppColors.surfaceVariant),
-                errorWidget: (_, __, ___) => const SizedBox.shrink(),
-              ),
+              // Fixed 16:5 frame (recommended upload size 1600 x 500): the browser-native
+              // image fallback used for CORS-less hosts can't size itself from the image.
+              LayoutBuilder(builder: (context, c) {
+                final h = c.maxWidth * 5 / 16;
+                return NetImage(
+                  url: ad.imageUrl,
+                  width: c.maxWidth,
+                  height: h < 120 ? 120 : h,
+                  fit: BoxFit.cover,
+                  placeholder: Container(height: h, color: AppColors.surfaceVariant),
+                  fallback: Container(height: h, color: AppColors.surfaceVariant),
+                );
+              }),
               Positioned(
                 top: 12,
                 right: 12,

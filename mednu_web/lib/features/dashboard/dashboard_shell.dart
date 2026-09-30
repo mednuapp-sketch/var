@@ -1,7 +1,7 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import '../../core/widgets/net_image.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/constants/app_colors.dart';
@@ -303,12 +303,12 @@ class _UserAvatar extends StatelessWidget {
             decoration: const BoxDecoration(gradient: AppColors.primaryGradient, shape: BoxShape.circle),
             child: ClipOval(
               child: photo.isNotEmpty
-                  ? CachedNetworkImage(
-                      imageUrl: photo,
+                  ? NetImage(
+                      url: photo,
                       width: 38,
                       height: 38,
                       fit: BoxFit.cover,
-                      errorWidget: (_, __, ___) => Center(child: Text(initial ?? '?', style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white))),
+                      fallback: Center(child: Text(initial ?? '?', style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white))),
                     )
                   : Center(
                       child: initial != null

@@ -228,7 +228,7 @@ class _HeroContent extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               GradientButton(
-                label: 'Book Consultation',
+                label: 'Book in the App',
                 onTap: onGetStarted,
                 height: 52,
                 icon: Icons.arrow_forward_rounded,
@@ -240,7 +240,7 @@ class _HeroContent extends StatelessWidget {
         else
           Row(children: [
             GradientButton(
-              label: 'Book Consultation',
+              label: 'Book in the App',
               onTap: onGetStarted,
               width: 210,
               height: 52,
