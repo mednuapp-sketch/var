@@ -308,8 +308,16 @@ class _DoctorOtpScreenState extends State<DoctorOtpScreen> {
           context.go(AppRoutes.verificationPending);
         }
       } else {
-        // No base identity document yet — brand-new account, so it first
-        // picks which partner service it is registering as. Choosing
+        // No base identity document yet — this phone number has no
+        // account, even though the user picked "Login". Say so explicitly
+        // before sending them into registration, rather than silently
+        // landing on role-select with no explanation.
+        setState(() => _isVerifying = false);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('No account found for this number. Please register to continue.'),
+          behavior: SnackBarBehavior.floating,
+        ));
+        // Picks which partner service it is registering as. Choosing
         // Doctor there routes on to AppRoutes.register unchanged.
         context.go(AppRoutes.partnerRoleSelect);
       }

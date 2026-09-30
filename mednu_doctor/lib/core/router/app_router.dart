@@ -450,13 +450,22 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         if (role == AppRole.pharmacy) {
           return loc == AppRoutes.pharmacyOnboarding ? null : AppRoutes.pharmacyOnboarding;
         }
-        // Physiotherapist/Counsellor have no dedicated onboarding-recovery
-        // screen — same as Ambulance/Caregiver, whose profile is written in
-        // one shot by PartnerRoleRegisterScreen's initial submit. A rare
-        // partial failure there (doctors/{uid} written, profile doc not)
-        // falls through to the pending-review screen below, same as those
-        // two roles already do.
-        return loc == AppRoutes.verificationPending ? null : AppRoutes.verificationPending;
+        // Every other role's profile is written in one shot by
+        // PartnerRoleRegisterScreen's initial submit — if `{role}_profiles/
+        // {uid}` is still missing here, that submit never finished (a
+        // partial failure between its `doctors/{uid}` write and the
+        // role-profile write, e.g. a dropped connection during document
+        // upload). This used to fall through to `verificationPending`,
+        // which reads `status` off a document that doesn't exist and
+        // silently defaults to 'pending' — showing a permanent "under
+        // review" screen for an application nothing was ever actually
+        // submitted for, with no way to retry. Routing back into the same
+        // registration screen (pre-filled with the chosen role) lets that
+        // submit actually complete — `PartnerRoleRegisterScreen._submit()`
+        // already merges into the existing `doctors/{uid}` doc rather than
+        // overwriting it, so this is safe to re-enter.
+        final resumeRoute = '${AppRoutes.partnerRoleRegister}/${role.firestoreValue}';
+        return loc == resumeRoute ? null : resumeRoute;
       }
 
       // Verification documents are only ever submitted once, up front,

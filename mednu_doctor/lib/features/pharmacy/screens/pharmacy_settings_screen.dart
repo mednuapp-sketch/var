@@ -1,5 +1,4 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -10,6 +9,7 @@ import '../../../core/services/feedback_service.dart';
 import '../../../core/widgets/mednu_components.dart';
 import '../../../shared_core/shared_core.dart';
 import '../../../shared_core/whatsapp/whatsapp_opt_in_service.dart';
+import '../../auth/services/doctor_auth_service.dart';
 import '../../security/services/biometric_service.dart';
 import '../services/pharmacy_profile_service.dart';
 
@@ -131,7 +131,7 @@ class _PharmacySettingsScreenState extends State<PharmacySettingsScreen> {
       destructive: true,
     );
     if (!confirmed) return;
-    await FirebaseAuth.instance.signOut();
+    await DoctorAuthService.signOut();
     if (mounted) context.go(AppRoutes.login);
   }
 

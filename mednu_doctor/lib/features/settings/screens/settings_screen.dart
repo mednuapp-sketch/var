@@ -433,7 +433,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         child: _SignOutButton(
                           onConfirmed: () async {
                             final router = GoRouter.of(context);
-                            await FirebaseAuth.instance.signOut();
+                            await DoctorAuthService.signOut();
                             if (!mounted) return;
                             router.go(AppRoutes.login);
                           },

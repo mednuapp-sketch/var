@@ -449,8 +449,14 @@ class _DoctorLoginScreenState extends State<DoctorLoginScreen>
           final exists = await DoctorAuthService.profileExists(uid);
           if (!mounted || !context.mounted) return;
           if (!exists) {
-            // No base identity document yet — brand-new account, same branch
-            // doctor_otp_screen.dart uses: pick a role before registering.
+            // No base identity document yet — same branch doctor_otp_screen.
+            // dart uses: say so explicitly, then pick a role before
+            // registering, whether this was a Login or Register attempt
+            // (auto-verify doesn't distinguish the two).
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('No account found for this number. Please register to continue.'),
+              behavior: SnackBarBehavior.floating,
+            ));
             context.go(AppRoutes.partnerRoleSelect);
             return;
           }

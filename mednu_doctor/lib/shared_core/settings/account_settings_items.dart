@@ -1,10 +1,10 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/router/app_router.dart';
 import '../../core/services/feedback_service.dart';
 import '../../core/widgets/mednu_components.dart';
+import '../../features/auth/services/doctor_auth_service.dart';
 import 'account_deletion_service.dart';
 import 'settings_models.dart';
 
@@ -83,7 +83,7 @@ class AccountSettingsItems {
             ? 'A deletion request is already pending for your account.'
             : 'Deletion request submitted.',
       );
-      await FirebaseAuth.instance.signOut();
+      await DoctorAuthService.signOut();
       if (context.mounted) context.go(AppRoutes.login);
     } catch (_) {
       if (!context.mounted) return;

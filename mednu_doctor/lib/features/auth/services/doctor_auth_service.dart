@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import '../../../shared_core/services/role_prefs.dart';
 
 class DoctorAuthService {
   static final _auth = FirebaseAuth.instance;
@@ -135,5 +136,15 @@ class DoctorAuthService {
   static Future<void> updatePhotoUrl(String uid, String photoUrl) =>
       _db.collection('doctors').doc(uid).update({'photoUrl': photoUrl});
 
-  static Future<void> signOut() => _auth.signOut();
+  /// Clears the device-local "active role" preference alongside Firebase
+  /// Auth — without this, a second account signing in on the same device
+  /// (a shared/handed-down device, or switching test accounts) would
+  /// inherit whichever role the previous account last had active, via
+  /// RolePrefs.resolveActive's persisted-preference lookup. That preference
+  /// is keyed by device, not by uid, so it has to be wiped on sign-out
+  /// rather than on sign-in.
+  static Future<void> signOut() async {
+    await RolePrefs.clear();
+    await _auth.signOut();
+  }
 }

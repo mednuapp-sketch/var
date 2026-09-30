@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -15,6 +14,7 @@ import '../../../core/utils/validators.dart';
 import '../../../core/widgets/mednu_components.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../../../shared_core/shared_core.dart';
+import '../../auth/services/doctor_auth_service.dart';
 import '../../security/services/biometric_service.dart';
 import '../models/hospital_profile.dart';
 import '../providers/hospital_providers.dart';
@@ -571,7 +571,7 @@ class _HospitalProfileScreenState extends ConsumerState<HospitalProfileScreen> {
       destructive: true,
     );
     if (!confirmed) return;
-    await FirebaseAuth.instance.signOut();
+    await DoctorAuthService.signOut();
     if (mounted) context.go(AppRoutes.login);
   }
 
