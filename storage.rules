@@ -55,6 +55,13 @@ service firebase.storage {
       return firestore.get(/databases/(default)/documents/orders/$(orderId)).data;
     }
 
+    // Frozen once the pharmacy accepts — see _orderPrescriptionLocked in
+    // firestore.rules (keep the status list identical).
+    function prescriptionLocked(data) {
+      return data.get('prescriptionVerified', null) == true ||
+             data.get('status', '') in ['verified', 'packed', 'out_for_delivery', 'delivered', 'cancelled'];
+    }
+
     // ── Patient profile photos: users/{uid}/profile.jpg ─────────────────────
     // Public read so the permanent token-free URL never expires.
     match /users/{uid}/{allPaths=**} {
@@ -224,6 +231,7 @@ service firebase.storage {
       );
       allow write: if isAuth()
                    && pharmacyOrder(orderId).pharmacyId == request.auth.uid
+                   && !prescriptionLocked(pharmacyOrder(orderId))
                    && request.resource.size < 10 * 1024 * 1024
                    && isDocument();
     }
@@ -240,9 +248,11 @@ service firebase.storage {
       );
       allow write: if isAuth()
                    && order(orderId).patientId == request.auth.uid
+                   && !prescriptionLocked(order(orderId))
                    && request.resource.size < 20 * 1024 * 1024
                    && isDocument();
-      allow delete: if isAuth() && order(orderId).patientId == request.auth.uid;
+      allow delete: if isAuth() && order(orderId).patientId == request.auth.uid
+                    && !prescriptionLocked(order(orderId));
     }
 
     // ── Pre-order prescription upload: pending_prescriptions/{uid}/... ──────
@@ -256,7 +266,10 @@ service firebase.storage {
       allow write: if isAuth() && request.auth.uid == uid
                    && request.resource.size < 20 * 1024 * 1024
                    && isDocument();
-      allow delete: if isAuth() && request.auth.uid == uid;
+      // No client deletes: once checked out, an order's prescriptionUrl
+      // points at this file, and deleting it would pull the prescription
+      // out from under an order the pharmacy already accepted.
+      allow delete: if false;
     }
 
     // ── Caregiver visit photos: visit_photos/{visitId}/... ───────────────────
@@ -325,6 +338,13 @@ service firebase.storage {
     }
 
     match /nutritionist_documents/{uid}/{allPaths=**} {
+      allow read:  if isAuth() && (isOwner(uid) || isAdmin());
+      allow write: if isOwner(uid)
+                   && request.resource.size < 20 * 1024 * 1024
+                   && isDocument();
+    }
+
+    match /hospital_documents/{uid}/{allPaths=**} {
       allow read:  if isAuth() && (isOwner(uid) || isAdmin());
       allow write: if isOwner(uid)
                    && request.resource.size < 20 * 1024 * 1024

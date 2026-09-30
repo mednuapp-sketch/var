@@ -463,8 +463,15 @@ service cloud.firestore {
     match /hospital_profiles/{hospitalUid} {
       allow read:   if isAuth() && (isOwner(hospitalUid) || isAdmin());
       allow create: if isOwner(hospitalUid) && request.resource.data.status == 'pending';
+      // `documentVerification`/`documentsVerified` are admin-only like every
+      // other partner role, and `documents` locks once approved so a
+      // verified file can't be swapped out after the fact.
       allow update: if (isOwner(hospitalUid) &&
-                         doesNotModify(['status', 'hospitalId', 'hospitalName'])) ||
+                         doesNotModify(['status', 'hospitalId', 'hospitalName', 'documentVerification', 'documentsVerified']) &&
+                         (resource.data.status != 'active' || doesNotModify(['documents']))) ||
+                       (adminInRoles(['hr']) &&
+                         request.resource.data.diff(resource.data).affectedKeys()
+                           .hasOnly(['documentVerification', 'documentsVerified', 'updatedAt', 'updatedBy'])) ||
                        isDirector();
       allow delete: if isDirector();
     }
@@ -763,8 +770,15 @@ service cloud.firestore {
       // self-declare the roll-up true directly, which is the one signal
       // patients actually see as a trust badge, without HR ever touching it.
       allow update: if (isOwner(labId) &&
-                         doesNotModify(['status', 'isVerified', 'rating', 'totalReviews', 'documentVerification', 'documentsVerified']) &&
-                         (resource.data.status != 'active' || doesNotModify(['documents']))) ||
+                         (
+                           (resource.data.status != 'active' &&
+                             doesNotModify(['status', 'isVerified', 'rating', 'totalReviews', 'documentVerification', 'documentsVerified'])) ||
+                           // `acceptingBookings` is a real-time operational toggle, not a profile
+                           // detail, so it stays instantly self-writable even once live.
+                           (resource.data.status == 'active' &&
+                             request.resource.data.diff(resource.data).affectedKeys()
+                               .hasOnly(['pendingChanges', 'hasPendingChanges', 'updatedAt', 'acceptingBookings']))
+                         )) ||
                        (adminInRoles(['hr']) &&
                          request.resource.data.diff(resource.data).affectedKeys()
                            .hasOnly(['documentVerification', 'documentsVerified', 'updatedAt', 'updatedBy'])) ||
@@ -864,6 +878,44 @@ service cloud.firestore {
       return before == after || (before in allowed && after in allowed[before]);
     }
 
+    // A prescription-required order may only reach 'verified' once a
+    // prescription is actually attached. The app's own UI already disables
+    // "Mark Verified" until one is uploaded, but that's just a client-side
+    // gate — this is the layer a compromised/buggy client can't bypass.
+    // uploadPrescriptionPhoto() writes prescriptionUrl in its own update, so
+    // by the time a *separate* write tries to move to 'verified', it's
+    // already sitting on `data` (the pre-write document) if it exists.
+    function _pharmacyPrescriptionOk(data) {
+      return data.requiresPrescription != true || data.prescriptionUrl != null;
+    }
+
+    // Once the pharmacy has accepted the prescription (verified, or the order
+    // is past verification / closed) it is frozen for BOTH sides. Mirrored
+    // client-side by PharmacyOrder.isPrescriptionLocked (partner app) and
+    // OrderModel.isPrescriptionLocked (patient app) — keep all three in sync.
+    function _prescriptionLockedStatuses() {
+      return ['verified', 'packed', 'out_for_delivery', 'delivered', 'cancelled'];
+    }
+    function _orderPrescriptionLocked(data) {
+      return data.get('prescriptionVerified', null) == true ||
+             data.get('status', '') in _prescriptionLockedStatuses();
+    }
+    function _prescriptionFields() {
+      return ['prescriptionUrl', 'prescriptionFileType', 'prescriptionUploadedAt',
+              'prescriptionAttachedBy', 'prescriptionSource'];
+    }
+    // A patient may cancel a medicine order only until the pharmacy packs
+    // it, and 'cancelled' is the only status a patient may ever write.
+    // Mirrors OrderModel.patientCancellableStatuses in the patient app.
+    function _patientCancellableOrderStatuses() {
+      return ['pending', 'confirmed', 'prescription_required', 'verified'];
+    }
+    function _patientStatusChangeOk() {
+      return doesNotModify(['status']) ||
+             (request.resource.data.status == 'cancelled' &&
+              resource.data.get('status', 'confirmed') in _patientCancellableOrderStatuses());
+    }
+
     match /pharmacy_profiles/{pharmacyId} {
       allow read: if isAuth() && (
         isOwner(pharmacyId) || adminInRoles(['hr']) || resource.data.status == 'active'
@@ -877,8 +929,15 @@ service cloud.firestore {
       // `status == 'active'`, and for why HR is limited to
       // documentVerification-only while approval is Director-only.
       allow update: if (isOwner(pharmacyId) &&
-                         doesNotModify(['status', 'isVerified', 'rating', 'totalReviews', 'documentVerification', 'documentsVerified']) &&
-                         (resource.data.status != 'active' || doesNotModify(['documents']))) ||
+                         (
+                           (resource.data.status != 'active' &&
+                             doesNotModify(['status', 'isVerified', 'rating', 'totalReviews', 'documentVerification', 'documentsVerified'])) ||
+                           // `acceptingOrders` is a real-time operational toggle, not a profile
+                           // detail, so it stays instantly self-writable even once live.
+                           (resource.data.status == 'active' &&
+                             request.resource.data.diff(resource.data).affectedKeys()
+                               .hasOnly(['pendingChanges', 'hasPendingChanges', 'updatedAt', 'acceptingOrders']))
+                         )) ||
                        (adminInRoles(['hr']) &&
                          request.resource.data.diff(resource.data).affectedKeys()
                            .hasOnly(['documentVerification', 'documentsVerified', 'updatedAt', 'updatedBy'])) ||
@@ -911,14 +970,17 @@ service cloud.firestore {
         (resource.data.pharmacyId == request.auth.uid &&
           request.resource.data.pharmacyId == resource.data.pharmacyId &&
           doesNotModify(_pharmacyOrderImmutableFields()) &&
-          _validPharmacyTransition(resource.data.status, request.resource.data.status)) ||
+          _validPharmacyTransition(resource.data.status, request.resource.data.status) &&
+          (request.resource.data.status != 'verified' || _pharmacyPrescriptionOk(resource.data)) &&
+          (!_orderPrescriptionLocked(resource.data) || doesNotModify(_prescriptionFields()))) ||
         // Claiming an unclaimed order: pharmacyId moves from null to the
         // caller, and the resulting status can only be one of the three
         // "just accepted this" outcomes — never straight to packed/delivered.
         (resource.data.pharmacyId == null && isPharmacyPartner() &&
           request.resource.data.pharmacyId == request.auth.uid &&
           doesNotModify(_pharmacyOrderImmutableFields()) &&
-          request.resource.data.status in ['prescription_required', 'verified', 'cancelled'])
+          request.resource.data.status in ['prescription_required', 'verified', 'cancelled'] &&
+          (request.resource.data.status != 'verified' || _pharmacyPrescriptionOk(resource.data)))
       );
       // Created only by the Cloud Function mirror (Admin SDK bypasses rules).
       allow create, delete: if isAdmin();
@@ -985,8 +1047,17 @@ service cloud.firestore {
       // why HR is limited to documentVerification-only while approval is
       // Director-only.
       allow update: if (isOwner(ambulanceId) &&
-                         doesNotModify(['status', 'isVerified', 'rating', 'totalReviews', 'totalTrips', 'documentVerification', 'documentsVerified']) &&
-                         (resource.data.status != 'active' || doesNotModify(['documents']))) ||
+                         (
+                           (resource.data.status != 'active' &&
+                             doesNotModify(['status', 'isVerified', 'rating', 'totalReviews', 'totalTrips', 'documentVerification', 'documentsVerified'])) ||
+                           // isOnline/lastHeartbeat (presence) and location/geohash/geohash5 (live
+                           // GPS) are real-time operational state, not profile details, so they
+                           // stay instantly self-writable even once live.
+                           (resource.data.status == 'active' &&
+                             request.resource.data.diff(resource.data).affectedKeys()
+                               .hasOnly(['pendingChanges', 'hasPendingChanges', 'updatedAt',
+                                         'isOnline', 'lastHeartbeat', 'location', 'geohash', 'geohash5']))
+                         )) ||
                        (adminInRoles(['hr']) &&
                          request.resource.data.diff(resource.data).affectedKeys()
                            .hasOnly(['documentVerification', 'documentsVerified', 'updatedAt', 'updatedBy'])) ||
@@ -1079,8 +1150,19 @@ service cloud.firestore {
       // `status == 'active'`, and for why HR is limited to
       // documentVerification-only while approval is Director-only.
       allow update: if (isOwner(caregiverId) &&
-                         doesNotModify(['status', 'isVerified', 'rating', 'totalReviews', 'totalVisits', 'documentVerification', 'documentsVerified']) &&
-                         (resource.data.status != 'active' || doesNotModify(['documents']))) ||
+                         (
+                           (resource.data.status != 'active' &&
+                             doesNotModify(['status', 'isVerified', 'rating', 'totalReviews', 'totalVisits', 'documentVerification', 'documentsVerified'])) ||
+                           // Already approved & live: any profile-detail self-edit (name, documents,
+                           // rate, anything) is diverted into a pending-review snapshot instead of
+                           // touching the fields patients actually see — applying it is an admin-only
+                           // act (isDirector() below / the admin panel's pending-edit approval flow).
+                           // `isOnDuty` is real-time operational state (the caregiver's own duty
+                           // toggle), not a profile detail, so it stays instantly self-writable.
+                           (resource.data.status == 'active' &&
+                             request.resource.data.diff(resource.data).affectedKeys()
+                               .hasOnly(['pendingChanges', 'hasPendingChanges', 'updatedAt', 'isOnDuty']))
+                         )) ||
                        (adminInRoles(['hr']) &&
                          request.resource.data.diff(resource.data).affectedKeys()
                            .hasOnly(['documentVerification', 'documentsVerified', 'updatedAt', 'updatedBy'])) ||
@@ -1237,8 +1319,15 @@ service cloud.firestore {
       // `status == 'active'`, and for why HR is limited to
       // documentVerification-only while approval is Director-only.
       allow update: if (isOwner(physiotherapistId) &&
-                         doesNotModify(['status', 'isVerified', 'rating', 'totalReviews', 'totalSessions', 'documentVerification', 'documentsVerified']) &&
-                         (resource.data.status != 'active' || doesNotModify(['documents']))) ||
+                         (
+                           (resource.data.status != 'active' &&
+                             doesNotModify(['status', 'isVerified', 'rating', 'totalReviews', 'totalSessions', 'documentVerification', 'documentsVerified'])) ||
+                           // isOnline/lastHeartbeat (presence) is real-time operational state, not a
+                           // profile detail, so it stays instantly self-writable even once live.
+                           (resource.data.status == 'active' &&
+                             request.resource.data.diff(resource.data).affectedKeys()
+                               .hasOnly(['pendingChanges', 'hasPendingChanges', 'updatedAt', 'isOnline', 'lastHeartbeat']))
+                         )) ||
                        (adminInRoles(['hr']) &&
                          request.resource.data.diff(resource.data).affectedKeys()
                            .hasOnly(['documentVerification', 'documentsVerified', 'updatedAt', 'updatedBy'])) ||
@@ -1287,8 +1376,15 @@ service cloud.firestore {
       // See lab_profiles' update rule above for why HR is limited to
       // documentVerification-only while approval is Director-only.
       allow update: if (isOwner(counsellorId) &&
-                         doesNotModify(['status', 'isVerified', 'rating', 'totalReviews', 'totalSessions', 'documentVerification', 'documentsVerified']) &&
-                         (resource.data.status != 'active' || doesNotModify(['documents']))) ||
+                         (
+                           (resource.data.status != 'active' &&
+                             doesNotModify(['status', 'isVerified', 'rating', 'totalReviews', 'totalSessions', 'documentVerification', 'documentsVerified'])) ||
+                           // isOnline/lastHeartbeat (presence) is real-time operational state, not a
+                           // profile detail, so it stays instantly self-writable even once live.
+                           (resource.data.status == 'active' &&
+                             request.resource.data.diff(resource.data).affectedKeys()
+                               .hasOnly(['pendingChanges', 'hasPendingChanges', 'updatedAt', 'isOnline', 'lastHeartbeat']))
+                         )) ||
                        (adminInRoles(['hr']) &&
                          request.resource.data.diff(resource.data).affectedKeys()
                            .hasOnly(['documentVerification', 'documentsVerified', 'updatedAt', 'updatedBy'])) ||
@@ -1593,8 +1689,15 @@ service cloud.firestore {
       // See lab_profiles' update rule above for why HR is limited to
       // documentVerification-only while approval is Director-only.
       allow update: if (isOwner(nutritionistId) &&
-                         doesNotModify(['status', 'isVerified', 'rating', 'reviewCount', 'documentVerification', 'documentsVerified']) &&
-                         (resource.data.status != 'active' || doesNotModify(['documents']))) ||
+                         (
+                           (resource.data.status != 'active' &&
+                             doesNotModify(['status', 'isVerified', 'rating', 'reviewCount', 'documentVerification', 'documentsVerified'])) ||
+                           // isOnline is real-time operational state, not a profile detail, so it
+                           // stays instantly self-writable even once live.
+                           (resource.data.status == 'active' &&
+                             request.resource.data.diff(resource.data).affectedKeys()
+                               .hasOnly(['pendingChanges', 'hasPendingChanges', 'updatedAt', 'isOnline']))
+                         )) ||
                        (adminInRoles(['hr']) &&
                          request.resource.data.diff(resource.data).affectedKeys()
                            .hasOnly(['documentVerification', 'documentsVerified', 'updatedAt', 'updatedBy'])) ||
@@ -1771,13 +1874,18 @@ service cloud.firestore {
       // mirror from the assigned pharmacy's decision (see
       // functions/index.js, onPharmacyOrderStatusChange), which uses the
       // Admin SDK and bypasses this rule entirely.
+      // The prescription fields freeze once the pharmacy has accepted the
+      // prescription (_orderPrescriptionLocked) — cancel stays allowed.
       allow update: if isAuth() && (
         (resource.data.patientId == request.auth.uid &&
           request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly([
               'status', 'cancelReason', 'updatedAt',
-              'prescriptionUrl', 'prescriptionFileType', 'prescriptionUploadedAt'
-            ])) ||
+              'prescriptionUrl', 'prescriptionFileType', 'prescriptionUploadedAt',
+              'prescriptionAttachedBy'
+            ]) &&
+          _patientStatusChangeOk() &&
+          (!_orderPrescriptionLocked(resource.data) || doesNotModify(_prescriptionFields()))) ||
         isAdmin()
       );
       allow delete: if isAdmin();

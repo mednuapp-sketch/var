@@ -664,8 +664,8 @@
       "collectionGroup": "physiotherapists",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "isAvailable", "order": "ASCENDING" },
-        { "fieldPath": "rating",      "order": "DESCENDING" }
+        { "fieldPath": "isAvailable",   "order": "ASCENDING" },
+        { "fieldPath": "totalSessions", "order": "DESCENDING" }
       ]
     },
     {
