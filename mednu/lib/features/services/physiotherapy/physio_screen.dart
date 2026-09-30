@@ -70,7 +70,7 @@ class PhysioScreen extends ConsumerWidget {
     Navigator.of(context, rootNavigator: true).pop(); // dismiss loading dialog
 
     final online = list.where((p) => p.isCurrentlyOnline).toList()
-      ..sort((a, b) => b.rating.compareTo(a.rating));
+      ..sort((a, b) => b.totalSessions.compareTo(a.totalSessions));
     if (!context.mounted) return;
     if (online.isNotEmpty) {
       context.push(AppRoutes.physioTherapistProfile.replaceFirst(':id', online.first.id));

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_rating_bar/flutter_rating_bar.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -346,16 +345,10 @@ class _PhysiotherapistCard extends StatelessWidget {
                       ],
                       const SizedBox(height: 6),
                       Row(children: [
-                        RatingBarIndicator(
-                          rating: p.rating,
-                          itemBuilder: (ctx, _) => const Icon(Icons.star_rounded, color: Color(0xFFF9A825)),
-                          itemCount: 5,
-                          itemSize: 14,
-                          unratedColor: const Color(0xFFF9A825).withValues(alpha: 0.25),
-                        ),
+                        Icon(Icons.event_available_rounded, size: 14, color: context.appTextSecondary),
                         const SizedBox(width: 6),
                         Text(
-                          p.totalSessions > 0 ? '${p.rating.toStringAsFixed(1)} (${p.totalSessions})' : 'New',
+                          p.totalSessions > 0 ? '${p.totalSessions} sessions' : 'New',
                           style: AppTextStyles.bodySmall.copyWith(color: context.appTextSecondary),
                         ),
                       ]),

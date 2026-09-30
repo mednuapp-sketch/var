@@ -5,10 +5,17 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
+import '../models/order_model.dart';
 
 class PrescriptionTooLargeException implements Exception {
   final int sizeBytes;
   const PrescriptionTooLargeException(this.sizeBytes);
+}
+
+/// The pharmacy has already accepted this order's prescription, so it can no
+/// longer be replaced or removed (see [OrderModel.isPrescriptionLocked]).
+class PrescriptionLockedException implements Exception {
+  const PrescriptionLockedException();
 }
 
 /// Everything needed to get a prescription photo/PDF from the device onto
@@ -60,6 +67,20 @@ class PrescriptionUploadService {
     final path = result?.files.single.path;
     return path == null ? null : File(path);
   }
+
+  /// Fresh server read right before any write — the card's snapshot can be a
+  /// few seconds stale if the pharmacy verified while the patient was
+  /// picking a file. firestore.rules/storage.rules are the real guard; this
+  /// just fails fast with a clear message instead of a permission error.
+  static Future<void> _ensureNotLocked(String orderId) async {
+    final snap = await _db.collection('orders').doc(orderId).get(const GetOptions(source: Source.server));
+    if (OrderModel.prescriptionLockedIn(snap.data() ?? const {})) {
+      throw const PrescriptionLockedException();
+    }
+  }
+
+  static bool _isPermissionDenied(Object e) =>
+      e is FirebaseException && (e.code == 'permission-denied' || e.code == 'unauthorized');
 
   static String fileTypeFor(File file) {
     final ext = file.path.toLowerCase();
@@ -119,6 +140,8 @@ class PrescriptionUploadService {
       throw PrescriptionTooLargeException(sizeBytes);
     }
 
+    await _ensureNotLocked(orderId);
+
     final fileName = uploadFile.path.split(Platform.pathSeparator).last;
     final storagePath =
         'order_prescriptions/$orderId/${DateTime.now().millisecondsSinceEpoch}_$fileName';
@@ -142,17 +165,34 @@ class PrescriptionUploadService {
 
     try {
       await task;
+    } on FirebaseException catch (e) {
+      // Storage rules refuse the write once the pharmacy has accepted.
+      if (_isPermissionDenied(e)) throw const PrescriptionLockedException();
+      rethrow;
     } finally {
       await progressSub.cancel();
     }
 
     final downloadUrl = await ref.getDownloadURL();
 
-    await _db.collection('orders').doc(orderId).update({
-      'prescriptionUrl': downloadUrl,
-      'prescriptionFileType': fileType,
-      'prescriptionUploadedAt': FieldValue.serverTimestamp(),
-    });
+    try {
+      await _db.collection('orders').doc(orderId).update({
+        'prescriptionUrl': downloadUrl,
+        'prescriptionFileType': fileType,
+        'prescriptionUploadedAt': FieldValue.serverTimestamp(),
+        'prescriptionAttachedBy': 'patient',
+      });
+    } catch (e) {
+      // The pharmacy accepted mid-upload: the file made it to Storage but
+      // the order now refuses it. Don't leave an orphaned object behind.
+      if (_isPermissionDenied(e)) {
+        try {
+          await ref.delete();
+        } catch (_) {}
+        throw const PrescriptionLockedException();
+      }
+      rethrow;
+    }
 
     return downloadUrl;
   }
@@ -210,6 +250,9 @@ class PrescriptionUploadService {
   /// to null). Best-effort Storage delete — a missing/already-deleted
   /// object never blocks clearing the Firestore fields.
   static Future<void> remove({required String orderId, required String? existingUrl}) async {
+    // Checked before the Storage delete — otherwise a locked order could
+    // lose its file while the Firestore clear below is (correctly) refused.
+    await _ensureNotLocked(orderId);
     if (existingUrl != null) {
       try {
         await _storage.refFromURL(existingUrl).delete();
@@ -222,6 +265,7 @@ class PrescriptionUploadService {
       'prescriptionUrl': null,
       'prescriptionFileType': null,
       'prescriptionUploadedAt': null,
+      'prescriptionAttachedBy': null,
     });
   }
 }

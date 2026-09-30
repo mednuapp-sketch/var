@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_rating_bar/flutter_rating_bar.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -289,16 +288,10 @@ class _PhysiotherapistProfileScreenState extends State<PhysiotherapistProfileScr
                                   overflow: TextOverflow.ellipsis),
                             const SizedBox(height: 10),
                             Row(mainAxisSize: MainAxisSize.min, children: [
-                              RatingBarIndicator(
-                                rating: p.rating,
-                                itemBuilder: (ctx, _) => const Icon(Icons.star_rounded, color: Color(0xFFF9A825)),
-                                itemCount: 5,
-                                itemSize: 16,
-                                unratedColor: Colors.white30,
-                              ),
+                              const Icon(Icons.event_available_rounded, size: 16, color: Colors.white70),
                               const SizedBox(width: 6),
                               Text(
-                                p.totalSessions > 0 ? '${p.rating.toStringAsFixed(1)} (${p.totalSessions} sessions)' : 'New',
+                                p.totalSessions > 0 ? '${p.totalSessions} sessions' : 'New',
                                 style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: Colors.white70),
                               ),
                             ]),

@@ -510,7 +510,7 @@ class _CardActions extends StatelessWidget {
         !isHospitalBillPayment &&
         status == BookingStatus.completed &&
         !(booking.rawData['isRated'] as bool? ?? false);
-    final canCancel = !isHospitalBillPayment && const {
+    final canCancel = !isHospitalBillPayment && booking.medicineCancelAllowed && const {
       BookingStatus.pending,
       BookingStatus.requested,
       BookingStatus.confirmed,

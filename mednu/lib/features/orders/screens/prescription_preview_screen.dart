@@ -53,6 +53,10 @@ class _PrescriptionPreviewScreenState extends State<PrescriptionPreviewScreen> {
       if (mounted) {
         FeedbackService.showError(context, 'That file is over the 20 MB limit. Please choose a smaller one.');
       }
+    } on PrescriptionLockedException {
+      if (!mounted) return;
+      FeedbackService.showError(context, 'The pharmacy has already accepted your prescription, so it can no longer be changed.');
+      Navigator.of(context).pop(false);
     } catch (e) {
       if (mounted) FeedbackService.showError(context, 'Upload failed. Please try again.');
     } finally {

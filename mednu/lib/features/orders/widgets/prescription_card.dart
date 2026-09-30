@@ -61,6 +61,10 @@ class PrescriptionCard extends StatelessWidget {
     try {
       await PrescriptionUploadService.remove(orderId: order.orderId, existingUrl: order.prescriptionUrl);
       if (context.mounted) FeedbackService.showSuccess(context, 'Prescription removed');
+    } on PrescriptionLockedException {
+      if (context.mounted) {
+        FeedbackService.showError(context, 'The pharmacy has already accepted your prescription, so it can no longer be removed.');
+      }
     } catch (e) {
       if (context.mounted) FeedbackService.showError(context, 'Could not remove the prescription. Please try again.');
     }
@@ -144,7 +148,12 @@ class PrescriptionCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          if (!order.hasPrescription)
+          if (!order.hasPrescription && order.isPrescriptionLocked)
+            Text(
+              'No prescription was attached to this order.',
+              style: AppTextStyles.bodySmall.copyWith(color: isDark ? Colors.white70 : AppColors.textSecondary),
+            )
+          else if (!order.hasPrescription)
             AppEmptyState(
               icon: Icons.upload_file_rounded,
               title: 'No prescription uploaded',
@@ -183,6 +192,16 @@ class PrescriptionCard extends StatelessWidget {
                       ),
               ),
             ),
+            if (order.prescriptionAttachedByPharmacy) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  const Icon(Icons.local_pharmacy_rounded, size: 14, color: AppColors.primary),
+                  const SizedBox(width: 6),
+                  Text('Attached by the pharmacy', style: AppTextStyles.bodySmall.copyWith(color: AppColors.primary)),
+                ],
+              ),
+            ],
             if (order.prescriptionWasRejected && order.prescriptionRejectedReason != null) ...[
               const SizedBox(height: 10),
               Container(
@@ -224,6 +243,33 @@ class PrescriptionCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 10),
+            // Driven by the realtime order stream: the moment the pharmacy
+            // accepts, Replace/Remove disappear without a refresh.
+            if (order.isPrescriptionLocked)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppColors.success.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.lock_rounded, color: AppColors.success, size: 16),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        order.status == 'cancelled'
+                            ? 'This order is cancelled — the prescription can no longer be changed or removed.'
+                            : 'Accepted by the pharmacy — this prescription can no longer be changed or removed.',
+                        style: AppTextStyles.bodySmall.copyWith(color: AppColors.success),
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
             Row(
               children: [
                 Expanded(
@@ -233,6 +279,9 @@ class PrescriptionCard extends StatelessWidget {
                     label: const Text('Replace'),
                   ),
                 ),
+                // The pharmacy's own copy can be replaced by a fresh upload
+                // but not deleted from the patient side.
+                if (!order.prescriptionAttachedByPharmacy) ...[
                 const SizedBox(width: 10),
                 Expanded(
                   child: OutlinedButton.icon(
@@ -242,6 +291,7 @@ class PrescriptionCard extends StatelessWidget {
                     label: const Text('Remove'),
                   ),
                 ),
+                ],
               ],
             ),
           ],
@@ -254,8 +304,16 @@ class PrescriptionCard extends StatelessWidget {
     if (order.prescriptionVerified == true) {
       return const StatusBadge(label: 'Verified', color: AppColors.success, icon: Icons.check_circle_rounded);
     }
+    if (order.status == 'cancelled') {
+      return const StatusBadge(label: 'Order Cancelled', color: AppColors.error, icon: Icons.cancel_outlined);
+    }
     if (order.prescriptionVerified == false) {
       return const StatusBadge(label: 'Action Needed', color: AppColors.error, icon: Icons.error_outline_rounded);
+    }
+    // No-prescription orders are accepted straight to 'verified' without a
+    // formal verdict — don't leave them saying "Pending Review" forever.
+    if (order.isPrescriptionLocked) {
+      return const StatusBadge(label: 'Accepted', color: AppColors.success, icon: Icons.check_circle_rounded);
     }
     return const StatusBadge(label: 'Pending Review', color: AppColors.warning, icon: Icons.hourglass_top_rounded);
   }

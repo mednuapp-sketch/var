@@ -921,6 +921,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
   Widget _buildActionButtons(BuildContext context, UnifiedBooking live) {
     final canCancel =
         live.source != BookingSource.hospitalBillPayment &&
+        live.medicineCancelAllowed &&
         live.isActive &&
         live.status != BookingStatus.inProgress &&
         live.status != BookingStatus.consultationStarted;

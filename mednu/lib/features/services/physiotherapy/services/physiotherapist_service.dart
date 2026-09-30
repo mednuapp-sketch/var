@@ -14,7 +14,7 @@ class PhysiotherapistService {
     return _db
         .collection('physiotherapists')
         .where('isAvailable', isEqualTo: true)
-        .orderBy('rating', descending: true)
+        .orderBy('totalSessions', descending: true)
         .snapshots()
         .map((s) => s.docs.map((d) => PhysiotherapistModel.fromFirestore(d)).toList());
   }

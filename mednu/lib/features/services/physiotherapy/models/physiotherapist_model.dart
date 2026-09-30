@@ -13,7 +13,6 @@ class PhysiotherapistModel {
   final List<String> certifications;
   final List<String> specialties;
   final int experienceYears;
-  final double rating;
   final int totalSessions;
   /// "Starting from" figure — the cheapest of [onlineRate]/[clinicRate]/
   /// [homeRate] that's actually offered, computed server-side (see
@@ -49,7 +48,6 @@ class PhysiotherapistModel {
     required this.certifications,
     required this.specialties,
     required this.experienceYears,
-    required this.rating,
     required this.totalSessions,
     required this.hourlyRate,
     this.onlineRate = 0,
@@ -73,7 +71,6 @@ class PhysiotherapistModel {
       certifications: ((d['certifications'] as List?) ?? const []).whereType<String>().toList(),
       specialties: ((d['specialties'] as List?) ?? const []).whereType<String>().toList(),
       experienceYears: (d['experienceYears'] as num?)?.toInt() ?? 0,
-      rating: (d['rating'] as num?)?.toDouble() ?? 0.0,
       totalSessions: (d['totalSessions'] as num?)?.toInt() ?? 0,
       hourlyRate: (d['hourlyRate'] as num?) ?? 0,
       onlineRate: (d['onlineRate'] as num?) ?? 0,

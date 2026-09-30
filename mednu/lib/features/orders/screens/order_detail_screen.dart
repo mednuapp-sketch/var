@@ -12,15 +12,10 @@ import '../models/order_model.dart';
 import '../providers/order_providers.dart';
 import '../widgets/prescription_card.dart';
 
-// A patient can cancel from any non-terminal status — the backend
-// (onMedicineOrderCancelledByPatient in functions/index.js) mirrors any
-// orders.status -> 'cancelled' write onto pharmacy_orders automatically, and
-// firestore.rules already allow-lists 'status'/'cancelReason'/'updatedAt' as
-// patient-self-updatable fields. Nothing server-side was missing — only this
-// button.
-const _kCancellableStatuses = {
-  'pending', 'confirmed', 'prescription_required', 'verified', 'packed', 'out_for_delivery',
-};
+// A patient can cancel until the pharmacy packs the order
+// (OrderModel.canPatientCancel). firestore.rules enforces the same limit, and
+// onMedicineOrderCancelledByPatient (functions/index.js) mirrors the cancel
+// onto pharmacy_orders — reverting it if the pharmacy packed in the meantime.
 
 Future<void> _cancelOrder(BuildContext context, String orderId) async {
   final confirm = await showDialog<bool>(
@@ -220,7 +215,7 @@ class _SummaryCard extends StatelessWidget {
               ),
             ]),
           ],
-          if (_kCancellableStatuses.contains(order.status)) ...[
+          if (order.canPatientCancel) ...[
             const SizedBox(height: 14),
             SizedBox(
               width: double.infinity,

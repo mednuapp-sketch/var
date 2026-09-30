@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../orders/models/order_model.dart';
 
 enum BookingSource {
   appointment,
@@ -312,15 +313,28 @@ class UnifiedBooking {
   /// needsPrescriptionDecision` already uses, not by a status string:
   /// `prescription_required` is a `pharmacy_orders`-only status that never
   /// lands on `orders.status` (see functions/index.js's pharmacy module).
+  ///
+  /// False once the prescription is locked (see [OrderModel.
+  /// isPrescriptionLocked]) — an order accepted without a formal verdict
+  /// (no-Rx orders go straight to 'verified') is no longer waiting on one.
   bool get needsPrescriptionDecision =>
       source == BookingSource.medicineOrder &&
       rawData['prescriptionUrl'] != null &&
-      rawData['prescriptionVerified'] == null;
+      rawData['prescriptionVerified'] == null &&
+      !OrderModel.prescriptionLockedIn(rawData);
 
-  /// True for a medicine order whose uploaded prescription was rejected.
+  /// True for a medicine order whose uploaded prescription was rejected and
+  /// can still be fixed — not once a hard rejection has cancelled it.
   bool get prescriptionWasRejected =>
       source == BookingSource.medicineOrder &&
-      rawData['prescriptionVerified'] == false;
+      rawData['prescriptionVerified'] == false &&
+      !OrderModel.prescriptionLockedIn(rawData);
+
+  /// Medicine orders can only be cancelled until the pharmacy packs them —
+  /// mirrors `_patientCancellableOrderStatuses` in firestore.rules.
+  bool get medicineCancelAllowed =>
+      source != BookingSource.medicineOrder ||
+      OrderModel.patientCancellableStatuses.contains(rawData['status']);
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 

@@ -46,6 +46,7 @@ class OrderModel {
   final DateTime? prescriptionUploadedAt;
   final bool? prescriptionVerified; // null = pending, true/false = decided
   final String? prescriptionRejectedReason;
+  final bool prescriptionAttachedByPharmacy;
 
   const OrderModel({
     required this.orderId,
@@ -64,6 +65,7 @@ class OrderModel {
     required this.prescriptionUploadedAt,
     required this.prescriptionVerified,
     required this.prescriptionRejectedReason,
+    this.prescriptionAttachedByPharmacy = false,
   });
 
   factory OrderModel.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
@@ -91,10 +93,28 @@ class OrderModel {
       prescriptionUploadedAt: (d['prescriptionUploadedAt'] as Timestamp?)?.toDate(),
       prescriptionVerified: d['prescriptionVerified'] as bool?,
       prescriptionRejectedReason: d['prescriptionRejectedReason'] as String?,
+      // Set by the Cloud Function when the pharmacy attaches its own copy.
+      prescriptionAttachedByPharmacy: d['prescriptionAttachedBy'] == 'pharmacy',
     );
   }
 
   bool get hasPrescription => prescriptionUrl != null;
   bool get needsPrescriptionDecision => hasPrescription && prescriptionVerified == null;
   bool get prescriptionWasRejected => prescriptionVerified == false;
+
+  /// Once the pharmacy has accepted the prescription (verified it, or the
+  /// order has moved past verification / been closed), the file is frozen —
+  /// no replace/remove from either side. Must stay in sync with
+  /// `_orderPrescriptionLocked` in firestore.rules / storage.rules, which is
+  /// what actually enforces it.
+  static const prescriptionLockedStatuses = {'verified', 'packed', 'out_for_delivery', 'delivered', 'cancelled'};
+  static bool prescriptionLockedIn(Map<String, dynamic> d) =>
+      d['prescriptionVerified'] == true || prescriptionLockedStatuses.contains(d['status']);
+  bool get isPrescriptionLocked =>
+      prescriptionVerified == true || prescriptionLockedStatuses.contains(status);
+
+  /// A patient may cancel only until the pharmacy packs the order. Must match
+  /// `_patientCancellableOrderStatuses` in firestore.rules.
+  static const patientCancellableStatuses = {'pending', 'confirmed', 'prescription_required', 'verified'};
+  bool get canPatientCancel => patientCancellableStatuses.contains(status);
 }
