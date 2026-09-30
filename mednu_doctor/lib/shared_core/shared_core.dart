@@ -17,6 +17,7 @@ export 'providers/role_providers.dart';
 // Services
 export 'services/role_migration_hook.dart';
 export 'services/role_prefs.dart';
+export 'services/pending_profile_edit_service.dart';
 
 // Widgets
 export 'widgets/app_shell.dart';
@@ -24,6 +25,7 @@ export 'widgets/profile_avatar.dart';
 export 'widgets/role_badge.dart';
 export 'widgets/role_switcher_sheet.dart';
 export 'widgets/shared_state_widgets.dart';
+export 'widgets/pending_review_banner.dart';
 
 // Navigation
 export 'navigation/adaptive_side_rail.dart';

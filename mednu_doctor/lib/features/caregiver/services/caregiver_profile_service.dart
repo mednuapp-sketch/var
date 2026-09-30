@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import '../../../shared_core/services/pending_profile_edit_service.dart';
 
 /// Mirrors `LabProfileService` for the Caregiver role: a thin static-method
 /// wrapper around `caregiver_profiles/{uid}`. A caregiver partner is the
@@ -77,9 +78,14 @@ class CaregiverProfileService {
 
   /// `status`/`isVerified`/`rating`/`totalReviews`/`totalVisits` are rejected
   /// by `firestore.rules` for a self-update — a partner can't self-approve or
-  /// inflate its own stats.
-  static Future<void> updateProfile(String uid, Map<String, dynamic> data) =>
-      _db.collection('caregiver_profiles').doc(uid).set(data, SetOptions(merge: true));
+  /// inflate its own stats. Once `currentStatus` is 'active', this doesn't
+  /// touch the live fields at all — see [PendingProfileEditService].
+  static Future<void> updateProfile(String uid, Map<String, dynamic> data, {required String currentStatus}) =>
+      PendingProfileEditService.apply(
+        ref: _db.collection('caregiver_profiles').doc(uid),
+        currentStatus: currentStatus,
+        fields: data,
+      );
 
   /// Persists the Dashboard's on-duty/availability toggle. Not in
   /// firestore.rules' protected-fields list for this collection, so a
@@ -91,13 +97,13 @@ class CaregiverProfileService {
         'isOnDuty': value,
       }, SetOptions(merge: true));
 
-  /// `photoUrl` isn't in firestore.rules' protected-fields list for this
-  /// collection either, so a self-write is allowed — same trust boundary as
-  /// [updateOnDuty]/[updateProfile]. Used by [CaregiverProfileScreen]'s
-  /// avatar upload/remove flow, mirroring `HospitalProfileService.
-  /// updatePhotoUrl`.
-  static Future<void> updatePhotoUrl(String uid, String photoUrl) =>
-      _db.collection('caregiver_profiles').doc(uid).set({
-        'photoUrl': photoUrl,
-      }, SetOptions(merge: true));
+  /// Used by [CaregiverProfileScreen]'s avatar upload/remove flow. Once
+  /// `currentStatus` is 'active', this doesn't touch the live `photoUrl` at
+  /// all — see [PendingProfileEditService].
+  static Future<void> updatePhotoUrl(String uid, String photoUrl, {required String currentStatus}) =>
+      PendingProfileEditService.apply(
+        ref: _db.collection('caregiver_profiles').doc(uid),
+        currentStatus: currentStatus,
+        fields: {'photoUrl': photoUrl},
+      );
 }

@@ -32,7 +32,7 @@ class HelpSupportScreen extends StatelessWidget {
     },
     {
       'q': 'Can patients see my location?',
-      'a': 'Patients can see your approximate area (within 10 km) when you are online. Your exact address is never shared.',
+      'a': 'For in-person visits, patients can sort doctors by distance from their own area — your exact address is never shared. For video, audio and chat consultations, your location is not used or shown at all; any online doctor is visible to any patient nationwide.',
     },
   ];
 

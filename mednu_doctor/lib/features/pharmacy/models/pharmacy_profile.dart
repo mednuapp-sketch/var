@@ -32,6 +32,14 @@ class PharmacyProfile {
   final Map<String, dynamic> documents;
   final Map<String, dynamic> documentVerification;
 
+  /// True once a self-edit has been submitted while `status == 'active'`
+  /// and is awaiting admin approval — see [PendingProfileEditService].
+  /// [pendingChanges] holds exactly what was last submitted (a full
+  /// snapshot of the editable fields), so the edit form can show it back
+  /// to the partner even though it isn't live yet.
+  final bool hasPendingChanges;
+  final Map<String, dynamic> pendingChanges;
+
   const PharmacyProfile({
     required this.uid,
     required this.name,
@@ -52,6 +60,8 @@ class PharmacyProfile {
     this.acceptingOrders = true,
     this.documents = const {},
     this.documentVerification = const {},
+    this.hasPendingChanges = false,
+    this.pendingChanges = const {},
   });
 
   factory PharmacyProfile.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
@@ -80,6 +90,9 @@ class PharmacyProfile {
           (d['documents'] as Map?) ?? const <String, dynamic>{}),
       documentVerification: Map<String, dynamic>.from(
           (d['documentVerification'] as Map?) ?? const <String, dynamic>{}),
+      hasPendingChanges: (d['hasPendingChanges'] as bool?) ?? false,
+      pendingChanges: Map<String, dynamic>.from(
+          (d['pendingChanges'] as Map?) ?? const <String, dynamic>{}),
     );
   }
 }

@@ -269,7 +269,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Text('Allow Location', style: AppTextStyles.h4),
         ]),
         content: Text(
-          'MedNU Service needs location permission to show you to patients within 7–10 km.\n\nPlease allow "While using the app" in app settings.',
+          'MedNU Service needs location permission to list you for in-person visits near your patients.\n\nVideo, audio and chat consultations aren\'t affected by location.\n\nPlease allow "While using the app" in app settings.',
           style: AppTextStyles.bodySmall.copyWith(height: 1.5),
         ),
         actions: [
@@ -522,7 +522,7 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                                       child: Row(mainAxisSize: MainAxisSize.min, children: [
                                         Icon(Icons.my_location_rounded, size: R.w(context, 12), color: Colors.white),
                                         SizedBox(width: R.p(context, 5)),
-                                        Flexible(child: Text('GPS Active • Visible within 10 km', style: AppTextStyles.caption.copyWith(fontSize: R.sp(context, 10), color: Colors.white))),
+                                        Flexible(child: Text('GPS Active • Visible to all patients', style: AppTextStyles.caption.copyWith(fontSize: R.sp(context, 10), color: Colors.white))),
                                       ]),
                                     ),
                                   ],

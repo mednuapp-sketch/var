@@ -135,6 +135,7 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
   final _selectedLanguages = <String>{'English'};
 
   bool _saving = false;
+  bool _declarationAccepted = false;
   bool _termsAccepted = false;
 
   // Verification documents, keyed by canonical docType — picked here and
@@ -211,6 +212,10 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
     }
     if (_role == AppRole.hospital && _selectedHospitalId == null) {
       FeedbackService.showError(context, 'Select which hospital you represent.');
+      return;
+    }
+    if (!_declarationAccepted) {
+      FeedbackService.showError(context, 'Please accept the declaration to proceed.');
       return;
     }
     if (!_termsAccepted) {
@@ -452,13 +457,15 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
                   ..._fieldsForRole(),
                   ..._documentFieldsForRole(),
                   const SizedBox(height: 22),
+                  _declarationCard(),
+                  const SizedBox(height: 16),
                   _termsCheckbox(),
                   const SizedBox(height: 20),
                   GradientButton(
                     label: 'Submit for Approval',
                     icon: Icons.send_rounded,
                     isLoading: _saving,
-                    onTap: (_saving || !_termsAccepted) ? null : _submit,
+                    onTap: (_saving || !_declarationAccepted || !_termsAccepted) ? null : _submit,
                   ),
                   const SizedBox(height: 10),
                   Center(
@@ -1011,53 +1018,160 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
     } catch (_) {}
   }
 
+  /// Mirrors `DoctorRegisterScreen`'s Declaration step — same card layout,
+  /// generalised wording since this screen covers every non-Doctor role
+  /// (Lab/Pharmacy/Ambulance/Caregiver/Physiotherapist/Counsellor/
+  /// Nutritionist/Hospital) rather than one licensed profession. Gates
+  /// [_submit] via [_declarationAccepted], enforced there, not just here.
+  Widget _declarationCard() {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
+            child: const Icon(Icons.gavel_rounded, color: AppColors.primary, size: 20),
+          ),
+          const SizedBox(width: 10),
+          const Text('Declaration', style: AppTextStyles.h4),
+        ]),
+        const SizedBox(height: 16),
+        const _PartnerDeclText(
+          'I, the undersigned, hereby declare that:\n\n'
+          '1. I wish to register with MedNU as a service partner on this platform.\n\n'
+          '2. All the information and documents submitted by me are true, correct, and authentic to the best of my knowledge.\n\n'
+          '3. I hold any licence, registration, or certification required by law to offer the services I have listed.\n\n'
+          '4. I will maintain professional standards and comply with all applicable laws while providing services through MedNU.\n\n'
+          '5. I understand that providing false information may result in immediate termination of my account and may attract legal consequences.\n\n'
+          '6. I consent to MedNU verifying my submitted documents and credentials.',
+        ),
+        const SizedBox(height: 16),
+        InkWell(
+          onTap: () => setState(() => _declarationAccepted = !_declarationAccepted),
+          borderRadius: BorderRadius.circular(8),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: 22,
+              height: 22,
+              decoration: BoxDecoration(
+                color: _declarationAccepted ? AppColors.primary : Colors.white,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(
+                  color: _declarationAccepted ? AppColors.primary : AppColors.border,
+                  width: 2,
+                ),
+              ),
+              child: _declarationAccepted
+                  ? const Icon(Icons.check_rounded, color: Colors.white, size: 14)
+                  : null,
+            ),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Text(
+                'I confirm that I wish to register with MedNU as a service partner and all the above statements are true.',
+                style: TextStyle(fontFamily: 'Inter', fontSize: 13, height: 1.5),
+              ),
+            ),
+          ]),
+        ),
+      ]),
+    );
+  }
+
   /// Gates [_submit] — enforced there via [_termsAccepted], not just
   /// visually here. Every non-Doctor role funnels through this one screen,
   /// so a single checkbox covers Lab/Pharmacy/Ambulance/Caregiver/
   /// Physiotherapist/Nutritionist/Hospital at once.
   Widget _termsCheckbox() {
-    return InkWell(
-      onTap: () => setState(() => _termsAccepted = !_termsAccepted),
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: AppColors.surfaceVariant,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: _termsAccepted ? AppColors.primary : AppColors.border,
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(color: AppColors.secondary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
+            child: const Icon(Icons.description_rounded, color: AppColors.secondary, size: 20),
+          ),
+          const SizedBox(width: 10),
+          const Text('Terms & Conditions', style: AppTextStyles.h4),
+        ]),
+        const SizedBox(height: 14),
+        Container(
+          height: 140,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: AppColors.background,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: AppColors.divider),
+          ),
+          child: const SingleChildScrollView(
+            child: _PartnerDeclText(
+              'By registering on the MedNU Service platform, you agree to:\n\n'
+              '• Provide accurate and up-to-date service details to patients.\n\n'
+              '• Maintain confidentiality of patient information and comply with applicable privacy laws.\n\n'
+              '• Not misuse the platform for non-service solicitation or advertising.\n\n'
+              '• Allow MedNU to display your profile, ratings, and reviews to patients.\n\n'
+              '• Respond to bookings and requests in a timely and professional manner.\n\n'
+              '• Comply with all applicable regulations and licensing requirements for your service category.\n\n'
+              '• Allow MedNU to collect a platform service fee per transaction as per the agreed rate.\n\n'
+              '• Accept that MedNU may suspend or terminate your account for violations of these terms.',
+            ),
           ),
         ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Checkbox(
-              value: _termsAccepted,
-              onChanged: (v) => setState(() => _termsAccepted = v ?? false),
-              activeColor: AppColors.primary,
+        const SizedBox(height: 14),
+        InkWell(
+          onTap: () => setState(() => _termsAccepted = !_termsAccepted),
+          borderRadius: BorderRadius.circular(8),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: 22,
+              height: 22,
+              decoration: BoxDecoration(
+                color: _termsAccepted ? AppColors.secondary : Colors.white,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(
+                  color: _termsAccepted ? AppColors.secondary : AppColors.border,
+                  width: 2,
+                ),
+              ),
+              child: _termsAccepted
+                  ? const Icon(Icons.check_rounded, color: Colors.white, size: 14)
+                  : null,
             ),
+            const SizedBox(width: 10),
             Expanded(
-              child: Padding(
-                padding: const EdgeInsets.only(top: 12),
-                child: RichText(
-                  text: TextSpan(
-                    style: AppTextStyles.bodySmall.copyWith(color: AppColors.textPrimary),
-                    children: [
-                      const TextSpan(text: 'I have read and agree to the '),
-                      TextSpan(
-                        text: 'Terms & Conditions',
-                        style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700),
-                        recognizer: TapGestureRecognizer()..onTap = _openTerms,
-                      ),
-                      const TextSpan(text: ' for registering as a MedNU partner.'),
-                    ],
-                  ),
+              child: RichText(
+                text: TextSpan(
+                  style: AppTextStyles.bodySmall.copyWith(color: AppColors.textPrimary),
+                  children: [
+                    const TextSpan(text: 'I have read and agree to the '),
+                    TextSpan(
+                      text: 'MedNU Terms & Conditions',
+                      style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700),
+                      recognizer: TapGestureRecognizer()..onTap = _openTerms,
+                    ),
+                    const TextSpan(text: ' and Privacy Policy for registering as a MedNU partner.'),
+                  ],
                 ),
               ),
             ),
-          ],
+          ]),
         ),
-      ),
+      ]),
     );
   }
 
@@ -1307,4 +1421,23 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
       },
     );
   }
+}
+
+/// Same look as `DoctorRegisterScreen`'s private `_DeclText` — kept as its
+/// own copy here rather than shared, since both are file-private widgets
+/// with no third caller to justify hoisting into shared_core.
+class _PartnerDeclText extends StatelessWidget {
+  final String text;
+  const _PartnerDeclText(this.text);
+
+  @override
+  Widget build(BuildContext context) => Text(
+        text,
+        style: const TextStyle(
+          fontFamily: 'Inter',
+          fontSize: 12.5,
+          height: 1.6,
+          color: AppColors.textSecondary,
+        ),
+      );
 }

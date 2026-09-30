@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import '../../../shared_core/services/pending_profile_edit_service.dart';
 
 /// Mirrors the structure of `DoctorAuthService` for the Lab & Diagnostics
 /// role: a thin static-method wrapper around `lab_profiles/{uid}`. This
@@ -66,13 +67,24 @@ class LabProfileService {
     });
   }
 
-  static Future<void> updateProfile(String uid, Map<String, dynamic> data) =>
-      _db.collection('lab_profiles').doc(uid).update(data);
+  /// Once `currentStatus` is 'active', this doesn't touch the live fields
+  /// at all — see [PendingProfileEditService].
+  static Future<void> updateProfile(String uid, Map<String, dynamic> data, {required String currentStatus}) =>
+      PendingProfileEditService.apply(
+        ref: _db.collection('lab_profiles').doc(uid),
+        currentStatus: currentStatus,
+        fields: data,
+      );
 
   /// Sets just `photoUrl` — used by the avatar upload/remove flow on
-  /// [LabProfileScreen], mirroring `HospitalProfileService.updatePhotoUrl`.
-  static Future<void> updatePhotoUrl(String uid, String photoUrl) =>
-      _db.collection('lab_profiles').doc(uid).update({'photoUrl': photoUrl});
+  /// [LabProfileScreen]. Once `currentStatus` is 'active', this doesn't
+  /// touch the live `photoUrl` at all — see [PendingProfileEditService].
+  static Future<void> updatePhotoUrl(String uid, String photoUrl, {required String currentStatus}) =>
+      PendingProfileEditService.apply(
+        ref: _db.collection('lab_profiles').doc(uid),
+        currentStatus: currentStatus,
+        fields: {'photoUrl': photoUrl},
+      );
 
   /// Sets `acceptingBookings` — the lab's own "Accepting New Bookings"
   /// availability toggle (order-fulfillment based, no location component).

@@ -126,7 +126,7 @@ class _CounsellingProfileScreenState extends ConsumerState<CounsellingProfileScr
           'specialties': split(specialties),
           'hourlyRate': rate,
           'experienceYears': years,
-        });
+        }, currentStatus: current.status);
       } else {
         await CounsellingProfileService.createProfile(
           uid: uid,
@@ -243,7 +243,7 @@ class _CounsellingProfileScreenState extends ConsumerState<CounsellingProfileScr
         },
       );
       if (!mounted) return;
-      await CounsellingProfileService.updatePhotoUrl(uid, url);
+      await CounsellingProfileService.updatePhotoUrl(uid, url, currentStatus: ref.read(counsellingProfileProvider).status);
       if (!mounted) return;
       setState(() => _uploading = false);
       FeedbackService.showSuccess(context, 'Profile photo updated!');
@@ -264,7 +264,7 @@ class _CounsellingProfileScreenState extends ConsumerState<CounsellingProfileScr
     setState(() => _uploading = true);
     try {
       await ImageUploadService.deletePartnerProfileImage(profileCollection: 'counsellor_profiles', uid: uid);
-      await CounsellingProfileService.updatePhotoUrl(uid, '');
+      await CounsellingProfileService.updatePhotoUrl(uid, '', currentStatus: ref.read(counsellingProfileProvider).status);
       if (!mounted) return;
       setState(() {
         _localImage = null;
@@ -321,21 +321,6 @@ class _CounsellingProfileScreenState extends ConsumerState<CounsellingProfileScr
                 ),
                 child: ClipOval(child: imageCircle),
               ),
-              if (profile.documentsVerified && !_uploading)
-                Positioned(
-                  right: -2,
-                  top: -2,
-                  child: Container(
-                    width: 22,
-                    height: 22,
-                    decoration: BoxDecoration(
-                      color: AppColors.success,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 1.6),
-                    ),
-                    child: const Icon(Icons.verified_rounded, size: 14, color: Colors.white),
-                  ),
-                ),
               if (_uploading)
                 Container(
                   width: 76,
@@ -409,6 +394,7 @@ class _CounsellingProfileScreenState extends ConsumerState<CounsellingProfileScr
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          if (profile.hasPendingChanges) const PendingReviewBanner(),
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(24),
@@ -443,11 +429,9 @@ class _CounsellingProfileScreenState extends ConsumerState<CounsellingProfileScr
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
+                const Row(
                   children: [
-                    const Text('Certifications', style: AppTextStyles.labelMedium),
-                    const Spacer(),
-                    if (profile.documentsVerified) const StatusBadge(label: 'Verified', color: AppColors.success, icon: Icons.verified_rounded),
+                    Text('Certifications', style: AppTextStyles.labelMedium),
                   ],
                 ),
                 const SizedBox(height: 12),

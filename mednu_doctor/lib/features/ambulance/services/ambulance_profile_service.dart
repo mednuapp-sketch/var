@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import '../../../shared_core/services/pending_profile_edit_service.dart';
 
 /// Mirrors `LabProfileService` for the Ambulance role: a thin static-method
 /// wrapper around `ambulance_profiles/{uid}`. This never touches the
@@ -64,15 +65,22 @@ class AmbulanceProfileService {
 
   /// `status`/`isVerified`/`rating`/`totalReviews`/`totalTrips` are rejected
   /// by `firestore.rules` for a self-update — a partner can't self-approve or
-  /// inflate its own stats.
-  static Future<void> updateProfile(String uid, Map<String, dynamic> data) =>
-      _db.collection('ambulance_profiles').doc(uid).set(data, SetOptions(merge: true));
+  /// inflate its own stats. Once `currentStatus` is 'active', this doesn't
+  /// touch the live fields at all — see [PendingProfileEditService].
+  static Future<void> updateProfile(String uid, Map<String, dynamic> data, {required String currentStatus}) =>
+      PendingProfileEditService.apply(
+        ref: _db.collection('ambulance_profiles').doc(uid),
+        currentStatus: currentStatus,
+        fields: data,
+      );
 
-  /// Persists the vehicle/driver avatar URL after an upload or removal —
-  /// only `photoUrl` is affected, same trust boundary as [updateProfile].
-  /// Mirrors `HospitalProfileService.updatePhotoUrl`.
-  static Future<void> updatePhotoUrl(String uid, String photoUrl) =>
-      _db.collection('ambulance_profiles').doc(uid).set({
-        'photoUrl': photoUrl,
-      }, SetOptions(merge: true));
+  /// Persists the vehicle/driver avatar URL after an upload or removal.
+  /// Once `currentStatus` is 'active', this doesn't touch the live
+  /// `photoUrl` at all — see [PendingProfileEditService].
+  static Future<void> updatePhotoUrl(String uid, String photoUrl, {required String currentStatus}) =>
+      PendingProfileEditService.apply(
+        ref: _db.collection('ambulance_profiles').doc(uid),
+        currentStatus: currentStatus,
+        fields: {'photoUrl': photoUrl},
+      );
 }

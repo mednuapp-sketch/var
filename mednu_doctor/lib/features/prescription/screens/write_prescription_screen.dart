@@ -149,7 +149,6 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
   String? _doctorSignatureUrl;
   String? _patientAge;
   String? _patientGender;
-  String? _patientPhone;
 
   // â”€â”€ Auto-save â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Timer? _autoSaveTimer;
@@ -240,7 +239,6 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
       setState(() {
         _patientAge    = age;
         _patientGender = d['gender'] as String?;
-        _patientPhone  = d['phone']  as String?;
       });
     } catch (_) {}
   }
@@ -433,7 +431,6 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
         'patientName':           widget.patientName,
         'patientAge':    _patientAge    ?? '--',
         'patientGender': _patientGender ?? '--',
-        'patientPhone':  _patientPhone  ?? '',
         'chiefComplaints':       _chiefComplaintsCtrl.text.trim(),
         'history':               _historyCtrl.text.trim(),
         'historyComorbidities':  _historyCtrl.text.trim(),
@@ -817,7 +814,6 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
             patientId:       widget.patientId,
             patientAge:    _patientAge,
             patientGender: _patientGender,
-            patientPhone:  _patientPhone,
             doctorName:    _doctorName,
             doctorSpecialty: _doctorSpecialty,
             doctorRegNo:     _doctorRegNo,
@@ -1073,7 +1069,6 @@ class _RxHeaderBanner extends StatelessWidget {
   final String  patientId;
   final String? patientAge;
   final String? patientGender;
-  final String? patientPhone;
   final String? doctorName;
   final String? doctorSpecialty;
   final String? doctorRegNo;
@@ -1084,7 +1079,6 @@ class _RxHeaderBanner extends StatelessWidget {
     required this.patientId,
     this.patientAge,
     this.patientGender,
-    this.patientPhone,
     this.doctorName,
     this.doctorSpecialty,
     this.doctorRegNo,
@@ -1248,8 +1242,6 @@ class _RxHeaderBanner extends StatelessWidget {
                     if (patientGender?.isNotEmpty == true)
                       _InfoChip(Icons.person_outline_rounded,
                           patientGender!),
-                    if (patientPhone?.isNotEmpty == true)
-                      _InfoChip(Icons.phone_outlined, patientPhone!),
                   ],
                 ),
               ],

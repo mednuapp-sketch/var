@@ -150,7 +150,7 @@ class _AmbulanceVehicleProfileScreenState extends ConsumerState<AmbulanceVehicle
           'driverPhone': driverPhone.text.trim(),
           'driverLicense': driverLicense.text.trim(),
           'equipment': equipmentList,
-        });
+        }, currentStatus: current.status);
       } else {
         await AmbulanceProfileService.createProfile(
           uid: uid,
@@ -268,7 +268,7 @@ class _AmbulanceVehicleProfileScreenState extends ConsumerState<AmbulanceVehicle
         },
       );
       if (!mounted) return;
-      await AmbulanceProfileService.updatePhotoUrl(uid, url);
+      await AmbulanceProfileService.updatePhotoUrl(uid, url, currentStatus: ref.read(vehicleProfileProvider).status);
       if (!mounted) return;
       setState(() {
         _currentPhotoUrl = url;
@@ -292,7 +292,7 @@ class _AmbulanceVehicleProfileScreenState extends ConsumerState<AmbulanceVehicle
     setState(() => _uploading = true);
     try {
       await ImageUploadService.deletePartnerProfileImage(profileCollection: 'ambulance_profiles', uid: uid);
-      await AmbulanceProfileService.updatePhotoUrl(uid, '');
+      await AmbulanceProfileService.updatePhotoUrl(uid, '', currentStatus: ref.read(vehicleProfileProvider).status);
       if (!mounted) return;
       setState(() {
         _currentPhotoUrl = '';
@@ -428,6 +428,7 @@ class _AmbulanceVehicleProfileScreenState extends ConsumerState<AmbulanceVehicle
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          if (vehicle.hasPendingChanges) const PendingReviewBanner(),
           FadeInSlide(child: Center(child: _buildAvatar(vehicle))),
           const SizedBox(height: 20),
           Container(
@@ -469,17 +470,15 @@ class _AmbulanceVehicleProfileScreenState extends ConsumerState<AmbulanceVehicle
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
+                const Row(
                   children: [
-                    const Text('Driver', style: AppTextStyles.labelMedium),
-                    const Spacer(),
-                    if (vehicle.documentsVerified) const StatusBadge(label: 'Verified', color: AppColors.success, icon: Icons.verified_rounded),
+                    Text('Driver', style: AppTextStyles.labelMedium),
                   ],
                 ),
                 const SizedBox(height: 10),
                 Row(
                   children: [
-                    SharedProfileAvatar(name: vehicle.driverName, size: 46, isVerified: vehicle.documentsVerified),
+                    SharedProfileAvatar(name: vehicle.driverName, size: 46),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(

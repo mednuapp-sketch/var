@@ -42,6 +42,14 @@ class CaregiverProfile {
   final Map<String, dynamic> documents;
   final Map<String, dynamic> documentVerification;
 
+  /// True once a self-edit has been submitted while `status == 'active'`
+  /// and is awaiting admin approval — see [PendingProfileEditService].
+  /// [pendingChanges] holds exactly what was last submitted (a full
+  /// snapshot of the editable fields), so the edit form can show it back
+  /// to the partner even though it isn't live yet.
+  final bool hasPendingChanges;
+  final Map<String, dynamic> pendingChanges;
+
   const CaregiverProfile({
     required this.name,
     required this.photoUrl,
@@ -61,6 +69,8 @@ class CaregiverProfile {
     this.gender = '',
     this.serviceType = 'caregiver',
     this.isOnDuty = false,
+    this.hasPendingChanges = false,
+    this.pendingChanges = const {},
   });
 
   /// What the Profile screen renders before the partner has completed
@@ -106,6 +116,9 @@ class CaregiverProfile {
       gender: d['gender'] as String? ?? '',
       serviceType: d['serviceType'] as String? ?? 'caregiver',
       isOnDuty: d['isOnDuty'] as bool? ?? false,
+      hasPendingChanges: d['hasPendingChanges'] as bool? ?? false,
+      pendingChanges: Map<String, dynamic>.from(
+          (d['pendingChanges'] as Map?) ?? const <String, dynamic>{}),
     );
   }
 }

@@ -200,7 +200,7 @@ class _NutritionProfileScreenState extends ConsumerState<NutritionProfileScreen>
         if (lat != null && lng != null) 'lng': lng,
         'bio': bio.text.trim(),
         'languages': selectedLanguages.toList(),
-      });
+      }, currentStatus: current.status);
       if (context.mounted) FeedbackService.showSuccess(context, 'Profile saved');
     } catch (_) {
       if (context.mounted) {
@@ -307,7 +307,7 @@ class _NutritionProfileScreenState extends ConsumerState<NutritionProfileScreen>
         },
       );
       if (!mounted) return;
-      await NutritionistProfileService.updatePhotoUrl(uid, url);
+      await NutritionistProfileService.updatePhotoUrl(uid, url, currentStatus: ref.read(nutritionistProfileProvider).valueOrNull?.status ?? 'pending');
       if (!mounted) return;
       setState(() {
         _currentPhotoUrl = url;
@@ -331,7 +331,7 @@ class _NutritionProfileScreenState extends ConsumerState<NutritionProfileScreen>
     setState(() => _uploading = true);
     try {
       await ImageUploadService.deletePartnerProfileImage(profileCollection: 'nutritionist_profiles', uid: uid);
-      await NutritionistProfileService.updatePhotoUrl(uid, '');
+      await NutritionistProfileService.updatePhotoUrl(uid, '', currentStatus: ref.read(nutritionistProfileProvider).valueOrNull?.status ?? 'pending');
       if (!mounted) return;
       setState(() {
         _currentPhotoUrl = '';
@@ -459,6 +459,7 @@ class _NutritionProfileScreenState extends ConsumerState<NutritionProfileScreen>
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          if (profile.hasPendingChanges) const PendingReviewBanner(),
           if (profile.status == 'pending')
             const Padding(
               padding: EdgeInsets.only(bottom: 12),
@@ -514,12 +515,9 @@ class _NutritionProfileScreenState extends ConsumerState<NutritionProfileScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
+                  const Row(
                     children: [
-                      const Text('Qualification', style: AppTextStyles.labelMedium),
-                      const Spacer(),
-                      if (profile.documentsVerified)
-                        const StatusBadge(label: 'Verified', color: AppColors.success, icon: Icons.verified_rounded),
+                      Text('Qualification', style: AppTextStyles.labelMedium),
                     ],
                   ),
                   const SizedBox(height: 10),

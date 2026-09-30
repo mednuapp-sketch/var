@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import '../../../shared_core/services/pending_profile_edit_service.dart';
 
 /// Mirrors `CaregiverProfileService` for the Physiotherapist role: a thin
 /// static-method wrapper around `physiotherapist_profiles/{uid}`. Note the
@@ -85,12 +86,20 @@ class PhysioProfileService {
   }
 
   /// `status`/`isVerified`/`rating`/`totalReviews`/`totalSessions` are
-  /// rejected by `firestore.rules` for a self-update.
-  static Future<void> updateProfile(String uid, Map<String, dynamic> data) =>
-      _db.collection('physiotherapist_profiles').doc(uid).set(data, SetOptions(merge: true));
+  /// rejected by `firestore.rules` for a self-update. Once `currentStatus`
+  /// is 'active', this doesn't touch the live fields at all — see
+  /// [PendingProfileEditService].
+  static Future<void> updateProfile(String uid, Map<String, dynamic> data, {required String currentStatus}) =>
+      PendingProfileEditService.apply(
+        ref: _db.collection('physiotherapist_profiles').doc(uid),
+        currentStatus: currentStatus,
+        fields: data,
+      );
 
-  static Future<void> updatePhotoUrl(String uid, String photoUrl) =>
-      _db.collection('physiotherapist_profiles').doc(uid).set({
-        'photoUrl': photoUrl,
-      }, SetOptions(merge: true));
+  static Future<void> updatePhotoUrl(String uid, String photoUrl, {required String currentStatus}) =>
+      PendingProfileEditService.apply(
+        ref: _db.collection('physiotherapist_profiles').doc(uid),
+        currentStatus: currentStatus,
+        fields: {'photoUrl': photoUrl},
+      );
 }

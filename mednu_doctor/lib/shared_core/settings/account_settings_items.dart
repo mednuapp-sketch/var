@@ -1,10 +1,11 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/router/app_router.dart';
 import '../../core/services/feedback_service.dart';
 import '../../core/widgets/mednu_components.dart';
-import '../../features/auth/services/doctor_auth_service.dart';
+import '../services/role_prefs.dart';
 import 'account_deletion_service.dart';
 import 'settings_models.dart';
 
@@ -83,7 +84,12 @@ class AccountSettingsItems {
             ? 'A deletion request is already pending for your account.'
             : 'Deletion request submitted.',
       );
-      await DoctorAuthService.signOut();
+      // Role-agnostic sign-out — this helper is shared across all 9 roles
+      // (Doctor + 8 partner roles), so it must not depend on any single
+      // role's own auth service. Clears the cached "active role" the same
+      // way DoctorAuthService.signOut() did, then signs out of Firebase.
+      await RolePrefs.clear();
+      await FirebaseAuth.instance.signOut();
       if (context.mounted) context.go(AppRoutes.login);
     } catch (_) {
       if (!context.mounted) return;

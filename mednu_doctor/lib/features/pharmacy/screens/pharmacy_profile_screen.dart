@@ -74,7 +74,7 @@ class _PharmacyProfileScreenState extends ConsumerState<PharmacyProfileScreen> {
         if (_addressLng != null) 'longitude': _addressLng,
         if (_addressCity.isNotEmpty) 'city': _addressCity,
         'phone': _phoneCtrl.text.trim(),
-      });
+      }, currentStatus: ref.read(pharmacyProfileProvider).valueOrNull?.status ?? 'pending');
       if (!mounted) return;
       FeedbackService.showSuccess(context, 'Profile updated');
       setState(() => _editing = false);
@@ -191,7 +191,7 @@ class _PharmacyProfileScreenState extends ConsumerState<PharmacyProfileScreen> {
         },
       );
       if (!mounted) return;
-      await PharmacyProfileService.updatePhotoUrl(uid, url);
+      await PharmacyProfileService.updatePhotoUrl(uid, url, currentStatus: ref.read(pharmacyProfileProvider).valueOrNull?.status ?? 'pending');
       if (!mounted) return;
       setState(() {
         _currentPhotoUrl = url;
@@ -215,7 +215,7 @@ class _PharmacyProfileScreenState extends ConsumerState<PharmacyProfileScreen> {
     setState(() => _uploading = true);
     try {
       await ImageUploadService.deletePartnerProfileImage(profileCollection: 'pharmacy_profiles', uid: uid);
-      await PharmacyProfileService.updatePhotoUrl(uid, '');
+      await PharmacyProfileService.updatePhotoUrl(uid, '', currentStatus: ref.read(pharmacyProfileProvider).valueOrNull?.status ?? 'pending');
       if (!mounted) return;
       setState(() {
         _currentPhotoUrl = '';
@@ -363,6 +363,7 @@ class _PharmacyProfileScreenState extends ConsumerState<PharmacyProfileScreen> {
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
+              if (profile.hasPendingChanges) const PendingReviewBanner(),
               Center(child: _buildAvatar()),
               const SizedBox(height: 16),
               PremiumCard(

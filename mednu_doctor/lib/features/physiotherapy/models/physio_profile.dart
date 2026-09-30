@@ -46,6 +46,14 @@ class PhysioProfile {
   final bool isOnline;
   final DateTime? lastHeartbeat;
 
+  /// True once a self-edit has been submitted while `status == 'active'`
+  /// and is awaiting admin approval — see [PendingProfileEditService].
+  /// [pendingChanges] holds exactly what was last submitted (a full
+  /// snapshot of the editable fields), so the edit form can show it back
+  /// to the partner even though it isn't live yet.
+  final bool hasPendingChanges;
+  final Map<String, dynamic> pendingChanges;
+
   const PhysioProfile({
     required this.name,
     required this.photoUrl,
@@ -68,6 +76,8 @@ class PhysioProfile {
     this.documentVerification = const {},
     this.isOnline = false,
     this.lastHeartbeat,
+    this.hasPendingChanges = false,
+    this.pendingChanges = const {},
   });
 
   /// What the Profile screen renders before the partner has completed
@@ -114,6 +124,9 @@ class PhysioProfile {
           (d['documentVerification'] as Map?) ?? const <String, dynamic>{}),
       isOnline: d['isOnline'] as bool? ?? false,
       lastHeartbeat: (d['lastHeartbeat'] as Timestamp?)?.toDate(),
+      hasPendingChanges: d['hasPendingChanges'] as bool? ?? false,
+      pendingChanges: Map<String, dynamic>.from(
+          (d['pendingChanges'] as Map?) ?? const <String, dynamic>{}),
     );
   }
 }

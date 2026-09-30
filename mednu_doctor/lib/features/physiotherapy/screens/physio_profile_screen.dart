@@ -144,7 +144,7 @@ class _PhysioProfileScreenState extends ConsumerState<PhysioProfileScreen> {
         },
       );
       if (!mounted) return;
-      await PhysioProfileService.updatePhotoUrl(uid, url);
+      await PhysioProfileService.updatePhotoUrl(uid, url, currentStatus: ref.read(physioProfileProvider).status);
       if (!mounted) return;
       setState(() => _uploading = false);
       FeedbackService.showSuccess(context, 'Profile photo updated!');
@@ -165,7 +165,7 @@ class _PhysioProfileScreenState extends ConsumerState<PhysioProfileScreen> {
     setState(() => _uploading = true);
     try {
       await ImageUploadService.deletePartnerProfileImage(profileCollection: 'physiotherapist_profiles', uid: uid);
-      await PhysioProfileService.updatePhotoUrl(uid, '');
+      await PhysioProfileService.updatePhotoUrl(uid, '', currentStatus: ref.read(physioProfileProvider).status);
       if (!mounted) return;
       setState(() {
         _localImage = null;
@@ -222,21 +222,6 @@ class _PhysioProfileScreenState extends ConsumerState<PhysioProfileScreen> {
                 ),
                 child: ClipOval(child: imageCircle),
               ),
-              if (profile.documentsVerified && !_uploading)
-                Positioned(
-                  right: -2,
-                  top: -2,
-                  child: Container(
-                    width: 22,
-                    height: 22,
-                    decoration: BoxDecoration(
-                      color: AppColors.success,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 1.6),
-                    ),
-                    child: const Icon(Icons.verified_rounded, size: 14, color: Colors.white),
-                  ),
-                ),
               if (_uploading)
                 Container(
                   width: 76,
@@ -475,7 +460,7 @@ class _PhysioProfileScreenState extends ConsumerState<PhysioProfileScreen> {
           if (clinicLat != null && clinicLng != null) 'clinicLat': clinicLat,
           if (clinicLat != null && clinicLng != null) 'clinicLng': clinicLng,
           'languages': selectedLanguages.toList(),
-        });
+        }, currentStatus: current.status);
       } else {
         await PhysioProfileService.createProfile(
           uid: uid,
@@ -522,6 +507,7 @@ class _PhysioProfileScreenState extends ConsumerState<PhysioProfileScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          if (profile.hasPendingChanges) const PendingReviewBanner(),
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(24),
@@ -556,11 +542,9 @@ class _PhysioProfileScreenState extends ConsumerState<PhysioProfileScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
+                const Row(
                   children: [
-                    const Text('Certifications', style: AppTextStyles.labelMedium),
-                    const Spacer(),
-                    if (profile.documentsVerified) const StatusBadge(label: 'Verified', color: AppColors.success, icon: Icons.verified_rounded),
+                    Text('Certifications', style: AppTextStyles.labelMedium),
                   ],
                 ),
                 const SizedBox(height: 12),

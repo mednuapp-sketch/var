@@ -29,6 +29,14 @@ class VehicleProfile {
   final Map<String, dynamic> documents;
   final Map<String, dynamic> documentVerification;
 
+  /// True once a self-edit has been submitted while `status == 'active'`
+  /// and is awaiting admin approval — see [PendingProfileEditService].
+  /// [pendingChanges] holds exactly what was last submitted (a full
+  /// snapshot of the editable fields), so the edit form can show it back
+  /// to the partner even though it isn't live yet.
+  final bool hasPendingChanges;
+  final Map<String, dynamic> pendingChanges;
+
   const VehicleProfile({
     required this.plateNumber,
     required this.vehicleType,
@@ -43,6 +51,8 @@ class VehicleProfile {
     this.documents = const {},
     this.documentVerification = const {},
     this.photoUrl = '',
+    this.hasPendingChanges = false,
+    this.pendingChanges = const {},
   });
 
   /// What the Vehicle Profile screen renders before the partner has
@@ -81,6 +91,9 @@ class VehicleProfile {
       documentVerification: Map<String, dynamic>.from(
           (d['documentVerification'] as Map?) ?? const <String, dynamic>{}),
       photoUrl: d['photoUrl'] as String? ?? '',
+      hasPendingChanges: d['hasPendingChanges'] as bool? ?? false,
+      pendingChanges: Map<String, dynamic>.from(
+          (d['pendingChanges'] as Map?) ?? const <String, dynamic>{}),
     );
   }
 }

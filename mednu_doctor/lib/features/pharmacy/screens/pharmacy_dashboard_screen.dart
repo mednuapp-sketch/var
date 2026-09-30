@@ -43,7 +43,7 @@ class _PharmacyDashboardScreenState extends ConsumerState<PharmacyDashboardScree
   Future<void> _toggleAccepting(String uid, bool value) async {
     setState(() => _togglingAccepting = true);
     try {
-      await PharmacyProfileService.updateProfile(uid, {'acceptingOrders': value});
+      await PharmacyProfileService.updateAcceptingOrders(uid, value);
       if (!mounted) return;
       FeedbackService.showSuccess(
         context,

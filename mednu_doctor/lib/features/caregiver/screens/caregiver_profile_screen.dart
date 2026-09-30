@@ -220,7 +220,7 @@ class _CaregiverProfileScreenState extends ConsumerState<CaregiverProfileScreen>
           'city': city,
           if (lat != null && lng != null) 'lat': lat,
           if (lat != null && lng != null) 'lng': lng,
-        });
+        }, currentStatus: current.status);
       } else {
         await CaregiverProfileService.createProfile(
           uid: uid,
@@ -343,7 +343,7 @@ class _CaregiverProfileScreenState extends ConsumerState<CaregiverProfileScreen>
         },
       );
       if (!mounted) return;
-      await CaregiverProfileService.updatePhotoUrl(uid, url);
+      await CaregiverProfileService.updatePhotoUrl(uid, url, currentStatus: ref.read(caregiverProfileProvider).status);
       if (!mounted) return;
       setState(() => _uploading = false);
       FeedbackService.showSuccess(context, 'Profile photo updated!');
@@ -364,7 +364,7 @@ class _CaregiverProfileScreenState extends ConsumerState<CaregiverProfileScreen>
     setState(() => _uploading = true);
     try {
       await ImageUploadService.deletePartnerProfileImage(profileCollection: 'caregiver_profiles', uid: uid);
-      await CaregiverProfileService.updatePhotoUrl(uid, '');
+      await CaregiverProfileService.updatePhotoUrl(uid, '', currentStatus: ref.read(caregiverProfileProvider).status);
       if (!mounted) return;
       setState(() {
         _localImage = null;
@@ -424,21 +424,6 @@ class _CaregiverProfileScreenState extends ConsumerState<CaregiverProfileScreen>
                 ),
                 child: ClipOval(child: imageCircle),
               ),
-              if (profile.documentsVerified && !_uploading)
-                Positioned(
-                  right: -2,
-                  top: -2,
-                  child: Container(
-                    width: 22,
-                    height: 22,
-                    decoration: BoxDecoration(
-                      color: AppColors.success,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 1.6),
-                    ),
-                    child: const Icon(Icons.verified_rounded, size: 14, color: Colors.white),
-                  ),
-                ),
               if (_uploading)
                 Container(
                   width: 76,
@@ -512,6 +497,7 @@ class _CaregiverProfileScreenState extends ConsumerState<CaregiverProfileScreen>
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          if (profile.hasPendingChanges) const PendingReviewBanner(),
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(24),
@@ -550,11 +536,9 @@ class _CaregiverProfileScreenState extends ConsumerState<CaregiverProfileScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
+                const Row(
                   children: [
-                    const Text('Certifications', style: AppTextStyles.labelMedium),
-                    const Spacer(),
-                    if (profile.documentsVerified) const StatusBadge(label: 'Verified', color: AppColors.success, icon: Icons.verified_rounded),
+                    Text('Certifications', style: AppTextStyles.labelMedium),
                   ],
                 ),
                 const SizedBox(height: 12),

@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import '../../../shared_core/services/pending_profile_edit_service.dart';
 
 /// Mirrors `CaregiverProfileService` for the Nutritionist role: a thin
 /// static-method wrapper around `nutritionist_profiles/{uid}`. A nutritionist
@@ -60,19 +61,24 @@ class NutritionistProfileService {
 
   /// `status`/`isVerified`/`rating`/`reviewCount` are rejected by
   /// `firestore.rules` for a self-update — a partner can't self-approve or
-  /// inflate its own stats.
-  static Future<void> updateProfile(String uid, Map<String, dynamic> data) =>
-      _db.collection('nutritionist_profiles').doc(uid).set(data, SetOptions(merge: true));
+  /// inflate its own stats. Once `currentStatus` is 'active', this doesn't
+  /// touch the live fields at all — see [PendingProfileEditService].
+  static Future<void> updateProfile(String uid, Map<String, dynamic> data, {required String currentStatus}) =>
+      PendingProfileEditService.apply(
+        ref: _db.collection('nutritionist_profiles').doc(uid),
+        currentStatus: currentStatus,
+        fields: data,
+      );
 
-  /// `photoUrl` isn't in firestore.rules' protected-fields list for this
-  /// collection (`status`/`isVerified`/`rating`/`reviewCount`/
-  /// `documentVerification`/`documentsVerified` only), so a self-write is
-  /// allowed. Used by [NutritionProfileScreen]'s avatar upload/remove flow,
-  /// mirroring `HospitalProfileService.updatePhotoUrl`.
-  static Future<void> updatePhotoUrl(String uid, String photoUrl) =>
-      _db.collection('nutritionist_profiles').doc(uid).set({
-        'photoUrl': photoUrl,
-      }, SetOptions(merge: true));
+  /// Used by [NutritionProfileScreen]'s avatar upload/remove flow. Once
+  /// `currentStatus` is 'active', this doesn't touch the live `photoUrl` at
+  /// all — see [PendingProfileEditService].
+  static Future<void> updatePhotoUrl(String uid, String photoUrl, {required String currentStatus}) =>
+      PendingProfileEditService.apply(
+        ref: _db.collection('nutritionist_profiles').doc(uid),
+        currentStatus: currentStatus,
+        fields: {'photoUrl': photoUrl},
+      );
 
   /// Remote/video-consult availability toggle — also not in the protected-
   /// fields list, so a self-write is always allowed regardless of

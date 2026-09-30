@@ -78,7 +78,7 @@ class _LabProfileScreenState extends ConsumerState<LabProfileScreen> {
         if (_addressLng != null) 'longitude': _addressLng,
         if (_addressCity.isNotEmpty) 'city': _addressCity,
         'phone': _phoneCtrl.text.trim(),
-      });
+      }, currentStatus: ref.read(labProfileProvider).valueOrNull?.status ?? 'pending');
       if (!mounted) return;
       FeedbackService.showSuccess(context, 'Profile updated');
       setState(() => _editing = false);
@@ -195,7 +195,7 @@ class _LabProfileScreenState extends ConsumerState<LabProfileScreen> {
         },
       );
       if (!mounted) return;
-      await LabProfileService.updatePhotoUrl(uid, url);
+      await LabProfileService.updatePhotoUrl(uid, url, currentStatus: ref.read(labProfileProvider).valueOrNull?.status ?? 'pending');
       if (!mounted) return;
       setState(() {
         _currentPhotoUrl = url;
@@ -219,7 +219,7 @@ class _LabProfileScreenState extends ConsumerState<LabProfileScreen> {
     setState(() => _uploading = true);
     try {
       await ImageUploadService.deletePartnerProfileImage(profileCollection: 'lab_profiles', uid: uid);
-      await LabProfileService.updatePhotoUrl(uid, '');
+      await LabProfileService.updatePhotoUrl(uid, '', currentStatus: ref.read(labProfileProvider).valueOrNull?.status ?? 'pending');
       if (!mounted) return;
       setState(() {
         _currentPhotoUrl = '';
@@ -373,6 +373,7 @@ class _LabProfileScreenState extends ConsumerState<LabProfileScreen> {
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
+              if (profile.hasPendingChanges) const PendingReviewBanner(),
               Center(child: _buildAvatar()),
               const SizedBox(height: 16),
               PremiumCard(

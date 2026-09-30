@@ -38,6 +38,14 @@ class NutritionistProfile {
   /// list for this collection, so a self-write is always allowed.
   final bool isOnline;
 
+  /// True once a self-edit has been submitted while `status == 'active'`
+  /// and is awaiting admin approval — see [PendingProfileEditService].
+  /// [pendingChanges] holds exactly what was last submitted (a full
+  /// snapshot of the editable fields), so the edit form can show it back
+  /// to the partner even though it isn't live yet.
+  final bool hasPendingChanges;
+  final Map<String, dynamic> pendingChanges;
+
   const NutritionistProfile({
     required this.name,
     required this.qualification,
@@ -57,6 +65,8 @@ class NutritionistProfile {
     this.documentVerification = const {},
     this.photoUrl,
     this.isOnline = false,
+    this.hasPendingChanges = false,
+    this.pendingChanges = const {},
   });
 
   factory NutritionistProfile.empty() => const NutritionistProfile(
@@ -98,6 +108,9 @@ class NutritionistProfile {
           (d['documentVerification'] as Map?) ?? const <String, dynamic>{}),
       photoUrl: d['photoUrl'] as String?,
       isOnline: d['isOnline'] as bool? ?? false,
+      hasPendingChanges: d['hasPendingChanges'] as bool? ?? false,
+      pendingChanges: Map<String, dynamic>.from(
+          (d['pendingChanges'] as Map?) ?? const <String, dynamic>{}),
     );
   }
 }
