@@ -8473,6 +8473,9 @@ const PARTNER_ROLES = {
     docSlots: {
       vehicle_registration: 'Vehicle Registration',
       driver_license:       'Driver License',
+      vehicle_insurance:    'Vehicle Insurance',
+      vehicle_fitness:      'Vehicle Fitness Certificate',
+      emt_certificate:      'EMT / Paramedic Certificate',
       address_proof:        'Address Proof',
     },
     nameOf: p => p.driverName || p.plateNumber || 'Unnamed partner',
@@ -8520,8 +8523,9 @@ const PARTNER_ROLES = {
     navBadge:     'nav-pharmacy-partners-count',
     extraFilterId:'pp-delivery-filter',
     docSlots: {
-      pharmacy_license: 'Pharmacy License',
-      address_proof:    'Address Proof',
+      pharmacy_license:        'Pharmacy License',
+      pharmacist_registration: 'Registered Pharmacist Certificate',
+      address_proof:           'Address Proof',
     },
     nameOf: p => p.name || 'Unnamed pharmacy',
     subOf:  p => p.address || p.email || '—',
@@ -8549,8 +8553,9 @@ const PARTNER_ROLES = {
     navBadge:     'nav-lab-partners-count',
     extraFilterId:'lp-service-filter',
     docSlots: {
-      lab_license:   'Lab License',
-      address_proof: 'Address Proof',
+      lab_license:              'Lab License',
+      pathologist_registration: 'Pathologist Registration Certificate',
+      address_proof:            'Address Proof',
     },
     nameOf: p => p.name || 'Unnamed lab',
     subOf:  p => p.address || p.email || '—',
@@ -8570,7 +8575,7 @@ const PARTNER_ROLES = {
   // qualification proof before approval — see each one's own `docSlots`
   // below (the `allDocsVerified` check below reads this generically, so any
   // role can still be left at `docSlots: {}` if it genuinely needs no
-  // verification, as Hospital is).
+  // verification).
   physiotherapy: {
     label:        'Physiotherapist Partner',
     collection:   'physiotherapist_profiles',
@@ -8659,12 +8664,12 @@ const PARTNER_ROLES = {
       (p.specialization || '').toLowerCase().includes(q) ||
       (p.city || '').toLowerCase().includes(q),
   },
-  // A hospital billing-desk login has no earnings ledger and nothing to
-  // verify (no docSlots — safe because the `allDocsVerified` check below
-  // reads `docSlots` generically and treats zero slots as trivially
-  // satisfied) — it exists only to read `hospital_bill_payments` for the
-  // `hospitalId` it's linked to, so patients/staff at the desk can confirm a
-  // payment landed. See firestore.rules' hospital_profiles + isHospitalPartner().
+  // A hospital billing-desk login has no earnings ledger — it exists only to
+  // read `hospital_bill_payments` for the `hospitalId` it's linked to, so
+  // patients/staff at the desk can confirm a payment landed. Because that
+  // exposes a real hospital's payment records, the applicant must prove the
+  // hospital is registered and that they're authorised to act for it before
+  // approval. See firestore.rules' hospital_profiles + isHospitalPartner().
   hospital: {
     label:        'Hospital Partner',
     collection:   'hospital_profiles',
@@ -8675,7 +8680,15 @@ const PARTNER_ROLES = {
     cols:         6,
     navBadge:     'nav-hospital-partners-count',
     extraFilterId:null,
-    docSlots: {},
+    // Keys must stay identical to `PartnerDocumentType.hospital` in
+    // partner_document_models.dart — they are also the
+    // `hospital_documents/{uid}/{docType}.{ext}` Storage path segment and
+    // the `documents.{docType}` field on `hospital_profiles`.
+    docSlots: {
+      hospital_registration: 'Hospital Registration Certificate',
+      authorization_letter:  'Authorization Letter (on Hospital Letterhead)',
+      hospital_contact_id:   'Contact Person Government ID',
+    },
     nameOf: p => p.hospitalName || p.contactName || 'Unnamed partner',
     subOf:  p => p.contactName || '—',
     searchMatch: (p, q) =>
@@ -8685,8 +8698,8 @@ const PARTNER_ROLES = {
   },
 };
 
-const _partnerData      = { ambulance: [], caregiver: [], pharmacy: [], lab: [], physiotherapy: [], counselling: [], nutrition: [] };
-const _partnerListeners = { ambulance: null, caregiver: null, pharmacy: null, lab: null, physiotherapy: null, counselling: null, nutrition: null };
+const _partnerData      = { ambulance: [], caregiver: [], pharmacy: [], lab: [], physiotherapy: [], counselling: [], nutrition: [], hospital: [] };
+const _partnerListeners = { ambulance: null, caregiver: null, pharmacy: null, lab: null, physiotherapy: null, counselling: null, nutrition: null, hospital: null };
 
 function partnerStatusOf(p) {
   const s = (p.status || 'pending').toLowerCase();
@@ -8835,15 +8848,19 @@ function _updatePartnerStats(role) {
   const cfg  = PARTNER_ROLES[role];
   const list = _partnerData[role];
   const set  = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-  const pending    = list.filter(p => partnerStatusOf(p) === 'pending').length;
-  const activeCount = list.filter(p => partnerStatusOf(p) === 'active').length;
+  const pending      = list.filter(p => partnerStatusOf(p) === 'pending').length;
+  const pendingEdits = list.filter(p => p.hasPendingChanges).length;
+  const activeCount  = list.filter(p => partnerStatusOf(p) === 'active').length;
   set(cfg.prefix + '-count-total',   list.length);
   set(cfg.prefix + '-count-pending', pending);
   set(cfg.prefix + '-count-active',  activeCount);
   const badge = document.getElementById(cfg.navBadge);
   if (badge) {
-    badge.textContent = pending;
-    badge.style.display = pending > 0 ? 'inline-flex' : 'none';
+    // Nav badge covers both "needs a look" states — new registrations AND
+    // active partners with a profile edit awaiting approval.
+    const needsReview = pending + pendingEdits;
+    badge.textContent = needsReview;
+    badge.style.display = needsReview > 0 ? 'inline-flex' : 'none';
   }
   if (PARTNER_OVERVIEW_SEC_ID[role]) setText(PARTNER_OVERVIEW_SEC_ID[role], activeCount);
 }
@@ -8889,8 +8906,14 @@ function partnerActionsCell(role, p) {
   } else {
     actions = `<button class="btn btn-approve" onclick="activatePartner('${role}','${id}', this)">Activate</button>`;
   }
+  // An active partner with a submitted profile edit needs the same "open the
+  // modal first" treatment as a pending registration — Approve/Reject for the
+  // edit itself live inside showPartnerModal(), not here.
+  const hasEdit = st === 'active' && p.hasPendingChanges;
+  const viewLabel = st === 'pending' ? 'Review' : (hasEdit ? 'Review Edit' : 'View');
+  const viewClass = hasEdit ? 'btn btn-approve' : 'btn btn-outline';
   return actions +
-    `<button class="btn btn-outline" style="margin-left:4px;" onclick="showPartnerModal('${role}','${id}')">${st === 'pending' ? 'Review' : 'View'}</button>`;
+    `<button class="${viewClass}" style="margin-left:4px;" onclick="showPartnerModal('${role}','${id}')">${viewLabel}</button>`;
 }
 
 // ---- Bulk select / approve (pending + fully-verified partners only) ----
@@ -8984,7 +9007,9 @@ function renderPartnerTable(role, list) {
     const name   = cfg.nameOf(p);
     const color  = randomAvatarColor(name);
     const avatar = `<div class="doc-avatar" style="background:${escHtml(color.bg)};color:${escHtml(color.fg)};">${escHtml(getInitials(name))}</div>`;
-    const statusCell = `<td><span class="pill pill-${escHtml(st)}">${escHtml(capitalize(st))}</span></td>`;
+    const statusCell = `<td><span class="pill pill-${escHtml(st)}">${escHtml(capitalize(st))}</span>${
+      p.hasPendingChanges ? ' <span class="pill pill-pending" title="Partner submitted a profile edit awaiting approval">Edit pending</span>' : ''
+    }</td>`;
     const actions    = `<td>${partnerActionsCell(role, p)}</td>`;
     const eligible   = _partnerBulkEligible(role, p);
     const checkboxCell = `<td><input type="checkbox" ${eligible ? '' : 'disabled'} ${_partnerSelSet(role).has(p.id) ? 'checked' : ''} onchange="togglePartnerSelect('${role}','${escHtml(p.id)}', this.checked)" aria-label="Select ${escHtml(name)}" /></td>`;
@@ -9149,7 +9174,7 @@ function approvePartner(role, id, btn) {
   const docs = (p && p.documents) || {};
   const vers = (p && p.documentVerification) || {};
   const slots = Object.keys(cfg.docSlots);
-  // A role with zero required doc slots (nutrition/hospital) has nothing to
+  // A role with zero required doc slots has nothing to
   // verify, so it must not be treated the same as "verification incomplete"
   // — mirrors showPartnerModal's `allDocsVerified`. This used to read
   // `slots.length > 0 && ...`, which evaluated to `false` whenever a role had
@@ -9175,6 +9200,18 @@ function approveHospitalPartner(id, btn) {
   const hospitalId = select ? select.value : '';
   if (!hospitalId) {
     showToast('Select which hospital this login represents before approving.');
+    return;
+  }
+  // Same document gate as approvePartner() — this path used to skip it
+  // because hospital had no docSlots.
+  const cfg   = PARTNER_ROLES.hospital;
+  const p     = (_partnerData.hospital || []).find(x => x.id === id);
+  const docs  = (p && p.documents) || {};
+  const vers  = (p && p.documentVerification) || {};
+  const allVerified = Object.keys(cfg.docSlots).every(k =>
+    _partnerDocStatus(docs[k] || null, vers[k] || null) === 'verified');
+  if (!allVerified) {
+    showToast('Verify every required document before approving.');
     return;
   }
   const hospital = allHospitals.find(h => h.id === hospitalId);
@@ -9208,6 +9245,66 @@ async function deactivatePartner(role, id, btn) {
 async function rejectPartner(role, id, btn) {
   if (!(await showConfirm('Reject this partner application?', {danger:true}))) return;
   _setPartnerStatus(role, id, 'suspended', btn, PARTNER_ROLES[role].label + ' rejected');
+}
+
+// ── Pending profile-edit review (post-approval self-edits) ─────────────────
+// An active partner's own edit lands in `pendingChanges` instead of the live
+// fields (see PendingProfileEditService in mednu_doctor + the self-write rule
+// on each `{role}_profiles` collection). Approving merges those fields onto
+// the live doc and clears the flag; rejecting just clears it, leaving the
+// live profile untouched. Only a Director can write here at all (isDirector()
+// has unconditional access in firestore.rules), matching every other
+// partner-approval action on this panel.
+async function approvePendingProfileEdit(role, id, btn) {
+  if (!canApproveRegistrations()) { showToast('Only Directors can approve profile edits.'); return; }
+  if (!(await showConfirm('Apply these changes to the live profile? Patients will see the updated details immediately.'))) return;
+  const cfg = PARTNER_ROLES[role];
+  const original = btn ? btn.textContent : '';
+  withCooldown('partner-edit-' + role + '-' + id + '-approve', async () => {
+    if (btn) { btn.disabled = true; btn.textContent = '...'; }
+    try {
+      const ref  = db.collection(cfg.collection).doc(id);
+      const snap = await ref.get();
+      const data = snap.exists ? (snap.data() || {}) : {};
+      const changes = data.pendingChanges || {};
+      await ref.update(Object.assign({}, changes, {
+        pendingChanges:  {},
+        hasPendingChanges: false,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedBy: auth.currentUser?.email || 'admin',
+      }));
+      showToast('Profile changes approved ✓');
+      document.getElementById('partner-modal')?.remove();
+    } catch (err) {
+      console.error('approvePendingProfileEdit:', err);
+      if (btn) { btn.disabled = false; btn.textContent = original; }
+      showToast('Failed to approve changes. Please try again.');
+    }
+  });
+}
+
+async function rejectPendingProfileEdit(role, id, btn) {
+  if (!canApproveRegistrations()) { showToast('Only Directors can reject profile edits.'); return; }
+  if (!(await showConfirm("Discard these pending changes? The partner's live profile will stay as it is.", {danger:true}))) return;
+  const cfg = PARTNER_ROLES[role];
+  const original = btn ? btn.textContent : '';
+  withCooldown('partner-edit-' + role + '-' + id + '-reject', async () => {
+    if (btn) { btn.disabled = true; btn.textContent = '...'; }
+    try {
+      await db.collection(cfg.collection).doc(id).update({
+        pendingChanges: {},
+        hasPendingChanges: false,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedBy: auth.currentUser?.email || 'admin',
+      });
+      showToast('Pending changes discarded');
+      document.getElementById('partner-modal')?.remove();
+    } catch (err) {
+      console.error('rejectPendingProfileEdit:', err);
+      if (btn) { btn.disabled = false; btn.textContent = original; }
+      showToast('Failed to discard changes. Please try again.');
+    }
+  });
 }
 
 // ── Per-document verification ───────────────────────────────────────────────
@@ -9549,7 +9646,7 @@ function showPartnerModal(role, id) {
     return { stat, html };
   });
   const docHtml = docEntries.map(e => e.html).join('');
-  // A role with zero required doc slots (nutrition/hospital — see
+  // A role with zero required doc slots (see
   // PARTNER_ROLES comment) has nothing to verify, so it must not be treated
   // the same as "verification incomplete"; only block Approve when there ARE
   // slots and not all of them are verified yet.
@@ -9647,6 +9744,49 @@ function showPartnerModal(role, id) {
     : 'No reviews']);
   fields.push(['Registered', p.createdAt ? formatDate(p.createdAt) : '—']);
 
+  // Once a partner is active, a self-edit never touches the live fields
+  // directly (firestore.rules only lets an active owner write `pendingChanges`
+  // + a few operational fields) — it lands in `pendingChanges` instead, so
+  // patients keep seeing the last-approved values until a Director reviews
+  // it here. See PendingProfileEditService in mednu_doctor.
+  let pendingEditHtml = '';
+  const pendingChanges = p.pendingChanges || {};
+  if (p.hasPendingChanges && Object.keys(pendingChanges).length > 0) {
+    const fmtVal = v => {
+      if (v === null || v === undefined || v === '') return '—';
+      if (Array.isArray(v)) return v.length ? v.join(', ') : '—';
+      if (typeof v === 'object') return JSON.stringify(v);
+      return String(v);
+    };
+    const rows = Object.entries(pendingChanges).map(([key, newVal]) => {
+      const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, c => c.toUpperCase());
+      return `<div class="partner-doc-item" style="margin-bottom:8px;">
+        <div style="font-size:11px;color:#aaa;font-weight:600;text-transform:uppercase;">${escHtml(label)}</div>
+        <div style="font-size:13px;margin-top:2px;overflow-wrap:anywhere;">
+          <span style="color:#c62828;text-decoration:line-through;">${escHtml(fmtVal(p[key]))}</span>
+          <i class="ti ti-arrow-right" style="margin:0 6px;color:#888;"></i>
+          <span style="color:#2e7d32;font-weight:700;">${escHtml(fmtVal(newVal))}</span>
+        </div>
+      </div>`;
+    }).join('');
+    pendingEditHtml = `
+      <div style="margin-bottom:20px;padding:16px;background:#fff8e1;border:1px solid #ffe082;border-radius:14px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <i class="ti ti-hourglass" style="color:#f9a825;"></i>
+          <span style="font-size:14px;font-weight:700;">Pending Profile Edit — Awaiting Approval</span>
+        </div>
+        <div style="font-size:12px;color:#666;margin-bottom:12px;">
+          The partner submitted these changes from their app. Patients still see the crossed-out
+          value on the left until you approve — approving applies the new value immediately.
+        </div>
+        ${rows}
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
+          <button onclick="approvePendingProfileEdit('${role}','${pid}', this)" style="flex:1;min-width:140px;padding:10px;background:#2e7d32;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">Approve Changes</button>
+          <button onclick="rejectPendingProfileEdit('${role}','${pid}', this)" style="flex:1;min-width:140px;padding:10px;background:#c62828;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">Discard Changes</button>
+        </div>
+      </div>`;
+  }
+
   // Hospital is the one partner role that links back to an existing,
   // separately-curated `hospitals` catalog entry rather than being the
   // operational entity itself — see hospital_profiles in firestore.rules.
@@ -9676,7 +9816,7 @@ function showPartnerModal(role, id) {
 
   const actionRow = st === 'pending'
     ? (role === 'hospital'
-        ? `<button onclick="approveHospitalPartner('${pid}', this)" style="flex:1;min-width:140px;padding:12px;background:#2e7d32;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;">Approve</button>
+        ? `<button onclick="approveHospitalPartner('${pid}', this)" ${allDocsVerified ? '' : 'disabled title="Verify every required document above before approving"'} style="flex:1;min-width:140px;padding:12px;background:${allDocsVerified ? '#2e7d32' : '#bdbdbd'};color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:${allDocsVerified ? 'pointer' : 'not-allowed'};">${allDocsVerified ? 'Approve' : 'Approve (verify docs first)'}</button>
            <button onclick="rejectPartner('${role}','${pid}', this)" style="flex:1;min-width:140px;padding:12px;background:#c62828;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;">Reject</button>`
         : `<button onclick="approvePartner('${role}','${pid}', this)" ${allDocsVerified ? '' : 'disabled title="Verify every required document above before approving"'} style="flex:1;min-width:140px;padding:12px;background:${allDocsVerified ? '#2e7d32' : '#bdbdbd'};color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:${allDocsVerified ? 'pointer' : 'not-allowed'};">${allDocsVerified ? 'Approve' : 'Approve (verify docs first)'}</button>
            <button onclick="rejectPartner('${role}','${pid}', this)" style="flex:1;min-width:140px;padding:12px;background:#c62828;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;">Reject</button>`)
@@ -9706,6 +9846,8 @@ function showPartnerModal(role, id) {
           <div style="margin-top:4px;"><span class="pill pill-${escHtml(st)}">${escHtml(capitalize(st))}</span></div>
         </div>
       </div>
+
+      ${pendingEditHtml}
 
       <div class="partner-doc-grid" style="margin-bottom:20px;">
         ${fields.map(([l, v]) => `
