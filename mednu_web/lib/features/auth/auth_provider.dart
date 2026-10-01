@@ -31,6 +31,32 @@ bool hasCompletedProfile(DocumentSnapshot<Map<String, dynamic>>? doc) {
               .isNotEmpty);
 }
 
+/// Maps a FirebaseAuthException's machine-readable `code` to copy a patient
+/// can actually act on, instead of showing Firebase's own developer-facing
+/// `e.message` (e.g. "[invalid-verification-code] The SMS verification code
+/// used to create the phone auth credential is invalid...") directly in the
+/// UI. Mirrors the mapping mednu_doctor's OTP screen already uses.
+String _friendlyAuthError(FirebaseAuthException e) {
+  switch (e.code) {
+    case 'invalid-verification-code':
+    case 'invalid-code':
+      return 'Incorrect OTP. Please check and try again.';
+    case 'session-expired':
+    case 'code-expired':
+      return 'OTP expired. Please request a new one.';
+    case 'too-many-requests':
+      return 'Too many attempts. Please wait a moment and try again.';
+    case 'invalid-phone-number':
+      return 'Please enter a valid 10-digit mobile number.';
+    case 'quota-exceeded':
+      return 'SMS limit reached. Please try again in a while.';
+    case 'network-request-failed':
+      return 'Network error. Please check your connection and try again.';
+    default:
+      return 'Something went wrong. Please try again.';
+  }
+}
+
 // Stored outside Riverpod state — web session object that can't be copied
 ConfirmationResult? _pendingConfirmation;
 
@@ -81,7 +107,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         onError: (FirebaseAuthException e) {
           state = state.copyWith(
             loading: false,
-            error: 'reCAPTCHA error [${e.code}]: ${e.message}',
+            error: _friendlyAuthError(e),
           );
         },
         onExpired: () {
@@ -99,9 +125,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
       state = state.copyWith(step: AuthStep.otp, loading: false);
     } on FirebaseAuthException catch (e) {
-      state = state.copyWith(loading: false, error: '[${e.code}] ${e.message}');
+      state = state.copyWith(loading: false, error: _friendlyAuthError(e));
     } catch (e) {
-      state = state.copyWith(loading: false, error: e.toString());
+      state = state.copyWith(loading: false, error: 'Something went wrong. Please try again.');
     }
   }
 
@@ -120,12 +146,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
       // that confirm() just triggered and could beat this read to the punch.
       state = state.copyWith(step: AuthStep.done, loading: false);
     } on FirebaseAuthException catch (e) {
-      state = state.copyWith(
-        loading: false,
-        error: '[${e.code}] ${e.message ?? 'Verification failed'}',
-      );
+      state = state.copyWith(loading: false, error: _friendlyAuthError(e));
     } catch (e) {
-      state = state.copyWith(loading: false, error: e.toString());
+      state = state.copyWith(loading: false, error: 'Something went wrong. Please try again.');
     }
   }
 
@@ -190,7 +213,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
       });
       state = state.copyWith(step: AuthStep.done, loading: false);
     } catch (e) {
-      state = state.copyWith(loading: false, error: e.toString());
+      state = state.copyWith(
+          loading: false,
+          error: 'Could not save your profile. Please check your connection and try again.');
     }
   }
 
