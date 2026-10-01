@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -47,10 +49,33 @@ class _OtpPageState extends ConsumerState<OtpPage> {
     }
   }
 
-  void _verify() {
+  // Awaits verifyOtp() and navigates off a one-time Firestore read, instead
+  // of waiting on the reactive authProfileProvider stream to notice the auth
+  // state changed (see the ref.listen below) — that listener-only approach
+  // left this screen stuck after a successful confirm() until a manual page
+  // reload, because of timing between authStateChanges() and the dependent
+  // profile stream rebuilding on Flutter Web. Mirrors the mobile app's own
+  // otp_screen.dart, which awaits verifyOtp() then does a direct profile
+  // check before navigating, and has never had this problem.
+  Future<void> _verify() async {
     final otp = _otp;
     if (otp.length != 6) return;
-    ref.read(authNotifierProvider.notifier).verifyOtp(otp);
+    await ref.read(authNotifierProvider.notifier).verifyOtp(otp);
+    if (!mounted) return;
+    if (ref.read(authNotifierProvider).error != null) return;
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+    if (!mounted) return;
+
+    if (hasCompletedProfile(doc)) {
+      context.go('/dashboard');
+    } else {
+      final rawPhone = user.phoneNumber ?? '';
+      final localPhone = rawPhone.startsWith('+91') ? rawPhone.substring(3) : rawPhone;
+      context.go('/register?phone=${Uri.encodeComponent(localPhone.isEmpty ? widget.phone : localPhone)}');
+    }
   }
 
   @override
