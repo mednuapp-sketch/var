@@ -23,7 +23,7 @@ import '../../../shared_core/providers/role_providers.dart';
 /// app's push handler/live listener/IncomingCallScreen — needed zero
 /// changes to already work for these two roles.
 class ProviderOutgoingCallScreen extends StatefulWidget {
-  final String providerRole; // 'physiotherapist' | 'counsellor'
+  final String providerRole; // 'physiotherapist' | 'counsellor' | 'nutritionist'
   final String patientId;
   final String patientName;
   final String patientPhotoUrl;
@@ -38,10 +38,17 @@ class ProviderOutgoingCallScreen extends StatefulWidget {
     this.sessionId,
   });
 
-  String get _profileCollection =>
-      providerRole == 'counsellor' ? 'counsellor_profiles' : 'physiotherapist_profiles';
+  String get _profileCollection => switch (providerRole) {
+        'counsellor' => 'counsellor_profiles',
+        'nutritionist' => 'nutritionist_profiles',
+        _ => 'physiotherapist_profiles',
+      };
 
-  String get _roleLabel => providerRole == 'counsellor' ? 'Counsellor' : 'Physiotherapist';
+  String get _roleLabel => switch (providerRole) {
+        'counsellor' => 'Counsellor',
+        'nutritionist' => 'Dietician',
+        _ => 'Physiotherapist',
+      };
 
   @override
   State<ProviderOutgoingCallScreen> createState() => _ProviderOutgoingCallScreenState();
@@ -106,17 +113,6 @@ class _ProviderOutgoingCallScreenState extends State<ProviderOutgoingCallScreen>
       providerPhotoUrl = doc.data()?['photoUrl'] as String? ?? '';
     } catch (_) {}
 
-    String patientFcmToken = '';
-    try {
-      final db = FirebaseFirestore.instance;
-      var patSnap = await db.collection('patients').doc(widget.patientId).get();
-      patientFcmToken = patSnap.data()?['fcmToken'] as String? ?? '';
-      if (patientFcmToken.isEmpty) {
-        final userSnap = await db.collection('users').doc(widget.patientId).get();
-        patientFcmToken = userSnap.data()?['fcmToken'] as String? ?? '';
-      }
-    } catch (_) {}
-
     final ref = FirebaseFirestore.instance.collection('consultations').doc();
     try {
       await ref.set({
@@ -130,7 +126,6 @@ class _ProviderOutgoingCallScreenState extends State<ProviderOutgoingCallScreen>
         'patientId': widget.patientId,
         'patientName': widget.patientName,
         'patientPhotoUrl': widget.patientPhotoUrl,
-        'patientFcmToken': patientFcmToken,
         'consultationType': 'Video',
         'sessionId': widget.sessionId,
         'createdAt': FieldValue.serverTimestamp(),

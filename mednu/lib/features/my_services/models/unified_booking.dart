@@ -457,7 +457,7 @@ class UnifiedBooking {
     // through the universal numbering other booking types share.
     if (source == BookingSource.serviceRequest) {
       final type = (rawData['type'] as String? ?? '').toLowerCase();
-      if (type == 'diagnostics' || type == 'lab_test') {
+      if (type == 'diagnostics' || type == 'lab_tests' || type == 'lab_test') {
         return _diagnosticsStepIndex();
       }
     }
@@ -542,7 +542,7 @@ class UnifiedBooking {
             {'title': 'Arrived', 'desc': 'Ambulance has reached your location'},
           ];
         }
-        if (type == 'diagnostics' || type == 'lab_test') {
+        if (type == 'diagnostics' || type == 'lab_tests' || type == 'lab_test') {
           return [
             {'title': 'Test Requested', 'desc': 'Diagnostic test booking submitted'},
             {'title': 'Booking Accepted', 'desc': 'The lab has accepted your test booking'},

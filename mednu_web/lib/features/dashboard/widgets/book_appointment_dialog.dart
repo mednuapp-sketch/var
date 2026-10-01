@@ -155,11 +155,12 @@ class _BookAppointmentDialogState extends State<_BookAppointmentDialog> {
         .toList();
   }
 
+  // `appointment_slots` is the server-maintained "taken" index (doctorId/
+  // date/time only) — patients can't read other patients' appointments.
   Stream<Set<String>> _taken(String doctorId, String dateKey) => FirebaseFirestore.instance
-      .collection('appointments')
+      .collection('appointment_slots')
       .where('doctorId', isEqualTo: doctorId)
       .where('date', isEqualTo: dateKey)
-      .where('status', isEqualTo: 'booked')
       .snapshots()
       .map((s) => s.docs.map((d) => (d.data()['time'] as String?) ?? '').toSet());
 
@@ -183,11 +184,10 @@ class _BookAppointmentDialogState extends State<_BookAppointmentDialog> {
     final dateKey = DateFormat('yyyy-MM-dd').format(day);
     try {
       final clash = await db
-          .collection('appointments')
+          .collection('appointment_slots')
           .where('doctorId', isEqualTo: doc.id)
           .where('date', isEqualTo: dateKey)
           .where('time', isEqualTo: slot)
-          .where('status', isEqualTo: 'booked')
           .limit(1)
           .get();
       if (clash.docs.isNotEmpty) {

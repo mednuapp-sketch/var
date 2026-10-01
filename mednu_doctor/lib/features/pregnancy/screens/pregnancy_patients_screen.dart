@@ -36,7 +36,7 @@ class _PregnancyPatientsScreenState extends State<PregnancyPatientsScreen>
   Widget build(BuildContext context) {
     final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F4F8),
+      backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -80,7 +80,7 @@ class _PregnancyPatientsScreenState extends State<PregnancyPatientsScreen>
                 hintText: 'Search patients...',
                 prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textHint),
                 filled: true,
-                fillColor: const Color(0xFFF7F4F8),
+                fillColor: AppColors.background,
                 border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                     borderSide: BorderSide.none),

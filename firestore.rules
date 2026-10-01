@@ -36,9 +36,16 @@ service cloud.firestore {
     function adminInRoles(roles) { return isAdmin() && (isDirector() || adminRole() in roles); }
 
     // Check if user is a verified doctor
+    // An *approved* doctor only. Mere existence of `doctors/{uid}` is not
+    // enough: every partner-app signup (any role, before any admin review)
+    // writes that base identity doc with status 'pending', and this check
+    // gates patient health data. A missing `roles` field is a legacy
+    // doctor account (see AppRole in mednu_doctor), so it defaults to doctor.
     function isDoctor() {
-      return isAuth() &&
-        exists(/databases/$(database)/documents/doctors/$(request.auth.uid));
+      let path = /databases/$(database)/documents/doctors/$(request.auth.uid);
+      return isAuth() && exists(path) &&
+        get(path).data.get('status', '') == 'active' &&
+        'doctor' in get(path).data.get('roles', ['doctor']);
     }
 
     // Check if user has an approved Lab & Diagnostics partner profile.
@@ -276,11 +283,18 @@ service cloud.firestore {
         (request.auth.token.guestAppointmentId != null &&
           request.auth.token.guestAppointmentId == appointmentId)
       );
-      // Collection queries (e.g. slot-availability check, appointment list):
-      // resource.data is null during list operations so field checks cannot be
-      // used here. Allow any authenticated user to query; sensitive data is
-      // already scoped by the patient/doctor writing their own records.
-      allow list: if isAuth();
+      // Own appointments (patient or doctor) and admin are always listable.
+      // The `status == 'booked'` clause is a TEMPORARY allowance for patient
+      // app builds <= 1.0.6+12 and older web bundles, whose slot-availability
+      // check queries other patients' booked appointments. Current clients
+      // read `appointment_slots` instead. Remove that clause once those
+      // builds are retired — see PENDING.md.
+      allow list: if isAuth() && (
+        resource.data.patientId == request.auth.uid ||
+        resource.data.doctorId == request.auth.uid ||
+        isAdmin() ||
+        resource.data.status == 'booked'
+      );
       // Only the booking patient can create; must set their own patientId.
       allow create: if isAuth() &&
                        request.resource.data.patientId == request.auth.uid &&
@@ -329,7 +343,14 @@ service cloud.firestore {
         isAdmin() ||
         isHospitalPartnerFor(resource.data.hospitalId)
       );
-      allow list: if isAuth();
+      // Every real query is scoped by patientId (patient app) or hospitalId
+      // (billing desk / admin), so list can carry the same scoping as get —
+      // previously any signed-in account could list every OP booking.
+      allow list: if isAuth() && (
+        resource.data.patientId == request.auth.uid ||
+        isAdmin() ||
+        isHospitalPartnerFor(resource.data.hospitalId)
+      );
       allow create: if isAuth() && request.resource.data.patientId == request.auth.uid;
       allow update: if isAuth() && (
         (resource.data.patientId == request.auth.uid &&
@@ -460,6 +481,13 @@ service cloud.firestore {
     // pre-filled client-side by phone-number auto-match at registration, but
     // only a Director can change them afterwards (or flip `status`) — the
     // same trust boundary every other partner role's approval already uses.
+    // Full patient contact for jobs still in an open pool — written and read
+    // only by Cloud Functions (see _POOL_JOB_SPECS in functions/index.js),
+    // copied onto the job doc once a partner claims it.
+    match /job_contacts/{docId} {
+      allow read, write: if false;
+    }
+
     match /hospital_profiles/{hospitalUid} {
       allow read:   if isAuth() && (isOwner(hospitalUid) || isAdmin());
       allow create: if isOwner(hospitalUid) && request.resource.data.status == 'pending';
@@ -611,7 +639,7 @@ service cloud.firestore {
       allow create: if isAuth() && (
         (request.resource.data.callerType == 'patient' &&
           request.resource.data.patientId == request.auth.uid) ||
-        (request.resource.data.callerType in ['doctor', 'physiotherapist', 'counsellor'] &&
+        (request.resource.data.callerType in ['doctor', 'physiotherapist', 'counsellor', 'nutritionist'] &&
           request.resource.data.doctorId == request.auth.uid)
       );
 
@@ -2154,12 +2182,12 @@ service cloud.firestore {
     // ── Appointment slot locks (atomic double-booking prevention) ────────────
     // ID format: {doctorId}_{date}_{time}. Created atomically inside a
     // Firestore transaction by the patient who books; deleted on cancellation.
+    // Public "this slot is taken" index: doctorId/date/time only, no patient
+    // data. Written solely by Cloud Functions (onAppointmentWrittenForSlots /
+    // reconcileAppointmentSlots), so it can't be spoofed to block a doctor.
     match /appointment_slots/{lockId} {
-      allow read:   if isAuth();
-      allow create: if isAuth() && request.resource.data.patientId == request.auth.uid;
-      // Patients can delete their own lock (slot freed on cancellation).
-      allow delete: if isAuth() && (resource.data.patientId == request.auth.uid || isAdmin());
-      allow update: if false;
+      allow read:  if isAuth();
+      allow write: if false;
     }
 
     // ── Patient wallet ────────────────────────────────────────────────────────

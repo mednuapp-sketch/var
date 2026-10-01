@@ -24,6 +24,10 @@ class AmbulanceRequestDetailScreen extends ConsumerWidget {
   const AmbulanceRequestDetailScreen({super.key, required this.requestId});
 
   Future<void> _call(BuildContext context, String phone) async {
+    if (phone.isEmpty) {
+      FeedbackService.showError(context, "No phone number yet — the patient's contact details appear once this request is accepted.");
+      return;
+    }
     final uri = Uri(scheme: 'tel', path: phone);
     // launchUrl throws (ACTIVITY_NOT_FOUND) on devices with no dialer —
     // e.g. tablets/web — so this must not be an unguarded fire-and-forget.

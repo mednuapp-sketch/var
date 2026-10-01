@@ -17,7 +17,20 @@
 
 ## 🔴 CRITICAL — Must do before Play Store / App Store release
 
-### 1. Change Bundle ID from placeholder
+### 0. Close doctor-appointment listing (after next patient-app release)
+**Problem:** `appointments` `allow list` still has a temporary `resource.data.status == 'booked'`
+clause, so any signed-in user can list other patients' *upcoming* appointments (name, doctor,
+specialty, guest phone). Patient app builds <= 1.0.6+12 need it for their slot check.
+Current code reads the patient-free `appointment_slots` index instead (live since 2026-10-01).
+**Steps:**
+1. Release the patient app (> 1.0.6+12) to Play Store / App Store.
+2. Once most users have updated, delete the `resource.data.status == 'booked'` line from
+   `appointments` `allow list` in `firestore.rules`.
+3. `firebase deploy --only firestore:rules`
+
+### 1. ~~Change Bundle ID from placeholder~~ ✅ Done
+> Verified 2026-10-01: Android `com.mednu.mednu` / `com.mednu.mednu_doctor`, iOS `com.mednu.mednu` / `com.mednu.mednuDoctor`, both `google-services.json` include them.
+
 **Problem:** `com.example.mednu` is a placeholder — stores reject it
 **Steps (in order):**
 1. Go to console.firebase.google.com

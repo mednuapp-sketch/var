@@ -31,6 +31,18 @@ class PharmacyOrderDetailScreen extends ConsumerStatefulWidget {
 class _PharmacyOrderDetailScreenState extends ConsumerState<PharmacyOrderDetailScreen> {
   bool _busy = false;
 
+  Future<void> _callPatient(String phone) async {
+    var opened = false;
+    try {
+      opened = await launchUrl(Uri(scheme: 'tel', path: phone));
+    } catch (_) {
+      opened = false;
+    }
+    if (!opened && mounted) {
+      FeedbackService.showError(context, 'Could not start a call on this device.');
+    }
+  }
+
   Future<void> _run(Future<void> Function() action, {String? successMessage}) async {
     if (_busy) return;
     setState(() => _busy = true);
@@ -203,7 +215,11 @@ class _PharmacyOrderDetailScreenState extends ConsumerState<PharmacyOrderDetailS
                       InfoChip(icon: Icons.person_outline_rounded, label: order.patientName),
                       const SizedBox(height: 8),
                       if (order.patientPhone.isNotEmpty)
-                        InfoChip(icon: Icons.call_outlined, label: order.patientPhone),
+                        InkWell(
+                          onTap: () => _callPatient(order.patientPhone),
+                          borderRadius: BorderRadius.circular(20),
+                          child: InfoChip(icon: Icons.call_outlined, label: 'Call ${order.patientPhone}'),
+                        ),
                       const SizedBox(height: 8),
                       if (order.deliveryAddress.isNotEmpty)
                         InfoChip(icon: Icons.location_on_outlined, label: order.deliveryAddress),

@@ -523,6 +523,8 @@ class _IncomingRequestScreenState extends State<IncomingRequestScreen>
         Text(
           _patientName,
           textAlign: TextAlign.center,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: AppTextStyles.display.copyWith(
               fontSize: 28, color: Colors.white, letterSpacing: -0.3),
         ),

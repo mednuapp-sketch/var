@@ -291,14 +291,15 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
   String get _selectedDateKey =>
       DateFormat('yyyy-MM-dd').format(_dates[_selectedDateIndex]);
 
+  // `appointment_slots` is the server-maintained "taken" index (doctorId/
+  // date/time only) — patients can't read other patients' appointments.
   Stream<Set<String>> _bookedSlotsStream() =>
       FirebaseFirestore.instance
-          .collection('appointments')
+          .collection('appointment_slots')
           .where('doctorId', isEqualTo: widget.doctorId)
           .where('date', isEqualTo: _selectedDateKey)
-          .where('status', isEqualTo: 'booked')
           .snapshots()
-          .map((s) => s.docs.map((d) => d['time'] as String? ?? '').toSet());
+          .map((s) => s.docs.map((d) => d.data()['time'] as String? ?? '').toSet());
 
   bool _isDoctorWorkingDay(DateTime date) {
     final avail = _availability;
@@ -447,15 +448,14 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
 
     // ── Pre-flight: confirm the slot is still free ───────────────────────────
     try {
-      final existing = await db.collection('appointments')
+      final existing = await db.collection('appointment_slots')
           .where('doctorId', isEqualTo: widget.doctorId)
           .where('date', isEqualTo: dateKey)
           .where('time', isEqualTo: slot)
-          .where('status', isEqualTo: 'booked')
           .limit(2)
           .get();
       final clash = existing.docs
-          .where((d) => d.id != widget.rescheduleAppointmentId)
+          .where((d) => d.data()['appointmentId'] != widget.rescheduleAppointmentId)
           .isNotEmpty;
       if (clash) throw Exception('slot_taken');
     } catch (e) {

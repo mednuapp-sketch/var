@@ -27,7 +27,7 @@ const {
   WHATSAPP_VERIFY_TOKEN,
   WHATSAPP_PHONE_NUMBER_ID,
 } = require("./config");
-const {getRecipient, notifyOnce, formatTime, shortId} = require("./notify");
+const {getRecipient, notifyOnce, formatTime, shortId, cleanName} = require("./notify");
 
 const _LOOKAHEAD_MINUTES = 60;
 
@@ -70,24 +70,24 @@ const sendAppointmentReminders = onSchedule(
         // silently suppressed by the original booking's dedupe record.
         const dedupeSuffix = `${appt.date || ""}:${appt.time || ""}`;
 
-        const patient = await getRecipient(COLLECTIONS.users, appt.patientId);
+        const patient = await getRecipient(COLLECTIONS.users, appt.patientId, appt.patientName);
         if (patient) {
           await notifyOnce(
             `appointment_reminder:${bookingId}:${dedupeSuffix}`,
             patient,
             "mednu_appointment_reminder",
-            [patient.firstName, appt.doctorName || "your doctor", time, shortBookingId],
+            [patient.firstName, cleanName(appt.doctorName) || "your doctor", time, shortBookingId],
             bookingId,
           );
         }
 
-        const doctor = await getRecipient(COLLECTIONS.doctors, appt.doctorId);
+        const doctor = await getRecipient(COLLECTIONS.doctors, appt.doctorId, appt.doctorName);
         if (doctor) {
           await notifyOnce(
             `doctor_appointment_reminder:${bookingId}:${dedupeSuffix}`,
             doctor,
             "mednu_doctor_appointment_reminder",
-            [doctor.firstName, appt.patientName || "a patient", time, shortBookingId],
+            [doctor.firstName, cleanName(appt.patientName) || "a patient", time, shortBookingId],
             bookingId,
           );
         }

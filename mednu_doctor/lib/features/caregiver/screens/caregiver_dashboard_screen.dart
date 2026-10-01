@@ -105,7 +105,7 @@ class _DutyHeroCard extends StatelessWidget {
         gradient: onDuty
             ? AppColors.onlineGradient
             : const LinearGradient(colors: [Color(0xFF455A64), Color(0xFF607D8B)], begin: Alignment.topLeft, end: Alignment.bottomRight),
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(R.r(context, 24)),
         boxShadow: [
           BoxShadow(
             color: (onDuty ? AppColors.online : AppColors.offline).withValues(alpha: 0.35),

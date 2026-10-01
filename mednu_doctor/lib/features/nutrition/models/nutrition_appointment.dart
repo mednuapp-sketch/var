@@ -47,6 +47,7 @@ extension NutritionAppointmentStatusX on NutritionAppointmentStatus {
 class NutritionAppointment {
   final String id;
   final NutritionAppointmentStatus status;
+  final String userId;
   final String userName;
   final String userPhone;
   final String consultationType;
@@ -61,6 +62,7 @@ class NutritionAppointment {
   const NutritionAppointment({
     required this.id,
     required this.status,
+    this.userId = '',
     required this.userName,
     required this.userPhone,
     required this.consultationType,
@@ -78,6 +80,7 @@ class NutritionAppointment {
     return NutritionAppointment(
       id: doc.id,
       status: _statusFrom(d['status'] as String?),
+      userId: d['userId'] as String? ?? '',
       userName: d['userName'] as String? ?? 'Patient',
       userPhone: d['userPhone'] as String? ?? '',
       consultationType: d['consultationType'] as String? ?? 'Consultation',

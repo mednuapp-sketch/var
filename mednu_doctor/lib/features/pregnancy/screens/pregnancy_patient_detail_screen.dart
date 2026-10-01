@@ -57,7 +57,7 @@ class _PregnancyPatientDetailScreenState
         final dueDate = (profile['dueDate'] as Timestamp?)?.toDate();
 
         return Scaffold(
-          backgroundColor: const Color(0xFFF7F4F8),
+          backgroundColor: AppColors.background,
           body: NestedScrollView(
             headerSliverBuilder: (context, _) => [
               SliverAppBar(
@@ -396,7 +396,7 @@ class _PregnancyPatientDetailScreenState
   Widget _metricChip(String label) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
     decoration: BoxDecoration(
-      color: const Color(0xFFF7F4F8),
+      color: AppColors.background,
       borderRadius: BorderRadius.circular(20),
     ),
     child: Text(label, style: const TextStyle(fontSize: 10, color: AppColors.textSecondary)),

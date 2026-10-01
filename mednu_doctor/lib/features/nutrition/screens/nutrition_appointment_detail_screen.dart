@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
+import '../../../core/router/app_router.dart';
 import '../../../core/services/feedback_service.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../../../shared_core/shared_core.dart';
@@ -50,6 +52,36 @@ class _NutritionAppointmentDetailScreenState extends ConsumerState<NutritionAppo
     if (!opened && mounted) {
       FeedbackService.showError(context, 'Could not start a call on this device.');
     }
+  }
+
+  /// Online consultations only, and only once the patient has a confirmed
+  /// slot — same day-level gating as Physio/Counselling sessions. `date` is
+  /// the patient app's `yyyy-MM-dd` key; an unparseable value fails open.
+  bool _canVideoCall(NutritionAppointment a) =>
+      a.consultationType == 'online' &&
+      (a.status == NutritionAppointmentStatus.confirmed ||
+          a.status == NutritionAppointmentStatus.inProgress);
+
+  void _startVideoCall(NutritionAppointment a) {
+    if (a.userId.isEmpty) {
+      FeedbackService.showError(context, 'Patient details are still loading — try again in a moment.');
+      return;
+    }
+    final day = DateTime.tryParse(a.date);
+    final now = DateTime.now();
+    if (day != null && day.isAfter(DateTime(now.year, now.month, now.day))) {
+      FeedbackService.showError(
+        context,
+        'This consultation is scheduled for ${a.date} — you can start the call on that day.',
+      );
+      return;
+    }
+    context.push(AppRoutes.providerOutgoingCall, extra: {
+      'providerRole': 'nutritionist',
+      'patientId': a.userId,
+      'patientName': a.userName,
+      'sessionId': a.id,
+    });
   }
 
   Future<void> _setStatus(String status, String successMessage) async {
@@ -154,6 +186,14 @@ class _NutritionAppointmentDetailScreenState extends ConsumerState<NutritionAppo
                           ],
                         ),
                       ),
+                      if (_canVideoCall(appointment)) ...[
+                        IconButton.filled(
+                          onPressed: () => _startVideoCall(appointment),
+                          icon: const Icon(Icons.videocam_rounded),
+                          style: IconButton.styleFrom(backgroundColor: AppColors.primary),
+                        ),
+                        const SizedBox(width: 8),
+                      ],
                       IconButton.filled(
                         onPressed: () => _call(appointment.userPhone),
                         icon: const Icon(Icons.call_rounded),

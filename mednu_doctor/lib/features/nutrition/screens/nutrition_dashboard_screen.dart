@@ -124,7 +124,7 @@ class _OnlineHeroCard extends StatelessWidget {
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(R.r(context, 24)),
         boxShadow: [
           BoxShadow(
             color: (online ? AppColors.online : AppColors.offline).withValues(alpha: 0.35),

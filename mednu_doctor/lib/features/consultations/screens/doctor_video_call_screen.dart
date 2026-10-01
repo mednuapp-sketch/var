@@ -528,7 +528,8 @@ class _DoctorVideoCallScreenState extends State<DoctorVideoCallScreen>
       left: 0,
       right: 0,
       child: Container(
-        padding: const EdgeInsets.fromLTRB(16, 50, 16, 16),
+        padding: EdgeInsets.fromLTRB(
+            16, MediaQuery.of(context).padding.top + 16, 16, 16),
         decoration: BoxDecoration(
           gradient: LinearGradient(
               colors: [Colors.black.withValues(alpha:0.6), Colors.transparent],
@@ -665,6 +666,8 @@ class _DoctorVideoCallScreenState extends State<DoctorVideoCallScreen>
           ),
           const SizedBox(height: 16),
           Text(widget.patientName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                   fontFamily: 'Inter',
                   fontSize: 22,

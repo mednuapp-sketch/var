@@ -39,12 +39,13 @@ initializeApp();
 // `providerId` so every existing consumer (generateAgoraToken's auth check,
 // the patient app's push handler/live listener/IncomingCallScreen) needs
 // zero changes to already work for the new roles.
-const _PROVIDER_INITIATED_CALLER_TYPES = ["doctor", "physiotherapist", "counsellor"];
+const _PROVIDER_INITIATED_CALLER_TYPES = ["doctor", "physiotherapist", "counsellor", "nutritionist"];
 
 function _providerRoleLabel(callerType) {
   switch (callerType) {
     case "physiotherapist": return "Physiotherapist";
     case "counsellor": return "Counsellor";
+    case "nutritionist": return "Dietician";
     default: return "Doctor";
   }
 }
@@ -53,10 +54,17 @@ async function _pushIncomingDoctorCallToPatient(data, consultationId) {
   const patientId = data.patientId;
   if (!patientId) return;
 
+  // Looked up here rather than trusted from the caller: provider accounts
+  // can't read patient profile docs (firestore.rules), so the client-side
+  // `patientFcmToken` on the consultation is usually empty. The patient app
+  // writes its token to `patients/{uid}`, older builds to `users/{uid}`.
   let fcmToken = null;
   try {
-    const userDoc = await getFirestore().collection("users").doc(patientId).get();
-    if (userDoc.exists) fcmToken = userDoc.data()?.fcmToken || null;
+    for (const col of ["patients", "users"]) {
+      const snap = await getFirestore().collection(col).doc(patientId).get();
+      fcmToken = (snap.exists && snap.data()?.fcmToken) || null;
+      if (fcmToken) break;
+    }
   } catch (_) {}
   if (!fcmToken) {
     console.log(`Patient ${patientId} has no FCM token — incoming doctor call push skipped.`);
@@ -783,14 +791,16 @@ exports.onConsultationStatusChange = onDocumentUpdated(
     // Primary: use the token stored on the consultation doc itself.
     let fcmToken = after.patientFcmToken || null;
 
-    // Fallback: look up from the users collection.
+    // Fallback: the patient app writes its token to `patients/{uid}`, older
+    // builds to `users/{uid}`. Provider-initiated calls usually land here,
+    // since provider accounts can't read patient docs to fill it in.
     if (!fcmToken) {
       try {
-        const userDoc = await getFirestore()
-          .collection("users")
-          .doc(patientId)
-          .get();
-        if (userDoc.exists) fcmToken = userDoc.data()?.fcmToken || null;
+        for (const col of ["patients", "users"]) {
+          const snap = await getFirestore().collection(col).doc(patientId).get();
+          fcmToken = (snap.exists && snap.data()?.fcmToken) || null;
+          if (fcmToken) break;
+        }
       } catch (_) {}
     }
 
@@ -1254,6 +1264,8 @@ exports.onAppointmentStatusChange = onDocumentUpdated(
     const rescheduled = before.status === "booked" && after.status === "booked" &&
       (before.date !== after.date || before.time !== after.time);
     if (!statusChanged && !rescheduled) return;
+    const slotConflictWrite = !!after.slotConflictAt &&
+      !after.slotConflictAt.isEqual?.(before.slotConflictAt);
 
     const patientId = after.patientId;
     if (!patientId) return;
@@ -1278,6 +1290,14 @@ exports.onAppointmentStatusChange = onDocumentUpdated(
         batch.delete(db.collection("scheduled_reminders").doc(`${doctorId}_appt_${apptId}_start`));
         await batch.commit();
       } catch (_) {}
+    }
+
+    if (slotConflictWrite) return; // patient already told by _resolveSlotConflict
+
+    if (statusChanged && after.status === "cancelled" && after.cancelledBy === "patient") {
+      await _notifyProviderOfPatientCancel(db, doctorId, {
+        serviceType: "appointment", bookingId: apptId, what: "appointment",
+      });
     }
 
     // Format appointment date/time if available.
@@ -1339,6 +1359,165 @@ exports.onAppointmentStatusChange = onDocumentUpdated(
   }
 );
 
+// ── Public slot index for doctor appointments ──────────────────────────────
+// Patients need to know which of a doctor's slots are taken, but must not be
+// able to read other patients' appointments (name, specialty, guest phone).
+// `appointment_slots/{doctorId}_{date}_{time}` holds only doctorId/date/time
+// (+ the owning appointmentId, so a stale write can't free someone else's
+// slot) and is the only thing booking screens query. Server-written only —
+// see firestore.rules' appointment_slots.
+function _slotKey(doctorId, date, time) {
+  return `${doctorId}_${date}_${String(time).replace(/[^A-Za-z0-9]/g, "-")}`;
+}
+
+function _bookedSlotOf(appt) {
+  if (!appt || appt.status !== "booked" || !appt.doctorId || !appt.date || !appt.time) return null;
+  return { key: _slotKey(appt.doctorId, appt.date, appt.time), doctorId: appt.doctorId, date: appt.date, time: appt.time };
+}
+
+exports.onAppointmentWrittenForSlots = onDocumentWritten(
+  "appointments/{appointmentId}",
+  async (event) => {
+    const db = getFirestore();
+    const appointmentId = event.params.appointmentId;
+    const beforeData = event.data.before?.exists ? event.data.before.data() : null;
+    const afterData = event.data.after?.exists ? event.data.after.data() : null;
+    const prev = _bookedSlotOf(beforeData);
+    const next = _bookedSlotOf(afterData);
+    if (prev && next && prev.key === next.key) return;
+
+    // Claim the new slot first. Every booking path (in-app, web portal,
+    // capturePayment, reschedule) ends in an appointments write, so this one
+    // transaction is the single place a slot is granted: first to commit
+    // wins, and the slot doc can only be held by a still-booked appointment.
+    if (next) {
+      const slotRef = db.collection("appointment_slots").doc(next.key);
+      const conflict = await db.runTransaction(async (tx) => {
+        const slotSnap = await tx.get(slotRef);
+        const holderId = slotSnap.exists ? slotSnap.data().appointmentId : null;
+        if (holderId && holderId !== appointmentId) {
+          const holder = await tx.get(db.collection("appointments").doc(holderId));
+          if (holder.exists && _bookedSlotOf(holder.data())?.key === next.key) return true;
+        }
+        tx.set(slotRef, {
+          doctorId: next.doctorId, date: next.date, time: next.time, appointmentId,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+        return false;
+      });
+      if (conflict) {
+        await _resolveSlotConflict(db, appointmentId, beforeData, afterData, prev);
+        return; // keep `prev` held: a rejected reschedule goes straight back to it
+      }
+    }
+
+    if (prev) {
+      const ref = db.collection("appointment_slots").doc(prev.key);
+      await db.runTransaction(async (tx) => {
+        const snap = await tx.get(ref);
+        if (snap.exists && snap.data().appointmentId === appointmentId) tx.delete(ref);
+      });
+    }
+  }
+);
+
+// The losing side of a slot race. A reschedule into a taken slot is put back
+// on its original date/time (the patient keeps the appointment they already
+// had); a brand-new booking is cancelled and auto-refunded if it was paid.
+// `slotConflictAt` tells onAppointmentStatusChange to stay quiet — this sends
+// the one notification that actually explains what happened.
+async function _resolveSlotConflict(db, appointmentId, beforeData, afterData, prev) {
+  const ref = db.collection("appointments").doc(appointmentId);
+  const patientId = afterData.patientId;
+  const doctorName = afterData.doctorName || "the doctor";
+  const isReschedule = !!prev;
+
+  if (isReschedule) {
+    await ref.update({
+      date: beforeData.date,
+      time: beforeData.time,
+      slotConflictAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+  } else {
+    await ref.update({
+      status: "cancelled",
+      cancelledBy: "system",
+      cancelReason: "slot_taken",
+      slotConflictAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    await _autoRefundBooking(db, "appointments", appointmentId,
+      "Slot was booked by another patient at the same moment");
+  }
+  console.log(JSON.stringify({
+    module: "appointment_slots", event: isReschedule ? "reschedule_reverted" : "booking_cancelled_slot_taken",
+    appointmentId, doctorId: afterData.doctorId, date: afterData.date, time: afterData.time,
+  }));
+
+  if (!patientId) return;
+  await _sendPatientNotification(db, getMessaging(), patientId, isReschedule ? {
+    title: "Reschedule Not Possible",
+    body: `${afterData.time} on ${afterData.date} was just booked by someone else. Your appointment with Dr. ${doctorName} stays at ${beforeData.time} on ${beforeData.date}.`,
+    type: "appointment_reschedule_conflict",
+    serviceType: "appointment",
+    bookingId: appointmentId,
+    actionType: "open_appointment",
+  } : {
+    title: "Slot Just Taken",
+    body: `Someone booked Dr. ${doctorName} at ${afterData.time} on ${afterData.date} a moment before you. Please pick another time${afterData.paymentId ? " — your payment is being refunded" : ""}.`,
+    type: "appointment_slot_taken",
+    serviceType: "appointment",
+    bookingId: appointmentId,
+    actionType: "open_appointment",
+  }).catch(() => {});
+}
+
+// Rebuilds today-onwards slots from the appointments themselves: backfills
+// bookings made before the index existed and repairs any missed trigger
+// (e.g. two appointments double-booked into one slot before this lock).
+exports.reconcileAppointmentSlots = onSchedule(
+  { schedule: "every 30 minutes", timeZone: "Asia/Kolkata" },
+  async () => {
+    const db = getFirestore();
+    const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date()); // yyyy-MM-dd
+    const [appts, slots] = await Promise.all([
+      db.collection("appointments").where("date", ">=", today).get(),
+      db.collection("appointment_slots").where("date", ">=", today).get(),
+    ]);
+    const expected = new Map();
+    appts.docs.forEach((d) => {
+      const slot = _bookedSlotOf(d.data());
+      if (slot && !expected.has(slot.key)) expected.set(slot.key, { ...slot, appointmentId: d.id });
+    });
+    const existing = new Map(slots.docs.map((d) => [d.id, d.data()]));
+
+    let writer = db.batch();
+    let ops = 0;
+    let added = 0;
+    let removed = 0;
+    const flush = async () => { if (ops) { await writer.commit(); writer = db.batch(); ops = 0; } };
+    for (const [key, slot] of expected) {
+      const cur = existing.get(key);
+      if (cur && cur.appointmentId === slot.appointmentId) continue;
+      writer.set(db.collection("appointment_slots").doc(key), {
+        doctorId: slot.doctorId, date: slot.date, time: slot.time, appointmentId: slot.appointmentId,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      added++;
+      if (++ops >= 400) await flush();
+    }
+    for (const key of existing.keys()) {
+      if (expected.has(key)) continue;
+      writer.delete(db.collection("appointment_slots").doc(key));
+      removed++;
+      if (++ops >= 400) await flush();
+    }
+    await flush();
+    console.log(JSON.stringify({ module: "appointment_slots", event: "reconciled", today, added, removed, total: expected.size }));
+  }
+);
+
 // ── Service Request Status Change ────────────────────────────────────────────
 //
 // Handles all non-emergency service requests:
@@ -1397,7 +1576,10 @@ exports.onServiceRequestStatusChange = onDocumentUpdated(
       lab_tests: {
         accepted:         ["Lab Booking Confirmed", "Your lab booking has been accepted. Our technician will visit you soon.", "lab_accepted"],
         assigned:         ["Technician Assigned", "A lab technician has been assigned to your booking.", "lab_assigned"],
-        in_progress:      ["Technician on the Way", "Your lab technician is on the way to collect your sample.", "lab_in_progress"],
+        // Only ever reached from the lab's 'processing' step, *after*
+        // sample collection (_LAB_TO_SERVICE_REQUEST_STATUS) — the patient
+        // timeline labels this step "Processing" too.
+        in_progress:      ["Sample Processing", "Your sample is being analysed at the lab.", "lab_processing"],
         sample_collected: ["Sample Collected", "Your sample has been collected and sent to the lab.", "lab_sample_collected"],
         report_ready:     ["Report Ready", "Your lab test report is now available. Tap to view.", "lab_report_ready"],
         completed:        ["Lab Test Completed", "Your lab test has been completed.", "lab_completed"],
@@ -1407,7 +1589,7 @@ exports.onServiceRequestStatusChange = onDocumentUpdated(
       diagnostics: {
         accepted:     ["Diagnostics Confirmed", "Your diagnostic booking has been accepted.", "lab_accepted"],
         assigned:     ["Technician Assigned", "A diagnostic technician has been assigned.", "lab_assigned"],
-        in_progress:  ["Diagnostics In Progress", "Your diagnostic test is in progress.", "lab_in_progress"],
+        in_progress:  ["Sample Processing", "Your sample is being analysed at the lab.", "lab_processing"],
         // _LAB_TO_SERVICE_REQUEST_STATUS mirrors 'sample_collected' for BOTH
         // diagnostic types; without this key the type='diagnostics' variant
         // fell through to genericMap, which has no such status, and the
@@ -2737,6 +2919,7 @@ async function _sendProviderNotification(db, messaging, providerId, opts) {
     const candidates = [
       "doctors", "lab_profiles", "pharmacy_profiles", "ambulance_profiles", "caregiver_profiles",
       "nutritionist_profiles", "physiotherapist_profiles", "counsellor_profiles",
+      "hospital_profiles",
     ];
     for (const col of candidates) {
       const snap = await db.collection(col).doc(providerId).get();
@@ -2818,6 +3001,26 @@ async function _pushToAllAdmins(db, messaging, { title, body, type }) {
 // ── Admin alert helper ────────────────────────────────────────────────────────
 // Writes to the existing `admin_alerts` collection and pushes FCM via
 // _pushToAllAdmins above. Never throws — see that function's note.
+// A patient cancelled a booking a provider had already claimed. The
+// provider's own list updates live, but someone already travelling to the
+// patient (technician, caregiver, driver, physio) needs an actual push.
+// Best-effort: a failed push must never fail the cancel mirror itself.
+async function _notifyProviderOfPatientCancel(db, providerId, { serviceType, bookingId, what }) {
+  if (!providerId) return;
+  try {
+    await _sendProviderNotification(db, getMessaging(), providerId, {
+      title: "Booking Cancelled by Patient",
+      body: `The patient has cancelled this ${what}. No further action is needed.`,
+      type: "booking_cancelled_by_patient",
+      serviceType,
+      bookingId,
+      extraData: { cancelledBy: "patient" },
+    });
+  } catch (err) {
+    console.error(`Patient-cancel push failed for provider ${providerId}:`, err.message);
+  }
+}
+
 async function _sendAdminAlert(db, messaging, opts) {
   const { title, body, type, extraData = {} } = opts;
   try {
@@ -4398,6 +4601,87 @@ async function _autoRefundOnProviderFailure(db, before, after, failStatuses, sou
 // writes back to service_requests, so there is no cycle.
 // ══════════════════════════════════════════════════════════════════════════
 
+// ── Unclaimed-job privacy ────────────────────────────────────────────────
+// A job nobody has claimed yet is readable by EVERY approved partner of that
+// role (firestore.rules' `providerField == null && is<Role>Partner()`), so
+// it must not carry the patient's full contact details. While unclaimed the
+// job doc gets only a first name + rough area; the full phone/address/notes
+// live in `job_contacts/{collection}__{id}` (no client access at all) and
+// are copied onto the job the moment a partner claims it. A job born
+// already assigned (patient picked that provider, or ambulance auto-match)
+// keeps full details from the start — only one provider can read it.
+const _POOL_JOB_SPECS = {
+  diagnostic_bookings:  { providerField: "labId",             areaField: "address",         hidden: ["patientPhone", "address", "notes"],   terminal: ["completed", "cancelled", "rejected", "expired"] },
+  pharmacy_orders:      { providerField: "pharmacyId",        areaField: "deliveryAddress", hidden: ["patientPhone", "deliveryAddress"],    terminal: ["delivered", "cancelled"] },
+  ambulance_requests:   { providerField: "ambulanceId",       areaField: "pickupAddress",   hidden: ["patientPhone", "pickupAddress", "pickupLat", "pickupLng"], terminal: ["completed", "cancelled"], roundLatLng: ["pickupLat", "pickupLng"] },
+  caregiver_visits:     { providerField: "caregiverId",       areaField: "address",         hidden: ["patientPhone", "address"],            terminal: ["completed", "cancelled", "missed"] },
+  physio_sessions:      { providerField: "physiotherapistId", areaField: "address",         hidden: ["patientPhone", "address", "notes"],   terminal: ["completed", "cancelled", "expired"] },
+  counselling_sessions: { providerField: "counsellorId",      areaField: "address",         hidden: ["patientPhone", "address", "notes"],   terminal: ["completed", "cancelled", "expired"] },
+};
+
+// "Flat 4B, 12 MG Road, Indiranagar, Bengaluru 560038" -> "Indiranagar,
+// Bengaluru 560038": enough to judge distance, not enough to find the door.
+function _coarseArea(address) {
+  const parts = String(address || "").split(",").map((p) => p.trim()).filter(Boolean);
+  if (parts.length <= 1) return "";
+  return parts.slice(-Math.min(2, parts.length - 1)).join(", ");
+}
+
+function _splitPoolJob(collection, docId, full) {
+  const spec = _POOL_JOB_SPECS[collection];
+  if (!spec || full[spec.providerField]) return { doc: full, contact: null };
+  const contact = { collection, docId, patientName: full.patientName || "", createdAt: FieldValue.serverTimestamp() };
+  const doc = { ...full, contactWithheld: true };
+  for (const f of spec.hidden) {
+    contact[f] = full[f] ?? null;
+    doc[f] = typeof full[f] === "number" ? null : "";
+  }
+  doc[spec.areaField] = _coarseArea(full[spec.areaField]);
+  for (const f of spec.roundLatLng || []) {
+    if (typeof full[f] === "number") doc[f] = Math.round(full[f] * 100) / 100; // ~1 km
+  }
+  doc.patientName = String(full.patientName || "Patient").trim().split(/\s+/)[0] || "Patient";
+  return { doc, contact };
+}
+
+async function _setPoolJob(db, ref, collection, full) {
+  const { doc, contact } = _splitPoolJob(collection, ref.id, full);
+  // Contact first, so it always exists by the time anyone can claim the job.
+  if (contact) await db.collection("job_contacts").doc(`${collection}__${ref.id}`).set(contact);
+  await ref.set(doc);
+}
+
+function _batchSetPoolJob(batch, db, ref, collection, full) {
+  const { doc, contact } = _splitPoolJob(collection, ref.id, full);
+  if (contact) batch.set(db.collection("job_contacts").doc(`${collection}__${ref.id}`), contact);
+  batch.set(ref, doc);
+}
+
+// Called at the top of each job collection's update trigger. The write it
+// makes re-fires that trigger once with no status/claim change, which every
+// mirror there already treats as a no-op.
+async function _releasePoolJobContact(db, collection, docId, before, after) {
+  const spec = _POOL_JOB_SPECS[collection];
+  if (!spec || !after.contactWithheld) return;
+  const contactRef = db.collection("job_contacts").doc(`${collection}__${docId}`);
+  try {
+    if (!before[spec.providerField] && after[spec.providerField]) {
+      const snap = await contactRef.get();
+      if (!snap.exists) return;
+      const c = snap.data();
+      const update = { contactWithheld: false, patientName: c.patientName || after.patientName };
+      for (const f of spec.hidden) update[f] = c[f] ?? null;
+      await db.collection(collection).doc(docId).update(update);
+      await contactRef.delete();
+    } else if (spec.terminal.includes(after.status)) {
+      await contactRef.delete(); // never claimed — nobody will ever need it
+    }
+  } catch (err) {
+    console.error(`[job_contacts] ${collection}/${docId}:`, err.message);
+    throw err; // retried: a claimed job must not stay without contact details
+  }
+}
+
 const _DIAGNOSTIC_TYPES = ["diagnostics", "lab_tests"];
 
 // Lab-side status -> the exact service_requests status vocabulary already
@@ -4479,7 +4763,7 @@ exports.onDiagnosticServiceRequestCreated = onDocumentCreated(
       }
     }
 
-    await bookingRef.set({
+    await _setPoolJob(db, bookingRef, "diagnostic_bookings", {
       sourceRequestId: requestId,
       type: data.type,
       testName: details.testName || data.serviceName || "Diagnostic Test",
@@ -4542,17 +4826,19 @@ exports.onDiagnosticServiceRequestCancelled = onDocumentUpdated(
     // is a genuine first delivery or a redelivered retry, re-checking the
     // *current* stored status (not the before/after off this specific
     // event) is what makes repeated invocations converge safely.
-    await db.runTransaction(async (tx) => {
+    const providerId = await db.runTransaction(async (tx) => {
       const bookingSnap = await tx.get(bookingRef);
-      if (!bookingSnap.exists) return;
+      if (!bookingSnap.exists) return null;
       const currentStatus = bookingSnap.data().status;
       if (["completed", "cancelled", "rejected", "expired"].includes(currentStatus)) {
         _logLab("INFO", "cancel_mirror_skipped_terminal", { requestId, currentStatus });
-        return;
+        return null;
       }
       tx.update(bookingRef, { status: "cancelled", cancelledBy: "patient", updatedAt: FieldValue.serverTimestamp() });
+      return bookingSnap.data().labId || null;
     });
     _logLab("INFO", "diagnostic_booking_cancelled_by_patient", { requestId });
+    await _notifyProviderOfPatientCancel(db, providerId, { serviceType: "diagnostics", bookingId: requestId, what: "lab test booking" });
   }
 );
 
@@ -4568,6 +4854,7 @@ exports.onDiagnosticBookingStatusChange = onDocumentUpdated(
     const after  = event.data.after.data();
     const bookingId = event.params.bookingId;
     const db = getFirestore();
+    await _releasePoolJobContact(db, "diagnostic_bookings", bookingId, before, after);
 
     const statusChanged = before.status !== after.status;
     await _autoRefundOnProviderFailure(db, before, after, ["rejected", "expired", "cancelled"], "service_requests",
@@ -5123,7 +5410,7 @@ exports.onMedicineOrderCreated = onDocumentCreated(
     // failure between the two writes left an order with no items at all that
     // the existence check would then never repair.
     const batch = db.batch();
-    batch.set(pharmacyOrderRef, {
+    _batchSetPoolJob(batch, db, pharmacyOrderRef, "pharmacy_orders", {
       sourceCollection: "orders",
       sourceId: orderId,
       orderType: "medicine",
@@ -5212,7 +5499,7 @@ exports.onEquipmentServiceRequestCreated = onDocumentCreated(
     // onMedicineOrderCreated above (no duplicate item on a redelivery, no
     // order left permanently item-less by a partial failure).
     const batch = db.batch();
-    batch.set(pharmacyOrderRef, {
+    _batchSetPoolJob(batch, db, pharmacyOrderRef, "pharmacy_orders", {
       sourceCollection: "service_requests",
       sourceId: requestId,
       orderType: "equipment",
@@ -5375,20 +5662,20 @@ exports.onOrderPrescriptionUploaded = onDocumentUpdated(
 // 'cancelled' and the terminal-state guard below makes it a no-op.
 async function _mirrorPharmacyCancellation(db, orderId, { medicine = false } = {}) {
   const pharmacyOrderRef = db.collection("pharmacy_orders").doc(orderId);
-  const refusedStatus = await db.runTransaction(async (tx) => {
+  const { refusedStatus, pharmacyId } = await db.runTransaction(async (tx) => {
     const orderSnap = await tx.get(pharmacyOrderRef);
-    if (!orderSnap.exists) return null;
+    if (!orderSnap.exists) return {};
     const currentStatus = orderSnap.data().status;
     if (["delivered", "cancelled"].includes(currentStatus)) {
       _logPharmacy("INFO", "cancel_mirror_skipped_terminal", { orderId, currentStatus });
-      return null;
+      return {};
     }
     // Medicine orders are only cancellable until packed (firestore.rules
     // enforces that on `orders`, but `orders` can lag the pharmacy by a
     // mirror hop). If the pharmacy packed first, the cancel loses.
-    if (medicine && ["packed", "out_for_delivery"].includes(currentStatus)) return currentStatus;
+    if (medicine && ["packed", "out_for_delivery"].includes(currentStatus)) return { refusedStatus: currentStatus };
     tx.update(pharmacyOrderRef, { status: "cancelled", cancelledBy: "patient", updatedAt: FieldValue.serverTimestamp() });
-    return null;
+    return { pharmacyId: orderSnap.data().pharmacyId || null };
   });
   if (refusedStatus) {
     await db.collection("orders").doc(orderId).update({
@@ -5400,6 +5687,9 @@ async function _mirrorPharmacyCancellation(db, orderId, { medicine = false } = {
     return;
   }
   _logPharmacy("INFO", "pharmacy_order_cancelled_by_patient", { orderId });
+  await _notifyProviderOfPatientCancel(db, pharmacyId, {
+    serviceType: medicine ? "medicine" : "equipment", bookingId: orderId, what: "order",
+  });
 }
 
 exports.onMedicineOrderCancelledByPatient = onDocumentUpdated(
@@ -5436,6 +5726,7 @@ exports.onPharmacyOrderStatusChange = onDocumentUpdated(
     const after  = event.data.after.data();
     const orderId = event.params.orderId;
     const db = getFirestore();
+    await _releasePoolJobContact(db, "pharmacy_orders", orderId, before, after);
 
     const statusChanged = before.status !== after.status;
     const deliveryPersonChanged = before.deliveryPersonName !== after.deliveryPersonName;
@@ -5940,7 +6231,7 @@ exports.onAmbulanceServiceRequestCreated = onDocumentCreated(
     const pickupLng = details.locationData?.lng;
     const matchedAmbulanceId = await _findNearestOnlineAmbulance(db, pickupLat, pickupLng);
 
-    await requestRef.set({
+    await _setPoolJob(db, requestRef, "ambulance_requests", {
       sourceRequestId: requestId,
       type: "ambulance",
       status: "pending",
@@ -6132,17 +6423,19 @@ exports.onAmbulanceServiceRequestCancelled = onDocumentUpdated(
     // Re-reading the *current* stored status inside a transaction (rather
     // than trusting this event's before/after) is what makes repeated
     // invocations converge safely — same pattern as the Lab mirror.
-    await db.runTransaction(async (tx) => {
+    const providerId = await db.runTransaction(async (tx) => {
       const reqSnap = await tx.get(requestRef);
-      if (!reqSnap.exists) return;
+      if (!reqSnap.exists) return null;
       const currentStatus = reqSnap.data().status;
       if (["completed", "cancelled"].includes(currentStatus)) {
         _logAmbulance("INFO", "cancel_mirror_skipped_terminal", { requestId, currentStatus });
-        return;
+        return null;
       }
       tx.update(requestRef, { status: "cancelled", cancelledBy: "patient", updatedAt: FieldValue.serverTimestamp() });
+      return reqSnap.data().ambulanceId || null;
     });
     _logAmbulance("INFO", "ambulance_request_cancelled_by_patient", { requestId });
+    await _notifyProviderOfPatientCancel(db, providerId, { serviceType: "ambulance", bookingId: requestId, what: "ambulance request" });
   }
 );
 
@@ -6158,6 +6451,7 @@ exports.onAmbulanceRequestStatusChange = onDocumentUpdated(
     const after  = event.data.after.data();
     const requestId = event.params.requestId;
     const db = getFirestore();
+    await _releasePoolJobContact(db, "ambulance_requests", requestId, before, after);
 
     if (!before.declineRequested && after.declineRequested) {
       await _redispatchDeclinedAmbulance(db, requestId);
@@ -6434,7 +6728,7 @@ exports.onCaregiverServiceRequestCreated = onDocumentCreated(
     }
 
     const batch = db.batch();
-    batch.set(visitRef, {
+    _batchSetPoolJob(batch, db, visitRef, "caregiver_visits", {
       sourceRequestId: requestId,
       sourceType: data.type,
       type: _caregiverCareType(details.specialty || details.shiftType || data.serviceName),
@@ -6512,17 +6806,19 @@ exports.onCaregiverServiceRequestCancelled = onDocumentUpdated(
     const requestId = event.params.requestId;
     const visitRef = db.collection("caregiver_visits").doc(requestId);
 
-    await db.runTransaction(async (tx) => {
+    const providerId = await db.runTransaction(async (tx) => {
       const visitSnap = await tx.get(visitRef);
-      if (!visitSnap.exists) return;
+      if (!visitSnap.exists) return null;
       const currentStatus = visitSnap.data().status;
       if (["completed", "cancelled", "missed"].includes(currentStatus)) {
         _logCaregiver("INFO", "cancel_mirror_skipped_terminal", { requestId, currentStatus });
-        return;
+        return null;
       }
       tx.update(visitRef, { status: "cancelled", cancelledBy: "patient", updatedAt: FieldValue.serverTimestamp() });
+      return visitSnap.data().caregiverId || null;
     });
     _logCaregiver("INFO", "caregiver_visit_cancelled_by_patient", { requestId });
+    await _notifyProviderOfPatientCancel(db, providerId, { serviceType: "caregiver", bookingId: requestId, what: "caregiver visit" });
   }
 );
 
@@ -6537,6 +6833,7 @@ exports.onCaregiverVisitStatusChange = onDocumentUpdated(
     const after  = event.data.after.data();
     const visitId = event.params.visitId;
     const db = getFirestore();
+    await _releasePoolJobContact(db, "caregiver_visits", visitId, before, after);
 
     const statusChanged = before.status !== after.status;
     await _autoRefundOnProviderFailure(db, before, after, ["cancelled", "missed"], "service_requests",
@@ -6891,7 +7188,7 @@ exports.onPhysioServiceRequestCreated = onDocumentCreated(
       ..._buildSessionDoc(data, "physiotherapistId"),
       sourceRequestId: requestId,
     };
-    await sessionRef.set(sessionDoc);
+    await _setPoolJob(db, sessionRef, "physio_sessions", sessionDoc);
 
     // A pre-assigned booking (patient picked a specific physiotherapist
     // directly, rather than requesting any available one) is born already
@@ -6945,17 +7242,19 @@ exports.onPhysioServiceRequestCancelled = onDocumentUpdated(
     const requestId = event.params.requestId;
     const sessionRef = db.collection("physio_sessions").doc(requestId);
 
-    await db.runTransaction(async (tx) => {
+    const providerId = await db.runTransaction(async (tx) => {
       const sessionSnap = await tx.get(sessionRef);
-      if (!sessionSnap.exists) return;
+      if (!sessionSnap.exists) return null;
       const currentStatus = sessionSnap.data().status;
       if (["completed", "cancelled", "expired"].includes(currentStatus)) {
         _logPhysio("INFO", "cancel_mirror_skipped_terminal", { requestId, currentStatus });
-        return;
+        return null;
       }
       tx.update(sessionRef, { status: "cancelled", cancelledBy: "patient", updatedAt: FieldValue.serverTimestamp() });
+      return sessionSnap.data().physiotherapistId || null;
     });
     _logPhysio("INFO", "physio_session_cancelled_by_patient", { requestId });
+    await _notifyProviderOfPatientCancel(db, providerId, { serviceType: "physiotherapy", bookingId: requestId, what: "physiotherapy session" });
   }
 );
 
@@ -6970,6 +7269,7 @@ exports.onPhysioSessionStatusChange = onDocumentUpdated(
     const after  = event.data.after.data();
     const sessionId = event.params.sessionId;
     const db = getFirestore();
+    await _releasePoolJobContact(db, "physio_sessions", sessionId, before, after);
 
     const statusChanged = before.status !== after.status;
     await _autoRefundOnProviderFailure(db, before, after, ["cancelled", "expired"], "service_requests",
@@ -7089,7 +7389,7 @@ exports.onCounsellingServiceRequestCreated = onDocumentCreated(
       ..._buildSessionDoc(data, "counsellorId"),
       sourceRequestId: requestId,
     };
-    await sessionRef.set(sessionDoc);
+    await _setPoolJob(db, sessionRef, "counselling_sessions", sessionDoc);
 
     // Mirrors physiotherapy's equivalent block above: a pre-assigned booking
     // is born already 'accepted' by `_buildSessionDoc`, but that transition
@@ -7142,17 +7442,19 @@ exports.onCounsellingServiceRequestCancelled = onDocumentUpdated(
     const requestId = event.params.requestId;
     const sessionRef = db.collection("counselling_sessions").doc(requestId);
 
-    await db.runTransaction(async (tx) => {
+    const providerId = await db.runTransaction(async (tx) => {
       const sessionSnap = await tx.get(sessionRef);
-      if (!sessionSnap.exists) return;
+      if (!sessionSnap.exists) return null;
       const currentStatus = sessionSnap.data().status;
       if (["completed", "cancelled", "expired"].includes(currentStatus)) {
         _logCounselling("INFO", "cancel_mirror_skipped_terminal", { requestId, currentStatus });
-        return;
+        return null;
       }
       tx.update(sessionRef, { status: "cancelled", cancelledBy: "patient", updatedAt: FieldValue.serverTimestamp() });
+      return sessionSnap.data().counsellorId || null;
     });
     _logCounselling("INFO", "counselling_session_cancelled_by_patient", { requestId });
+    await _notifyProviderOfPatientCancel(db, providerId, { serviceType: "counselling", bookingId: requestId, what: "counselling session" });
   }
 );
 
@@ -7166,6 +7468,7 @@ exports.onCounsellingSessionStatusChange = onDocumentUpdated(
     const after  = event.data.after.data();
     const sessionId = event.params.sessionId;
     const db = getFirestore();
+    await _releasePoolJobContact(db, "counselling_sessions", sessionId, before, after);
 
     const statusChanged = before.status !== after.status;
     await _autoRefundOnProviderFailure(db, before, after, ["cancelled", "expired"], "service_requests",
@@ -7403,7 +7706,7 @@ exports.onNutritionAppointmentStatusChange = onDocumentUpdated(
     if (after.status === "cancelled" && after.cancelledBy === "provider") {
       await _autoRefundBooking(db, "nutrition_appointments", appointmentId, "The nutritionist cancelled this appointment");
     }
-    if (after.status === "cancelled" && after.nutritionistId) {
+    if (after.status === "cancelled" && after.cancelledBy !== "provider" && after.nutritionistId) {
       await _sendProviderNotification(db, messaging, after.nutritionistId, {
         title: "Appointment Cancelled",
         body: `${after.userName || "A patient"}'s appointment${when} was cancelled.`,
@@ -7553,6 +7856,21 @@ exports.onHospitalAppointmentStatusChange = onDocumentUpdated(
         await _sendPatientNotification(getFirestore(), getMessaging(), patientId, {
           title, body, type, serviceType: "hospital_op", bookingId: appointmentId, actionType: "open_appointment",
         });
+      }
+    }
+
+    // The patient may cancel a booked/checked-in OP visit (firestore.rules);
+    // the billing desk's list updates live, but staff should also be pushed.
+    if (after.status === "cancelled" && after.hospitalId) {
+      try {
+        await _notifyHospitalStaff(getFirestore(), getMessaging(), after.hospitalId, {
+          title: "OP Appointment Cancelled",
+          body: `${after.patientName || "A patient"} cancelled their OP appointment${after.date ? ` for ${after.date}` : ""}.`,
+          type: "hospital_appointment_cancelled",
+          bookingId: appointmentId,
+        });
+      } catch (err) {
+        console.error("Hospital cancel push failed:", err.message);
       }
     }
 

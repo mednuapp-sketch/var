@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/services/feedback_service.dart';
@@ -29,6 +30,18 @@ class LabBookingDetailScreen extends ConsumerStatefulWidget {
 
 class _LabBookingDetailScreenState extends ConsumerState<LabBookingDetailScreen> {
   bool _busy = false;
+
+  Future<void> _callPatient(String phone) async {
+    var opened = false;
+    try {
+      opened = await launchUrl(Uri(scheme: 'tel', path: phone));
+    } catch (_) {
+      opened = false;
+    }
+    if (!opened && mounted) {
+      FeedbackService.showError(context, 'Could not start a call on this device.');
+    }
+  }
 
   Future<void> _run(Future<void> Function() action, {String? successMessage}) async {
     if (_busy) return;
@@ -205,7 +218,11 @@ class _LabBookingDetailScreenState extends ConsumerState<LabBookingDetailScreen>
                       InfoChip(icon: Icons.person_outline_rounded, label: booking.patientName),
                       const SizedBox(height: 8),
                       if (booking.patientPhone.isNotEmpty)
-                        InfoChip(icon: Icons.call_outlined, label: booking.patientPhone),
+                        InkWell(
+                          onTap: () => _callPatient(booking.patientPhone),
+                          borderRadius: BorderRadius.circular(20),
+                          child: InfoChip(icon: Icons.call_outlined, label: 'Call ${booking.patientPhone}'),
+                        ),
                       const SizedBox(height: 8),
                       InfoChip(
                         icon: Icons.calendar_today_outlined,

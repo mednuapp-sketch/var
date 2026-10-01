@@ -7,13 +7,32 @@ const {COLLECTIONS, WHATSAPP_DEFAULT_LANG} = require("./config");
 const {normalizePhone, sendTemplate} = require("./whatsapp");
 
 /**
+ * Tidies a stored name for use inside a template: trims and collapses
+ * spaces, drops a leading "Dr"/"Dr." (the doctor templates already say
+ * "Dr. {{n}}", so a stored "Dr. Navya" would otherwise read "Dr. Dr. Navya"),
+ * and title-cases names typed in all-lower or all-upper case
+ * ("ravi kumar" / "RAVI KUMAR" -> "Ravi Kumar"). Returns "" if nothing usable.
+ */
+function cleanName(raw) {
+  let s = String(raw || "").replace(/\s+/g, " ").trim();
+  s = s.replace(/^dr(\.\s*|\s+)/i, "").trim();
+  if (!s) return "";
+  if (s === s.toLowerCase() || s === s.toUpperCase()) {
+    s = s.toLowerCase().replace(/(^|[\s'-])(\p{L})/gu, (m, sep, ch) => sep + ch.toUpperCase());
+  }
+  return s;
+}
+
+/**
  * Resolves whether `uid`'s profile doc in `collection` is opted in to
  * WhatsApp and, if so, returns what to send to. Returns null when opted out,
  * missing, or has no usable phone — callers should just skip sending.
  * @param {string} collection e.g. COLLECTIONS.users or COLLECTIONS.doctors.
  * @param {string} uid
+ * @param {string} [fallbackName] Name to use if the profile has none, e.g.
+ *   the `patientName` stored on the booking itself.
  */
-async function getRecipient(collection, uid) {
+async function getRecipient(collection, uid, fallbackName) {
   if (!uid) return null;
   const snap = await getFirestore().collection(collection).doc(uid).get();
   if (!snap.exists) return null;
@@ -24,8 +43,12 @@ async function getRecipient(collection, uid) {
   const phone = normalizePhone(rawPhone);
   if (!phone) return null;
 
-  const fullName = (d.name || "").trim();
-  const firstName = fullName ? fullName.split(/\s+/)[0] : "there";
+  // Profiles don't all use the same field (ambulance profiles store
+  // `driverName`), so take the first one that has a usable value.
+  const fullName = cleanName(
+    d.name || d.fullName || d.displayName || d.driverName || d.ownerName || fallbackName,
+  );
+  const firstName = fullName ? fullName.split(" ")[0] : "there";
 
   // Only "en" has real copy today (all 13 templates were created in en);
   // any other stored language value falls back to the configured default
@@ -164,4 +187,4 @@ function shortId(docId, prefix = "BK") {
   return `${prefix}-${tail || "000000"}`;
 }
 
-module.exports = {getRecipient, notifyOnce, formatWhen, formatTime, shortId, parseApptDateTime};
+module.exports = {getRecipient, notifyOnce, formatWhen, formatTime, shortId, parseApptDateTime, cleanName};

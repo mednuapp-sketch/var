@@ -132,7 +132,7 @@ class _MedNUAppState extends ConsumerState<MedNUApp>
       _incomingCallSub = FirebaseFirestore.instance
           .collection('consultations')
           .where('patientId', isEqualTo: user.uid)
-          .where('callerType', whereIn: ['doctor', 'physiotherapist', 'counsellor'])
+          .where('callerType', whereIn: ['doctor', 'physiotherapist', 'counsellor', 'nutritionist'])
           .where('status', isEqualTo: 'pending')
           .orderBy('createdAt', descending: true)
           .limit(1)

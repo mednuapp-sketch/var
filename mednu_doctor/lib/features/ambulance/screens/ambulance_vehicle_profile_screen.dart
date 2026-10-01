@@ -445,6 +445,8 @@ class _AmbulanceVehicleProfileScreenState extends ConsumerState<AmbulanceVehicle
                 const SizedBox(height: 12),
                 Text(
                   vehicle.plateNumber,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontFamily: 'Inter', fontSize: 26, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: 1.5),
                 ),
                 const SizedBox(height: 6),

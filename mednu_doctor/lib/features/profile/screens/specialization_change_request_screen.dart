@@ -339,10 +339,10 @@ class _SpecializationChangeRequestScreenState
         : '—';
 
     final (color, bg, icon, label) = switch (status) {
-      'approved'     => (AppColors.success,  const Color(0xFFE8F5E9), Icons.check_circle_rounded,    'Approved'),
-      'rejected'     => (AppColors.error,    const Color(0xFFFFEBEE), Icons.cancel_rounded,           'Rejected'),
-      'under_review' => (AppColors.warning,  const Color(0xFFFFF8E1), Icons.manage_search_rounded,    'Under Review'),
-      _              => (AppColors.info,     const Color(0xFFE3F2FD), Icons.hourglass_empty_rounded,  'Pending Approval'),
+      'approved'     => (AppColors.success,  AppColors.successBg, Icons.check_circle_rounded,    'Approved'),
+      'rejected'     => (AppColors.error,    AppColors.errorBg,   Icons.cancel_rounded,           'Rejected'),
+      'under_review' => (AppColors.warning,  AppColors.warningBg, Icons.manage_search_rounded,    'Under Review'),
+      _              => (AppColors.info,     AppColors.infoBg,    Icons.hourglass_empty_rounded,  'Pending Approval'),
     };
 
     return ListView(

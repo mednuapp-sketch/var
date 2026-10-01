@@ -22,7 +22,7 @@ class CounsellingSessionDetailScreen extends ConsumerWidget {
 
   Future<void> _call(BuildContext context, String phone) async {
     if (phone.isEmpty) {
-      FeedbackService.showError(context, 'No phone number on file for this patient.');
+      FeedbackService.showError(context, "No phone number yet — the patient's contact details appear once this request is accepted.");
       return;
     }
     var opened = false;

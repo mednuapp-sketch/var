@@ -20,7 +20,7 @@ import '../../../shared_core/providers/role_providers.dart';
 /// therapy/counselling session.
 class ProviderVideoCallScreen extends StatefulWidget {
   final String consultationId;
-  final String providerRole; // 'physiotherapist' | 'counsellor'
+  final String providerRole; // 'physiotherapist' | 'counsellor' | 'nutritionist'
   final String patientName;
 
   const ProviderVideoCallScreen({
@@ -485,7 +485,7 @@ class _ProviderVideoCallScreenState extends State<ProviderVideoCallScreen> {
               child: const Icon(Icons.person_rounded, size: 64, color: Colors.white),
             ),
             const SizedBox(height: 16),
-            Text(widget.patientName, style: const TextStyle(fontFamily: 'Inter', fontSize: 22, fontWeight: FontWeight.w700, color: Colors.white)),
+            Text(widget.patientName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontFamily: 'Inter', fontSize: 22, fontWeight: FontWeight.w700, color: Colors.white)),
             const SizedBox(height: 6),
             const Text('Waiting for patient to join...', style: TextStyle(fontFamily: 'Inter', fontSize: 13, color: Colors.white54)),
           ],
@@ -572,7 +572,8 @@ class _ProviderVideoCallScreenState extends State<ProviderVideoCallScreen> {
       left: 0,
       right: 0,
       child: Container(
-        padding: const EdgeInsets.fromLTRB(16, 50, 16, 16),
+        padding: EdgeInsets.fromLTRB(
+            16, MediaQuery.of(context).padding.top + 16, 16, 16),
         decoration: BoxDecoration(
           gradient: LinearGradient(colors: [Colors.black.withValues(alpha: 0.6), Colors.transparent], begin: Alignment.topCenter, end: Alignment.bottomCenter),
         ),

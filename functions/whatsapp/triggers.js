@@ -24,7 +24,7 @@ const {
   WHATSAPP_VERIFY_TOKEN,
   WHATSAPP_PHONE_NUMBER_ID,
 } = require("./config");
-const {getRecipient, notifyOnce, formatWhen, shortId, parseApptDateTime} = require("./notify");
+const {getRecipient, notifyOnce, formatWhen, shortId, parseApptDateTime, cleanName} = require("./notify");
 
 // Every trigger needs at least the send secrets/params (notifyOnce ->
 // sendTemplate reads them); listed once here and spread into each trigger's
@@ -57,18 +57,20 @@ const onAppointmentWritten = onDocumentWritten(
     const appointmentId = event.params.appointmentId;
     const bookingId = after.bookingNumber || after.rxId || shortId(appointmentId);
     const when = formatWhen(parseApptDateTime(after.date, after.time)) || `${after.date || ""} ${after.time || ""}`.trim();
+    const doctorName = cleanName(after.doctorName) || "your doctor";
+    const patientName = cleanName(after.patientName) || "a patient";
 
     const isNew = !before;
     const statusChanged = before && before.status !== after.status;
 
     if (isNew) {
-      const patient = await getRecipient(COLLECTIONS.users, after.patientId);
+      const patient = await getRecipient(COLLECTIONS.users, after.patientId, after.patientName);
       if (patient) {
         await notifyOnce(
           `booking_received:${appointmentId}`,
           patient,
           "mednu_booking_received",
-          [patient.firstName, after.doctorName || "your doctor", when, bookingId],
+          [patient.firstName, doctorName, when, bookingId],
           appointmentId,
         );
         // No real 'pending -> confirmed' transition exists for this
@@ -78,18 +80,18 @@ const onAppointmentWritten = onDocumentWritten(
           `booking_confirmed:${appointmentId}:${after.date || ""}:${after.time || ""}`,
           patient,
           "mednu_booking_confirmed",
-          [patient.firstName, after.doctorName || "your doctor", when, bookingId],
+          [patient.firstName, doctorName, when, bookingId],
           appointmentId,
         );
       }
 
-      const doctor = await getRecipient(COLLECTIONS.doctors, after.doctorId);
+      const doctor = await getRecipient(COLLECTIONS.doctors, after.doctorId, after.doctorName);
       if (doctor) {
         await notifyOnce(
           `doctor_new_booking:${appointmentId}`,
           doctor,
           "mednu_doctor_new_booking",
-          [doctor.firstName, after.consultationType || "appointment", after.patientName || "a patient", when],
+          [doctor.firstName, after.consultationType || "appointment", patientName, when],
           appointmentId,
         );
       }
@@ -97,13 +99,13 @@ const onAppointmentWritten = onDocumentWritten(
     }
 
     if (statusChanged && after.status === APPOINTMENT_STATUS.cancelled) {
-      const patient = await getRecipient(COLLECTIONS.users, after.patientId);
+      const patient = await getRecipient(COLLECTIONS.users, after.patientId, after.patientName);
       if (patient) {
         await notifyOnce(
           `booking_cancelled:${appointmentId}`,
           patient,
           "mednu_booking_cancelled",
-          [patient.firstName, after.doctorName || "your doctor", when, bookingId],
+          [patient.firstName, doctorName, when, bookingId],
           appointmentId,
         );
       }
@@ -113,13 +115,13 @@ const onAppointmentWritten = onDocumentWritten(
       // only notify the doctor when the PATIENT was the one who cancelled;
       // a doctor doesn't need a WhatsApp message about their own action.
       if (after.cancelledBy !== "doctor") {
-        const doctor = await getRecipient(COLLECTIONS.doctors, after.doctorId);
+        const doctor = await getRecipient(COLLECTIONS.doctors, after.doctorId, after.doctorName);
         if (doctor) {
           await notifyOnce(
             `doctor_booking_cancelled:${appointmentId}`,
             doctor,
             "mednu_doctor_booking_cancelled",
-            [doctor.firstName, after.patientName || "a patient", when, bookingId],
+            [doctor.firstName, patientName, when, bookingId],
             appointmentId,
           );
         }
@@ -146,7 +148,7 @@ const onOrderWritten = onDocumentWritten(
     const label = ORDER_STATUS_LABEL[after.status];
     if (!label) return; // unmapped status (e.g. an internal-only value) — nothing user-facing to say.
 
-    const patient = await getRecipient(COLLECTIONS.users, after.patientId);
+    const patient = await getRecipient(COLLECTIONS.users, after.patientId, after.patientName);
     if (!patient) return;
 
     await notifyOnce(
@@ -175,7 +177,7 @@ const onLabServiceRequestWritten = onDocumentWritten(
     if (before.status === after.status) return;
 
     const requestId = event.params.requestId;
-    const patient = await getRecipient(COLLECTIONS.users, after.patientId);
+    const patient = await getRecipient(COLLECTIONS.users, after.patientId, after.patientName);
     if (!patient) return;
     const orderId = shortId(requestId, "OD");
 
@@ -222,7 +224,7 @@ const onPaymentWritten = onDocumentWritten(
     if (before && before.status === PAYMENT_STATUS.completed) return; // already handled.
 
     const paymentId = event.params.paymentId;
-    const patient = await getRecipient(COLLECTIONS.users, after.patientId);
+    const patient = await getRecipient(COLLECTIONS.users, after.patientId, after.patientName);
     if (!patient) return;
 
     const bookingId = shortId((after.bookingRef && after.bookingRef.id) || paymentId);
@@ -279,7 +281,11 @@ const onSettlementWritten = onDocumentWritten(
       `payout:${settlementId}`,
       recipient,
       resolved.role.payoutTemplate,
-      [recipient.firstName, String(amount), reference],
+      // Doctor template reads "Hello Dr. {{1}}" -> first name; the partner
+      // template greets a business/person, so use the full name there
+      // ("Hello Priya Lab Services", not "Hello Priya").
+      [resolved.role.key === "doctor" ? recipient.firstName : recipient.fullName || recipient.firstName,
+        String(amount), reference],
       settlementId,
     );
   },

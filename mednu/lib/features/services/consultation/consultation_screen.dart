@@ -230,11 +230,11 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
     if (doc == null) return;
     _updateScheduleSlots();
     final dateKey = DateFormat('yyyy-MM-dd').format(_dateTimes[_selectedDateIndex]);
+    // Server-maintained "taken" index — see DoctorProfileScreen._bookedSlotsStream.
     _bookedScheduleSub = FirebaseFirestore.instance
-        .collection('appointments')
+        .collection('appointment_slots')
         .where('doctorId', isEqualTo: doc['uid'])
         .where('date', isEqualTo: dateKey)
-        .where('status', isEqualTo: 'booked')
         .snapshots()
         .listen((snap) {
       if (!mounted) return;
