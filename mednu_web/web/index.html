@@ -57,9 +57,13 @@
   <!-- Theme -->
   <meta name="theme-color" content="#522546">
 
-  <!-- Favicon — SVG for modern browsers, PNG fallback -->
-  <link rel="icon" type="image/svg+xml" href="favicon.svg"/>
-  <link rel="icon" type="image/png" href="favicon.png"/>
+  <!-- Favicon — Google's favicon crawler wants a square PNG at least 48x48
+       (a multiple of 48) checked first, plus a real /favicon.ico (not the
+       app's index.html fallback) at the exact root path it probes. -->
+  <link rel="icon" type="image/png" sizes="192x192" href="/icons/Icon-192.png">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="shortcut icon" href="/favicon.ico">
+  <link rel="icon" type="image/png" href="/favicon.png"/>
   <link rel="manifest" href="manifest.json">
 
   <!-- Preconnect Google Fonts -->
