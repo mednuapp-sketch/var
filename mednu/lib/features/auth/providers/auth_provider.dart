@@ -246,8 +246,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
       await _sec.write(key: 'last_phone', value: phone);
       state = state.copyWith(isLoading: false);
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
-      rethrow;
+      const msg = 'Could not complete your registration. Please check your connection and try again.';
+      state = state.copyWith(isLoading: false, error: msg);
+      throw Exception(msg);
     }
   }
 
@@ -283,8 +284,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
       });
       state = state.copyWith(isLoading: false);
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
-      rethrow;
+      const msg = 'Could not update your profile. Please check your connection and try again.';
+      state = state.copyWith(isLoading: false, error: msg);
+      throw Exception(msg);
     }
   }
 
@@ -298,8 +300,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
           .doc(uid)
           .update({'photoUrl': photoUrl});
     } catch (e) {
-      state = state.copyWith(error: e.toString());
-      rethrow;
+      const msg = 'Could not update your photo. Please try again.';
+      state = state.copyWith(error: msg);
+      throw Exception(msg);
     }
   }
 
@@ -317,8 +320,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
         tx.set(docRef, {'familyMembers': current}, SetOptions(merge: true));
       });
     } catch (e) {
-      state = state.copyWith(error: e.toString());
-      rethrow;
+      const msg = 'Could not add this family member. Please try again.';
+      state = state.copyWith(error: msg);
+      throw Exception(msg);
     }
   }
 
@@ -334,8 +338,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
         tx.set(docRef, {'familyMembers': current}, SetOptions(merge: true));
       });
     } catch (e) {
-      state = state.copyWith(error: e.toString());
-      rethrow;
+      const msg = 'Could not remove this family member. Please try again.';
+      state = state.copyWith(error: msg);
+      throw Exception(msg);
     }
   }
 
@@ -362,8 +367,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
         tx.set(docRef, {'familyMembers': current}, SetOptions(merge: true));
       });
     } catch (e) {
-      state = state.copyWith(error: e.toString());
-      rethrow;
+      const msg = 'Could not update this family member. Please try again.';
+      state = state.copyWith(error: msg);
+      throw Exception(msg);
     }
   }
 
@@ -392,7 +398,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         'missing-client-identifier' ||
         'missing-app-credential'    =>
           'Verification service unavailable. Please try again.',
-        _ => 'Error ($code). Please try again.',
+        _ => 'Something went wrong. Please try again.',
       };
 }
 

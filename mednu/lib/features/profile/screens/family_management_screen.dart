@@ -782,7 +782,7 @@ class _FamilyManagementScreenState extends ConsumerState<FamilyManagementScreen>
                                   } catch (e) {
                                     if (context.mounted) {
                                       ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(content: Text('Failed to remove: $e')),
+                                        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
                                       );
                                     }
                                   }
