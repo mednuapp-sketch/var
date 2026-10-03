@@ -112,6 +112,38 @@ async function sendText(to, body) {
   });
 }
 
+/**
+ * Interactive list message — only usable within Meta's 24h customer-service
+ * window (a quick-reply tap opens one). Max 10 rows; row title <= 24 chars,
+ * description <= 72, button label <= 20, row id <= 200.
+ * @param {string} to
+ * @param {{body:string, button:string, sectionTitle:string,
+ *   rows:{id:string, title:string, description?:string}[]}} list
+ */
+async function sendList(to, {body, button, sectionTitle, rows}) {
+  return _post({
+    messaging_product: "whatsapp",
+    to,
+    type: "interactive",
+    interactive: {
+      type: "list",
+      body: {text: body},
+      footer: {text: "MedNU - Always With You"},
+      action: {
+        button: button.slice(0, 20),
+        sections: [{
+          title: sectionTitle.slice(0, 24),
+          rows: rows.slice(0, 10).map((r) => ({
+            id: r.id,
+            title: r.title.slice(0, 24),
+            ...(r.description ? {description: r.description.slice(0, 72)} : {}),
+          })),
+        }],
+      },
+    },
+  });
+}
+
 /** Marks an inbound message read (blue ticks) — best-effort, errors swallowed. */
 async function markRead(messageId) {
   try {
@@ -135,4 +167,4 @@ async function markRead(messageId) {
   }
 }
 
-module.exports = {normalizePhone, sendTemplate, sendText, markRead};
+module.exports = {normalizePhone, sendTemplate, sendText, sendList, markRead};

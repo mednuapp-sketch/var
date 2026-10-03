@@ -98,6 +98,25 @@ const onAppointmentWritten = onDocumentWritten(
       return;
     }
 
+    // Rescheduled (date/time moved, still booked) — from the app or the
+    // WhatsApp Reschedule picker. Re-sends booking_confirmed with the new
+    // time; the dedupe key includes date+time, so a slot-conflict revert to
+    // the original time (onAppointmentWrittenForSlots) is a no-op here.
+    const moved = before && (before.date !== after.date || before.time !== after.time);
+    if (moved && before.status === APPOINTMENT_STATUS.booked && after.status === APPOINTMENT_STATUS.booked) {
+      const patient = await getRecipient(COLLECTIONS.users, after.patientId, after.patientName);
+      if (patient) {
+        await notifyOnce(
+          `booking_confirmed:${appointmentId}:${after.date || ""}:${after.time || ""}`,
+          patient,
+          "mednu_booking_confirmed",
+          [patient.firstName, doctorName, when, bookingId],
+          appointmentId,
+        );
+      }
+      return;
+    }
+
     if (statusChanged && after.status === APPOINTMENT_STATUS.cancelled) {
       const patient = await getRecipient(COLLECTIONS.users, after.patientId, after.patientName);
       if (patient) {

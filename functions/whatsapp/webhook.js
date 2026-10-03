@@ -15,7 +15,9 @@ const {
   WHATSAPP_APP_SECRET,
   WHATSAPP_VERIFY_TOKEN,
 } = require("./config");
-const {sendText, markRead, normalizePhone} = require("./whatsapp");
+const {sendText, sendList, markRead, normalizePhone} = require("./whatsapp");
+const {cleanName} = require("./notify");
+const {freeSlotsByDay, dayLabel, spread, encodeSlot, decodeSlot} = require("./reschedule");
 
 // ── Signature verification ──────────────────────────────────────────────
 function _isValidSignature(req) {
@@ -92,6 +94,10 @@ function _extractPayload(msg) {
   if (msg.interactive && msg.interactive.button_reply && msg.interactive.button_reply.id) {
     return msg.interactive.button_reply.id;
   }
+  // A row picked from a list message (the reschedule day/time pickers).
+  if (msg.interactive && msg.interactive.list_reply && msg.interactive.list_reply.id) {
+    return msg.interactive.list_reply.id;
+  }
   return null;
 }
 
@@ -108,8 +114,8 @@ async function _handleMessages(messages) {
 
     const payload = _extractPayload(msg);
     if (payload) {
-      const [action, refId] = payload.split(":");
-      await _handleAction(db, action, refId, from);
+      const [action, refId, ...args] = payload.split(":");
+      await _handleAction(db, action, refId, from, args);
       continue;
     }
 
@@ -124,7 +130,7 @@ async function _handleMessages(messages) {
   }
 }
 
-async function _handleAction(db, action, appointmentId, fromDigits) {
+async function _handleAction(db, action, appointmentId, fromDigits, args = []) {
   if (!action || !appointmentId) return;
   const apptRef = db.collection(COLLECTIONS.appointments).doc(appointmentId);
   const apptSnap = await apptRef.get();
@@ -164,20 +170,99 @@ async function _handleAction(db, action, appointmentId, fromDigits) {
       await sendText(fromDigits, "Thank you for confirming — we'll see you at your appointment. MedNU - Always With You");
       break;
     }
+    // Reschedule is a two-step picker inside WhatsApp: the tap opens a 24h
+    // service window, so free-form list messages are allowed. RESCHEDULE ->
+    // list of days with free slots (RSDAY rows) -> list of that day's free
+    // times (RSTIME rows) -> the appointment's date/time is moved.
     case "RESCHEDULE": {
       if (!isPatient) return;
-      await sendText(fromDigits, "To reschedule your appointment, please visit https://mednu.in or open the MedNU app.");
+      if (appt.status !== APPOINTMENT_STATUS.booked) {
+        await sendText(fromDigits, "This appointment can no longer be rescheduled. Please open the MedNU app for details.");
+        return;
+      }
+      const days = await freeSlotsByDay(appt.doctorId);
+      if (!days.size) {
+        await sendText(fromDigits,
+          `Sorry, Dr. ${cleanName(appt.doctorName) || "your doctor"} has no free slots in the next 10 days. ` +
+          "Your current appointment is unchanged.");
+        return;
+      }
+      await sendList(fromDigits, {
+        body: `Pick a new day for your appointment with Dr. ${cleanName(appt.doctorName) || "your doctor"}.`,
+        button: "Choose a day",
+        sectionTitle: "Available days",
+        rows: [...days.entries()].slice(0, 10).map(([dateKey, slots]) => ({
+          id: `RSDAY:${appointmentId}:${dateKey}`,
+          title: dayLabel(dateKey),
+          description: `${slots.length} slot${slots.length === 1 ? "" : "s"} free`,
+        })),
+      });
+      break;
+    }
+    case "RSDAY": {
+      if (!isPatient) return;
+      if (appt.status !== APPOINTMENT_STATUS.booked) return;
+      const dateKey = args[0];
+      const slots = (await freeSlotsByDay(appt.doctorId)).get(dateKey) || [];
+      if (!slots.length) {
+        await sendText(fromDigits, "That day just filled up. Tap Reschedule again to see the latest free days.");
+        return;
+      }
+      await sendList(fromDigits, {
+        body: `Free times on ${dayLabel(dateKey)}. Pick one to move your appointment.`,
+        button: "Choose a time",
+        sectionTitle: dayLabel(dateKey),
+        rows: spread(slots, 10).map((slot) => ({
+          id: `RSTIME:${appointmentId}:${dateKey}:${encodeSlot(slot)}`,
+          title: slot,
+        })),
+      });
+      break;
+    }
+    case "RSTIME": {
+      if (!isPatient) return;
+      if (appt.status !== APPOINTMENT_STATUS.booked) return;
+      const dateKey = args[0];
+      const slot = decodeSlot(args[1]);
+      if (!dateKey || !slot) return;
+      if (appt.date === dateKey && appt.time === slot) return; // already there
+      // Re-check right before writing; onAppointmentWrittenForSlots is still
+      // the final arbiter and reverts the move if someone wins the race.
+      const stillFree = ((await freeSlotsByDay(appt.doctorId)).get(dateKey) || []).includes(slot);
+      if (!stillFree) {
+        await sendText(fromDigits, `Sorry, ${slot} on ${dayLabel(dateKey)} was just taken. Tap Reschedule again to pick another time.`);
+        return;
+      }
+      // Same fields the app's reschedule writes (doctor_profile_screen.dart).
+      // onAppointmentWritten then sends the booking_confirmed template with
+      // the new time, so no extra text is sent here.
+      await apptRef.update({
+        date: dateKey,
+        time: slot,
+        status: APPOINTMENT_STATUS.booked,
+        rescheduledVia: "whatsapp",
+        updatedAt: FieldValue.serverTimestamp(),
+      });
       break;
     }
     case "ACCEPT": {
       if (!isDoctor) return;
-      if (appt.status !== APPOINTMENT_STATUS.booked) return;
+      if (appt.status !== APPOINTMENT_STATUS.booked) {
+        await sendText(fromDigits, "This booking was already cancelled, so there is nothing to accept.");
+        return;
+      }
       // No separate 'confirmed' status exists on this collection — 'booked'
       // already is the accepted/final state (see triggers.js's comment on
-      // why booking_confirmed fires on create), so accepting is
-      // acknowledgement-only and doesn't write a new status value the rest
-      // of the app has no concept of.
-      await sendText(fromDigits, "Thanks — this booking is confirmed on your schedule.");
+      // why booking_confirmed fires on create), so status stays as is; the
+      // acceptance is recorded as its own field instead of a new status
+      // value the rest of the app has no concept of.
+      if (!appt.doctorAcceptedAt) {
+        await apptRef.set({doctorAcceptedAt: FieldValue.serverTimestamp(), doctorAcceptedVia: "whatsapp"}, {merge: true});
+      }
+      const docName = cleanName(doctorSnap.data().name);
+      await sendText(fromDigits,
+        `Thanks${docName ? `, Dr. ${docName}` : ""}. The booking from ${cleanName(appt.patientName) || "your patient"} ` +
+        `on ${dayLabel(appt.date)} at ${appt.time} is confirmed on your schedule.`);
       break;
     }
     case "DECLINE": {

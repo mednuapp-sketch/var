@@ -27,7 +27,8 @@ const {
   WHATSAPP_VERIFY_TOKEN,
   WHATSAPP_PHONE_NUMBER_ID,
 } = require("./config");
-const {getRecipient, notifyOnce, formatTime, shortId, cleanName} = require("./notify");
+const {getRecipient, notifyOnce, formatTime, shortId, cleanName, parseApptDateTime} = require("./notify");
+const {istDateKey} = require("./reschedule");
 
 const _LOOKAHEAD_MINUTES = 60;
 
@@ -63,7 +64,17 @@ const sendAppointmentReminders = onSchedule(
         const appt = apptSnap.data();
         if (appt.status !== APPOINTMENT_STATUS.booked) return; // cancelled/completed since queued.
 
-        const time = formatTime(r.fireAt) || appt.time || "";
+        // The template says "today at {{3}}", so show the APPOINTMENT's time,
+        // not the reminder's fireAt (which is N minutes earlier). Skip
+        // reminders that no longer fit the appointment — e.g. one queued for
+        // the old time of a booking rescheduled over WhatsApp, before the
+        // patient app has re-synced its reminders.
+        const apptAt = parseApptDateTime(appt.date, appt.time);
+        const fireAt = r.fireAt && r.fireAt.toDate ? r.fireAt.toDate() : null;
+        if (!apptAt || apptAt <= now) return;
+        if (istDateKey(apptAt) !== istDateKey(now)) return; // "today" in the copy
+        if (fireAt && (fireAt > apptAt || apptAt - fireAt > 24 * 60 * 60 * 1000)) return;
+        const time = formatTime(apptAt);
         const shortBookingId = appt.bookingNumber || appt.rxId || shortId(bookingId);
         // Dedupe key includes date+time so a reschedule (new date/time on the
         // same appointment doc) is treated as a fresh reminder rather than
