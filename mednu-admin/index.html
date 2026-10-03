@@ -228,6 +228,10 @@
         <i class="ti ti-message-star nav-icon" aria-hidden="true"></i> Reviews
         <span class="nav-badge nav-badge-red" id="nav-reviews-flagged" style="display:none;">0</span>
       </div>
+      <div class="nav-item" data-tab="deletion-requests" data-title="Account Deletion Requests" title="Patient and partner account deletion requests (Director only)">
+        <i class="ti ti-user-x nav-icon" aria-hidden="true"></i> Deletion Requests
+        <span class="nav-badge nav-badge-red" id="nav-deletion-count" style="display:none;">0</span>
+      </div>
       <div class="nav-item" data-tab="tickets" data-title="Support Tickets" title="Patient and doctor support tickets">
         <i class="ti ti-headset nav-icon" aria-hidden="true"></i> Support
         <span class="nav-badge" id="nav-ticket-count">0</span>
@@ -1579,6 +1583,35 @@
               </thead>
               <tbody id="feedback-tbody">
                 <tr><td colspan="8" class="loading">Loading feedback...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== ACCOUNT DELETION REQUESTS TAB ===== -->
+      <div id="tab-deletion-requests" class="tab-section">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Account Deletion Requests</span>
+            <select id="deletion-filter" class="filter-select" onchange="renderDeletionRequests()" aria-label="Filter by status">
+              <option value="pending">Pending</option>
+              <option value="failed">Failed (retry)</option>
+              <option value="completed">Completed</option>
+              <option value="rejected">Rejected</option>
+              <option value="all">All</option>
+            </select>
+          </div>
+          <p style="margin:0 16px 12px;color:var(--text-muted,#6b5a66);font-size:13px;">
+            Approving erases the user's profile, health data, uploads and login. Consultation, payment and settlement records are retained as required by law.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>User</th><th>Role</th><th>Source</th><th>Requested</th><th>Status</th><th>Actions</th></tr>
+              </thead>
+              <tbody id="deletion-tbody">
+                <tr><td colspan="6" class="loading">Loading requests...</td></tr>
               </tbody>
             </table>
           </div>

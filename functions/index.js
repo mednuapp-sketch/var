@@ -8573,6 +8573,102 @@ exports.generateAgoraToken = onCall({ secrets: ["AGORA_APP_CERTIFICATE"] }, asyn
   return { token, uid: assignedUid, expiresAt: privilegeExpiredTs };
 });
 
+// ── Account deletion (Play User Data policy / DPDP erasure) ──────────────────
+// Apps file deletion_requests/{uid}; a Director reviews them in the admin
+// panel, which calls processAccountDeletion. Approve erases personal data
+// keyed by the user's uid (profile docs + subcollections, storage folders,
+// Auth account). Transactional/legal records (appointments, consultations,
+// payments, settlements, wallet ledger, audit logs) are deliberately KEPT,
+// as the privacy policy states.
+const _DELETION_UID_DOC_COLLECTIONS = [
+  "users", "patient_notifications", "health_records", "period_tracker", "water_tracker",
+  "pregnancy", "health_data", "emergency_contacts", "doctor_notifications",
+  "provider_notifications", "doctor_status", "patients",
+  "doctors", "lab_profiles", "pharmacy_profiles", "ambulance_profiles", "caregiver_profiles",
+  "physiotherapist_profiles", "counsellor_profiles", "nutritionist_profiles", "hospital_profiles",
+  "physiotherapists", "counsellors", "nutritionists", "caregivers", "care_assistants", "ambulances",
+];
+const _DELETION_STORAGE_PREFIXES = [
+  "users", "doctors", "labs", "pharmacies", "ambulances", "caregivers",
+  "physiotherapists", "counsellors", "nutritionists", "hospitals",
+  ..._DELETION_UID_DOC_COLLECTIONS,
+];
+
+exports.processAccountDeletion = onCall({ timeoutSeconds: 300 }, async (request) => {
+  const adminUid = request.auth?.uid;
+  const db = getFirestore();
+  const adminSnap = await _assertAdmin(db, adminUid);
+  if ((adminSnap.data().role || "director") !== "director") {
+    throw new HttpsError("permission-denied", "Only a Director can process account deletions.");
+  }
+  const { uid, action, reason } = request.data || {};
+  if (typeof uid !== "string" || !uid.trim() || uid.includes("/")) {
+    throw new HttpsError("invalid-argument", "uid is required.");
+  }
+  if (!["approve", "reject"].includes(action)) {
+    throw new HttpsError("invalid-argument", "action must be approve or reject.");
+  }
+  if (uid === adminUid) throw new HttpsError("failed-precondition", "You cannot delete your own admin account.");
+
+  const reqRef = db.collection("deletion_requests").doc(uid);
+  const reqSnap = await reqRef.get();
+  if (!reqSnap.exists) throw new HttpsError("not-found", "Deletion request not found.");
+  const prevStatus = reqSnap.data().status;
+  if (!["pending", "failed"].includes(prevStatus)) {
+    throw new HttpsError("failed-precondition", `Request is already ${prevStatus}.`);
+  }
+
+  if (action === "reject") {
+    await reqRef.update({
+      status: "rejected", reason: String(reason || "").slice(0, 500),
+      processedBy: adminUid, processedAt: FieldValue.serverTimestamp(),
+    });
+    await db.collection("audit_logs").add(_auditLogDoc({
+      actorId: adminUid, action: "rejectAccountDeletion", targetType: "deletion_requests", targetId: uid,
+      before: { status: prevStatus }, after: { status: "rejected" },
+    }));
+    return { success: true, status: "rejected" };
+  }
+
+  // Never erase another admin through this path.
+  if ((await db.collection("admins").doc(uid).get()).exists) {
+    throw new HttpsError("failed-precondition", "This account is an admin account.");
+  }
+
+  await reqRef.update({ status: "processing", processedBy: adminUid });
+  const errors = [];
+  const attempt = async (label, fn) => {
+    try { await fn(); } catch (e) { errors.push(`${label}: ${e.message}`); }
+  };
+
+  for (const col of _DELETION_UID_DOC_COLLECTIONS) {
+    await attempt(`firestore:${col}`, () => db.recursiveDelete(db.collection(col).doc(uid)));
+  }
+  const { getStorage } = require("firebase-admin/storage");
+  const bucket = getStorage().bucket("mednu-healthcare-app.firebasestorage.app");
+  for (const prefix of new Set(_DELETION_STORAGE_PREFIXES)) {
+    await attempt(`storage:${prefix}`, () => bucket.deleteFiles({ prefix: `${prefix}/${uid}/`, force: true }));
+  }
+  await attempt("auth", async () => {
+    try { await getAuth().deleteUser(uid); }
+    catch (e) { if (e.code !== "auth/user-not-found") throw e; }
+  });
+
+  const status = errors.length ? "failed" : "completed";
+  await reqRef.update({
+    status, processedBy: adminUid, processedAt: FieldValue.serverTimestamp(),
+    errors: errors.slice(0, 20),
+  });
+  await db.collection("audit_logs").add(_auditLogDoc({
+    actorId: adminUid, action: "approveAccountDeletion", targetType: "deletion_requests", targetId: uid,
+    before: { status: prevStatus }, after: { status, errorCount: errors.length },
+  }));
+  if (errors.length) {
+    throw new HttpsError("internal", `Deletion incomplete (${errors.length} errors). Details are on the request; retry to resume.`);
+  }
+  return { success: true, status };
+});
+
 // ── WhatsApp Cloud API notifications ─────────────────────────────────────
 // See functions/whatsapp/ — a self-contained module (config, templates,
 // Graph API client, dedupe-safe sender, Firestore triggers, reminder

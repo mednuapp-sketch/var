@@ -228,6 +228,7 @@ function switchTab(tab, title) {
   }
 
   if (tab === 'reviews') loadReviews();
+  if (tab === 'deletion-requests') loadDeletionRequests();
 
   // Cache-aware (no `force`): repeatedly switching between partner tabs must
   // not re-read the whole ledger every time. The Refresh button forces.
@@ -11219,3 +11220,78 @@ let _campaignsInited = false;
 let _settlementsInited = false;
 let _refundsInited = false;
 
+
+// ============================================
+//   ACCOUNT DELETION REQUESTS (Director only)
+// ============================================
+
+let _deletionListener = null;
+let _deletionRequests = [];
+
+function loadDeletionRequests() {
+  if (_deletionListener || !isDirector()) return;
+  _deletionListener = db.collection('deletion_requests').onSnapshot(snap => {
+    _deletionRequests = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    _deletionRequests.sort((a, b) => (b.requestedAt?.toMillis?.() || 0) - (a.requestedAt?.toMillis?.() || 0));
+    const pending = _deletionRequests.filter(r => r.status === 'pending').length;
+    const badge = document.getElementById('nav-deletion-count');
+    if (badge) { badge.textContent = pending; badge.style.display = pending > 0 ? 'inline' : 'none'; }
+    renderDeletionRequests();
+  }, err => {
+    _deletionListener = null;
+    console.error('deletion_requests listener', err);
+    const tbody = document.getElementById('deletion-tbody');
+    if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="loading">Could not load requests.</td></tr>';
+  });
+}
+
+function renderDeletionRequests() {
+  const tbody = document.getElementById('deletion-tbody');
+  if (!tbody) return;
+  const filter = document.getElementById('deletion-filter')?.value || 'pending';
+  const rows = _deletionRequests.filter(r => filter === 'all' || r.status === filter);
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="loading">No requests.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(r => {
+    const when = r.requestedAt?.toDate ? r.requestedAt.toDate().toLocaleString('en-IN') : '-';
+    const who = [r.phone, r.email].filter(Boolean).join(' / ') || r.uid;
+    const canAct = r.status === 'pending' || r.status === 'failed';
+    const errs = r.status === 'failed' && (r.errors || []).length
+      ? `<div style="font-size:11px;color:#c62828;">${escHtml(r.errors.join('; ')).slice(0, 200)}</div>` : '';
+    const actions = canAct
+      ? `<button class="btn btn-reject" onclick="processDeletion('${escHtml(r.id)}','approve')">${r.status === 'failed' ? 'Retry delete' : 'Approve &amp; delete'}</button>
+         <button class="btn btn-outline" onclick="processDeletion('${escHtml(r.id)}','reject')">Reject</button>`
+      : '-';
+    return `<tr>
+      <td>${escHtml(who)}<div style="font-size:11px;color:#888;">${escHtml(r.id)}</div></td>
+      <td>${escHtml(r.role || '-')}</td>
+      <td>${escHtml(r.source || '-')}</td>
+      <td>${escHtml(when)}</td>
+      <td>${escHtml(r.status || '-')}${errs}</td>
+      <td>${actions}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function processDeletion(uid, action) {
+  if (!isDirector()) { showToast('Only a Director can process deletions.'); return; }
+  let reason = '';
+  if (action === 'approve') {
+    if (!confirm('Permanently erase this account and its personal data? This cannot be undone.')) return;
+  } else {
+    reason = prompt('Reason for rejecting (optional):') ?? null;
+    if (reason === null) return;
+  }
+  withCooldown('deletion-' + uid, async () => {
+    try {
+      showToast(action === 'approve' ? 'Deleting account data...' : 'Rejecting...');
+      await functions.httpsCallable('processAccountDeletion')({ uid, action, reason });
+      showToast(action === 'approve' ? 'Account deleted.' : 'Request rejected.');
+    } catch (e) {
+      console.error('processAccountDeletion', e);
+      showToast(e.message || 'Could not process request.');
+    }
+  });
+}

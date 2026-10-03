@@ -18,6 +18,7 @@ import '../../../core/utils/r.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../my_services/services/my_services_service.dart';
 import '../../security/services/biometric_service.dart';
+import '../services/account_deletion_service.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -274,7 +275,58 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
-  // ignore: unused_element — kept for future use (account deletion flow)
+  Future<void> _confirmAndRequestDeletion() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.r(ctx, 20))),
+        title: const Text('Delete your account?'),
+        content: const Text(
+            'This sends a request to permanently delete your MedNU account and '
+            'personal data. You will be signed out now and our team will process '
+            'the deletion within 30 days. Records we are legally required to keep '
+            '(such as consultation and payment records) may be retained.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.error, foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Request Deletion'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true || !mounted) return;
+
+    _showLoadingDialog('Submitting request...');
+    final messenger = ScaffoldMessenger.of(context);
+    final router = GoRouter.of(context);
+    final navigator = Navigator.of(context, rootNavigator: true);
+    try {
+      final result = await AccountDeletionService.requestDeletion();
+      navigator.pop();
+      messenger.showSnackBar(SnackBar(
+        content: Text(result == DeletionRequestResult.alreadyRequested
+            ? 'A deletion request is already pending for your account.'
+            : 'Deletion request submitted.'),
+        behavior: SnackBarBehavior.floating,
+      ));
+      await FirebaseAuth.instance.signOut();
+      router.go(AppRoutes.login);
+    } catch (_) {
+      navigator.pop();
+      messenger.showSnackBar(SnackBar(
+        content: const Text('Could not submit your request. Please try again.'),
+        backgroundColor: AppColors.error,
+        behavior: SnackBarBehavior.floating,
+      ));
+    }
+  }
+
   void _showLoadingDialog(String message) {
     showDialog(
       context: context,
@@ -601,6 +653,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   _NavTile(Icons.card_giftcard_rounded, 'Referral & Rewards',
                       'Invite friends and earn rewards',
                       () => context.push(AppRoutes.referral)),
+                  const Divider(height: 1, indent: 62),
+                  _NavTile(Icons.delete_forever_outlined, 'Delete Account',
+                      'Request permanent deletion of your account and data',
+                      _confirmAndRequestDeletion,
+                      destructive: true),
                 ]),
 
                 SizedBox(height: R.h(context, 20)),
@@ -833,8 +890,9 @@ class _NavTile extends StatelessWidget {
   final String title, subtitle;
   final VoidCallback onTap;
   final bool showChevron;
+  final bool destructive;
   const _NavTile(this.icon, this.title, this.subtitle, this.onTap,
-      {this.showChevron = true});
+      {this.showChevron = true, this.destructive = false});
 
   @override
   Widget build(BuildContext context) => ListTile(
@@ -844,12 +902,17 @@ class _NavTile extends StatelessWidget {
           width: R.w(context, 38),
           height: R.h(context, 38),
           decoration: BoxDecoration(
-            color: AppColors.primary.withValues(alpha: 0.1),
+            color: (destructive ? AppColors.error : AppColors.primary).withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(R.r(context, 11)),
           ),
-          child: Icon(icon, color: AppColors.primary, size: R.w(context, 20)),
+          child: Icon(icon,
+              color: destructive ? AppColors.error : AppColors.primary,
+              size: R.w(context, 20)),
         ),
-        title: Text(title, style: AppTextStyles.labelLarge),
+        title: Text(title,
+            style: destructive
+                ? AppTextStyles.labelLarge.copyWith(color: AppColors.error)
+                : AppTextStyles.labelLarge),
         subtitle: Text(subtitle, style: AppTextStyles.caption),
         trailing: showChevron
             ? Icon(Icons.chevron_right_rounded,
