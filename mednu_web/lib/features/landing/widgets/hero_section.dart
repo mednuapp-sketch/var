@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../core/constants/app_constants.dart';
 import '../../../core/utils/launch_utils.dart';
 import '../../../core/utils/responsive.dart';
-import '../../../core/widgets/gradient_button.dart';
 
 class HeroSection extends StatefulWidget {
   final VoidCallback onGetStarted;
@@ -224,29 +222,9 @@ class _HeroContent extends StatelessWidget {
 
         // CTA buttons
         if (isMobile)
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              GradientButton(
-                label: 'Book in the App',
-                onTap: onGetStarted,
-                height: 52,
-                icon: Icons.arrow_forward_rounded,
-              ),
-              const SizedBox(height: 12),
-              _DownloadBtn(onTap: onGetStarted, stretch: true),
-            ],
-          )
+          _DownloadBtn(onTap: onGetStarted, stretch: true)
         else
           Row(children: [
-            GradientButton(
-              label: 'Book in the App',
-              onTap: onGetStarted,
-              width: 210,
-              height: 52,
-              icon: Icons.arrow_forward_rounded,
-            ),
-            const SizedBox(width: 12),
             _DownloadBtn(onTap: onGetStarted),
           ]),
         const SizedBox(height: 32),
@@ -278,7 +256,7 @@ class _DownloadBtnState extends State<_DownloadBtn> {
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
       child: GestureDetector(
-        onTap: () => openUrl(AppConstants.apkDownloadUrl),
+        onTap: openAppOrStore,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           width: widget.stretch ? double.infinity : 185,

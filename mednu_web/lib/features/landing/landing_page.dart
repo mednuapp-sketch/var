@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/utils/responsive.dart';
 import 'widgets/navbar.dart';
 import 'widgets/hero_section.dart';
 import 'widgets/stats_bar_section.dart';
@@ -40,6 +41,7 @@ class _LandingPageState extends State<LandingPage> {
   ];
 
   String _activeSection = 'Home';
+  bool _mobileMenuOpen = false;
 
   @override
   void initState() {
@@ -126,8 +128,10 @@ class _LandingPageState extends State<LandingPage> {
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = Responsive.isMobile(context);
     return Scaffold(
-      body: CustomScrollView(
+      body: Stack(children: [
+      CustomScrollView(
         controller: _scroll,
         slivers: [
           SliverPersistentHeader(
@@ -137,6 +141,8 @@ class _LandingPageState extends State<LandingPage> {
               scrollController: _scroll,
               onNavTap: _scrollToSection,
               activeSection: _activeSection,
+              mobileMenuOpen: _mobileMenuOpen,
+              onMobileMenuToggle: () => setState(() => _mobileMenuOpen = !_mobileMenuOpen),
             ),
           ),
 
@@ -175,6 +181,24 @@ class _LandingPageState extends State<LandingPage> {
           ),
         ],
       ),
+      if (isMobile && _mobileMenuOpen)
+        Positioned(
+          top: 70,
+          left: 0,
+          right: 0,
+          child: MobileNavMenu(
+            activeItem: _activeSection,
+            onItemTap: (item) {
+              setState(() => _mobileMenuOpen = false);
+              _scrollToSection(item);
+            },
+            onLoginTap: () {
+              setState(() => _mobileMenuOpen = false);
+              widget.onLoginTap();
+            },
+          ),
+        ),
+      ]),
     );
   }
 }
@@ -187,8 +211,12 @@ class _NavbarDelegate extends SliverPersistentHeaderDelegate {
     required this.scrollController,
     required this.onNavTap,
     required this.activeSection,
+    required this.mobileMenuOpen,
+    required this.onMobileMenuToggle,
   });
 
+  final bool mobileMenuOpen;
+  final VoidCallback onMobileMenuToggle;
   final VoidCallback onLoginTap;
   final ScrollController scrollController;
   final void Function(String) onNavTap;
@@ -206,6 +234,8 @@ class _NavbarDelegate extends SliverPersistentHeaderDelegate {
       onLoginTap: onLoginTap,
       onNavTap: onNavTap,
       activeSection: activeSection,
+      mobileMenuOpen: mobileMenuOpen,
+      onMobileMenuToggle: onMobileMenuToggle,
     );
   }
 
@@ -213,5 +243,6 @@ class _NavbarDelegate extends SliverPersistentHeaderDelegate {
   bool shouldRebuild(covariant _NavbarDelegate old) =>
       old.onLoginTap != onLoginTap ||
       old.onNavTap != onNavTap ||
-      old.activeSection != activeSection;
+      old.activeSection != activeSection ||
+      old.mobileMenuOpen != mobileMenuOpen;
 }

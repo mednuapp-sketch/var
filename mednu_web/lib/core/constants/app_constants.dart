@@ -33,7 +33,7 @@ class AppConstants {
     {'title': 'Doctor Consultation', 'icon': '🩺', 'color': 'pink'},
     {'title': 'Video Consultation', 'icon': '📹', 'color': 'purple'},
     {'title': 'Lab Tests', 'icon': '🔬', 'color': 'teal'},
-    {'title': 'Diagnostics', 'icon': '🏥', 'color': 'orange'},
+    {'title': 'Lab & Diagnostics', 'icon': '🏥', 'color': 'orange'},
     {'title': 'Ambulance', 'icon': '🚑', 'color': 'red'},
     {'title': 'Pregnancy Care', 'icon': '🤱', 'color': 'pink'},
     {'title': 'Dietician', 'icon': '🥗', 'color': 'green'},

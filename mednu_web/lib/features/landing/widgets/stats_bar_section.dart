@@ -85,12 +85,63 @@ class _MobileStats extends StatelessWidget {
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       crossAxisCount: 2,
-      childAspectRatio: 1.55,
-      crossAxisSpacing: 16,
-      mainAxisSpacing: 16,
+      childAspectRatio: 1.0,
+      crossAxisSpacing: 12,
+      mainAxisSpacing: 12,
       children: StatsBarSection._stats
-          .map((s) => _StatPillar(stat: s))
+          .map((s) => _MobileStatCard(stat: s))
           .toList(),
+    );
+  }
+}
+
+class _MobileStatCard extends StatelessWidget {
+  final Map<String, dynamic> stat;
+  const _MobileStatCard({required this.stat});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFEDE3EA)),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(stat['icon'] as IconData, size: 20, color: AppColors.primary),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            stat['title'] as String,
+            textAlign: TextAlign.center,
+            style: GoogleFonts.poppins(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFF33172C),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            stat['subtitle'] as String,
+            textAlign: TextAlign.center,
+            style: GoogleFonts.poppins(
+              fontSize: 11,
+              color: const Color(0xFF7A6472),
+              height: 1.4,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

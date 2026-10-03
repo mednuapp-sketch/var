@@ -11,6 +11,8 @@ class WebNavbar extends StatefulWidget {
   final VoidCallback onLoginTap;
   final void Function(String)? onNavTap;
   final String activeSection;
+  final bool mobileMenuOpen;
+  final VoidCallback? onMobileMenuToggle;
 
   const WebNavbar({
     super.key,
@@ -18,6 +20,8 @@ class WebNavbar extends StatefulWidget {
     required this.onLoginTap,
     this.onNavTap,
     this.activeSection = 'Home',
+    this.mobileMenuOpen = false,
+    this.onMobileMenuToggle,
   });
 
   @override
@@ -26,7 +30,6 @@ class WebNavbar extends StatefulWidget {
 
 class _WebNavbarState extends State<WebNavbar> {
   bool _scrolled = false;
-  bool _mobileMenuOpen = false;
   late String _activeItem;
 
   @override
@@ -108,7 +111,7 @@ class _WebNavbarState extends State<WebNavbar> {
                   ] else ...[
                     const Spacer(),
                     GestureDetector(
-                      onTap: () => setState(() => _mobileMenuOpen = !_mobileMenuOpen),
+                      onTap: widget.onMobileMenuToggle,
                       child: Container(
                         width: 40,
                         height: 40,
@@ -117,7 +120,7 @@ class _WebNavbarState extends State<WebNavbar> {
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Icon(
-                          _mobileMenuOpen ? Icons.close_rounded : Icons.menu_rounded,
+                          widget.mobileMenuOpen ? Icons.close_rounded : Icons.menu_rounded,
                           color: AppColors.textPrimary,
                           size: 22,
                         ),
@@ -128,21 +131,6 @@ class _WebNavbarState extends State<WebNavbar> {
               ),
             ),
           ),
-          if (isMobile && _mobileMenuOpen)
-            _MobileMenu(
-              activeItem: _activeItem,
-              onItemTap: (item) {
-                setState(() {
-                  _activeItem = item;
-                  _mobileMenuOpen = false;
-                });
-                widget.onNavTap?.call(item);
-              },
-              onLoginTap: () {
-                setState(() => _mobileMenuOpen = false);
-                widget.onLoginTap();
-              },
-            ),
         ],
       ),
     );
@@ -286,12 +274,12 @@ class _AuthButtons extends StatelessWidget {
   }
 }
 
-class _MobileMenu extends StatelessWidget {
+class MobileNavMenu extends StatelessWidget {
   final String activeItem;
   final ValueChanged<String> onItemTap;
   final VoidCallback onLoginTap;
 
-  const _MobileMenu({
+  const MobileNavMenu({
     required this.activeItem,
     required this.onItemTap,
     required this.onLoginTap,
@@ -299,10 +287,13 @@ class _MobileMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return Material(
       color: Colors.white,
+      elevation: 8,
+      child: Container(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Divider(height: 1),
@@ -332,12 +323,13 @@ class _MobileMenu extends StatelessWidget {
             Expanded(
               child: GradientButton(
                 label: 'Download',
-                onTap: () => openUrl(AppConstants.apkDownloadUrl),
+                onTap: openAppOrStore,
                 height: 44,
               ),
             ),
           ]),
         ],
+      ),
       ),
     );
   }

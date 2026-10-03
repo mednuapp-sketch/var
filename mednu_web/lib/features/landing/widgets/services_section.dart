@@ -30,7 +30,7 @@ class ServicesSection extends StatelessWidget {
       ),
       (
         Icons.science_rounded,
-        'Diagnostics',
+        'Lab & Diagnostics',
         'X-Ray, MRI, CT, ECG & lab tests at home',
         'Get the app'
       ),

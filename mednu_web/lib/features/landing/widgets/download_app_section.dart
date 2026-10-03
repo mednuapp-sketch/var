@@ -101,12 +101,11 @@ class _BrandVisual extends StatelessWidget {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        // Cross / Plus medical icon
+        // MedNU logo
         Container(
           width: size,
           height: size,
           decoration: BoxDecoration(
-            gradient: AppColors.primaryGradient,
             borderRadius: BorderRadius.circular(size * 0.28),
             boxShadow: [
               BoxShadow(
@@ -116,8 +115,10 @@ class _BrandVisual extends StatelessWidget {
               ),
             ],
           ),
-          child: Center(
-            child: _MedicalCross(size: size * 0.52, color: Colors.white),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(size * 0.28),
+            child: Image.asset('assets/images/mednu_logo.png',
+                width: size, height: size, fit: BoxFit.cover, filterQuality: FilterQuality.high),
           ),
         ),
         SizedBox(height: mobile ? 16 : 24),
@@ -142,50 +143,6 @@ class _BrandVisual extends StatelessWidget {
       ],
     );
   }
-}
-
-// ─── Medical cross custom painter ─────────────────────────────────────────────
-
-class _MedicalCross extends StatelessWidget {
-  final double size;
-  final Color color;
-  const _MedicalCross({required this.size, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: size,
-      height: size,
-      child: CustomPaint(painter: _CrossPainter(color: color)),
-    );
-  }
-}
-
-class _CrossPainter extends CustomPainter {
-  final Color color;
-  const _CrossPainter({required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = color..style = PaintingStyle.fill;
-    final w = size.width;
-    final h = size.height;
-    final t = w / 3;
-
-    // Vertical bar
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(Rect.fromLTWH(t, 0, t, h), Radius.circular(t * 0.3)),
-      paint,
-    );
-    // Horizontal bar
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(Rect.fromLTWH(0, t, w, t), Radius.circular(t * 0.3)),
-      paint,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 // ─── Text Content ─────────────────────────────────────────────────────────────
