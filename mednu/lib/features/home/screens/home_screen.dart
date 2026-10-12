@@ -1497,7 +1497,7 @@ class _ProfileBody extends ConsumerWidget {
                   if (!isMale)
                     _MenuItem(icon: Icons.favorite_rounded, iconColor: const Color(0xFFA36BAC), label: 'Period Tracker', onTap: () => context.push(AppRoutes.periodTracker)),
                   _MenuItem(icon: Icons.water_drop_rounded, iconColor: const Color(0xFF1565C0), label: 'Water Reminder', onTap: () => context.push(AppRoutes.waterReminder)),
-                  _MenuItem(icon: Icons.local_shipping_rounded, iconColor: const Color(0xFFE65100), label: 'Track Order', onTap: () => context.push(AppRoutes.medicineOrders)),
+                  _MenuItem(icon: Icons.local_shipping_rounded, iconColor: const Color(0xFFE65100), label: 'Track Order', onTap: () => context.push(AppRoutes.myServices)),
                 ]),
 
                 const SizedBox(height: 12),

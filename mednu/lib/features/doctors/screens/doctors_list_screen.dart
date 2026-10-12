@@ -96,6 +96,7 @@ const _allLanguages = [
 // ─────────────────────────────────────────────────────────────
 class DoctorsListScreen extends ConsumerStatefulWidget {
   final String? initialSpecialty;
+  final String? initialSearch; // pre-filled text for the in-list search box
   final String? initialMode; // 'video' | 'inperson'
   final String? initialType; // 'therapist' | null (any professional type)
   final int? initialDuration; // preferred session length in minutes, carried from the booking flow
@@ -108,6 +109,7 @@ class DoctorsListScreen extends ConsumerStatefulWidget {
   const DoctorsListScreen({
     super.key,
     this.initialSpecialty,
+    this.initialSearch,
     this.initialMode,
     this.initialType,
     this.initialDuration,
@@ -127,6 +129,7 @@ class _DoctorsListScreenState extends ConsumerState<DoctorsListScreen>
   late bool _therapistsOnly;
   String _search = '';
   String _debouncedSearch = '';
+  late final TextEditingController _searchCtrl;
   Timer? _searchDebounce;
   _FilterState _filters = const _FilterState();
   late TabController _tabController;
@@ -176,6 +179,9 @@ class _DoctorsListScreenState extends ConsumerState<DoctorsListScreen>
   @override
   void initState() {
     super.initState();
+    _searchCtrl = TextEditingController(text: widget.initialSearch ?? '');
+    _search = (widget.initialSearch ?? '').toLowerCase();
+    _debouncedSearch = _search;
     _therapistsOnly = widget.initialType == 'therapist';
     _selectedSpecialty = widget.initialSpecialty ?? 'All';
     _consultationMode = widget.initialMode == 'inperson' ? 'inperson' : 'video';
@@ -204,6 +210,7 @@ class _DoctorsListScreenState extends ConsumerState<DoctorsListScreen>
   @override
   void dispose() {
     _searchDebounce?.cancel();
+    _searchCtrl.dispose();
     _tabController.dispose();
     _specialtyScrollController.dispose();
     super.dispose();
@@ -425,6 +432,7 @@ class _DoctorsListScreenState extends ConsumerState<DoctorsListScreen>
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
           child: TextField(
+            controller: _searchCtrl,
             onChanged: _onSearchChanged,
             decoration: InputDecoration(
               hintText: 'Search doctors, specialities…',

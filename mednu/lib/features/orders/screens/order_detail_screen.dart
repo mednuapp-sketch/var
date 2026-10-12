@@ -84,9 +84,9 @@ class OrderDetailScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: isDark ? AppColors.darkBase : AppColors.background,
+      appBar: const GradientAppBar(title: 'Order Details'),
       body: CustomScrollView(
         slivers: [
-          const SliverToBoxAdapter(child: GradientAppBar(title: 'Order Details')),
           SliverToBoxAdapter(
             child: orderAsync.when(
               loading: () => const Padding(

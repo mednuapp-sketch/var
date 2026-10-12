@@ -343,7 +343,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       }),
       GoRoute(path: AppRoutes.cart,               builder: (c, s) => const CartScreen()),
       GoRoute(path: AppRoutes.appointment,        builder: (c, s) => const AppointmentScreen()),
-      GoRoute(path: AppRoutes.doctors,            builder: (c, s) => DoctorsListScreen(initialSpecialty: s.uri.queryParameters['specialty'], initialMode: s.uri.queryParameters['mode'], initialType: s.uri.queryParameters['type'], initialDuration: int.tryParse(s.uri.queryParameters['duration'] ?? ''), initialTherapyTitle: s.uri.queryParameters['title'])),
+      GoRoute(path: AppRoutes.doctors,            builder: (c, s) => DoctorsListScreen(initialSearch: s.uri.queryParameters['q'], initialSpecialty: s.uri.queryParameters['specialty'], initialMode: s.uri.queryParameters['mode'], initialType: s.uri.queryParameters['type'], initialDuration: int.tryParse(s.uri.queryParameters['duration'] ?? ''), initialTherapyTitle: s.uri.queryParameters['title'])),
       GoRoute(path: AppRoutes.specialities,       builder: (c, s) => const SpecialitiesScreen()),
       GoRoute(path: AppRoutes.doctorProfile,      builder: (c, s) => DoctorProfileScreen(doctorId: s.pathParameters['id'] ?? '', initialDuration: int.tryParse(s.uri.queryParameters['duration'] ?? ''), initialMode: s.uri.queryParameters['mode'], rescheduleAppointmentId: s.uri.queryParameters['rescheduleId'], rescheduleType: s.uri.queryParameters['rescheduleType'])),
       GoRoute(path: AppRoutes.hospitals,          builder: (c, s) => HospitalsScreen(initialQuery: s.uri.queryParameters['q'])),

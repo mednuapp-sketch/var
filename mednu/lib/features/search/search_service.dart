@@ -736,31 +736,87 @@ class SearchService {
   }
 
   /// Queries the live Firestore `doctors` collection.
+  // Active doctors are fetched once and kept for a few minutes so every
+  // keystroke searches the FULL list locally. Previously only the first 30
+  // (unordered) docs were fetched, so most doctors could never be found.
+  static List<Map<String, dynamic>>? _doctorCache;
+  static DateTime? _doctorCacheAt;
+  static const _doctorCacheTtl = Duration(minutes: 5);
+
+  static Future<List<Map<String, dynamic>>> _loadDoctors() async {
+    final at = _doctorCacheAt;
+    if (_doctorCache != null &&
+        at != null &&
+        DateTime.now().difference(at) < _doctorCacheTtl) {
+      return _doctorCache!;
+    }
+    final snap = await FirebaseFirestore.instance
+        .collection('doctors')
+        .where('status', isEqualTo: 'active')
+        .limit(1000)
+        .get();
+    _doctorCache = snap.docs
+        .map((d) => <String, dynamic>{'id': d.id, ...d.data()})
+        .where(isDoctorAccount)
+        .toList();
+    _doctorCacheAt = DateTime.now();
+    return _doctorCache!;
+  }
+
+  static String _str(dynamic v) {
+    if (v is String) return v;
+    if (v is List) return v.whereType<String>().join(' ');
+    return '';
+  }
+
+  static List<String> _tokens(String q) => q
+      .toLowerCase()
+      .replaceAll(RegExp(r'[^a-z0-9\s]'), ' ')
+      .split(RegExp(r'\s+'))
+      .where((t) => t.isNotEmpty && t != 'dr' && t != 'doctor')
+      .toList();
+
+  /// Scored match: every query word must hit name / specialty /
+  /// qualifications / hospital / city / languages. Name hits rank highest.
   static Future<List<Map<String, dynamic>>> searchFirestoreDoctors(
       String query) async {
-    if (query.length < 2) return [];
+    final tokens = _tokens(query);
+    if (query.trim().length < 2 || tokens.isEmpty) return [];
     try {
-      final snap = await FirebaseFirestore.instance
-          .collection('doctors')
-          .where('status', isEqualTo: 'active')
-          .limit(30)
-          .get();
-      final q = query.toLowerCase();
-      return snap.docs
-          .map((d) => <String, dynamic>{'id': d.id, ...d.data()})
-          .where((d) {
-        // See isDoctorAccount's own doc comment: without this filter, a
-        // Lab/Pharmacy/etc. name match surfaced here too, in the "Doctors"
-        // search results tab, tagged as a doctor.
-        if (!isDoctorAccount(d)) return false;
-
-        final name = (d['name'] as String? ?? '').toLowerCase();
-        final spec = (d['specialty'] as String? ??
-                d['speciality'] as String? ??
-                '')
-            .toLowerCase();
-        return name.contains(q) || spec.contains(q);
-      }).toList();
+      final doctors = await _loadDoctors();
+      final scored = <MapEntry<int, Map<String, dynamic>>>[];
+      for (final d in doctors) {
+        final name = _str(d['name']).toLowerCase();
+        final spec =
+            '${_str(d['specialty'])} ${_str(d['speciality'])}'.toLowerCase();
+        final other = [
+          _str(d['qualifications']),
+          _str(d['qualification']),
+          _str(d['hospital']),
+          _str(d['clinic']),
+          _str(d['city']),
+          _str(d['languages']),
+        ].join(' ').toLowerCase();
+        var score = 0;
+        var allMatched = true;
+        for (final t in tokens) {
+          if (name.startsWith(t) || name.contains(' $t')) {
+            score += 10;
+          } else if (name.contains(t)) {
+            score += 6;
+          } else if (spec.contains(t)) {
+            score += 5;
+          } else if (other.contains(t)) {
+            score += 2;
+          } else {
+            allMatched = false;
+            break;
+          }
+        }
+        if (allMatched) scored.add(MapEntry(score, d));
+      }
+      scored.sort((a, b) => b.key.compareTo(a.key));
+      return scored.map((e) => e.value).toList();
     } catch (_) {
       return [];
     }

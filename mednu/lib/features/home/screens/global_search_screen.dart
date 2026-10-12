@@ -213,7 +213,9 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen>
         icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
         onPressed: () => context.pop(),
       ),
-      title: TextField(
+      title: Padding(
+        padding: const EdgeInsets.only(right: 16),
+        child: TextField(
         controller: _ctrl,
         autofocus: true,
         textInputAction: TextInputAction.search,
@@ -227,7 +229,15 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen>
         },
         decoration: InputDecoration(
           hintText: 'Doctors, reports, hospitals, labs...',
+          isDense: true,
+          filled: false,
+          contentPadding: const EdgeInsets.symmetric(vertical: 10),
           border: InputBorder.none,
+          enabledBorder: InputBorder.none,
+          focusedBorder: InputBorder.none,
+          errorBorder: InputBorder.none,
+          disabledBorder: InputBorder.none,
+          focusedErrorBorder: InputBorder.none,
           hintStyle: AppTextStyles.bodyLarge.copyWith(
             color: context.appTextHint,
             fontWeight: FontWeight.w400,
@@ -243,6 +253,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen>
                 )
               : null,
         ),
+      ),
       ),
       bottom: _query.isNotEmpty && _isLoadingFirestore
           ? const PreferredSize(
@@ -593,7 +604,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen>
                   isDark: isDark,
                   count: _firestoreDoctors.length,
                   onSeeAll: () => context.push(
-                      '/doctors?specialty=${Uri.encodeComponent(_query)}&mode=filter'),
+                      '${AppRoutes.doctors}?q=${Uri.encodeComponent(_query)}'),
                 ),
                 ..._firestoreDoctors
                     .take(5)

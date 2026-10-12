@@ -241,7 +241,7 @@ class _HospitalsScreenState extends State<HospitalsScreen> {
             // ── App Bar ──────────────────────────────────────────────────────
             SliverAppBar(
               pinned: true,
-              expandedHeight: R.h(context, 200),
+              expandedHeight: R.h(context, 156),
               backgroundColor: AppColors.primary,
               foregroundColor: Colors.white,
               elevation: 0,
