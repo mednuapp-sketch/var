@@ -225,7 +225,10 @@ class _PaymentCardState extends State<_PaymentCard> {
                                 color: AppColors.primarySoft,
                                 borderRadius: BorderRadius.circular(6),
                               ),
-                              child: Text(payment.discountLabel!,
+                              child: Text(
+                                  payment.billAmount > payment.finalAmount
+                                      ? '${payment.discountLabel!} discount'
+                                      : payment.discountLabel!,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: AppTextStyles.labelSmall.copyWith(color: AppColors.primary)),
@@ -273,7 +276,7 @@ class _PaymentCardState extends State<_PaymentCard> {
           else
             SizedBox(
               width: double.infinity,
-              height: 36,
+              height: 44,
               child: OutlinedButton.icon(
                 onPressed: _isVerifying ? null : _markVerified,
                 icon: _isVerifying
@@ -283,7 +286,9 @@ class _PaymentCardState extends State<_PaymentCard> {
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.success,
                   side: const BorderSide(color: AppColors.success),
-                  textStyle: AppTextStyles.labelSmall,
+                  textStyle: AppTextStyles.labelSmall.copyWith(height: 1.2),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                  minimumSize: const Size.fromHeight(44),
                 ),
               ),
             ),

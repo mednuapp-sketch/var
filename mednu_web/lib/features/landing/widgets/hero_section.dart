@@ -171,7 +171,7 @@ class _HeroContent extends StatelessWidget {
               : CrossAxisAlignment.start,
           children: [
             Text(
-              'Healthcare Made Simple,',
+              'MedNU',
               textAlign:
                   isMobile ? TextAlign.center : TextAlign.left,
               style: GoogleFonts.poppins(
@@ -187,7 +187,7 @@ class _HeroContent extends StatelessWidget {
                   AppColors.primaryGradient.createShader(b),
               blendMode: BlendMode.srcIn,
               child: Text(
-                'Smarter & Closer',
+                'Always with You',
                 textAlign:
                     isMobile ? TextAlign.center : TextAlign.left,
                 style: GoogleFonts.poppins(
@@ -202,6 +202,22 @@ class _HeroContent extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 18),
+
+        // Slogan — follows the brand headline
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 500),
+          child: Text(
+            'Healthcare Made Simple, Smarter & Closer',
+            textAlign: isMobile ? TextAlign.center : TextAlign.left,
+            style: GoogleFonts.poppins(
+              fontSize: isMobile ? 17 : 20,
+              fontWeight: FontWeight.w600,
+              color: AppColors.primary,
+              height: 1.4,
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
 
         // Description
         ConstrainedBox(
@@ -314,7 +330,7 @@ class _TrustRow extends StatelessWidget {
         ),
         const SizedBox(width: 10),
         Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Launching October 2026',
+          Text('Launching November 2026',
               style: GoogleFonts.poppins(
                   fontSize: 12.5,
                   fontWeight: FontWeight.w600,
@@ -376,7 +392,9 @@ class _HeroVisual extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final availW = constraints.maxWidth.isFinite ? constraints.maxWidth : 480.0;
-        final totalH = phoneH + 60;
+        // Extra room under the phone so "Book in 60 sec" sits clear of the
+        // app's service row and bottom nav instead of covering them.
+        final totalH = phoneH + 84;
 
         // Phone sits left-center; doctor occupies right ~55%
         const phoneLeft = 0.0;
@@ -416,7 +434,12 @@ class _HeroVisual extends StatelessWidget {
                 top: 0,
                 bottom: 0,
                 width: doctorW,
-                child: _DoctorImage(totalW: doctorW, totalH: totalH),
+                child: _DoctorImage(
+                  totalW: doctorW,
+                  totalH: totalH,
+                  // Keep badges to the right of the phone's edge.
+                  leftInset: (phoneW - doctorLeft).clamp(0.0, double.infinity) + 14,
+                ),
               ),
 
               // Phone mockup — LEFT-CENTER (drawn on top of doctor's left edge)
@@ -428,8 +451,9 @@ class _HeroVisual extends StatelessWidget {
 
               // Floating cards
               Positioned(
-                top: 24,
-                left: phoneW - 16,
+                // Sits on the coat, below the face and above the rating badge.
+                top: totalH * 0.58,
+                left: phoneW - 8,
                 child: const _FloatingCard(
                   icon: Icons.calendar_month_rounded,
                   iconColor: AppColors.primary,
@@ -438,7 +462,7 @@ class _HeroVisual extends StatelessWidget {
                 ),
               ),
               const Positioned(
-                bottom: 90,
+                bottom: 4,
                 left: 0,
                 child: _FloatingCard(
                   icon: Icons.bolt_rounded,
@@ -1017,7 +1041,12 @@ class _FloatingCard extends StatelessWidget {
 class _DoctorImage extends StatelessWidget {
   final double totalW;
   final double totalH;
-  const _DoctorImage({required this.totalW, required this.totalH});
+  final double leftInset;
+  const _DoctorImage({
+    required this.totalW,
+    required this.totalH,
+    this.leftInset = 8,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1060,10 +1089,10 @@ class _DoctorImage extends StatelessWidget {
             ),
           ),
 
-          // Verified badge — top-left
+          // Verified badge — right side, below the "Next Appointment" card
           Positioned(
-            left: 4,
-            top: totalH * 0.08,
+            right: 4,
+            top: totalH * 0.34,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
               decoration: BoxDecoration(
@@ -1107,7 +1136,7 @@ class _DoctorImage extends StatelessWidget {
 
           // Rating badge — bottom-left
           Positioned(
-            left: 8,
+            left: leftInset,
             bottom: totalH * 0.14,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),

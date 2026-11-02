@@ -15,14 +15,16 @@ import 'wallet_providers.dart';
 /// changes since it only ever reads the shared [WalletSummary] shape.
 class SharedWalletSummaryCard extends ConsumerWidget {
   final VoidCallback? onTap;
-  const SharedWalletSummaryCard({super.key, this.onTap});
+  /// Side inset; pass 0 when the parent list already pads its children.
+  final double horizontalPadding;
+  const SharedWalletSummaryCard({super.key, this.onTap, this.horizontalPadding = 16});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final summaryAsync = ref.watch(walletSummaryProvider);
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
       child: summaryAsync.when(
         loading: () => const CardLoadingState(itemCount: 1, cardHeight: 108),
         error: (_, __) => const PremiumCard(

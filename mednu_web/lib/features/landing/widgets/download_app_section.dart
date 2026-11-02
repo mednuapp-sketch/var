@@ -6,6 +6,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/utils/launch_utils.dart';
 import '../../../core/utils/responsive.dart';
+import 'landing_stats.dart';
 
 class DownloadAppSection extends StatelessWidget {
   const DownloadAppSection({super.key});
@@ -152,12 +153,7 @@ class _TextContent extends StatelessWidget {
   final bool center;
   const _TextContent({required this.compact, this.center = false});
 
-  static const _stats = [
-    (value: '8', label: 'Care Services'),
-    (value: '3', label: 'Languages'),
-    (value: 'Video', label: 'Consultations'),
-    (value: 'Oct 2026', label: 'Launch'),
-  ];
+  static const _stats = landingStats;
 
   @override
   Widget build(BuildContext context) {

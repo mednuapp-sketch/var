@@ -68,13 +68,6 @@ class HospitalDashboardScreen extends ConsumerWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(profile.displayName, style: AppTextStyles.labelLarge),
-                            const SizedBox(height: 2),
-                            Text(
-                              profile.isActive ? 'Active billing desk' : 'Verification pending',
-                              style: AppTextStyles.bodySmall.copyWith(
-                                color: profile.isActive ? AppColors.success : AppColors.warning,
-                              ),
-                            ),
                           ],
                         ),
                       ),
@@ -95,9 +88,6 @@ class HospitalDashboardScreen extends ConsumerWidget {
                         'Your dashboard will fill in once that\'s done.',
                   ),
                 ] else ...[
-                  SharedWalletSummaryCard(onTap: () => context.push(AppRoutes.hospitalEarnings)),
-                  const SizedBox(height: 20),
-
                   Consumer(
                     builder: (context, ref, _) {
                       final metrics = ref.watch(hospitalDashboardMetricsProvider);
@@ -131,6 +121,11 @@ class HospitalDashboardScreen extends ConsumerWidget {
                         ],
                       );
                     },
+                  ),
+                  const SizedBox(height: 16),
+                  SharedWalletSummaryCard(
+                    horizontalPadding: 0,
+                    onTap: () => context.push(AppRoutes.hospitalEarnings),
                   ),
                   const SizedBox(height: 20),
 

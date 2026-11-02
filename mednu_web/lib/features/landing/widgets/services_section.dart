@@ -49,13 +49,13 @@ class ServicesSection extends StatelessWidget {
       (
         Icons.support_agent_rounded,
         'Care Assist',
-        'A health assistant on call whenever you need one',
+        'A caregiver by your side whenever you need one',
         'Get the app'
       ),
       (
         Icons.elderly_rounded,
-        'Caregivers',
-        'Trained attendants & caregiver support at home',
+        'Nurses',
+        'Trained attendants & nurse support at home',
         'Get the app'
       ),
       (

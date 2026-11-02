@@ -14,13 +14,27 @@ class WebFooter extends StatelessWidget {
   final void Function(String section)? onNavTap;
   const WebFooter({super.key, this.onNavTap});
 
+  /// Same names as the cards in ServicesSection; each link scrolls there.
+  static const _serviceNames = [
+    'Emergency',
+    'Consultation',
+    'Pharmacy',
+    'Lab & Diagnostics',
+    'Pregnancy',
+    'Ambulance',
+    'Care Assist',
+    'Nurses',
+    'Physiotherapy',
+    'Diet & Dietician',
+    'Therapy and Counselling',
+    'Equipment',
+    'Nearby Hospitals',
+    'Pay Hospital Bill',
+  ];
+
   static const _links = {
     'Company': ['About Us', 'Careers', 'Blog', 'Contact'],
-    'Services': [
-      'Medicines',
-      'Lab Tests',
-      'Health Records'
-    ],
+    'Services': _serviceNames,
     'Support': [
       'Help Center',
       'FAQs',
@@ -302,10 +316,14 @@ class _FooterLinkState extends State<_FooterLink> {
   bool _hovered = false;
 
   // Only wired where a real destination exists today. Careers, Blog,
-  // Medicines, Lab Tests, Health Records, Help Center, and FAQs have no
-  // corresponding page/content anywhere in the codebase yet — left as
-  // no-ops rather than invented placeholder content.
+  // Help Center, and FAQs have no corresponding page/content anywhere in
+  // the codebase yet — left as no-ops rather than invented placeholder
+  // content. Every service name scrolls to the Services section.
   void _handleTap() {
+    if (WebFooter._serviceNames.contains(widget.label)) {
+      widget.onNavTap?.call('Services');
+      return;
+    }
     switch (widget.label) {
       case 'Privacy Policy':
         openUrl(AppConstants.privacyPolicyUrl);

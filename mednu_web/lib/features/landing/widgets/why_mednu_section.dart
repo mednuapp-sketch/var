@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/responsive.dart';
 import '../../../core/widgets/section_header.dart';
+import 'landing_stats.dart';
 
 class WhyMednuSection extends StatelessWidget {
   const WhyMednuSection({super.key});
@@ -255,11 +256,8 @@ class _TrustBadges extends StatelessWidget {
       spacing: isMobile ? 24 : 48,
       runSpacing: 24,
       alignment: WrapAlignment.center,
-      children: const [
-        _TrustBadge(value: '8', label: 'Care Services'),
-        _TrustBadge(value: '3', label: 'Languages'),
-        _TrustBadge(value: 'Video', label: 'Consultations'),
-        _TrustBadge(value: 'Oct 2026', label: 'Launch'),
+      children: [
+        for (final s in landingStats) _TrustBadge(value: s.value, label: s.label),
       ],
     );
   }

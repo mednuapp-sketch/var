@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -36,13 +38,17 @@ class ProviderSection extends StatelessWidget {
               border: Border.all(color: AppColors.border),
               boxShadow: [BoxShadow(color: AppColors.primary.withValues(alpha: 0.08), blurRadius: 40, offset: const Offset(0, 16))],
             ),
-            child: isMobile
-                ? Column(children: [_Info(center: true), const SizedBox(height: 32), const _Qr()])
-                : Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-                    Expanded(flex: 6, child: _Info(center: false)),
-                    const SizedBox(width: 48),
-                    const _Qr(),
-                  ]),
+            child: Column(children: [
+              isMobile
+                  ? Column(children: [_Info(center: true), const SizedBox(height: 32), const _Qr()])
+                  : Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+                      Expanded(flex: 6, child: _Info(center: false)),
+                      const SizedBox(width: 48),
+                      const _Qr(),
+                    ]),
+              SizedBox(height: isMobile ? 28 : 40),
+              const _ProviderCarousel(),
+            ]),
           ),
         ),
       ),
@@ -175,6 +181,172 @@ class _ContactLine extends StatelessWidget {
         FaIcon(icon, size: 14, color: AppColors.primary),
         const SizedBox(width: 8),
         Text(text, style: GoogleFonts.poppins(fontSize: 13.5, fontWeight: FontWeight.w500, color: AppColors.textPrimary)),
+      ]),
+    );
+  }
+}
+
+/// Every provider type that can join the MedNU Partner app.
+const _providerTypes = <({IconData icon, String label, String blurb})>[
+  (icon: Icons.medical_services_rounded, label: 'Doctors', blurb: 'Consult & treat patients'),
+  (icon: Icons.local_hospital_rounded, label: 'Ambulance', blurb: 'Emergency transport & dispatch'),
+  (icon: Icons.local_pharmacy_rounded, label: 'Pharmacy', blurb: 'Fulfil prescriptions'),
+  (icon: Icons.biotech_rounded, label: 'Lab & Diagnostics', blurb: 'Run tests & share reports'),
+  (icon: Icons.health_and_safety_rounded, label: 'Medical Equipment', blurb: 'Rent & sell equipment'),
+  (icon: Icons.volunteer_activism_rounded, label: 'Nurses', blurb: 'Home care & assistance'),
+  (icon: Icons.accessibility_new_rounded, label: 'Physiotherapists', blurb: 'Rehab & physiotherapy'),
+  (icon: Icons.psychology_rounded, label: 'Counsellors', blurb: 'Mental health & therapy'),
+  (icon: Icons.restaurant_menu_rounded, label: 'Dieticians', blurb: 'Diet & nutrition plans'),
+  (icon: Icons.apartment_rounded, label: 'Hospitals', blurb: 'OP tokens & bill payments'),
+];
+
+/// Auto-scrolling strip of provider types. Pauses while hovered or touched;
+/// the user can also drag or use the arrows.
+class _ProviderCarousel extends StatefulWidget {
+  const _ProviderCarousel();
+
+  @override
+  State<_ProviderCarousel> createState() => _ProviderCarouselState();
+}
+
+class _ProviderCarouselState extends State<_ProviderCarousel> {
+  static const _cardW = 200.0;
+  static const _gap = 14.0;
+  final _controller = ScrollController();
+  Timer? _timer;
+  bool _paused = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(milliseconds: 30), (_) {
+      if (_paused || !_controller.hasClients) return;
+      _controller.jumpTo(_controller.offset + 0.7);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _nudge(double dir) {
+    if (!_controller.hasClients) return;
+    _controller.animateTo(
+      _controller.offset + dir * (_cardW + _gap) * 2,
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeOut,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isMobile = Responsive.isMobile(context);
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const Divider(color: AppColors.border, height: 1),
+      const SizedBox(height: 22),
+      Row(children: [
+        Expanded(
+          child: Text('Who can join MedNU as a partner',
+              style: GoogleFonts.poppins(fontSize: isMobile ? 15 : 17, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+        ),
+        _ArrowBtn(icon: Icons.chevron_left_rounded, onTap: () => _nudge(-1)),
+        const SizedBox(width: 8),
+        _ArrowBtn(icon: Icons.chevron_right_rounded, onTap: () => _nudge(1)),
+      ]),
+      const SizedBox(height: 16),
+      MouseRegion(
+        onEnter: (_) => _paused = true,
+        onExit: (_) => _paused = false,
+        child: Listener(
+          onPointerDown: (_) => _paused = true,
+          onPointerUp: (_) => _paused = false,
+          child: SizedBox(
+            height: 92,
+            child: ListView.builder(
+              controller: _controller,
+              scrollDirection: Axis.horizontal,
+              // Endless loop: index wraps over the 10 provider types.
+              itemBuilder: (_, i) => Padding(
+                padding: const EdgeInsets.only(right: _gap),
+                child: _ProviderCard(
+                  width: _cardW,
+                  type: _providerTypes[i % _providerTypes.length],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ]);
+  }
+}
+
+class _ArrowBtn extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  const _ArrowBtn({required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Icon(icon, size: 22, color: AppColors.primary),
+      ),
+    );
+  }
+}
+
+class _ProviderCard extends StatelessWidget {
+  final double width;
+  final ({IconData icon, String label, String blurb}) type;
+  const _ProviderCard({required this.width, required this.type});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppColors.primarySoft.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(children: [
+        Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+          child: Icon(type.icon, color: AppColors.primary, size: 22),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(type.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.poppins(fontSize: 13.5, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+              const SizedBox(height: 2),
+              Text(type.blurb,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.poppins(fontSize: 11, color: AppColors.textSecondary, height: 1.3)),
+            ],
+          ),
+        ),
       ]),
     );
   }
