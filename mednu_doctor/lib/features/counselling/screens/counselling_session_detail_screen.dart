@@ -6,6 +6,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/services/feedback_service.dart';
+import '../../../core/utils/maps_launcher.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../../../shared_core/shared_core.dart';
 import '../models/counselling_session.dart';
@@ -166,11 +167,13 @@ class CounsellingSessionDetailScreen extends ConsumerWidget {
                 if (session.address.isNotEmpty) ...[
                   const SizedBox(height: 16),
                   PremiumCard(
+                    onTap: () => openAddressInMaps(context, session.address),
                     child: Row(
                       children: [
                         const Icon(Icons.location_on_outlined, color: AppColors.primary),
                         const SizedBox(width: 10),
                         Expanded(child: Text(session.address, style: AppTextStyles.bodyMedium)),
+                        const Icon(Icons.directions_rounded, color: AppColors.primary),
                       ],
                     ),
                   ),

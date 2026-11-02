@@ -17,7 +17,10 @@ import '../../home/providers/location_provider.dart';
 import '../../my_services/models/unified_booking.dart';
 
 class DiagnosticsScreen extends ConsumerStatefulWidget {
-  const DiagnosticsScreen({super.key});
+  /// Investigations suggested on a prescription. Matching tests in the
+  /// catalogue are ticked automatically so they can be added in one tap.
+  final List<String> prescribedTests;
+  const DiagnosticsScreen({super.key, this.prescribedTests = const []});
 
   @override
   ConsumerState<DiagnosticsScreen> createState() => _DiagnosticsScreenState();
@@ -45,7 +48,36 @@ class _DiagnosticsScreenState extends ConsumerState<DiagnosticsScreen> {
   Color _colorAt(int i) => _palette[i % _palette.length];
   IconData _iconAt(int i) => _icons[i % _icons.length];
 
-  void _book(Map<String, dynamic> test) {
+  /// Tests ticked in the list below, keyed by test id, so several can be added
+  /// to the cart with one tap.
+  final Map<String, Map<String, dynamic>> _selected = {};
+  bool _prefilled = false;
+
+  void _toggle(Map<String, dynamic> test) {
+    final id = test['id'] as String;
+    setState(() {
+      if (_selected.containsKey(id)) {
+        _selected.remove(id);
+      } else {
+        _selected[id] = test;
+      }
+    });
+  }
+
+  int get _selectedTotal =>
+      _selected.values.fold(0, (total, t) => total + ((t['price'] as num?)?.toInt() ?? 0));
+
+  void _addSelected() {
+    final tests = _selected.values.toList();
+    for (final t in tests) {
+      _book(t, announce: false);
+    }
+    setState(_selected.clear);
+    FeedbackService.showSuccess(
+        context, tests.length == 1 ? '${tests.first['name']} added to cart' : '${tests.length} tests added to cart');
+  }
+
+  void _book(Map<String, dynamic> test, {bool announce = true}) {
     ref.read(cartProvider.notifier).addItem(
           type: 'diagnostics',
           serviceName: test['name'] as String,
@@ -57,13 +89,35 @@ class _DiagnosticsScreenState extends ConsumerState<DiagnosticsScreen> {
             'reportTime': test['duration'],
           },
         );
-    FeedbackService.showSuccess(context, '${test['name']} added to cart');
+    if (announce) FeedbackService.showSuccess(context, '${test['name']} added to cart');
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: context.appBackground,
+      bottomNavigationBar: _selected.isEmpty
+          ? null
+          : SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                child: SizedBox(
+                  height: 52,
+                  child: ElevatedButton(
+                    onPressed: _addSelected,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _themeColor,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    child: Text(
+                      'Add ${_selected.length} test${_selected.length == 1 ? '' : 's'} to cart · ₹$_selectedTotal',
+                      style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 14),
+                    ),
+                  ),
+                ),
+              ),
+            ),
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
@@ -200,6 +254,25 @@ class _DiagnosticsScreenState extends ConsumerState<DiagnosticsScreen> {
       };
     }).toList();
 
+    if (!_prefilled && widget.prescribedTests.isNotEmpty && allTests.isNotEmpty) {
+      _prefilled = true;
+      final wanted = widget.prescribedTests.map((s) => s.toLowerCase().trim()).where((s) => s.isNotEmpty).toList();
+      final matches = allTests.where((t) {
+        final name = (t['name'] as String).toLowerCase();
+        return wanted.any((w) => name.contains(w) || w.contains(name));
+      }).toList();
+      if (matches.isNotEmpty) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          setState(() {
+            for (final t in matches) {
+              _selected[t['id'] as String] = t;
+            }
+          });
+        });
+      }
+    }
+
     final filtered = _query.isEmpty
         ? allTests
         : allTests.where((t) => (t['name'] as String).toLowerCase().contains(_query.toLowerCase())).toList();
@@ -240,13 +313,20 @@ class _DiagnosticsScreenState extends ConsumerState<DiagnosticsScreen> {
             final duration = (t['duration'] as String);
             final desc = (t['description'] as String);
             final subtitle = duration.isNotEmpty ? 'Reports in $duration' : desc;
-            return Container(
+            final picked = _selected.containsKey(t['id']);
+            return GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => _toggle(t),
+              child: Container(
               margin: const EdgeInsets.only(bottom: 10),
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
                 color: context.appSurface,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: context.appBorder),
+                border: Border.all(
+                  color: picked ? _themeColor : context.appBorder,
+                  width: picked ? 1.5 : 1,
+                ),
               ),
               child: Row(children: [
                 Container(
@@ -260,23 +340,15 @@ class _DiagnosticsScreenState extends ConsumerState<DiagnosticsScreen> {
                   if (subtitle.isNotEmpty)
                     Text(subtitle, style: AppTextStyles.bodySmall),
                 ])),
-                Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                  Text('₹${t['price']}', style: AppTextStyles.labelLarge.copyWith(color: _themeColor)),
-                  const SizedBox(height: 4),
-                  GestureDetector(
-                    onTap: () => _book(t),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(colors: [Color(0xFF0097A7), Color(0xFF26C6DA)]),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Text('Add to Cart', style: TextStyle(fontFamily: 'Poppins', fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white)),
-                    ),
-                  ),
-                ]),
+                Text('₹${t['price']}', style: AppTextStyles.labelLarge.copyWith(color: _themeColor)),
+                const SizedBox(width: 10),
+                Icon(
+                  picked ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+                  color: picked ? _themeColor : context.appTextHint,
+                  size: 26,
+                ),
               ]),
-            );
+            ));
           })),
         ),
     ]);

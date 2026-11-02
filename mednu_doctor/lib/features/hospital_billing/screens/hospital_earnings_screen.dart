@@ -38,12 +38,10 @@ class HospitalEarningsScreen extends ConsumerWidget {
           num todayEarnings = 0;
           num weekEarnings = 0;
           num monthEarnings = 0;
-          int monthCount = 0;
           for (final t in data.transactions) {
             if (t.type != WalletTransactionType.credit) continue;
             if (!t.date.isBefore(monthStart)) {
               monthEarnings += t.amount;
-              monthCount++;
               if (!t.date.isBefore(weekStart)) {
                 weekEarnings += t.amount;
                 if (!t.date.isBefore(today)) {
@@ -52,7 +50,6 @@ class HospitalEarningsScreen extends ConsumerWidget {
               }
             }
           }
-          final avgPerTransaction = monthCount > 0 ? (monthEarnings / monthCount).round() : 0;
 
           return ListView(
           padding: const EdgeInsets.all(16),
@@ -89,8 +86,6 @@ class HospitalEarningsScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 16),
             Row(children: [
-              _QuickEarnCard('Avg/Transaction', '₹$avgPerTransaction', Icons.bar_chart_rounded, const Color(0xFF1565C0)),
-              const SizedBox(width: 12),
               _QuickEarnCard('Pending', '₹${data.pendingAmount.toInt()}', Icons.hourglass_bottom_rounded, AppColors.warning),
             ]),
             const SizedBox(height: 20),

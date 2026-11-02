@@ -1888,7 +1888,7 @@ class _PrescriptionViewerScreenState extends State<PrescriptionViewerScreen> {
           icon: Icons.science_rounded,
           label: 'Book Lab Tests',
           color: const Color(0xFF00838F),
-          onTap: () => context.push(AppRoutes.diagnostics),
+          onTap: () => context.push(AppRoutes.diagnostics, extra: _investigations),
           fullWidth: true,
         ),
     ],

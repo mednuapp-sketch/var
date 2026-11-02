@@ -41,7 +41,27 @@ class _LabMenuScreenState extends ConsumerState<LabMenuScreen> {
     });
   }
 
-  Future<void> _addToCart(Map<String, dynamic> test) async {
+  /// Tests the patient has ticked, keyed by test id. Kept across searches so
+  /// several tests can be picked and added to the cart in one go.
+  final Map<String, Map<String, dynamic>> _selected = {};
+
+  void _toggle(Map<String, dynamic> test) {
+    final id = test['id'] as String;
+    setState(() {
+      if (_selected.containsKey(id)) {
+        _selected.remove(id);
+      } else {
+        _selected[id] = test;
+      }
+    });
+  }
+
+  int get _selectedTotal =>
+      _selected.values.fold(0, (total, t) => total +((t['price'] as num?)?.toInt() ?? 0));
+
+  Future<void> _addSelectedToCart() async {
+    final tests = _selected.values.toList();
+    if (tests.isEmpty) return;
     final vendorKey = 'lab:${widget.labId}';
     final conflict = ref.read(cartProvider.notifier).conflictFor(type: 'diagnostics', vendorKey: vendorKey);
     if (conflict != null) {
@@ -64,21 +84,26 @@ class _LabMenuScreenState extends ConsumerState<LabMenuScreen> {
       ref.read(cartProvider.notifier).clearType('diagnostics');
     }
 
-    ref.read(cartProvider.notifier).addItem(
-          type: 'diagnostics',
-          serviceName: test['name'] as String,
-          themeColor: _themeColor,
-          unitAmount: (test['price'] as num?)?.toInt() ?? 0,
-          serviceDetails: {
-            'testName': test['name'],
-            'price': test['price'],
-            'reportTime': test['duration'],
-            'sourceLabId': widget.labId,
-            'sourceTestId': test['id'],
-            'labName': _lab?['name'],
-          },
-        );
-    if (mounted) FeedbackService.showSuccess(context, '${test['name']} added to cart');
+    for (final test in tests) {
+      ref.read(cartProvider.notifier).addItem(
+            type: 'diagnostics',
+            serviceName: test['name'] as String,
+            themeColor: _themeColor,
+            unitAmount: (test['price'] as num?)?.toInt() ?? 0,
+            serviceDetails: {
+              'testName': test['name'],
+              'price': test['price'],
+              'reportTime': test['duration'],
+              'sourceLabId': widget.labId,
+              'sourceTestId': test['id'],
+              'labName': _lab?['name'],
+            },
+          );
+    }
+    if (!mounted) return;
+    setState(_selected.clear);
+    FeedbackService.showSuccess(
+        context, tests.length == 1 ? '${tests.first['name']} added to cart' : '${tests.length} tests added to cart');
   }
 
   @override
@@ -90,6 +115,28 @@ class _LabMenuScreenState extends ConsumerState<LabMenuScreen> {
 
     return Scaffold(
       backgroundColor: context.appBackground,
+      bottomNavigationBar: _selected.isEmpty
+          ? null
+          : SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                child: SizedBox(
+                  height: 52,
+                  child: ElevatedButton(
+                    onPressed: _addSelectedToCart,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _themeColor,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    child: Text(
+                      'Add ${_selected.length} test${_selected.length == 1 ? '' : 's'} to cart · ₹$_selectedTotal',
+                      style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 14),
+                    ),
+                  ),
+                ),
+              ),
+            ),
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
@@ -210,13 +257,20 @@ class _LabMenuScreenState extends ConsumerState<LabMenuScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Column(children: tests.map((t) {
                       final duration = t['duration'] as String;
-                      return Container(
+                      final picked = _selected.containsKey(t['id']);
+                      return GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => _toggle(t),
+                        child: Container(
                         margin: const EdgeInsets.only(bottom: 10),
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
                           color: context.appSurface,
                           borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: context.appBorder),
+                          border: Border.all(
+                            color: picked ? _themeColor : context.appBorder,
+                            width: picked ? 1.5 : 1,
+                          ),
                         ),
                         child: Row(children: [
                           Container(
@@ -230,23 +284,15 @@ class _LabMenuScreenState extends ConsumerState<LabMenuScreen> {
                             if (duration.isNotEmpty)
                               Text('Reports in $duration', style: AppTextStyles.bodySmall),
                           ])),
-                          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                            Text('₹${t['price']}', style: AppTextStyles.labelLarge.copyWith(color: _themeColor)),
-                            const SizedBox(height: 4),
-                            GestureDetector(
-                              onTap: () => _addToCart(t),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                decoration: BoxDecoration(
-                                  gradient: const LinearGradient(colors: [Color(0xFF0097A7), Color(0xFF26C6DA)]),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: const Text('Add to Cart', style: TextStyle(fontFamily: 'Poppins', fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white)),
-                              ),
-                            ),
-                          ]),
+                          Text('₹${t['price']}', style: AppTextStyles.labelLarge.copyWith(color: _themeColor)),
+                          const SizedBox(width: 10),
+                          Icon(
+                            picked ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+                            color: picked ? _themeColor : context.appTextHint,
+                            size: 26,
+                          ),
                         ]),
-                      );
+                      ));
                     }).toList()),
                   );
                 },

@@ -15,6 +15,10 @@ class NutritionistModel {
   final String photoUrl;
   final bool isAvailable;
   final bool isOnlineAvailable;
+
+  /// Live online/offline switch from the dietician's partner app. Offline
+  /// dieticians stay listed and bookable; this only drives the badge.
+  final bool isOnline;
   final bool isInPersonAvailable;
   final String city;
   final double? lat;
@@ -39,6 +43,7 @@ class NutritionistModel {
     required this.photoUrl,
     required this.isAvailable,
     required this.isOnlineAvailable,
+    this.isOnline = false,
     required this.isInPersonAvailable,
     required this.city,
     this.lat,
@@ -66,6 +71,7 @@ class NutritionistModel {
       photoUrl: d['photoUrl'] as String? ?? '',
       isAvailable: d['isAvailable'] as bool? ?? true,
       isOnlineAvailable: d['isOnlineAvailable'] as bool? ?? true,
+      isOnline: d['isOnline'] as bool? ?? false,
       isInPersonAvailable: d['isInPersonAvailable'] as bool? ?? false,
       city: d['city'] as String? ?? '',
       lat: (d['lat'] as num?)?.toDouble(),

@@ -502,7 +502,13 @@ class GradientSliverAppBar extends StatelessWidget {
   final String? subtitle;
   final List<Widget>? actions;
   final VoidCallback? onBack;
+
+  /// Kept so existing call sites compile; the header no longer expands or
+  /// collapses, so this value is ignored.
   final double expandedHeight;
+
+  /// Fixed one-row header height (below the status bar).
+  static const double height = 64;
 
   const GradientSliverAppBar({
     super.key,
@@ -511,17 +517,21 @@ class GradientSliverAppBar extends StatelessWidget {
     this.subtitle,
     this.actions,
     this.onBack,
-    this.expandedHeight = 130,
+    this.expandedHeight = 0,
   });
 
   @override
   Widget build(BuildContext context) {
+    // Fixed height, no flexibleSpace scroll view: the header never shrinks or
+    // resizes while the content scrolls underneath it.
     return SliverAppBar(
       pinned: true,
-      expandedHeight: expandedHeight,
+      toolbarHeight: height,
       backgroundColor: AppColors.primary,
       foregroundColor: Colors.white,
       elevation: 0,
+      scrolledUnderElevation: 0,
+      titleSpacing: 0,
       leading: IconButton(
         icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
         // safeBack, not pop: screens opened via context.go (e.g. from the
@@ -529,115 +539,82 @@ class GradientSliverAppBar extends StatelessWidget {
         onPressed: onBack ?? () => context.safeBack(),
       ),
       actions: actions,
-      flexibleSpace: FlexibleSpaceBar(
-        collapseMode: CollapseMode.pin,
-        background: _GradientHeader(
-          icon: headerIcon,
-          title: title,
-          subtitle: subtitle,
-        ),
+      flexibleSpace: const _GradientHeaderBackground(),
+      title: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.18),
+              borderRadius: BorderRadius.circular(11),
+            ),
+            child: Icon(headerIcon, color: Colors.white, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.onPrimaryH2.copyWith(fontSize: 18, height: 1.2),
+                ),
+                if (subtitle != null)
+                  Text(
+                    subtitle!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.onPrimaryBody.copyWith(fontSize: 12, height: 1.2),
+                  ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _GradientHeader extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String? subtitle;
-
-  const _GradientHeader({
-    required this.icon,
-    required this.title,
-    this.subtitle,
-  });
+class _GradientHeaderBackground extends StatelessWidget {
+  const _GradientHeaderBackground();
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: AppColors.heroBannerGradient,
-      ),
-      child: Stack(
-        children: [
-          // Decorative circles
-          Positioned(
-            top: -28,
-            right: -28,
-            child: Container(
-              width: 130,
-              height: 130,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white.withValues(alpha: 0.05),
+    return ClipRect(
+      child: DecoratedBox(
+        decoration: const BoxDecoration(gradient: AppColors.heroBannerGradient),
+        child: Stack(
+          children: [
+            Positioned(
+              top: -40,
+              right: -28,
+              child: Container(
+                width: 120,
+                height: 120,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withValues(alpha: 0.05),
+                ),
               ),
             ),
-          ),
-          Positioned(
-            bottom: -20,
-            left: -10,
-            child: Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white.withValues(alpha: 0.04),
+            Positioned(
+              bottom: -36,
+              left: -10,
+              child: Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withValues(alpha: 0.04),
+                ),
               ),
             ),
-          ),
-          SafeArea(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                return SingleChildScrollView(
-                  physics: const ClampingScrollPhysics(),
-                  child: ConstrainedBox(
-                    constraints:
-                        BoxConstraints(minHeight: constraints.maxHeight),
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 48, 20, 16),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          Container(
-                            width: 44,
-                            height: 44,
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.18),
-                              borderRadius: BorderRadius.circular(13),
-                            ),
-                            child: Icon(icon, color: Colors.white, size: 22),
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  title,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: AppTextStyles.onPrimaryH2,
-                                ),
-                                if (subtitle != null)
-                                  Text(
-                                    subtitle!,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: AppTextStyles.onPrimaryBody,
-                                  ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -941,17 +918,29 @@ class InfoChip extends StatelessWidget {
   final IconData icon;
   final String label;
   final Color? color;
+  final VoidCallback? onTap;
 
   const InfoChip({
     super.key,
     required this.icon,
     required this.label,
     this.color,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     final c = color ?? AppColors.primary;
+    final chip = _buildChip(c);
+    if (onTap == null) return chip;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: chip,
+    );
+  }
+
+  Widget _buildChip(Color c) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(

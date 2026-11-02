@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/services/feedback_service.dart';
+import '../../../core/utils/maps_launcher.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../../../shared_core/shared_core.dart';
 import '../models/pharmacy_order.dart';
@@ -222,7 +223,11 @@ class _PharmacyOrderDetailScreenState extends ConsumerState<PharmacyOrderDetailS
                         ),
                       const SizedBox(height: 8),
                       if (order.deliveryAddress.isNotEmpty)
-                        InfoChip(icon: Icons.location_on_outlined, label: order.deliveryAddress),
+                        InfoChip(
+                          icon: Icons.location_on_outlined,
+                          label: order.deliveryAddress,
+                          onTap: () => openAddressInMaps(context, order.deliveryAddress),
+                        ),
                       const SizedBox(height: 8),
                       InfoChip(
                         icon: Icons.currency_rupee_rounded,

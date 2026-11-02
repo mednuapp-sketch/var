@@ -8069,7 +8069,10 @@ function _nutritionistListingDoc(profile, existingCreatedAt) {
       : {}),
     rating: profile.rating ?? 0,
     reviewCount: profile.reviewCount ?? 0,
+    // Every approved dietician stays listed and bookable; `isOnline` mirrors
+    // the partner's online/offline toggle so the patient app can badge it.
     isAvailable: true,
+    isOnline: profile.isOnline === true,
     isOnlineAvailable: true,
     isInPersonAvailable: false,
     languages: profile.languages || [],

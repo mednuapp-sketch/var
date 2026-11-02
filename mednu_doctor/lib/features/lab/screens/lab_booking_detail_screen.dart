@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/services/feedback_service.dart';
+import '../../../core/utils/maps_launcher.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../../../shared_core/shared_core.dart';
@@ -230,7 +231,11 @@ class _LabBookingDetailScreenState extends ConsumerState<LabBookingDetailScreen>
                       ),
                       const SizedBox(height: 8),
                       if (booking.address.isNotEmpty)
-                        InfoChip(icon: Icons.location_on_outlined, label: booking.address),
+                        InfoChip(
+                          icon: Icons.location_on_outlined,
+                          label: booking.address,
+                          onTap: () => openAddressInMaps(context, booking.address),
+                        ),
                       const SizedBox(height: 8),
                       InfoChip(
                         icon: Icons.currency_rupee_rounded,

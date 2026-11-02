@@ -9,6 +9,7 @@ import '../../../core/router/app_router.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../../../shared_core/shared_core.dart';
 import '../../../core/services/feedback_service.dart';
+import '../../../core/utils/maps_launcher.dart';
 import '../models/visit.dart';
 import '../providers/caregiver_providers.dart';
 import '../services/caregiver_profile_service.dart';
@@ -106,11 +107,13 @@ class CaregiverVisitDetailScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 16),
                 PremiumCard(
+                  onTap: () => openAddressInMaps(context, visit.address),
                   child: Row(
                     children: [
                       const Icon(Icons.location_on_outlined, color: AppColors.primary),
                       const SizedBox(width: 10),
                       Expanded(child: Text(visit.address, style: AppTextStyles.bodyMedium)),
+                      const Icon(Icons.directions_rounded, color: AppColors.primary),
                     ],
                   ),
                 ),

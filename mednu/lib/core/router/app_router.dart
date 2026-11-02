@@ -308,7 +308,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           return AmbulanceLiveTrackingScreen(requestId: extra?['requestId'] as String? ?? '');
         },
       ),
-      GoRoute(path: AppRoutes.diagnostics,        builder: (c, s) => const DiagnosticsScreen()),
+      GoRoute(path: AppRoutes.diagnostics,        builder: (c, s) => DiagnosticsScreen(
+          prescribedTests: s.extra is List ? List<String>.from((s.extra as List).map((e) => '$e')) : const [],
+        )),
       GoRoute(path: AppRoutes.labMenu,            builder: (c, s) => LabMenuScreen(labId: s.pathParameters['id'] ?? '')),
       GoRoute(path: AppRoutes.caregivers,         builder: (c, s) => const CaregiversScreen()),
       GoRoute(path: AppRoutes.careAssistant,      builder: (c, s) => const CareAssistantScreen()),

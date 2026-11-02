@@ -471,6 +471,12 @@ class _NutritionistCard extends StatelessWidget {
                           : 'Online',
                   color: context.appTextSecondary,
                 ),
+                _InfoChip(
+                  icon: Icons.circle,
+                  label: nutritionist.isOnline ? 'Online now' : 'Offline',
+                  color: nutritionist.isOnline ? _kGreen : context.appTextHint,
+                  bgColor: nutritionist.isOnline ? _kGreenBg : null,
+                ),
                 if (nutritionist.isOnlineAvailable)
                   const _InfoChip(
                     icon: Icons.videocam_rounded,

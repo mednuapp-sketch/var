@@ -55,6 +55,13 @@ class _NutritionProfileScreenState extends ConsumerState<NutritionProfileScreen>
     _currentPhotoUrl = profile.photoUrl;
   }
 
+  /// Compact outlined field used inside the edit dialog.
+  InputDecoration _dialogField(String label) => InputDecoration(
+        labelText: label,
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      );
+
   Future<void> _edit(BuildContext context, NutritionistProfile current) async {
     final uid = NutritionistProfileService.currentUid;
     if (uid == null) {
@@ -82,24 +89,34 @@ class _NutritionProfileScreenState extends ConsumerState<NutritionProfileScreen>
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (dialogContext, setDialogState) => AlertDialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
           title: const Text('Dietician Details'),
           content: SingleChildScrollView(
+            padding: const EdgeInsets.only(top: 6, bottom: 4),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                TextField(controller: name, decoration: const InputDecoration(labelText: 'Full name')),
-                TextField(controller: qualification, decoration: const InputDecoration(labelText: 'Qualification (e.g. RD, MSc Nutrition)')),
-                TextField(controller: specialization, decoration: const InputDecoration(labelText: 'Specialization')),
+                // Compact fields with an even 14dp gap; the app-wide input
+                // theme is tall and has no spacing, so labels collided with
+                // the box above.
+                TextField(controller: name, decoration: _dialogField('Full name')),
+                const SizedBox(height: 14),
+                TextField(controller: qualification, decoration: _dialogField('Qualification (e.g. RD, MSc)')),
+                const SizedBox(height: 14),
+                TextField(controller: specialization, decoration: _dialogField('Specialization')),
+                const SizedBox(height: 14),
                 TextField(
                   controller: experienceYears,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Years of experience'),
+                  decoration: _dialogField('Years of experience'),
                 ),
+                const SizedBox(height: 14),
                 TextField(
                   controller: consultationFee,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Consultation fee (₹)'),
+                  decoration: _dialogField('Consultation fee (₹)'),
                 ),
+                const SizedBox(height: 14),
                 InkWell(
                   onTap: () async {
                     final result = await Navigator.of(dialogContext).push<PreciseAddress>(
@@ -116,11 +133,11 @@ class _NutritionProfileScreenState extends ConsumerState<NutritionProfileScreen>
                   },
                   borderRadius: BorderRadius.circular(8),
                   child: InputDecorator(
-                    decoration: const InputDecoration(
-                      labelText: 'Service Area',
-                      prefixIcon: Icon(Icons.location_on_outlined, color: AppColors.textSecondary),
-                      suffixIcon: Icon(Icons.map_outlined, color: AppColors.primary),
+                    decoration: _dialogField('Service Area').copyWith(
+                      prefixIcon: const Icon(Icons.location_on_outlined, color: AppColors.textSecondary),
+                      suffixIcon: const Icon(Icons.map_outlined, color: AppColors.primary),
                       helperText: 'Tap to pick the city/area you serve on the map',
+                      helperMaxLines: 2,
                     ),
                     child: Text(
                       city.isEmpty ? 'Select on map' : city,
@@ -128,13 +145,14 @@ class _NutritionProfileScreenState extends ConsumerState<NutritionProfileScreen>
                     ),
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 14),
                 TextField(
                   controller: bio,
-                  maxLines: 3,
-                  decoration: const InputDecoration(labelText: 'About you'),
+                  minLines: 3,
+                  maxLines: 4,
+                  decoration: _dialogField('About you'),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 16),
                 const Align(
                   alignment: Alignment.centerLeft,
                   child: Text('Languages Spoken', style: AppTextStyles.labelMedium),
