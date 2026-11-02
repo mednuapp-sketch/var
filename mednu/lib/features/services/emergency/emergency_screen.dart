@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
+import '../../home/screens/home_screen.dart' show MedNUPushedBottomNav;
+import '../../../core/router/app_router.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -146,6 +147,7 @@ class _EmergencyScreenState extends State<EmergencyScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: context.appBackground,
+      bottomNavigationBar: const MedNUPushedBottomNav(activeRoute: AppRoutes.emergency),
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
@@ -154,7 +156,7 @@ class _EmergencyScreenState extends State<EmergencyScreen>
             backgroundColor: const Color(0xFFB71C1C),
             leading: IconButton(
               icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-              onPressed: () => context.pop(),
+              onPressed: () => context.safeBack(),
             ),
             flexibleSpace: FlexibleSpaceBar(
               background: Container(

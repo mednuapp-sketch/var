@@ -26,6 +26,7 @@ class FcmService {
   static const _newJobTypes = {
     'new_lab_booking',
     'new_pharmacy_order',
+    'new_equipment_order',
     'new_ambulance_request',
     'new_caregiver_visit',
     'new_physio_session',

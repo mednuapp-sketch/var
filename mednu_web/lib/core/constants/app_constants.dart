@@ -38,7 +38,7 @@ class AppConstants {
     {'title': 'Pregnancy Care', 'icon': '🤱', 'color': 'pink'},
     {'title': 'Dietician', 'icon': '🥗', 'color': 'green'},
     {'title': 'Physiotherapy', 'icon': '💪', 'color': 'blue'},
-    {'title': 'Caregivers', 'icon': '👩‍⚕️', 'color': 'pink'},
+    {'title': 'Nurses', 'icon': '👩‍⚕️', 'color': 'pink'},
     {'title': 'Medical Equipment', 'icon': '🩻', 'color': 'slate'},
     {'title': 'Home Care', 'icon': '🏠', 'color': 'blue'},
     {'title': 'Emergency Services', 'icon': '🆘', 'color': 'red'},

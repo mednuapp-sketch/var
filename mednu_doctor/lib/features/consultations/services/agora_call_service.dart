@@ -87,7 +87,15 @@ class AgoraCallService {
     return [Permission.camera, Permission.microphone].request();
   }
 
+  /// Tail of every engine teardown still in flight. The native Agora engine is
+  /// shared, so a new screen (e.g. rejoining from the session bridge) must not
+  /// create its engine until the previous screen's leave + release finished —
+  /// otherwise that late release destroys the new engine and the rejoined
+  /// call comes up without working preview / controls.
+  static Future<void> _pendingRelease = Future.value();
+
   Future<void> initialize() async {
+    await _pendingRelease;
     await [Permission.camera, Permission.microphone].request();
     _engine = createAgoraRtcEngine();
     await _engine!.initialize(const RtcEngineContext(appId: kAgoraAppId));
@@ -341,9 +349,17 @@ class AgoraCallService {
   }
 
   Future<void> dispose() async {
-    await _engine?.leaveChannel();
-    await _engine?.release();
+    final engine = _engine;
     _engine = null;
+    if (engine != null) {
+      _pendingRelease = _pendingRelease.then((_) async {
+        try {
+          await engine.leaveChannel();
+          await engine.release();
+        } catch (_) {}
+      });
+    }
+    await _pendingRelease;
     isJoined = false;
     remoteUids.clear();
     localUid = null;

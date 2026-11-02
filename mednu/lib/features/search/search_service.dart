@@ -88,8 +88,8 @@ class SearchService {
     ),
     SearchResult(
       id: 'caregivers',
-      title: 'Caregivers',
-      subtitle: 'Trained caregivers for elderly & patients',
+      title: 'Nurses',
+      subtitle: 'Trained nurses for elderly & patients',
       route: AppRoutes.caregivers,
       icon: Icons.elderly_rounded,
       color: Color(0xFFEC407A),

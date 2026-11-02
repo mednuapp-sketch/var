@@ -94,7 +94,7 @@ class _PregnancyJournalScreenState extends ConsumerState<PregnancyJournalScreen>
         surfaceTintColor: Colors.transparent,
         leading: IconButton(
           icon: Icon(Icons.arrow_back_ios_new_rounded, color: context.appTextPrimary, size: 20),
-          onPressed: () => context.pop(),
+          onPressed: () => context.safeBack(),
         ),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -809,7 +809,7 @@ class _NoProfileView extends StatelessWidget {
       elevation: 0,
       leading: IconButton(
         icon: Icon(Icons.close_rounded, color: context.appTextPrimary),
-        onPressed: () => context.pop(),
+        onPressed: () => context.safeBack(),
       ),
       title: Text('Pregnancy Journal', style: TextStyle(fontFamily: 'Poppins', color: context.appTextPrimary, fontWeight: FontWeight.w700, fontSize: 16)),
     ),

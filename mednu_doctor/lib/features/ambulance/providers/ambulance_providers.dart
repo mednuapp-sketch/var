@@ -1,9 +1,12 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../shared_core/models/app_role.dart';
+import '../../../shared_core/providers/role_providers.dart';
 import '../models/ambulance_request.dart';
 import '../models/trip.dart';
 import '../models/vehicle_profile.dart';
 import '../services/ambulance_profile_service.dart';
 import '../services/ambulance_request_service.dart';
+import '../services/ambulance_trip_tracker.dart';
 
 /// True while the ambulance partner is marked online/available. Backed by
 /// `ambulance_profiles/{uid}.isOnline` — written by AmbulancePresenceService
@@ -254,5 +257,34 @@ final ambulanceDashboardMetricsProvider =
     todayEarnings: todayTrips.fold<num>(0, (s, t) => s + t.fare),
     pendingCount: pending.length,
     rating: vehicle.rating,
+  );
+});
+
+// ── Live trip GPS feed ───────────────────────────────────────────────────
+//
+// Watched once from the app root (main.dart), so the feed follows the TRIP,
+// not whichever screen is open: it starts when this driver has a request in
+// accepted / en route / arrived, retargets if the status changes, and stops
+// when the trip ends. Only accounts that actually hold the ambulance role
+// subscribe to the request stream.
+final ambulanceTripTrackingProvider = Provider<void>((ref) {
+  final isAmbulance = ref.watch(roleEngineProvider.select((s) => s.roles.contains(AppRole.ambulance)));
+  final uid = AmbulanceProfileService.currentUid;
+  if (!isAmbulance || uid == null) {
+    AmbulanceTripTracker.stop();
+    return;
+  }
+
+  final active = ref.watch(activeRequestProvider);
+  if (active == null || active.patientId.isEmpty) {
+    AmbulanceTripTracker.stop();
+    return;
+  }
+
+  AmbulanceTripTracker.start(
+    requestId: active.id,
+    ambulanceId: uid,
+    patientId: active.patientId,
+    status: active.status.name,
   );
 });

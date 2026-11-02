@@ -6,7 +6,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:url_launcher/url_launcher.dart';
+import '../../../shared_core/legal/partner_legal_screen.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
@@ -20,6 +20,8 @@ import '../../../shared_core/models/app_role.dart';
 import '../../ambulance/services/ambulance_profile_service.dart';
 import '../../caregiver/services/caregiver_profile_service.dart';
 import '../../counselling/services/counselling_profile_service.dart';
+import '../../equipment/models/equipment_profile.dart';
+import '../../equipment/services/equipment_profile_service.dart';
 import '../../hospital_billing/services/hospital_profile_service.dart';
 import '../../lab/models/lab_profile.dart';
 import '../../lab/services/lab_profile_service.dart';
@@ -202,12 +204,27 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
 
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
+    final missingDocs = [
+      for (final type in PartnerDocumentType.forRole(_role.firestoreValue))
+        if (_pickedDocs[type.key] == null) type.label,
+    ];
+    if (missingDocs.isNotEmpty) {
+      FeedbackService.showError(
+        context,
+        'Upload all required documents before submitting: ${missingDocs.join(', ')}.',
+      );
+      return;
+    }
     if (_role == AppRole.lab && _selectedServices.isEmpty) {
       FeedbackService.showError(context, 'Select at least one service you offer.');
       return;
     }
     if (_role == AppRole.pharmacy && _selectedCategories.isEmpty) {
       FeedbackService.showError(context, 'Select at least one category you stock.');
+      return;
+    }
+    if (_role == AppRole.equipment && _selectedCategories.isEmpty) {
+      FeedbackService.showError(context, 'Select at least one equipment category you offer.');
       return;
     }
     if (_role == AppRole.hospital && _selectedHospitalId == null) {
@@ -333,6 +350,20 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
           address: _addressCtrl.text.trim(),
           latitude: _addressLat,
           longitude: _addressLng,
+          phone: _phoneCtrl.text.trim(),
+          email: _emailCtrl.text.trim(),
+          deliveryAvailable: _deliveryAvailable,
+          categoriesOffered: _selectedCategories.toList(),
+        );
+      case AppRole.equipment:
+        return EquipmentProfileService.createProfile(
+          uid: uid,
+          name: _nameCtrl.text.trim(),
+          licenseNumber: _licenseCtrl.text.trim(),
+          address: _addressCtrl.text.trim(),
+          latitude: _addressLat,
+          longitude: _addressLng,
+          city: _addressCity,
           phone: _phoneCtrl.text.trim(),
           email: _emailCtrl.text.trim(),
           deliveryAvailable: _deliveryAvailable,
@@ -575,6 +606,54 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
             }).toList(),
           ),
         ];
+      case AppRole.equipment:
+        return [
+          _field(_nameCtrl, 'Shop / Business Name', Icons.storefront_rounded),
+          const SizedBox(height: 14),
+          _field(_licenseCtrl, 'Registration / GST Number', Icons.badge_outlined),
+          const SizedBox(height: 14),
+          _addressPickerField('Shop Address'),
+          const SizedBox(height: 14),
+          _field(_phoneCtrl, 'Contact Phone', Icons.call_outlined,
+              keyboardType: TextInputType.phone, locked: true),
+          const SizedBox(height: 14),
+          _field(_emailCtrl, 'Email Address', Icons.mail_outline_rounded,
+              keyboardType: TextInputType.emailAddress),
+          const SizedBox(height: 6),
+          SwitchListTile.adaptive(
+            contentPadding: EdgeInsets.zero,
+            value: _deliveryAvailable,
+            onChanged: (v) => setState(() => _deliveryAvailable = v),
+            title: Text('Home delivery available',
+                style: AppTextStyles.labelLarge),
+            subtitle: Text(
+              'Turn off if patients must collect equipment from your shop.',
+              style: AppTextStyles.caption,
+            ),
+          ),
+          const SizedBox(height: 16),
+          const Text('Equipment You Offer', style: AppTextStyles.h4),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: kEquipmentCategoryCatalog.map((category) {
+              final selected = _selectedCategories.contains(category);
+              return FilterChip(
+                label: Text(category),
+                selected: selected,
+                onSelected: (v) => setState(() {
+                  v ? _selectedCategories.add(category) : _selectedCategories.remove(category);
+                }),
+                selectedColor: AppColors.primary.withValues(alpha: 0.14),
+                checkmarkColor: AppColors.primary,
+                labelStyle: AppTextStyles.labelMedium.copyWith(
+                  color: selected ? AppColors.primary : AppColors.textSecondary,
+                ),
+              );
+            }).toList(),
+          ),
+        ];
       case AppRole.ambulance:
         return [
           _field(_plateCtrl, 'Vehicle Plate Number',
@@ -603,7 +682,7 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
             spacing: 8,
             runSpacing: 8,
             children: [
-              (value: 'caregiver', label: 'Caregiver — home care & assistance'),
+              (value: 'caregiver', label: 'Nurse — home care & assistance'),
               (value: 'care_assistant', label: 'Care Assistant — hospital escort & errands'),
             ].map((opt) => FilterChip(
                   label: Text(opt.label),
@@ -1012,10 +1091,7 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
   }
 
   Future<void> _openTerms() async {
-    final uri = Uri.parse('https://mednu.in/terms');
-    try {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } catch (_) {}
+    await PartnerLegalScreen.openTerms(context);
   }
 
   /// Mirrors `DoctorRegisterScreen`'s Declaration step — same card layout,

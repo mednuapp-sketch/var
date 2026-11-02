@@ -79,7 +79,6 @@ class LabTestInventoryScreen extends ConsumerWidget {
                     title: const Text('Home sample collection', style: AppTextStyles.labelMedium),
                     value: homeCollectionAvailable,
                     onChanged: (v) => setSheetState(() => homeCollectionAvailable = v),
-                    activeThumbColor: AppColors.primary,
                   ),
                   const SizedBox(height: 16),
                   GradientButton(
@@ -239,7 +238,6 @@ class _TestTile extends StatelessWidget {
                 onChanged: labId.isEmpty
                     ? null
                     : (v) => LabTestInventoryService.setAvailable(labId, item.id, v),
-                activeThumbColor: AppColors.primary,
               ),
             ],
           ),

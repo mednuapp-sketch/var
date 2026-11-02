@@ -106,7 +106,7 @@ class CaregiverVisitService {
         visitId,
         precondition: (d) =>
             (d['caregiverId'] == null || d['caregiverId'] == caregiverId) && d['status'] == 'scheduled',
-        conflictMessage: 'This visit was already assigned to another caregiver.',
+        conflictMessage: 'This visit was already assigned to another nurse.',
         buildUpdate: (d) => {'caregiverId': caregiverId},
       );
 

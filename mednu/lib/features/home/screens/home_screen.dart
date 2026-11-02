@@ -2134,8 +2134,11 @@ class _SignOutButton extends ConsumerWidget {
 class _MedNUBottomNav extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onTap;
+  /// Route of the pushed screen this bar is shown on (SOS / Hospitals), so
+  /// that item renders as active and doesn't re-push itself.
+  final String? activeRoute;
   const _MedNUBottomNav(
-      {required this.currentIndex, required this.onTap});
+      {required this.currentIndex, required this.onTap, this.activeRoute});
 
   @override
   Widget build(BuildContext context) {
@@ -2182,7 +2185,9 @@ class _MedNUBottomNav extends StatelessWidget {
               _NavItem(icon: Icons.home_rounded, label: 'Home', index: 0, currentIndex: currentIndex, onTap: onTap),
               _NavItem(icon: Icons.person_search_rounded, label: 'Doctors', index: 1, currentIndex: currentIndex, onTap: onTap),
               GestureDetector(
-                onTap: () => context.push(AppRoutes.emergency),
+                onTap: () {
+                  if (activeRoute != AppRoutes.emergency) context.push(AppRoutes.emergency);
+                },
                 child: Container(
                   width: 54,
                   height: 54,
@@ -2206,12 +2211,31 @@ class _MedNUBottomNav extends StatelessWidget {
                   ),
                 ),
               ),
-              const _NavPushItem(icon: Icons.local_hospital_rounded, label: 'Hospitals', route: AppRoutes.hospitals),
+              _NavPushItem(icon: Icons.local_hospital_rounded, label: 'Hospitals', route: AppRoutes.hospitals, active: activeRoute == AppRoutes.hospitals),
               _NavItem(icon: Icons.person_outline_rounded, label: 'Profile', index: 2, currentIndex: currentIndex, onTap: onTap),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+/// The home bottom bar for full-screen routes pushed from it (SOS, Hospitals).
+/// Home / Doctors / Profile jump back to the matching home tab.
+class MedNUPushedBottomNav extends ConsumerWidget {
+  final String activeRoute;
+  const MedNUPushedBottomNav({super.key, required this.activeRoute});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return _MedNUBottomNav(
+      currentIndex: -1,
+      activeRoute: activeRoute,
+      onTap: (i) {
+        ref.read(bottomNavIndexProvider.notifier).state = i;
+        context.go(AppRoutes.home);
+      },
     );
   }
 }
@@ -2284,17 +2308,22 @@ class _NavPushItem extends StatelessWidget {
   final IconData icon;
   final String label;
   final String route;
-  const _NavPushItem({required this.icon, required this.label, required this.route});
+  final bool active;
+  const _NavPushItem({required this.icon, required this.label, required this.route, this.active = false});
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final inactiveColor = isDark
-        ? const Color(0xFF4A6080)
-        : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.40);
+    final inactiveColor = active
+        ? AppColors.primary
+        : isDark
+            ? const Color(0xFF4A6080)
+            : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.40);
 
     return GestureDetector(
-      onTap: () => context.push(route),
+      onTap: () {
+        if (!active) context.push(route);
+      },
       behavior: HitTestBehavior.opaque,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),

@@ -2,7 +2,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../../core/constants/app_colors.dart';
@@ -13,6 +12,7 @@ import '../../auth/providers/auth_provider.dart';
 import '../referral_provider.dart';
 import '../referral_service.dart';
 
+import '../../../core/router/app_router.dart';
 // ─────────────────────────────────────────────────────────────────────────────
 //  ReferralScreen
 // ─────────────────────────────────────────────────────────────────────────────
@@ -47,7 +47,7 @@ class ReferralScreen extends ConsumerWidget {
                 color: Colors.white.withValues(alpha: 0.15),
                 shape: const CircleBorder(),
                 child: InkWell(
-                  onTap: () => context.pop(),
+                  onTap: () => context.safeBack(),
                   customBorder: const CircleBorder(),
                   child: const Padding(
                     padding: EdgeInsets.all(8),

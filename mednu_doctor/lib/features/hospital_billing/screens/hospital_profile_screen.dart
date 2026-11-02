@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
@@ -13,6 +12,7 @@ import '../../../core/services/image_upload_service.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/mednu_components.dart';
 import '../../../core/widgets/ux_widgets.dart';
+import '../../../shared_core/legal/partner_legal_screen.dart';
 import '../../../shared_core/shared_core.dart';
 import '../../auth/services/doctor_auth_service.dart';
 import '../../security/services/biometric_service.dart';
@@ -101,13 +101,17 @@ class _HospitalProfileScreenState extends ConsumerState<HospitalProfileScreen> {
   void _syncFromProfile(HospitalProfile profile) {
     if (_synced) return;
     _synced = true;
-    _contactNameCtrl.text = profile.contactName;
+    _contactNameCtrl.text = profile.displayName;
     _phoneCtrl.text = profile.phone;
     _currentPhotoUrl = profile.photoUrl;
   }
 
-  Future<void> _save(String uid) async {
-    final nameError = Validators.name(_contactNameCtrl.text, label: 'Contact name');
+  Future<void> _save(HospitalProfile profile) async {
+    final uid = profile.uid;
+    // Once a Director links the desk to a catalog hospital, the name shown is
+    // the hospital's own and is locked; `contactName` is left untouched.
+    final nameError =
+        profile.isLinked ? null : Validators.name(_contactNameCtrl.text, label: 'Hospital name');
     final phoneError = Validators.phone(_phoneCtrl.text);
     setState(() {
       _nameError = nameError;
@@ -119,7 +123,7 @@ class _HospitalProfileScreenState extends ConsumerState<HospitalProfileScreen> {
     try {
       await HospitalProfileService.updateContactInfo(
         uid,
-        contactName: _contactNameCtrl.text.trim(),
+        contactName: profile.isLinked ? profile.contactName : _contactNameCtrl.text.trim(),
         phone: _phoneCtrl.text.trim(),
       );
       if (!mounted) return;
@@ -388,51 +392,27 @@ class _HospitalProfileScreenState extends ConsumerState<HospitalProfileScreen> {
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              FadeInSlide(child: Center(child: _buildAvatar())),
-              const SizedBox(height: 20),
+              FadeInSlide(
+                child: PartnerProfileHero(
+                  avatar: _buildAvatar(),
+                  name: profile.displayName,
+                  subtitle: 'Billing Desk',
+                  stats: [
+                    PartnerHeroStat(label: 'Status', value: profile.isActive ? 'Active' : 'Pending', icon: Icons.verified_outlined),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
 
               _sectionCard(
                 icon: Icons.badge_rounded,
                 title: 'Contact Details',
                 children: [
-                  _field('Contact Name', _contactNameCtrl, errorText: _nameError),
+                  _field('Hospital Name', _contactNameCtrl,
+                      errorText: _nameError, readOnly: profile.isLinked),
                   const SizedBox(height: 12),
-                  _field('Phone', _phoneCtrl, type: TextInputType.phone, errorText: _phoneError),
-                ],
-              ),
-              const SizedBox(height: 16),
-
-              _sectionCard(
-                icon: Icons.local_hospital_rounded,
-                title: 'Linked Hospital',
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.lock_rounded, size: 15, color: AppColors.textHint),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          profile.isLinked ? profile.hospitalName ?? 'Linked hospital' : 'Awaiting confirmation',
-                          style: const TextStyle(
-                            fontFamily: 'Inter',
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                      ),
-                      StatusBadge(
-                        label: profile.isActive ? 'Active' : 'Pending',
-                        color: profile.isActive ? AppColors.success : AppColors.warning,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Which hospital this billing desk represents, and whether it\'s live, '
-                    'is set by our team once your application is reviewed.',
-                    style: AppTextStyles.caption,
-                  ),
+                  _field('Hospital Reception Phone', _phoneCtrl,
+                      type: TextInputType.phone, errorText: _phoneError),
                 ],
               ),
               const SizedBox(height: 16),
@@ -470,12 +450,12 @@ class _HospitalProfileScreenState extends ConsumerState<HospitalProfileScreen> {
                   _actionRow(
                     icon: Icons.privacy_tip_outlined,
                     label: 'Privacy Policy',
-                    onTap: () => _openUrl(AccountSettingsItems.privacyPolicyUrl),
+                    onTap: () => PartnerLegalScreen.openPrivacy(context),
                   ),
                   _actionRow(
                     icon: Icons.description_outlined,
                     label: 'Terms of Service',
-                    onTap: () => _openUrl(AccountSettingsItems.termsUrl),
+                    onTap: () => PartnerLegalScreen.openTerms(context),
                   ),
                   _actionRow(
                     icon: Icons.logout_rounded,
@@ -499,7 +479,7 @@ class _HospitalProfileScreenState extends ConsumerState<HospitalProfileScreen> {
               GradientButton(
                 label: 'Save Changes',
                 isLoading: _saving,
-                onTap: () => _save(profile.uid),
+                onTap: () => _save(profile),
               ),
               const SizedBox(height: 40),
             ],
@@ -514,6 +494,7 @@ class _HospitalProfileScreenState extends ConsumerState<HospitalProfileScreen> {
     TextEditingController ctrl, {
     TextInputType type = TextInputType.text,
     String? errorText,
+    bool readOnly = false,
   }) =>
       Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -523,7 +504,13 @@ class _HospitalProfileScreenState extends ConsumerState<HospitalProfileScreen> {
           TextField(
             controller: ctrl,
             keyboardType: type,
-            decoration: InputDecoration(errorText: errorText),
+            readOnly: readOnly,
+            decoration: InputDecoration(
+              errorText: errorText,
+              suffixIcon: readOnly
+                  ? const Icon(Icons.lock_rounded, size: 16, color: AppColors.textHint)
+                  : null,
+            ),
           ),
         ],
       );
@@ -559,17 +546,6 @@ class _HospitalProfileScreenState extends ConsumerState<HospitalProfileScreen> {
           ),
         ],
       );
-
-  Future<void> _openUrl(String url) async {
-    try {
-      final ok = await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-      if (!ok && mounted) {
-        FeedbackService.showError(context, 'Could not open the page. Please try again.');
-      }
-    } catch (_) {
-      if (mounted) FeedbackService.showError(context, 'Could not open the page. Please try again.');
-    }
-  }
 
   Future<void> _signOut() async {
     final confirmed = await MedNuConfirmationDialog.show(

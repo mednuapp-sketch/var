@@ -2,13 +2,13 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_text_styles.dart';
 import '../models/bmi_log_model.dart';
 import '../providers/nutrition_provider.dart';
 
+import '../../../../core/router/app_router.dart';
 // ─── BMI data ─────────────────────────────────────────────────────────────────
 
 const _kTips = {
@@ -255,7 +255,7 @@ class _BmiCalculatorScreenState extends ConsumerState<BmiCalculatorScreen>
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
-          onPressed: () => context.pop(),
+          onPressed: () => context.safeBack(),
         ),
         title: const Text('BMI Calculator', style: AppTextStyles.h3),
         centerTitle: true,

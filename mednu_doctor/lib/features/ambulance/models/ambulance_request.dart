@@ -94,6 +94,7 @@ class AmbulanceRequest {
   final String id;
   final EmergencyType type;
   final AmbulanceRequestStatus status;
+  final String patientId;
   final String patientName;
   final String patientPhone;
   final String pickupAddress;
@@ -129,6 +130,7 @@ class AmbulanceRequest {
     required this.id,
     required this.type,
     required this.status,
+    this.patientId = '',
     required this.patientName,
     required this.patientPhone,
     required this.pickupAddress,
@@ -155,6 +157,7 @@ class AmbulanceRequest {
       id: doc.id,
       type: _emergencyTypeFrom(d['emergencyType'] as String?),
       status: _statusFrom(d['status'] as String?),
+      patientId: d['patientId'] as String? ?? '',
       patientName: d['patientName'] as String? ?? 'Patient',
       patientPhone: d['patientPhone'] as String? ?? '',
       pickupAddress: d['pickupAddress'] as String? ?? '',

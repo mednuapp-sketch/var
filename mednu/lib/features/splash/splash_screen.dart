@@ -151,10 +151,13 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
             extra: {'phone': firebaseUser.phoneNumber ?? ''});
         return;
       } catch (_) {
-        // Network failure or timeout — session is left intact so the next
-        // launch can retry; only the destination falls back to login.
+        // Network failure or timeout — the Firebase session is still valid,
+        // we just couldn't verify the profile. Sending a signed-in user to
+        // the login screen here made weak-network launches look like a
+        // logout (forcing a fresh OTP), so continue into the app instead;
+        // screens read from the offline cache and recover once online.
         if (!mounted) return;
-        context.go(onboarded ? AppRoutes.login : AppRoutes.onboarding);
+        context.go(AppRoutes.home);
         return;
       }
     }

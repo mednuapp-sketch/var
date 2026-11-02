@@ -70,6 +70,15 @@ service cloud.firestore {
         get(/databases/$(database)/documents/pharmacy_profiles/$(request.auth.uid)).data.status == 'active';
     }
 
+    // Check if user has an approved Medical Equipment vendor profile. See
+    // isLabPartner() above for why `status == 'active'` is required rather
+    // than mere existence.
+    function isEquipmentPartner() {
+      return isAuth() &&
+        exists(/databases/$(database)/documents/equipment_profiles/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/equipment_profiles/$(request.auth.uid)).data.status == 'active';
+    }
+
     // Check if user has an approved Ambulance partner profile. See
     // isLabPartner() above for why `status == 'active'` is required rather
     // than mere existence.
@@ -255,6 +264,13 @@ service cloud.firestore {
       allow update: if isAdmin() ||
                        (isOwner(doctorId) &&
                         doesNotModify(['status', 'rating', 'totalReviews', 'totalConsultations', 'reviewCount', 'earnings', 'verificationStatus']) &&
+                        // Once live (active), patient-visible profile fields can't be
+                        // self-edited — they go to `pendingChanges` for admin approval
+                        // (admin app: doctor modal "Pending Profile Edit").
+                        (resource.data.status != 'active' ||
+                          doesNotModify(['name', 'bio', 'about', 'fee', 'experience', 'qualifications',
+                                         'clinicName', 'clinicAddress', 'clinicLat', 'clinicLng',
+                                         'clinicCity', 'photoUrl', 'languages'])) &&
                         (!('roles' in request.resource.data) ||
                          !('admin' in request.resource.data.roles)));
       allow delete: if isAdmin();
@@ -1035,6 +1051,91 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // ── Medical Equipment vendor module ─────────────────────────────────────
+    // Same shape as Pharmacy/Lab ("hotel" model): a vendor self-registers
+    // (status 'pending'), admin approves, then the vendor manages its own
+    // menu of equipment under `items`. A Cloud Function (Admin SDK, bypasses
+    // these rules) publishes each item into `services` (type 'equipment',
+    // sourceVendorId) and the vendor itself into `equipment_vendors` while the
+    // vendor is 'active', so patients browse/book it exactly like before.
+    match /equipment_profiles/{vendorId} {
+      allow read: if isAuth() && (
+        isOwner(vendorId) || adminInRoles(['hr']) || resource.data.status == 'active'
+      );
+      // See lab_profiles' create rule for why status/isVerified are fixed.
+      allow create: if isOwner(vendorId) &&
+                       request.resource.data.status == 'pending' &&
+                       request.resource.data.isVerified == false;
+      // See lab_profiles' update rule for the documents lock / HR split.
+      // `acceptingOrders` is a real-time operational toggle ("shop open /
+      // closed"), so it stays instantly self-writable even once live.
+      allow update: if (isOwner(vendorId) &&
+                         (
+                           (resource.data.status != 'active' &&
+                             doesNotModify(['status', 'isVerified', 'rating', 'totalReviews', 'documentVerification', 'documentsVerified'])) ||
+                           (resource.data.status == 'active' &&
+                             request.resource.data.diff(resource.data).affectedKeys()
+                               .hasOnly(['pendingChanges', 'hasPendingChanges', 'updatedAt', 'acceptingOrders']))
+                         )) ||
+                       (adminInRoles(['hr']) &&
+                         request.resource.data.diff(resource.data).affectedKeys()
+                           .hasOnly(['documentVerification', 'documentsVerified', 'updatedAt', 'updatedBy'])) ||
+                       isDirector();
+      allow delete: if isDirector();
+
+      // The vendor's private menu. Nobody else reads it directly — patients
+      // see the published copy in `services`.
+      match /items/{itemId} {
+        allow read, write: if isOwner(vendorId) || isAdmin();
+      }
+    }
+
+    function _equipmentOrderImmutableFields() {
+      return [
+        'sourceCollection', 'sourceId', 'orderType', 'vendorId', 'patientId',
+        'patientName', 'patientPhone', 'deliveryAddress', 'itemId', 'itemName',
+        'mode', 'rentalDays', 'quantity', 'deposit', 'totalAmount',
+        'pricePerDay', 'preferredDate', 'preferredTime', 'notes', 'createdAt'
+      ];
+    }
+
+    // pending -> accepted | rejected; accepted/out_for_delivery can still be
+    // cancelled by the vendor (stock is released server-side); only a rental
+    // can reach 'returned', and only after it was delivered.
+    function _validEquipmentTransition(before, after) {
+      let allowed = {
+        'pending':          ['accepted', 'rejected'],
+        'accepted':         ['out_for_delivery', 'cancelled'],
+        'out_for_delivery': ['delivered', 'cancelled'],
+        'delivered':        ['returned'],
+      };
+      return before == after || (before in allowed && after in allowed[before]);
+    }
+
+    match /equipment_orders/{orderId} {
+      allow read: if isAuth() && (
+        resource.data.patientId == request.auth.uid ||
+        resource.data.vendorId == request.auth.uid ||
+        isAdmin()
+      );
+      allow update: if isAuth() && (
+        isAdmin() ||
+        (resource.data.vendorId == request.auth.uid &&
+          request.resource.data.vendorId == resource.data.vendorId &&
+          doesNotModify(_equipmentOrderImmutableFields()) &&
+          _validEquipmentTransition(resource.data.status, request.resource.data.status) &&
+          (request.resource.data.status != 'returned' || resource.data.mode == 'rent'))
+      );
+      // Created only by the Cloud Function mirror (Admin SDK bypasses rules).
+      allow create, delete: if isAdmin();
+    }
+
+    // Immutable earnings ledger, credited server-side when an order completes.
+    match /equipment_transactions/{txId} {
+      allow read: if isAuth() && (resource.data.vendorId == request.auth.uid || isAdmin());
+      allow write: if false;
+    }
+
     // ── Ambulance partner module ────────────────────────────────────────────
     // Additive collections only — `service_requests` is never written by the
     // ambulance client; a Cloud Function (Admin SDK, bypasses these rules)
@@ -1061,6 +1162,37 @@ service cloud.firestore {
         'arrived':  ['completed'],
       };
       return before == after || (before in allowed && after in allowed[before]);
+    }
+
+    // Live position feed for ONE active trip. The driver app writes it every
+    // few seconds while a request is accepted / en route / arrived; the
+    // patient app streams it for its own request. Unlike
+    // `ambulance_profiles.location` (readable by any signed-in user so the
+    // fleet can be matched), this is readable only by the trip's own patient,
+    // its driver and admin. A Cloud Function deletes it when the trip ends.
+    match /ambulance_live/{requestId} {
+      allow read: if isAuth() && (
+        resource.data.patientId == request.auth.uid ||
+        resource.data.ambulanceId == request.auth.uid ||
+        isAdmin()
+      );
+      // The feed can only be opened by the driver the request is assigned to,
+      // for the patient it belongs to, while the trip is live — so a driver
+      // can't publish a feed against someone else's request.
+      allow create: if isAuth() &&
+                       request.resource.data.ambulanceId == request.auth.uid &&
+                       exists(/databases/$(database)/documents/ambulance_requests/$(requestId)) &&
+                       get(/databases/$(database)/documents/ambulance_requests/$(requestId)).data.ambulanceId == request.auth.uid &&
+                       get(/databases/$(database)/documents/ambulance_requests/$(requestId)).data.patientId == request.resource.data.patientId &&
+                       get(/databases/$(database)/documents/ambulance_requests/$(requestId)).data.status in ['accepted', 'enRoute', 'arrived'];
+      // Updates only re-check ownership (no extra document read per GPS fix).
+      // The doc is deleted when the trip ends, so there is nothing left to
+      // update afterwards.
+      allow update: if isAuth() &&
+                       resource.data.ambulanceId == request.auth.uid &&
+                       request.resource.data.ambulanceId == resource.data.ambulanceId &&
+                       request.resource.data.patientId == resource.data.patientId;
+      allow delete: if isAuth() && (resource.data.ambulanceId == request.auth.uid || isAdmin());
     }
 
     match /ambulance_profiles/{ambulanceId} {

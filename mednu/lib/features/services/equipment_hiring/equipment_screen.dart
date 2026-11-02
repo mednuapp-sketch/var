@@ -67,6 +67,15 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen> with SingleTi
   // header collision fix).
   static const _tabBarHeight = 46.0;
 
+  /// Which partner vendor's menu item this is — present only for items a
+  /// vendor published from its own menu (admin-listed legacy items carry no
+  /// `sourceItemId`). Checkout uses it to route the order to that vendor.
+  Map<String, dynamic> _vendorDetails(Map<String, dynamic> eq) => {
+        if (eq['sourceVendorId'] != null) 'sourceVendorId': eq['sourceVendorId'],
+        if (eq['sourceItemId'] != null) 'sourceItemId': eq['sourceItemId'],
+        if (eq['vendorName'] != null) 'vendorName': eq['vendorName'],
+      };
+
   void _addRentToCart(Map<String, dynamic> eq, int days) {
     final pricePerDay = eq['price'] as int;
     final deposit = eq['deposit'] as int;
@@ -82,6 +91,7 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen> with SingleTi
             'rentalDays':    days,
             'deposit':       deposit,
             'deliveryFree':  true,
+            ..._vendorDetails(eq),
           },
         );
     if (mounted) FeedbackService.showSuccess(context, '${eq['name']} added to cart');
@@ -101,6 +111,7 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen> with SingleTi
             'purchasePrice':  purchasePrice,
             'deposit':        deposit,
             'deliveryFree':   true,
+            ..._vendorDetails(eq),
           },
         );
     if (mounted) FeedbackService.showSuccess(context, '${eq['name']} added to cart');
@@ -181,7 +192,7 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen> with SingleTi
             backgroundColor: AppColors.primaryDark,
             leading: IconButton(
               icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-              onPressed: () => context.pop(),
+              onPressed: () => context.safeBack(),
             ),
             actions: const [CartBadgeAction()],
             bottom: PreferredSize(
@@ -306,6 +317,13 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen> with SingleTi
                     'deposit':       (d['deposit'] as num?)?.toInt() ?? 0,
                     'description':   (d['description'] as String? ?? '').trim(),
                     'imageUrl':      (d['imageUrl'] as String? ?? '').trim(),
+                    // Live from the vendor's menu. Legacy admin-listed items
+                    // have neither field, which reads as "always available".
+                    'isAvailable':   (d['isAvailable'] as bool?) ?? true,
+                    'stock':         (d['stock'] as num?)?.toInt(),
+                    'sourceVendorId': d['sourceVendorId'],
+                    'sourceItemId':  d['sourceItemId'],
+                    'vendorName':    d['vendorName'],
                     'color':         _colorAt(e.key),
                     'icon':          _iconAt(e.key),
                   };
@@ -383,6 +401,10 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen> with SingleTi
     final desc = eq['description'] as String;
     final imageUrl = eq['imageUrl'] as String;
     final isRent = _mode == 'rent';
+    final stock = eq['stock'] as int?;
+    final available = eq['isAvailable'] as bool;
+    final soldOut = !available || (stock != null && stock <= 0);
+    final lowStock = !soldOut && stock != null && stock <= 2;
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -432,11 +454,24 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen> with SingleTi
           )
         else if (desc.isNotEmpty)
           Text(desc, style: AppTextStyles.caption, maxLines: 1, overflow: TextOverflow.ellipsis),
+        if (soldOut || lowStock)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              soldOut ? 'Sold out' : 'Only $stock left',
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: soldOut ? AppColors.error : const Color(0xFFE65100),
+              ),
+            ),
+          ),
         const Spacer(),
         SizedBox(
           width: double.infinity,
           child: ElevatedButton(
-            onPressed: () => isRent ? _showRentSheet(eq) : _addBuyToCart(eq),
+            onPressed: soldOut ? null : () => isRent ? _showRentSheet(eq) : _addBuyToCart(eq),
             style: ElevatedButton.styleFrom(
               backgroundColor: color,
               minimumSize: const Size(double.infinity, 32),
@@ -444,7 +479,8 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen> with SingleTi
               elevation: 0,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
-            child: Text(isRent ? 'Rent Now' : 'Buy Now', style: const TextStyle(fontSize: 12, fontFamily: 'Poppins')),
+            child: Text(soldOut ? 'Sold out' : (isRent ? 'Rent Now' : 'Buy Now'),
+                style: const TextStyle(fontSize: 12, fontFamily: 'Poppins')),
           ),
         ),
       ]),

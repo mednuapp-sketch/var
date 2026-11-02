@@ -214,7 +214,7 @@ class _PhysiotherapistProfileScreenState extends State<PhysiotherapistProfileScr
             return Scaffold(
               backgroundColor: context.appBackground,
               appBar: AppBar(
-                leading: IconButton(icon: const Icon(Icons.arrow_back_ios_new_rounded), onPressed: () => context.pop()),
+                leading: IconButton(icon: const Icon(Icons.arrow_back_ios_new_rounded), onPressed: () => context.safeBack()),
               ),
               body: const AppEmptyState(
                 icon: Icons.person_off_outlined,
@@ -232,7 +232,7 @@ class _PhysiotherapistProfileScreenState extends State<PhysiotherapistProfileScr
                 backgroundColor: _kTealDark,
                 leading: IconButton(
                   icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-                  onPressed: () => context.pop(),
+                  onPressed: () => context.safeBack(),
                 ),
                 flexibleSpace: FlexibleSpaceBar(
                   background: Container(

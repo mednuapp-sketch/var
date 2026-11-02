@@ -1,9 +1,13 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../shared_core/providers/role_providers.dart';
+import '../../auth/screens/partner_role_select_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../../shared_core/legal/partner_legal_screen.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
@@ -166,17 +170,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _setNotifPref(String key, bool value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(key, value);
-  }
-
-  Future<void> _openUrl(String url) async {
-    final uri = Uri.parse(url);
-    try {
-      if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-        _showUrlError();
-      }
-    } catch (_) {
-      _showUrlError();
-    }
   }
 
   void _showUrlError() {
@@ -370,6 +363,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ),
                           _divider(),
                           _SettingsTile(
+                            icon: Icons.add_circle_outline_rounded,
+                            iconColor: AppColors.primary,
+                            title: 'Add another service',
+                            onTap: () {
+                              final roles = ProviderScope.containerOf(context)
+                                  .read(roleEngineProvider)
+                                  .roles;
+                              Navigator.of(context).push(MaterialPageRoute(
+                                builder: (_) => PartnerRoleSelectScreen(existingRoles: roles.toSet()),
+                              ));
+                            },
+                          ),
+                          _divider(),
+                          _SettingsTile(
                             icon: Icons.bug_report_outlined,
                             iconColor: AppColors.warning,
                             title: 'Report a Problem',
@@ -406,15 +413,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             icon: Icons.privacy_tip_outlined,
                             iconColor: const Color(0xFF1565C0),
                             title: 'Privacy Policy',
-                            onTap: () =>
-                                _openUrl('https://mednu.in/partner-privacy-policy'),
+                            onTap: () => PartnerLegalScreen.openPrivacy(context),
                           ),
                           _divider(),
                           _SettingsTile(
                             icon: Icons.description_outlined,
                             iconColor: const Color(0xFF2E7D32),
                             title: 'Terms of Service',
-                            onTap: () => _openUrl('https://mednu.in/terms'),
+                            onTap: () => PartnerLegalScreen.openTerms(context),
                           ),
                           _divider(),
                           _SettingsTile(

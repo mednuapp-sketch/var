@@ -877,11 +877,11 @@ class _DayToggle extends StatelessWidget {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 250),
         curve: Curves.easeInOut,
-        width: 46,
-        height: 26,
+        width: 52,
+        height: 32,
         padding: const EdgeInsets.all(3),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(13),
+          borderRadius: BorderRadius.circular(16),
           gradient: value
               ? const LinearGradient(
                   colors: [AppColors.primary, AppColors.secondary],
@@ -889,7 +889,12 @@ class _DayToggle extends StatelessWidget {
                   end: Alignment.centerRight,
                 )
               : null,
-          color: value ? null : const Color(0xFFDDE1E7),
+          color: value ? null : const Color(0xFFEDEDED),
+          // Visible outline when off so the control never blends into a card.
+          border: Border.all(
+            color: value ? AppColors.primary : const Color(0xFF9E9E9E),
+            width: 1.5,
+          ),
           boxShadow: value
               ? [
                   BoxShadow(
@@ -907,10 +912,10 @@ class _DayToggle extends StatelessWidget {
           child: Container(
             width: 20,
             height: 20,
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: Colors.white,
-              boxShadow: [
+              color: value ? Colors.white : const Color(0xFF8A8A8A),
+              boxShadow: const [
                 BoxShadow(
                   color: Colors.black12,
                   blurRadius: 4,
@@ -918,6 +923,10 @@ class _DayToggle extends StatelessWidget {
                 ),
               ],
             ),
+            child: value
+                ? const Icon(Icons.check_rounded,
+                    size: 14, color: AppColors.primary)
+                : null,
           ),
         ),
       ),

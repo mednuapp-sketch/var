@@ -113,11 +113,11 @@ class _CaregiversScreenState extends ConsumerState<CaregiversScreen> {
     final rateNum    = (raw['ratePerDay']  as num?)?.toInt() ?? 0;
     final rateHour   = (raw['ratePerHour'] as num?)?.toInt() ?? (rateNum > 0 ? (rateNum ~/ 8) : 0);
     final rate12     = (raw['ratePer12Hr'] as num?)?.toInt() ?? (rateHour > 0 ? rateHour * 12 : 0);
-    final type       = raw['type'] as String? ?? 'Caregiver';
+    final type       = raw['type'] as String? ?? 'Nurse';
     final isVerified = raw['isVerified'] as bool? ?? false;
     return {
       'id':         id,
-      'name':       raw['name']       as String? ?? 'Caregiver',
+      'name':       raw['name']       as String? ?? 'Nurse',
       'exp':        raw['experience'] as String? ?? raw['exp'] as String? ?? '',
       'rating':     (raw['rating']    as num?)?.toDouble() ?? 0.0,
       'specialty':  raw['specialty']  as String? ?? 'Home Care',
@@ -405,8 +405,8 @@ class _CaregiversScreenState extends ConsumerState<CaregiversScreen> {
                                   children: [
                                     Icon(Icons.elderly_rounded, color: Colors.white, size: AppSpacing.headerIconSize(context)),
                                     SizedBox(height: AppSpacing.headerIconGap(context)),
-                                    const Text('Caregivers', style: AppTextStyles.onPrimaryH2),
-                                    const Text('Trained & verified home caregivers', style: AppTextStyles.onPrimaryBody),
+                                    const Text('Nurses', style: AppTextStyles.onPrimaryH2),
+                                    const Text('Trained & verified home nurses', style: AppTextStyles.onPrimaryBody),
                                   ],
                                 ),
                               ),
@@ -489,7 +489,7 @@ class _CaregiversScreenState extends ConsumerState<CaregiversScreen> {
                     else if (snap.hasError)
                       AppEmptyState(
                         icon: Icons.wifi_off_rounded,
-                        title: 'Could not load caregivers',
+                        title: 'Could not load nurses',
                         message: 'Check your internet connection and try again.',
                         actionLabel: 'Retry',
                         onAction: () => setState(() {}),
@@ -497,8 +497,8 @@ class _CaregiversScreenState extends ConsumerState<CaregiversScreen> {
                     else if (caregivers.isEmpty)
                       const AppEmptyState(
                         icon: Icons.health_and_safety_outlined,
-                        title: 'No caregivers available',
-                        message: 'Caregiver listings will appear here soon.',
+                        title: 'No nurses available',
+                        message: 'Nurse listings will appear here soon.',
                       )
                     else if (filtered.isEmpty)
                       AppEmptyState(
@@ -725,7 +725,7 @@ class _CaregiverFilterSheetState extends State<_CaregiverFilterSheet> {
             ),
           ),
           Row(children: [
-            const Text('Filter Caregivers', style: AppTextStyles.h3),
+            const Text('Filter Nurses', style: AppTextStyles.h3),
             const Spacer(),
             TextButton(
               onPressed: () => setState(
@@ -736,7 +736,7 @@ class _CaregiverFilterSheetState extends State<_CaregiverFilterSheet> {
           const SizedBox(height: 16),
 
           // Caregiver type
-          const Text('Caregiver Type', style: AppTextStyles.labelLarge),
+          const Text('Nurse Type', style: AppTextStyles.labelLarge),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8, runSpacing: 8,

@@ -90,7 +90,7 @@ class BookingSummaryScreen extends StatelessWidget {
                       if (success) {
                         context.go(AppRoutes.appointment);
                       } else {
-                        context.pop();
+                        context.safeBack();
                       }
                     },
                     style: ElevatedButton.styleFrom(

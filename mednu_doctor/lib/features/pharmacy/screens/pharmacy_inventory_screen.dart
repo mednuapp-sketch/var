@@ -95,7 +95,6 @@ class PharmacyInventoryScreen extends ConsumerWidget {
                   title: const Text('Requires prescription', style: AppTextStyles.labelMedium),
                   value: requiresPrescription,
                   onChanged: (v) => setSheetState(() => requiresPrescription = v),
-                  activeThumbColor: AppColors.primary,
                 ),
                 const SizedBox(height: 16),
                 GradientButton(

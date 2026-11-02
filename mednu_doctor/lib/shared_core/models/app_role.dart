@@ -7,7 +7,7 @@ import '../../core/constants/app_colors.dart';
 /// no `roles` field, so every reader in this layer treats a missing/absent
 /// value as `[AppRole.doctor]` rather than throwing. No existing document
 /// needs to be migrated for the app to keep working exactly as before.
-enum AppRole { doctor, ambulance, pharmacy, lab, caregiver, physiotherapist, counsellor, nutritionist, hospital, admin }
+enum AppRole { doctor, ambulance, pharmacy, lab, equipment, caregiver, physiotherapist, counsellor, nutritionist, hospital, admin }
 
 extension AppRoleX on AppRole {
   /// Value stored in Firestore (`roles` / `activeRole` fields). Kept
@@ -23,6 +23,8 @@ extension AppRoleX on AppRole {
         return 'pharmacy';
       case AppRole.lab:
         return 'lab';
+      case AppRole.equipment:
+        return 'equipment';
       case AppRole.caregiver:
         return 'caregiver';
       case AppRole.physiotherapist:
@@ -48,8 +50,10 @@ extension AppRoleX on AppRole {
         return 'Pharmacy';
       case AppRole.lab:
         return 'Lab & Diagnostics';
+      case AppRole.equipment:
+        return 'Medical Equipment';
       case AppRole.caregiver:
-        return 'Caregiver';
+        return 'Nurse';
       case AppRole.physiotherapist:
         return 'Physiotherapist';
       case AppRole.counsellor:
@@ -76,6 +80,8 @@ extension AppRoleX on AppRole {
         return 'Fulfil prescriptions';
       case AppRole.lab:
         return 'Run tests & share reports';
+      case AppRole.equipment:
+        return 'Rent & sell medical equipment';
       case AppRole.caregiver:
         return 'Home care & assistance';
       case AppRole.physiotherapist:
@@ -101,6 +107,8 @@ extension AppRoleX on AppRole {
         return Icons.local_pharmacy_rounded;
       case AppRole.lab:
         return Icons.biotech_rounded;
+      case AppRole.equipment:
+        return Icons.health_and_safety_rounded;
       case AppRole.caregiver:
         return Icons.volunteer_activism_rounded;
       case AppRole.physiotherapist:
@@ -126,6 +134,8 @@ extension AppRoleX on AppRole {
         return const Color(0xFF00897B);
       case AppRole.lab:
         return const Color(0xFF1565C0);
+      case AppRole.equipment:
+        return const Color(0xFFEF6C00);
       case AppRole.caregiver:
         return const Color(0xFF6A1B9A);
       case AppRole.physiotherapist:
@@ -151,6 +161,8 @@ extension AppRoleX on AppRole {
         return AppRole.pharmacy;
       case 'lab':
         return AppRole.lab;
+      case 'equipment':
+        return AppRole.equipment;
       case 'caregiver':
         return AppRole.caregiver;
       case 'physiotherapist':

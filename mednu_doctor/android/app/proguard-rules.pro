@@ -87,3 +87,7 @@
 -dontwarn com.google.android.play.core.splitcompat.**
 -dontwarn com.google.android.play.core.splitinstall.**
 -dontwarn com.google.android.play.core.tasks.**
+
+# SafetyNet App Check provider is excluded (release uses Play Integrity)
+-dontwarn com.google.firebase.appcheck.safetynet.**
+-dontwarn com.google.android.gms.safetynet.**

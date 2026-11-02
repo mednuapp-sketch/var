@@ -181,4 +181,46 @@ class ImageUploadService {
       await _storage.ref().child('$profileCollection/$uid/profile.jpg').delete();
     } catch (_) {}
   }
+
+  /// Uploads one equipment menu photo to
+  /// `equipment_profiles/{uid}/items/{itemId}.jpg` and returns its permanent,
+  /// token-free download URL (see storage.rules — public read, owner write).
+  static Future<String> uploadEquipmentItemImage({
+    required File imageFile,
+    required String uid,
+    required String itemId,
+    void Function(double progress)? onProgress,
+  }) async {
+    final ref = _storage.ref().child('equipment_profiles/$uid/items/$itemId.jpg');
+    final task = ref.putFile(
+      imageFile,
+      SettableMetadata(contentType: 'image/jpeg'),
+    );
+
+    if (onProgress != null) {
+      task.snapshotEvents.listen((snap) {
+        if (snap.totalBytes > 0) {
+          onProgress(snap.bytesTransferred / snap.totalBytes);
+        }
+      });
+    }
+
+    final snapshot = await task;
+    if (snapshot.state != TaskState.success) {
+      throw Exception('Upload failed (state: ${snapshot.state}).');
+    }
+
+    final uri = Uri.parse(await ref.getDownloadURL());
+    return uri.replace(queryParameters: {'alt': 'media'}).toString();
+  }
+
+  /// Removes an equipment menu photo. Silently ignores errors.
+  static Future<void> deleteEquipmentItemImage({
+    required String uid,
+    required String itemId,
+  }) async {
+    try {
+      await _storage.ref().child('equipment_profiles/$uid/items/$itemId.jpg').delete();
+    } catch (_) {}
+  }
 }

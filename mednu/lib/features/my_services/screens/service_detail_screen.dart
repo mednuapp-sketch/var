@@ -127,7 +127,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
       expandedHeight: 190,
       leading: IconButton(
         icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-        onPressed: () => context.pop(),
+        onPressed: () => context.safeBack(),
       ),
       actions: [
         IconButton(

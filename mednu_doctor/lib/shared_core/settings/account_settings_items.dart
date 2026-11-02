@@ -1,11 +1,11 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../../core/router/app_router.dart';
 import '../../core/services/feedback_service.dart';
 import '../../core/widgets/mednu_components.dart';
 import '../services/role_prefs.dart';
+import '../legal/partner_legal_screen.dart';
 import 'account_deletion_service.dart';
 import 'settings_models.dart';
 
@@ -18,30 +18,17 @@ class AccountSettingsItems {
   static const privacyPolicyUrl = 'https://mednu.in/partner-privacy-policy';
   static const termsUrl = 'https://mednu.in/terms';
 
-  static Future<void> _open(BuildContext context, String url) async {
-    try {
-      final ok = await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-      if (!ok && context.mounted) {
-        FeedbackService.showError(context, 'Could not open the page. Please try again.');
-      }
-    } catch (_) {
-      if (context.mounted) {
-        FeedbackService.showError(context, 'Could not open the page. Please try again.');
-      }
-    }
-  }
-
   /// Privacy Policy + Terms of Service rows — append to the "About" section.
   static List<SettingsItemData> legal(BuildContext context) => [
         SettingsItemData(
           icon: Icons.privacy_tip_outlined,
           title: 'Privacy Policy',
-          onTap: () => _open(context, privacyPolicyUrl),
+          onTap: () => PartnerLegalScreen.openPrivacy(context),
         ),
         SettingsItemData(
           icon: Icons.description_outlined,
           title: 'Terms of Service',
-          onTap: () => _open(context, termsUrl),
+          onTap: () => PartnerLegalScreen.openTerms(context),
         ),
       ];
 

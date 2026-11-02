@@ -94,7 +94,7 @@ class _PaymentTile extends StatelessWidget {
     'medicine': 'Medicine Order',
     'pharmacy': 'Pharmacy',
     'ambulance': 'Ambulance',
-    'caregiver': 'Caregiver Visit',
+    'caregiver': 'Nurse Visit',
   };
 
   @override

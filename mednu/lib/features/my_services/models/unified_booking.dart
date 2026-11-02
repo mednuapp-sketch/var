@@ -389,7 +389,7 @@ class UnifiedBooking {
       case 'diagnostics':
       case 'diagnostic':         return 'Diagnostics';
       case 'caregiver':
-      case 'caregivers':         return 'Caregiver';
+      case 'caregivers':         return 'Nurse';
       case 'care_assistant':     return 'Care Assistant';
       case 'physiotherapy':
       case 'physio':             return 'Physiotherapy';

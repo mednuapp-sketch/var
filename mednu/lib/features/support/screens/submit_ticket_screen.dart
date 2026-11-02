@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -9,6 +8,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/r.dart';
 import '../../../core/widgets/ux_widgets.dart';
 
+import '../../../core/router/app_router.dart';
 class SubmitTicketScreen extends StatefulWidget {
   const SubmitTicketScreen({super.key});
 
@@ -144,7 +144,7 @@ class _SubmitTicketScreenState extends State<SubmitTicketScreen> {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-          onPressed: () => context.pop(),
+          onPressed: () => context.safeBack(),
         ),
         flexibleSpace: Container(
           decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
@@ -193,7 +193,7 @@ class _SubmitTicketScreenState extends State<SubmitTicketScreen> {
             AppButton(
               label: 'Back to Help',
               icon: Icons.arrow_back_rounded,
-              onPressed: () => context.pop(),
+              onPressed: () => context.safeBack(),
             ),
           ],
         ),

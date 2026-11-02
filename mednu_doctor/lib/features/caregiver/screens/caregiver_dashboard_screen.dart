@@ -29,7 +29,7 @@ class CaregiverDashboardScreen extends ConsumerWidget {
 
     return SharedAppShell(
       currentRoute: AppRoutes.caregiverDashboard,
-      title: 'Caregiver Dashboard',
+      title: 'Nurse Dashboard',
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
         children: [

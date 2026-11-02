@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../models/doctor_review.dart';
 import '../services/review_service.dart';
 
+import '../../../core/router/app_router.dart';
 class SubmitReviewScreen extends StatefulWidget {
   final String appointmentId;
   final String doctorId;
@@ -175,7 +175,7 @@ class _SubmitReviewScreenState extends State<SubmitReviewScreen>
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.close_rounded, color: Colors.white),
-          onPressed: () => context.pop(),
+          onPressed: () => context.safeBack(),
         ),
       ),
       body: SingleChildScrollView(

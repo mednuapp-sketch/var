@@ -271,7 +271,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       if (mounted) {
         FeedbackService.dismiss(context);
         FeedbackService.showSuccess(context, 'Profile updated successfully');
-        context.pop();
+        context.safeBack();
       }
     } catch (e) {
       await OperationLogger.logError(
@@ -312,7 +312,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             foregroundColor: Colors.white,
             leading: IconButton(
               icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-              onPressed: () => context.pop(),
+              onPressed: () => context.safeBack(),
             ),
             actions: [
               Padding(

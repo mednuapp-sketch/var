@@ -38,7 +38,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
     'medicine': 'Medicine Order',
     'pharmacy': 'Pharmacy',
     'ambulance': 'Ambulance Service',
-    'caregiver': 'Caregiver Visit',
+    'caregiver': 'Nurse Visit',
   };
 
   String _dateStr(Timestamp? ts) =>

@@ -1322,7 +1322,7 @@ class _NotifTile extends ConsumerWidget {
       'lab': 'Lab Test',
       'ambulance': 'Ambulance',
       'home_care': 'Home Care',
-      'caregiver': 'Caregiver',
+      'caregiver': 'Nurse',
       'physiotherapy': 'Physio',
       'hospital': 'Hospital',
       'pregnancy': 'Pregnancy',

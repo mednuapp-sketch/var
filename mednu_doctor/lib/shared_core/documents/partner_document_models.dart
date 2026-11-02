@@ -26,6 +26,15 @@ class PartnerDocumentType {
     PartnerDocumentType('address_proof', 'Address Proof'),
   ];
 
+  /// A medical-equipment vendor rents/sells devices straight to patients, so
+  /// admin needs proof the business is real (trade/GST registration) and who
+  /// is behind it (owner ID) before its menu goes live.
+  static const equipment = <PartnerDocumentType>[
+    PartnerDocumentType('business_registration', 'Business / Trade Registration (GST / Shop Act)'),
+    PartnerDocumentType('owner_id', 'Owner Government ID Proof'),
+    PartnerDocumentType('address_proof', 'Shop Address Proof'),
+  ];
+
   static const ambulance = <PartnerDocumentType>[
     PartnerDocumentType('vehicle_registration', 'Vehicle Registration'),
     PartnerDocumentType('driver_license', 'Driver License'),
@@ -36,7 +45,7 @@ class PartnerDocumentType {
   ];
 
   static const caregiver = <PartnerDocumentType>[
-    PartnerDocumentType('caregiver_id', 'Caregiver ID'),
+    PartnerDocumentType('caregiver_id', 'Nurse ID'),
     PartnerDocumentType('certificates', 'Certificates'),
     PartnerDocumentType('address_proof', 'Address Proof'),
   ];
@@ -79,8 +88,19 @@ class PartnerDocumentType {
     PartnerDocumentType('hospital_contact_id', 'Contact Person Government ID'),
   ];
 
+  /// Labels of the required documents for [role] that have no uploaded file
+  /// in [documents] (the `{role}_profiles/{uid}.documents` map). Empty means
+  /// the profile is complete enough to go to admin review.
+  static List<String> missingFor(String role, Object? documents) {
+    final map = documents is Map ? documents : const {};
+    return [
+      for (final type in forRole(role))
+        if (PartnerDocumentMeta.fromMap(map[type.key]) == null) type.label,
+    ];
+  }
+
   /// `role` is the same short token used for the Storage prefix and the
-  /// `{role}_profiles` collection: 'lab' | 'pharmacy' | 'ambulance' |
+  /// `{role}_profiles` collection: 'lab' | 'pharmacy' | 'equipment' | 'ambulance' |
   /// 'caregiver' | 'counsellor' | 'physiotherapist' | 'nutritionist' |
   /// 'hospital'.
   static List<PartnerDocumentType> forRole(String role) {
@@ -89,6 +109,8 @@ class PartnerDocumentType {
         return lab;
       case 'pharmacy':
         return pharmacy;
+      case 'equipment':
+        return equipment;
       case 'ambulance':
         return ambulance;
       case 'caregiver':

@@ -281,17 +281,51 @@ class AppTheme {
         modalElevation: 8,
       ),
 
+      // ── Checkbox / Radio ────────────────────────────────
+      // Clear states: filled brand box + white tick when on, outlined box when off.
+      checkboxTheme: CheckboxThemeData(
+        fillColor: WidgetStateProperty.resolveWith((s) =>
+            s.contains(WidgetState.selected) ? AppColors.primary : Colors.transparent),
+        checkColor: WidgetStateProperty.all(Colors.white),
+        side: WidgetStateBorderSide.resolveWith((s) => BorderSide(
+            width: 1.8,
+            color: s.contains(WidgetState.selected)
+                ? AppColors.primary
+                : const Color(0xFF8A8A8A))),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
+      ),
+      radioTheme: RadioThemeData(
+        fillColor: WidgetStateProperty.resolveWith((s) =>
+            s.contains(WidgetState.selected)
+                ? AppColors.primary
+                : const Color(0xFF8A8A8A)),
+      ),
+
       // ── Switch ──────────────────────────────────────────
       switchTheme: SwitchThemeData(
-        thumbColor: WidgetStateProperty.resolveWith(
-          (s) => s.contains(WidgetState.selected) ? Colors.white : Colors.white,
-        ),
-        trackColor: WidgetStateProperty.resolveWith(
-          (s) => s.contains(WidgetState.selected)
+        // Unmistakable states: ON = solid brand track + white thumb with a
+        // check; OFF = pale track, grey outline, small grey thumb, no icon.
+        thumbColor: WidgetStateProperty.resolveWith((s) {
+          if (s.contains(WidgetState.disabled)) return const Color(0xFFBDBDBD);
+          return s.contains(WidgetState.selected)
+              ? Colors.white
+              : const Color(0xFF8A8A8A);
+        }),
+        trackColor: WidgetStateProperty.resolveWith((s) {
+          if (s.contains(WidgetState.disabled)) return const Color(0xFFEEEEEE);
+          return s.contains(WidgetState.selected)
               ? AppColors.primary
-              : AppColors.border,
-        ),
-        trackOutlineColor: WidgetStateProperty.all(Colors.transparent),
+              : const Color(0xFFEDEDED);
+        }),
+        trackOutlineColor: WidgetStateProperty.resolveWith((s) =>
+            s.contains(WidgetState.selected)
+                ? AppColors.primary
+                : const Color(0xFF9E9E9E)),
+        trackOutlineWidth: WidgetStateProperty.all(1.5),
+        thumbIcon: WidgetStateProperty.resolveWith((s) =>
+            s.contains(WidgetState.selected)
+                ? const Icon(Icons.check_rounded, color: AppColors.primary)
+                : null),
       ),
 
       // ── ListTile ────────────────────────────────────────

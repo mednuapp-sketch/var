@@ -27,6 +27,7 @@ import 'shared_core/models/app_role.dart';
 import 'shared_core/providers/role_providers.dart';
 import 'features/lab/providers/lab_providers.dart';
 import 'features/pharmacy/providers/pharmacy_providers.dart';
+import 'features/equipment/providers/equipment_providers.dart';
 import 'features/ambulance/providers/ambulance_providers.dart';
 import 'features/caregiver/providers/caregiver_providers.dart';
 import 'features/physiotherapy/providers/physio_providers.dart';
@@ -450,6 +451,9 @@ class _MedNUDoctorAppState extends ConsumerState<MedNUDoctorApp>
           ref.invalidate(availableBookingsProvider);
           ref.invalidate(sampleCollectionQueueProvider);
           break;
+        case AppRole.equipment:
+          ref.invalidate(equipmentOrdersProvider);
+          break;
         case AppRole.pharmacy:
           ref.invalidate(availableOrdersProvider);
           ref.invalidate(prescriptionVerificationQueueProvider);
@@ -495,6 +499,9 @@ class _MedNUDoctorAppState extends ConsumerState<MedNUDoctorApp>
   @override
   Widget build(BuildContext context) {
     final router = ref.watch(appRouterProvider);
+    // Keeps an ambulance driver's live trip GPS feed running independent of
+    // which screen is open (no-op for every other role).
+    ref.watch(ambulanceTripTrackingProvider);
     return MaterialApp.router(
       title:                    'MedNU Service',
       debugShowCheckedModeBanner: false,

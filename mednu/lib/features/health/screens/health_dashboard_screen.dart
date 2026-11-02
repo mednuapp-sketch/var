@@ -70,7 +70,7 @@ class _FullPageLoader extends StatelessWidget {
           leading: IconButton(
             icon:
                 const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-            onPressed: () => context.pop(),
+            onPressed: () => context.safeBack(),
           ),
         ),
         body: SingleChildScrollView(
@@ -113,7 +113,7 @@ class _NotSignedIn extends StatelessWidget {
           leading: IconButton(
             icon:
                 const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-            onPressed: () => context.pop(),
+            onPressed: () => context.safeBack(),
           ),
         ),
         body: Center(
@@ -266,7 +266,7 @@ class _DashboardContent extends ConsumerWidget {
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
                 icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-                onPressed: () => context.pop(),
+                onPressed: () => context.safeBack(),
               ),
               SizedBox(height: R.h(context, 4)),
               Row(children: [

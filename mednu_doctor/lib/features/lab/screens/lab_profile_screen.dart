@@ -374,7 +374,16 @@ class _LabProfileScreenState extends ConsumerState<LabProfileScreen> {
             padding: const EdgeInsets.all(16),
             children: [
               if (profile.hasPendingChanges) const PendingReviewBanner(),
-              Center(child: _buildAvatar()),
+              PartnerProfileHero(
+                avatar: _buildAvatar(),
+                name: profile.name,
+                subtitle: profile.licenseNumber.isEmpty ? null : 'License ${profile.licenseNumber}',
+                stats: [
+                  PartnerHeroStat(label: 'Rating', value: profile.rating.toStringAsFixed(1), icon: Icons.star_rounded),
+                  PartnerHeroStat(label: 'Reviews', value: '${profile.totalReviews}', icon: Icons.rate_review_outlined),
+                  PartnerHeroStat(label: 'Status', value: profile.status == 'active' ? 'Active' : 'Pending', icon: Icons.verified_outlined),
+                ],
+              ),
               const SizedBox(height: 16),
               PremiumCard(
                 child: Column(

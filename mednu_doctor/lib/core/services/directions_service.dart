@@ -30,14 +30,21 @@ class DirectionsService {
   /// error) — callers keep showing their last-known route/ETA rather than
   /// clearing the map, since a single failed refresh on a live-tracking
   /// screen shouldn't blank out what the user was just looking at.
+  ///
+  /// Give either [destination] (a coordinate) or [destinationAddress] (free
+  /// text, e.g. a hospital name — the Directions API geocodes it itself).
   static Future<RouteInfo?> getRoute({
     required LatLng origin,
-    required LatLng destination,
+    LatLng? destination,
+    String? destinationAddress,
   }) async {
+    assert(destination != null || (destinationAddress ?? '').trim().isNotEmpty);
     try {
       final res = await _dio.get(_url, queryParameters: {
         'origin': '${origin.latitude},${origin.longitude}',
-        'destination': '${destination.latitude},${destination.longitude}',
+        'destination': destination != null
+            ? '${destination.latitude},${destination.longitude}'
+            : destinationAddress!.trim(),
         'mode': 'driving',
         'key': _kApiKey,
       });

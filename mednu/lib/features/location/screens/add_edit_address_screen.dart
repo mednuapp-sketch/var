@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
-import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../../../core/constants/app_colors.dart';
 import '../models/saved_address.dart';
@@ -11,6 +10,7 @@ import '../providers/saved_addresses_provider.dart';
 import 'map_location_picker_screen.dart';
 import '../../home/providers/location_provider.dart';
 
+import '../../../core/router/app_router.dart';
 // ─────────────────────────────────────────────────────────────────────────────
 // Add / Edit Address Screen
 // Address type segmented button (Home/Work/Other)
@@ -301,7 +301,7 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
         surfaceTintColor: Colors.transparent,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
-          onPressed: () => context.pop(),
+          onPressed: () => context.safeBack(),
         ),
         title: Text(
           _isEdit ? 'Edit Address' : 'Add Address',
@@ -617,7 +617,6 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
                   ),
                   Switch.adaptive(
                     value: _isDefault,
-                    activeThumbColor: AppColors.primary,
                     onChanged: (v) => setState(() => _isDefault = v),
                   ),
                 ],

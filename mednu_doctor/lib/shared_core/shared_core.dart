@@ -21,6 +21,7 @@ export 'services/pending_profile_edit_service.dart';
 
 // Widgets
 export 'widgets/app_shell.dart';
+export 'widgets/partner_profile_hero.dart';
 export 'widgets/profile_avatar.dart';
 export 'widgets/role_badge.dart';
 export 'widgets/role_switcher_sheet.dart';

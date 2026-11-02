@@ -14,9 +14,10 @@ import '../../home/providers/location_provider.dart';
 /// Provider-first equipment browsing — pick a nearby vendor, then see that
 /// vendor's own equipment (same shape as Pharmacy's provider list →
 /// `MedicineScreen(pharmacyId: ...)`). `equipment_vendors` is admin-managed
-/// (see mednu-admin), so unlike pharmacies/labs there is no self-serve
-/// partner registration behind this list yet — it starts empty until an
-/// admin adds real vendors.
+/// (see mednu-admin) and also fed automatically from approved partner vendors
+/// (`equipment_profiles`, see `onEquipmentProfileWriteForVisibility` in
+/// functions/index.js) — a vendor registers in the MedNu Partner app, admin
+/// approves it, and it appears here with its own menu.
 class EquipmentVendorsScreen extends ConsumerStatefulWidget {
   const EquipmentVendorsScreen({super.key});
 
@@ -40,6 +41,9 @@ class _EquipmentVendorsScreenState extends ConsumerState<EquipmentVendorsScreen>
       'name': (d['name'] as String?) ?? 'Equipment Vendor',
       'city': (d['city'] as String?) ?? '',
       'phone': (d['phone'] as String?) ?? '',
+      // The vendor's open / closed switch (absent on admin-listed vendors,
+      // which read as always open).
+      'open': (d['acceptingOrders'] as bool?) ?? true,
       'distanceKm': distance,
     };
   }
@@ -58,7 +62,7 @@ class _EquipmentVendorsScreenState extends ConsumerState<EquipmentVendorsScreen>
             backgroundColor: AppColors.primaryDark,
             leading: IconButton(
               icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-              onPressed: () => context.pop(),
+              onPressed: () => context.safeBack(),
             ),
             flexibleSpace: FlexibleSpaceBar(
               background: Container(
@@ -231,6 +235,12 @@ class _VendorCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(v['name'] as String, style: AppTextStyles.labelLarge, maxLines: 1, overflow: TextOverflow.ellipsis),
+                    if (v['open'] == false)
+                      Padding(
+                        padding: EdgeInsets.only(top: R.h(context, 2)),
+                        child: Text('Closed right now',
+                            style: AppTextStyles.labelSmall.copyWith(color: AppColors.error)),
+                      ),
                     SizedBox(height: R.h(context, 4)),
                     Row(children: [
                       Icon(Icons.location_on_outlined, size: R.w(context, 13), color: context.appTextHint),

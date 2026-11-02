@@ -230,6 +230,10 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
   // ── Submit ────────────────────────────────────────────────────────────────
 
   Future<void> _submit() async {
+    if (!_allDocsUploaded) {
+      _snack('Please upload all 5 required documents before submitting');
+      return;
+    }
     if (!_declarationAccepted || !_termsAccepted) {
       _snack('Please accept the declaration and terms to proceed'); return;
     }

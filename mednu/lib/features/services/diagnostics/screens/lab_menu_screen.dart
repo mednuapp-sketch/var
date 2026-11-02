@@ -1,7 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/constants/app_text_styles.dart';
@@ -10,6 +9,7 @@ import '../../../../core/widgets/add_to_cart_button.dart';
 import '../../../../core/widgets/ux_widgets.dart';
 import '../../../cart/providers/cart_provider.dart';
 
+import '../../../../core/router/app_router.dart';
 /// A single lab's test menu — the "food" screen in the hotel/lab-first
 /// browsing flow. Reached from a lab card on [DiagnosticsScreen]; fetches the
 /// lab's own profile by id (rather than trusting nav `extra`) so it also
@@ -97,7 +97,7 @@ class _LabMenuScreenState extends ConsumerState<LabMenuScreen> {
             expandedHeight: AppSpacing.headerHeight(context),
             leading: IconButton(
               icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-              onPressed: () => context.pop(),
+              onPressed: () => context.safeBack(),
             ),
             actions: const [CartBadgeAction()],
             flexibleSpace: FlexibleSpaceBar(

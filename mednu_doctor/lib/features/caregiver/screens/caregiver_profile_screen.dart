@@ -70,7 +70,7 @@ class _CaregiverProfileScreenState extends ConsumerState<CaregiverProfileScreen>
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (dialogContext, setDialogState) => AlertDialog(
-          title: const Text('Caregiver Details'),
+          title: const Text('Nurse Details'),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -84,7 +84,7 @@ class _CaregiverProfileScreenState extends ConsumerState<CaregiverProfileScreen>
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    (value: 'caregiver', label: 'Caregiver'),
+                    (value: 'caregiver', label: 'Nurse'),
                     (value: 'care_assistant', label: 'Care Assistant'),
                   ].map((opt) => ChoiceChip(
                         label: Text(opt.label),
@@ -481,7 +481,7 @@ class _CaregiverProfileScreenState extends ConsumerState<CaregiverProfileScreen>
 
     return SharedAppShell(
       currentRoute: AppRoutes.caregiverProfile,
-      title: 'Caregiver Profile',
+      title: 'Nurse Profile',
       extraActions: [
         IconButton(
           icon: const Icon(Icons.edit_outlined, color: AppColors.textPrimary),
@@ -518,7 +518,7 @@ class _CaregiverProfileScreenState extends ConsumerState<CaregiverProfileScreen>
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
                     _HeroStat(
-                      label: profile.serviceType == 'care_assistant' ? 'Care Assistant' : 'Caregiver',
+                      label: profile.serviceType == 'care_assistant' ? 'Care Assistant' : 'Nurse',
                       value: profile.gender.isEmpty ? '—' : profile.gender,
                       icon: Icons.badge_rounded,
                     ),

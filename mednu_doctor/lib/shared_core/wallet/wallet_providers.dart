@@ -28,6 +28,7 @@ final walletRepositoryProvider = Provider<WalletRepository>((ref) {
   switch (role) {
     case AppRole.doctor:
     case AppRole.lab:
+    case AppRole.equipment:
     case AppRole.pharmacy:
     case AppRole.ambulance:
     case AppRole.caregiver:

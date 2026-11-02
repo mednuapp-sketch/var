@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:mednu/features/home/screens/home_screen.dart' show MedNUPushedBottomNav;
 import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -223,6 +224,7 @@ class _HospitalsScreenState extends State<HospitalsScreen> {
 
     return Scaffold(
       backgroundColor: context.appBackground,
+      bottomNavigationBar: const MedNUPushedBottomNav(activeRoute: AppRoutes.hospitals),
       body: RefreshIndicator(
         color: AppColors.primary,
         onRefresh: () async {

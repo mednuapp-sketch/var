@@ -34,7 +34,7 @@
     ],
     caregivers: [
       { name: '[TEST] Elderly Care Companion', price: 999, priceUnit: 'per_day', duration: '8 hrs', description: 'Companionship and daily support for elderly patients.' },
-      { name: '[TEST] Post-Hospitalization Caregiver', price: 1499, priceUnit: 'per_day', duration: '12 hrs', description: 'Dedicated caregiver for recovery after hospital discharge.' },
+      { name: '[TEST] Post-Hospitalization Nurse', price: 1499, priceUnit: 'per_day', duration: '12 hrs', description: 'Dedicated nurse for recovery after hospital discharge.' },
     ],
     equipment: [
       { name: '[TEST] Wheelchair (Standard)', price: 99, priceUnit: 'per_day', duration: null, description: 'Standard foldable wheelchair rental.', purchasePrice: 4999, deposit: 1000 },

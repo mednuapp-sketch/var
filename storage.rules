@@ -119,6 +119,22 @@ service firebase.storage {
                    && isImage();
     }
 
+    match /equipment_profiles/{uid}/profile.jpg {
+      allow read:  if true;
+      allow write: if isOwner(uid)
+                   && request.resource.size < 5 * 1024 * 1024
+                   && isImage();
+    }
+
+    // A vendor's own equipment photos — the "menu pictures". Public read so
+    // patients can see them without an expiring token, owner-only write.
+    match /equipment_profiles/{uid}/items/{itemFile} {
+      allow read:  if true;
+      allow write: if isOwner(uid)
+                   && request.resource.size < 5 * 1024 * 1024
+                   && isImage();
+    }
+
     match /ambulance_profiles/{uid}/profile.jpg {
       allow read:  if true;
       allow write: if isOwner(uid)
@@ -303,6 +319,13 @@ service firebase.storage {
     }
 
     match /pharmacy_documents/{uid}/{allPaths=**} {
+      allow read:  if isAuth() && (isOwner(uid) || isAdmin());
+      allow write: if isOwner(uid)
+                   && request.resource.size < 20 * 1024 * 1024
+                   && isDocument();
+    }
+
+    match /equipment_documents/{uid}/{allPaths=**} {
       allow read:  if isAuth() && (isOwner(uid) || isAdmin());
       allow write: if isOwner(uid)
                    && request.resource.size < 20 * 1024 * 1024

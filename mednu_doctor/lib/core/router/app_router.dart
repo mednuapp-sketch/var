@@ -59,6 +59,14 @@ import '../../features/pharmacy/screens/pharmacy_delivery_tracking_screen.dart';
 import '../../features/pharmacy/screens/pharmacy_earnings_screen.dart';
 import '../../features/pharmacy/screens/pharmacy_profile_screen.dart';
 import '../../features/pharmacy/screens/pharmacy_settings_screen.dart';
+import '../../features/equipment/screens/equipment_onboarding_screen.dart';
+import '../../features/equipment/screens/equipment_dashboard_screen.dart';
+import '../../features/equipment/screens/equipment_orders_screen.dart';
+import '../../features/equipment/screens/equipment_order_detail_screen.dart';
+import '../../features/equipment/screens/equipment_menu_screen.dart';
+import '../../features/equipment/screens/equipment_earnings_screen.dart';
+import '../../features/equipment/screens/equipment_profile_screen.dart';
+import '../../features/equipment/screens/equipment_settings_screen.dart';
 import '../../features/ambulance/screens/ambulance_dashboard_screen.dart';
 import '../../features/ambulance/screens/ambulance_incoming_requests_screen.dart';
 import '../../features/ambulance/screens/ambulance_request_detail_screen.dart';
@@ -174,6 +182,13 @@ class _AuthChangeNotifier extends ChangeNotifier {
       // the route tree — which was resetting DashboardScreen's local
       // _isOnline toggle state and flashing the screen on every heartbeat.
       // Only notify when a value the redirect logic actually reads changes.
+      // A "missing" doc served purely from the local cache (cold start on a
+      // weak/offline network, cache cleared) does not mean the account has
+      // no profile — treating it that way bounced signed-in partners into
+      // role-select/registration, which reads as being logged out. Wait for
+      // the server-confirmed snapshot instead.
+      if (!snap.exists && snap.metadata.isFromCache) return;
+
       final wasReady = ready;
       final prevProfileExists = profileExists;
       final prevRole = role;
@@ -247,6 +262,8 @@ class _AuthChangeNotifier extends ChangeNotifier {
             .doc(user.uid)
             .snapshots()
             .listen((roleSnap) {
+          // Same cache-miss guard as the account doc above.
+          if (!roleSnap.exists && roleSnap.metadata.isFromCache) return;
           roleProfileExists = roleSnap.exists;
           status = roleSnap.data()?['status'] as String?;
           _markReady();
@@ -328,6 +345,16 @@ class AppRoutes {
   static const pharmacyEarnings                 = '/pharmacy/earnings';
   static const pharmacyProfile                  = '/pharmacy/profile';
   static const pharmacySettings                 = '/pharmacy/settings';
+
+  // ── Medical Equipment vendor module ──────────────────────────────────────
+  static const equipmentOnboarding  = '/equipment/onboarding';
+  static const equipmentDashboard   = '/equipment/dashboard';
+  static const equipmentOrders      = '/equipment/orders';
+  static const equipmentOrderDetail = '/equipment/order-detail';
+  static const equipmentMenu        = '/equipment/menu';
+  static const equipmentEarnings    = '/equipment/earnings';
+  static const equipmentProfile     = '/equipment/profile';
+  static const equipmentSettings    = '/equipment/settings';
 
   // ── Ambulance partner module (Firestore-backed) ──────────────────────────
   static const ambulanceDashboard         = '/ambulance/dashboard';
@@ -411,7 +438,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       // Only the very first navigation of a session (or the one right after
       // sign-in) ever actually waits here — every subsequent call reads
       // already-warm cached fields below with no Firestore round-trip.
-      if (!_authChangeNotifier.ready) await _authChangeNotifier.onReady;
+      if (!_authChangeNotifier.ready) {
+        // Bounded: with no server-confirmed snapshot yet (offline cold
+        // start) stay on the current route rather than guessing a gate.
+        try {
+          await _authChangeNotifier.onReady
+              .timeout(const Duration(seconds: 10));
+        } on TimeoutException {
+          return null;
+        }
+      }
 
       if (!_authChangeNotifier.profileExists) {
         // Brand-new authenticated session with no base identity doc yet.
@@ -450,6 +486,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         if (role == AppRole.pharmacy) {
           return loc == AppRoutes.pharmacyOnboarding ? null : AppRoutes.pharmacyOnboarding;
         }
+        if (role == AppRole.equipment) {
+          return loc == AppRoutes.equipmentOnboarding ? null : AppRoutes.equipmentOnboarding;
+        }
         // Every other role's profile is written in one shot by
         // PartnerRoleRegisterScreen's initial submit — if `{role}_profiles/
         // {uid}` is still missing here, that submit never finished (a
@@ -481,6 +520,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           AppRoutes.partnerRoleSelect,
           AppRoutes.labOnboarding,
           AppRoutes.pharmacyOnboarding,
+          AppRoutes.equipmentOnboarding,
         };
         return alwaysReachableWhilePending.contains(loc) ? null : AppRoutes.verificationPending;
       }
@@ -696,6 +736,22 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: AppRoutes.pharmacyEarnings,         pageBuilder: (c, s) => const NoTransitionPage(child: PharmacyEarningsScreen())),
       GoRoute(path: AppRoutes.pharmacyProfile,          pageBuilder: (c, s) => const NoTransitionPage(child: PharmacyProfileScreen())),
       GoRoute(path: AppRoutes.pharmacySettings,         builder: (c, s) => const PharmacySettingsScreen()),
+
+      // ── Medical Equipment vendor module ──────────────────────────────────
+      GoRoute(path: AppRoutes.equipmentOnboarding, builder: (c, s) => const EquipmentOnboardingScreen()),
+      GoRoute(path: AppRoutes.equipmentDashboard,  pageBuilder: (c, s) => const NoTransitionPage(child: EquipmentDashboardScreen())),
+      GoRoute(path: AppRoutes.equipmentOrders,     pageBuilder: (c, s) => const NoTransitionPage(child: EquipmentOrdersScreen())),
+      GoRoute(
+        path: AppRoutes.equipmentOrderDetail,
+        builder: (c, s) {
+          final extra = s.extra as Map<String, dynamic>?;
+          return EquipmentOrderDetailScreen(orderId: extra?['orderId'] as String? ?? '');
+        },
+      ),
+      GoRoute(path: AppRoutes.equipmentMenu,       pageBuilder: (c, s) => const NoTransitionPage(child: EquipmentMenuScreen())),
+      GoRoute(path: AppRoutes.equipmentEarnings,   pageBuilder: (c, s) => const NoTransitionPage(child: EquipmentEarningsScreen())),
+      GoRoute(path: AppRoutes.equipmentProfile,    pageBuilder: (c, s) => const NoTransitionPage(child: EquipmentProfileScreen())),
+      GoRoute(path: AppRoutes.equipmentSettings,   builder: (c, s) => const EquipmentSettingsScreen()),
 
       // ── Ambulance partner module (Firestore-backed) ──────────────────────
       GoRoute(path: AppRoutes.ambulanceDashboard,        pageBuilder: (c, s) => const NoTransitionPage(child: AmbulanceDashboardScreen())),

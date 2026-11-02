@@ -6,7 +6,7 @@
 //   2. Open DevTools (F12) → Console tab.
 //   3. Paste this whole script and press Enter.
 //   4. It inserts a few [TEST] caregivers into the `caregivers` collection
-//      with isActive:true so you can confirm the Caregivers screen in the
+//      with isActive:true so you can confirm the Nurses screen in the
 //      consumer app actually renders them.
 //   5. IMPORTANT: these ARE visible to real users while active. Once you've
 //      confirmed the screen works, run window.__removeDummyCaregivers()
@@ -53,16 +53,16 @@
   });
 
   await batch.commit();
-  console.log(`✓ Seeded ${createdRefs.length} dummy caregivers (isActive:true). Check the consumer app's Caregivers screen now.`);
+  console.log(`✓ Seeded ${createdRefs.length} dummy nurses (isActive:true). Check the consumer app's Nurses screen now.`);
   console.log('Doc IDs:', createdRefs);
 
   window.__dummyCaregiverIds = createdRefs;
   window.__removeDummyCaregivers = async function () {
     const ids = window.__dummyCaregiverIds || [];
-    if (!ids.length) { console.log('No dummy caregiver IDs tracked in this session.'); return; }
+    if (!ids.length) { console.log('No dummy nurse IDs tracked in this session.'); return; }
     const delBatch = db.batch();
     ids.forEach(id => delBatch.delete(db.collection('caregivers').doc(id)));
     await delBatch.commit();
-    console.log(`✓ Removed ${ids.length} dummy caregivers.`);
+    console.log(`✓ Removed ${ids.length} dummy nurses.`);
   };
 })();

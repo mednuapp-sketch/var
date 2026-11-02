@@ -70,7 +70,7 @@ class _MyServicesScreenState extends ConsumerState<MyServicesScreen>
             // navigator stack to pop, so fall back to switching to the
             // Home tab instead of a no-op pop.
             if (context.canPop()) {
-              context.pop();
+              context.safeBack();
             } else {
               ref.read(bottomNavIndexProvider.notifier).state = 0;
             }
@@ -213,7 +213,7 @@ class _BookingsList extends ConsumerWidget {
     // is invisible — it changes the IndexedStack underneath this route.
     // Pop back to the shell so the Home tab is actually shown.
     if (context.canPop()) {
-      context.pop();
+      context.safeBack();
     } else {
       context.go(AppRoutes.home);
     }

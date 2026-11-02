@@ -1573,6 +1573,13 @@ exports.onServiceRequestStatusChange = onDocumentUpdated(
         rejected:    ["Ambulance Unavailable", "We could not fulfil your ambulance request right now. Please try again.", "ambulance_rejected"],
         cancelled:   ["Ambulance Booking Cancelled", "Your ambulance booking has been cancelled.", "ambulance_cancelled"],
       },
+      equipment: {
+        accepted:    ["Equipment Order Confirmed", "The vendor has accepted your equipment order and is preparing it.", "equipment_accepted"],
+        in_progress: ["Equipment Out for Delivery", "Your equipment is on its way to you.", "equipment_out_for_delivery"],
+        completed:   ["Equipment Order Complete", "Your equipment order has been completed. Thank you!", "equipment_completed"],
+        rejected:    ["Equipment Order Declined", "The vendor could not fulfil your equipment order. Your payment will be refunded.", "equipment_rejected"],
+        cancelled:   ["Equipment Order Cancelled", "Your equipment order has been cancelled.", "equipment_cancelled"],
+      },
       lab_tests: {
         accepted:         ["Lab Booking Confirmed", "Your lab booking has been accepted. Our technician will visit you soon.", "lab_accepted"],
         assigned:         ["Technician Assigned", "A lab technician has been assigned to your booking.", "lab_assigned"],
@@ -1602,40 +1609,40 @@ exports.onServiceRequestStatusChange = onDocumentUpdated(
       },
       home_care: {
         accepted:    ["Home Care Confirmed", "Your home care request has been accepted.", "homecare_accepted"],
-        assigned:    ["Caregiver Assigned", "A caregiver has been assigned to you.", "caregiver_assigned"],
+        assigned:    ["Nurse Assigned", "A nurse has been assigned to you.", "caregiver_assigned"],
         in_progress: ["Home Care Started", "Your home care session has started.", "homecare_started"],
         completed:   ["Home Care Completed", "Your home care session has been completed.", "homecare_completed"],
         rejected:    ["Home Care Rejected", "Your home care request could not be accepted.", "homecare_rejected"],
         cancelled:   ["Home Care Cancelled", "Your home care booking has been cancelled.", "homecare_cancelled"],
       },
-      caregiver: {
-        accepted:    ["Caregiver Booking Accepted", "Your caregiver request has been accepted.", "caregiver_accepted"],
-        assigned:    ["Caregiver Assigned", "A caregiver has been assigned to you.", "caregiver_assigned"],
-        in_progress: ["Caregiver Service Started", "Your caregiver has arrived and the service has started.", "caregiver_started"],
-        completed:   ["Caregiver Service Completed", "Your caregiver service has been completed.", "caregiver_completed"],
-        rejected:    ["Caregiver Booking Rejected", "Your caregiver booking could not be accepted.", "caregiver_rejected"],
-        cancelled:   ["Caregiver Booking Cancelled", "Your caregiver booking has been cancelled.", "caregiver_cancelled"],
+      nurse: {
+        accepted:    ["Nurse Booking Accepted", "Your nurse request has been accepted.", "caregiver_accepted"],
+        assigned:    ["Nurse Assigned", "A nurse has been assigned to you.", "caregiver_assigned"],
+        in_progress: ["Nurse Service Started", "Your nurse has arrived and the service has started.", "caregiver_started"],
+        completed:   ["Nurse Service Completed", "Your nurse service has been completed.", "caregiver_completed"],
+        rejected:    ["Nurse Booking Rejected", "Your nurse booking could not be accepted.", "caregiver_rejected"],
+        cancelled:   ["Nurse Booking Cancelled", "Your nurse booking has been cancelled.", "caregiver_cancelled"],
       },
-      // The patient app never writes the literal type 'caregiver' (singular)
+      // The patient app never writes the literal type 'nurse' (singular)
       // — the cart checkout path writes 'care_assistant' or 'caregivers'
       // (see mednu/lib/features/cart/screens/cart_screen.dart). These two
-      // keys reuse the `caregiver` copy verbatim so real bookings get
+      // keys reuse the `nurse` copy verbatim so real bookings get
       // tailored notification text instead of the generic fallback.
       care_assistant: {
-        accepted:    ["Caregiver Booking Accepted", "Your caregiver request has been accepted.", "caregiver_accepted"],
-        assigned:    ["Caregiver Assigned", "A caregiver has been assigned to you.", "caregiver_assigned"],
-        in_progress: ["Caregiver Service Started", "Your caregiver has arrived and the service has started.", "caregiver_started"],
-        completed:   ["Caregiver Service Completed", "Your caregiver service has been completed.", "caregiver_completed"],
-        rejected:    ["Caregiver Booking Rejected", "Your caregiver booking could not be accepted.", "caregiver_rejected"],
-        cancelled:   ["Caregiver Booking Cancelled", "Your caregiver booking has been cancelled.", "caregiver_cancelled"],
+        accepted:    ["Nurse Booking Accepted", "Your nurse request has been accepted.", "caregiver_accepted"],
+        assigned:    ["Nurse Assigned", "A nurse has been assigned to you.", "caregiver_assigned"],
+        in_progress: ["Nurse Service Started", "Your nurse has arrived and the service has started.", "caregiver_started"],
+        completed:   ["Nurse Service Completed", "Your nurse service has been completed.", "caregiver_completed"],
+        rejected:    ["Nurse Booking Rejected", "Your nurse booking could not be accepted.", "caregiver_rejected"],
+        cancelled:   ["Nurse Booking Cancelled", "Your nurse booking has been cancelled.", "caregiver_cancelled"],
       },
       caregivers: {
-        accepted:    ["Caregiver Booking Accepted", "Your caregiver request has been accepted.", "caregiver_accepted"],
-        assigned:    ["Caregiver Assigned", "A caregiver has been assigned to you.", "caregiver_assigned"],
-        in_progress: ["Caregiver Service Started", "Your caregiver has arrived and the service has started.", "caregiver_started"],
-        completed:   ["Caregiver Service Completed", "Your caregiver service has been completed.", "caregiver_completed"],
-        rejected:    ["Caregiver Booking Rejected", "Your caregiver booking could not be accepted.", "caregiver_rejected"],
-        cancelled:   ["Caregiver Booking Cancelled", "Your caregiver booking has been cancelled.", "caregiver_cancelled"],
+        accepted:    ["Nurse Booking Accepted", "Your nurse request has been accepted.", "caregiver_accepted"],
+        assigned:    ["Nurse Assigned", "A nurse has been assigned to you.", "caregiver_assigned"],
+        in_progress: ["Nurse Service Started", "Your nurse has arrived and the service has started.", "caregiver_started"],
+        completed:   ["Nurse Service Completed", "Your nurse service has been completed.", "caregiver_completed"],
+        rejected:    ["Nurse Booking Rejected", "Your nurse booking could not be accepted.", "caregiver_rejected"],
+        cancelled:   ["Nurse Booking Cancelled", "Your nurse booking has been cancelled.", "caregiver_cancelled"],
       },
       physiotherapy: {
         accepted:    ["Physiotherapy Confirmed", "Your physiotherapy session has been confirmed.", "physio_accepted"],
@@ -1703,7 +1710,7 @@ exports.onServiceRequestStatusChange = onDocumentUpdated(
       || after.technicianName || after.driverName || "";
     if (assigneeName) {
       finalBody = finalBody
-        .replace("A caregiver", assigneeName)
+        .replace("A nurse", assigneeName)
         .replace("A lab technician", assigneeName)
         .replace("A staff member", assigneeName);
     }
@@ -2840,6 +2847,7 @@ const _PROVIDER_FIELD_BY_SERVICE = {
   lab_tests: "labId",
   medicine: "pharmacyId",
   pharmacy: "pharmacyId",
+  equipment: "vendorId",
   ambulance: "ambulanceId",
   caregiver: "caregiverId",
   nursing: "caregiverId",
@@ -2919,7 +2927,7 @@ async function _sendProviderNotification(db, messaging, providerId, opts) {
     const candidates = [
       "doctors", "lab_profiles", "pharmacy_profiles", "ambulance_profiles", "caregiver_profiles",
       "nutritionist_profiles", "physiotherapist_profiles", "counsellor_profiles",
-      "hospital_profiles",
+      "hospital_profiles", "equipment_profiles",
     ];
     for (const col of candidates) {
       const snap = await db.collection(col).doc(providerId).get();
@@ -5495,6 +5503,15 @@ exports.onEquipmentServiceRequestCreated = onDocumentCreated(
     const details = data.serviceDetails || {};
     const amount = data.amount ?? details.purchasePrice ?? details.pricePerDay ?? 0;
 
+    // An order placed from a specific partner vendor's own menu (see
+    // equipment_screen.dart — `sourceVendorId` is set on every item mirrored
+    // from `equipment_profiles/{id}/items`) is pinned straight to that vendor
+    // in `equipment_orders` instead of dropping into the shared pharmacy pool.
+    // If the vendor was suspended between browsing and checkout, or the
+    // vendor is an admin-listed one with no partner account, fall through to
+    // the legacy pool below rather than losing the order.
+    if (await _routeEquipmentRequestToVendor(db, requestId, data, details, amount)) return;
+
     // One batch + a deterministic line-item ID, same reasoning as
     // onMedicineOrderCreated above (no duplicate item on a redelivery, no
     // order left permanently item-less by a partial failure).
@@ -6088,6 +6105,461 @@ exports.onPharmacyProfileStatusChangeForInventory = onDocumentUpdated(
     });
   }
 );
+
+// ══════════════════════════════════════════════════════════════════════════
+// ── Medical Equipment vendor module ─────────────────────────────────────────
+//
+// "Hotel / menu" model, same as Pharmacy and Lab:
+//   - A vendor self-registers (equipment_profiles/{uid}, status 'pending').
+//   - Admin approves it (status 'active').
+//   - The vendor manages its own menu at equipment_profiles/{uid}/items/{id}
+//     (price, stock, Available / Sold out). Nobody else reads that directly.
+//   - These triggers publish it for patients:
+//       items  -> services/eqi_{vendorId}_{itemId}   (type 'equipment')
+//       vendor -> equipment_vendors/{vendorId}
+//     which are the two collections the patient app ALREADY browses
+//     (vendor list -> that vendor's menu), so it needs no new reads.
+//   - A patient booking (service_requests, type 'equipment', with
+//     serviceDetails.sourceVendorId) is pinned to that vendor in
+//     equipment_orders, which the vendor works through
+//     pending -> accepted -> out_for_delivery -> delivered (-> returned).
+//   - Stock is held when the vendor accepts (client-side transaction sets
+//     stockHeld) and released here when an order is cancelled / rejected /
+//     returned, so the menu's "left in stock" is always live.
+// ══════════════════════════════════════════════════════════════════════════
+
+function _logEquipment(severity, event, data = {}) {
+  const payload = { severity, module: "equipment", event, ...data };
+  if (severity === "ERROR" || severity === "WARNING") {
+    console.error(JSON.stringify(payload));
+  } else {
+    console.log(JSON.stringify(payload));
+  }
+}
+
+const _EQUIPMENT_STALE_PENDING_HOURS = 12;
+
+function _equipmentServiceRef(db, vendorId, itemId) {
+  return db.collection("services").doc(`eqi_${vendorId}_${itemId}`);
+}
+
+// What a patient sees on the vendor's menu. The doc is always published
+// (`isEnabled`) while the vendor is active so a sold-out item stays visible as
+// "Sold out" rather than silently vanishing; `isAvailable` is what gates
+// booking, and folds in the vendor's own open/closed switch.
+function _equipmentServiceDoc(item, vendorId, itemId, vendor) {
+  const stock = Number(item.stock ?? 0);
+  const offersRent = item.offersRent !== false && Number(item.rentPricePerDay ?? 0) > 0;
+  const offersBuy = item.offersBuy === true && Number(item.buyPrice ?? 0) > 0;
+  const available = item.isAvailable !== false && stock > 0 && vendor.acceptingOrders !== false;
+  return {
+    type: "equipment",
+    name: item.name || "",
+    description: item.description || "",
+    imageUrl: item.imageUrl || "",
+    category: item.category || "",
+    price: offersRent ? Number(item.rentPricePerDay) : 0,
+    purchasePrice: offersBuy ? Number(item.buyPrice) : 0,
+    deposit: Number(item.deposit ?? 0),
+    stock,
+    isEnabled: true,
+    isAvailable: available,
+    sourceVendorId: vendorId,
+    sourceItemId: itemId,
+    vendorName: vendor.name || "",
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+}
+
+function _equipmentVendorDoc(vendor) {
+  return {
+    name: vendor.name || "Equipment Vendor",
+    city: vendor.city || "",
+    address: vendor.address || "",
+    phone: vendor.phone || "",
+    lat: vendor.latitude ?? null,
+    lng: vendor.longitude ?? null,
+    photoUrl: vendor.photoUrl || "",
+    rating: vendor.rating ?? 0,
+    totalReviews: vendor.totalReviews ?? 0,
+    deliveryAvailable: vendor.deliveryAvailable !== false,
+    categories: Array.isArray(vendor.categoriesOffered) ? vendor.categoriesOffered : [],
+    acceptingOrders: vendor.acceptingOrders !== false,
+    isEnabled: true,
+    source: "partner",
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+}
+
+exports.onEquipmentItemWrite = onDocumentWritten(
+  "equipment_profiles/{vendorId}/items/{itemId}",
+  async (event) => {
+    const { vendorId, itemId } = event.params;
+    const db = getFirestore();
+    const ref = _equipmentServiceRef(db, vendorId, itemId);
+
+    const after = event.data.after;
+    if (!after.exists) {
+      await ref.delete().catch(() => {});
+      _logEquipment("INFO", "item_mirror_deleted", { vendorId, itemId });
+      return;
+    }
+
+    const vendorSnap = await db.collection("equipment_profiles").doc(vendorId).get();
+    const vendor = vendorSnap.exists ? vendorSnap.data() : null;
+    if (!vendor || vendor.status !== "active") {
+      // Pending / suspended vendors keep their private menu but stay out of
+      // the patient catalogue until (re)approved — the status sweep below
+      // publishes every existing item on that transition.
+      await ref.delete().catch(() => {});
+      return;
+    }
+
+    await ref.set(_equipmentServiceDoc(after.data(), vendorId, itemId, vendor), { merge: true });
+    _logEquipment("INFO", "item_mirror_synced", { vendorId, itemId });
+  }
+);
+
+// Vendor-level changes: approval / suspension, the shop open-closed switch,
+// and profile edits (name, location, photo) all need to reach the patient
+// side. Items are re-swept only when something they embed actually changed.
+exports.onEquipmentProfileWriteForVisibility = onDocumentUpdated(
+  "equipment_profiles/{vendorId}",
+  async (event) => {
+    const before = event.data.before.data();
+    const after = event.data.after.data();
+    const vendorId = event.params.vendorId;
+    const db = getFirestore();
+    const vendorRef = db.collection("equipment_vendors").doc(vendorId);
+
+    if (after.status !== "active") {
+      if (before.status === "active") {
+        await vendorRef.delete().catch(() => {});
+        await _sweepEquipmentItems(db, vendorId, after, false);
+      }
+      return;
+    }
+
+    // The profile doc also changes for reasons patients never see (fcmToken,
+    // pendingChanges, document verification) — don't rewrite the published
+    // vendor doc for those.
+    const visible = (v) => { const d = _equipmentVendorDoc(v); delete d.updatedAt; return JSON.stringify(d); };
+    if (before.status === "active" && visible(before) === visible(after)) return;
+
+    await vendorRef.set(_equipmentVendorDoc(after), { merge: true });
+
+    const becameActive = before.status !== "active";
+    const embeddedChanged =
+      before.acceptingOrders !== after.acceptingOrders || before.name !== after.name;
+    if (becameActive || embeddedChanged) {
+      await _sweepEquipmentItems(db, vendorId, after, true);
+    }
+  }
+);
+
+async function _sweepEquipmentItems(db, vendorId, vendor, publish) {
+  const itemsSnap = await db.collection("equipment_profiles").doc(vendorId).collection("items").get();
+  if (itemsSnap.empty) return;
+  const batchSize = 400; // Firestore batch write limit is 500.
+  for (let i = 0; i < itemsSnap.docs.length; i += batchSize) {
+    const batch = db.batch();
+    for (const doc of itemsSnap.docs.slice(i, i + batchSize)) {
+      const ref = _equipmentServiceRef(db, vendorId, doc.id);
+      if (publish) {
+        batch.set(ref, _equipmentServiceDoc(doc.data(), vendorId, doc.id, vendor), { merge: true });
+      } else {
+        batch.delete(ref);
+      }
+    }
+    await batch.commit();
+  }
+  _logEquipment("INFO", publish ? "items_bulk_synced" : "items_bulk_hidden", { vendorId, count: itemsSnap.size });
+}
+
+exports.onEquipmentProfileApproved = onDocumentUpdated("equipment_profiles/{uid}", async (event) => {
+  await _notifyPartnerApproved(
+    getFirestore(), getMessaging(), "equipment", event.params.uid,
+    event.data.before.data(), event.data.after.data(),
+  );
+});
+
+// Called from onEquipmentServiceRequestCreated. Returns true when the request
+// was handled here (pinned to an active partner vendor), false to let the
+// legacy shared-pool path take over.
+async function _routeEquipmentRequestToVendor(db, requestId, data, details, amount) {
+  const vendorId = details.sourceVendorId;
+  if (!vendorId) return false;
+
+  const vendorSnap = await db.collection("equipment_profiles").doc(String(vendorId)).get();
+  if (!vendorSnap.exists || vendorSnap.data().status !== "active") {
+    _logEquipment("INFO", "vendor_not_a_partner_falling_back_to_pool", { requestId, vendorId });
+    return false;
+  }
+  const vendor = vendorSnap.data();
+
+  const orderRef = db.collection("equipment_orders").doc(requestId);
+  if ((await orderRef.get()).exists) {
+    _logEquipment("INFO", "equipment_order_create_skipped_existing", { requestId });
+    return true;
+  }
+
+  const quantity = Math.max(1, Number(details.quantity) || 1);
+
+  // The patient's app already hides sold-out items, but two patients can book
+  // the last unit at once (or the vendor can close up between browse and pay).
+  // Such an order is created and immediately rejected, which runs the normal
+  // status path: patient notified, payment auto-refunded.
+  let unavailableReason = null;
+  if (vendor.acceptingOrders === false) {
+    unavailableReason = "The shop is currently closed.";
+  } else if (details.sourceItemId) {
+    const itemSnap = await db.collection("equipment_profiles").doc(String(vendorId))
+      .collection("items").doc(String(details.sourceItemId)).get();
+    if (!itemSnap.exists) {
+      unavailableReason = "This item is no longer on the menu.";
+    } else if (itemSnap.data().isAvailable === false || Number(itemSnap.data().stock ?? 0) < quantity) {
+      unavailableReason = "This item just sold out.";
+    }
+  }
+
+  await orderRef.set({
+    sourceCollection: "service_requests",
+    sourceId: requestId,
+    orderType: "equipment",
+    vendorId: String(vendorId),
+    vendorName: vendor.name || "",
+    status: "pending",
+    patientId: data.patientId,
+    patientName: data.patientName || "Patient",
+    patientPhone: data.patientPhone || "",
+    deliveryAddress: data.address || "",
+    itemId: details.sourceItemId || null,
+    itemName: details.equipmentName || data.serviceName || "Medical Equipment",
+    mode: details.mode === "rent" ? "rent" : "buy",
+    rentalDays: Number(details.rentalDays) || 0,
+    pricePerDay: Number(details.pricePerDay) || 0,
+    quantity,
+    deposit: Number(details.deposit) || 0,
+    totalAmount: amount,
+    preferredDate: data.preferredDate || "",
+    preferredTime: data.preferredTime || "",
+    notes: data.notes || "",
+    paymentId: data.paymentId || null,
+    stockHeld: false,
+    createdAt: data.createdAt || FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  _logEquipment("INFO", "equipment_order_created", { orderId: requestId, vendorId });
+
+  if (unavailableReason) {
+    await orderRef.update({
+      status: "rejected", cancelledBy: "system", cancelReason: unavailableReason,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    _logEquipment("WARNING", "equipment_order_auto_rejected", { orderId: requestId, vendorId, reason: unavailableReason });
+    return true;
+  }
+
+  await _sendProviderNotification(db, getMessaging(), String(vendorId), {
+    title: "New Equipment Order",
+    body: `${quantity} × ${details.equipmentName || data.serviceName || "equipment"} (${details.mode === "rent" ? "rent" : "buy"}) — tap to accept.`,
+    type: "new_equipment_order", serviceType: "equipment", bookingId: requestId,
+  });
+  return true;
+}
+
+// Vendor status -> the service_requests vocabulary the patient app already
+// understands (see onServiceRequestStatusChange's `equipment` map above).
+const _EQUIPMENT_TO_SERVICE_REQUEST_STATUS = {
+  accepted:         "accepted",
+  out_for_delivery: "in_progress",
+  rejected:         "rejected",
+  cancelled:        "cancelled",
+  returned:         "completed",
+};
+
+exports.onEquipmentOrderStatusChange = onDocumentUpdated(
+  "equipment_orders/{orderId}",
+  async (event) => {
+    const before = event.data.before.data();
+    const after = event.data.after.data();
+    if (before.status === after.status) return;
+    const orderId = event.params.orderId;
+    const db = getFirestore();
+
+    await _autoRefundOnProviderFailure(db, before, after, ["rejected", "cancelled"],
+      "service_requests", after.sourceId || orderId, "The vendor declined or cancelled this equipment order");
+
+    // Remembered and rethrown at the end so a failed mirror never skips the
+    // stock release / ledger below, yet the invocation still fails (retries)
+    // instead of reporting a false success.
+    let firstError = null;
+    const remember = (err) => { firstError = firstError || err; };
+
+    // ── Mirror onto the patient's service_request ─────────────────────────
+    // A buy order is finished the moment it is delivered; a rental stays
+    // 'in_progress' until it is returned.
+    const mapped = after.status === "delivered" && after.mode === "buy"
+      ? "completed"
+      : _EQUIPMENT_TO_SERVICE_REQUEST_STATUS[after.status];
+    if (mapped) {
+      try {
+        const sourceRef = db.collection(after.sourceCollection || "service_requests").doc(after.sourceId || orderId);
+        const current = await sourceRef.get();
+        if (current.exists && current.data().status !== mapped) {
+          await sourceRef.update({ status: mapped, updatedAt: FieldValue.serverTimestamp() });
+        }
+      } catch (err) {
+        _logEquipment("ERROR", "mirror_to_source_failed", { orderId, error: err.message });
+        remember(err);
+      }
+    }
+
+    // A rental that just arrived keeps the same patient-facing status
+    // ('in_progress') it had while out for delivery, so say so explicitly.
+    if (after.status === "delivered" && after.mode === "rent" && after.patientId) {
+      await _sendPatientNotification(db, getMessaging(), after.patientId, {
+        title: "Equipment Delivered",
+        body: `${after.itemName || "Your equipment"} has been delivered. Keep it safe — the vendor will arrange pickup when your rental ends.`,
+        type: "equipment_delivered", serviceType: "equipment", bookingId: orderId, actionType: "open_service",
+      });
+    }
+
+    // ── Release held stock when the unit is not leaving for good ──────────
+    if (["cancelled", "rejected", "returned"].includes(after.status) && after.stockHeld === true) {
+      try {
+        await db.runTransaction(async (tx) => {
+          const orderRef = db.collection("equipment_orders").doc(orderId);
+          const orderSnap = await tx.get(orderRef);
+          if (!orderSnap.exists || orderSnap.data().stockHeld !== true) return; // already released
+          const itemId = orderSnap.data().itemId;
+          let itemRef = null;
+          let itemSnap = null;
+          if (itemId) {
+            itemRef = db.collection("equipment_profiles").doc(after.vendorId).collection("items").doc(itemId);
+            itemSnap = await tx.get(itemRef);
+          }
+          if (itemSnap && itemSnap.exists) {
+            tx.update(itemRef, { stock: FieldValue.increment(Math.max(1, Number(orderSnap.data().quantity) || 1)) });
+          }
+          tx.update(orderRef, { stockHeld: false });
+        });
+        _logEquipment("INFO", "stock_released", { orderId, status: after.status });
+      } catch (err) {
+        _logEquipment("ERROR", "stock_release_failed", { orderId, error: err.message });
+        remember(err);
+      }
+    }
+
+    // ── Earnings: credited once, when the equipment is in the patient's hands ──
+    if (after.status === "delivered" && before.status !== "delivered") {
+      try {
+        await _transitionPaymentToEligible(db, {
+          sourceCollection: after.sourceCollection || "service_requests",
+          sourceId: after.sourceId || orderId,
+          providerId: after.vendorId,
+          serviceType: "equipment",
+        });
+        const ledgerRef = db.collection("equipment_transactions").doc(orderId);
+        await db.runTransaction(async (tx) => {
+          if ((await tx.get(ledgerRef)).exists) return;
+          tx.set(ledgerRef, {
+            vendorId: after.vendorId,
+            orderId,
+            type: "earning",
+            amount: after.totalAmount ?? 0,
+            status: "credited",
+            mode: after.mode,
+            itemName: after.itemName || "",
+            patientName: after.patientName || "Patient",
+            createdAt: FieldValue.serverTimestamp(),
+          });
+        });
+      } catch (err) {
+        _logEquipment("ERROR", "earnings_credit_failed", { orderId, error: err.message });
+        remember(err);
+      }
+    }
+
+    if (firstError) throw firstError;
+  }
+);
+
+// Patient cancels their own equipment request. Allowed until the vendor has
+// dispatched it; after that the cancel loses and the request is put back.
+exports.onEquipmentRequestCancelledByPatient = onDocumentUpdated(
+  "service_requests/{requestId}",
+  async (event) => {
+    const before = event.data.before.data();
+    const after = event.data.after.data();
+    if (after.type !== "equipment") return;
+    if (before.status === after.status || after.status !== "cancelled") return;
+    const requestId = event.params.requestId;
+    const db = getFirestore();
+    const orderRef = db.collection("equipment_orders").doc(requestId);
+
+    const result = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(orderRef);
+      if (!snap.exists) return {};
+      const o = snap.data();
+      if (["cancelled", "rejected", "returned"].includes(o.status)) return {};
+      if (["out_for_delivery", "delivered"].includes(o.status)) return { refused: o.status };
+      tx.update(orderRef, { status: "cancelled", cancelledBy: "patient", updatedAt: FieldValue.serverTimestamp() });
+      return { vendorId: o.vendorId };
+    });
+
+    if (result.refused) {
+      await db.collection("service_requests").doc(requestId).update({
+        status: "in_progress", updatedAt: FieldValue.serverTimestamp(),
+      });
+      _logEquipment("WARNING", "patient_cancel_refused_already_dispatched", { requestId, status: result.refused });
+      return;
+    }
+    if (result.vendorId) {
+      _logEquipment("INFO", "equipment_order_cancelled_by_patient", { requestId });
+      await _notifyProviderOfPatientCancel(db, result.vendorId, {
+        serviceType: "equipment", bookingId: requestId, what: "order",
+      });
+    }
+  }
+);
+
+// ── Ambulance live-trip feed cleanup ─────────────────────────────────────────
+// `ambulance_live/{requestId}` (firestore.rules) holds the driver's GPS only for
+// the duration of a trip. Delete it the moment the request leaves the active
+// states, so the patient's last-known driver position doesn't outlive the trip.
+exports.onAmbulanceRequestEndedCleanupLive = onDocumentUpdated(
+  "ambulance_requests/{requestId}",
+  async (event) => {
+    const before = event.data.before.data();
+    const after = event.data.after.data();
+    if (before.status === after.status) return;
+    if (!["completed", "cancelled"].includes(after.status)) return;
+    await getFirestore().collection("ambulance_live").doc(event.params.requestId).delete().catch(() => {});
+  }
+);
+
+// A vendor that never answers shouldn't leave a paid patient waiting: after
+// the window the order is cancelled and the status trigger refunds it.
+exports.cleanupStaleEquipmentOrders = onSchedule({ schedule: "every 60 minutes", timeZone: "UTC" }, async () => {
+  const db = getFirestore();
+  const cutoff = Timestamp.fromDate(new Date(Date.now() - _EQUIPMENT_STALE_PENDING_HOURS * 60 * 60 * 1000));
+  const staleSnap = await db.collection("equipment_orders")
+    .where("status", "==", "pending")
+    .where("createdAt", "<", cutoff)
+    .limit(200)
+    .get();
+  if (staleSnap.empty) {
+    _logEquipment("INFO", "stale_cleanup_none_found");
+    return;
+  }
+  const { updated, skipped } = await _expireStaleDocs(staleSnap.docs, {
+    status: "cancelled", cancelledBy: "system",
+    cancelReason: "The vendor did not respond in time.",
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  _logEquipment("INFO", "stale_cleanup_cancelled", { count: updated, skippedConcurrentlyModified: skipped });
+});
 
 // ══════════════════════════════════════════════════════════════════════════
 // ── Ambulance partner module ────────────────────────────────────────────────
@@ -6778,14 +7250,14 @@ exports.onCaregiverServiceRequestCreated = onDocumentCreated(
     if (pinnedCaregiverId) {
       await _sendProviderNotification(db, getMessaging(), pinnedCaregiverId, {
         title: "New Visit Assigned",
-        body: `A new ${data.serviceName || "caregiver"} visit has been assigned to you.`,
+        body: `A new ${data.serviceName || "nurse"} visit has been assigned to you.`,
         type: "new_caregiver_visit", serviceType: "caregiver", bookingId: requestId,
       });
     } else {
       await _broadcastNewJobToActiveProviders(db, getMessaging(), {
         profileCollection: "caregiver_profiles",
         title: "New Visit Request Available",
-        body: `A new ${data.serviceName || "caregiver"} visit request is available to claim.`,
+        body: `A new ${data.serviceName || "nurse"} visit request is available to claim.`,
         type: "new_caregiver_visit", serviceType: "caregiver", bookingId: requestId,
       });
     }
@@ -6818,7 +7290,7 @@ exports.onCaregiverServiceRequestCancelled = onDocumentUpdated(
       return visitSnap.data().caregiverId || null;
     });
     _logCaregiver("INFO", "caregiver_visit_cancelled_by_patient", { requestId });
-    await _notifyProviderOfPatientCancel(db, providerId, { serviceType: "caregiver", bookingId: requestId, what: "caregiver visit" });
+    await _notifyProviderOfPatientCancel(db, providerId, { serviceType: "caregiver", bookingId: requestId, what: "nurse visit" });
   }
 );
 
@@ -6837,7 +7309,7 @@ exports.onCaregiverVisitStatusChange = onDocumentUpdated(
 
     const statusChanged = before.status !== after.status;
     await _autoRefundOnProviderFailure(db, before, after, ["cancelled", "missed"], "service_requests",
-      after.sourceRequestId || visitId, "The caregiver cancelled or missed this visit");
+      after.sourceRequestId || visitId, "The nurse cancelled or missed this visit");
     const claimChanged = before.caregiverId !== after.caregiverId;
 
     // Remembered and rethrown at the end (see the Lab mirror) so a mirror
@@ -6967,7 +7439,7 @@ function _caregiverListingDoc(profile, existingCreatedAt) {
   const specialties = Array.isArray(profile.specialties) ? profile.specialties : [];
   const hourlyRate = profile.hourlyRate ?? 0;
   const shared = {
-    name: profile.name || "Caregiver",
+    name: profile.name || "Nurse",
     photoUrl: profile.photoUrl || "",
     gender: profile.gender || "",
     experience: `${profile.experienceYears ?? 0} yrs`,
@@ -7003,7 +7475,7 @@ function _caregiverListingDoc(profile, existingCreatedAt) {
 
   return {
     ...shared,
-    type: specialties.length > 0 ? specialties[0] : "Caregiver",
+    type: specialties.length > 0 ? specialties[0] : "Nurse",
     specialty: specialties.length > 0 ? specialties.join(", ") : "Home Care",
     ratePerDay: Math.round(hourlyRate * 8),
     ratePerHour: hourlyRate,
@@ -8584,7 +9056,8 @@ const _DELETION_UID_DOC_COLLECTIONS = [
   "users", "patient_notifications", "health_records", "period_tracker", "water_tracker",
   "pregnancy", "health_data", "emergency_contacts", "doctor_notifications",
   "provider_notifications", "doctor_status", "patients",
-  "doctors", "lab_profiles", "pharmacy_profiles", "ambulance_profiles", "caregiver_profiles",
+  "doctors", "lab_profiles", "pharmacy_profiles", "equipment_profiles", "equipment_vendors",
+  "ambulance_profiles", "caregiver_profiles",
   "physiotherapist_profiles", "counsellor_profiles", "nutritionist_profiles", "hospital_profiles",
   "physiotherapists", "counsellors", "nutritionists", "caregivers", "care_assistants", "ambulances",
 ];

@@ -40,6 +40,7 @@ class PartnerRoleSelectScreen extends StatelessWidget {
     AppRole.doctor,
     AppRole.lab,
     AppRole.pharmacy,
+    AppRole.equipment,
     AppRole.ambulance,
     AppRole.caregiver,
     AppRole.physiotherapist,

@@ -85,9 +85,13 @@ class _ActiveSessionBridgeState extends ConsumerState<ActiveSessionBridge>
     if (mounted) setState(() {});
   }
 
-  bool get _onVideoCallScreen => widget.router.routerDelegate.currentConfiguration.uri
-      .toString()
-      .startsWith(AppRoutes.videoCall);
+  // True on every call-related screen — the bridge exists to get the doctor
+  // BACK to a call, so it must never sit over the call itself.
+  bool get _onVideoCallScreen {
+    final loc = widget.router.routerDelegate.currentConfiguration.uri.toString();
+    return loc.startsWith(AppRoutes.videoCall) ||
+        loc.startsWith(AppRoutes.outgoingCall);
+  }
 
   void _onAuthChanged(User? user) {
     _liveSub?.cancel();
@@ -213,11 +217,9 @@ class _ActiveSessionBridgeState extends ConsumerState<ActiveSessionBridge>
   @override
   Widget build(BuildContext context) {
     final info = _computeInfo();
-    // Only the live-call case needs suppressing while already on that
-    // screen — patientWaiting/upcoming still need to surface from
-    // elsewhere in the app so the doctor can navigate to accept/start them.
-    final visible = info.kind != _BridgeKind.none &&
-        !(info.kind == _BridgeKind.liveCall && _onVideoCallScreen);
+    // Hidden while on any call screen and shown again only once the doctor
+    // has left it.
+    final visible = info.kind != _BridgeKind.none && !_onVideoCallScreen;
 
     return IgnorePointer(
       ignoring: !visible,

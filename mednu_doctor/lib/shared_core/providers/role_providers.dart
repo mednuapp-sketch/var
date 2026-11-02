@@ -21,6 +21,7 @@ class RoleEngineState {
   bool get isAmbulance => activeRole == AppRole.ambulance;
   bool get isPharmacy => activeRole == AppRole.pharmacy;
   bool get isLab => activeRole == AppRole.lab;
+  bool get isEquipment => activeRole == AppRole.equipment;
   bool get isCaregiver => activeRole == AppRole.caregiver;
   bool get isPhysiotherapist => activeRole == AppRole.physiotherapist;
   bool get isCounsellor => activeRole == AppRole.counsellor;

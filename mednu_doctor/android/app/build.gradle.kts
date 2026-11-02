@@ -102,6 +102,10 @@ android {
     }
 }
 
+configurations.configureEach {
+    exclude(group = "com.google.firebase", module = "firebase-appcheck-safetynet")
+}
+
 flutter {
     source = "../.."
 }

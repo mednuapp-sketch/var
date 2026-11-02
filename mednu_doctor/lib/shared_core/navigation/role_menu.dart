@@ -132,6 +132,39 @@ List<NavItem> buildMenuForRole(AppRole role) {
           route: AppRoutes.pharmacyProfile,
         ),
       ];
+    case AppRole.equipment:
+      return const [
+        NavItem(
+          label: 'Dashboard',
+          icon: Icons.space_dashboard_outlined,
+          activeIcon: Icons.space_dashboard_rounded,
+          route: AppRoutes.equipmentDashboard,
+        ),
+        NavItem(
+          label: 'Orders',
+          icon: Icons.receipt_long_outlined,
+          activeIcon: Icons.receipt_long_rounded,
+          route: AppRoutes.equipmentOrders,
+        ),
+        NavItem(
+          label: 'Equipment',
+          icon: Icons.health_and_safety_outlined,
+          activeIcon: Icons.health_and_safety_rounded,
+          route: AppRoutes.equipmentMenu,
+        ),
+        NavItem(
+          label: 'Earnings',
+          icon: Icons.account_balance_wallet_outlined,
+          activeIcon: Icons.account_balance_wallet_rounded,
+          route: AppRoutes.equipmentEarnings,
+        ),
+        NavItem(
+          label: 'Profile',
+          icon: Icons.person_outline_rounded,
+          activeIcon: Icons.person_rounded,
+          route: AppRoutes.equipmentProfile,
+        ),
+      ];
     case AppRole.ambulance:
       return const [
         NavItem(

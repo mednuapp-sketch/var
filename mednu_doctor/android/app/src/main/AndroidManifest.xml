@@ -25,6 +25,8 @@
     <!-- Foreground service for background online-presence heartbeat + active calls -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- Keeps the ambulance driver's live GPS feed running while the trip is open but the app is in the background (e.g. while navigating in Google Maps). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <!-- Camera + microphone foreground service types for active video call service (Android 10+) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />

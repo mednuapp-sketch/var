@@ -799,7 +799,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
         child: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 18),
           tooltip: 'Back',
-          onPressed: () => context.pop(),
+          onPressed: () => context.safeBack(),
         ),
       ),
       actions: [
@@ -1619,7 +1619,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
             leading: IconButton(
               icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
               tooltip: 'Back',
-              onPressed: () => context.pop(),
+              onPressed: () => context.safeBack(),
             ),
             flexibleSpace: FlexibleSpaceBar(
               background: Container(
@@ -1677,7 +1677,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded),
           tooltip: 'Back',
-          onPressed: () => context.pop(),
+          onPressed: () => context.safeBack(),
         ),
       ),
       body: AppEmptyState(
@@ -1685,7 +1685,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
         title: 'Doctor not found',
         message: 'This doctor profile is no longer available.',
         actionLabel: 'Go Back',
-        onAction: () => context.pop(),
+        onAction: () => context.safeBack(),
       ),
     );
   }

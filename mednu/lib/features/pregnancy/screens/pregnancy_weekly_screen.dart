@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../data/pregnancy_week_data.dart';
 import '../providers/pregnancy_provider.dart';
 
+import '../../../core/router/app_router.dart';
 // --- Helpers ------------------------------------------------------------------
 
 int _trimesterOf(int week) {
@@ -109,7 +109,7 @@ class _PregnancyWeeklyScreenState extends ConsumerState<PregnancyWeeklyScreen>
         surfaceTintColor: Colors.transparent,
         leading: IconButton(
           icon: Icon(Icons.arrow_back_ios_new_rounded, color: context.appTextPrimary, size: 20),
-          onPressed: () => context.pop(),
+          onPressed: () => context.safeBack(),
         ),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

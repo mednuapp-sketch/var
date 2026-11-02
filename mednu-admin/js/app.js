@@ -62,7 +62,7 @@ const ROLE_TAB_ACCESS = {
   marketing: ['banners', 'web-ads', 'referrals'],
   support:   ['reports', 'tickets', 'broadcast'],
   hr:        [
-    'ambulance-partners', 'caregiver-partners', 'pharmacy-partners', 'lab-partners',       // Partner Accounts
+    'ambulance-partners', 'caregiver-partners', 'pharmacy-partners', 'equipment-partners', 'lab-partners', // Partner Accounts
     'physio-partners', 'counselling-partners', 'nutrition-partners',                        // Partner Accounts (cont.)
     'revenue', 'wallet',                                                            // Finance
     'banners', 'web-ads', 'referrals',                                              // Marketing
@@ -235,6 +235,7 @@ function switchTab(tab, title) {
   if (tab === 'ambulance-partners')    loadPartnerEarnings('ambulance');
   if (tab === 'caregiver-partners')    loadPartnerEarnings('caregiver');
   if (tab === 'pharmacy-partners')     loadPartnerEarnings('pharmacy');
+  if (tab === 'equipment-partners')    loadPartnerEarnings('equipment');
   if (tab === 'lab-partners')          loadPartnerEarnings('lab');
   if (tab === 'physio-partners')       loadPartnerEarnings('physiotherapy');
   if (tab === 'counselling-partners')  loadPartnerEarnings('counselling');
@@ -776,7 +777,7 @@ function renderDoctorsTable(doctors) {
       <td>${(d.totalReviews > 0 && d.rating > 0) ? `â­ ${escHtml(d.rating.toFixed(1))} <span style="font-size:11px;color:#9E9E9E;">(${d.totalReviews})</span>` : '<span style="color:#BDBDBD;font-size:12px;">No reviews</span>'}</td>
       <td><span class="pill pill-${escHtml(safeStatus)}">${escHtml(capitalize(d.status || 'Pending'))}</span></td>
       <td>
-        <button class="btn btn-outline" onclick="viewDoctor('${escHtml(d.id)}')">${(!d.status || d.status === 'pending') ? 'Review' : 'View'}</button>
+        <button class="${d.hasPendingChanges ? 'btn btn-approve' : 'btn btn-outline'}" onclick="viewDoctor('${escHtml(d.id)}')">${(!d.status || d.status === 'pending') ? 'Review' : (d.hasPendingChanges ? 'Review Edit' : 'View')}</button>
         <button class="btn btn-outline" style="margin-left:4px;" onclick="editDoctorAdmin('${escHtml(d.id)}')" title="Edit" aria-label="Edit">
           <i class="ti ti-edit"></i>
         </button>
@@ -1156,6 +1157,43 @@ function showDoctorModal(d) {
 
   const isPending = !d.status || d.status === 'pending';
 
+  // An active doctor's own profile edit lands in `pendingChanges` (see
+  // _saveProfile in mednu_doctor's doctor_profile_screen.dart) and only goes
+  // live when approved here.
+  let pendingEditHtml = '';
+  const pendingChanges = d.pendingChanges || {};
+  if (d.hasPendingChanges && Object.keys(pendingChanges).length > 0) {
+    const fmtVal = v => {
+      if (v === null || v === undefined || v === '') return '—';
+      if (Array.isArray(v)) return v.length ? v.join(', ') : '—';
+      if (typeof v === 'object') return JSON.stringify(v);
+      return String(v);
+    };
+    const rows = Object.entries(pendingChanges)
+      .filter(([key, newVal]) => fmtVal(d[key]) !== fmtVal(newVal))
+      .map(([key, newVal]) => {
+        const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, c => c.toUpperCase());
+        return `<div style="margin-bottom:8px;">
+          <div style="font-size:11px;color:#aaa;font-weight:600;text-transform:uppercase;">${escHtml(label)}</div>
+          <div style="font-size:13px;margin-top:2px;overflow-wrap:anywhere;">
+            <span style="color:#c62828;text-decoration:line-through;">${escHtml(fmtVal(d[key]))}</span>
+            <span style="margin:0 6px;color:#888;">&rarr;</span>
+            <span style="color:#2e7d32;font-weight:700;">${escHtml(fmtVal(newVal))}</span>
+          </div>
+        </div>`;
+      }).join('');
+    pendingEditHtml = `
+      <div style="margin-bottom:20px;padding:16px;background:#fff8e1;border:1px solid #ffe082;border-radius:14px;">
+        <div style="font-size:14px;font-weight:700;margin-bottom:6px;">Pending Profile Edit — Awaiting Approval</div>
+        <div style="font-size:12px;color:#666;margin-bottom:12px;">Patients still see the crossed-out value until you approve.</div>
+        ${rows || '<div style="font-size:12px;color:#888;">No visible differences.</div>'}
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
+          <button onclick="approveDoctorProfileEdit('${escHtml(d.id)}', this)" style="flex:1;min-width:130px;padding:10px;background:#2e7d32;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">Approve Changes</button>
+          <button onclick="rejectDoctorProfileEdit('${escHtml(d.id)}', this)" style="flex:1;min-width:130px;padding:10px;background:#c62828;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">Discard Changes</button>
+        </div>
+      </div>`;
+  }
+
   const modal = document.createElement('div');
   modal.id = 'doctor-modal';
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
@@ -1184,6 +1222,8 @@ function showDoctorModal(d) {
           </div>`).join('')}
       </div>
 
+      ${pendingEditHtml}
+
       <div style="margin-bottom:20px;">
         <div style="font-size:14px;font-weight:700;margin-bottom:12px;"> Submitted Documents</div>
         ${docHtml}
@@ -1202,6 +1242,53 @@ function showDoctorModal(d) {
     </div>`;
   document.body.appendChild(modal);
   modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+}
+
+async function approveDoctorProfileEdit(id, btn) {
+  if (!canApproveRegistrations()) { showToast('Only Directors can approve profile edits.'); return; }
+  if (!(await showConfirm('Apply these changes to the live profile? Patients will see the updated details immediately.'))) return;
+  const original = btn ? btn.textContent : '';
+  withCooldown(`doctor-edit-${id}-approve`, async () => {
+    if (btn) { btn.disabled = true; btn.textContent = '...'; }
+    try {
+      const ref  = db.collection('doctors').doc(id);
+      const snap = await ref.get();
+      const changes = (snap.exists && snap.data().pendingChanges) || {};
+      await ref.update(Object.assign({}, changes, {
+        pendingChanges: {},
+        hasPendingChanges: false,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      }));
+      showToast('Profile changes approved ✓');
+      document.getElementById('doctor-modal')?.remove();
+    } catch (err) {
+      console.error('approveDoctorProfileEdit:', err);
+      if (btn) { btn.disabled = false; btn.textContent = original; }
+      showToast('Failed to approve changes. Please try again.');
+    }
+  });
+}
+
+async function rejectDoctorProfileEdit(id, btn) {
+  if (!canApproveRegistrations()) { showToast('Only Directors can reject profile edits.'); return; }
+  if (!(await showConfirm("Discard these pending changes? The doctor's live profile will stay as it is.", {danger:true}))) return;
+  const original = btn ? btn.textContent : '';
+  withCooldown(`doctor-edit-${id}-reject`, async () => {
+    if (btn) { btn.disabled = true; btn.textContent = '...'; }
+    try {
+      await db.collection('doctors').doc(id).update({
+        pendingChanges: {},
+        hasPendingChanges: false,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+      showToast('Pending changes discarded');
+      document.getElementById('doctor-modal')?.remove();
+    } catch (err) {
+      console.error('rejectDoctorProfileEdit:', err);
+      if (btn) { btn.disabled = false; btn.textContent = original; }
+      showToast('Failed to discard changes. Please try again.');
+    }
+  });
 }
 
 // Shares the `approve-${id}` / `reject-${id}` cooldown keys with
@@ -2908,7 +2995,7 @@ function buildLocationBlock(r) {
 }
 
 function reqTypeLabel(type) {
-  const m = { diagnostics: 'Diagnostics', lab_tests: 'Lab Tests', care_assistant: 'Care Assistant', physiotherapy: 'Physiotherapy', equipment: 'Equipment', caregivers: 'Caregivers' };
+  const m = { diagnostics: 'Diagnostics', lab_tests: 'Lab Tests', care_assistant: 'Care Assistant', physiotherapy: 'Physiotherapy', equipment: 'Equipment', caregivers: 'Nurses' };
   return m[type] || capitalize(type || 'Service');
 }
 
@@ -4452,7 +4539,8 @@ function initOverviewRealtime() {
       const el = document.getElementById('stat-doctors');
       if (el) { el.textContent = doctorDocs.length.toLocaleString(); el.classList.add('stat-updated'); setTimeout(() => el.classList.remove('stat-updated'), 500); }
       // Pending list
-      const pendingDocs = doctorDocs.filter(d => { const s = d.data().status; return !s || s === 'pending'; }).slice(0, 5);
+      // Also surfaces active doctors with a profile edit awaiting approval.
+      const pendingDocs = doctorDocs.filter(d => { const x = d.data(); return !x.status || x.status === 'pending' || x.hasPendingChanges === true; }).slice(0, 8);
       renderPendingList(pendingDocs);
       // Notify new doctors
       snap.docChanges().forEach(change => {
@@ -5100,7 +5188,7 @@ const svcTypeColors = {
 function svcTypeLabel(type) {
   const m = {
     diagnostics:'Diagnostics', lab_tests:'Lab Tests', physiotherapy:'Physiotherapy',
-    care_assistant:'Care Assistant', caregivers:'Caregivers', equipment:'Equipment',
+    care_assistant:'Care Assistant', caregivers:'Nurses', equipment:'Equipment',
     consultation:'Consultation', nutrition:'Dietician', counselling:'Counselling',
     medicine_delivery:'Medicine Delivery',
   };
@@ -8066,7 +8154,7 @@ function initCaregiversListener() {
         badge.style.display = activeCount > 0 ? 'inline' : 'none';
       }
       setText('sec-caregivers', activeCount);
-    }, err => console.error('[Caregivers]', err));
+    }, err => console.error('[Nurses]', err));
 }
 
 function _filterCaregiversImpl() {
@@ -8093,7 +8181,7 @@ function renderCaregiversList(list) {
   const el = document.getElementById('caregivers-list');
   if (!el) return;
   if (!list.length) {
-    el.innerHTML = '<div class="empty-state"><div class="empty-icon">🧑‍⚕️</div><p>No caregivers found. Add one above.</p></div>';
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon">🧑‍⚕️</div><p>No nurses found. Add one above.</p></div>';
     return;
   }
   const rateUnitLabel = u => CG_RATE_UNIT_LABELS[u] || (u || 'Per Day');
@@ -8114,7 +8202,7 @@ function renderCaregiversList(list) {
           ${c.location ? ' · 📍 ' + escHtml(c.location) : ''}
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center;">
-          <span class="svc-type-badge" style="background:${tc.bg};color:${tc.fg};">${escHtml(c.type || 'Caregiver')}</span>
+          <span class="svc-type-badge" style="background:${tc.bg};color:${tc.fg};">${escHtml(c.type || 'Nurse')}</span>
           ${c.gender ? `<span class="svc-type-badge" style="background:#f3e5f5;color:#6a1b9a;">${escHtml(c.gender)}</span>` : ''}
           <span class="service-price">${rateStr}</span>
           ${rating ? `<span class="banner-cta-chip">${escHtml(rating)}</span>` : ''}
@@ -8181,11 +8269,11 @@ async function saveCaregiver() {
   try {
     if (_editingCaregiverId) {
       await db.collection('caregivers').doc(_editingCaregiverId).update(data);
-      showToast('Caregiver updated ✔');
+      showToast('Nurse updated ✔');
     } else {
       data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
       await db.collection('caregivers').add(data);
-      showToast('Caregiver added ✔');
+      showToast('Nurse added ✔');
     }
     cancelCaregiverEdit();
   } catch (err) {
@@ -8211,7 +8299,7 @@ function editCaregiver(id) {
   document.getElementById('cg-phone').value       = c.phone      || '';
   document.getElementById('cg-bio').value         = c.bio        || '';
   document.getElementById('cg-active').checked    = c.isActive   !== false;
-  document.getElementById('caregiver-form-title').textContent = 'Edit Caregiver';
+  document.getElementById('caregiver-form-title').textContent = 'Edit Nurse';
   document.getElementById('cancel-caregiver-btn').style.display = 'inline-flex';
   document.getElementById('cg-name').scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
@@ -8224,7 +8312,7 @@ function cancelCaregiverEdit() {
   document.getElementById('cg-gender').value      = 'Female';
   document.getElementById('cg-rate-unit').value   = 'per_day';
   document.getElementById('cg-active').checked    = true;
-  document.getElementById('caregiver-form-title').textContent = 'Add Caregiver';
+  document.getElementById('caregiver-form-title').textContent = 'Add Nurse';
   document.getElementById('cancel-caregiver-btn').style.display = 'none';
 }
 
@@ -8235,11 +8323,11 @@ async function toggleCaregiver(id, isActive) {
 }
 
 async function deleteCaregiver(id, btn) {
-  if (!(await showConfirm('Delete this caregiver? This cannot be undone.', {danger:true}))) return;
+  if (!(await showConfirm('Delete this nurse? This cannot be undone.', {danger:true}))) return;
   btn.disabled = true;
   try {
     await db.collection('caregivers').doc(id).delete();
-    showToast('Caregiver deleted');
+    showToast('Nurse deleted');
   } catch (e) {
     showToast('Delete failed: ' + e.message);
     btn.disabled = false;
@@ -8500,7 +8588,7 @@ const PARTNER_ROLES = {
     navBadge:     'nav-caregiver-partners-count',
     extraFilterId:'cp-specialty-filter',
     docSlots: {
-      caregiver_id:  'Caregiver ID',
+      caregiver_id:  'Nurse ID',
       certificates:  'Certificates',
       address_proof: 'Address Proof',
     },
@@ -8537,6 +8625,39 @@ const PARTNER_ROLES = {
       (p.licenseNumber || '').toLowerCase().includes(q) ||
       (p.phone || '').toLowerCase().includes(q) ||
       (p.email || '').toLowerCase().includes(q),
+  },
+  // Medical-equipment vendors: self-register in the partner app, are approved
+  // here, then run their own menu (equipment_profiles/{uid}/items) that the
+  // patient app browses vendor-by-vendor. Same profile shape as pharmacy, so it
+  // reuses the generic pharmacy row/detail rendering below.
+  equipment: {
+    label:        'Equipment Vendor',
+    collection:   'equipment_profiles',
+    txCollection: 'equipment_transactions',
+    txField:      'vendorId',
+    tab:          'equipment-partners',
+    prefix:       'ep',
+    cols:         8,
+    navBadge:     'nav-equipment-partners-count',
+    extraFilterId:'ep-delivery-filter',
+    // Keys must stay identical to `PartnerDocumentType.equipment` in
+    // partner_document_models.dart (and the `equipment_documents/{uid}/...`
+    // Storage path).
+    docSlots: {
+      business_registration: 'Business / Trade Registration (GST / Shop Act)',
+      owner_id:              'Owner Government ID Proof',
+      address_proof:         'Shop Address Proof',
+    },
+    nameOf: p => p.name || 'Unnamed vendor',
+    subOf:  p => p.address || p.email || '—',
+    extraValues: null, // delivery filter is a fixed yes/no list in the markup
+    extraMatch:  (p, v) => v === 'yes' ? p.deliveryAvailable === true : p.deliveryAvailable !== true,
+    searchMatch: (p, q) =>
+      (p.name || '').toLowerCase().includes(q) ||
+      (p.licenseNumber || '').toLowerCase().includes(q) ||
+      (p.phone || '').toLowerCase().includes(q) ||
+      (p.email || '').toLowerCase().includes(q) ||
+      (p.categoriesOffered || []).join(' ').toLowerCase().includes(q),
   },
   // Lab partners were missing from this panel entirely (the earlier partner
   // onboarding task covered ambulance/caregiver/pharmacy only). Document
@@ -8699,8 +8820,8 @@ const PARTNER_ROLES = {
   },
 };
 
-const _partnerData      = { ambulance: [], caregiver: [], pharmacy: [], lab: [], physiotherapy: [], counselling: [], nutrition: [], hospital: [] };
-const _partnerListeners = { ambulance: null, caregiver: null, pharmacy: null, lab: null, physiotherapy: null, counselling: null, nutrition: null, hospital: null };
+const _partnerData      = { ambulance: [], caregiver: [], pharmacy: [], equipment: [], lab: [], physiotherapy: [], counselling: [], nutrition: [], hospital: [] };
+const _partnerListeners = { ambulance: null, caregiver: null, pharmacy: null, equipment: null, lab: null, physiotherapy: null, counselling: null, nutrition: null, hospital: null };
 
 function partnerStatusOf(p) {
   const s = (p.status || 'pending').toLowerCase();
@@ -8887,6 +9008,7 @@ function filterPartnerTable(role) {
 const filterAmbulancePartners   = debounce(() => filterPartnerTable('ambulance'), 180);
 const filterCaregiverPartners   = debounce(() => filterPartnerTable('caregiver'), 180);
 const filterPharmacyPartners    = debounce(() => filterPartnerTable('pharmacy'), 180);
+const filterEquipmentPartners   = debounce(() => filterPartnerTable('equipment'), 180);
 const filterLabPartners         = debounce(() => filterPartnerTable('lab'), 180);
 const filterPhysioPartners      = debounce(() => filterPartnerTable('physiotherapy'), 180);
 const filterCounsellingPartners = debounce(() => filterPartnerTable('counselling'), 180);
@@ -9034,7 +9156,7 @@ function renderPartnerTable(role, list) {
         .map(s => `<span class="svc-type-badge" style="background:#f3e5f5;color:#6a1b9a;">${escHtml(s)}</span>`).join(' ');
       const listedAs = p.serviceType === 'care_assistant'
         ? `<span class="svc-type-badge" style="background:#EFE1EC;color:#522546;">Care Assistant</span>`
-        : `<span class="svc-type-badge" style="background:#EFE1EC;color:#522546;">Caregiver</span>`;
+        : `<span class="svc-type-badge" style="background:#EFE1EC;color:#522546;">Nurse</span>`;
       return `<tr>
         ${checkboxCell}
         <td><div class="user-cell">${avatar}
@@ -9496,6 +9618,7 @@ async function _loadPartnerEarningsUncached(role) {
 function loadAmbulancePartnerEarnings() { loadPartnerEarnings('ambulance', true); }
 function loadCaregiverPartnerEarnings() { loadPartnerEarnings('caregiver', true); }
 function loadPharmacyPartnerEarnings()  { loadPartnerEarnings('pharmacy',  true); }
+function loadEquipmentPartnerEarnings() { loadPartnerEarnings('equipment', true); }
 function loadLabPartnerEarnings()       { loadPartnerEarnings('lab',       true); }
 function loadPhysioPartnerEarnings()       { loadPartnerEarnings('physiotherapy', true); }
 function loadCounsellingPartnerEarnings()  { loadPartnerEarnings('counselling',   true); }
@@ -9667,7 +9790,7 @@ function showPartnerModal(role, id) {
     fields = [
       ['Phone',          p.phone || '—'],
       ['Email',          p.email || '—'],
-      ['Listed As',      p.serviceType === 'care_assistant' ? 'Care Assistant' : 'Caregiver'],
+      ['Listed As',      p.serviceType === 'care_assistant' ? 'Care Assistant' : 'Nurse'],
       ['Gender',         p.gender || '—'],
       ['Service Area',   p.city || '—'],
       ['Hourly Rate',    p.hourlyRate ? formatCurrency(p.hourlyRate) + '/hr' : '—'],
@@ -9918,7 +10041,7 @@ window.renderPendingList = function (docs) {
     return {
       role: 'doctor',
       name: d.name || 'Unknown',
-      sub:  d.specialty || d.specialisation || 'General',
+      sub:  (d.hasPendingChanges && d.status === 'active' ? 'Profile edit · ' : '') + (d.specialty || d.specialisation || 'General'),
       onclick: `reviewPendingDoctor('${escHtml(doc.id)}')`,
     };
   });
@@ -9939,6 +10062,7 @@ const _PENDING_ROLE_BADGES = {
   ambulance:     { label: 'Ambulance',  bg: '#ffebee', fg: '#c62828' },
   caregiver:     { label: 'Care',       bg: '#f3e5f5', fg: '#6a1b9a' },
   pharmacy:      { label: 'Pharmacy',   bg: '#e8f5e9', fg: '#2e7d32' },
+  equipment:     { label: 'Equipment',  bg: '#fff3e0', fg: '#e65100' },
   lab:           { label: 'Lab',        bg: '#e0f2f1', fg: '#00695c' },
   physiotherapy: { label: 'Physio',     bg: '#e8f5e9', fg: '#2e7d32' },
   counselling:   { label: 'Counsellor', bg: '#ede7f6', fg: '#4527a0' },
@@ -9954,6 +10078,7 @@ const _PENDING_ROLE_NAV = {
   ambulance:     { tab: 'ambulance-partners',  title: 'Ambulance Partners' },
   caregiver:     { tab: 'caregiver-partners',  title: 'Care Partners' },
   pharmacy:      { tab: 'pharmacy-partners',   title: 'Pharmacy Partners' },
+  equipment:     { tab: 'equipment-partners',  title: 'Equipment Vendors' },
   lab:           { tab: 'lab-partners',        title: 'Lab Partners' },
   physiotherapy: { tab: 'physio-partners',     title: 'Physiotherapist Partners' },
   counselling:   { tab: 'counselling-partners',title: 'Counsellor Partners' },
@@ -10037,7 +10162,7 @@ function renderCombinedPendingList() {
 //   with `db`, exactly like the existing Banners section.
 // ============================================================================
 
-const SETTLEMENT_SERVICE_TYPES = ['consultation', 'video_consultation', 'diagnostics', 'medicine', 'pharmacy', 'ambulance', 'caregiver'];
+const SETTLEMENT_SERVICE_TYPES = ['consultation', 'video_consultation', 'diagnostics', 'medicine', 'pharmacy', 'equipment', 'ambulance', 'caregiver'];
 const SERVICE_TYPE_LABELS = {
   consultation: 'Consultation',
   video_consultation: 'Video Consultation',
@@ -10045,7 +10170,7 @@ const SERVICE_TYPE_LABELS = {
   medicine: 'Medicine',
   pharmacy: 'Pharmacy',
   ambulance: 'Ambulance',
-  caregiver: 'Caregiver',
+  caregiver: 'Nurse',
 };
 function serviceTypeLabel(s) { return SERVICE_TYPE_LABELS[s] || s || '—'; }
 

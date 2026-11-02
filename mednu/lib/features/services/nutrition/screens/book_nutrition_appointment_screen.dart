@@ -224,8 +224,8 @@ class _BookNutritionAppointmentScreenState
                 child: ElevatedButton(
                   onPressed: () {
                     Navigator.pop(ctx);
-                    context.pop();
-                    context.pop();
+                    context.safeBack();
+                    context.safeBack();
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: _kGreen,
@@ -262,7 +262,7 @@ class _BookNutritionAppointmentScreenState
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded),
-          onPressed: () => context.pop(),
+          onPressed: () => context.safeBack(),
         ),
         title: const Text('Book Consultation', style: AppTextStyles.h3),
         centerTitle: true,

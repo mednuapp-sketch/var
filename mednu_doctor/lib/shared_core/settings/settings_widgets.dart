@@ -102,7 +102,6 @@ class SharedSettingsTile extends StatelessWidget {
         return Switch.adaptive(
           value: item.toggleValue,
           onChanged: item.onToggle,
-          activeThumbColor: AppColors.primary,
         );
       case SettingsItemTrailing.value:
         return Text(item.valueText ?? '', style: AppTextStyles.bodyMedium);

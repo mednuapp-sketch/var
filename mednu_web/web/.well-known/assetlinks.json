@@ -1,0 +1,13 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.mednu.mednu",
+    "sha256_cert_fingerprints": [
+      "8D:83:FC:53:C1:03:D8:BD:9C:1D:62:61:E7:98:A4:73:26:6F:A8:56:16:48:C4:F3:3C:63:D1:00:23:6E:58:7E",
+      "7B:68:A4:55:39:16:D0:BE:0F:11:2F:39:FD:B7:A9:B6:35:A5:13:04:4B:AA:99:3B:B5:D4:3E:87:D9:9E:77:B2",
+      "E5:2F:92:44:CD:06:2C:31:E5:EF:09:61:E0:BE:74:F2:A1:65:1B:86:65:57:A8:36:52:95:7C:3E:43:9E:D0:EF",
+      "C3:23:91:58:8E:E5:8A:00:E7:E8:E1:FE:EC:68:26:29:C8:72:1F:97:1E:86:CD:72:EF:06:63:6E:D3:61:DD:87"
+    ]
+  }
+}]

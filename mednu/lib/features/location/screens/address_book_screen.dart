@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/widgets/ux_widgets.dart';
@@ -8,6 +7,7 @@ import '../models/saved_address.dart';
 import '../providers/saved_addresses_provider.dart';
 import 'add_edit_address_screen.dart';
 
+import '../../../core/router/app_router.dart';
 // ─────────────────────────────────────────────────────────────────────────────
 //  AddressBookScreen
 // ─────────────────────────────────────────────────────────────────────────────
@@ -30,7 +30,7 @@ class AddressBookScreen extends ConsumerWidget {
             color: AppColors.primary.withValues(alpha: 0.08),
             shape: const CircleBorder(),
             child: InkWell(
-              onTap: () => context.pop(),
+              onTap: () => context.safeBack(),
               customBorder: const CircleBorder(),
               child: const Padding(
                 padding: EdgeInsets.all(8),

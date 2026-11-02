@@ -111,9 +111,15 @@ class _ActiveSessionBridgeState extends ConsumerState<ActiveSessionBridge>
 
   // AppRoutes.videoCall is '/consultation/video/:id' — check the prefix
   // since the live id segment varies.
-  bool get _onVideoCallScreen => widget.router.routerDelegate.currentConfiguration.uri
-      .toString()
-      .startsWith('/consultation/video');
+  // True on every call-related screen (video call, outgoing/incoming ring,
+  // guest call) — the bridge exists to get the patient BACK to a call, so it
+  // must never sit over the call itself, whatever state the session is in.
+  bool get _onVideoCallScreen {
+    final loc = widget.router.routerDelegate.currentConfiguration.uri.toString();
+    return loc.startsWith('/consultation/video') ||
+        loc.startsWith('/call/') ||
+        loc.startsWith('/guest-join');
+  }
 
   void _onAuthChanged(User? user) {
     _liveSub?.cancel();
@@ -252,11 +258,9 @@ class _ActiveSessionBridgeState extends ConsumerState<ActiveSessionBridge>
   @override
   Widget build(BuildContext context) {
     final info = _computeInfo();
-    // Only the live-call case needs suppressing while already on that
-    // screen — waitingRoom/upcoming still need to surface from elsewhere
-    // in the app so the patient can navigate to rejoin/start them.
-    final visible = info.kind != _BridgeKind.none &&
-        !(info.kind == _BridgeKind.liveCall && _onVideoCallScreen);
+    // Hidden while on any call screen (including the lobby and the waiting
+    // room) and shown again only once the patient has left it.
+    final visible = info.kind != _BridgeKind.none && !_onVideoCallScreen;
 
     final mq = MediaQuery.of(context);
     // Mirrors the default Align(bottomCenter)+SafeArea(minimum: 72) spot

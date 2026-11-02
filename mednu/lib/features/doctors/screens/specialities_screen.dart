@@ -5,6 +5,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/utils/r.dart';
 
+import '../../../core/router/app_router.dart';
 class SpecialitiesScreen extends StatefulWidget {
   const SpecialitiesScreen({super.key});
 
@@ -74,7 +75,7 @@ class _SpecialitiesScreenState extends State<SpecialitiesScreen> {
             leading: IconButton(
               icon: const Icon(Icons.arrow_back_ios_new_rounded,
                   color: Colors.white),
-              onPressed: () => context.pop(),
+              onPressed: () => context.safeBack(),
             ),
             flexibleSpace: FlexibleSpaceBar(
               background: Container(

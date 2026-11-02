@@ -66,7 +66,7 @@ class _NutritionistListScreenState
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded),
-          onPressed: () => context.pop(),
+          onPressed: () => context.safeBack(),
         ),
         title: const Text('Find Dietician', style: AppTextStyles.h3),
         centerTitle: true,

@@ -121,6 +121,8 @@ String _profileRouteForRole(AppRole role) {
       return AppRoutes.editProfile;
     case AppRole.lab:
       return AppRoutes.labProfile;
+    case AppRole.equipment:
+      return AppRoutes.equipmentProfile;
     case AppRole.pharmacy:
       return AppRoutes.pharmacyProfile;
     case AppRole.ambulance:

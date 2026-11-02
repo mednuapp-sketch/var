@@ -58,6 +58,24 @@ class _GuestJoinScreenState extends State<GuestJoinScreen> {
 
   Future<void> _redeem() async {
     try {
+      // Signing in with the guest custom token replaces the current session,
+      // and the call screen signs it out afterwards — that would silently log
+      // a real patient out of their own account. Refuse instead.
+      final existing = FirebaseAuth.instance.currentUser;
+      if (existing != null) {
+        final claims = (await existing.getIdTokenResult()).claims ?? {};
+        if (claims['guestAppointmentId'] == null) {
+          if (!mounted) return;
+          setState(() {
+            _state = _GuestJoinState.error;
+            _errorMessage =
+                'You are signed in to a MedNU account on this device. Please '
+                'open this link on a different device or browser to join as a guest.';
+          });
+          return;
+        }
+      }
+
       final result = await FirebaseFunctions.instance
           .httpsCallable('redeemGuestJoinLink')
           .call({

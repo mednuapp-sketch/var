@@ -213,7 +213,7 @@ class _MyMedicinesScreenState extends ConsumerState<MyMedicinesScreen> {
         leading: IconButton(
           icon: Icon(Icons.arrow_back_ios_new_rounded,
               color: context.appTextPrimary, size: 20),
-          onPressed: () => context.pop(),
+          onPressed: () => context.safeBack(),
         ),
         title: Text(
           'My Medicines',

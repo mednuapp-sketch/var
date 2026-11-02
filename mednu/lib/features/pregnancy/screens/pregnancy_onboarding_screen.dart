@@ -200,7 +200,7 @@ class _PregnancyOnboardingScreenState
         Row(
           children: [
             GestureDetector(
-              onTap: () => context.pop(),
+              onTap: () => context.safeBack(),
               child: Container(
                 width: 40,
                 height: 40,

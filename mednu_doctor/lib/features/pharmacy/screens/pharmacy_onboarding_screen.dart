@@ -62,6 +62,17 @@ class _PharmacyOnboardingScreenState extends State<PharmacyOnboardingScreen> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    final missingDocs = [
+      for (final type in PartnerDocumentType.pharmacy)
+        if (_pickedDocs[type.key] == null) type.label,
+    ];
+    if (missingDocs.isNotEmpty) {
+      FeedbackService.showError(
+        context,
+        'Upload all required documents before submitting: ${missingDocs.join(', ')}.',
+      );
+      return;
+    }
     if (_selectedCategories.isEmpty) {
       FeedbackService.showError(context, 'Select at least one category you stock.');
       return;
@@ -150,7 +161,6 @@ class _PharmacyOnboardingScreenState extends State<PharmacyOnboardingScreen> {
                       subtitle: const Text('Turn off if pickup-only for now', style: AppTextStyles.bodySmall),
                       value: _deliveryAvailable,
                       onChanged: (v) => setState(() => _deliveryAvailable = v),
-                      activeThumbColor: AppColors.primary,
                     ),
                   ),
                   const SizedBox(height: 22),

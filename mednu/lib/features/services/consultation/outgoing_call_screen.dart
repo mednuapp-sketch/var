@@ -249,7 +249,7 @@ class _OutgoingCallScreenState extends State<OutgoingCallScreen>
     // screen, so if there is also nothing to pop back to (entered via a
     // stack-replacing `go`) the user would be stranded. Fall back to home.
     if (context.canPop()) {
-      context.pop();
+      context.safeBack();
     } else {
       context.go(AppRoutes.home);
     }

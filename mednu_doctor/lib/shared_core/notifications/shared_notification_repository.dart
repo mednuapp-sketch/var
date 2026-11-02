@@ -31,6 +31,7 @@ class SharedNotificationRepository {
       case AppRole.ambulance:
       case AppRole.pharmacy:
       case AppRole.lab:
+      case AppRole.equipment:
       case AppRole.caregiver:
       case AppRole.physiotherapist:
       case AppRole.counsellor:

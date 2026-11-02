@@ -92,7 +92,7 @@ class CaregiverProfile {
   factory CaregiverProfile.fromFirestore(DocumentSnapshot<Object?> doc) {
     final d = (doc.data() as Map<String, dynamic>?) ?? const {};
     return CaregiverProfile(
-      name: d['name'] as String? ?? 'Caregiver',
+      name: d['name'] as String? ?? 'Nurse',
       photoUrl: d['photoUrl'] as String? ?? '',
       certifications: (d['certifications'] as List<dynamic>? ?? const [])
           .map((e) => e.toString())

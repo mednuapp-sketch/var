@@ -102,7 +102,7 @@ class _NotApplicableScreen extends StatelessWidget {
               ),
               SizedBox(height: R.h(context, 32)),
               OutlinedButton.icon(
-                onPressed: () => context.pop(),
+                onPressed: () => context.safeBack(),
                 icon: const Icon(Icons.arrow_back_rounded),
                 label: const Text('Go Back'),
               ),

@@ -5,10 +5,10 @@
 // ============================================================
 
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import '../constants/app_colors.dart';
 import '../constants/app_text_styles.dart';
 
+import '../router/app_router.dart';
 // ──────────────────────────────────────────────────────────────
 // 1. SHIMMER / SKELETON
 // ──────────────────────────────────────────────────────────────
@@ -680,7 +680,7 @@ class GradientAppBar extends StatelessWidget implements PreferredSizeWidget {
           ? IconButton(
               icon: const Icon(Icons.arrow_back_ios_new_rounded,
                   color: Colors.white, size: 20),
-              onPressed: () => context.pop(),
+              onPressed: () => context.safeBack(),
             )
           : leading,
       title: Text(title,

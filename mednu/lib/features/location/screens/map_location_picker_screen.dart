@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -10,6 +9,7 @@ import '../../home/providers/location_provider.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/places_service.dart';
 
+import '../../../core/router/app_router.dart';
 // ─────────────────────────────────────────────────────────────────────────────
 // Map Location Picker Screen
 // Full-screen Google Map with a draggable center-pin.
@@ -535,7 +535,7 @@ class _MapLocationPickerScreenState
                       _MapIconButton(
                         icon: Icons.arrow_back_ios_new_rounded,
                         isDark: isDark,
-                        onTap: () => context.pop(),
+                        onTap: () => context.safeBack(),
                       ),
                       const SizedBox(width: 8),
                       Expanded(

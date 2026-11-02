@@ -91,6 +91,17 @@
                 <category android:name="android.intent.category.BROWSABLE"/>
                 <data android:scheme="mednu"/>
             </intent-filter>
+
+            <!-- Android App Link: opening https://mednu.in/ (home page only, so
+                 privacy.html etc. stay in the browser) launches the installed
+                 app. Verified via mednu_web/web/.well-known/assetlinks.json. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="https" android:host="mednu.in" android:path="/"/>
+                <data android:scheme="https" android:host="www.mednu.in" android:path="/"/>
+            </intent-filter>
         </activity>
 
         <!-- Google Maps API Key -->

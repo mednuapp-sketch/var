@@ -6,7 +6,7 @@
 // ============================================================
 
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
+import '../router/app_router.dart';
 import '../constants/app_colors.dart';
 import '../constants/app_text_styles.dart';
 
@@ -524,7 +524,9 @@ class GradientSliverAppBar extends StatelessWidget {
       elevation: 0,
       leading: IconButton(
         icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-        onPressed: onBack ?? () => context.pop(),
+        // safeBack, not pop: screens opened via context.go (e.g. from the
+        // dashboard grid or side menu) have nothing to pop.
+        onPressed: onBack ?? () => context.safeBack(),
       ),
       actions: actions,
       flexibleSpace: FlexibleSpaceBar(

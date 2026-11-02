@@ -2005,9 +2005,9 @@ class _AllergiesSection extends StatelessWidget {
               ),
               Switch(
                 value: show,
-                activeThumbColor: const Color(0xFFE53935),
+                activeThumbColor: Colors.white,
                 activeTrackColor:
-                    const Color(0xFFE53935).withValues(alpha: 0.3),
+                    const Color(0xFFE53935),
                 onChanged: onToggle,
               ),
             ]),
@@ -2125,7 +2125,6 @@ class _FollowUpSection extends StatelessWidget {
           ),
           Switch(
             value: required,
-            activeThumbColor: AppColors.secondary,
             onChanged: onToggle,
           ),
         ]),

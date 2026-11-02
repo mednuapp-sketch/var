@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../models/pregnancy_models.dart';
 import '../providers/pregnancy_provider.dart';
 
+import '../../../core/router/app_router.dart';
 // --- Timing constants --------------------------------------------------------
 
 const _kTimingOptions = ['Morning', 'Afternoon', 'Evening', 'Night', 'With meals'];
@@ -160,7 +160,7 @@ class _PregnancyMedicinesScreenState
         leading: IconButton(
           icon: Icon(Icons.arrow_back_ios_new_rounded,
               color: context.appTextPrimary, size: 20),
-          onPressed: () => context.pop(),
+          onPressed: () => context.safeBack(),
         ),
         title: Text(
           'My Medicines',
@@ -1334,7 +1334,6 @@ class _AddMedicineSheetState extends ConsumerState<_AddMedicineSheet> {
                               value: _reminderEnabled,
                               onChanged: (v) =>
                                   setState(() => _reminderEnabled = v),
-                              activeThumbColor: AppColors.primary,
                             ),
                           ],
                         ),

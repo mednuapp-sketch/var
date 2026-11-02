@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_rating_bar/flutter_rating_bar.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_text_styles.dart';
 import '../../../../core/widgets/ux_widgets.dart';
@@ -9,6 +8,7 @@ import '../../../../core/widgets/service_booking_sheet.dart';
 import '../models/counsellor_model.dart';
 import '../services/counsellor_service.dart';
 
+import '../../../../core/router/app_router.dart';
 const _kPlum     = Color(0xFF633058);
 const _kPlumDark = Color(0xFF3D1D36);
 const _kPlumBg   = Color(0xFFF3E5F5);
@@ -57,7 +57,7 @@ class CounsellorProfileScreen extends StatelessWidget {
             return Scaffold(
               backgroundColor: context.appBackground,
               appBar: AppBar(
-                leading: IconButton(icon: const Icon(Icons.arrow_back_ios_new_rounded), onPressed: () => context.pop()),
+                leading: IconButton(icon: const Icon(Icons.arrow_back_ios_new_rounded), onPressed: () => context.safeBack()),
               ),
               body: const AppEmptyState(
                 icon: Icons.person_off_outlined,
@@ -75,7 +75,7 @@ class CounsellorProfileScreen extends StatelessWidget {
                 backgroundColor: _kPlumDark,
                 leading: IconButton(
                   icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-                  onPressed: () => context.pop(),
+                  onPressed: () => context.safeBack(),
                 ),
                 flexibleSpace: FlexibleSpaceBar(
                   background: Container(

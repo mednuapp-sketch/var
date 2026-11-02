@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 
+import '../../../core/router/app_router.dart';
 /// Medical Disclaimer screen — standalone informational page accessible from
 /// the Settings / Legal section. Not the first-launch gate.
 class MedicalDisclaimerScreen extends StatelessWidget {
@@ -19,7 +19,7 @@ class MedicalDisclaimerScreen extends StatelessWidget {
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
           color: context.appTextPrimary,
-          onPressed: () => context.pop(),
+          onPressed: () => context.safeBack(),
         ),
         title: Text(
           'Medical Disclaimer',
@@ -261,7 +261,7 @@ class MedicalDisclaimerScreen extends StatelessWidget {
               width: double.infinity,
               height: 52,
               child: ElevatedButton(
-                onPressed: () => context.pop(),
+                onPressed: () => context.safeBack(),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,

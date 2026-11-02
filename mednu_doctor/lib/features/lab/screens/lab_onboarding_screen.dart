@@ -63,6 +63,17 @@ class _LabOnboardingScreenState extends State<LabOnboardingScreen> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    final missingDocs = [
+      for (final type in PartnerDocumentType.lab)
+        if (_pickedDocs[type.key] == null) type.label,
+    ];
+    if (missingDocs.isNotEmpty) {
+      FeedbackService.showError(
+        context,
+        'Upload all required documents before submitting: ${missingDocs.join(', ')}.',
+      );
+      return;
+    }
     if (_selectedServices.isEmpty) {
       FeedbackService.showError(context, 'Select at least one service you offer.');
       return;

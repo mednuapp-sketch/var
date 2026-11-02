@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:mednu/core/constants/app_colors.dart';
 import 'package:mednu/core/constants/app_text_styles.dart';
@@ -11,6 +10,7 @@ import '../../../core/utils/r.dart';
 import '../services/ai_tips_service.dart';
 import '../services/health_article_service.dart';
 
+import '../../../core/router/app_router.dart';
 // ── Article data model ────────────────────────────────────────────────────────
 
 class _Article {
@@ -213,7 +213,7 @@ class _EducationScreenState extends State<EducationScreen> {
             leading: IconButton(
               icon: const Icon(Icons.arrow_back_ios_new_rounded,
                   color: Colors.white),
-              onPressed: () => context.pop(),
+              onPressed: () => context.safeBack(),
             ),
             actions: [
               IconButton(

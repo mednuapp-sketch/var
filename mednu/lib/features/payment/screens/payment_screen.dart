@@ -12,6 +12,7 @@ import '../../../core/constants/app_text_styles.dart';
 import '../../../core/constants/payment_config.dart';
 import '../../wallet/wallet_provider.dart';
 
+import '../../../core/router/app_router.dart';
 // ─────────────────────────────────────────────────────────────────────────────
 //  Constants
 // ─────────────────────────────────────────────────────────────────────────────
@@ -659,7 +660,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen>
       leading: IconButton(
         icon: const Icon(Icons.arrow_back_ios_new_rounded),
         tooltip: 'Back',
-        onPressed: () => context.pop(),
+        onPressed: () => context.safeBack(),
       ),
       actions: const [
         Padding(
@@ -877,8 +878,8 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen>
           Switch(
             value: active,
             onChanged: onChanged,
-            activeThumbColor: activeColor,
-            activeTrackColor: activeColor.withValues(alpha: 0.3),
+            activeThumbColor: Colors.white,
+            activeTrackColor: activeColor,
           ),
         ],
       ),

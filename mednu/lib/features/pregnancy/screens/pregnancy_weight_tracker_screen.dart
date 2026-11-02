@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../../core/constants/app_colors.dart';
@@ -9,6 +8,7 @@ import '../../../core/widgets/ux_widgets.dart';
 import '../models/pregnancy_models.dart';
 import '../providers/pregnancy_provider.dart';
 
+import '../../../core/router/app_router.dart';
 class PregnancyWeightTrackerScreen extends ConsumerStatefulWidget {
   const PregnancyWeightTrackerScreen({super.key});
 
@@ -102,7 +102,7 @@ class _PregnancyWeightTrackerScreenState
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded,
               color: Colors.white, size: 20),
-          onPressed: () => context.pop(),
+          onPressed: () => context.safeBack(),
         ),
         flexibleSpace: FlexibleSpaceBar(
           background: Container(
@@ -1271,7 +1271,7 @@ class _PregnancyWeightTrackerScreenState
           leading: IconButton(
             icon: const Icon(Icons.arrow_back_ios_new_rounded,
                 color: Color(0xFF33172C), size: 20),
-            onPressed: () => context.pop(),
+            onPressed: () => context.safeBack(),
           ),
           title: Text(
             'Weight Tracker',
@@ -1316,7 +1316,7 @@ class _PregnancyWeightTrackerScreenState
                 ),
                 const SizedBox(height: 24),
                 ElevatedButton(
-                  onPressed: () => context.pop(),
+                  onPressed: () => context.safeBack(),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,

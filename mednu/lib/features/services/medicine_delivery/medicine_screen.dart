@@ -369,7 +369,7 @@ class _MedicineScreenState extends ConsumerState<MedicineScreen> {
             pinned: true,
             backgroundColor: const Color(0xFF2E7D32),
             expandedHeight: AppSpacing.headerHeight(context),
-            leading: IconButton(icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white), onPressed: () => context.pop()),
+            leading: IconButton(icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white), onPressed: () => context.safeBack()),
             actions: [
               IconButton(
                 icon: const Icon(Icons.upload_file_rounded, color: Colors.white),
@@ -616,7 +616,7 @@ class _MedicineScreenState extends ConsumerState<MedicineScreen> {
         ? 'This pharmacy hasn\'t listed its catalogue yet. Check back soon or try another pharmacy nearby.'
         : 'The medicine catalogue will appear here once added by the pharmacy team.',
     actionLabel: widget.pharmacyId != null ? 'Browse Other Pharmacies' : null,
-    onAction: widget.pharmacyId != null ? () => context.pop() : null,
+    onAction: widget.pharmacyId != null ? () => context.safeBack() : null,
   );
 }
 

@@ -4,6 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/router/app_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:dio/dio.dart';
 import '../../../core/constants/app_colors.dart';
@@ -346,7 +347,7 @@ class _DoctorsListScreenState extends ConsumerState<DoctorsListScreen>
                 tooltip: 'Back',
                 onPressed: () {
                   if (context.canPop()) {
-                    context.pop();
+                    context.safeBack();
                   } else {
                     ref.read(bottomNavIndexProvider.notifier).state = 0;
                   }

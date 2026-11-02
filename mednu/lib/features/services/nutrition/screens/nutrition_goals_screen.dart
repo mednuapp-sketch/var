@@ -2,7 +2,6 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:mednu/core/constants/app_colors.dart';
 import 'package:mednu/core/constants/app_text_styles.dart';
 import 'package:mednu/core/widgets/ux_widgets.dart';
@@ -10,6 +9,7 @@ import '../models/nutrition_goal_model.dart';
 import '../providers/nutrition_provider.dart';
 import '../services/nutrition_service.dart';
 
+import '../../../../core/router/app_router.dart';
 // ─── Local state model ────────────────────────────────────────────────────────
 
 class _GoalFormState {
@@ -195,7 +195,7 @@ class _NutritionGoalsScreenState extends ConsumerState<NutritionGoalsScreen>
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       );
-      context.pop();
+      context.safeBack();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -221,7 +221,7 @@ class _NutritionGoalsScreenState extends ConsumerState<NutritionGoalsScreen>
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
-          onPressed: () => context.pop(),
+          onPressed: () => context.safeBack(),
         ),
         title: const Text('Nutrition Goals', style: AppTextStyles.h3),
         centerTitle: true,

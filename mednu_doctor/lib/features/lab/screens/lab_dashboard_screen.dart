@@ -263,7 +263,7 @@ class _AcceptingBookingsCard extends StatelessWidget {
           Switch.adaptive(
             value: accepting,
             onChanged: onChanged,
-            activeThumbColor: AppColors.success,
+            activeTrackColor: AppColors.success,
           ),
         ],
       ),

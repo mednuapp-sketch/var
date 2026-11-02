@@ -1030,7 +1030,7 @@ class _AmbulanceScreenState extends ConsumerState<AmbulanceScreen> {
                 width: double.infinity,
                 height: 52,
                 child: ElevatedButton(
-                  onPressed: () => context.pop(),
+                  onPressed: () => context.safeBack(),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: _kRed,
                     shape: RoundedRectangleBorder(

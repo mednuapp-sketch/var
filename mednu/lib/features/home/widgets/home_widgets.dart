@@ -1406,12 +1406,12 @@ class _ServiceGridState extends State<ServiceGrid> {
       'Browse',
     ),
     const _Service(
-      'Caregivers',
+      'Nurses',
       Icons.elderly_rounded,
       AppColors.caregiverGrad,
       AppRoutes.caregivers,
       null,
-      'Trained attendants & caregiver support',
+      'Trained attendants & nurse support',
       'Hire Now',
     ),
     const _Service(

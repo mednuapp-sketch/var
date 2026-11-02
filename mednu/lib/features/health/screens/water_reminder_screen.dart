@@ -675,7 +675,7 @@ class _SettingsCard extends StatelessWidget {
                       ));
                     }
                   },
-                  activeThumbColor: const Color(0xFF1565C0),
+                  activeThumbColor: Colors.white,
                 ),
               ]),
 

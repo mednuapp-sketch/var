@@ -561,3 +561,16 @@ GoRoute(path: AppRoutes.referral,           builder: (c, s) => const ReferralScr
     ],
   );
 });
+/// Back navigation that never silently fails. Screens reached through
+/// `context.go(...)` (notification taps, post-action redirects) replace the
+/// stack, so `context.pop()` has nothing to pop and the back arrow looks
+/// broken. This pops when it can and otherwise falls back to [fallbackRoute].
+extension SafeBackNavigation on BuildContext {
+  void safeBack({String fallbackRoute = AppRoutes.home}) {
+    if (canPop()) {
+      pop();
+    } else {
+      go(fallbackRoute);
+    }
+  }
+}

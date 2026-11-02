@@ -118,7 +118,7 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
 
   bool get _canSubmit {
     if (_submitting || _submitted) return false;
-    if (_isImmediate) return _rating > 0;
+    if (_isImmediate) return true;
     return _selectedFeeling != null;
   }
 
@@ -426,7 +426,7 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
                             borderRadius: BorderRadius.circular(R.r(context, 12)),
                           ),
                           child: Icon(
-                            _isImmediate ? Icons.star_rounded : Icons.health_and_safety_rounded,
+                            Icons.health_and_safety_rounded,
                             color: Colors.white, size: R.w(context, 24),
                           ),
                         ),
@@ -434,12 +434,12 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
                         Expanded(
                           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                             Text(
-                              _isImmediate ? 'Rate Your Doctor' : 'How Are You Feeling?',
+                              _isImmediate ? 'Share Your Feedback' : 'How Are You Feeling?',
                               style: AppTextStyles.onPrimaryH2,
                             ),
                             Text(
                               _isImmediate
-                                  ? 'Your feedback helps improve care quality'
+                                  ? 'Tell us how you are feeling after your consultation'
                                   : 'Post-consultation follow-up for ${widget.doctorName ?? 'your doctor'}',
                               style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: Colors.white70),
                               maxLines: 1,
@@ -467,14 +467,6 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
               children: [
                 // Doctor card
                 _buildDoctorCard(),
-                SizedBox(height: R.h(context, 20)),
-
-                // Star rating
-                _buildSection(
-                  title: 'Rate Your Doctor',
-                  required: _isImmediate,
-                  child: _buildStarRating(),
-                ),
                 SizedBox(height: R.h(context, 20)),
 
                 // Feeling selector (follow-up mode)
@@ -584,82 +576,12 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
             borderRadius: BorderRadius.circular(20),
           ),
           child: Text(
-            _isImmediate ? 'Rate Now' : 'Follow-up',
+            'Follow-up',
             style: const TextStyle(
               fontFamily: 'Poppins', fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.accent,
             ),
           ),
         ),
-      ]),
-    );
-  }
-
-  // ── Star rating ───────────────────────────────────────────────────────────
-
-  Widget _buildStarRating() {
-    const labels = ['', 'Poor', 'Fair', 'Good', 'Very Good', 'Excellent!'];
-    const colors = [
-      Colors.transparent,
-      Color(0xFFE53935),
-      Color(0xFFE65100),
-      Color(0xFFFFA000),
-      Color(0xFF66BB6A),
-      Color(0xFF2E7D32),
-    ];
-
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
-      decoration: BoxDecoration(
-        color: context.appSurface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: _isImmediate && _rating == 0 ? const Color(0xFFFFCDD2) : context.appDivider,
-        ),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha:0.04), blurRadius: 10, offset: const Offset(0, 2))],
-      ),
-      child: Column(children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(5, (i) {
-            final filled = i < _rating;
-            return GestureDetector(
-              onTap: () {
-                HapticFeedback.lightImpact();
-                setState(() => _rating = i + 1);
-              },
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                padding: const EdgeInsets.symmetric(horizontal: 5),
-                child: Icon(
-                  filled ? Icons.star_rounded : Icons.star_outline_rounded,
-                  color: filled ? const Color(0xFFFFA000) : context.appTextHint,
-                  size: 46,
-                ),
-              ),
-            );
-          }),
-        ),
-        const SizedBox(height: 10),
-        AnimatedSwitcher(
-          duration: const Duration(milliseconds: 200),
-          child: Text(
-            _rating == 0 ? 'Tap a star to rate' : labels[_rating],
-            key: ValueKey(_rating),
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: _rating == 0 ? context.appTextHint : colors[_rating],
-            ),
-          ),
-        ),
-        if (_isImmediate && _rating == 0) ...[
-          const SizedBox(height: 8),
-          const Text(
-            'Rating is required to submit',
-            style: TextStyle(fontFamily: 'Poppins', fontSize: 11, color: Color(0xFFE53935)),
-          ),
-        ],
       ]),
     );
   }
@@ -897,7 +819,7 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
                       )
                     : Row(mainAxisSize: MainAxisSize.min, children: [
                         Icon(
-                          _isImmediate ? Icons.star_rounded : Icons.send_rounded,
+                          Icons.send_rounded,
                           color: _canSubmit ? Colors.white : Colors.grey,
                           size: 20,
                         ),
@@ -918,8 +840,8 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
         ),
         if (!_canSubmit && !_submitting) ...[
           const SizedBox(height: 8),
-          Text(
-            _isImmediate ? 'Please rate the doctor to continue' : 'Please select how you are feeling to continue',
+          const Text(
+            'Please select how you are feeling to continue',
             style: const TextStyle(fontFamily: 'Poppins', fontSize: 11, color: Colors.grey),
           ),
         ],

@@ -61,7 +61,18 @@ class _CartScreenState extends ConsumerState<CartScreen> {
               'preferredDate': d.date,
               'preferredTime': d.time,
               'notes': d.notes,
-              'serviceDetails': item.serviceDetails,
+              // Equipment orders carry how many units were wanted (the cart
+              // merges identical lines into one with a quantity) and the
+              // vendor's own id, so the order lands in that vendor's queue
+              // (onEquipmentServiceRequestCreated) and commission is
+              // attributed to them. Only items a partner vendor published
+              // from its own menu have a `sourceItemId`; admin-listed legacy
+              // equipment has no vendor account to attribute to.
+              'serviceDetails': item.type == 'equipment'
+                  ? {...item.serviceDetails, 'quantity': item.quantity}
+                  : item.serviceDetails,
+              if (item.type == 'equipment' && item.serviceDetails['sourceItemId'] != null)
+                'vendorId': item.serviceDetails['sourceVendorId'],
               'amount': item.totalAmount,
               'status': 'pending',
               'assignedTo': null,
@@ -166,7 +177,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
       appBar: AppBar(
         title: const Text('My Cart', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 17)),
         centerTitle: true,
-        leading: IconButton(icon: const Icon(Icons.arrow_back_ios_new_rounded), tooltip: 'Back', onPressed: () => context.pop()),
+        leading: IconButton(icon: const Icon(Icons.arrow_back_ios_new_rounded), tooltip: 'Back', onPressed: () => context.safeBack()),
         actions: [
           if (items.isNotEmpty)
             TextButton(

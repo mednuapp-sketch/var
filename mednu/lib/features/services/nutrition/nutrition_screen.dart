@@ -110,7 +110,7 @@ class _NutritionSliverAppBar extends StatelessWidget {
       backgroundColor: AppColors.primary,
       leading: IconButton(
         icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
-        onPressed: () => context.pop(),
+        onPressed: () => context.safeBack(),
       ),
       flexibleSpace: FlexibleSpaceBar(
         collapseMode: CollapseMode.parallax,

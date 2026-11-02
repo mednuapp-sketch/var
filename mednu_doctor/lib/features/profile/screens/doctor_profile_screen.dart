@@ -45,6 +45,11 @@ class _DoctorProfileEditScreenState extends State<DoctorProfileEditScreen> {
   bool         _loading           = true;
   bool         _saving            = false;
   bool         _hasPendingSpecRequest = false;
+  // Once a doctor is 'active' (live to patients) profile edits go to
+  // `pendingChanges` for admin review instead of the live fields.
+  bool         _isActive        = false;
+  // Labels of required verification documents the doctor hasn't uploaded.
+  List<String> _missingDocs     = const [];
   String?      _nameError;
   String?      _clinicAddrError;
   double?      _clinicLat;
@@ -70,10 +75,28 @@ class _DoctorProfileEditScreenState extends State<DoctorProfileEditScreen> {
       return;
     }
     try {
-      final data = await DoctorAuthService.getProfile(uid)
+      var data = await DoctorAuthService.getProfile(uid)
           .timeout(const Duration(seconds: 15));
       if (!mounted) return;
       if (data != null) {
+        _isActive = data['status'] == 'active';
+        final docs = data['documents'];
+        const required = {
+          'mbbs_degree': 'MBBS Degree',
+          'spec_cert': 'Specialization Certificate',
+          'mbbs_reg_cert': 'MBBS Registration Certificate',
+          'renewal_cert': 'Renewal Certificate',
+        };
+        _missingDocs = [
+          for (final e in required.entries)
+            if (docs is! Map || (docs[e.key]?.toString() ?? '').isEmpty) e.value,
+        ];
+        // Show the doctor their own submitted-but-unapproved edits on top of
+        // the live values so re-opening the screen doesn't look like a revert.
+        final pending = data['pendingChanges'];
+        if (_isActive && pending is Map && pending.isNotEmpty) {
+          data = {...data, ...Map<String, dynamic>.from(pending)};
+        }
         _nameCtrl.text       = data['name']       as String? ?? '';
         _bioCtrl.text        = data['bio']         as String? ?? data['about'] as String? ?? '';
         _feeCtrl.text        = (data['fee']        ?? '').toString();
@@ -146,10 +169,20 @@ class _DoctorProfileEditScreenState extends State<DoctorProfileEditScreen> {
     }
     setState(() => _clinicAddrError = null);
 
+    if (_missingDocs.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(
+            'Upload your required documents before submitting: ${_missingDocs.join(', ')}.'),
+        backgroundColor: AppColors.error,
+        behavior: SnackBarBehavior.floating,
+      ));
+      return;
+    }
+
     setState(() => _saving = true);
     try {
       // Specialization is intentionally excluded — changes require admin approval
-      await FirebaseFirestore.instance.collection('doctors').doc(uid).update({
+      final fields = <String, dynamic>{
         'name':           name,
         'bio':            _bioCtrl.text.trim(),
         'about':          _bioCtrl.text.trim(),
@@ -162,11 +195,26 @@ class _DoctorProfileEditScreenState extends State<DoctorProfileEditScreen> {
         if (_clinicLat != null && _clinicLng != null) 'clinicLat': _clinicLat,
         if (_clinicLat != null && _clinicLng != null) 'clinicLng': _clinicLng,
         if (_clinicCity.isNotEmpty) 'clinicCity': _clinicCity,
-        'updatedAt':      FieldValue.serverTimestamp(),
-      });
+      };
+      final ref = FirebaseFirestore.instance.collection('doctors').doc(uid);
+      if (_isActive) {
+        // Merge (not replace) so a pending photo change survives a text edit.
+        await ref.update({
+          for (final e in fields.entries) 'pendingChanges.${e.key}': e.value,
+          'hasPendingChanges': true,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      } else {
+        await ref.update({
+          ...fields,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      }
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Profile updated successfully ✅'),
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(_isActive
+            ? 'Changes submitted for admin review. They go live once approved.'
+            : 'Profile updated successfully ✅'),
         backgroundColor: AppColors.success,
         behavior: SnackBarBehavior.floating,
       ));
@@ -307,14 +355,16 @@ class _DoctorProfileEditScreenState extends State<DoctorProfileEditScreen> {
         },
       );
       if (!mounted) return;
-      await DoctorAuthService.updatePhotoUrl(uid, url);
+      await _savePhotoUrl(uid, url);
       if (!mounted) return;
       setState(() {
         _currentPhotoUrl = url;
         _uploading       = false;
       });
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: const Text('Profile photo updated!'),
+        content: Text(_isActive
+            ? 'Photo submitted for admin review.'
+            : 'Profile photo updated!'),
         backgroundColor: AppColors.success,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -330,6 +380,15 @@ class _DoctorProfileEditScreenState extends State<DoctorProfileEditScreen> {
     }
   }
 
+  Future<void> _savePhotoUrl(String uid, String url) {
+    if (!_isActive) return DoctorAuthService.updatePhotoUrl(uid, url);
+    return FirebaseFirestore.instance.collection('doctors').doc(uid).update({
+      'pendingChanges.photoUrl': url,
+      'hasPendingChanges': true,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
   Future<void> _removePhoto() async {
     final uid = DoctorAuthService.currentUid;
     if (uid == null) return;
@@ -337,7 +396,7 @@ class _DoctorProfileEditScreenState extends State<DoctorProfileEditScreen> {
     setState(() => _uploading = true);
     try {
       await ImageUploadService.deleteDoctorProfileImage(uid);
-      await DoctorAuthService.updatePhotoUrl(uid, '');
+      await _savePhotoUrl(uid, '');
       if (!mounted) return;
       setState(() {
         _currentPhotoUrl = '';
