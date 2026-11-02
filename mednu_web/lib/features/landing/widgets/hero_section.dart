@@ -394,7 +394,7 @@ class _HeroVisual extends StatelessWidget {
         final availW = constraints.maxWidth.isFinite ? constraints.maxWidth : 480.0;
         // Extra room under the phone so "Book in 60 sec" sits clear of the
         // app's service row and bottom nav instead of covering them.
-        final totalH = phoneH + 84;
+        final totalH = phoneH + 130;
 
         // Phone sits left-center; doctor occupies right ~55%
         const phoneLeft = 0.0;
@@ -445,15 +445,16 @@ class _HeroVisual extends StatelessWidget {
               // Phone mockup — LEFT-CENTER (drawn on top of doctor's left edge)
               Positioned(
                 left: phoneLeft,
-                top: 20,
+                top: 64,
                 child: _PhoneMockup(w: phoneW, h: phoneH),
               ),
 
               // Floating cards
               Positioned(
-                // Sits on the coat, below the face and above the rating badge.
-                top: totalH * 0.58,
-                left: phoneW - 8,
+                // Above the phone's top edge, left of the doctor's head, so it
+                // covers neither the face nor the app screen.
+                top: 0,
+                left: phoneW * 0.25,
                 child: const _FloatingCard(
                   icon: Icons.calendar_month_rounded,
                   iconColor: AppColors.primary,
