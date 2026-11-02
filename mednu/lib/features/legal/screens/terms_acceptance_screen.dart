@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
+import 'package:mednu/core/router/app_router.dart';
 
 /// Terms & Conditions acceptance gate — shown once on first launch, before
 /// the disclaimer/onboarding flow. The "I Accept" button stays disabled
@@ -286,7 +287,7 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
                 width: double.infinity,
                 height: 52,
                 child: ElevatedButton(
-                  onPressed: _accepted ? () => context.pop() : null,
+                  onPressed: _accepted ? () => context.safeBack() : null,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,

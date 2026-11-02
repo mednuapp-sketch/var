@@ -58,7 +58,7 @@ class _EquipmentVendorsScreenState extends ConsumerState<EquipmentVendorsScreen>
             backgroundColor: AppColors.primaryDark,
             leading: IconButton(
               icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-              onPressed: () => context.pop(),
+              onPressed: () => context.safeBack(),
             ),
             flexibleSpace: FlexibleSpaceBar(
               background: Container(

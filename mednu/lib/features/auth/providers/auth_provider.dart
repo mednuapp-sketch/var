@@ -243,7 +243,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
           referralCode: referralCode.trim(), newUserId: uid);
       }
 
-      await _sec.write(key: 'last_phone', value: phone);
+      try {
+        await _sec.write(key: 'last_phone', value: phone);
+      } catch (_) {}
       state = state.copyWith(isLoading: false);
     } catch (e) {
       const msg = 'Could not complete your registration. Please check your connection and try again.';
@@ -259,7 +261,19 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   // ── Saved phone (for pre-filling phone entry after logout) ────────────────
-  Future<String?> getLastPhone() => _sec.read(key: 'last_phone');
+  // Reads can throw BAD_DECRYPT when Android restores backed-up encrypted
+  // prefs onto a device whose Keystore key no longer matches. The value is only
+  // a convenience, so wipe the unreadable store and carry on without it.
+  Future<String?> getLastPhone() async {
+    try {
+      return await _sec.read(key: 'last_phone');
+    } catch (_) {
+      try {
+        await _sec.deleteAll();
+      } catch (_) {}
+      return null;
+    }
+  }
 
   // ── Update profile fields ─────────────────────────────────────────────────
   Future<void> updateProfile({

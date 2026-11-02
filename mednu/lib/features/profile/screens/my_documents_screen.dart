@@ -10,6 +10,7 @@ import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/utils/r.dart';
+import 'package:mednu/core/router/app_router.dart';
 
 /// KYC-style personal documents the patient can keep on file for quick
 /// access during hospital admission / insurance claims — separate from
@@ -272,7 +273,7 @@ class _MyDocumentsScreenState extends State<MyDocumentsScreen> {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-          onPressed: () => context.pop(),
+          onPressed: () => context.safeBack(),
         ),
       ),
       body: uid.isEmpty

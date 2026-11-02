@@ -6,6 +6,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../data/pregnancy_week_data.dart';
 import '../providers/pregnancy_provider.dart';
+import 'package:mednu/core/router/app_router.dart';
 
 class PregnancyNutritionScreen extends ConsumerStatefulWidget {
   const PregnancyNutritionScreen({super.key});
@@ -48,7 +49,7 @@ class _PregnancyNutritionScreenState
         leading: IconButton(
           icon: Icon(Icons.arrow_back_ios_new_rounded,
               color: context.appTextPrimary, size: 20),
-          onPressed: () => context.pop(),
+          onPressed: () => context.safeBack(),
         ),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

@@ -9,6 +9,7 @@ import 'package:permission_handler/permission_handler.dart';
 import '../../home/providers/location_provider.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/places_service.dart';
+import 'package:mednu/core/router/app_router.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Map Location Picker Screen
@@ -535,7 +536,7 @@ class _MapLocationPickerScreenState
                       _MapIconButton(
                         icon: Icons.arrow_back_ios_new_rounded,
                         isDark: isDark,
-                        onTap: () => context.pop(),
+                        onTap: () => context.safeBack(),
                       ),
                       const SizedBox(width: 8),
                       Expanded(

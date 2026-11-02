@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/utils/r.dart';
+import 'package:mednu/core/router/app_router.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Privacy Policy Screen
@@ -110,7 +111,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
                 color: Colors.white.withValues(alpha: 0.15),
                 shape: const CircleBorder(),
                 child: InkWell(
-                  onTap: () => context.pop(),
+                  onTap: () => context.safeBack(),
                   customBorder: const CircleBorder(),
                   child: Padding(
                     padding: EdgeInsets.all(R.p(context, 8)),

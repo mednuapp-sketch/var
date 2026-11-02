@@ -6,6 +6,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../models/pregnancy_models.dart';
 import '../providers/pregnancy_provider.dart';
+import 'package:mednu/core/router/app_router.dart';
 
 // --- Timing constants --------------------------------------------------------
 
@@ -160,7 +161,7 @@ class _PregnancyMedicinesScreenState
         leading: IconButton(
           icon: Icon(Icons.arrow_back_ios_new_rounded,
               color: context.appTextPrimary, size: 20),
-          onPressed: () => context.pop(),
+          onPressed: () => context.safeBack(),
         ),
         title: Text(
           'My Medicines',

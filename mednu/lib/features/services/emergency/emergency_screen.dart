@@ -13,6 +13,7 @@ import '../../../core/utils/r.dart';
 import 'emergency_contacts_service.dart';
 import 'manage_contacts_screen.dart';
 import 'nearby_ambulances_sheet.dart';
+import 'package:mednu/core/router/app_router.dart';
 
 class EmergencyScreen extends StatefulWidget {
   const EmergencyScreen({super.key});
@@ -154,7 +155,7 @@ class _EmergencyScreenState extends State<EmergencyScreen>
             backgroundColor: const Color(0xFFB71C1C),
             leading: IconButton(
               icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-              onPressed: () => context.pop(),
+              onPressed: () => context.safeBack(),
             ),
             flexibleSpace: FlexibleSpaceBar(
               background: Container(

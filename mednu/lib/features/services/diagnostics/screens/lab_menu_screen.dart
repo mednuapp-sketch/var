@@ -9,6 +9,7 @@ import '../../../../core/services/feedback_service.dart';
 import '../../../../core/widgets/add_to_cart_button.dart';
 import '../../../../core/widgets/ux_widgets.dart';
 import '../../../cart/providers/cart_provider.dart';
+import 'package:mednu/core/router/app_router.dart';
 
 /// A single lab's test menu — the "food" screen in the hotel/lab-first
 /// browsing flow. Reached from a lab card on [DiagnosticsScreen]; fetches the
@@ -97,7 +98,7 @@ class _LabMenuScreenState extends ConsumerState<LabMenuScreen> {
             expandedHeight: AppSpacing.headerHeight(context),
             leading: IconButton(
               icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-              onPressed: () => context.pop(),
+              onPressed: () => context.safeBack(),
             ),
             actions: const [CartBadgeAction()],
             flexibleSpace: FlexibleSpaceBar(

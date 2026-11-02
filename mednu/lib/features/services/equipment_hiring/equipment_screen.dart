@@ -181,7 +181,7 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen> with SingleTi
             backgroundColor: AppColors.primaryDark,
             leading: IconButton(
               icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-              onPressed: () => context.pop(),
+              onPressed: () => context.safeBack(),
             ),
             actions: const [CartBadgeAction()],
             bottom: PreferredSize(

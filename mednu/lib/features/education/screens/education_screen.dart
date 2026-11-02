@@ -10,6 +10,7 @@ import '../../../core/constants/app_spacing.dart';
 import '../../../core/utils/r.dart';
 import '../services/ai_tips_service.dart';
 import '../services/health_article_service.dart';
+import 'package:mednu/core/router/app_router.dart';
 
 // ── Article data model ────────────────────────────────────────────────────────
 
@@ -213,7 +214,7 @@ class _EducationScreenState extends State<EducationScreen> {
             leading: IconButton(
               icon: const Icon(Icons.arrow_back_ios_new_rounded,
                   color: Colors.white),
-              onPressed: () => context.pop(),
+              onPressed: () => context.safeBack(),
             ),
             actions: [
               IconButton(

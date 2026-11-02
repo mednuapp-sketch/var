@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../constants/app_colors.dart';
 import '../constants/app_text_styles.dart';
+import 'package:mednu_doctor/core/router/app_router.dart';
 
 // ──────────────────────────────────────────────────────────────
 // 1. SHIMMER
@@ -524,7 +525,7 @@ class GradientSliverAppBar extends StatelessWidget {
       elevation: 0,
       leading: IconButton(
         icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-        onPressed: onBack ?? () => context.pop(),
+        onPressed: onBack ?? () => context.safeBack(),
       ),
       actions: actions,
       flexibleSpace: FlexibleSpaceBar(

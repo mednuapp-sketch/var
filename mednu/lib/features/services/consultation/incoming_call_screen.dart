@@ -176,7 +176,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
     // `canPop()` check left the user trapped here after declining or after
     // the doctor cancelled. Fall back to home so there is always a way out.
     if (context.canPop()) {
-      context.pop();
+      context.safeBack();
     } else {
       context.go(AppRoutes.home);
     }

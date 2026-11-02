@@ -377,7 +377,7 @@ class _RecordsScreenState extends State<RecordsScreen>
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-          onPressed: () => context.pop(),
+          onPressed: () => context.safeBack(),
         ),
         bottom: TabBar(
           controller: _tab,

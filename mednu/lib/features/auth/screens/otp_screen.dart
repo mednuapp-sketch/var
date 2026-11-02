@@ -260,7 +260,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
                     child: Align(
                       alignment: Alignment.centerLeft,
                       child: GestureDetector(
-                        onTap: () => context.pop(),
+                        onTap: () => context.safeBack(),
                         child: Container(
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(

@@ -39,7 +39,12 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen>
   }
 
   Future<void> _prefillPhone() async {
-    final last = await ref.read(authProvider.notifier).getLastPhone();
+    String? last;
+    try {
+      last = await ref.read(authProvider.notifier).getLastPhone();
+    } catch (_) {
+      return;
+    }
     if (last != null && mounted) {
       final display = last.startsWith('+91') ? last.substring(3) : last;
       _phoneController.text = display;

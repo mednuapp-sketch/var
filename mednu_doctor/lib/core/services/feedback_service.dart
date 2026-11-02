@@ -15,10 +15,11 @@ class FeedbackService {
     VoidCallback? onAction,
     bool dismissible = true,
   }) {
-    if (!context.mounted) return;
+    final messenger = _messenger(context);
+    if (messenger == null) return;
     // hideCurrentSnackBar (animated exit) instead of clearSnackBars (instant
     // removal) so back-to-back show() calls don't hard-cut into each other.
-    ScaffoldMessenger.of(context)
+    messenger
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
@@ -96,12 +97,24 @@ class FeedbackService {
       );
 
   static void dismiss(BuildContext context) {
-    if (!context.mounted) return;
     // hideCurrentSnackBar animates the bar out before the next show() call
     // animates its replacement in. clearSnackBars() removes instantly with
     // no exit animation, which reads as a hard flash/blink when a show()
     // call follows immediately after (e.g. loading -> success/info).
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    _messenger(context)?.hideCurrentSnackBar();
+  }
+
+  /// Callers often show feedback after an `await`, by which time the screen
+  /// may be popping: `context.mounted` is still true while the element is
+  /// deactivated, but an ancestor lookup then throws. Treat that as "no
+  /// messenger" instead of crashing.
+  static ScaffoldMessengerState? _messenger(BuildContext context) {
+    if (!context.mounted) return null;
+    try {
+      return ScaffoldMessenger.maybeOf(context);
+    } catch (_) {
+      return null;
+    }
   }
 
   static Future<bool> confirm(

@@ -9,6 +9,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../providers/pregnancy_provider.dart';
+import 'package:mednu/core/router/app_router.dart';
 
 // --- Data ---------------------------------------------------------------------
 
@@ -289,7 +290,7 @@ class _PregnancyEmergencyScreenState
         leading: IconButton(
           icon: Icon(Icons.arrow_back_ios_new_rounded,
               color: context.appTextPrimary, size: 20),
-          onPressed: () => context.pop(),
+          onPressed: () => context.safeBack(),
         ),
         title: Text('Emergency', style: AppTextStyles.h4.copyWith(color: context.appTextPrimary)),
         actions: [

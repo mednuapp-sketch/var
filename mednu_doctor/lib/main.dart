@@ -122,12 +122,20 @@ void main() {
     );
 
     // ── Crashlytics error hooks (sync — must be before any async work) ──────
+    // Debug builds surface assertion-only diagnostics (layout asserts,
+    // "ListTile ink may be invisible", deactivated-ancestor lookups) that
+    // never fire in release; sending them inflated Crashlytics with fake
+    // crashes. Match the patient app: report from release/profile only.
     FlutterError.onError = (details) {
       FlutterError.presentError(details);
-      FirebaseCrashlytics.instance.recordFlutterFatalError(details);
+      if (!kDebugMode) {
+        FirebaseCrashlytics.instance.recordFlutterFatalError(details);
+      }
     };
     PlatformDispatcher.instance.onError = (error, stack) {
-      FirebaseCrashlytics.instance.recordError(error, stack, fatal: false);
+      if (!kDebugMode) {
+        FirebaseCrashlytics.instance.recordError(error, stack, fatal: false);
+      }
       return true;
     };
 

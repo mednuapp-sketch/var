@@ -11,6 +11,7 @@ import '../services/agora_call_service.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/active_call_service.dart';
 import '../../../shared_core/providers/role_providers.dart';
+import 'package:mednu_doctor/core/router/app_router.dart';
 
 /// Physiotherapist/Counsellor video session — same reliable call mechanics
 /// as [DoctorVideoCallScreen] (lobby → join, adaptive quality, reconnect/
@@ -35,6 +36,10 @@ class ProviderVideoCallScreen extends StatefulWidget {
 }
 
 class _ProviderVideoCallScreenState extends State<ProviderVideoCallScreen> {
+  // Cached in initState: dispose() runs after the element is deactivated,
+  // where ProviderScope.containerOf(context) throws "No ProviderScope found".
+  late final ProviderContainer _providerContainer;
+
   Set<int> _remoteUids = {};
   bool get _remoteJoined => _remoteUids.isNotEmpty;
   bool _engineReady = false;
@@ -61,8 +66,9 @@ class _ProviderVideoCallScreenState extends State<ProviderVideoCallScreen> {
   @override
   void initState() {
     super.initState();
+    _providerContainer = ProviderScope.containerOf(context, listen: false);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-    ProviderScope.containerOf(context, listen: false)
+    _providerContainer
         .read(criticalOperationInProgressProvider.notifier)
         .state = true;
     _enableScreenProtection();
@@ -288,12 +294,12 @@ class _ProviderVideoCallScreenState extends State<ProviderVideoCallScreen> {
     ActiveCallService.clearEndCallFromNotificationHandler();
 
     if (!mounted) return;
-    ProviderScope.containerOf(context, listen: false)
+    _providerContainer
         .read(criticalOperationInProgressProvider.notifier)
         .state = false;
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     if (context.canPop()) {
-      context.pop();
+      context.safeBack();
     } else {
       context.go('/dashboard');
     }
@@ -302,7 +308,7 @@ class _ProviderVideoCallScreenState extends State<ProviderVideoCallScreen> {
   @override
   void dispose() {
     ActiveCallService.clearEndCallFromNotificationHandler();
-    ProviderScope.containerOf(context, listen: false)
+    _providerContainer
         .read(criticalOperationInProgressProvider.notifier)
         .state = false;
     _consultSub?.cancel();

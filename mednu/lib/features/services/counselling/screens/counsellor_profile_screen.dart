@@ -8,6 +8,7 @@ import '../../../../core/widgets/ux_widgets.dart';
 import '../../../../core/widgets/service_booking_sheet.dart';
 import '../models/counsellor_model.dart';
 import '../services/counsellor_service.dart';
+import 'package:mednu/core/router/app_router.dart';
 
 const _kPlum     = Color(0xFF633058);
 const _kPlumDark = Color(0xFF3D1D36);
@@ -57,7 +58,7 @@ class CounsellorProfileScreen extends StatelessWidget {
             return Scaffold(
               backgroundColor: context.appBackground,
               appBar: AppBar(
-                leading: IconButton(icon: const Icon(Icons.arrow_back_ios_new_rounded), onPressed: () => context.pop()),
+                leading: IconButton(icon: const Icon(Icons.arrow_back_ios_new_rounded), onPressed: () => context.safeBack()),
               ),
               body: const AppEmptyState(
                 icon: Icons.person_off_outlined,
@@ -75,7 +76,7 @@ class CounsellorProfileScreen extends StatelessWidget {
                 backgroundColor: _kPlumDark,
                 leading: IconButton(
                   icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-                  onPressed: () => context.pop(),
+                  onPressed: () => context.safeBack(),
                 ),
                 flexibleSpace: FlexibleSpaceBar(
                   background: Container(

@@ -68,7 +68,7 @@ class WalletScreen extends ConsumerWidget {
             expandedHeight: R.h(context, 240),
             leading: IconButton(
               icon: Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: R.w(context, 20)),
-              onPressed: () => context.pop(),
+              onPressed: () => context.safeBack(),
             ),
             actions: [
               IconButton(

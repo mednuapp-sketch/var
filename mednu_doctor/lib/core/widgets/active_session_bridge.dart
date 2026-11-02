@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -81,8 +82,23 @@ class _ActiveSessionBridgeState extends ConsumerState<ActiveSessionBridge>
     widget.router.routerDelegate.addListener(_onRouteChanged);
   }
 
+  // The router delegate notifies synchronously, often while the framework is
+  // mid-build (e.g. a redirect during a route rebuild). Calling setState then
+  // throws "setState() called during build", so defer to after the frame.
+  bool _routeRebuildScheduled = false;
   void _onRouteChanged() {
-    if (mounted) setState(() {});
+    if (!mounted || _routeRebuildScheduled) return;
+    final phase = SchedulerBinding.instance.schedulerPhase;
+    if (phase == SchedulerPhase.idle ||
+        phase == SchedulerPhase.postFrameCallbacks) {
+      setState(() {});
+      return;
+    }
+    _routeRebuildScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _routeRebuildScheduled = false;
+      if (mounted) setState(() {});
+    });
   }
 
   bool get _onVideoCallScreen => widget.router.routerDelegate.currentConfiguration.uri

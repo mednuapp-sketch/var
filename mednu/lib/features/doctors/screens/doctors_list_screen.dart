@@ -13,6 +13,7 @@ import '../../../core/utils/doctor_role_filter.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../../home/providers/location_provider.dart';
 import '../../home/providers/home_nav_provider.dart';
+import 'package:mednu/core/router/app_router.dart';
 
 double _haversineKm(double lat1, double lng1, double lat2, double lng2) {
   const r = 6371.0;
@@ -339,7 +340,7 @@ class _DoctorsListScreenState extends ConsumerState<DoctorsListScreen>
                 tooltip: 'Back',
                 onPressed: () {
                   if (context.canPop()) {
-                    context.pop();
+                    context.safeBack();
                   } else {
                     ref.read(bottomNavIndexProvider.notifier).state = 0;
                   }

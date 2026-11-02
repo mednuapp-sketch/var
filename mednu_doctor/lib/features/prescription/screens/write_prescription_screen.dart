@@ -111,6 +111,10 @@ class WritePrescriptionScreen extends StatefulWidget {
 
 class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
     with TickerProviderStateMixin {
+  // Cached in initState: dispose() runs after the element is deactivated,
+  // where ProviderScope.containerOf(context) throws "No ProviderScope found".
+  late final ProviderContainer _providerContainer;
+
   // â”€â”€ Form controllers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   final _chiefComplaintsCtrl     = TextEditingController();
   final _historyCtrl             = TextEditingController();
@@ -162,6 +166,7 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
   @override
   void initState() {
     super.initState();
+    _providerContainer = ProviderScope.containerOf(context, listen: false);
     _loadDoctorInfo();
     _loadPatientInfo();
     _startAutoSave();
@@ -358,7 +363,7 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
     // Block role switching while the prescription is being written/sent â€”
     // mirrors the call-screen guards in incoming_request_screen.dart /
     // doctor_video_call_screen.dart.
-    ProviderScope.containerOf(context, listen: false)
+    _providerContainer
         .read(criticalOperationInProgressProvider.notifier)
         .state = true;
     FeedbackService.showLoading(context, 'Sending prescription...');
@@ -580,7 +585,7 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
     } finally {
       if (mounted) {
         setState(() => _saving = false);
-        ProviderScope.containerOf(context, listen: false)
+        _providerContainer
             .read(criticalOperationInProgressProvider.notifier)
             .state = false;
       }
@@ -626,7 +631,7 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
         icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
         onPressed: () {
           if (context.canPop()) {
-            context.pop();
+            context.safeBack();
           } else {
             context.go(AppRoutes.dashboard);
           }
@@ -752,7 +757,7 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
               TextButton(
                 onPressed: () {
                   if (context.canPop()) {
-                    context.pop();
+                    context.safeBack();
                   } else {
                     context.go(AppRoutes.dashboard);
                   }
@@ -924,7 +929,10 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
           // â”€â”€ Section 6: Rx (Medicines) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
           Row(
             children: [
-              const _SectionHeader(
+              // _SectionHeader has an Expanded inside its own Row, so in this
+              // Row it needs a bounded width — wrap it rather than Spacer.
+              const Expanded(
+                child: _SectionHeader(
                 sectionNumber: '06',
                 icon: Icons.medication_rounded,
                 title: 'Rx â€” Medicines',
@@ -932,7 +940,9 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
                 required: true,
                 color: AppColors.primary,
               ),
-              const Spacer(),
+              ),
+              const SizedBox(width: 12),
+
               TapScale(
                 onTap: _addMedicine,
                 child: Container(

@@ -10,6 +10,7 @@ import '../models/saved_address.dart';
 import '../providers/saved_addresses_provider.dart';
 import 'map_location_picker_screen.dart';
 import '../../home/providers/location_provider.dart';
+import 'package:mednu/core/router/app_router.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Add / Edit Address Screen
@@ -301,7 +302,7 @@ class _AddEditAddressScreenState extends ConsumerState<AddEditAddressScreen> {
         surfaceTintColor: Colors.transparent,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
-          onPressed: () => context.pop(),
+          onPressed: () => context.safeBack(),
         ),
         title: Text(
           _isEdit ? 'Edit Address' : 'Add Address',

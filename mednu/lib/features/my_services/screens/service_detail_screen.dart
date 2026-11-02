@@ -127,7 +127,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
       expandedHeight: 190,
       leading: IconButton(
         icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-        onPressed: () => context.pop(),
+        onPressed: () => context.safeBack(),
       ),
       actions: [
         IconButton(
@@ -1138,7 +1138,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
             context,
             'Booking cancelled successfully',
           );
-          GoRouter.of(context).pop();
+          context.safeBack();
         }
       } catch (e) {
         if (mounted && context.mounted) {

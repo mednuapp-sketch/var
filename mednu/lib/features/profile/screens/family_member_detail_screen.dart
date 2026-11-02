@@ -136,7 +136,7 @@ class _FamilyMemberDetailScreenState extends ConsumerState<FamilyMemberDetailScr
         action: OpAction.familyMemberDeleted,
         message: 'Removed family member: $name',
       );
-      if (context.mounted) context.pop();
+      if (context.mounted) context.safeBack();
     } catch (e) {
       OperationLogger.logError(
         action: OpAction.familyMemberDeleted,
@@ -171,7 +171,7 @@ class _FamilyMemberDetailScreenState extends ConsumerState<FamilyMemberDetailScr
             backgroundColor: color,
             leading: IconButton(
               icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-              onPressed: () => context.pop(),
+              onPressed: () => context.safeBack(),
             ),
             actions: [
               IconButton(

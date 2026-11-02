@@ -21,6 +21,10 @@ class IncomingRequestScreen extends StatefulWidget {
 
 class _IncomingRequestScreenState extends State<IncomingRequestScreen>
     with TickerProviderStateMixin {
+  // Cached in initState: dispose() runs after the element is deactivated,
+  // where ProviderScope.containerOf(context) throws "No ProviderScope found".
+  late final ProviderContainer _providerContainer;
+
   // ── Animations ──────────────────────────────────────────────────────────
   late AnimationController _ripple1;
   late AnimationController _ripple2;
@@ -52,6 +56,7 @@ class _IncomingRequestScreenState extends State<IncomingRequestScreen>
   @override
   void initState() {
     super.initState();
+    _providerContainer = ProviderScope.containerOf(context, listen: false);
     _initAnimations();
     WakelockPlus.enable();
     _listenForPendingConsultation();
@@ -212,7 +217,7 @@ class _IncomingRequestScreenState extends State<IncomingRequestScreen>
     // Block role switching from the moment the doctor accepts through the
     // handoff into DoctorVideoCallScreen (which owns this flag for the rest
     // of the call — see its initState/dispose).
-    ProviderScope.containerOf(context, listen: false)
+    _providerContainer
         .read(criticalOperationInProgressProvider.notifier)
         .state = true;
     HapticFeedback.heavyImpact();
@@ -233,7 +238,7 @@ class _IncomingRequestScreenState extends State<IncomingRequestScreen>
       // screen with no way to accept, decline, or retry after a transient
       // network failure.
       if (mounted) {
-        ProviderScope.containerOf(context, listen: false)
+        _providerContainer
             .read(criticalOperationInProgressProvider.notifier)
             .state = false;
         setState(() => _accepted = false);
@@ -327,7 +332,7 @@ class _IncomingRequestScreenState extends State<IncomingRequestScreen>
     // succeed, DoctorVideoCallScreen's own dispose is what actually clears
     // this by the time the call ends — re-clearing it here afterwards is
     // harmless.
-    ProviderScope.containerOf(context, listen: false)
+    _providerContainer
         .read(criticalOperationInProgressProvider.notifier)
         .state = false;
     super.dispose();

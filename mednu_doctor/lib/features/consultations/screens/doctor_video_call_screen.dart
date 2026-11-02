@@ -31,6 +31,10 @@ class DoctorVideoCallScreen extends StatefulWidget {
 
 class _DoctorVideoCallScreenState extends State<DoctorVideoCallScreen>
     with SingleTickerProviderStateMixin {
+  // Cached in initState: dispose() runs after the element is deactivated,
+  // where ProviderScope.containerOf(context) throws "No ProviderScope found".
+  late final ProviderContainer _providerContainer;
+
   bool _isMuted = false;
   bool _isCameraOff = false;
   bool _isSpeakerOn = true;
@@ -83,13 +87,14 @@ class _DoctorVideoCallScreenState extends State<DoctorVideoCallScreen>
   @override
   void initState() {
     super.initState();
+    _providerContainer = ProviderScope.containerOf(context, listen: false);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     // Owns criticalOperationInProgressProvider for the full duration of the
     // call — covers both video and audio-only (the latter is a
     // network-degradation mode of this same screen, see _isAudioOnly).
     // IncomingRequestScreen/DoctorOutgoingCallScreen already set this true
     // before the doctor lands here; re-asserting it is idempotent.
-    ProviderScope.containerOf(context, listen: false)
+    _providerContainer
         .read(criticalOperationInProgressProvider.notifier)
         .state = true;
     _enableScreenProtection();
@@ -336,7 +341,7 @@ class _DoctorVideoCallScreenState extends State<DoctorVideoCallScreen>
     ActiveCallService.clearEndCallFromNotificationHandler();
     // The call is over (or this screen is being torn down some other way) —
     // role switching is safe again.
-    ProviderScope.containerOf(context, listen: false)
+    _providerContainer
         .read(criticalOperationInProgressProvider.notifier)
         .state = false;
     _consultSub?.cancel();

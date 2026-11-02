@@ -561,3 +561,16 @@ GoRoute(path: AppRoutes.referral,           builder: (c, s) => const ReferralScr
     ],
   );
 });
+/// Safe back navigation. A bare `context.pop()` throws
+/// "GoError: There is nothing to pop" when the screen was reached with
+/// `context.go(...)` (deep link / notification tap) or when an async callback
+/// pops after the route is already gone. Pop when possible, else go home.
+extension SafeBackNavigation on BuildContext {
+  void safeBack({String fallbackRoute = AppRoutes.home}) {
+    if (canPop()) {
+      pop();
+    } else {
+      go(fallbackRoute);
+    }
+  }
+}

@@ -32,10 +32,10 @@ class NutritionistProfileScreen extends ConsumerWidget {
 
     return nutritionistAsync.when(
       loading: () => _LoadingScaffold(),
-      error: (e, _) => _ErrorScaffold(onBack: () => context.pop()),
+      error: (e, _) => _ErrorScaffold(onBack: () => context.safeBack()),
       data: (nutritionist) {
         if (nutritionist == null) {
-          return _NotFoundScaffold(onBack: () => context.pop());
+          return _NotFoundScaffold(onBack: () => context.safeBack());
         }
         return _ProfileScaffold(nutritionist: nutritionist);
       },
@@ -294,7 +294,7 @@ class _HeroSliverAppBar extends StatelessWidget {
       backgroundColor: const Color(0xFF1B5E20),
       surfaceTintColor: Colors.transparent,
       leading: GestureDetector(
-        onTap: () => context.pop(),
+        onTap: () => context.safeBack(),
         child: Container(
           margin: const EdgeInsets.all(8),
           decoration: BoxDecoration(

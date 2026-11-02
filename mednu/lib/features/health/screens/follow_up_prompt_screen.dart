@@ -39,7 +39,7 @@ class FollowUpPromptScreen extends StatelessWidget {
       };
 
   void _bookFollowUp(BuildContext context) {
-    context.pop();
+    context.safeBack();
     switch (source) {
       case FollowUpSource.doctor:
         context.push('/doctors/$providerId');
@@ -158,7 +158,7 @@ class FollowUpPromptScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 4),
                         TextButton(
-                          onPressed: () => context.pop(),
+                          onPressed: () => context.safeBack(),
                           child: Text(
                             'Maybe Later',
                             style: AppTextStyles.bodyMedium.copyWith(

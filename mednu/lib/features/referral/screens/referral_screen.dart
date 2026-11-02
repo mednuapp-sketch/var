@@ -12,6 +12,7 @@ import '../../../core/widgets/ux_widgets.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../referral_provider.dart';
 import '../referral_service.dart';
+import 'package:mednu/core/router/app_router.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  ReferralScreen
@@ -47,7 +48,7 @@ class ReferralScreen extends ConsumerWidget {
                 color: Colors.white.withValues(alpha: 0.15),
                 shape: const CircleBorder(),
                 child: InkWell(
-                  onTap: () => context.pop(),
+                  onTap: () => context.safeBack(),
                   customBorder: const CircleBorder(),
                   child: const Padding(
                     padding: EdgeInsets.all(8),

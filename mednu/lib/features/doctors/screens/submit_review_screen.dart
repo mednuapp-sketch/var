@@ -5,6 +5,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../models/doctor_review.dart';
 import '../services/review_service.dart';
+import 'package:mednu/core/router/app_router.dart';
 
 class SubmitReviewScreen extends StatefulWidget {
   final String appointmentId;
@@ -175,7 +176,7 @@ class _SubmitReviewScreenState extends State<SubmitReviewScreen>
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.close_rounded, color: Colors.white),
-          onPressed: () => context.pop(),
+          onPressed: () => context.safeBack(),
         ),
       ),
       body: SingleChildScrollView(

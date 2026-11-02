@@ -60,7 +60,7 @@ class _PhysiotherapistListScreenState extends ConsumerState<PhysiotherapistListS
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded),
-          onPressed: () => context.pop(),
+          onPressed: () => context.safeBack(),
         ),
         title: const Text('Find Physiotherapist', style: AppTextStyles.h3),
         centerTitle: true,

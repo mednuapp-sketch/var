@@ -352,7 +352,7 @@ class _HospitalAppointmentBookingScreenState
         elevation: 0,
         leading: IconButton(
           icon: Icon(Icons.arrow_back_ios_new_rounded, size: R.w(context, 20)),
-          onPressed: () => context.pop(),
+          onPressed: () => context.safeBack(),
         ),
         title: Text('Book OP Appointment', style: AppTextStyles.h4.copyWith(color: context.appTextPrimary)),
       ),

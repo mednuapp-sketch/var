@@ -36,6 +36,10 @@ class DoctorOutgoingCallScreen extends StatefulWidget {
 
 class _DoctorOutgoingCallScreenState extends State<DoctorOutgoingCallScreen>
     with TickerProviderStateMixin {
+  // Cached in initState: dispose() runs after the element is deactivated,
+  // where ProviderScope.containerOf(context) throws "No ProviderScope found".
+  late final ProviderContainer _providerContainer;
+
   late AnimationController _ripple1;
   late AnimationController _ripple2;
   late AnimationController _ripple3;
@@ -53,6 +57,7 @@ class _DoctorOutgoingCallScreenState extends State<DoctorOutgoingCallScreen>
   @override
   void initState() {
     super.initState();
+    _providerContainer = ProviderScope.containerOf(context, listen: false);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     _initAnimations();
     WakelockPlus.enable();
@@ -60,7 +65,7 @@ class _DoctorOutgoingCallScreenState extends State<DoctorOutgoingCallScreen>
     // Block role switching for the entire outgoing-call flow. If the call
     // connects, DoctorVideoCallScreen's own initState/dispose take over
     // ownership of this flag for the rest of the session.
-    ProviderScope.containerOf(context, listen: false)
+    _providerContainer
         .read(criticalOperationInProgressProvider.notifier)
         .state = true;
     _createAndWatch();
@@ -93,7 +98,7 @@ class _DoctorOutgoingCallScreenState extends State<DoctorOutgoingCallScreen>
   Future<void> _createAndWatch() async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) {
-      if (mounted) context.pop();
+      if (mounted) context.safeBack();
       return;
     }
 
@@ -144,7 +149,7 @@ class _DoctorOutgoingCallScreenState extends State<DoctorOutgoingCallScreen>
       });
     } catch (e) {
       debugPrint('[DoctorOutgoing] Failed to create consultation: $e');
-      if (mounted) context.pop();
+      if (mounted) context.safeBack();
       return;
     }
 
@@ -242,7 +247,7 @@ class _DoctorOutgoingCallScreenState extends State<DoctorOutgoingCallScreen>
     // stack-replacing `go`, e.g. from the incoming-request deep link) the
     // doctor would be stranded here. Fall back to the dashboard.
     if (context.canPop()) {
-      context.pop();
+      context.safeBack();
     } else {
       context.go(AppRoutes.dashboard);
     }
@@ -261,7 +266,7 @@ class _DoctorOutgoingCallScreenState extends State<DoctorOutgoingCallScreen>
     // without ever reaching DoctorVideoCallScreen; harmless to re-clear if
     // the call did connect, since that screen already cleared it on its own
     // dispose by the time this one runs.
-    ProviderScope.containerOf(context, listen: false)
+    _providerContainer
         .read(criticalOperationInProgressProvider.notifier)
         .state = false;
     WakelockPlus.disable();

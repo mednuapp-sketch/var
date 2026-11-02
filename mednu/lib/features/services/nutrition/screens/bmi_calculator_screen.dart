@@ -8,6 +8,7 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_text_styles.dart';
 import '../models/bmi_log_model.dart';
 import '../providers/nutrition_provider.dart';
+import 'package:mednu/core/router/app_router.dart';
 
 // ─── BMI data ─────────────────────────────────────────────────────────────────
 
@@ -255,7 +256,7 @@ class _BmiCalculatorScreenState extends ConsumerState<BmiCalculatorScreen>
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
-          onPressed: () => context.pop(),
+          onPressed: () => context.safeBack(),
         ),
         title: const Text('BMI Calculator', style: AppTextStyles.h3),
         centerTitle: true,

@@ -165,7 +165,7 @@ class _CareAssistantScreenState extends ConsumerState<CareAssistantScreen> {
                 leading: IconButton(
                   icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
                   onPressed: () => context.canPop()
-                      ? context.pop()
+                      ? context.safeBack()
                       : context.go(AppRoutes.home),
                 ),
                 actions: [

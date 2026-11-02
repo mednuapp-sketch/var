@@ -56,6 +56,10 @@ class ProviderOutgoingCallScreen extends StatefulWidget {
 
 class _ProviderOutgoingCallScreenState extends State<ProviderOutgoingCallScreen>
     with TickerProviderStateMixin {
+  // Cached in initState: dispose() runs after the element is deactivated,
+  // where ProviderScope.containerOf(context) throws "No ProviderScope found".
+  late final ProviderContainer _providerContainer;
+
   late AnimationController _ripple1;
   late AnimationController _ripple2;
   late AnimationController _ripple3;
@@ -73,11 +77,12 @@ class _ProviderOutgoingCallScreenState extends State<ProviderOutgoingCallScreen>
   @override
   void initState() {
     super.initState();
+    _providerContainer = ProviderScope.containerOf(context, listen: false);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     _initAnimations();
     WakelockPlus.enable();
     HapticFeedback.mediumImpact();
-    ProviderScope.containerOf(context, listen: false)
+    _providerContainer
         .read(criticalOperationInProgressProvider.notifier)
         .state = true;
     _createAndWatch();
@@ -101,7 +106,7 @@ class _ProviderOutgoingCallScreenState extends State<ProviderOutgoingCallScreen>
   Future<void> _createAndWatch() async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) {
-      if (mounted) context.pop();
+      if (mounted) context.safeBack();
       return;
     }
 
@@ -132,7 +137,7 @@ class _ProviderOutgoingCallScreenState extends State<ProviderOutgoingCallScreen>
       });
     } catch (e) {
       debugPrint('[ProviderOutgoing] Failed to create consultation: $e');
-      if (mounted) context.pop();
+      if (mounted) context.safeBack();
       return;
     }
 
@@ -220,7 +225,7 @@ class _ProviderOutgoingCallScreenState extends State<ProviderOutgoingCallScreen>
     if (!mounted) return;
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     if (context.canPop()) {
-      context.pop();
+      context.safeBack();
     } else {
       context.go(AppRoutes.dashboard);
     }
@@ -235,7 +240,7 @@ class _ProviderOutgoingCallScreenState extends State<ProviderOutgoingCallScreen>
     _dotsCtrl.dispose();
     _elapsedTimer?.cancel();
     _sub?.cancel();
-    ProviderScope.containerOf(context, listen: false)
+    _providerContainer
         .read(criticalOperationInProgressProvider.notifier)
         .state = false;
     WakelockPlus.disable();

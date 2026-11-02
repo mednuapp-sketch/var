@@ -177,6 +177,9 @@ class _HospitalsScreenState extends State<HospitalsScreen> {
       case _HospitalFilter.all:
         break;
     }
+    // Copy before sorting: when no filter ran, `src` is still the provider's
+    // list (or the const empty list), both of which are unmodifiable.
+    src = List<NearbyHospital>.of(src);
     src.sort((a, b) {
       if (_sort == _SortMode.name) {
         return a.name.toLowerCase().compareTo(b.name.toLowerCase());

@@ -7,6 +7,7 @@ import '../providers/nutrition_provider.dart';
 import '../models/meal_log_model.dart';
 import '../../../../core/widgets/ux_widgets.dart';
 import '../services/food_lookup_service.dart';
+import 'package:mednu/core/router/app_router.dart';
 
 class MealTrackingScreen extends ConsumerStatefulWidget {
   const MealTrackingScreen({super.key});
@@ -52,7 +53,7 @@ class _MealTrackingScreenState extends ConsumerState<MealTrackingScreen> {
     return Scaffold(
       backgroundColor: context.appBackground,
       appBar: AppBar(
-        leading: IconButton(icon: const Icon(Icons.arrow_back_ios_new_rounded), onPressed: () => context.pop()),
+        leading: IconButton(icon: const Icon(Icons.arrow_back_ios_new_rounded), onPressed: () => context.safeBack()),
         title: const Text('Meal Tracker', style: AppTextStyles.h3),
         centerTitle: true,
         backgroundColor: context.appSurface,

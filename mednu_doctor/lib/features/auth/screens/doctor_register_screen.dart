@@ -315,7 +315,7 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
                   duration: const Duration(milliseconds: 300),
                   curve: Curves.easeInOut);
             } else {
-              context.pop();
+              context.safeBack();
             }
           },
         ),

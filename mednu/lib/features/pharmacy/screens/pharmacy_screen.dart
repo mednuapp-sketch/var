@@ -66,7 +66,7 @@ class _PharmacyScreenState extends ConsumerState<PharmacyScreen> {
             backgroundColor: const Color(0xFF2E7D32),
             leading: IconButton(
               icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-              onPressed: () => context.pop(),
+              onPressed: () => context.safeBack(),
             ),
             flexibleSpace: FlexibleSpaceBar(
               background: Container(

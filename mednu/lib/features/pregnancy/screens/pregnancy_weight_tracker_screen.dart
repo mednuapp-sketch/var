@@ -8,6 +8,7 @@ import '../../../core/utils/r.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../models/pregnancy_models.dart';
 import '../providers/pregnancy_provider.dart';
+import 'package:mednu/core/router/app_router.dart';
 
 class PregnancyWeightTrackerScreen extends ConsumerStatefulWidget {
   const PregnancyWeightTrackerScreen({super.key});
@@ -102,7 +103,7 @@ class _PregnancyWeightTrackerScreenState
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded,
               color: Colors.white, size: 20),
-          onPressed: () => context.pop(),
+          onPressed: () => context.safeBack(),
         ),
         flexibleSpace: FlexibleSpaceBar(
           background: Container(
@@ -1271,7 +1272,7 @@ class _PregnancyWeightTrackerScreenState
           leading: IconButton(
             icon: const Icon(Icons.arrow_back_ios_new_rounded,
                 color: Color(0xFF33172C), size: 20),
-            onPressed: () => context.pop(),
+            onPressed: () => context.safeBack(),
           ),
           title: Text(
             'Weight Tracker',
@@ -1316,7 +1317,7 @@ class _PregnancyWeightTrackerScreenState
                 ),
                 const SizedBox(height: 24),
                 ElevatedButton(
-                  onPressed: () => context.pop(),
+                  onPressed: () => context.safeBack(),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
