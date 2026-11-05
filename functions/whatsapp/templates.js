@@ -166,6 +166,33 @@ const TEMPLATES = {
     params: ["partnerName", "amount", "reference"],
     example: ["Priya Lab Services", "5000", "PAYOUT123"],
   },
+
+  // Sent straight to the guest's phone the moment the booking account holder
+  // generates the join link (createGuestJoinLink in index.js). The guest has
+  // no MedNU account, so there is no profile/opt-in to look up.
+  mednu_guest_join_link: {
+    category: CATEGORY,
+    footer: FOOTER,
+    body:
+      "Hi {{1}}, you are invited to a video consultation with Dr. {{2}} on {{3}}. " +
+      "Join the call here: {{4}} (this link works only for this consultation).",
+    params: ["guestName", "doctorName", "when", "link"],
+    example: ["Ravi", "Navya", "25 Sep, 5:30 pm", "https://mednu-web.web.app/join.html?a=abc"],
+  },
+
+  // Sent when a doctor issues a prescription (prescriptions/{id} created).
+  // Params must be single-line text (Meta rejects newlines/tabs), so the
+  // medicines are flattened into one line — see oneLine() in notify.js.
+  mednu_prescription_ready: {
+    category: CATEGORY,
+    footer: FOOTER,
+    body:
+      "Hi {{1}}, Dr. {{2}} has written a prescription for {{3}}. " +
+      "Diagnosis: {{4}}. Medicines: {{5}}. " +
+      "Rx ID: {{6}}. Please open the MedNU app to view or download the full prescription.",
+    params: ["recipientName", "doctorName", "forName", "diagnosis", "medicines", "rxId"],
+    example: ["Ravi", "Navya", "Ravi", "Viral fever", "PARACETAMOL (500mg, 5 days)", "MN-20250925-AB12CD"],
+  },
 };
 
 module.exports = {TEMPLATES};

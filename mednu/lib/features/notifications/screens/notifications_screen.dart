@@ -140,7 +140,8 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
         headerSliverBuilder: (_, __) => [
           SliverAppBar(
             pinned: true,
-            expandedHeight: R.h(context, 196),
+            toolbarHeight: 64,
+            scrolledUnderElevation: 0,
             backgroundColor: AppColors.primary,
             foregroundColor: Colors.white,
             elevation: 0,
@@ -257,9 +258,8 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                 error: (_, __) => const SizedBox.shrink(),
               ),
             ],
-            flexibleSpace: FlexibleSpaceBar(
-              collapseMode: CollapseMode.pin,
-              background: _HeaderBackground(unreadCount: unreadCount),
+            flexibleSpace: const DecoratedBox(
+              decoration: BoxDecoration(gradient: AppColors.primaryGradient),
             ),
             bottom: PreferredSize(
               preferredSize: Size.fromHeight(R.h(context, 44)),
@@ -323,148 +323,6 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
 enum _TabFilter { all, appointments, health, promotions }
 
 // ── Gradient header background ────────────────────────────────────────────────
-
-class _HeaderBackground extends StatelessWidget {
-  final int unreadCount;
-  const _HeaderBackground({required this.unreadCount});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            AppColors.primaryDark,
-            AppColors.primary,
-            AppColors.secondary,
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      child: Stack(
-        children: [
-          Positioned(
-            top: -24,
-            right: -24,
-            child: Container(
-              width: R.w(context, 130),
-              height: R.h(context, 130),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white.withValues(alpha: 0.06),
-              ),
-            ),
-          ),
-          Positioned(
-            bottom: 44,
-            left: -30,
-            child: Container(
-              width: R.w(context, 90),
-              height: R.h(context, 90),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white.withValues(alpha: 0.04),
-              ),
-            ),
-          ),
-          SafeArea(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                // No Scrollable here: this background sits inside the outer
-                // NestedScrollView's SliverAppBar, and a nested Scrollable
-                // (even a non-scrolling one) installs a drag recognizer that
-                // competes with the outer scroll in the gesture arena, causing
-                // stuttering/stalling swipes. Content is fixed-size and fits
-                // well within expandedHeight, so ConstrainedBox alone (no
-                // scroll safety-net) is enough to vertically center it.
-                return ConstrainedBox(
-                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                  child: Padding(
-                    padding: EdgeInsets.fromLTRB(
-                      R.p(context, 20),
-                      R.p(context, 24),
-                      R.p(context, 20),
-                      R.p(context, 16),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Container(
-                          width: R.w(context, 44),
-                          height: R.h(context, 44),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.18),
-                            borderRadius: BorderRadius.circular(
-                              R.r(context, 14),
-                            ),
-                          ),
-                          child: Icon(
-                            Icons.notifications_rounded,
-                            color: Colors.white,
-                            size: R.w(context, 24),
-                          ),
-                        ),
-                        SizedBox(width: R.w(context, 14)),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Text(
-                              'Notifications',
-                              style: TextStyle(
-                                fontFamily: 'Poppins',
-                                fontSize: 20,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.white,
-                              ),
-                            ),
-                            Text(
-                              unreadCount > 0
-                                  ? '$unreadCount unread notification${unreadCount == 1 ? '' : 's'}'
-                                  : 'Stay updated',
-                              style: const TextStyle(
-                                fontFamily: 'Poppins',
-                                fontSize: 13,
-                                color: Colors.white70,
-                              ),
-                            ),
-                          ],
-                        ),
-                        if (unreadCount > 0) ...[
-                          const Spacer(),
-                          Container(
-                            width: R.w(context, 46),
-                            height: R.h(context, 46),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.15),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Center(
-                              child: Text(
-                                '$unreadCount',
-                                style: const TextStyle(
-                                  fontFamily: 'Poppins',
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w800,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 // ── Grouped list view ─────────────────────────────────────────────────────────
 

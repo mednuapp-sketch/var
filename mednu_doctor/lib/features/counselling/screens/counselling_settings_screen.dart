@@ -25,7 +25,7 @@ class CounsellingSettingsScreen extends StatefulWidget {
 class _CounsellingSettingsScreenState extends State<CounsellingSettingsScreen> {
   bool _notifyNewSessions = true;
   bool _notifySessionReminders = true;
-  bool _whatsappOptIn = false;
+  bool _whatsappOptIn = true;
   String _appVersion = '';
 
   // Biometric lock state — device-local, independent of the profile stream.
@@ -94,7 +94,7 @@ class _CounsellingSettingsScreenState extends State<CounsellingSettingsScreen> {
     if (uid == null) return;
     try {
       final doc = await FirebaseFirestore.instance.collection('counsellor_profiles').doc(uid).get();
-      if (mounted) setState(() => _whatsappOptIn = doc.data()?['whatsappOptIn'] == true);
+      if (mounted) setState(() => _whatsappOptIn = doc.data()?['whatsappOptIn'] != false);
     } catch (_) {}
   }
 

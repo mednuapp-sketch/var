@@ -704,6 +704,92 @@ class GradientAppBar extends StatelessWidget implements PreferredSizeWidget {
   }
 }
 
+/// Fixed-height, pinned header for sliver screens: back arrow + icon tile +
+/// title/subtitle on one row. It never expands or collapses, so there is no
+/// empty band under the status bar and nothing shrinks while content scrolls.
+class AppSliverHeader extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+  final Color color;
+  final Gradient? gradient;
+  final List<Widget>? actions;
+  final PreferredSizeWidget? bottom;
+  final VoidCallback? onBack;
+
+  /// Fixed one-row header height (below the status bar).
+  static const double height = 64;
+
+  const AppSliverHeader({
+    super.key,
+    required this.icon,
+    required this.title,
+    this.subtitle,
+    this.color = AppColors.primary,
+    this.gradient,
+    this.actions,
+    this.bottom,
+    this.onBack,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SliverAppBar(
+      pinned: true,
+      toolbarHeight: height,
+      backgroundColor: color,
+      foregroundColor: Colors.white,
+      elevation: 0,
+      scrolledUnderElevation: 0,
+      titleSpacing: 0,
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
+        onPressed: onBack ?? () => context.safeBack(),
+      ),
+      actions: actions,
+      bottom: bottom,
+      flexibleSpace: gradient == null
+          ? null
+          : DecoratedBox(decoration: BoxDecoration(gradient: gradient)),
+      title: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.18),
+              borderRadius: BorderRadius.circular(11),
+            ),
+            child: Icon(icon, color: Colors.white, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.onPrimaryH2.copyWith(fontSize: 18, height: 1.2),
+                ),
+                if (subtitle != null)
+                  Text(
+                    subtitle!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.onPrimaryBody.copyWith(fontSize: 12, height: 1.2),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ──────────────────────────────────────────────────────────────
 // 7. PULL-TO-REFRESH WRAPPER
 // ──────────────────────────────────────────────────────────────

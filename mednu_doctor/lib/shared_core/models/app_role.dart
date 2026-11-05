@@ -7,7 +7,7 @@ import '../../core/constants/app_colors.dart';
 /// no `roles` field, so every reader in this layer treats a missing/absent
 /// value as `[AppRole.doctor]` rather than throwing. No existing document
 /// needs to be migrated for the app to keep working exactly as before.
-enum AppRole { doctor, ambulance, pharmacy, lab, equipment, caregiver, physiotherapist, counsellor, nutritionist, hospital, admin }
+enum AppRole { doctor, ambulance, pharmacy, lab, equipment, caregiver, careAssistant, physiotherapist, counsellor, nutritionist, hospital, admin }
 
 extension AppRoleX on AppRole {
   /// Value stored in Firestore (`roles` / `activeRole` fields). Kept
@@ -27,6 +27,8 @@ extension AppRoleX on AppRole {
         return 'equipment';
       case AppRole.caregiver:
         return 'caregiver';
+      case AppRole.careAssistant:
+        return 'care_assistant';
       case AppRole.physiotherapist:
         return 'physiotherapist';
       case AppRole.counsellor:
@@ -54,6 +56,8 @@ extension AppRoleX on AppRole {
         return 'Medical Equipment';
       case AppRole.caregiver:
         return 'Nurse';
+      case AppRole.careAssistant:
+        return 'Care Assistant';
       case AppRole.physiotherapist:
         return 'Physiotherapist';
       case AppRole.counsellor:
@@ -83,7 +87,9 @@ extension AppRoleX on AppRole {
       case AppRole.equipment:
         return 'Rent & sell medical equipment';
       case AppRole.caregiver:
-        return 'Home care & assistance';
+        return 'Home Care & Assistance';
+      case AppRole.careAssistant:
+        return 'Hospital escort & errands';
       case AppRole.physiotherapist:
         return 'Rehab & physiotherapy sessions';
       case AppRole.counsellor:
@@ -111,6 +117,8 @@ extension AppRoleX on AppRole {
         return Icons.health_and_safety_rounded;
       case AppRole.caregiver:
         return Icons.volunteer_activism_rounded;
+      case AppRole.careAssistant:
+        return Icons.support_agent_rounded;
       case AppRole.physiotherapist:
         return Icons.accessibility_new_rounded;
       case AppRole.counsellor:
@@ -138,6 +146,8 @@ extension AppRoleX on AppRole {
         return const Color(0xFFEF6C00);
       case AppRole.caregiver:
         return const Color(0xFF6A1B9A);
+      case AppRole.careAssistant:
+        return const Color(0xFF00897B);
       case AppRole.physiotherapist:
         return const Color(0xFF00838F);
       case AppRole.counsellor:
@@ -150,6 +160,18 @@ extension AppRoleX on AppRole {
         return const Color(0xFF37474F);
     }
   }
+
+  /// Firestore collection holding this role's partner profile. A Care
+  /// Assistant is its own role in the app but shares the `caregiver_profiles`
+  /// collection (distinguished by `serviceType: 'care_assistant'`), so the
+  /// visit pipeline, approval flow, wallet ledger and Cloud Functions that
+  /// already serve caregivers apply to it unchanged.
+  String get profileCollection =>
+      this == AppRole.careAssistant ? 'caregiver_profiles' : '${firestoreValue}_profiles';
+
+  /// Token for `PartnerDocumentType.forRole` / Storage prefixes, which are
+  /// keyed by profile collection name rather than role.
+  String get documentRoleKey => this == AppRole.careAssistant ? 'caregiver' : firestoreValue;
 
   static AppRole fromFirestoreValue(String? raw) {
     switch (raw) {
@@ -165,6 +187,8 @@ extension AppRoleX on AppRole {
         return AppRole.equipment;
       case 'caregiver':
         return AppRole.caregiver;
+      case 'care_assistant':
+        return AppRole.careAssistant;
       case 'physiotherapist':
         return AppRole.physiotherapist;
       case 'counsellor':

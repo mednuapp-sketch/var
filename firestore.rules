@@ -138,6 +138,17 @@ service cloud.firestore {
       return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
     }
 
+    // Approval gate for partner profiles: a director can't move a profile to
+    // 'active' unless every required verification document is on file. The
+    // partner app creates the profile first and uploads documents right after,
+    // so this can't be enforced at create time; approval is the server-side
+    // choke point. Keys must match PartnerDocumentType in mednu_doctor.
+    function activationHasDocs(keys) {
+      return request.resource.data.status == resource.data.status ||
+        request.resource.data.status != 'active' ||
+        request.resource.data.get('documents', {}).keys().hasAll(keys);
+    }
+
     // ── Admins collection ───────────────────────────────────────────────────
     match /admins/{adminId} {
       allow read: if isAdmin();
@@ -159,7 +170,23 @@ service cloud.firestore {
     // rule at all until now, so the Reports tab 404'd with permission-denied
     // for every admin, including Directors.
     match /admin_generated_reports/{reportId} {
-      allow read, write: if adminInRoles(['support', 'hr']);
+      // Finance generates its own financial reports from the Finance heading.
+      allow read, write: if adminInRoles(['support', 'hr', 'finance']);
+    }
+
+    // ── Minor requests — profile photo / phone number changes ─────────────────
+    // Raised by the user from their own profile; reviewed under Support ->
+    // Minor Requests in the admin panel. A client can only ever create a
+    // pending request for itself — applying the change is the admin's write
+    // to users/{uid} (see the narrow admin branch on /users below).
+    match /minor_requests/{requestId} {
+      allow read:   if isAuth() && (resource.data.userId == request.auth.uid || adminInRoles(['support', 'hr']));
+      allow create: if isAuth() &&
+                       request.resource.data.userId == request.auth.uid &&
+                       request.resource.data.status == 'pending' &&
+                       request.resource.data.type in ['photo', 'phone'];
+      allow update: if adminInRoles(['support', 'hr']);
+      allow delete: if false;
     }
 
     // ── Users ───────────────────────────────────────────────────────────────
@@ -175,9 +202,14 @@ service cloud.firestore {
       // (functions/whatsapp/) need no addition here — they aren't in the
       // doesNotModify() blocklist below, so the owner can already write them
       // like any other profile field.
-      allow update: if isOwner(userId) &&
-                       doesNotModify(['role', 'createdAt',
-                                      'walletBalance', 'mednuMoneyBalance', 'referralPoints']);
+      allow update: if (isOwner(userId) &&
+                        doesNotModify(['role', 'createdAt',
+                                       'walletBalance', 'mednuMoneyBalance', 'referralPoints'])) ||
+                       // Support / HR applying an approved Minor Request (profile
+                       // photo or phone number) — nothing else on the doc.
+                       (adminInRoles(['support', 'hr']) &&
+                        request.resource.data.diff(resource.data).affectedKeys()
+                          .hasOnly(['photoUrl', 'photoURL', 'profileImageUrl', 'phone', 'updatedAt']));
       allow delete: if false; // Account deletion handled by Cloud Functions only
 
       // Wallet transactions — user reads own; entries are written server-side only,
@@ -332,6 +364,14 @@ service cloud.firestore {
           request.auth.token.guestAppointmentId == appointmentId &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'completedAt']) &&
           request.resource.data.status == 'completed') ||
+        // Guest's own display name (typed, or taken from their signed-in
+        // MedNU account) — shown on their video tile for the doctor and the
+        // booking account holder, like a Google Meet guest name.
+        (request.auth.token.guestAppointmentId != null &&
+          request.auth.token.guestAppointmentId == appointmentId &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['guestDisplayName']) &&
+          request.resource.data.guestDisplayName is string &&
+          request.resource.data.guestDisplayName.size() <= 60) ||
         isAdmin()
       );
       allow delete: if isAdmin();
@@ -516,7 +556,7 @@ service cloud.firestore {
                        (adminInRoles(['hr']) &&
                          request.resource.data.diff(resource.data).affectedKeys()
                            .hasOnly(['documentVerification', 'documentsVerified', 'updatedAt', 'updatedBy'])) ||
-                       isDirector();
+                       (isDirector() && activationHasDocs(['hospital_registration', 'authorization_letter', 'hospital_contact_id']));
       allow delete: if isDirector();
     }
 
@@ -827,7 +867,7 @@ service cloud.firestore {
                        (adminInRoles(['hr']) &&
                          request.resource.data.diff(resource.data).affectedKeys()
                            .hasOnly(['documentVerification', 'documentsVerified', 'updatedAt', 'updatedBy'])) ||
-                       isDirector();
+                       (isDirector() && activationHasDocs(['lab_license', 'pathologist_registration', 'address_proof']));
       allow delete: if isDirector();
 
       // A lab manages its own test catalogue; nobody else reads this
@@ -987,7 +1027,7 @@ service cloud.firestore {
                        (adminInRoles(['hr']) &&
                          request.resource.data.diff(resource.data).affectedKeys()
                            .hasOnly(['documentVerification', 'documentsVerified', 'updatedAt', 'updatedBy'])) ||
-                       isDirector();
+                       (isDirector() && activationHasDocs(['pharmacy_license', 'pharmacist_registration', 'address_proof']));
       allow delete: if isDirector();
 
       // A pharmacy manages its own stock; nobody else reads this
@@ -1080,7 +1120,7 @@ service cloud.firestore {
                        (adminInRoles(['hr']) &&
                          request.resource.data.diff(resource.data).affectedKeys()
                            .hasOnly(['documentVerification', 'documentsVerified', 'updatedAt', 'updatedBy'])) ||
-                       isDirector();
+                       (isDirector() && activationHasDocs(['business_registration', 'owner_id', 'address_proof']));
       allow delete: if isDirector();
 
       // The vendor's private menu. Nobody else reads it directly — patients
@@ -1224,7 +1264,7 @@ service cloud.firestore {
                        (adminInRoles(['hr']) &&
                          request.resource.data.diff(resource.data).affectedKeys()
                            .hasOnly(['documentVerification', 'documentsVerified', 'updatedAt', 'updatedBy'])) ||
-                       isDirector();
+                       (isDirector() && activationHasDocs(['vehicle_registration', 'driver_license', 'vehicle_insurance', 'vehicle_fitness', 'emt_certificate', 'address_proof']));
       allow delete: if isDirector();
     }
 
@@ -1290,7 +1330,7 @@ service cloud.firestore {
         'sourceRequestId', 'sourceType', 'type', 'patientId', 'patientName',
         'patientAge', 'address', 'scheduledAt', 'durationMinutes', 'fare',
         'createdAt',
-        'cancelledBy'
+        'cancelledBy', 'serviceDetails'
       ];
     }
 
@@ -1338,7 +1378,7 @@ service cloud.firestore {
                        (adminInRoles(['hr']) &&
                          request.resource.data.diff(resource.data).affectedKeys()
                            .hasOnly(['documentVerification', 'documentsVerified', 'updatedAt', 'updatedBy'])) ||
-                       isDirector();
+                       (isDirector() && activationHasDocs(['caregiver_id', 'certificates', 'address_proof']));
       allow delete: if isDirector();
     }
 
@@ -1366,7 +1406,25 @@ service cloud.firestore {
           request.resource.data.caregiverId == request.auth.uid &&
           doesNotModify(_caregiverVisitImmutableFields()) &&
           resource.data.status == 'scheduled' &&
-          request.resource.data.status == 'scheduled')
+          request.resource.data.status == 'scheduled') ||
+        // Care Assistant declining a request from the open pool only hides it
+        // from them: their uid is added to `declinedBy` and nothing else, so
+        // other assistants can still take it.
+        (resource.data.caregiverId == null && isCaregiverPartner() &&
+          resource.data.status == 'scheduled' &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['declinedBy', 'updatedAt']) &&
+          request.auth.uid in request.resource.data.declinedBy &&
+          request.resource.data.declinedBy.hasAll(resource.data.get('declinedBy', []))) ||
+        // Care Assistant declining a request the patient pinned to them (and
+        // that they haven't accepted yet): releases it back to the open pool.
+        (resource.data.caregiverId == request.auth.uid &&
+          resource.data.status == 'scheduled' &&
+          !('acceptedAt' in resource.data) &&
+          request.resource.data.caregiverId == null &&
+          request.resource.data.status == 'scheduled' &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['caregiverId', 'declinedBy', 'updatedAt']) &&
+          request.auth.uid in request.resource.data.declinedBy &&
+          request.resource.data.declinedBy.hasAll(resource.data.get('declinedBy', [])))
       );
       // Created only by the Cloud Function mirror (Admin SDK bypasses rules).
       allow create, delete: if isAdmin();
@@ -1504,7 +1562,7 @@ service cloud.firestore {
                        (adminInRoles(['hr']) &&
                          request.resource.data.diff(resource.data).affectedKeys()
                            .hasOnly(['documentVerification', 'documentsVerified', 'updatedAt', 'updatedBy'])) ||
-                       isDirector();
+                       (isDirector() && activationHasDocs(['physio_id', 'physio_certificate']));
       allow delete: if isDirector();
     }
 
@@ -1561,7 +1619,7 @@ service cloud.firestore {
                        (adminInRoles(['hr']) &&
                          request.resource.data.diff(resource.data).affectedKeys()
                            .hasOnly(['documentVerification', 'documentsVerified', 'updatedAt', 'updatedBy'])) ||
-                       isDirector();
+                       (isDirector() && activationHasDocs(['counsellor_id', 'certificates']));
       allow delete: if isDirector();
     }
 
@@ -1892,7 +1950,7 @@ service cloud.firestore {
                        (adminInRoles(['hr']) &&
                          request.resource.data.diff(resource.data).affectedKeys()
                            .hasOnly(['documentVerification', 'documentsVerified', 'updatedAt', 'updatedBy'])) ||
-                       isDirector();
+                       (isDirector() && activationHasDocs(['nutritionist_id', 'nutrition_certificate']));
       allow delete: if isDirector();
     }
 

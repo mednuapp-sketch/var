@@ -1,4 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <uses-permission android:name="android.permission.USE_FINGERPRINT" />
@@ -24,6 +25,10 @@
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <!-- Foreground service for background online-presence heartbeat + active calls -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- Screen sharing is not a feature of this app. Agora's screen-share module
+         ships a mediaProjection foreground service and permission that would
+         otherwise need a Play Console declaration and demo video. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" tools:node="remove" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <!-- Keeps the ambulance driver's live GPS feed running while the trip is open but the app is in the background (e.g. while navigating in Google Maps). -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
@@ -89,6 +94,10 @@
 
         <!-- Active call foreground service — keeps the Agora session alive when
              the doctor swipes the app from recents during a consultation. -->
+        <service
+            android:name="io.agora.rtc2.extensions.MediaProjectionMgr$LocalScreenSharingService"
+            tools:node="remove" />
+
         <service
             android:name=".CallForegroundService"
             android:foregroundServiceType="camera|microphone"

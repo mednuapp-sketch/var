@@ -39,12 +39,16 @@ class UserProfile {
       DocumentSnapshot<Map<String, dynamic>> snap) {
     final d = snap.data() ?? const <String, dynamic>{};
     final activeRoleRaw = d['activeRole'] as String?;
+    // A verified doctor's new photo is held in pendingChanges until admin
+    // review; show it to the doctor right away so it doesn't look lost.
+    final pending = d['pendingChanges'];
+    final pendingPhoto = pending is Map ? pending['photoUrl'] as String? : null;
     return UserProfile(
       uid: snap.id,
       name: (d['name'] as String?) ?? '',
       phone: (d['phone'] as String?) ?? '',
       email: (d['email'] as String?) ?? '',
-      photoUrl: (d['photoUrl'] as String?) ?? '',
+      photoUrl: pendingPhoto ?? (d['photoUrl'] as String?) ?? '',
       isVerified: (d['isVerified'] as bool?) ?? false,
       isOnline: (d['isOnline'] as bool?) ?? false,
       status: (d['status'] as String?) ?? 'pending',

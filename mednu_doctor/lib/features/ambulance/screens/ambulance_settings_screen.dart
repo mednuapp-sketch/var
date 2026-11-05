@@ -25,7 +25,7 @@ class AmbulanceSettingsScreen extends StatefulWidget {
 class _AmbulanceSettingsScreenState extends State<AmbulanceSettingsScreen> {
   bool _notifyNewRequests = true;
   bool _notifySoundAlert = true;
-  bool _whatsappOptIn = false;
+  bool _whatsappOptIn = true;
   String _appVersion = '';
 
   // Biometric lock state — device-local, independent of the profile stream.
@@ -83,7 +83,7 @@ class _AmbulanceSettingsScreenState extends State<AmbulanceSettingsScreen> {
     if (uid == null) return;
     try {
       final doc = await FirebaseFirestore.instance.collection('ambulance_profiles').doc(uid).get();
-      if (mounted) setState(() => _whatsappOptIn = doc.data()?['whatsappOptIn'] == true);
+      if (mounted) setState(() => _whatsappOptIn = doc.data()?['whatsappOptIn'] != false);
     } catch (_) {}
   }
 

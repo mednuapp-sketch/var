@@ -77,6 +77,10 @@ import '../../features/ambulance/screens/ambulance_earnings_screen.dart';
 import '../../features/ambulance/screens/ambulance_vehicle_profile_screen.dart';
 import '../../features/ambulance/screens/ambulance_settings_screen.dart';
 import '../../features/caregiver/screens/caregiver_dashboard_screen.dart';
+import '../../features/care_assistant/screens/care_assistant_dashboard_screen.dart';
+import '../../features/care_assistant/screens/care_assistant_requests_screen.dart';
+import '../../features/care_assistant/screens/care_assistant_job_detail_screen.dart';
+import '../../features/care_assistant/screens/care_assistant_profile_screen.dart';
 import '../../features/caregiver/screens/caregiver_assigned_visits_screen.dart';
 import '../../features/caregiver/screens/caregiver_visit_detail_screen.dart';
 import '../../features/caregiver/screens/caregiver_task_checklist_screen.dart';
@@ -173,7 +177,27 @@ class _AuthChangeNotifier extends ChangeNotifier {
         .collection('doctors')
         .doc(user.uid)
         .snapshots()
-        .listen((snap) async {
+        .listen((snap) {
+      _lastDoctorSnap = snap;
+      _handleDoctorSnap(user, snap);
+    });
+  }
+
+  DocumentSnapshot<Map<String, dynamic>>? _lastDoctorSnap;
+
+  /// Re-resolves the active role from the last account snapshot. The role
+  /// switcher persists the new choice locally, which does not change the
+  /// Firestore doc — without this the router keeps redirecting to the
+  /// previous role's home (e.g. picking Doctor still landed on Dietician).
+  Future<void> refreshActiveRole() async {
+    final user = FirebaseAuth.instance.currentUser;
+    final snap = _lastDoctorSnap;
+    if (user == null || snap == null) return;
+    await _handleDoctorSnap(user, snap);
+  }
+
+  Future<void> _handleDoctorSnap(
+      User user, DocumentSnapshot<Map<String, dynamic>> snap) async {
       // This document also receives frequent writes unrelated to routing —
       // PresenceService's online heartbeat (isOnline/acceptingConsultations/
       // lastHeartbeat, every 60s while online) and location pushes. Since
@@ -208,6 +232,23 @@ class _AuthChangeNotifier extends ChangeNotifier {
       // last set to, since `arrayUnion` appends new roles to the end of the
       // array and never reorders it.
       final roles = AppRoleX.listFrom(snap.data()?['roles']);
+      // Repair: adding a service to a legacy doctor account (no `roles`
+      // field) used to leave `roles` as just the new role, hiding the
+      // Doctor profile and the switcher. Partner registrations never write
+      // the doctor-only fields checked below, so any of them proves Doctor.
+      final data = snap.data();
+      final rawRoles = data?['roles'];
+      if (!snap.metadata.isFromCache &&
+          rawRoles is List &&
+          rawRoles.isNotEmpty &&
+          !rawRoles.contains('doctor') &&
+          _looksLikeDoctorRegistration(data)) {
+        snap.reference.update({
+          'roles': FieldValue.arrayUnion(['doctor']),
+        }).catchError((Object e) {
+          debugPrint('[Router] doctor role repair failed: $e');
+        });
+      }
       final serverActiveRoleRaw = snap.data()?['activeRole'] as String?;
       final serverPreferred = serverActiveRoleRaw != null
           ? AppRoleX.fromFirestoreValue(serverActiveRoleRaw)
@@ -252,7 +293,7 @@ class _AuthChangeNotifier extends ChangeNotifier {
         return;
       }
 
-      final collection = '${role.firestoreValue}_profiles';
+      final collection = role.profileCollection;
       if (_roleProfileUid != user.uid || _roleProfileCollection != collection) {
         _roleProfileUid = user.uid;
         _roleProfileCollection = collection;
@@ -272,7 +313,6 @@ class _AuthChangeNotifier extends ChangeNotifier {
       } else {
         notifyListeners();
       }
-    });
   }
 
   @override
@@ -285,6 +325,10 @@ class _AuthChangeNotifier extends ChangeNotifier {
 }
 
 final _authChangeNotifier = _AuthChangeNotifier();
+
+/// Makes the router adopt the role just chosen in the role switcher.
+Future<void> refreshRouterActiveRole() =>
+    _authChangeNotifier.refreshActiveRole();
 
 class AppRoutes {
   static const login               = '/';
@@ -378,6 +422,13 @@ class AppRoutes {
   static const caregiverEarnings          = '/caregiver/earnings';
   static const caregiverProfile           = '/caregiver/profile';
   static const caregiverSettings          = '/caregiver/settings';
+
+  // ── Care Assistant partner module (shares the caregiver_visits backend) ───
+  static const careAssistantDashboard = '/care-assistant/dashboard';
+  static const careAssistantRequests  = '/care-assistant/requests';
+  static const careAssistantJobDetail = '/care-assistant/job-detail';
+  static const careAssistantEarnings  = '/care-assistant/earnings';
+  static const careAssistantProfile   = '/care-assistant/profile';
 
   // ── Physiotherapy partner module (Firestore-backed) ──────────────────────
   static const physioDashboard       = '/physio/dashboard';
@@ -818,6 +869,19 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: AppRoutes.caregiverProfile,  pageBuilder: (c, s) => const NoTransitionPage(child: CaregiverProfileScreen())),
       GoRoute(path: AppRoutes.caregiverSettings, builder: (c, s) => const CaregiverSettingsScreen()),
 
+      // ── Care Assistant partner module ─────────────────────────────────────
+      GoRoute(path: AppRoutes.careAssistantDashboard, pageBuilder: (c, s) => const NoTransitionPage(child: CareAssistantDashboardScreen())),
+      GoRoute(path: AppRoutes.careAssistantRequests,  pageBuilder: (c, s) => const NoTransitionPage(child: CareAssistantRequestsScreen())),
+      GoRoute(
+        path: AppRoutes.careAssistantJobDetail,
+        builder: (c, s) {
+          final extra = s.extra as Map<String, dynamic>?;
+          return CareAssistantJobDetailScreen(visitId: extra?['visitId'] as String? ?? '');
+        },
+      ),
+      GoRoute(path: AppRoutes.careAssistantEarnings,  pageBuilder: (c, s) => const NoTransitionPage(child: CaregiverEarningsScreen(careAssistant: true))),
+      GoRoute(path: AppRoutes.careAssistantProfile,   pageBuilder: (c, s) => const NoTransitionPage(child: CareAssistantProfileScreen())),
+
       // ── Physiotherapy partner module ──────────────────────────────────────
       GoRoute(path: AppRoutes.physioDashboard, pageBuilder: (c, s) => const NoTransitionPage(child: PhysioDashboardScreen())),
       GoRoute(path: AppRoutes.physioSessions,  pageBuilder: (c, s) => const NoTransitionPage(child: PhysioSessionsScreen())),
@@ -888,4 +952,23 @@ extension SafeBackNavigation on BuildContext {
       go(fallbackRoute);
     }
   }
+}
+
+/// True when a `doctors/{uid}` document carries fields only
+/// `DoctorAuthService.saveProfile` writes — partner-role registrations
+/// (`PartnerRoleRegisterScreen`) never set any of them.
+bool _looksLikeDoctorRegistration(Map<String, dynamic>? data) {
+  if (data == null) return false;
+  bool filled(String key) {
+    final v = data[key];
+    if (v is String) return v.trim().isNotEmpty;
+    if (v is Map) return v.isNotEmpty;
+    return false;
+  }
+
+  return filled('specialty') ||
+      filled('qualifications') ||
+      filled('registrationNumber') ||
+      filled('clinicName') ||
+      filled('documents');
 }

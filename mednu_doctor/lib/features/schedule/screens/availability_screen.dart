@@ -240,7 +240,7 @@ class _AvailabilityScreenState extends State<AvailabilityScreen> {
           // ── Gradient App Bar ─────────────────────────────
           SliverAppBar(
             pinned: true,
-            expandedHeight: 130,
+            expandedHeight: 72,
             backgroundColor: AppColors.primary,
             foregroundColor: Colors.white,
             elevation: 0,
@@ -480,7 +480,9 @@ class _AvailabilityHeader extends StatelessWidget {
                     constraints:
                         BoxConstraints(minHeight: constraints.maxHeight),
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 48, 20, 16),
+                      // Sits level with the back arrow / Save in the toolbar
+                      // instead of in a second row beneath them.
+                      padding: const EdgeInsets.fromLTRB(56, 6, 100, 0),
                       child: Row(children: [
                         Container(
                           width: 44,

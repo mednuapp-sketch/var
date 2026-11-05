@@ -2157,6 +2157,9 @@ class _ShareGuestLinkButtonState extends State<_ShareGuestLinkButton> {
       if (deepLink == null || deepLink.isEmpty) {
         throw Exception('No link returned');
       }
+      // The server also sends the link straight to the guest's WhatsApp;
+      // `whatsappSent` is false (or absent on older servers) if that didn't go.
+      final whatsappSent = (result.data as Map)['whatsappSent'] == true;
       if (!mounted) return;
 
       final when = [
@@ -2171,6 +2174,20 @@ class _ShareGuestLinkButtonState extends State<_ShareGuestLinkButton> {
           "Don't have the MedNU app yet? Install it first, then tap this link again.";
 
       await Share.share(message, subject: 'Join your MedNU consultation');
+      if (mounted && whatsappSent) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'The join link was also sent to ${widget.guestName}\'s WhatsApp.',
+            ),
+            backgroundColor: Colors.green.shade700,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        );
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

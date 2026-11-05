@@ -7,13 +7,13 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
-import '../../../core/constants/app_text_styles.dart';
 import '../../../core/services/connectivity_service.dart';
 import '../../../core/services/booking_service.dart';
 import '../../../core/utils/r.dart';
 import 'emergency_contacts_service.dart';
 import 'manage_contacts_screen.dart';
 import 'nearby_ambulances_sheet.dart';
+import '../../../core/widgets/ux_widgets.dart';
 
 class EmergencyScreen extends StatefulWidget {
   const EmergencyScreen({super.key});
@@ -150,50 +150,15 @@ class _EmergencyScreenState extends State<EmergencyScreen>
       bottomNavigationBar: const MedNUPushedBottomNav(activeRoute: AppRoutes.emergency),
       body: CustomScrollView(
         slivers: [
-          SliverAppBar(
-            expandedHeight: AppSpacing.headerHeight(context),
-            pinned: true,
-            backgroundColor: const Color(0xFFB71C1C),
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-              onPressed: () => context.safeBack(),
-            ),
-            flexibleSpace: FlexibleSpaceBar(
-              background: Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Color(0xFFB71C1C), Color(0xFFE53935)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                ),
-                child: SafeArea(
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      return SingleChildScrollView(
-                        physics: const ClampingScrollPhysics(),
-                        child: ConstrainedBox(
-                          constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                          child: Padding(
-                            padding: AppSpacing.headerPadding(context),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.emergency_rounded, color: Colors.white, size: AppSpacing.headerIconSize(context)),
-                                SizedBox(height: AppSpacing.headerIconGap(context)),
-                                const Text('Emergency', style: AppTextStyles.onPrimaryH2),
-                                const Text('Instant High Priority Assistence', style: AppTextStyles.onPrimaryBody),
-                              ],
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ),
+          const AppSliverHeader(
+            icon: Icons.emergency_rounded,
+            title: 'Emergency',
+            subtitle: 'Instant High Priority Assistance',
+            color: Color(0xFFB71C1C),
+            gradient: LinearGradient(
+              colors: [Color(0xFFB71C1C), Color(0xFFE53935)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             ),
           ),
           SliverToBoxAdapter(

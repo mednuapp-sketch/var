@@ -5,12 +5,10 @@ import 'package:intl/intl.dart';
 import 'package:mednu/core/constants/app_colors.dart';
 import 'package:mednu/core/constants/app_text_styles.dart';
 import 'package:mednu/core/widgets/ux_widgets.dart';
-import '../../../core/constants/app_spacing.dart';
 import '../../../core/utils/r.dart';
 import '../services/ai_tips_service.dart';
 import '../services/health_article_service.dart';
 
-import '../../../core/router/app_router.dart';
 // ── Article data model ────────────────────────────────────────────────────────
 
 class _Article {
@@ -206,14 +204,15 @@ class _EducationScreenState extends State<EducationScreen> {
       body: CustomScrollView(
         slivers: [
           // ── App Bar ──────────────────────────────────────────────────────
-          SliverAppBar(
-            pinned: true,
-            expandedHeight: AppSpacing.headerHeight(context),
-            backgroundColor: _accentIndigo,
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back_ios_new_rounded,
-                  color: Colors.white),
-              onPressed: () => context.safeBack(),
+          AppSliverHeader(
+            icon: Icons.menu_book_rounded,
+            title: 'Health Education',
+            subtitle: 'Learn about health & wellness',
+            color: _accentIndigo,
+            gradient: const LinearGradient(
+              colors: [Color(0xFF1A237E), Color(0xFF3F51B5), Color(0xFF5C6BC0)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             ),
             actions: [
               IconButton(
@@ -224,82 +223,6 @@ class _EducationScreenState extends State<EducationScreen> {
                 tooltip: 'Saved Articles',
               ),
             ],
-            flexibleSpace: FlexibleSpaceBar(
-              background: Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Color(0xFF1A237E), Color(0xFF3F51B5), Color(0xFF5C6BC0)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                ),
-                child: Stack(
-                  children: [
-                    Positioned(
-                      top: -20, right: -20,
-                      child: Container(
-                        width: R.w(context, 110), height: R.h(context, 110),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.white.withValues(alpha: 0.07),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      bottom: 10, left: -30,
-                      child: Container(
-                        width: R.w(context, 80), height: R.h(context, 80),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.white.withValues(alpha: 0.04),
-                        ),
-                      ),
-                    ),
-                    SafeArea(
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          return SingleChildScrollView(
-                            physics: const ClampingScrollPhysics(),
-                            child: ConstrainedBox(
-                              constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                              child: Padding(
-                                padding: AppSpacing.headerPadding(context),
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      width: R.w(context, 44), height: R.h(context, 44),
-                                      decoration: BoxDecoration(
-                                        color: Colors.white.withValues(alpha: 0.18),
-                                        borderRadius: BorderRadius.circular(R.r(context, 14)),
-                                      ),
-                                      child: Icon(Icons.menu_book_rounded,
-                                          color: Colors.white, size: R.w(context, 24)),
-                                    ),
-                                    SizedBox(width: R.w(context, 12)),
-                                    Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Text('Health Education',
-                                            style: AppTextStyles.h2
-                                                .copyWith(color: Colors.white)),
-                                        Text('Learn about health & wellness',
-                                            style: AppTextStyles.bodySmall
-                                                .copyWith(color: Colors.white70)),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
           ),
 
           // ── Content ──────────────────────────────────────────────────────

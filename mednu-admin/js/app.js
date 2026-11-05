@@ -52,28 +52,48 @@ async function verifyAdminRole(uid) {
 // reads/writes for each role server-side (not present in this repo).
 let currentAdminRole = 'director';
 
-// Each list is the `data-tab` values a role may open. These are independent
-// of the nav-section-label groupings in index.html (which are purely visual
-// categorization) — a role's tabs can span multiple sections.
+// Each list is the `data-tab` values a role may open. The sidebar headings
+// (Main / Partner Accounts / Finance / Support / Marketing / Quality Assessment /
+// Miscellaneous) are purely visual — access is decided per tab, so a profile
+// can open a whole heading or just single subheadings of it.
 // `null` = every tab (Director).
+const _ACCT_TABS = [
+  'acct-doctors', 'acct-nurses', 'acct-lab', 'acct-pharmacy', 'acct-ambulance', 'acct-physio',
+  'acct-dietician', 'acct-hospitals', 'acct-care-assistants', 'acct-equipment', 'acct-counsellors',
+];
+const _FINANCE_TABS   = ['revenue', 'wallet', 'settlements', 'commission-rules', 'coupons', 'refunds', 'referrals', 'reports', 'bill-discounts'];
+const _SUPPORT_TABS   = ['patients', 'appointments', 'calls', 'tickets', 'operation-logs', 'requests', 'order-tracking', 'ambulance-tracking', 'minor-requests'];
+const _MARKETING_TABS = ['campaigns', 'banners', 'broadcast', 'web-ads'];
+const _QUALITY_TABS   = ['feedback', 'operation-logs', 'quality-reports', 'quality-analytics', 'reviews'];
+// Miscellaneous minus "Prescriptions and Reports" + "Health Data" (clinical
+// data HR must not see) and "Deletion Requests" (Director only).
+const _MISC_HR_TABS   = ['health-articles', 'medicines', 'services', 'nutrition', 'caregivers', 'care-assistants', 'hospitals', 'ambulances', 'equipmentVendors'];
+
 const ROLE_TAB_ACCESS = {
   director:  null,
-  finance:   ['revenue', 'wallet'],
-  marketing: ['banners', 'web-ads', 'referrals'],
-  support:   ['reports', 'tickets', 'broadcast'],
-  hr:        [
-    'ambulance-partners', 'caregiver-partners', 'pharmacy-partners', 'equipment-partners', 'lab-partners', // Partner Accounts
-    'physio-partners', 'counselling-partners', 'nutrition-partners',                        // Partner Accounts (cont.)
-    'revenue', 'wallet',                                                            // Finance
-    'banners', 'web-ads', 'referrals',                                              // Marketing
-    'reports', 'tickets', 'broadcast',                                              // Support
-    'quality-analytics', 'feedback', 'reviews',                                     // Quality
-  ],
+  // HR: everything except Main, "Prescriptions and Reports" and "Health Data".
+  hr:        ['home', ..._ACCT_TABS, ..._FINANCE_TABS, ..._SUPPORT_TABS, ..._MARKETING_TABS, ..._QUALITY_TABS, ..._MISC_HR_TABS],
+  // Finance: the Finance heading only.
+  finance:   ['home', ..._FINANCE_TABS],
+  // Support: the Support heading + Feedback.
+  support:   ['home', ..._SUPPORT_TABS, 'feedback'],
+  // Marketing: the Marketing heading + Health Articles + Feedback.
+  marketing: ['home', ..._MARKETING_TABS, 'health-articles', 'feedback'],
+};
+
+const ROLE_LABELS = {
+  director:  { name: 'Director',  tag: 'Full access to every section',                           icon: 'ti-crown' },
+  hr:        { name: 'HR',        tag: 'Partner accounts, finance, support, marketing & quality', icon: 'ti-users-group' },
+  finance:   { name: 'Finance',   tag: 'Revenue, settlements, refunds and financial reports',     icon: 'ti-coin-rupee' },
+  support:   { name: 'Support',   tag: 'Patients, tickets, tracking and feedback',                icon: 'ti-headset' },
+  marketing: { name: 'Marketing', tag: 'Campaigns, banners, broadcasts, articles and feedback',   icon: 'ti-speakerphone' },
 };
 
 function isDirector() { return currentAdminRole === 'director'; }
 
 function canAccessTab(tab) {
+  // The Director already has the full Overview — "My Dashboard" is for the other profiles.
+  if (tab === 'home' && isDirector()) return false;
   const allowed = ROLE_TAB_ACCESS[currentAdminRole];
   if (allowed === null) return true;      // director
   if (!allowed) return false;             // unrecognized role: default-deny
@@ -100,9 +120,12 @@ function applyRoleNavVisibility() {
   });
 }
 
+// Everyone but the Director lands on the profile-specific "My Dashboard"
+// instead of the platform-wide Overview.
 function firstAccessibleTab() {
-  const item = Array.from(document.querySelectorAll('.nav-item[data-tab]'))
-    .find(el => canAccessTab(el.dataset.tab));
+  const items = Array.from(document.querySelectorAll('.nav-item[data-tab]'))
+    .filter(el => canAccessTab(el.dataset.tab));
+  const item = items.find(el => el.dataset.tab === 'home') || items[0];
   return item ? { tab: item.dataset.tab, title: item.dataset.title } : null;
 }
 
@@ -121,6 +144,7 @@ auth.onAuthStateChanged(async user => {
     document.getElementById('app').style.display = 'flex';
     applyRoleNavVisibility();
     initDashboard();
+    if (typeof onPanelReady === 'function') onPanelReady();
     initAdminPushNotifications();
     if (!canAccessTab('overview')) {
       const landing = firstAccessibleTab();
@@ -153,7 +177,10 @@ document.getElementById('logout-btn').addEventListener('click', () => auth.signO
 
 // ---- NAV ----
 document.querySelectorAll('.nav-item[data-tab]').forEach(item => {
-  item.addEventListener('click', () => switchTab(item.dataset.tab, item.dataset.title));
+  item.addEventListener('click', () => {
+    switchTab(item.dataset.tab, item.dataset.title, item);
+    if (window.innerWidth <= 768 && typeof closeSidebar === 'function') closeSidebar();
+  });
 });
 
 // ---- COLLAPSIBLE NAV SECTIONS ----
@@ -196,17 +223,48 @@ function restoreNavCollapseState() {
 }
 restoreNavCollapseState();
 
-function switchTab(tab, title) {
+// Some nav entries share one tab section (e.g. Nurses / Care Assistants both
+// use the caregiver partner table) or have no nav entry of their own.
+const TAB_SECTION_ALIAS = { 'care-assistant-partners': 'caregiver-partners' };
+const TAB_NAV_ALIAS     = { calls: 'appointments' };
+
+function tabSectionEl(tab) {
+  if (tab.startsWith('acct-')) return document.getElementById('tab-accounts');
+  return document.getElementById('tab-' + (TAB_SECTION_ALIAS[tab] || tab));
+}
+
+function navHeadingOf(item) {
+  let el = item && item.previousElementSibling;
+  while (el && !el.classList.contains('nav-section-label')) el = el.previousElementSibling;
+  const txt = el && el.querySelector('.nav-section-text');
+  return txt ? txt.textContent.trim() : '';
+}
+
+let _nutritionTabInited = false;
+
+function switchTab(tab, title, navItem) {
   if (!canAccessTab(tab)) {
     showToast('You do not have access to this section.');
     return;
   }
+  const section = tabSectionEl(tab);
+  if (!section) { showToast('This section is not available.'); return; }
+  const navTab = TAB_NAV_ALIAS[tab] || tab;
+  const candidates = Array.from(document.querySelectorAll('.nav-item[data-tab="' + navTab + '"]'));
+  const active = (navItem && navItem.dataset.tab === navTab && navItem)
+    || candidates.find(el => el.style.display !== 'none') || candidates[0] || null;
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  document.querySelector(`.nav-item[data-tab="${tab}"]`).classList.add('active');
+  if (active) active.classList.add('active');
   document.querySelectorAll('.tab-section').forEach(s => s.classList.remove('active'));
-  document.getElementById(`tab-${tab}`).classList.add('active');
-  document.getElementById('page-title').textContent = title || tab;
-  document.getElementById('page-sub').textContent = new Date().toLocaleDateString('en-IN', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+  section.classList.add('active');
+  const pageTitle = title || (active && active.dataset.title) || tab;
+  document.getElementById('page-title').textContent = pageTitle;
+  const crumb = document.getElementById('page-crumb');
+  if (crumb) crumb.textContent = navHeadingOf(active) || 'MedNU';
+  const sub = document.getElementById('page-sub');
+  if (sub) sub.textContent = new Date().toLocaleDateString('en-IN', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+  const contentEl = document.querySelector('.content');
+  if (contentEl) contentEl.scrollTop = 0;
 
   // Always return to hub when re-entering Services
   if (tab === 'services') {
@@ -218,7 +276,8 @@ function switchTab(tab, title) {
   }
 
   // Initialize nutrition tab when first opened
-  if (tab === 'nutrition') {
+  if (tab === 'nutrition' && !_nutritionTabInited) {
+    _nutritionTabInited = true;
     initNutritionTab();
   }
 
@@ -233,7 +292,8 @@ function switchTab(tab, title) {
   // Cache-aware (no `force`): repeatedly switching between partner tabs must
   // not re-read the whole ledger every time. The Refresh button forces.
   if (tab === 'ambulance-partners')    loadPartnerEarnings('ambulance');
-  if (tab === 'caregiver-partners')    loadPartnerEarnings('caregiver');
+  if (tab === 'caregiver-partners' || tab === 'care-assistant-partners') loadPartnerEarnings('caregiver');
+  if (typeof onPanelTabOpened === 'function') onPanelTabOpened(tab);
   if (tab === 'pharmacy-partners')     loadPartnerEarnings('pharmacy');
   if (tab === 'equipment-partners')    loadPartnerEarnings('equipment');
   if (tab === 'lab-partners')          loadPartnerEarnings('lab');
@@ -249,6 +309,7 @@ function switchTab(tab, title) {
   }
   if (tab === 'settlements' && !_settlementsInited) { _settlementsInited = true; initSettlementDashboardListeners(); }
   if (tab === 'refunds' && !_refundsInited) { _refundsInited = true; loadRefunds(); }
+  if (tab === 'reports' || tab === 'quality-reports') loadReportsList();
 }
 
 // ---- TOAST ----
@@ -2116,51 +2177,11 @@ document.getElementById('ticket-filter')?.addEventListener('change', filterTicke
 // ============================================
 //   REPORTS — REALTIME
 // ============================================
-let _reportsListener = null;
-
+// Report list + generator now live in js/panel.js (scoped Finance / Quality
+// reports). Kept as a thin shim because several callers invoke it.
 function loadReportsList() {
-  // Uses its own collection (not 'reports') because the patient app already writes
-  // unrelated uploaded-scan documents to 'reports' with an incompatible shape
-  // (name/imageUrl/storagePath) — sharing that collection made this list show blanks.
-  if (_reportsListener) return; // already live
-  _reportsListener = db.collection('admin_generated_reports').orderBy('createdAt', 'desc').limit(10)
-    .onSnapshot(snap => {
-      const el = document.getElementById('reports-list');
-      if (!el) return;
-      if (snap.empty) { el.innerHTML = '<div class="empty-state"><div class="empty-icon"><i class="ti ti-file-analytics"></i></div><p>No reports generated yet</p></div>'; return; }
-      el.innerHTML = snap.docs.map(doc => {
-        const r = doc.data();
-        return `<div class="user-cell" style="padding:12px 0;border-bottom:1px solid var(--border);">
-          <div style="font-size:24px;">
-          <div style="flex:1;">
-            <div class="user-name">${escHtml(r.title || 'Report')}</div>
-            <div class="user-sub">${r.type || ''} · ${escHtml(formatDate(r.createdAt))}</div>
-          </div>
-          ${r.downloadUrl ? `<a href="${escHtml(r.downloadUrl)}" target="_blank" class="btn btn-outline">Download</a>` : ''}
-        </div>`;
-      }).join('');
-    }, err => {
-      console.error('reports list error:', err);
-      const el = document.getElementById('reports-list');
-      if (el) el.innerHTML = '<div class="empty-state"><div class="empty-icon"><i class="ti ti-alert-circle"></i></div><p>Couldn\'t load reports — try refreshing.</p></div>';
-    });
+  if (typeof initScopedReports === 'function') initScopedReports();
 }
-
-document.getElementById('generate-report-btn')?.addEventListener('click', async () => {
-  const type  = document.getElementById('report-type').value;
-  const range = document.getElementById('report-range').value;
-  showToast(`Generating ${type} report for ${range}...`);
-  // Save report request to Firestore — your backend/Cloud Function can process it
-  await db.collection('admin_generated_reports').add({
-    title: `${type} — ${range}`,
-    type, range,
-    status: 'generating',
-    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-    createdBy: auth.currentUser?.email
-  });
-  showToast('Report queued! Check back soon.');
-  loadReportsList();
-});
 
 // ============================================
 //   CHARTS (Chart.js)
@@ -4974,12 +4995,14 @@ function initDashboard() {
 function updateAdminDisplayName() {
   const user = auth.currentUser;
   if (!user) return;
-  const name = user.displayName || user.email || 'Admin';
-  const el = document.querySelector('.admin-name');
-  if (el) el.textContent = name.split('@')[0];
-  const ROLE_LABELS = { director: 'Director', hr: 'HR', finance: 'Finance', marketing: 'Marketing', support: 'Support & Tele-calling' };
-  const roleEl = document.querySelector('.admin-role');
-  if (roleEl) roleEl.textContent = ROLE_LABELS[currentAdminRole] || currentAdminRole;
+  const name = (user.displayName || user.email || 'Admin').split('@')[0];
+  const el = document.getElementById('admin-name');
+  if (el) el.textContent = name;
+  const av = document.getElementById('admin-avatar');
+  if (av) av.textContent = getInitials(name);
+  const roleEl = document.getElementById('admin-role');
+  const meta = ROLE_LABELS[currentAdminRole];
+  if (roleEl) roleEl.textContent = (meta ? meta.name : currentAdminRole) + ' profile';
 }
 
 // ============================================
@@ -8988,6 +9011,7 @@ function _updatePartnerStats(role) {
 }
 
 // ── Filtering ────────────────────────────────────────────────────────────────
+let _caregiverKind = null; // 'nurse' | 'care_assistant' | null (= both)
 function filterPartnerTable(role) {
   const cfg    = PARTNER_ROLES[role];
   const q      = (document.getElementById(cfg.prefix + '-search')?.value || '').trim().toLowerCase();
@@ -8998,6 +9022,11 @@ function filterPartnerTable(role) {
   if (status !== 'all') list = list.filter(p => partnerStatusOf(p) === status);
   if (extra  !== 'all') list = list.filter(p => cfg.extraMatch(p, extra));
   if (q)                list = list.filter(p => cfg.searchMatch(p, q));
+  // Nurses and Care Assistants share caregiver_profiles (told apart by
+  // serviceType) and have separate Main entries — see setCaregiverKind().
+  if (role === 'caregiver' && _caregiverKind) {
+    list = list.filter(p => (p.serviceType === 'care_assistant') === (_caregiverKind === 'care_assistant'));
+  }
   list = sortedBy(list, 'partner-' + role, {
     name: p => (cfg.nameOf(p) || '').toLowerCase(),
     status: p => partnerStatusOf(p),

@@ -4,12 +4,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../core/constants/app_spacing.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/utils/distance.dart';
 import '../../../core/utils/r.dart';
 import '../../home/providers/location_provider.dart';
+import '../../../core/widgets/ux_widgets.dart';
 
 /// Provider-first equipment browsing — pick a nearby vendor, then see that
 /// vendor's own equipment (same shape as Pharmacy's provider list →
@@ -56,45 +56,12 @@ class _EquipmentVendorsScreenState extends ConsumerState<EquipmentVendorsScreen>
       backgroundColor: context.appBackground,
       body: CustomScrollView(
         slivers: [
-          SliverAppBar(
-            pinned: true,
-            expandedHeight: AppSpacing.headerHeight(context),
-            backgroundColor: AppColors.primaryDark,
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-              onPressed: () => context.safeBack(),
-            ),
-            flexibleSpace: FlexibleSpaceBar(
-              background: Container(
-                decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
-                child: SafeArea(
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      return SingleChildScrollView(
-                        physics: const ClampingScrollPhysics(),
-                        child: ConstrainedBox(
-                          constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                          child: Padding(
-                            padding: AppSpacing.headerPadding(context),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.medical_services_rounded, color: Colors.white, size: AppSpacing.headerIconSize(context)),
-                                SizedBox(height: AppSpacing.headerIconGap(context)),
-                                const Text('Equipment Vendors', style: AppTextStyles.onPrimaryH2),
-                                const Text('Rent or buy from a vendor near you', style: AppTextStyles.onPrimaryBody),
-                              ],
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ),
-            ),
+          const AppSliverHeader(
+            icon: Icons.medical_services_rounded,
+            title: 'Equipment Vendors',
+            subtitle: 'Rent or buy from a vendor near you',
+            color: AppColors.primaryDark,
+            gradient: AppColors.primaryGradient,
           ),
           SliverToBoxAdapter(
             child: Column(

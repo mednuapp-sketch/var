@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
 import '../../../core/constants/app_text_styles.dart';
@@ -14,6 +13,7 @@ import '../../home/providers/location_provider.dart';
 import '../../location/providers/saved_addresses_provider.dart';
 import '../../location/models/saved_address.dart';
 import '../../location/screens/map_location_picker_screen.dart';
+import '../../../core/widgets/ux_widgets.dart';
 
 const _kRed = Color(0xFFB71C1C);
 const _kRedLight = Color(0xFFE53935);
@@ -422,55 +422,15 @@ class _AmbulanceScreenState extends ConsumerState<AmbulanceScreen> {
 
   // ── App bar ──────────────────────────────────────────────
 
-  Widget _buildAppBar() => SliverAppBar(
-        pinned: true,
-        backgroundColor: _kRed,
-        expandedHeight: AppSpacing.headerHeight(context),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded,
-              color: Colors.white),
-          onPressed: () =>
-              context.canPop() ? context.pop() : context.go(AppRoutes.home),
-        ),
-        flexibleSpace: FlexibleSpaceBar(
-          background: Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                colors: [_kRed, _kRedLight],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-            ),
-            child: SafeArea(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  return SingleChildScrollView(
-                    physics: const ClampingScrollPhysics(),
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                      child: Padding(
-                        padding: AppSpacing.headerPadding(context),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.local_shipping_rounded,
-                                color: Colors.white, size: AppSpacing.headerIconSize(context)),
-                            SizedBox(height: AppSpacing.headerIconGap(context)),
-                            const Text('Ambulance Service',
-                                style: AppTextStyles.onPrimaryH2),
-                            const Text('Available 24/7 • GPS Precision Dispatch',
-                                style: AppTextStyles.onPrimaryBody),
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ),
+  Widget _buildAppBar() => const AppSliverHeader(
+        icon: Icons.local_shipping_rounded,
+        title: 'Ambulance Service',
+        subtitle: 'Available 24/7 • GPS Precision Dispatch',
+        color: _kRed,
+        gradient: LinearGradient(
+          colors: [_kRed, _kRedLight],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
       );
 

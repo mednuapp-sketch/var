@@ -1,3 +1,4 @@
+import '../../../core/widgets/call_screen_tracker.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -61,6 +62,7 @@ class _ProviderVideoCallScreenState extends State<ProviderVideoCallScreen> {
   @override
   void initState() {
     super.initState();
+    CallScreenTracker.enter();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     ProviderScope.containerOf(context, listen: false)
         .read(criticalOperationInProgressProvider.notifier)
@@ -301,6 +303,7 @@ class _ProviderVideoCallScreenState extends State<ProviderVideoCallScreen> {
 
   @override
   void dispose() {
+    CallScreenTracker.leave();
     ActiveCallService.clearEndCallFromNotificationHandler();
     ProviderScope.containerOf(context, listen: false)
         .read(criticalOperationInProgressProvider.notifier)

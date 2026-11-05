@@ -8,24 +8,28 @@ import '../../../shared_core/shared_core.dart';
 import '../models/visit.dart';
 import '../providers/caregiver_providers.dart';
 import '../widgets/weekly_earnings_chart.dart';
+import '../../care_assistant/providers/care_assistant_providers.dart';
 
 /// Earnings — hero total + weekly bar chart + recent completed visits,
 /// backed by the module's own mock providers (no `caregiver_transactions`
 /// ledger yet), same shape as the Ambulance module's Earnings screen but
 /// in the caregiver teal/amber palette.
 class CaregiverEarningsScreen extends ConsumerWidget {
-  const CaregiverEarningsScreen({super.key});
+  /// True when shown under the Care Assistant role: reads the care-assistant
+  /// slice of the same visit stream and highlights that role's nav tab.
+  final bool careAssistant;
+  const CaregiverEarningsScreen({super.key, this.careAssistant = false});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final weekly = ref.watch(weeklyCaregiverEarningsProvider);
-    final history = ref.watch(visitHistoryProvider);
-    final breakdown = ref.watch(caregiverEarningsBreakdownProvider);
+    final weekly = ref.watch(careAssistant ? careWeeklyEarningsProvider : weeklyCaregiverEarningsProvider);
+    final history = ref.watch(careAssistant ? careJobHistoryProvider : visitHistoryProvider);
+    final breakdown = ref.watch(careAssistant ? careEarningsBreakdownProvider : caregiverEarningsBreakdownProvider);
     final total = weekly.fold<double>(0, (s, v) => s + v);
     final completedCount = history.where((v) => v.status == VisitStatus.completed).length;
 
     return SharedAppShell(
-      currentRoute: AppRoutes.caregiverEarnings,
+      currentRoute: careAssistant ? AppRoutes.careAssistantEarnings : AppRoutes.caregiverEarnings,
       title: 'Earnings',
       body: ListView(
         padding: const EdgeInsets.all(16),
@@ -44,7 +48,7 @@ class CaregiverEarningsScreen extends ConsumerWidget {
                 const SizedBox(height: 6),
                 Text('₹${total.toInt()}', style: AppTextStyles.onPrimaryH2.copyWith(fontSize: 30)),
                 const SizedBox(height: 4),
-                Text('$completedCount visits completed', style: AppTextStyles.onPrimaryBody),
+                Text('$completedCount ${careAssistant ? 'jobs' : 'visits'} completed', style: AppTextStyles.onPrimaryBody),
                 const SizedBox(height: 16),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,

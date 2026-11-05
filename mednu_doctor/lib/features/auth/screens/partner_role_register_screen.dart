@@ -11,6 +11,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/services/feedback_service.dart';
+import '../../../core/utils/validators.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../../../features/location/models/precise_address.dart';
 import '../../../features/location/screens/map_location_picker_screen.dart';
@@ -78,16 +79,6 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
   final _selectedServices = <String>{};
   final _selectedCategories = <String>{};
 
-  // Hospital billing-desk — which `hospitals` catalog entry this login
-  // represents. Picked explicitly here rather than relying solely on the
-  // best-effort phone-number auto-match in HospitalProfileService, so a
-  // patient's payment (routed by hospitalId — see HospitalPaymentService)
-  // reaches the right billing desk as soon as admin approves, instead of
-  // depending on an exact-string phone match that silently misses whenever
-  // the catalog's phone field isn't formatted identically to the OTP number.
-  String? _selectedHospitalId;
-  String _selectedHospitalName = '';
-
   // Ambulance
   final _plateCtrl = TextEditingController();
   final _vehicleTypeCtrl = TextEditingController();
@@ -100,13 +91,18 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
   final _certificationsCtrl = TextEditingController();
   final _specialtiesCtrl = TextEditingController();
   final _hourlyRateCtrl = TextEditingController();
+  // Care Assistant only — the other three duration tiers the patient app
+  // offers (hourly reuses `_hourlyRateCtrl`).
+  final _rateHalfDayCtrl = TextEditingController();
+  final _rateFullDayCtrl = TextEditingController();
+  final _rateMultiDayCtrl = TextEditingController();
 
   // Caregiver only — which patient-facing listing this profile mirrors into
   // (see `onCaregiverProfileWriteForVisibility`, functions/index.js) and the
   // gender shown/filtered on that listing. Neither was ever collected before,
   // so a new caregiver's `care_assistants`/`caregivers` listing was missing
   // both fields until edited later.
-  String _caregiverServiceType = 'caregiver';
+  final String _caregiverServiceType = 'caregiver';
   String _caregiverGender = 'Female';
   // Shared across Caregiver/Physiotherapist/Nutritionist — the admin panel's
   // partner detail view shows "Experience" for all three (see app.js's
@@ -174,6 +170,9 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
     _certificationsCtrl.dispose();
     _specialtiesCtrl.dispose();
     _hourlyRateCtrl.dispose();
+    _rateHalfDayCtrl.dispose();
+    _rateFullDayCtrl.dispose();
+    _rateMultiDayCtrl.dispose();
     _experienceCtrl.dispose();
     _cityCtrl.dispose();
     _bioCtrl.dispose();
@@ -205,8 +204,11 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     final missingDocs = [
-      for (final type in PartnerDocumentType.forRole(_role.firestoreValue))
-        if (_pickedDocs[type.key] == null) type.label,
+      for (final type in PartnerDocumentType.forRole(_role.documentRoleKey))
+        // A picked file can vanish (cache cleared, camera temp file) before
+        // submit; treat that the same as never having picked one.
+        if (_pickedDocs[type.key] == null || !_pickedDocs[type.key]!.existsSync())
+          type.label,
     ];
     if (missingDocs.isNotEmpty) {
       FeedbackService.showError(
@@ -227,10 +229,6 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
       FeedbackService.showError(context, 'Select at least one equipment category you offer.');
       return;
     }
-    if (_role == AppRole.hospital && _selectedHospitalId == null) {
-      FeedbackService.showError(context, 'Select which hospital you represent.');
-      return;
-    }
     if (!_declarationAccepted) {
       FeedbackService.showError(context, 'Please accept the declaration to proceed.');
       return;
@@ -249,6 +247,19 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
 
     setState(() => _saving = true);
     try {
+      // 0 ── Upload the verification files to Storage first. Nothing is
+      // written to Firestore yet, so if an upload fails the partner is left
+      // on this form with no half-submitted profile in the approval queue.
+      final docTypes = PartnerDocumentType.forRole(_role.documentRoleKey);
+      final uploadedDocs = <String, Map<String, dynamic>>{};
+      if (docTypes.isNotEmpty) {
+        final docService = PartnerDocumentService(_role.documentRoleKey, uid);
+        for (final type in docTypes) {
+          uploadedDocs[type.key] = await docService.uploadToStorage(
+              docType: type.key, file: _pickedDocs[type.key]!);
+        }
+      }
+
       // 1 ── Base identity document, shared by every role.
       //
       // Two distinct callers reach this screen: OTP verification for a
@@ -260,8 +271,16 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
       final existingSnap = await doctorRef.get();
 
       if (existingSnap.exists) {
+        // A legacy account has no `roles` field (the app treats that as
+        // Doctor). arrayUnion on a missing field would leave only the new
+        // role and silently drop Doctor, so seed it first.
+        final rawRoles = existingSnap.data()?['roles'];
+        final hasRoles = rawRoles is List && rawRoles.isNotEmpty;
         await doctorRef.update({
-          'roles': FieldValue.arrayUnion([_role.firestoreValue]),
+          'roles': FieldValue.arrayUnion([
+            if (!hasRoles) AppRole.doctor.firestoreValue,
+            _role.firestoreValue,
+          ]),
           'termsAccepted': true,
           'termsAcceptedAt': FieldValue.serverTimestamp(),
         });
@@ -283,19 +302,19 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
       // 2 ── Role-specific operational profile.
       await _createRoleProfile(uid);
 
-      // 3 ── Verification documents, uploaded now that the profile document
-      // exists. Must run after step 2: `uploadDocument` merge-writes into
-      // the profile doc, but `_createRoleProfile` writes with a plain
-      // (non-merge) `set()` — uploading first would get clobbered.
-      // `_documentPickerField`'s validator already guarantees every
-      // required slot is non-null before the form lets `_submit()` run.
-      final docTypes = PartnerDocumentType.forRole(_role.firestoreValue);
-      if (docTypes.isNotEmpty) {
-        final docService = PartnerDocumentService(_role.firestoreValue, uid);
-        for (final type in docTypes) {
-          final file = _pickedDocs[type.key];
-          if (file != null) {
-            await docService.uploadDocument(docType: type.key, file: file);
+      // 3 ── Record the documents uploaded in step 0. Must run after step 2:
+      // `_createRoleProfile` writes with a plain (non-merge) `set()`, so
+      // recording first would get clobbered. One write, retried, so the
+      // documents land together.
+      if (uploadedDocs.isNotEmpty) {
+        final docService = PartnerDocumentService(_role.documentRoleKey, uid);
+        for (var attempt = 1;; attempt++) {
+          try {
+            await docService.saveDocuments(uploadedDocs);
+            break;
+          } catch (_) {
+            if (attempt == 3) rethrow;
+            await Future<void>.delayed(Duration(milliseconds: 400 * attempt));
           }
         }
       }
@@ -310,9 +329,9 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
           context,
           '${_role.label} application submitted — it will appear once approved.',
         );
-        if (Navigator.of(context).canPop()) {
-          Navigator.of(context).pop();
-        }
+        // Pop the whole add-service flow (register + role picker), not
+        // just this form, so the user lands back where they started.
+        Navigator.of(context).popUntil((r) => r.isFirst);
       } else {
         context.go(AppRoutes.verificationPending);
       }
@@ -395,6 +414,28 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
           lat: _addressLat,
           lng: _addressLng,
         );
+      case AppRole.careAssistant:
+        final hourly = num.tryParse(_hourlyRateCtrl.text.trim()) ?? 0;
+        return CaregiverProfileService.createProfile(
+          uid: uid,
+          name: _nameCtrl.text.trim(),
+          certifications: _csv(_certificationsCtrl),
+          specialties: _csv(_specialtiesCtrl),
+          hourlyRate: hourly,
+          rateHalfDay: num.tryParse(_rateHalfDayCtrl.text.trim()) ?? hourly * 4,
+          rateFullDay: num.tryParse(_rateFullDayCtrl.text.trim()) ?? hourly * 8,
+          rateMultiDay: num.tryParse(_rateMultiDayCtrl.text.trim()) ?? hourly * 8,
+          bio: _bioCtrl.text.trim(),
+          languages: _selectedLanguages.toList(),
+          experienceYears: int.tryParse(_experienceCtrl.text.trim()) ?? 0,
+          phone: _phoneCtrl.text.trim(),
+          email: _emailCtrl.text.trim(),
+          gender: _caregiverGender,
+          serviceType: 'care_assistant',
+          city: _addressCity,
+          lat: _addressLat,
+          lng: _addressLng,
+        );
       case AppRole.physiotherapist:
         return PhysioProfileService.createProfile(
           uid: uid,
@@ -439,8 +480,7 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
           uid: uid,
           contactName: _nameCtrl.text.trim(),
           phone: _phoneCtrl.text.trim(),
-          hospitalId: _selectedHospitalId,
-          hospitalName: _selectedHospitalName,
+          address: _addressCtrl.text.trim(),
           latitude: _addressLat,
           longitude: _addressLng,
         );
@@ -466,7 +506,7 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
             GradientSliverAppBar(
               headerIcon: _role.icon,
               title: '${_role.label} Registration',
-              subtitle: 'A few details before our team reviews your account',
+              subtitle: 'Quick details for team review',
               onBack: () {
                 // Reached either via go_router (brand-new account, from
                 // AppRoutes.partnerRoleSelect) or via a pushed Navigator
@@ -676,23 +716,6 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
         ];
       case AppRole.caregiver:
         return [
-          const Text('I am registering as a', style: AppTextStyles.h4),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              (value: 'caregiver', label: 'Nurse — home care & assistance'),
-              (value: 'care_assistant', label: 'Care Assistant — hospital escort & errands'),
-            ].map((opt) => FilterChip(
-                  label: Text(opt.label),
-                  selected: _caregiverServiceType == opt.value,
-                  onSelected: (_) => setState(() => _caregiverServiceType = opt.value),
-                  selectedColor: AppColors.primary.withValues(alpha: 0.14),
-                  checkmarkColor: AppColors.primary,
-                )).toList(),
-          ),
-          const SizedBox(height: 20),
           _field(_nameCtrl, 'Full Name', Icons.person_outline),
           const SizedBox(height: 14),
           _field(_phoneCtrl, 'Contact Phone', Icons.call_outlined,
@@ -733,16 +756,87 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
               Icons.timeline_rounded,
               keyboardType: TextInputType.number),
         ];
-      case AppRole.hospital:
+      case AppRole.careAssistant:
         return [
-          _field(_nameCtrl, 'Billing Desk Contact Name', Icons.person_outline),
+          _field(_nameCtrl, 'Full Name', Icons.person_outline),
           const SizedBox(height: 14),
           _field(_phoneCtrl, 'Contact Phone', Icons.call_outlined,
               keyboardType: TextInputType.phone, locked: true),
           const SizedBox(height: 14),
-          _hospitalPickerField(),
+          _field(_emailCtrl, 'Email Address', Icons.mail_outline_rounded,
+              keyboardType: TextInputType.emailAddress, required: false),
           const SizedBox(height: 14),
-          _addressPickerField('Hospital Location (for distance in the patient app)'),
+          const Text('Gender', style: AppTextStyles.h4),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: ['Female', 'Male'].map((g) => FilterChip(
+                  label: Text(g),
+                  selected: _caregiverGender == g,
+                  onSelected: (_) => setState(() => _caregiverGender = g),
+                  selectedColor: AppColors.primary.withValues(alpha: 0.14),
+                  checkmarkColor: AppColors.primary,
+                )).toList(),
+          ),
+          const SizedBox(height: 14),
+          _addressPickerField('Service Area (city you serve)'),
+          const SizedBox(height: 14),
+          _field(_specialtiesCtrl, 'Services you offer (e.g. Hospital escort, Report collection)',
+              Icons.support_agent_rounded,
+              maxLines: 2, required: false),
+          const SizedBox(height: 14),
+          _field(_bioCtrl, 'About you (shown to patients)', Icons.notes_rounded,
+              maxLines: 3, required: false),
+          const SizedBox(height: 14),
+          _field(_experienceCtrl, 'Years of Experience', Icons.timeline_rounded,
+              keyboardType: TextInputType.number),
+          const SizedBox(height: 20),
+          const Text('Your rates (₹)', style: AppTextStyles.h4),
+          const SizedBox(height: 10),
+          _field(_hourlyRateCtrl, 'Hourly rate', Icons.currency_rupee_rounded,
+              keyboardType: TextInputType.number),
+          const SizedBox(height: 14),
+          _field(_rateHalfDayCtrl, 'Half-day rate (leave blank = 4 × hourly)',
+              Icons.currency_rupee_rounded,
+              keyboardType: TextInputType.number, required: false),
+          const SizedBox(height: 14),
+          _field(_rateFullDayCtrl, 'Full-day rate (leave blank = 8 × hourly)',
+              Icons.currency_rupee_rounded,
+              keyboardType: TextInputType.number, required: false),
+          const SizedBox(height: 14),
+          _field(_rateMultiDayCtrl, 'Multi-day rate per day (leave blank = 8 × hourly)',
+              Icons.currency_rupee_rounded,
+              keyboardType: TextInputType.number, required: false),
+          const SizedBox(height: 20),
+          const Text('Languages spoken', style: AppTextStyles.h4),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _allLanguages.map((lang) => FilterChip(
+              label: Text(lang),
+              selected: _selectedLanguages.contains(lang),
+              onSelected: (sel) => setState(() {
+                if (sel) {
+                  _selectedLanguages.add(lang);
+                } else if (_selectedLanguages.length > 1) {
+                  _selectedLanguages.remove(lang);
+                }
+              }),
+              selectedColor: AppColors.primary.withValues(alpha: 0.14),
+              checkmarkColor: AppColors.primary,
+            )).toList(),
+          ),
+        ];
+      case AppRole.hospital:
+        return [
+          _field(_nameCtrl, 'Hospital Name', Icons.local_hospital_outlined),
+          const SizedBox(height: 14),
+          _field(_phoneCtrl, 'Contact Phone', Icons.call_outlined,
+              keyboardType: TextInputType.phone, locked: true),
+          const SizedBox(height: 14),
+          _addressPickerField('Hospital Address', typeable: true),
           const SizedBox(height: 14),
           Container(
             padding: const EdgeInsets.all(12),
@@ -916,7 +1010,7 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
   /// elsewhere. Returns nothing for roles with no doc requirement defined
   /// (`PartnerDocumentType.forRole` returns an empty list for those).
   List<Widget> _documentFieldsForRole() {
-    final types = PartnerDocumentType.forRole(_role.firestoreValue);
+    final types = PartnerDocumentType.forRole(_role.documentRoleKey);
     if (types.isEmpty) return const [];
     return [
       const SizedBox(height: 22),
@@ -937,7 +1031,7 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
   Future<void> _pickDocument(PartnerDocumentType type) async {
     final uid = DoctorAuthService.currentUid;
     if (uid == null) return;
-    final service = PartnerDocumentService(_role.firestoreValue, uid);
+    final service = PartnerDocumentService(_role.documentRoleKey, uid);
 
     final source = await showModalBottomSheet<String>(
       context: context,
@@ -1262,13 +1356,30 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
   }) {
     return TextFormField(
       controller: ctrl,
+      // maxLines 2 fields (certifications, specialties, services) start as a
+      // normal one-line box with the label/icon centred, and only grow when
+      // the text wraps — a fixed two-line box left the label floating
+      // off-centre. Taller fields (e.g. About you) keep their fixed height.
+      minLines: maxLines > 2 ? maxLines : 1,
       maxLines: maxLines,
       keyboardType: keyboardType,
       readOnly: locked,
       enabled: !locked,
-      validator: required
-          ? (v) => (v == null || v.trim().isEmpty) ? 'Required' : null
-          : null,
+      validator: (v) {
+        final text = v?.trim() ?? '';
+        if (text.isEmpty) return required ? 'Required' : null;
+        if (keyboardType == TextInputType.emailAddress) {
+          return Validators.email(text);
+        }
+        if (keyboardType == TextInputType.number) {
+          // Fees and experience are saved via `num.tryParse(...) ?? 0`, so
+          // anything unparsable would silently become 0 without this.
+          final n = num.tryParse(text);
+          if (n == null || n < 0) return 'Enter a valid number';
+          if (label.contains('₹') && n <= 0) return 'Enter an amount greater than 0';
+        }
+        return null;
+      },
       decoration: InputDecoration(
         labelText: label,
         prefixIcon: Icon(icon, color: AppColors.textSecondary),
@@ -1308,7 +1419,37 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
     });
   }
 
-  Widget _addressPickerField(String label) {
+  Widget _addressPickerField(String label, {bool typeable = false}) {
+    if (typeable) {
+      // Address can be typed freely or filled from the map picker; typing
+      // clears any previously picked coordinates so a stale pin isn't kept.
+      return TextFormField(
+        controller: _addressCtrl,
+        minLines: 1,
+        maxLines: 3,
+        keyboardType: TextInputType.streetAddress,
+        textCapitalization: TextCapitalization.words,
+        onChanged: (_) {
+          _addressLat = null;
+          _addressLng = null;
+        },
+        validator: (v) =>
+            (v == null || v.trim().isEmpty) ? 'Enter or pick the hospital address' : null,
+        decoration: InputDecoration(
+          labelText: label,
+          prefixIcon: const Icon(Icons.location_on_outlined, color: AppColors.textSecondary),
+          suffixIcon: IconButton(
+            tooltip: 'Pick on map',
+            icon: const Icon(Icons.map_outlined, color: AppColors.primary),
+            onPressed: () async {
+              await _pickAddress();
+              if (mounted) _formKey.currentState?.validate();
+            },
+          ),
+          helperText: 'Type the address, or tap the map icon to pick it',
+        ),
+      );
+    }
     return FormField<String>(
       initialValue: _addressCtrl.text,
       validator: (_) =>
@@ -1335,161 +1476,6 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: _addressCtrl.text.isEmpty ? AppColors.textHint : AppColors.textPrimary,
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  /// Opens a searchable bottom sheet of enabled `hospitals` catalog entries
-  /// and applies the pick to [_selectedHospitalId]/[_selectedHospitalName] —
-  /// the same catalog the patient app books hospitals from and admin
-  /// manages under the Hospitals tab.
-  Future<void> _pickHospital() async {
-    final snap = await FirebaseFirestore.instance
-        .collection('hospitals')
-        .where('isEnabled', isEqualTo: true)
-        .get();
-    final hospitals = snap.docs
-        .map((d) => (id: d.id, name: (d.data()['name'] as String?) ?? ''))
-        .where((h) => h.name.isNotEmpty)
-        .toList()
-      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-
-    if (!mounted) return;
-    if (hospitals.isEmpty) {
-      FeedbackService.showError(
-        context,
-        'No hospitals are set up yet — contact our team to register.',
-      );
-      return;
-    }
-
-    final picked = await showModalBottomSheet<({String id, String name})>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (sheetContext) {
-        var query = '';
-        return StatefulBuilder(
-          builder: (sheetContext, setSheetState) {
-            final filtered = query.isEmpty
-                ? hospitals
-                : hospitals
-                    .where((h) => h.name.toLowerCase().contains(query.toLowerCase()))
-                    .toList();
-            return SafeArea(
-              child: Padding(
-                padding: EdgeInsets.only(
-                  bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 40,
-                      height: 4,
-                      margin: const EdgeInsets.symmetric(vertical: 12),
-                      decoration: BoxDecoration(
-                        color: AppColors.divider,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: Text('Which hospital do you represent?',
-                          style: AppTextStyles.h4),
-                    ),
-                    const SizedBox(height: 12),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: TextField(
-                        autofocus: true,
-                        onChanged: (v) => setSheetState(() => query = v),
-                        decoration: InputDecoration(
-                          hintText: 'Search hospitals',
-                          prefixIcon: const Icon(Icons.search_rounded),
-                          filled: true,
-                          fillColor: AppColors.surfaceVariant,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide.none,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Flexible(
-                      child: filtered.isEmpty
-                          ? Padding(
-                              padding: const EdgeInsets.all(24),
-                              child: Text('No matching hospitals',
-                                  style: AppTextStyles.bodyMedium
-                                      .copyWith(color: AppColors.textSecondary)),
-                            )
-                          : ListView.builder(
-                              shrinkWrap: true,
-                              padding: const EdgeInsets.symmetric(vertical: 8),
-                              itemCount: filtered.length,
-                              itemBuilder: (_, i) {
-                                final h = filtered[i];
-                                return ListTile(
-                                  leading: const Icon(Icons.local_hospital_rounded,
-                                      color: AppColors.primary),
-                                  title: Text(h.name),
-                                  onTap: () => Navigator.pop(sheetContext, h),
-                                );
-                              },
-                            ),
-                    ),
-                    const SizedBox(height: 8),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-    if (picked == null || !mounted) return;
-    setState(() {
-      _selectedHospitalId = picked.id;
-      _selectedHospitalName = picked.name;
-    });
-  }
-
-  Widget _hospitalPickerField() {
-    return FormField<String>(
-      initialValue: _selectedHospitalId,
-      validator: (_) =>
-          _selectedHospitalId == null ? 'Select the hospital you represent' : null,
-      builder: (state) {
-        return InkWell(
-          onTap: () async {
-            await _pickHospital();
-            state.didChange(_selectedHospitalId);
-            state.validate();
-          },
-          borderRadius: BorderRadius.circular(8),
-          child: InputDecorator(
-            decoration: InputDecoration(
-              labelText: 'Hospital',
-              prefixIcon: const Icon(Icons.local_hospital_outlined, color: AppColors.textSecondary),
-              suffixIcon: const Icon(Icons.expand_more_rounded, color: AppColors.primary),
-              errorText: state.errorText,
-              helperText: 'Tap to search and select from our hospital catalog',
-            ),
-            child: Text(
-              _selectedHospitalName.isEmpty ? 'Select hospital' : _selectedHospitalName,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: _selectedHospitalName.isEmpty ? AppColors.textHint : AppColors.textPrimary,
               ),
             ),
           ),

@@ -152,12 +152,6 @@ class _AmbulanceDashboardScreenState extends ConsumerState<AmbulanceDashboardScr
                 icon: Icons.notifications_active_rounded,
                 colors: const [Color(0xFFEF6C00), Color(0xFFE65100)],
               ),
-              GradientStatCard(
-                value: metrics.rating.toStringAsFixed(1),
-                label: 'Driver Rating',
-                icon: Icons.star_rounded,
-                colors: const [Color(0xFF6A1B9A), AppColors.secondaryDark],
-              ),
             ],
           ),
           const SizedBox(height: 20),

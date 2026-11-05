@@ -6,18 +6,23 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/router/app_router.dart';
+import 'guest_firebase.dart';
 
 enum _GuestJoinState { redeeming, error, waitingForDoctor, readyToJoin }
 
-/// Landing screen for a family member tapping a guest-join link
+/// Landing screen for anyone tapping a guest-join link
 /// (mednu://join?a=&t=&exp=) shared from the account holder's appointment
 /// screen — see _ShareGuestLinkButton in appointment_screen.dart.
 ///
-/// Unlike every other screen in this app, the person here has no MedNU
-/// account: [redeemGuestJoinLink] (functions/index.js) verifies the signed
-/// link and hands back a Firebase custom token scoped to exactly this one
-/// appointment (via the `guestAppointmentId` claim), which is what lets the
-/// rest of this flow — Firestore reads, generateAgoraToken — work at all.
+/// Works like joining a Google Meet link: if a MedNU account is already signed
+/// in on this device its name is used automatically; otherwise the person types
+/// their name. Either way the guest session lives on a separate Firebase app
+/// ([GuestFirebase]), so an existing login is never replaced or signed out.
+///
+/// [redeemGuestJoinLink] (functions/index.js) verifies the signed link and
+/// hands back a Firebase custom token scoped to exactly this one appointment
+/// (via the `guestAppointmentId` claim), which is what lets the rest of this
+/// flow — Firestore reads, generateAgoraToken — work at all.
 class GuestJoinScreen extends StatefulWidget {
   final String appointmentId;
   final String token;
@@ -42,6 +47,11 @@ class _GuestJoinScreenState extends State<GuestJoinScreen> {
   String _date = '';
   String _time = '';
   String? _consultationId;
+  // Name of the MedNU account already signed in on this device, if any —
+  // used as the guest's display name without asking.
+  String _accountName = '';
+  final _nameCtrl = TextEditingController();
+  bool _joining = false;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _apptSub;
 
   @override
@@ -53,30 +63,36 @@ class _GuestJoinScreenState extends State<GuestJoinScreen> {
   @override
   void dispose() {
     _apptSub?.cancel();
+    _nameCtrl.dispose();
     super.dispose();
+  }
+
+  /// Name of the real MedNU account signed in on the default Firebase app, or
+  /// '' if nobody is (or only a stale guest session from an older build is).
+  Future<String> _signedInAccountName() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return '';
+    try {
+      final claims = (await user.getIdTokenResult()).claims ?? {};
+      if (claims['guestAppointmentId'] != null) return '';
+    } catch (_) {}
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      final name = (snap.data()?['name'] as String?)?.trim() ?? '';
+      if (name.isNotEmpty) return name;
+    } catch (_) {}
+    return (user.displayName ?? '').trim();
   }
 
   Future<void> _redeem() async {
     try {
-      // Signing in with the guest custom token replaces the current session,
-      // and the call screen signs it out afterwards — that would silently log
-      // a real patient out of their own account. Refuse instead.
-      final existing = FirebaseAuth.instance.currentUser;
-      if (existing != null) {
-        final claims = (await existing.getIdTokenResult()).claims ?? {};
-        if (claims['guestAppointmentId'] == null) {
-          if (!mounted) return;
-          setState(() {
-            _state = _GuestJoinState.error;
-            _errorMessage =
-                'You are signed in to a MedNU account on this device. Please '
-                'open this link on a different device or browser to join as a guest.';
-          });
-          return;
-        }
-      }
+      await GuestFirebase.ensureInitialized();
+      _accountName = await _signedInAccountName();
 
-      final result = await FirebaseFunctions.instance
+      final result = await GuestFirebase.functions
           .httpsCallable('redeemGuestJoinLink')
           .call({
         'appointmentId': widget.appointmentId,
@@ -89,8 +105,24 @@ class _GuestJoinScreenState extends State<GuestJoinScreen> {
         throw Exception('Invalid response from server.');
       }
 
-      await FirebaseAuth.instance.signInWithCustomToken(customToken);
+      await GuestFirebase.auth.signInWithCustomToken(customToken);
       if (!mounted) return;
+
+      // No account on this device: suggest the name the booking was made for
+      // (the family member), which the guest can edit before joining.
+      if (_accountName.isEmpty) {
+        try {
+          final appt = await GuestFirebase.firestore
+              .collection('appointments')
+              .doc(widget.appointmentId)
+              .get();
+          final suggested = (appt.data()?['patientName'] as String?)?.trim();
+          if (suggested != null && suggested.isNotEmpty && _nameCtrl.text.isEmpty) {
+            _nameCtrl.text = suggested;
+          }
+        } catch (_) {}
+        if (!mounted) return;
+      }
 
       setState(() {
         _doctorName = (data['doctorName'] as String?)?.trim() ?? '';
@@ -126,7 +158,7 @@ class _GuestJoinScreenState extends State<GuestJoinScreen> {
   /// appointment (Firestore rules: guestAppointmentId == appointmentId), so
   /// this read is allowed even though the guest never logged in normally.
   void _watchAppointment() {
-    _apptSub = FirebaseFirestore.instance
+    _apptSub = GuestFirebase.firestore
         .collection('appointments')
         .doc(widget.appointmentId)
         .snapshots()
@@ -142,8 +174,24 @@ class _GuestJoinScreenState extends State<GuestJoinScreen> {
     });
   }
 
-  void _joinCall() {
-    if (_consultationId == null) return;
+  String get _displayName =>
+      (_accountName.isNotEmpty ? _accountName : _nameCtrl.text).trim();
+
+  bool get _canJoin => _consultationId != null && !_joining && _displayName.isNotEmpty;
+
+  Future<void> _joinCall() async {
+    if (!_canJoin) return;
+    setState(() => _joining = true);
+    final name = _displayName.length > 60 ? _displayName.substring(0, 60) : _displayName;
+    // Tells the doctor and the account holder who this tile is. Best-effort:
+    // if it fails the call screens fall back to the booking's patient name.
+    try {
+      await GuestFirebase.firestore
+          .collection('appointments')
+          .doc(widget.appointmentId)
+          .update({'guestDisplayName': name});
+    } catch (_) {}
+    if (!mounted) return;
     context.pushReplacement(
       AppRoutes.guestVideoCall,
       extra: {
@@ -162,7 +210,7 @@ class _GuestJoinScreenState extends State<GuestJoinScreen> {
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(24),
-          child: Center(child: _buildBody()),
+          child: Center(child: SingleChildScrollView(child: _buildBody())),
         ),
       ),
     );
@@ -216,6 +264,8 @@ class _GuestJoinScreenState extends State<GuestJoinScreen> {
                   style: const TextStyle(fontFamily: 'Poppins', fontSize: 13, color: Colors.white60)),
             ],
             const SizedBox(height: 24),
+            _nameSection(),
+            const SizedBox(height: 24),
             const SizedBox(
               width: 22, height: 22,
               child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white54),
@@ -243,23 +293,72 @@ class _GuestJoinScreenState extends State<GuestJoinScreen> {
               Text(_scheduleLine,
                   style: const TextStyle(fontFamily: 'Poppins', fontSize: 13, color: Colors.white60)),
             ],
-            const SizedBox(height: 28),
+            const SizedBox(height: 24),
+            _nameSection(),
+            const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: _joinCall,
+                onPressed: _canJoin ? _joinCall : null,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
+                  disabledBackgroundColor: Colors.white12,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 ),
-                child: const Text('Join call',
-                    style: TextStyle(fontFamily: 'Poppins', fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
+                child: _joining
+                    ? const SizedBox(
+                        width: 20, height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Text('Join call',
+                        style: TextStyle(fontFamily: 'Poppins', fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
               ),
             ),
           ],
         );
     }
+  }
+
+  /// Signed-in account: shows who they'll appear as. Otherwise: asks for a
+  /// name, like a Google Meet guest.
+  Widget _nameSection() {
+    if (_accountName.isNotEmpty) {
+      return Column(
+        children: [
+          Text('Joining as $_accountName',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontFamily: 'Poppins', fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white)),
+          const SizedBox(height: 4),
+          const Text('Signed in to your MedNU account',
+              style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: Colors.white54)),
+        ],
+      );
+    }
+    return TextField(
+      controller: _nameCtrl,
+      onChanged: (_) => setState(() {}),
+      textCapitalization: TextCapitalization.words,
+      maxLength: 60,
+      style: const TextStyle(fontFamily: 'Poppins', fontSize: 15, color: Colors.white),
+      decoration: InputDecoration(
+        labelText: 'Your name',
+        hintText: 'Shown to the doctor on the call',
+        counterText: '',
+        labelStyle: const TextStyle(fontFamily: 'Poppins', color: Colors.white60),
+        hintStyle: const TextStyle(fontFamily: 'Poppins', color: Colors.white38),
+        filled: true,
+        fillColor: Colors.white.withValues(alpha: 0.08),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide.none,
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: Colors.white54),
+        ),
+      ),
+    );
   }
 
   String get _doctorTitle => _doctorName.isEmpty ? 'your doctor' : 'Dr. $_doctorName';

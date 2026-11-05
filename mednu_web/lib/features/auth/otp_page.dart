@@ -66,7 +66,19 @@ class _OtpPageState extends ConsumerState<OtpPage> {
 
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
-    final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+    DocumentSnapshot<Map<String, dynamic>> doc;
+    try {
+      doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+    } catch (e) {
+      // Signed in, but the profile read failed (rules not deployed, offline…).
+      // Surface it instead of leaving the user on a silent OTP screen.
+      debugPrint('OTP profile read failed: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Signed in, but could not load your profile ($e). Please refresh and try again.'),
+      ));
+      return;
+    }
     if (!mounted) return;
 
     if (hasCompletedProfile(doc)) {

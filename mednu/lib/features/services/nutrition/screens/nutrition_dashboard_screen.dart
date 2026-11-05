@@ -64,14 +64,12 @@ class _DashboardAppBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final today = DateFormat('EEEE, MMM d').format(DateTime.now());
-    return SliverAppBar(
-      pinned: true,
-      expandedHeight: R.h(context, 140),
-      backgroundColor: const Color(0xFF33691E), // matches nutritionGrad's dark stop so the collapsed bar doesn't jump to an unrelated color
-      leading: IconButton(
-        icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
-        onPressed: () => context.safeBack(),
-      ),
+    return AppSliverHeader(
+      icon: Icons.insights_rounded,
+      title: 'Nutrition Dashboard',
+      subtitle: today,
+      color: const Color(0xFF33691E),
+      gradient: AppColors.nutritionGrad,
       actions: [
         IconButton(
           icon: const Icon(Icons.add_circle_outline_rounded, color: Colors.white, size: 22),
@@ -80,39 +78,6 @@ class _DashboardAppBar extends StatelessWidget {
         ),
         SizedBox(width: R.p(context, 4)),
       ],
-      flexibleSpace: FlexibleSpaceBar(
-        collapseMode: CollapseMode.parallax,
-        background: Container(
-          decoration: const BoxDecoration(gradient: AppColors.nutritionGrad),
-          child: SafeArea(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                return SingleChildScrollView(
-                  physics: const ClampingScrollPhysics(),
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                    child: Padding(
-                      padding: EdgeInsets.fromLTRB(
-                        R.p(context, 20), R.p(context, 52),
-                        R.p(context, 20), R.p(context, 16),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Text('Nutrition Dashboard', style: AppTextStyles.onPrimaryH2),
-                          SizedBox(height: R.h(context, 2)),
-                          Text(today, style: AppTextStyles.onPrimaryBody),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

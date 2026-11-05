@@ -32,6 +32,7 @@ final walletRepositoryProvider = Provider<WalletRepository>((ref) {
     case AppRole.pharmacy:
     case AppRole.ambulance:
     case AppRole.caregiver:
+    case AppRole.careAssistant:
     case AppRole.nutritionist:
       return SettlementWalletRepository();
     case AppRole.hospital:

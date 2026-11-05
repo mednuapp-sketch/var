@@ -61,6 +61,7 @@ class HospitalProfileService {
     String? hospitalName,
     double? latitude,
     double? longitude,
+    String? address,
   }) async {
     String? fcmToken;
     try {
@@ -81,6 +82,10 @@ class HospitalProfileService {
       'phone': phone,
       'hospitalId': linkedId,
       'hospitalName': linkedName,
+      // Typed by the applicant (no catalog picker) — admin links it to a
+      // `hospitals` entry on approval.
+      'requestedHospitalName': contactName,
+      if (address != null && address.isNotEmpty) 'address': address,
       'status': 'pending',
       'createdAt': FieldValue.serverTimestamp(),
       if (fcmToken != null) 'fcmToken': fcmToken,

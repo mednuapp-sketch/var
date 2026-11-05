@@ -1,3 +1,4 @@
+import '../../../../core/widgets/call_screen_tracker.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -49,6 +50,7 @@ class _VideoCallScreenState extends State<VideoCallScreen>
   Set<int> _remoteUids = {};
   bool get _remoteJoined => _remoteUids.isNotEmpty;
   String? _guestLabel;
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _guestLabelSub;
   bool _engineReady = false;
   bool _ending = false;
   bool _isReconnecting = false;
@@ -85,6 +87,7 @@ class _VideoCallScreenState extends State<VideoCallScreen>
   @override
   void initState() {
     super.initState();
+    CallScreenTracker.enter();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     _enableScreenProtection();
     _pulseController = AnimationController(
@@ -283,17 +286,25 @@ class _VideoCallScreenState extends State<VideoCallScreen>
   // this account holder's own name when booked for "Self", or a family
   // member's name when a guest link exists for them — used to label their
   // video tile if they join this call (see `_buildRemoteView`).
-  Future<void> _loadGuestLabel(String appointmentId) async {
-    try {
-      final snap = await FirebaseFirestore.instance
-          .collection('appointments')
-          .doc(appointmentId)
-          .get();
-      final name = (snap.data()?['patientName'] as String?)?.trim();
-      if (mounted && name != null && name.isNotEmpty) {
+  //
+  // Live, not a one-off read: the guest picks (or confirms) their own display
+  // name when they join — possibly well after this screen opened — and writes
+  // it to `guestDisplayName`, which takes priority over the booking's name.
+  void _loadGuestLabel(String appointmentId) {
+    _guestLabelSub?.cancel();
+    _guestLabelSub = FirebaseFirestore.instance
+        .collection('appointments')
+        .doc(appointmentId)
+        .snapshots()
+        .listen((snap) {
+      final data = snap.data();
+      final typed = (data?['guestDisplayName'] as String?)?.trim() ?? '';
+      final booked = (data?['patientName'] as String?)?.trim() ?? '';
+      final name = typed.isNotEmpty ? typed : booked;
+      if (mounted && name.isNotEmpty && name != _guestLabel) {
         setState(() => _guestLabel = name);
       }
-    } catch (_) {}
+    }, onError: (_) {});
   }
 
   void _startTimer() {
@@ -346,6 +357,7 @@ class _VideoCallScreenState extends State<VideoCallScreen>
 
   @override
   void dispose() {
+    CallScreenTracker.leave();
     // Always detach the notification handler — the widget is gone.
     // We do NOT stop the foreground service here because dispose() is also
     // called when the Activity is destroyed by swipe-from-recents. The service
@@ -353,6 +365,7 @@ class _VideoCallScreenState extends State<VideoCallScreen>
     // only in _doEndCall() when the call is intentionally ended.
     ActiveCallService.clearEndCallFromNotificationHandler();
     _consultSub?.cancel();
+    _guestLabelSub?.cancel();
     _pulseController.dispose();
     _notesCtrl.dispose();
     _agora.dispose();

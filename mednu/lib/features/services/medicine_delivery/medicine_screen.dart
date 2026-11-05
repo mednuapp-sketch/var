@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../core/constants/app_spacing.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/services/feedback_service.dart';
@@ -365,11 +364,12 @@ class _MedicineScreenState extends ConsumerState<MedicineScreen> {
       backgroundColor: context.appBackground,
       body: CustomScrollView(
         slivers: [
-          SliverAppBar(
-            pinned: true,
-            backgroundColor: const Color(0xFF2E7D32),
-            expandedHeight: AppSpacing.headerHeight(context),
-            leading: IconButton(icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white), onPressed: () => context.safeBack()),
+          AppSliverHeader(
+            icon: Icons.local_pharmacy_rounded,
+            title: widget.pharmacyId != null ? ((_pharmacy?['name'] as String?) ?? 'Pharmacy') : 'Pharmacy',
+            subtitle: 'Order genuine medicines, delivered fast',
+            color: const Color(0xFF2E7D32),
+            gradient: AppColors.medicineGrad,
             actions: [
               IconButton(
                 icon: const Icon(Icons.upload_file_rounded, color: Colors.white),
@@ -378,38 +378,6 @@ class _MedicineScreenState extends ConsumerState<MedicineScreen> {
               ),
               const CartBadgeAction(),
             ],
-            flexibleSpace: FlexibleSpaceBar(
-              background: Container(
-                decoration: const BoxDecoration(gradient: AppColors.medicineGrad),
-                child: SafeArea(
-                  child: LayoutBuilder(
-                    builder: (context, constraints) => SingleChildScrollView(
-                      physics: const ClampingScrollPhysics(),
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                        child: Padding(
-                          padding: AppSpacing.headerPadding(context),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.local_pharmacy_rounded, color: Colors.white, size: AppSpacing.headerIconSize(context)),
-                              SizedBox(height: AppSpacing.headerIconGap(context)),
-                              Text(
-                                widget.pharmacyId != null ? ((_pharmacy?['name'] as String?) ?? 'Pharmacy') : 'Pharmacy',
-                                style: AppTextStyles.onPrimaryH2,
-                              ),
-                              const Text('Order genuine medicines, delivered fast', style: AppTextStyles.onPrimaryBody),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
           ),
           SliverToBoxAdapter(
             child: Column(children: [

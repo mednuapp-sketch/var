@@ -350,107 +350,65 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
       backgroundColor: context.appBackground,
       body: NestedScrollView(
         headerSliverBuilder: (ctx, innerBoxIsScrolled) => [
-          SliverAppBar(
-            expandedHeight: AppSpacing.headerHeight(context) + _tabBarHeight,
-            pinned: true,
-            forceElevated: innerBoxIsScrolled,
-            backgroundColor: AppColors.primaryDark,
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-              onPressed: () => context.canPop() ? context.pop() : context.go(AppRoutes.home),
-            ),
-            flexibleSpace: FlexibleSpaceBar(
-              background: Container(
-                decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
-                child: SafeArea(
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      // expandedHeight already reserves _tabBarHeight on top of
-                      // the hero content's own height, so the centered
-                      // title/subtitle only need to stay clear of that trailing
-                      // strip — they're never squeezed by it.
-                      return SingleChildScrollView(
-                        physics: const ClampingScrollPhysics(),
-                        child: ConstrainedBox(
-                          constraints: BoxConstraints(
-                              minHeight: constraints.maxHeight - _tabBarHeight),
-                          child: Padding(
-                            padding: AppSpacing.headerPaddingWithBottomWidget(context),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(widget.therapistsOnly ? 'Therapy Consultation' : 'Consultation',
-                                    maxLines: 1, overflow: TextOverflow.ellipsis,
-                                    style: AppTextStyles.onPrimaryH2),
-                                SizedBox(height: R.h(context, 4)),
-                                Text(widget.therapistsOnly
-                                        ? 'Connect with a therapist instantly or book in advance'
-                                        : 'Connect instantly or book in advance',
-                                    maxLines: 1, overflow: TextOverflow.ellipsis,
-                                    style: AppTextStyles.onPrimaryBody),
-                              ],
-                            ),
+          AppSliverHeader(
+            icon: Icons.video_call_rounded,
+            title: widget.therapistsOnly ? 'Therapy Consultation' : 'Consultation',
+            subtitle: widget.therapistsOnly
+                ? 'Connect with a therapist instantly or book in advance'
+                : 'Connect instantly or book in advance',
+            color: AppColors.primaryDark,
+            gradient: AppColors.primaryGradient,
+            bottom: PreferredSize(
+                        preferredSize: const Size.fromHeight(_tabBarHeight),
+                        child: Container(
+                          color: AppColors.primaryDark,
+                          child: TabBar(
+                            controller: _tabController,
+                            indicatorColor: Colors.white,
+                            indicatorWeight: 3,
+                            labelColor: Colors.white,
+                            unselectedLabelColor: Colors.white54,
+                            labelStyle: const TextStyle(
+                              fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w700),
+                            unselectedLabelStyle: const TextStyle(
+                              fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w500),
+                            tabs: const [
+                              Tab(
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.bolt_rounded, size: 16),
+                                    SizedBox(width: 5),
+                                    Flexible(
+                                      child: Text(
+                                        'Quick Connect',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Tab(
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.calendar_month_rounded, size: 16),
+                                    SizedBox(width: 5),
+                                    Flexible(
+                                      child: Text(
+                                        'Schedule',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      );
-                    },
-                  ),
-                ),
-              ),
-            ),
-            bottom: PreferredSize(
-              preferredSize: const Size.fromHeight(_tabBarHeight),
-              child: Container(
-                color: AppColors.primaryDark,
-                child: TabBar(
-                  controller: _tabController,
-                  indicatorColor: Colors.white,
-                  indicatorWeight: 3,
-                  labelColor: Colors.white,
-                  unselectedLabelColor: Colors.white54,
-                  labelStyle: const TextStyle(
-                    fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w700),
-                  unselectedLabelStyle: const TextStyle(
-                    fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w500),
-                  tabs: const [
-                    Tab(
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.bolt_rounded, size: 16),
-                          SizedBox(width: 5),
-                          Flexible(
-                            child: Text(
-                              'Quick Connect',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
                       ),
-                    ),
-                    Tab(
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.calendar_month_rounded, size: 16),
-                          SizedBox(width: 5),
-                          Flexible(
-                            child: Text(
-                              'Schedule',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
           ),
         ],
         body: TabBarView(

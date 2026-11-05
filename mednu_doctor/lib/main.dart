@@ -463,6 +463,7 @@ class _MedNUDoctorAppState extends ConsumerState<MedNUDoctorApp>
           ref.invalidate(myAmbulanceRequestsProvider);
           break;
         case AppRole.caregiver:
+        case AppRole.careAssistant:
           ref.invalidate(availableCaregiverVisitsProvider);
           ref.invalidate(myCaregiverVisitsProvider);
           break;

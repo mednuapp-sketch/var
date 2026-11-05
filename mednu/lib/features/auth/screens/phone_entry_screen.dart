@@ -139,18 +139,37 @@ class _PhoneEntryScreenState extends ConsumerState<PhoneEntryScreen>
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(
-                                      'MedNU',
-                                      style: AppTextStyles.display
-                                          .copyWith(color: Colors.white, height: 1.1),
+                                    FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      alignment: Alignment.centerLeft,
+                                      child: Text(
+                                        'MedNU',
+                                        style: AppTextStyles.display.copyWith(
+                                          color: Colors.white,
+                                          fontSize: size.height < 680 ? 44 : 56,
+                                          height: 1.05,
+                                          letterSpacing: -1.5,
+                                          shadows: [
+                                            Shadow(
+                                              color: Colors.black
+                                                  .withValues(alpha: 0.18),
+                                              blurRadius: 16,
+                                              offset: const Offset(0, 4),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
                                     ),
-                                    const SizedBox(height: 6),
+                                    const SizedBox(height: 8),
                                     Text(
                                       'Always with You',
-                                      style: AppTextStyles.onPrimaryBody
-                                          .copyWith(fontWeight: FontWeight.w500),
+                                      style: AppTextStyles.onPrimaryBody.copyWith(
+                                        fontSize: 17,
+                                        fontWeight: FontWeight.w500,
+                                        letterSpacing: 0.3,
+                                      ),
                                     ),
-                                    const SizedBox(height: 28),
+                                    SizedBox(height: size.height < 680 ? 18 : 28),
                                     // Trust badges — Wrap (not Row) so 3 pills
                                     // never horizontally overflow on narrow screens.
                                     const Wrap(

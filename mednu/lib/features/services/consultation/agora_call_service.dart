@@ -68,7 +68,13 @@ class AgoraCallService {
   /// `connectionStateFailed` without the caller having to re-supply it.
   String? _lastChannelId;
 
+  /// Functions instance used to fetch Agora tokens. Null = the default app
+  /// (every normal call); guest-link calls pass the separate guest app's so
+  /// the token request carries the guest's identity, not the signed-in user's.
+  final FirebaseFunctions? functions;
+
   AgoraCallService({
+    this.functions,
     required this.onRemoteJoined,
     required this.onRemoteLeft,
     this.onNetworkQualityChanged,
@@ -286,7 +292,7 @@ class AgoraCallService {
   /// caller a fixed uid for their verified role (doctor=1, patient=2,
   /// guest=3) so every screen can label tiles deterministically.
   Future<({String token, int uid})> _fetchAuth(String channelId) async {
-    final result = await FirebaseFunctions.instance
+    final result = await (functions ?? FirebaseFunctions.instance)
         .httpsCallable('generateAgoraToken')
         .call({'channelName': channelId});
     final data = result.data as Map;

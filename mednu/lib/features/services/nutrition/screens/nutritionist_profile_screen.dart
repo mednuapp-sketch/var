@@ -1,6 +1,5 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_rating_bar/flutter_rating_bar.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
@@ -242,10 +241,6 @@ class _ProfileScaffold extends StatelessWidget {
                     const SizedBox(height: 16),
                   ],
 
-                  // Rating & reviews
-                  _RatingCard(nutritionist: nutritionist),
-                  const SizedBox(height: 16),
-
                   // Languages
                   if (nutritionist.languages.isNotEmpty) ...[
                     _SectionCard(
@@ -406,30 +401,6 @@ class _HeroSliverAppBar extends StatelessWidget {
                             color: Colors.white60,
                           ),
                         ),
-                        const SizedBox(height: 6),
-                        Row(
-                          children: [
-                            RatingBarIndicator(
-                              rating: nutritionist.rating,
-                              itemBuilder: (ctx, _) => const Icon(
-                                Icons.star_rounded,
-                                color: Color(0xFFF9A825),
-                              ),
-                              itemCount: 5,
-                              itemSize: 14,
-                              unratedColor: Colors.white24,
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              '${nutritionist.rating.toStringAsFixed(1)} · ${nutritionist.reviewCount} reviews',
-                              style: const TextStyle(
-                                fontFamily: 'Poppins',
-                                fontSize: 11,
-                                color: Colors.white70,
-                              ),
-                            ),
-                          ],
-                        ),
                       ],
                     ),
                   ),
@@ -500,11 +471,6 @@ class _StatsRow extends StatelessWidget {
               value: '${nutritionist.reviewCount}+',
               label: 'Patients',
               icon: Icons.people_rounded),
-          _VerticalDivider(),
-          _StatItem(
-              value: nutritionist.rating.toStringAsFixed(1),
-              label: 'Rating',
-              icon: Icons.star_rounded),
         ],
       ),
     );
@@ -594,130 +560,6 @@ class _SectionCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           child,
-        ],
-      ),
-    );
-  }
-}
-
-// ── Rating card ───────────────────────────────────────────────────────────────
-
-class _RatingCard extends StatelessWidget {
-  final NutritionistModel nutritionist;
-  const _RatingCard({required this.nutritionist});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: context.appSurface,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          )
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(7),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFF8E1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(Icons.star_rounded,
-                    color: Color(0xFFF9A825), size: 16),
-              ),
-              const SizedBox(width: 10),
-              const Text('Ratings & Reviews', style: AppTextStyles.h4),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Column(
-                children: [
-                  Text(
-                    nutritionist.rating.toStringAsFixed(1),
-                    style: const TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 48,
-                      fontWeight: FontWeight.w800,
-                      color: _kGreen,
-                      height: 1,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  RatingBarIndicator(
-                    rating: nutritionist.rating,
-                    itemBuilder: (ctx, _) => const Icon(
-                      Icons.star_rounded,
-                      color: Color(0xFFF9A825),
-                    ),
-                    itemCount: 5,
-                    itemSize: 16,
-                    unratedColor: const Color(0xFFF9A825)
-                        .withValues(alpha: 0.25),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${nutritionist.reviewCount} reviews',
-                    style: AppTextStyles.bodySmall
-                        .copyWith(color: context.appTextSecondary),
-                  ),
-                ],
-              ),
-              const SizedBox(width: 20),
-              Expanded(
-                child: Column(
-                  children: [5, 4, 3, 2, 1].map((star) {
-                    // Simulated distribution
-                    final pct = switch (star) {
-                      5 => 0.6,
-                      4 => 0.25,
-                      3 => 0.1,
-                      2 => 0.03,
-                      _ => 0.02,
-                    };
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 4),
-                      child: Row(
-                        children: [
-                          Text('$star',
-                              style: AppTextStyles.bodySmall
-                                  .copyWith(color: context.appTextSecondary)),
-                          const SizedBox(width: 4),
-                          const Icon(Icons.star_rounded,
-                              size: 10, color: Color(0xFFF9A825)),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(4),
-                              child: LinearProgressIndicator(
-                                value: pct,
-                                backgroundColor: const Color(0xFFF5F5F5),
-                                valueColor:
-                                    const AlwaysStoppedAnimation<Color>(
-                                        Color(0xFFF9A825)),
-                                minHeight: 6,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ),
-            ],
-          ),
         ],
       ),
     );

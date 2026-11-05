@@ -6,7 +6,6 @@ import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../core/constants/app_spacing.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/utils/r.dart';
@@ -60,47 +59,12 @@ class _PharmacyScreenState extends ConsumerState<PharmacyScreen> {
       backgroundColor: context.appBackground,
       body: CustomScrollView(
         slivers: [
-          SliverAppBar(
-            pinned: true,
-            expandedHeight: AppSpacing.headerHeight(context),
-            backgroundColor: const Color(0xFF2E7D32),
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-              onPressed: () => context.safeBack(),
-            ),
-            flexibleSpace: FlexibleSpaceBar(
-              background: Container(
-                decoration: const BoxDecoration(
-                  gradient: AppColors.medicineGrad,
-                ),
-                child: SafeArea(
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      return SingleChildScrollView(
-                        physics: const ClampingScrollPhysics(),
-                        child: ConstrainedBox(
-                          constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                          child: Padding(
-                            padding: AppSpacing.headerPadding(context),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.local_pharmacy_rounded, color: Colors.white, size: AppSpacing.headerIconSize(context)),
-                                SizedBox(height: AppSpacing.headerIconGap(context)),
-                                const Text('Pharmacy & Medical Shops', style: AppTextStyles.onPrimaryH2),
-                                const Text('Find nearby pharmacies • Order online', style: AppTextStyles.onPrimaryBody),
-                              ],
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ),
-            ),
+          const AppSliverHeader(
+            icon: Icons.local_pharmacy_rounded,
+            title: 'Pharmacy & Medical Shops',
+            subtitle: 'Find nearby pharmacies • Order online',
+            color: Color(0xFF2E7D32),
+            gradient: AppColors.medicineGrad,
           ),
 
           SliverToBoxAdapter(
@@ -339,7 +303,6 @@ class _PharmacyCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = pharmacy;
     final deliveryAvailable = p['deliveryAvailable'] as bool;
-    final totalReviews = p['totalReviews'] as int;
     final distanceKm = p['distanceKm'] as double?;
     final categories = (p['categories'] as List).cast<String>();
     final photoUrl = p['photoUrl'] as String? ?? '';
@@ -407,27 +370,6 @@ class _PharmacyCard extends StatelessWidget {
                             deliveryAvailable ? 'Delivers' : 'Pickup only',
                             style: TextStyle(fontFamily: 'Poppins', fontSize: R.sp(context, 11), fontWeight: FontWeight.w600, color: Colors.white),
                           ),
-                        ]),
-                      ),
-                    ),
-                    // Rating chip overlapping the bottom edge, like Zomato's
-                    // green rating badge on the restaurant card image.
-                    Positioned(
-                      left: R.p(context, 10),
-                      bottom: R.p(context, 10),
-                      child: Container(
-                        padding: EdgeInsets.symmetric(horizontal: R.p(context, 8), vertical: R.p(context, 4)),
-                        decoration: BoxDecoration(
-                          color: totalReviews > 0 ? const Color(0xFF2E7D32) : Colors.grey.shade700,
-                          borderRadius: BorderRadius.circular(R.r(context, 8)),
-                        ),
-                        child: Row(mainAxisSize: MainAxisSize.min, children: [
-                          if (totalReviews > 0) ...[
-                            Text('${p['rating']}', style: TextStyle(fontFamily: 'Poppins', fontSize: R.sp(context, 12), fontWeight: FontWeight.w700, color: Colors.white)),
-                            SizedBox(width: R.p(context, 3)),
-                            Icon(Icons.star_rounded, size: R.w(context, 13), color: Colors.white),
-                          ] else
-                            Text('New', style: TextStyle(fontFamily: 'Poppins', fontSize: R.sp(context, 12), fontWeight: FontWeight.w700, color: Colors.white)),
                         ]),
                       ),
                     ),

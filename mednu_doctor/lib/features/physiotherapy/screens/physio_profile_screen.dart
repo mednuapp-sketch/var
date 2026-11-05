@@ -273,6 +273,32 @@ class _PhysioProfileScreenState extends ConsumerState<PhysioProfileScreen> {
     );
   }
 
+  /// First problem with the details form, or null when it is complete enough
+  /// to save. [clinicRate] is null when in-clinic visits are switched off.
+  String? _validateDetails({
+    required String name,
+    required String onlineRate,
+    required String homeRate,
+    required String? clinicRate,
+    required String experienceYears,
+    required bool hasLocation,
+  }) {
+    if (name.trim().length < 2) return 'Enter your full name.';
+    for (final (label, value) in [
+      ('online consultation', onlineRate),
+      ('home visit', homeRate),
+      if (clinicRate != null) ('in-clinic', clinicRate),
+    ]) {
+      final fee = num.tryParse(value.trim());
+      if (fee == null || fee <= 0) return 'Enter a valid $label fee greater than ₹0.';
+    }
+    if (int.tryParse(experienceYears.trim()) == null) {
+      return 'Enter your years of experience as a number.';
+    }
+    if (!hasLocation) return 'Pick your service area on the map.';
+    return null;
+  }
+
   Future<void> _edit(BuildContext context, PhysioProfile current) async {
     final uid = PhysioProfileService.currentUid;
     if (uid == null) {
@@ -299,6 +325,8 @@ class _PhysioProfileScreenState extends ConsumerState<PhysioProfileScreen> {
     final selectedLanguages = <String>{
       ...current.languages.isEmpty ? const ['English'] : current.languages,
     };
+
+    String? formError;
 
     final saved = await showDialog<bool>(
       context: context,
@@ -403,12 +431,34 @@ class _PhysioProfileScreenState extends ConsumerState<PhysioProfileScreen> {
                     checkmarkColor: AppColors.primary,
                   )).toList(),
                 ),
+                if (formError != null) ...[
+                  const SizedBox(height: 12),
+                  Text(formError!,
+                      style: AppTextStyles.caption.copyWith(color: AppColors.error)),
+                ],
               ],
             ),
           ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
-            TextButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Save')),
+            TextButton(
+              onPressed: () {
+                final error = _validateDetails(
+                  name: name.text,
+                  onlineRate: onlineRate.text,
+                  homeRate: homeRate.text,
+                  clinicRate: offersClinicVisit ? clinicRate.text : null,
+                  experienceYears: experienceYears.text,
+                  hasLocation: city.isNotEmpty && clinicLat != null && clinicLng != null,
+                );
+                if (error != null) {
+                  setDialogState(() => formError = error);
+                  return;
+                }
+                Navigator.pop(dialogContext, true);
+              },
+              child: const Text('Save'),
+            ),
           ],
         ),
       ),
@@ -462,20 +512,14 @@ class _PhysioProfileScreenState extends ConsumerState<PhysioProfileScreen> {
           'languages': selectedLanguages.toList(),
         }, currentStatus: current.status);
       } else {
-        await PhysioProfileService.createProfile(
-          uid: uid,
-          name: name.text.trim(),
-          certifications: split(certifications),
-          specialties: split(specialties),
-          onlineRate: online,
-          clinicRate: clinic,
-          homeRate: home,
-          experienceYears: years,
-          city: city,
-          clinicLat: clinicLat,
-          clinicLng: clinicLng,
-          languages: selectedLanguages.toList(),
-        );
+        // A profile only comes into being through registration, which also
+        // collects the verification documents. Creating one from here would
+        // put it in the approval queue with none.
+        if (context.mounted) {
+          FeedbackService.showError(
+              context, 'Please complete registration, including your documents, first.');
+        }
+        return;
       }
       if (context.mounted) FeedbackService.showSuccess(context, 'Profile saved');
     } catch (_) {
@@ -527,8 +571,6 @@ class _PhysioProfileScreenState extends ConsumerState<PhysioProfileScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    _HeroStat(label: 'Rating', value: profile.rating.toStringAsFixed(1), icon: Icons.star_rounded),
-                    Container(width: 1, height: 30, color: Colors.white24),
                     _HeroStat(label: 'Sessions', value: '${profile.totalSessions}', icon: Icons.event_note_rounded),
                     Container(width: 1, height: 30, color: Colors.white24),
                     _HeroStat(label: 'From', value: '₹${profile.hourlyRate}', icon: Icons.currency_rupee_rounded),

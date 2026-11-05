@@ -10,6 +10,7 @@ import '../../../core/router/app_router.dart';
 import '../../../core/utils/r.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../providers/period_tracker_provider.dart';
+import '../../../core/widgets/ux_widgets.dart';
 
 // ── Brand colours ─────────────────────────────────────────────────────────────
 const _kPink      = Color(0xFFA36BAC);
@@ -560,14 +561,16 @@ class _CalendarScreenState extends ConsumerState<_CalendarScreen> {
     );
   }
 
-  SliverAppBar _buildAppBar(BuildContext context) {
-    return SliverAppBar(
-      pinned: true,
-      backgroundColor: _kPinkDark,
-      expandedHeight: 160,
-      leading: IconButton(
-        icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-        onPressed: () => context.canPop() ? context.pop() : context.go(AppRoutes.home),
+  Widget _buildAppBar(BuildContext context) {
+    return AppSliverHeader(
+      icon: Icons.spa_rounded,
+      title: 'Period Tracker',
+      subtitle: 'Track your cycle & stay informed',
+      color: _kPinkDark,
+      gradient: const LinearGradient(
+        colors: [_kPinkDark, _kPink],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
       ),
       actions: [
         IconButton(
@@ -575,43 +578,6 @@ class _CalendarScreenState extends ConsumerState<_CalendarScreen> {
           onPressed: () => _showSettingsSheet(context),
         ),
       ],
-      flexibleSpace: FlexibleSpaceBar(
-        background: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [_kPinkDark, _kPink],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-          ),
-          child: SafeArea(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                return SingleChildScrollView(
-                  physics: const ClampingScrollPhysics(),
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                    child: const Padding(
-                      padding: EdgeInsets.fromLTRB(20, 48, 20, 16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          Text('🌸', style: TextStyle(fontSize: 30)),
-                          SizedBox(height: 4),
-                          Text('Period Tracker', style: AppTextStyles.onPrimaryH2),
-                          Text('Track your cycle & stay informed',
-                              style: AppTextStyles.onPrimaryBody),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ),
-      ),
     );
   }
 

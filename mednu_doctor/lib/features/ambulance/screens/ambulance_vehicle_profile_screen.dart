@@ -459,8 +459,6 @@ class _AmbulanceVehicleProfileScreenState extends ConsumerState<AmbulanceVehicle
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    _HeroStat(label: 'Rating', value: vehicle.rating.toStringAsFixed(1), icon: Icons.star_rounded),
-                    Container(width: 1, height: 30, color: Colors.white24),
                     _HeroStat(label: 'Trips', value: '${vehicle.totalTrips}', icon: Icons.route_rounded),
                   ],
                 ),

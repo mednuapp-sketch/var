@@ -26,7 +26,7 @@ class CaregiverSettingsScreen extends StatefulWidget {
 class _CaregiverSettingsScreenState extends State<CaregiverSettingsScreen> {
   bool _notifyNewVisits = true;
   bool _notifyReminders = true;
-  bool _whatsappOptIn = false;
+  bool _whatsappOptIn = true;
   String _appVersion = '';
 
   // Biometric lock state — device-local, independent of the profile stream.
@@ -84,7 +84,7 @@ class _CaregiverSettingsScreenState extends State<CaregiverSettingsScreen> {
     if (uid == null) return;
     try {
       final doc = await FirebaseFirestore.instance.collection('caregiver_profiles').doc(uid).get();
-      if (mounted) setState(() => _whatsappOptIn = doc.data()?['whatsappOptIn'] == true);
+      if (mounted) setState(() => _whatsappOptIn = doc.data()?['whatsappOptIn'] != false);
     } catch (_) {}
   }
 

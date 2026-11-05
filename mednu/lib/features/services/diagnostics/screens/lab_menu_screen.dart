@@ -2,14 +2,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/constants/app_colors.dart';
-import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/constants/app_text_styles.dart';
 import '../../../../core/services/feedback_service.dart';
 import '../../../../core/widgets/add_to_cart_button.dart';
 import '../../../../core/widgets/ux_widgets.dart';
 import '../../../cart/providers/cart_provider.dart';
 
-import '../../../../core/router/app_router.dart';
 /// A single lab's test menu — the "food" screen in the hotel/lab-first
 /// browsing flow. Reached from a lab card on [DiagnosticsScreen]; fetches the
 /// lab's own profile by id (rather than trusting nav `extra`) so it also
@@ -110,8 +108,6 @@ class _LabMenuScreenState extends ConsumerState<LabMenuScreen> {
   Widget build(BuildContext context) {
     final labName = _lab?['name'] as String? ?? 'Lab';
     final address = _lab?['address'] as String? ?? '';
-    final rating = ((_lab?['rating'] as num?) ?? 0).toDouble();
-    final totalReviews = (_lab?['totalReviews'] as int?) ?? 0;
 
     return Scaffold(
       backgroundColor: context.appBackground,
@@ -139,62 +135,21 @@ class _LabMenuScreenState extends ConsumerState<LabMenuScreen> {
             ),
       body: CustomScrollView(
         slivers: [
-          SliverAppBar(
-            pinned: true,
-            expandedHeight: AppSpacing.headerHeight(context),
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-              onPressed: () => context.safeBack(),
+          AppSliverHeader(
+            icon: Icons.biotech_rounded,
+            title: _labLoading ? 'Loading…' : labName,
+            subtitle: _labLoading
+                ? null
+                : [
+                    if (address.isNotEmpty) address,
+                  ].join(' • '),
+            color: _themeColor,
+            gradient: const LinearGradient(
+              colors: [Color(0xFF0097A7), Color(0xFF26C6DA)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             ),
             actions: const [CartBadgeAction()],
-            flexibleSpace: FlexibleSpaceBar(
-              background: Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Color(0xFF0097A7), Color(0xFF26C6DA)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                ),
-                child: SafeArea(
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      return SingleChildScrollView(
-                        physics: const ClampingScrollPhysics(),
-                        child: ConstrainedBox(
-                          constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                          child: Padding(
-                            padding: AppSpacing.headerPadding(context),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.biotech_rounded, color: Colors.white, size: AppSpacing.headerIconSize(context)),
-                                SizedBox(height: AppSpacing.headerIconGap(context)),
-                                Text(_labLoading ? 'Loading…' : labName, style: AppTextStyles.onPrimaryH2),
-                                if (!_labLoading) ...[
-                                  if (address.isNotEmpty)
-                                    Text(address, style: AppTextStyles.onPrimaryBody, maxLines: 1, overflow: TextOverflow.ellipsis),
-                                  Row(children: [
-                                    const Icon(Icons.star_rounded, size: 14, color: Colors.amber),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      totalReviews > 0 ? '${rating.toStringAsFixed(1)} ($totalReviews)' : 'New',
-                                      style: AppTextStyles.onPrimaryBody,
-                                    ),
-                                  ]),
-                                ],
-                              ],
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ),
-            ),
           ),
           SliverToBoxAdapter(
             child: Column(children: [

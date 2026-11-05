@@ -57,15 +57,13 @@ class PartnerDocumentService {
 
   // ── Upload / remove ──────────────────────────────────────────────────────
 
-  /// Uploads to `{role}_documents/{uid}/{docType}.{jpg|pdf}` and records the
-  /// result under `documents.{docType}` on the profile doc.
-  ///
-  /// Throws a message-carrying [Exception] on an oversized file so the caller
-  /// can surface it verbatim.
-  Future<void> uploadDocument({
+  /// Uploads [file] to Storage only and returns the metadata that belongs
+  /// under `documents.{docType}` — nothing is written to Firestore. Registration
+  /// uses this to get every file safely uploaded *before* the profile document
+  /// exists, so a failed upload leaves no half-submitted profile behind.
+  Future<Map<String, dynamic>> uploadToStorage({
     required String docType,
     required File file,
-    String? previousStoragePath,
     void Function(double progress)? onProgress,
   }) async {
     final size = await file.length();
@@ -97,24 +95,46 @@ class PartnerDocumentService {
       throw Exception('Upload failed (${snapshot.state.name}). Please retry.');
     }
 
-    final url = await ref.getDownloadURL();
+    return {
+      'url': await ref.getDownloadURL(),
+      'storagePath': storagePath,
+      'fileName': file.path.split(Platform.pathSeparator).last,
+      'contentType': contentType,
+      'sizeBytes': size,
+    };
+  }
+
+  /// Records already-uploaded documents (from [uploadToStorage]) on the
+  /// profile in one write, so they all land together or not at all.
+  Future<void> saveDocuments(Map<String, Map<String, dynamic>> metaByType) {
+    return _profileRef.set({
+      'documents': {
+        for (final e in metaByType.entries)
+          e.key: {...e.value, 'uploadedAt': FieldValue.serverTimestamp()},
+      },
+    }, SetOptions(merge: true));
+  }
+
+  /// Uploads to `{role}_documents/{uid}/{docType}.{jpg|pdf}` and records the
+  /// result under `documents.{docType}` on the profile doc.
+  ///
+  /// Throws a message-carrying [Exception] on an oversized file so the caller
+  /// can surface it verbatim.
+  Future<void> uploadDocument({
+    required String docType,
+    required File file,
+    String? previousStoragePath,
+    void Function(double progress)? onProgress,
+  }) async {
+    final meta = await uploadToStorage(
+        docType: docType, file: file, onProgress: onProgress);
+    final storagePath = meta['storagePath'] as String;
 
     // `set(merge: true)` rather than `update()` so a partner whose profile doc
     // has not been created yet still gets a valid write (rules allow the owner
     // to create their own profile), and so the nested `documents` map is
     // deep-merged instead of replaced.
-    await _profileRef.set({
-      'documents': {
-        docType: {
-          'url': url,
-          'storagePath': storagePath,
-          'fileName': file.path.split(Platform.pathSeparator).last,
-          'contentType': contentType,
-          'sizeBytes': size,
-          'uploadedAt': FieldValue.serverTimestamp(),
-        },
-      },
-    }, SetOptions(merge: true));
+    await saveDocuments({docType: meta});
 
     // A replace that switched format (pdf ➜ jpg or back) leaves the old object
     // behind under the other extension — clean it up, best effort.

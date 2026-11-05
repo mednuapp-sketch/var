@@ -28,7 +28,7 @@ class DoctorNotificationsScreen extends ConsumerWidget {
           // ── Gradient App Bar ─────────────────────────────
           SliverAppBar(
             pinned: true,
-            expandedHeight: 130,
+            expandedHeight: 72,
             backgroundColor: AppColors.primary,
             foregroundColor: Colors.white,
             elevation: 0,
@@ -206,7 +206,9 @@ class _NotifHeader extends StatelessWidget {
                     constraints:
                         BoxConstraints(minHeight: constraints.maxHeight),
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 48, 20, 16),
+                      // Sits level with the back arrow / actions in the
+                      // toolbar instead of in a second row beneath them.
+                      padding: const EdgeInsets.fromLTRB(56, 6, 100, 0),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [

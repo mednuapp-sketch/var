@@ -185,14 +185,14 @@ class _GradientAppBar extends StatelessWidget {
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 10, vertical: 3),
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.15),
+                                  color: Colors.white.withValues(alpha: 0.22),
                                   borderRadius: BorderRadius.circular(20),
                                 ),
                                 child: Text(
                                   'Last 12 Months',
                                   style: AppTextStyles.caption.copyWith(
-                                    fontSize: 10,
-                                    color: Colors.white70,
+                                    fontSize: 11,
+                                    color: Colors.white,
                                     fontWeight: FontWeight.w500,
                                   ),
                                 ),
@@ -203,7 +203,7 @@ class _GradientAppBar extends StatelessWidget {
                                 style: AppTextStyles.display.copyWith(
                                   fontSize: 38,
                                   fontWeight: FontWeight.w800,
-                                  color: AppColors.accentText,
+                                  color: Colors.white,
                                   height: 1.1,
                                 ),
                               ),

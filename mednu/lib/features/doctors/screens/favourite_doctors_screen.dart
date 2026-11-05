@@ -21,103 +21,15 @@ class FavouriteDoctorsScreen extends StatelessWidget {
       body: CustomScrollView(
         slivers: [
           // ── Gradient SliverAppBar ──────────────────────────
-          SliverAppBar(
-            pinned: true,
-            expandedHeight: R.h(context, 130),
-            backgroundColor: AppColors.primary,
-            foregroundColor: Colors.white,
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-              onPressed: () => context.safeBack(),
-            ),
-            flexibleSpace: FlexibleSpaceBar(
-              collapseMode: CollapseMode.pin,
-              background: Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Color(0xFF33172C), Color(0xFF522546), Color(0xFF633058)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                ),
-                child: Stack(
-                  children: [
-                    Positioned(
-                      top: -R.h(context, 20),
-                      right: -R.w(context, 20),
-                      child: Container(
-                        width: R.w(context, 110),
-                        height: R.h(context, 110),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.white.withValues(alpha:0.06),
-                        ),
-                      ),
-                    ),
-                    SafeArea(
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          return SingleChildScrollView(
-                            physics: const ClampingScrollPhysics(),
-                            child: ConstrainedBox(
-                              constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                              child: Padding(
-                                padding: EdgeInsets.fromLTRB(R.p(context, 20), R.p(context, 52), R.p(context, 20), R.p(context, 16)),
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Container(
-                                          width: R.w(context, 40),
-                                          height: R.w(context, 40),
-                                          decoration: BoxDecoration(
-                                            color: Colors.white.withValues(alpha:0.18),
-                                            borderRadius: BorderRadius.circular(R.r(context, 12)),
-                                          ),
-                                          child: Icon(
-                                            Icons.favorite_rounded,
-                                            color: Colors.white,
-                                            size: R.w(context, 22),
-                                          ),
-                                        ),
-                                        SizedBox(width: R.p(context, 12)),
-                                        const Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Text(
-                                              'Favourite Doctors',
-                                              style: TextStyle(
-                                                fontFamily: 'Poppins',
-                                                fontSize: 18,
-                                                fontWeight: FontWeight.w700,
-                                                color: Colors.white,
-                                              ),
-                                            ),
-                                            Text(
-                                              'Your saved doctors',
-                                              style: TextStyle(
-                                                fontFamily: 'Poppins',
-                                                fontSize: 12,
-                                                color: Colors.white70,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+          const AppSliverHeader(
+            icon: Icons.favorite_rounded,
+            title: 'Favourite Doctors',
+            subtitle: 'Your saved doctors',
+            color: AppColors.primary,
+            gradient: LinearGradient(
+              colors: [Color(0xFF33172C), Color(0xFF522546), Color(0xFF633058)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             ),
           ),
 

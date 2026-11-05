@@ -2,13 +2,19 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
 import '../services/doctor_auth_service.dart';
+import '../../../shared_core/documents/partner_document_models.dart';
+import '../../../shared_core/documents/partner_document_upload_card.dart';
 import '../../../shared_core/models/app_role.dart';
 import '../../../shared_core/navigation/role_menu.dart';
+import '../../../shared_core/providers/role_providers.dart';
+import '../../../shared_core/widgets/role_switcher_sheet.dart';
+import '../../../shared_core/services/role_prefs.dart';
 
 class VerificationPendingScreen extends StatefulWidget {
   const VerificationPendingScreen({super.key});
@@ -22,6 +28,17 @@ class _VerificationPendingScreenState extends State<VerificationPendingScreen>
     with TickerProviderStateMixin {
   String _status = 'pending';
   bool _loading = true;
+
+  // Partner (non-doctor) accounts only: documents the profile still lacks.
+  // Registration uploads them before the profile exists, but if the final
+  // write ever fails the profile can exist without them — surface the upload
+  // here instead of showing a "pending" wait for an application that can't be
+  // reviewed.
+  String? _partnerRole;
+  String? _partnerUid;
+  List<String> _missingDocs = const [];
+  Map<String, dynamic> _documents = const {};
+  Map<String, dynamic> _documentVerification = const {};
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _statusSub;
 
   late AnimationController _pulseCtrl;
@@ -76,7 +93,15 @@ class _VerificationPendingScreenState extends State<VerificationPendingScreen>
           .get();
       final rawRoles = doctorSnap.data()?['roles'];
       final roles = AppRoleX.listFrom(rawRoles);
-      role = roles.first;
+      // The active role (what the switcher chose), not `roles.first` —
+      // otherwise a pending Hospital watched the Doctor doc, saw 'active',
+      // bounced to the Doctor dashboard and the router bounced it back.
+      final serverRaw = doctorSnap.data()?['activeRole'] as String?;
+      role = await RolePrefs.resolveActive(
+        roles,
+        serverPreferred:
+            serverRaw != null ? AppRoleX.fromFirestoreValue(serverRaw) : null,
+      );
     } catch (_) {
       // Fall back to watching `doctors/{uid}` (existing behavior) below.
     }
@@ -84,7 +109,7 @@ class _VerificationPendingScreenState extends State<VerificationPendingScreen>
     final statusDocRef = role == AppRole.doctor
         ? FirebaseFirestore.instance.collection('doctors').doc(uid)
         : FirebaseFirestore.instance
-              .collection('${role.firestoreValue}_profiles')
+              .collection(role.profileCollection)
               .doc(uid);
 
     _statusSub = statusDocRef.snapshots().listen(
@@ -103,9 +128,21 @@ class _VerificationPendingScreenState extends State<VerificationPendingScreen>
           );
           return;
         }
+        final data = snap.data();
+        final isPartner = role != AppRole.doctor;
         setState(() {
           _status = status;
           _loading = false;
+          _partnerRole = isPartner ? role.documentRoleKey : null;
+          _partnerUid = uid;
+          _documents = Map<String, dynamic>.from(
+              (data?['documents'] as Map?) ?? const {});
+          _documentVerification = Map<String, dynamic>.from(
+              (data?['documentVerification'] as Map?) ?? const {});
+          _missingDocs = isPartner && snap.exists
+              ? PartnerDocumentType.missingFor(
+                  role.documentRoleKey, data?['documents'])
+              : const [];
         });
       },
       onError: (_) {
@@ -187,32 +224,39 @@ class _VerificationPendingScreenState extends State<VerificationPendingScreen>
                 ),
                 Padding(
                   padding: EdgeInsets.fromLTRB(24, topInset + 20, 24, 44),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Layered status illustration: a rotating dashed ring
-                      // (still "in progress"), a pulsing center badge, and
-                      // small orbiting accent icons — reads as an active,
-                      // living process rather than a single static glyph.
-                      _StatusIllustration(
-                        isSuspended: isSuspended,
-                        pulse: _pulse,
-                        rotation: _rotateCtrl,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        isSuspended
-                            ? 'Application Rejected'
-                            : 'Verification Pending',
-                        style: const TextStyle(
-                          fontFamily: 'Inter',
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
+                  // Full width: a Stack top-left-aligns its non-positioned
+                  // child, so without this the column shrank to the title's
+                  // width and the whole hero sat left of centre.
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        // Layered status illustration: a rotating dashed ring
+                        // (still "in progress"), a pulsing center badge, and
+                        // small orbiting accent icons — reads as an active,
+                        // living process rather than a single static glyph.
+                        _StatusIllustration(
+                          isSuspended: isSuspended,
+                          pulse: _pulse,
+                          rotation: _rotateCtrl,
                         ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
+                        const SizedBox(height: 16),
+                        Text(
+                          isSuspended
+                              ? 'Application Rejected'
+                              : 'Verification Pending',
+                          style: const TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -251,6 +295,20 @@ class _VerificationPendingScreenState extends State<VerificationPendingScreen>
                       padding: const EdgeInsets.fromLTRB(24, 28, 24, 40),
                       child: Column(
                         children: [
+                          if (_missingDocs.isNotEmpty &&
+                              _partnerRole != null &&
+                              _partnerUid != null &&
+                              !isSuspended) ...[
+                            _MissingDocsNotice(missing: _missingDocs),
+                            const SizedBox(height: 12),
+                            PartnerDocumentsSection(
+                              role: _partnerRole!,
+                              uid: _partnerUid!,
+                              documents: _documents,
+                              documentVerification: _documentVerification,
+                            ),
+                            const SizedBox(height: 20),
+                          ],
                           // Content card
                           Container(
                             padding: const EdgeInsets.all(24),
@@ -399,6 +457,34 @@ class _VerificationPendingScreenState extends State<VerificationPendingScreen>
                           const SizedBox(height: 28),
 
                           // Action buttons
+                          // A pending service must not trap the account: let
+                          // it hop to another of its profiles from here.
+                          Consumer(builder: (context, ref, _) {
+                            if (!ref.watch(roleEngineProvider).canSwitchRoles) {
+                              return const SizedBox.shrink();
+                            }
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: SizedBox(
+                                width: double.infinity,
+                                height: 52,
+                                child: OutlinedButton.icon(
+                                  onPressed: () => showRoleSwitcherSheet(context),
+                                  icon: const Icon(Icons.swap_horiz_rounded,
+                                      size: 18),
+                                  label: const Text('Switch profile'),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: AppColors.primary,
+                                    side: const BorderSide(
+                                        color: AppColors.primary),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            );
+                          }),
                           SizedBox(
                             width: double.infinity,
                             height: 52,
@@ -487,10 +573,13 @@ class _StatusIllustration extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const size = 148.0;
+    // Outer box is larger than the ring so the satellite badges (which sit
+    // on the ring) are fully inside it and never clipped.
+    const box = 164.0;
+    const size = 132.0; // ring diameter
     return SizedBox(
-      width: size,
-      height: size,
+      width: box,
+      height: box,
       child: Stack(
         alignment: Alignment.center,
         children: [
@@ -516,7 +605,7 @@ class _StatusIllustration extends StatelessWidget {
               _SatelliteIcon(
                 icon: _satellites[i].$1,
                 angle: (2 * math.pi / _satellites.length) * i - (math.pi / 2),
-                radius: size / 2 - 6,
+                radius: size / 2 - 1,
               ),
 
           // Centre badge with the existing pulse animation.
@@ -708,6 +797,49 @@ class _ProgressStep extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Shown on the pending screen while required verification documents are
+/// missing, so an application with nothing to review is never mistaken for
+/// one that is simply waiting on admin.
+class _MissingDocsNotice extends StatelessWidget {
+  final List<String> missing;
+  const _MissingDocsNotice({required this.missing});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.warning.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.warning.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.upload_file_rounded, color: AppColors.warning),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Upload your documents',
+                    style: AppTextStyles.labelLarge),
+                const SizedBox(height: 4),
+                Text(
+                  'Our team can only review your application once these are '
+                  'uploaded: ${missing.join(', ')}.',
+                  style: AppTextStyles.bodySmall,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

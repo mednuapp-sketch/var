@@ -395,69 +395,13 @@ class _PostConsultationScreenState extends State<PostConsultationScreen>
   Widget _buildForm() {
     return CustomScrollView(
       slivers: [
-        SliverAppBar(
-          pinned: true,
-          expandedHeight: R.h(context, 170),
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-            onPressed: () => context.canPop() ? context.pop() : context.go(AppRoutes.home),
-          ),
-          flexibleSpace: FlexibleSpaceBar(
-            background: Container(
-              decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
-              child: SafeArea(
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    return SingleChildScrollView(
-                      physics: const ClampingScrollPhysics(),
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                        child: Padding(
-                  padding: EdgeInsets.fromLTRB(R.p(context, 20), R.p(context, 52), R.p(context, 20), R.p(context, 20)),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Row(children: [
-                        Container(
-                          padding: EdgeInsets.all(R.p(context, 10)),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha:0.15),
-                            borderRadius: BorderRadius.circular(R.r(context, 12)),
-                          ),
-                          child: Icon(
-                            Icons.health_and_safety_rounded,
-                            color: Colors.white, size: R.w(context, 24),
-                          ),
-                        ),
-                        SizedBox(width: R.w(context, 12)),
-                        Expanded(
-                          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                            Text(
-                              _isImmediate ? 'Share Your Feedback' : 'How Are You Feeling?',
-                              style: AppTextStyles.onPrimaryH2,
-                            ),
-                            Text(
-                              _isImmediate
-                                  ? 'Tell us how you are feeling after your consultation'
-                                  : 'Post-consultation follow-up for ${widget.doctorName ?? 'your doctor'}',
-                              style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: Colors.white70),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ]),
-                        ),
-                      ]),
-                    ],
-                  ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ),
-          ),
+        AppSliverHeader(
+          icon: Icons.health_and_safety_rounded,
+          title: _isImmediate ? 'Share Your Feedback' : 'How Are You Feeling?',
+          subtitle: _isImmediate
+              ? 'Tell us how you are feeling after your consultation'
+              : 'Post-consultation follow-up for ${widget.doctorName ?? 'your doctor'}',
+          gradient: AppColors.primaryGradient,
         ),
         SliverToBoxAdapter(
           child: Padding(

@@ -1,7 +1,7 @@
 name: mednu_doctor
 description: MedNu Service App - Partner platform for Doctors, Labs, Pharmacies, Ambulances, Nurses, Physiotherapists, Counsellors, Nutritionists & Hospitals
 publish_to: 'none'
-version: 1.0.9+12
+version: 1.0.11+14
 
 environment:
   sdk: '>=3.12.0 <4.0.0'

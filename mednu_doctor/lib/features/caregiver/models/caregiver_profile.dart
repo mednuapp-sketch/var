@@ -9,6 +9,15 @@ class CaregiverProfile {
   final List<String> certifications;
   final List<String> specialties;
   final num hourlyRate;
+
+  /// Care Assistant duration tiers (hourly is [hourlyRate]). Fall back to a
+  /// multiple of the hourly rate when a profile predates the dedicated fields,
+  /// matching what the patient-facing listing mirror does.
+  final num rateHalfDay;
+  final num rateFullDay;
+  final num rateMultiDay;
+  final String bio;
+  final List<String> languages;
   final double rating;
   final int totalVisits;
   final int experienceYears;
@@ -56,6 +65,11 @@ class CaregiverProfile {
     required this.certifications,
     required this.specialties,
     required this.hourlyRate,
+    this.rateHalfDay = 0,
+    this.rateFullDay = 0,
+    this.rateMultiDay = 0,
+    this.bio = '',
+    this.languages = const [],
     required this.rating,
     required this.totalVisits,
     required this.experienceYears,
@@ -101,6 +115,11 @@ class CaregiverProfile {
           .map((e) => e.toString())
           .toList(),
       hourlyRate: (d['hourlyRate'] as num?) ?? 0,
+      rateHalfDay: (d['rateHalfDay'] as num?) ?? ((d['hourlyRate'] as num?) ?? 0) * 4,
+      rateFullDay: (d['rateFullDay'] as num?) ?? ((d['hourlyRate'] as num?) ?? 0) * 8,
+      rateMultiDay: (d['rateMultiDay'] as num?) ?? ((d['hourlyRate'] as num?) ?? 0) * 8,
+      bio: d['bio'] as String? ?? '',
+      languages: (d['languages'] as List<dynamic>? ?? const []).map((e) => e.toString()).toList(),
       rating: ((d['rating'] as num?) ?? 0).toDouble(),
       totalVisits: ((d['totalVisits'] as num?) ?? 0).toInt(),
       experienceYears: ((d['experienceYears'] as num?) ?? 0).toInt(),

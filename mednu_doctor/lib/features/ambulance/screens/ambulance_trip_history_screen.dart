@@ -297,7 +297,6 @@ class _TripTimelineTile extends StatelessWidget {
                             children: [
                               InfoChip(icon: Icons.social_distance_rounded, label: '${trip.distanceKm} km'),
                               InfoChip(icon: Icons.timer_outlined, label: '${trip.durationMinutes} min'),
-                              InfoChip(icon: Icons.star_rounded, label: trip.rating.toStringAsFixed(1), color: AppColors.warning),
                             ],
                           ),
                         ),

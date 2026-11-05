@@ -110,6 +110,40 @@ class CaregiverVisitService {
         buildUpdate: (d) => {'caregiverId': caregiverId},
       );
 
+  /// Care Assistant: explicitly accept a request. Works for both an open-pool
+  /// request (claims it) and one the patient pinned to this assistant. Sets
+  /// `acceptedAt`, which the Cloud Function mirrors onto the patient's booking
+  /// as `accepted` (with this assistant's name) in real time.
+  static Future<void> accept(String visitId, String caregiverId) => _transitionVisit(
+        visitId,
+        precondition: (d) =>
+            (d['caregiverId'] == null || d['caregiverId'] == caregiverId) &&
+            d['status'] == 'scheduled' &&
+            d['acceptedAt'] == null,
+        conflictMessage: 'This request was already taken by another assistant.',
+        buildUpdate: (d) => {
+          'caregiverId': caregiverId,
+          'acceptedAt': FieldValue.serverTimestamp(),
+        },
+      );
+
+  /// Care Assistant: decline a request. From the open pool it only hides the
+  /// request from this assistant; if the patient had pinned it to them, it is
+  /// released back to the pool (and the patient's booking goes back to
+  /// waiting) so another assistant can pick it up.
+  static Future<void> decline(String visitId, String caregiverId) => _transitionVisit(
+        visitId,
+        precondition: (d) =>
+            (d['caregiverId'] == null || d['caregiverId'] == caregiverId) &&
+            d['status'] == 'scheduled' &&
+            d['acceptedAt'] == null,
+        conflictMessage: 'This request is no longer available.',
+        buildUpdate: (d) => {
+          if (d['caregiverId'] == caregiverId) 'caregiverId': null,
+          'declinedBy': FieldValue.arrayUnion([caregiverId]),
+        },
+      );
+
   /// Check-in also claims the visit if it wasn't claimed yet, so a caregiver
   /// arriving at a still-unassigned visit doesn't have to tap twice.
   static Future<void> checkIn(String visitId, String caregiverId) => _transitionVisit(

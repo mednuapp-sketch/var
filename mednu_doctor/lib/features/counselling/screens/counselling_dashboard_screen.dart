@@ -89,12 +89,6 @@ class _CounsellingDashboardScreenState extends ConsumerState<CounsellingDashboar
                 icon: Icons.account_balance_wallet_rounded,
                 colors: const [AppColors.accent, AppColors.accentDark],
               ),
-              GradientStatCard(
-                value: metrics.rating.toStringAsFixed(1),
-                label: 'Rating',
-                icon: Icons.star_rounded,
-                colors: const [AppColors.primary, AppColors.secondary],
-              ),
             ],
           ),
           const SizedBox(height: 20),

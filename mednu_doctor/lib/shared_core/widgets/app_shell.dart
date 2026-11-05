@@ -129,6 +129,8 @@ String _profileRouteForRole(AppRole role) {
       return AppRoutes.ambulanceVehicleProfile;
     case AppRole.caregiver:
       return AppRoutes.caregiverProfile;
+    case AppRole.careAssistant:
+      return AppRoutes.careAssistantProfile;
     case AppRole.physiotherapist:
       return AppRoutes.physioProfile;
     case AppRole.counsellor:
@@ -185,9 +187,25 @@ class _ShellAppBar extends StatelessWidget implements PreferredSizeWidget {
           ),
           if (canSwitchRoles) ...[
             const SizedBox(width: 8),
-            GestureDetector(
-              onTap: () => showRoleSwitcherSheet(context),
-              child: RoleBadge(role: role),
+            // Instagram-style account switcher: tap the role chip (or
+            // long-press the avatar) to swap between this number's profiles.
+            Flexible(
+              flex: 0,
+              child: InkWell(
+                onTap: () => showRoleSwitcherSheet(context),
+                borderRadius: BorderRadius.circular(20),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(child: RoleBadge(role: role)),
+                      const Icon(Icons.keyboard_arrow_down_rounded,
+                          size: 20, color: AppColors.textSecondary),
+                    ],
+                  ),
+                ),
+              ),
             ),
           ],
         ],
@@ -228,6 +246,8 @@ class _ShellAppBar extends StatelessWidget implements PreferredSizeWidget {
         ),
         GestureDetector(
           onTap: () => context.go(_profileRouteForRole(role)),
+          onLongPress:
+              canSwitchRoles ? () => showRoleSwitcherSheet(context) : null,
           child: Padding(
             padding: const EdgeInsets.only(right: 16, left: 4),
             child: SharedProfileAvatar(

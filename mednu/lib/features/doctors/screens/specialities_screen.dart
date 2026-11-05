@@ -5,7 +5,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/utils/r.dart';
 
-import '../../../core/router/app_router.dart';
+import '../../../core/widgets/ux_widgets.dart';
 class SpecialitiesScreen extends StatefulWidget {
   const SpecialitiesScreen({super.key});
 
@@ -20,41 +20,56 @@ class _SpecialitiesScreenState extends State<SpecialitiesScreen> {
     _SpecialtyData('General Physician', 'General',
         Icons.medical_services_rounded, Color(0xFF1565C0), Color(0xFFE3F2FD)),
     _SpecialtyData('Cardiologist', 'Cardiology',
-        Icons.favorite_rounded, Color(0xFFE53935), Color(0xFFFFEBEE)),
+        Icons.favorite_rounded, Color(0xFFE53935), Color(0xFFFFEBEE),
+        asset: 'cardiology'),
     _SpecialtyData('Dermatologist', 'Dermatology',
-        Icons.face_rounded, Color(0xFF6A1B9A), Color(0xFFF3E5F5)),
+        Icons.face_rounded, Color(0xFF6A1B9A), Color(0xFFF3E5F5),
+        asset: 'dermatology'),
     _SpecialtyData('Gynecologist', 'Gynaecology',
         Icons.pregnant_woman_rounded, Color(0xFFA36BAC), Color(0xFFFCE4EC)),
     _SpecialtyData('Neurologist', 'Neurology',
-        Icons.psychology_rounded, Color(0xFF5E35B1), Color(0xFFEDE7F6)),
+        Icons.psychology_rounded, Color(0xFF5E35B1), Color(0xFFEDE7F6),
+        asset: 'neurology'),
     _SpecialtyData('Orthopedic', 'Orthopaedics',
-        Icons.accessibility_new_rounded, Color(0xFF795548), Color(0xFFEFEBE9)),
+        Icons.accessibility_new_rounded, Color(0xFF795548), Color(0xFFEFEBE9),
+        asset: 'orthopaedics'),
     _SpecialtyData('Pediatrician', 'Paediatrics',
         Icons.child_care_rounded, Color(0xFF2E7D32), Color(0xFFE8F5E9)),
     _SpecialtyData('ENT Specialist', 'ENT',
-        Icons.hearing_rounded, Color(0xFF00695C), Color(0xFFE0F2F1)),
+        Icons.hearing_rounded, Color(0xFF00695C), Color(0xFFE0F2F1),
+        asset: 'ent'),
     _SpecialtyData('Ophthalmologist', 'Ophthalmology',
         Icons.visibility_rounded, Color(0xFF0277BD), Color(0xFFE1F5FE)),
     _SpecialtyData('Psychiatrist', 'Psychiatry',
-        Icons.self_improvement_rounded, Color(0xFF37474F), Color(0xFFECEFF1)),
+        Icons.self_improvement_rounded, Color(0xFF37474F), Color(0xFFECEFF1),
+        asset: 'psychiatry'),
     _SpecialtyData('Endocrinologist', 'Endocrinology',
-        Icons.science_rounded, Color(0xFF558B2F), Color(0xFFF1F8E9)),
+        Icons.science_rounded, Color(0xFF558B2F), Color(0xFFF1F8E9),
+        asset: 'endocrinology'),
     _SpecialtyData('Gastroenterologist', 'Gastroenterology',
-        Icons.monitor_heart_rounded, Color(0xFFE65100), Color(0xFFFBE9E7)),
+        Icons.monitor_heart_rounded, Color(0xFFE65100), Color(0xFFFBE9E7),
+        asset: 'gastroenterology'),
     _SpecialtyData('Nephrologist', 'Nephrology',
-        Icons.water_drop_rounded, Color(0xFF283593), Color(0xFFE8EAF6)),
+        Icons.water_drop_rounded, Color(0xFF283593), Color(0xFFE8EAF6),
+        asset: 'nephrology'),
     _SpecialtyData('Urologist', 'Urology',
-        Icons.health_and_safety_rounded, Color(0xFF633058), Color(0xFFF3E5F5)),
+        Icons.health_and_safety_rounded, Color(0xFF633058), Color(0xFFF3E5F5),
+        asset: 'urology'),
     _SpecialtyData('Pulmonologist', 'Pulmonology',
-        Icons.air_rounded, Color(0xFF006064), Color(0xFFE0F7FA)),
+        Icons.air_rounded, Color(0xFF006064), Color(0xFFE0F7FA),
+        asset: 'pulmonology'),
     _SpecialtyData('General Surgeon', 'General Surgery',
-        Icons.cut_rounded, Color(0xFF4E342E), Color(0xFFEFEBE9)),
+        Icons.cut_rounded, Color(0xFF4E342E), Color(0xFFEFEBE9),
+        asset: 'surgery'),
     _SpecialtyData('Dentist', 'Dental',
-        Icons.mood_rounded, Color(0xFF00838F), Color(0xFFE0F2F1)),
+        Icons.mood_rounded, Color(0xFF00838F), Color(0xFFE0F2F1),
+        asset: 'dental'),
     _SpecialtyData('Rheumatologist', 'Rheumatology',
-        Icons.elderly_rounded, Color(0xFF827717), Color(0xFFF9FBE7)),
+        Icons.elderly_rounded, Color(0xFF827717), Color(0xFFF9FBE7),
+        asset: 'rheumatology'),
     _SpecialtyData('Oncologist', 'Oncology',
-        Icons.biotech_rounded, Color(0xFFBF360C), Color(0xFFFBE9E7)),
+        Icons.biotech_rounded, Color(0xFFBF360C), Color(0xFFFBE9E7),
+        asset: 'oncology'),
   ];
 
   @override
@@ -69,50 +84,11 @@ class _SpecialitiesScreenState extends State<SpecialitiesScreen> {
       backgroundColor: context.appBackground,
       body: CustomScrollView(
         slivers: [
-          SliverAppBar(
-            pinned: true,
-            expandedHeight: R.h(context, 130),
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back_ios_new_rounded,
-                  color: Colors.white),
-              onPressed: () => context.safeBack(),
-            ),
-            flexibleSpace: FlexibleSpaceBar(
-              background: Container(
-                decoration: const BoxDecoration(
-                    gradient: AppColors.primaryGradient),
-                child: SafeArea(
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      return SingleChildScrollView(
-                        physics: const ClampingScrollPhysics(),
-                        child: ConstrainedBox(
-                          constraints: BoxConstraints(
-                              minHeight: constraints.maxHeight),
-                          child: Padding(
-                            padding: EdgeInsets.fromLTRB(R.p(context, 20),
-                                R.p(context, 44), R.p(context, 20),
-                                R.p(context, 12)),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisAlignment: MainAxisAlignment.end,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Text('Specialities',
-                                    style: AppTextStyles.onPrimaryH2),
-                                SizedBox(height: R.h(context, 4)),
-                                const Text('Browse doctors by medical specialty',
-                                    style: AppTextStyles.onPrimaryBody),
-                              ],
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ),
-            ),
+          const AppSliverHeader(
+            icon: Icons.category_rounded,
+            title: 'Specialities',
+            subtitle: 'Browse doctors by medical specialty',
+            gradient: AppColors.primaryGradient,
           ),
 
           // ── Search bar ────────────────────────────────────────
@@ -243,7 +219,18 @@ class _SpecialtyCard extends StatelessWidget {
                 color: item.bgColor,
                 shape: BoxShape.circle,
               ),
-              child: Icon(item.icon, color: item.color, size: R.w(context, 26)),
+              child: item.asset == null
+                  ? Icon(item.icon, color: item.color, size: R.w(context, 26))
+                  : Padding(
+                      padding: EdgeInsets.all(R.p(context, 11)),
+                      child: Image.asset(
+                        'assets/icons/specialities/${item.asset}.png',
+                        fit: BoxFit.contain,
+                        cacheWidth: 128,
+                        errorBuilder: (_, __, ___) => Icon(item.icon,
+                            color: item.color, size: R.w(context, 26)),
+                      ),
+                    ),
             ),
             SizedBox(height: R.h(context, 10)),
             Padding(
@@ -454,7 +441,9 @@ class _SpecialtyData {
   final IconData icon;
   final Color color;
   final Color bgColor;
+  final String? asset;
 
   const _SpecialtyData(
-      this.label, this.firestoreKey, this.icon, this.color, this.bgColor);
+      this.label, this.firestoreKey, this.icon, this.color, this.bgColor,
+      {this.asset});
 }

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_rating_bar/flutter_rating_bar.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:go_router/go_router.dart';
@@ -421,29 +420,6 @@ class _NutritionistCard extends StatelessWidget {
                             fontWeight: FontWeight.w600),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 6),
-                      // Star rating
-                      Row(
-                        children: [
-                          RatingBarIndicator(
-                            rating: nutritionist.rating,
-                            itemBuilder: (ctx, _) => const Icon(
-                              Icons.star_rounded,
-                              color: Color(0xFFF9A825),
-                            ),
-                            itemCount: 5,
-                            itemSize: 14,
-                            unratedColor:
-                                const Color(0xFFF9A825).withValues(alpha: 0.25),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            '${nutritionist.rating.toStringAsFixed(1)} (${nutritionist.reviewCount})',
-                            style: AppTextStyles.bodySmall.copyWith(
-                                color: context.appTextSecondary),
-                          ),
-                        ],
                       ),
                     ],
                   ),

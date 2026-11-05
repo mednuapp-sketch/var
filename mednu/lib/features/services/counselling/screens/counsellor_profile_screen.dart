@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_rating_bar/flutter_rating_bar.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_text_styles.dart';
@@ -129,21 +128,6 @@ class CounsellorProfileScreen extends StatelessWidget {
                                   textAlign: TextAlign.center,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis),
-                            const SizedBox(height: 10),
-                            Row(mainAxisSize: MainAxisSize.min, children: [
-                              RatingBarIndicator(
-                                rating: c.rating,
-                                itemBuilder: (ctx, _) => const Icon(Icons.star_rounded, color: Color(0xFFF9A825)),
-                                itemCount: 5,
-                                itemSize: 16,
-                                unratedColor: Colors.white30,
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                c.totalSessions > 0 ? '${c.rating.toStringAsFixed(1)} (${c.totalSessions} sessions)' : 'New',
-                                style: const TextStyle(fontFamily: 'Poppins', fontSize: 12, color: Colors.white70),
-                              ),
-                            ]),
                           ],
                         ),
                       ),

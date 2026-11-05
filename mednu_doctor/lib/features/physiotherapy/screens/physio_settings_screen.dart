@@ -26,7 +26,7 @@ class PhysioSettingsScreen extends StatefulWidget {
 class _PhysioSettingsScreenState extends State<PhysioSettingsScreen> {
   bool _notifyNewSessions = true;
   bool _notifySessionReminders = true;
-  bool _whatsappOptIn = false;
+  bool _whatsappOptIn = true;
   String _appVersion = '';
 
   // Biometric lock state — device-local, independent of the profile stream.
@@ -95,7 +95,7 @@ class _PhysioSettingsScreenState extends State<PhysioSettingsScreen> {
     if (uid == null) return;
     try {
       final doc = await FirebaseFirestore.instance.collection('physiotherapist_profiles').doc(uid).get();
-      if (mounted) setState(() => _whatsappOptIn = doc.data()?['whatsappOptIn'] == true);
+      if (mounted) setState(() => _whatsappOptIn = doc.data()?['whatsappOptIn'] != false);
     } catch (_) {}
   }
 

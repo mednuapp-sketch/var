@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../constants/app_colors.dart';
 import '../router/app_router.dart';
+import 'call_screen_tracker.dart';
 
 /// Global floating banner that surfaces a live/imminent consultation from
 /// anywhere in the app — quick-connect calls in progress, a patient waiting
@@ -79,6 +80,7 @@ class _ActiveSessionBridgeState extends ConsumerState<ActiveSessionBridge>
     // listen to the router directly instead, needed to hide the "Call in
     // progress" card while the doctor is already looking at that exact call.
     widget.router.routerDelegate.addListener(_onRouteChanged);
+    CallScreenTracker.open.addListener(_onRouteChanged);
   }
 
   void _onRouteChanged() {
@@ -88,9 +90,12 @@ class _ActiveSessionBridgeState extends ConsumerState<ActiveSessionBridge>
   // True on every call-related screen — the bridge exists to get the doctor
   // BACK to a call, so it must never sit over the call itself.
   bool get _onVideoCallScreen {
+    if (CallScreenTracker.isOnCallScreen) return true;
     final loc = widget.router.routerDelegate.currentConfiguration.uri.toString();
     return loc.startsWith(AppRoutes.videoCall) ||
-        loc.startsWith(AppRoutes.outgoingCall);
+        loc.startsWith(AppRoutes.outgoingCall) ||
+        loc.startsWith(AppRoutes.providerVideoCall) ||
+        loc.startsWith(AppRoutes.providerOutgoingCall);
   }
 
   void _onAuthChanged(User? user) {
@@ -206,6 +211,7 @@ class _ActiveSessionBridgeState extends ConsumerState<ActiveSessionBridge>
   @override
   void dispose() {
     widget.router.routerDelegate.removeListener(_onRouteChanged);
+    CallScreenTracker.open.removeListener(_onRouteChanged);
     _authSub?.cancel();
     _liveSub?.cancel();
     _apptSub?.cancel();

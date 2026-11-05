@@ -28,7 +28,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
 
   String  _selectedGender    = 'Male';
   bool    _isLoading         = false;
-  bool    _whatsappOptIn     = false;
+  bool    _whatsappOptIn     = true;
   File?   _profileImage;
   double  _uploadProgress    = 0;
 

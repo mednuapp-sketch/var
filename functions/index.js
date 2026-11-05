@@ -1629,12 +1629,12 @@ exports.onServiceRequestStatusChange = onDocumentUpdated(
       // keys reuse the `nurse` copy verbatim so real bookings get
       // tailored notification text instead of the generic fallback.
       care_assistant: {
-        accepted:    ["Nurse Booking Accepted", "Your nurse request has been accepted.", "caregiver_accepted"],
-        assigned:    ["Nurse Assigned", "A nurse has been assigned to you.", "caregiver_assigned"],
-        in_progress: ["Nurse Service Started", "Your nurse has arrived and the service has started.", "caregiver_started"],
-        completed:   ["Nurse Service Completed", "Your nurse service has been completed.", "caregiver_completed"],
-        rejected:    ["Nurse Booking Rejected", "Your nurse booking could not be accepted.", "caregiver_rejected"],
-        cancelled:   ["Nurse Booking Cancelled", "Your nurse booking has been cancelled.", "caregiver_cancelled"],
+        accepted:    ["Care Assistant Accepted", "Your care assistant has accepted your request.", "caregiver_accepted"],
+        assigned:    ["Care Assistant Assigned", "A care assistant has been assigned to you.", "caregiver_assigned"],
+        in_progress: ["Care Assistance Started", "Your care assistant has started the job.", "caregiver_started"],
+        completed:   ["Care Assistance Completed", "Your care assistant job has been completed.", "caregiver_completed"],
+        rejected:    ["Care Request Declined", "Your care assistant request could not be accepted.", "caregiver_rejected"],
+        cancelled:   ["Care Assistant Booking Cancelled", "Your care assistant booking has been cancelled.", "caregiver_cancelled"],
       },
       caregivers: {
         accepted:    ["Nurse Booking Accepted", "Your nurse request has been accepted.", "caregiver_accepted"],
@@ -2964,6 +2964,10 @@ async function _sendProviderNotification(db, messaging, providerId, opts) {
 // providers and this must not slow down the write that triggered it.
 async function _broadcastNewJobToActiveProviders(db, messaging, {
   profileCollection, title, body, type, serviceType, bookingId, extraData = {},
+  // Optional per-profile predicate (receives the profile doc snapshot) for
+  // verticals that share one profile collection between distinct roles, e.g.
+  // Nurse vs Care Assistant in `caregiver_profiles`.
+  profileFilter = null, excludeIds = [],
 }) {
   let snap;
   try {
@@ -2973,7 +2977,9 @@ async function _broadcastNewJobToActiveProviders(db, messaging, {
     return;
   }
 
-  const providerIds = snap.docs.map((d) => d.id);
+  const providerIds = snap.docs
+    .filter((d) => !excludeIds.includes(d.id) && (!profileFilter || profileFilter(d)))
+    .map((d) => d.id);
   const CONCURRENCY = 20;
   for (let i = 0; i < providerIds.length; i += CONCURRENCY) {
     const chunk = providerIds.slice(i, i + CONCURRENCY);
@@ -6963,7 +6969,8 @@ exports.onAmbulanceRequestStatusChange = onDocumentUpdated(
         const currentData = current.exists ? current.data() : null;
         const alreadyApplied = !!currentData &&
           (!update.status || currentData.status === update.status) &&
-          (!update.assignedTo || currentData.assignedTo === update.assignedTo);
+          (!update.assignedTo || currentData.assignedTo === update.assignedTo) &&
+          (!update.assignedToName || currentData.assignedToName === update.assignedToName);
 
         if (!currentData) {
           _logAmbulance("WARNING", "mirror_target_missing", { requestId });
@@ -7120,6 +7127,15 @@ const _CAREGIVER_DEFAULT_TASKS = [
   { title: "Update care log",        subtitle: "Record observations for the family" },
 ];
 
+// Care Assistant jobs are escort/errand work, not clinical care, so they get
+// their own starter checklist.
+const _CARE_ASSISTANT_DEFAULT_TASKS = [
+  { title: "Meet the patient",           subtitle: "Confirm identity and the plan for the day" },
+  { title: "Accompany / run the errand", subtitle: "Hospital escort, report collection or medicine pickup" },
+  { title: "Keep the family updated",    subtitle: "Share progress with the patient's family" },
+  { title: "Hand over safely",           subtitle: "Make sure the patient is home or settled" },
+];
+
 // Free-text specialty/shift text from the patient app's serviceDetails ->
 // the exact CareType enum vocabulary the partner app's Dart model parses.
 function _caregiverCareType(raw) {
@@ -7175,10 +7191,13 @@ exports.onCaregiverServiceRequestCreated = onDocumentCreated(
       return;
     }
 
+    const isCareAssistant = data.type === "care_assistant";
+    // care_assistant_screen.dart books one of 4 duration tiers (no shiftHours).
+    const careDurationMinutes = { hourly: 60, halfDay: 240, fullDay: 480, multiDay: 480 };
     const shiftHours = Number(details.shiftHours);
-    const durationMinutes = Number.isFinite(shiftHours) && shiftHours > 0
-      ? Math.round(shiftHours * 60)
-      : 60;
+    const durationMinutes = isCareAssistant
+      ? (careDurationMinutes[details.duration] || 60)
+      : (Number.isFinite(shiftHours) && shiftHours > 0 ? Math.round(shiftHours * 60) : 60);
 
     // A visit booked from a specific caregiver's own profile card (see
     // caregivers_screen.dart's `sourceCaregiverId`, or care_assistant_screen.dart's
@@ -7190,7 +7209,10 @@ exports.onCaregiverServiceRequestCreated = onDocumentCreated(
     let pinnedCaregiverId = null;
     if (sourcePartnerId) {
       const caregiverSnap = await db.collection("caregiver_profiles").doc(sourcePartnerId).get();
-      if (caregiverSnap.exists && caregiverSnap.data().status === "active") {
+      if (caregiverSnap.exists && caregiverSnap.data().status === "active" &&
+          // A care-assistant booking may only pin to a care assistant, and a
+          // nurse booking only to a nurse.
+          (_caregiverServiceType(caregiverSnap.data()) === "care_assistant") === isCareAssistant) {
         pinnedCaregiverId = sourcePartnerId;
       } else {
         _logCaregiver("WARNING", "source_caregiver_inactive_falling_back_to_pool", {
@@ -7203,7 +7225,8 @@ exports.onCaregiverServiceRequestCreated = onDocumentCreated(
     _batchSetPoolJob(batch, db, visitRef, "caregiver_visits", {
       sourceRequestId: requestId,
       sourceType: data.type,
-      type: _caregiverCareType(details.specialty || details.shiftType || data.serviceName),
+      type: isCareAssistant ? "assistance" : _caregiverCareType(details.specialty || details.shiftType || data.serviceName),
+      serviceDetails: details,
       status: "scheduled",
       patientId: data.patientId,
       patientName: data.patientName || "Patient",
@@ -7221,7 +7244,7 @@ exports.onCaregiverServiceRequestCreated = onDocumentCreated(
 
     // Seeded in the same batch as the visit itself, so a visit never exists
     // with a half-written checklist.
-    _CAREGIVER_DEFAULT_TASKS.forEach((task, i) => {
+    (isCareAssistant ? _CARE_ASSISTANT_DEFAULT_TASKS : _CAREGIVER_DEFAULT_TASKS).forEach((task, i) => {
       batch.set(visitRef.collection("tasks").doc(`t${i + 1}`), {
         title: task.title,
         subtitle: task.subtitle,
@@ -7238,8 +7261,10 @@ exports.onCaregiverServiceRequestCreated = onDocumentCreated(
     // would never show up as `assignedTo` on the patient's own
     // `service_requests` doc without this direct write.
     if (pinnedCaregiverId) {
+      const pinnedName = await _providerDisplayName(db, "caregiver_profiles", pinnedCaregiverId);
       await db.collection("service_requests").doc(requestId).update({
         assignedTo: pinnedCaregiverId,
+        ...(pinnedName ? { assignedToName: pinnedName } : {}),
       }).catch((err) => {
         _logCaregiver("WARNING", "initial_assignedTo_mirror_failed", { requestId, error: err.message });
       });
@@ -7249,16 +7274,22 @@ exports.onCaregiverServiceRequestCreated = onDocumentCreated(
 
     if (pinnedCaregiverId) {
       await _sendProviderNotification(db, getMessaging(), pinnedCaregiverId, {
-        title: "New Visit Assigned",
-        body: `A new ${data.serviceName || "nurse"} visit has been assigned to you.`,
+        title: isCareAssistant ? "New Care Request" : "New Visit Assigned",
+        body: isCareAssistant
+          ? `${(data.patientName || "A patient").split(" ")[0]} requested you. Open the app to accept.`
+          : `A new ${data.serviceName || "nurse"} visit has been assigned to you.`,
         type: "new_caregiver_visit", serviceType: "caregiver", bookingId: requestId,
       });
     } else {
       await _broadcastNewJobToActiveProviders(db, getMessaging(), {
         profileCollection: "caregiver_profiles",
-        title: "New Visit Request Available",
-        body: `A new ${data.serviceName || "nurse"} visit request is available to claim.`,
+        title: isCareAssistant ? "New Care Assistant Request" : "New Visit Request Available",
+        body: isCareAssistant
+          ? "A patient needs a care assistant. Open the app to accept."
+          : `A new ${data.serviceName || "nurse"} visit request is available to claim.`,
         type: "new_caregiver_visit", serviceType: "caregiver", bookingId: requestId,
+        // Only the matching role hears about it.
+        profileFilter: (d) => (_caregiverServiceType(d.data()) === "care_assistant") === isCareAssistant,
       });
     }
   }
@@ -7308,20 +7339,65 @@ exports.onCaregiverVisitStatusChange = onDocumentUpdated(
     await _releasePoolJobContact(db, "caregiver_visits", visitId, before, after);
 
     const statusChanged = before.status !== after.status;
+    const isCareAssistant = after.sourceType === "care_assistant";
     await _autoRefundOnProviderFailure(db, before, after, ["cancelled", "missed"], "service_requests",
-      after.sourceRequestId || visitId, "The nurse cancelled or missed this visit");
+      after.sourceRequestId || visitId,
+      isCareAssistant ? "The care assistant cancelled or missed this job" : "The nurse cancelled or missed this visit");
     const claimChanged = before.caregiverId !== after.caregiverId;
+    // A care assistant explicitly accepting (acceptedAt stamped) is what moves
+    // the patient's booking pending -> accepted.
+    const acceptedNow = !before.acceptedAt && !!after.acceptedAt;
+
+    // A pinned assistant declined: the job went back to the open pool, so the
+    // patient's booking is unassigned again and the other assistants hear
+    // about it (excluding everyone who already declined).
+    if (claimChanged && before.caregiverId && !after.caregiverId && after.status === "scheduled") {
+      // The job was born pinned, so it carries the patient's full phone and
+      // address. Back in the open pool it must be withheld again like any
+      // other unclaimed job (the details return to it when someone accepts).
+      if (!after.contactWithheld) {
+        const { doc, contact } = _splitPoolJob("caregiver_visits", visitId, { ...after, caregiverId: null });
+        if (contact) {
+          await db.collection("job_contacts").doc(`caregiver_visits__${visitId}`).set(contact);
+          await db.collection("caregiver_visits").doc(visitId).update({
+            contactWithheld: true,
+            patientPhone: doc.patientPhone,
+            address: doc.address,
+            patientName: doc.patientName,
+          });
+        }
+      }
+      const requestRef = db.collection("service_requests").doc(after.sourceRequestId || visitId);
+      await requestRef.update({
+        assignedTo: FieldValue.delete(),
+        assignedToName: FieldValue.delete(),
+        updatedAt: FieldValue.serverTimestamp(),
+      }).catch((err) => _logCaregiver("WARNING", "unassign_mirror_failed", { visitId, error: err.message }));
+      await _broadcastNewJobToActiveProviders(db, getMessaging(), {
+        profileCollection: "caregiver_profiles",
+        title: "New Care Assistant Request",
+        body: "A patient needs a care assistant. Open the app to accept.",
+        type: "new_caregiver_visit", serviceType: "caregiver", bookingId: visitId,
+        profileFilter: (d) => _caregiverServiceType(d.data()) === "care_assistant",
+        excludeIds: after.declinedBy || [],
+      });
+    }
 
     // Remembered and rethrown at the end (see the Lab mirror) so a mirror
     // failure never skips the ledger credit below.
     let mirrorError = null;
 
-    if (statusChanged || claimChanged) {
+    if (statusChanged || claimChanged || acceptedNow) {
       const update = { updatedAt: FieldValue.serverTimestamp() };
 
       const mappedStatus = _CAREGIVER_TO_SERVICE_REQUEST_STATUS[after.status];
       if (statusChanged && mappedStatus) update.status = mappedStatus;
-      if (claimChanged && after.caregiverId) update.assignedTo = after.caregiverId;
+      if ((claimChanged || acceptedNow) && after.caregiverId) {
+        update.assignedTo = after.caregiverId;
+        // Human-readable name so the patient app can show who accepted.
+        const providerName = await _providerDisplayName(db, "caregiver_profiles", after.caregiverId);
+        if (providerName) update.assignedToName = providerName;
+      }
 
       if (Object.keys(update).length > 1) {
         const serviceRequestRef = db.collection("service_requests").doc(after.sourceRequestId || visitId);
@@ -7333,7 +7409,9 @@ exports.onCaregiverVisitStatusChange = onDocumentUpdated(
         // it move from 'pending' to 'accepted' with a caregiver attached.
         // Gated on the *current* patient-side status: a re-assignment after
         // check-in must never drag 'in_progress' backwards to 'accepted'.
-        if (update.assignedTo && !update.status && currentData?.status === "pending") {
+        if (update.assignedTo && !update.status && currentData?.status === "pending" &&
+            // A pinned care-assistant job must wait for their explicit Accept.
+            (!isCareAssistant || after.acceptedAt)) {
           update.status = "accepted";
         }
 
@@ -7465,11 +7543,13 @@ function _caregiverListingDoc(profile, existingCreatedAt) {
     return {
       ...shared,
       specialty: specialties.length > 0 ? specialties.join(", ") : "Home & Hospital Assistance",
-      bio: "",
+      bio: profile.bio || "",
+      languages: Array.isArray(profile.languages) ? profile.languages : [],
       rateHourly: hourlyRate,
-      rateHalfDay: Math.round(hourlyRate * 4),
-      rateFullDay: Math.round(hourlyRate * 8),
-      rateMultiDay: Math.round(hourlyRate * 8),
+      // Dedicated tiers when the assistant set them, else derived from hourly.
+      rateHalfDay: profile.rateHalfDay ?? Math.round(hourlyRate * 4),
+      rateFullDay: profile.rateFullDay ?? Math.round(hourlyRate * 8),
+      rateMultiDay: profile.rateMultiDay ?? Math.round(hourlyRate * 8),
     };
   }
 
@@ -8858,9 +8938,43 @@ exports.onDoctorProfileApproved = onDocumentUpdated("doctors/{uid}", async (even
 // is the guest has no account) — same crypto.createHmac pattern already used
 // for Razorpay webhook verification elsewhere in this file.
 
+// Sends the freshly generated join link straight to the guest's WhatsApp
+// (the number the account holder entered when booking for them). Best-effort:
+// returns false instead of throwing, so a WhatsApp problem (template not yet
+// approved, bad number, network) never stops the share-sheet link from being
+// returned. notifyOnce is send-once-per-key, so a previous *failed* attempt is
+// cleared first, otherwise it could never be retried once templates exist.
+const waConfig = require("./whatsapp/config");
+async function _sendGuestLinkOnWhatsApp({ appointmentId, exp, appt, guestPhone, deepLink }) {
+  try {
+    const { notifyOnce, guestRecipient, formatWhen, parseApptDateTime, cleanName } = require("./whatsapp/notify");
+    const recipient = guestRecipient(guestPhone, appt.patientName);
+    if (!recipient) return false;
+
+    const dedupeKey = `guest_link:${appointmentId}:${exp}`;
+    const logRef = getFirestore().collection("whatsapp_logs").doc(dedupeKey);
+    const prev = await logRef.get();
+    if (prev.exists && prev.data().status === "failed") await logRef.delete();
+
+    const when = formatWhen(parseApptDateTime(appt.date, appt.time)) ||
+      `${appt.date || ""} ${appt.time || ""}`.trim();
+    const result = await notifyOnce(
+      dedupeKey,
+      recipient,
+      "mednu_guest_join_link",
+      [recipient.firstName, cleanName(appt.doctorName) || "your doctor", when, deepLink],
+      appointmentId,
+    );
+    return !!result?.ok;
+  } catch (e) {
+    console.warn(`[createGuestJoinLink] WhatsApp send failed for ${appointmentId}: ${e?.message || e}`);
+    return false;
+  }
+}
+
 // Request data: { appointmentId: string }
-// Response:     { deepLink: string }
-exports.createGuestJoinLink = onCall({ secrets: ["GUEST_LINK_SECRET"] }, async (request) => {
+// Response:     { deepLink: string, whatsappSent: boolean }
+exports.createGuestJoinLink = onCall({ secrets: ["GUEST_LINK_SECRET", waConfig.WHATSAPP_TOKEN] }, async (request) => {
   const uid = request.auth?.uid;
   if (!uid) throw new HttpsError("unauthenticated", "Sign in to continue.");
 
@@ -8915,9 +9029,9 @@ exports.createGuestJoinLink = onCall({ secrets: ["GUEST_LINK_SECRET"] }, async (
   // (WhatsApp, SMS, iMessage) only auto-linkify http(s) URLs, so a raw custom
   // scheme often isn't even tappable. The landing page redirects into this
   // same mednu://join deep link once opened in a real browser.
-  return {
-    deepLink: `https://mednu-web.web.app/join.html?a=${appointmentId}&t=${token}&exp=${exp}`,
-  };
+  const deepLink = `https://mednu-web.web.app/join.html?a=${appointmentId}&t=${token}&exp=${exp}`;
+  const whatsappSent = await _sendGuestLinkOnWhatsApp({ appointmentId, exp, appt, guestPhone, deepLink });
+  return { deepLink, whatsappSent };
 });
 
 // Request data: { appointmentId: string, token: string, exp: number }
@@ -9160,6 +9274,7 @@ const waReminders = require("./whatsapp/reminders");
 const waWebhookModule = require("./whatsapp/webhook");
 
 exports.onAppointmentWritten = waTriggers.onAppointmentWritten;
+exports.onPrescriptionCreated = waTriggers.onPrescriptionCreated;
 exports.onOrderWritten = waTriggers.onOrderWritten;
 exports.onLabServiceRequestWritten = waTriggers.onLabServiceRequestWritten;
 exports.onPaymentWritten = waTriggers.onPaymentWritten;

@@ -51,7 +51,14 @@ final caregiverVisitsProvider = Provider.autoDispose<List<Visit>>((ref) {
     byId[v.id] = v;
   }
 
-  final all = byId.values.toList()..sort((a, b) => a.scheduledAt.compareTo(b.scheduledAt));
+  // Care-assistant jobs live in their own role's module (see
+  // `careAssistantVisitsProvider`); the Nurse module never shows them.
+  // Accounts registered before the dedicated role existed (serviceType
+  // 'care_assistant' under the Nurse role) keep seeing everything.
+  final legacyCareAssistant =
+      ref.watch(caregiverProfileProvider).serviceType == 'care_assistant';
+  final all = byId.values.where((v) => legacyCareAssistant || !v.isCareAssistantJob).toList()
+    ..sort((a, b) => a.scheduledAt.compareTo(b.scheduledAt));
   return all;
 });
 

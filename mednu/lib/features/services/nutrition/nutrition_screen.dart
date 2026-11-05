@@ -104,86 +104,12 @@ class _NutritionSliverAppBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SliverAppBar(
-      pinned: true,
-      expandedHeight: R.h(context, 190),
-      backgroundColor: AppColors.primary,
-      leading: IconButton(
-        icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
-        onPressed: () => context.safeBack(),
-      ),
-      flexibleSpace: FlexibleSpaceBar(
-        collapseMode: CollapseMode.parallax,
-        background: Container(
-          decoration: const BoxDecoration(gradient: AppColors.nutritionGrad),
-          child: Stack(
-            children: [
-              Positioned(
-                top: -20,
-                right: -20,
-                child: Container(
-                  width: R.w(context, 140),
-                  height: R.w(context, 140),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white.withValues(alpha: 0.06),
-                  ),
-                ),
-              ),
-              Positioned(
-                bottom: 10,
-                right: 60,
-                child: Container(
-                  width: R.w(context, 70),
-                  height: R.w(context, 70),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white.withValues(alpha: 0.06),
-                  ),
-                ),
-              ),
-              SafeArea(
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    return SingleChildScrollView(
-                      physics: const ClampingScrollPhysics(),
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                        child: Padding(
-                          padding: EdgeInsets.fromLTRB(
-                              R.p(context, 20), R.p(context, 52), R.p(context, 20), R.p(context, 20)),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                padding: EdgeInsets.all(R.p(context, 10)),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.18),
-                                  borderRadius: BorderRadius.circular(R.r(context, 14)),
-                                ),
-                                child: Icon(Icons.restaurant_rounded, color: Colors.white, size: R.w(context, 26)),
-                              ),
-                              SizedBox(height: R.h(context, 10)),
-                              const Text('Diet & Dietician', style: AppTextStyles.onPrimaryH2),
-                              SizedBox(height: R.h(context, 2)),
-                              const Text(
-                                'Expert dietitian consultations & plans',
-                                style: AppTextStyles.onPrimaryBody,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+    return const AppSliverHeader(
+      icon: Icons.restaurant_rounded,
+      title: 'Diet & Dietician',
+      subtitle: 'Expert dietitian consultations & plans',
+      color: AppColors.primary,
+      gradient: AppColors.nutritionGrad,
     );
   }
 }

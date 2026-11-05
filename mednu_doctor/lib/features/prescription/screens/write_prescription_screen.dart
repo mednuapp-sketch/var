@@ -10,6 +10,7 @@ import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/services/feedback_service.dart';
 import '../../../core/services/operation_logger.dart';
+import '../../../core/widgets/pre_consultation_summary_card.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../../../shared_core/providers/role_providers.dart';
 import '../../auth/services/doctor_auth_service.dart';
@@ -150,7 +151,11 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
   String? _patientAge;
   String? _patientGender;
 
-  // â”€â”€ Auto-save â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Id of patient_intake_forms/{id}: the appointment id for scheduled visits,
+  // the consultation id for Quick Connect (see DoctorBookingFlow.submitIntake).
+  String _intakeId = '';
+
+  //â”€â”€ Auto-save â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   Timer? _autoSaveTimer;
   bool   _hasDraftChanges = false;
 
@@ -163,7 +168,11 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
   void initState() {
     super.initState();
     _loadDoctorInfo();
-    _loadPatientInfo();
+    _intakeId = (widget.appointmentId?.isNotEmpty == true
+            ? widget.appointmentId
+            : widget.consultationId) ??
+        '';
+    _loadPatientInfo().then((_) => _loadIntake());
     _startAutoSave();
     for (final c in [
       _chiefComplaintsCtrl, _historyCtrl, _allergiesCtrl, _examinationCtrl,
@@ -241,6 +250,65 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
         _patientGender = d['gender'] as String?;
       });
     } catch (_) {}
+  }
+
+  /// Pulls the patient's pre-consultation form so the doctor sees it here and
+  /// the empty fields start pre-filled (age/gender fall back to what the
+  /// patient entered when their profile has no DOB). Never overwrites text the
+  /// doctor already typed.
+  Future<void> _loadIntake() async {
+    final ids = <String>{
+      if (widget.appointmentId?.isNotEmpty == true) widget.appointmentId!,
+      if (widget.consultationId?.isNotEmpty == true) widget.consultationId!,
+    };
+    for (final id in ids) {
+      try {
+        final snap = await FirebaseFirestore.instance
+            .collection('patient_intake_forms')
+            .doc(id)
+            .get();
+        final d = snap.data();
+        if (!mounted || d == null) continue;
+
+        String text(String k) => (d[k] as String? ?? '').trim();
+        List<String> labels(String k) => ((d[k] as List?) ?? const [])
+            .map((e) => e is Map ? (e['label'] ?? '').toString() : e.toString())
+            .where((s) => s.trim().isNotEmpty)
+            .toList();
+
+        final complaint = [
+          text('reasonForVisit'),
+          if (labels('symptoms').isNotEmpty) labels('symptoms').join(', '),
+          text('otherSymptoms'),
+        ].where((s) => s.isNotEmpty).join(' — ');
+        final history = [
+          ...labels('comorbidities'),
+          ...labels('treatments'),
+        ].join(', ');
+        final allergies = labels('allergies').join(', ');
+        final age = text('age');
+        final gender = text('gender');
+
+        setState(() {
+          _intakeId = id;
+          if (_chiefComplaintsCtrl.text.isEmpty) {
+            _chiefComplaintsCtrl.text = complaint;
+          }
+          if (_historyCtrl.text.isEmpty) _historyCtrl.text = history;
+          if (allergies.isNotEmpty && _allergiesCtrl.text.isEmpty) {
+            _allergiesCtrl.text = allergies;
+            _showAllergies = true;
+          }
+          if ((_patientAge == null || _patientAge == '--') && age.isNotEmpty) {
+            _patientAge = '$age yrs';
+          }
+          if ((_patientGender ?? '').isEmpty && gender.isNotEmpty) {
+            _patientGender = gender;
+          }
+        });
+        return;
+      } catch (_) {}
+    }
   }
 
   // â”€â”€ Auto-save â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -819,7 +887,14 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
             doctorRegNo:     _doctorRegNo,
             doctorHospital:  _doctorHospital,
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 14),
+
+          // Patient's pre-consultation form (age, gender, symptoms, allergies…)
+          PreConsultationSummaryCard(
+            appointmentId: _intakeId,
+            patientName: widget.patientName,
+          ),
+          const SizedBox(height: 6),
 
           // â”€â”€ Section 1: Chief Complaints â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
           const _SectionHeader(
@@ -924,15 +999,17 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
           // â”€â”€ Section 6: Rx (Medicines) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
           Row(
             children: [
-              const _SectionHeader(
-                sectionNumber: '06',
-                icon: Icons.medication_rounded,
-                title: 'Rx â€” Medicines',
-                subtitle: 'Prescribed medications',
-                required: true,
-                color: AppColors.primary,
+              const Expanded(
+                child: _SectionHeader(
+                  sectionNumber: '06',
+                  icon: Icons.medication_rounded,
+                  title: 'Rx â€” Medicines',
+                  subtitle: 'Prescribed medications',
+                  required: true,
+                  color: AppColors.primary,
+                ),
               ),
-              const Spacer(),
+              const SizedBox(width: 12),
               TapScale(
                 onTap: _addMedicine,
                 child: Container(

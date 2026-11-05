@@ -1090,10 +1090,11 @@ class _DoctorImage extends StatelessWidget {
             ),
           ),
 
-          // Verified badge — right side, below the "Next Appointment" card
+          // Verified badge — top-right corner, above the doctor's head so it
+          // doesn't cover her hair, face or shoulder.
           Positioned(
-            right: 4,
-            top: totalH * 0.34,
+            right: 0,
+            top: 0,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
               decoration: BoxDecoration(

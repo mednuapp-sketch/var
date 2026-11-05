@@ -25,7 +25,7 @@ class NutritionSettingsScreen extends StatefulWidget {
 class _NutritionSettingsScreenState extends State<NutritionSettingsScreen> {
   bool _notifyNewAppointments = true;
   bool _notifyAppointmentReminders = true;
-  bool _whatsappOptIn = false;
+  bool _whatsappOptIn = true;
   bool _biometricEnabled = false;
   bool _biometricSupported = false;
   String _appVersion = '';
@@ -92,7 +92,7 @@ class _NutritionSettingsScreenState extends State<NutritionSettingsScreen> {
     if (uid == null) return;
     try {
       final doc = await FirebaseFirestore.instance.collection('nutritionist_profiles').doc(uid).get();
-      if (mounted) setState(() => _whatsappOptIn = doc.data()?['whatsappOptIn'] == true);
+      if (mounted) setState(() => _whatsappOptIn = doc.data()?['whatsappOptIn'] != false);
     } catch (_) {}
   }
 

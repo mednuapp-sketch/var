@@ -1,3 +1,4 @@
+import '../../../core/widgets/call_screen_tracker.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -43,6 +44,8 @@ class _DoctorVideoCallScreenState extends State<DoctorVideoCallScreen>
   Set<int> _remoteUids = {};
   bool get _remoteJoined => _remoteUids.isNotEmpty;
   String? _bookedByName;
+  String? _guestDisplayName;
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _apptLabelSub;
   bool _engineReady = false;
   bool _isReconnecting = false;
   int _networkQualityIndex = 0;
@@ -83,6 +86,7 @@ class _DoctorVideoCallScreenState extends State<DoctorVideoCallScreen>
   @override
   void initState() {
     super.initState();
+    CallScreenTracker.enter();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     // Owns criticalOperationInProgressProvider for the full duration of the
     // call — covers both video and audio-only (the latter is a
@@ -299,17 +303,28 @@ class _DoctorVideoCallScreenState extends State<DoctorVideoCallScreen>
   // `_consultPatientName` (whoever the appointment is actually FOR, which
   // may be a family member) — used to label their video tile when both
   // they and a guest family member are on this call at once.
-  Future<void> _loadBookedByName(String appointmentId) async {
-    try {
-      final snap = await FirebaseFirestore.instance
-          .collection('appointments')
-          .doc(appointmentId)
-          .get();
-      final name = (snap.data()?['bookedByName'] as String?)?.trim();
-      if (mounted && name != null && name.isNotEmpty) {
-        setState(() => _bookedByName = name);
+  //
+  // Also tracks `guestDisplayName` live: the guest types (or confirms) their
+  // own name when they join — possibly well after this screen opened — and
+  // it takes priority over the booking's patient name on their tile.
+  void _loadBookedByName(String appointmentId) {
+    _apptLabelSub?.cancel();
+    _apptLabelSub = FirebaseFirestore.instance
+        .collection('appointments')
+        .doc(appointmentId)
+        .snapshots()
+        .listen((snap) {
+      final data = snap.data();
+      final booked = (data?['bookedByName'] as String?)?.trim() ?? '';
+      final guest = (data?['guestDisplayName'] as String?)?.trim() ?? '';
+      if (!mounted) return;
+      if (booked != (_bookedByName ?? '') || guest != (_guestDisplayName ?? '')) {
+        setState(() {
+          if (booked.isNotEmpty) _bookedByName = booked;
+          _guestDisplayName = guest.isNotEmpty ? guest : null;
+        });
       }
-    } catch (_) {}
+    }, onError: (_) {});
   }
 
   void _startTimer() {
@@ -329,6 +344,7 @@ class _DoctorVideoCallScreenState extends State<DoctorVideoCallScreen>
 
   @override
   void dispose() {
+    CallScreenTracker.leave();
     // Detach the notification handler — widget is gone.
     // Do NOT stop the foreground service here: dispose() is also called when
     // the Activity is destroyed by swipe-from-recents. The cached engine +
@@ -340,6 +356,7 @@ class _DoctorVideoCallScreenState extends State<DoctorVideoCallScreen>
         .read(criticalOperationInProgressProvider.notifier)
         .state = false;
     _consultSub?.cancel();
+    _apptLabelSub?.cancel();
     _notesCtrl.dispose();
     // Only dispose Agora if _doEndCall hasn't already done it
     if (!_endCallLock) _agora.dispose();
@@ -705,7 +722,8 @@ class _DoctorVideoCallScreenState extends State<DoctorVideoCallScreen>
         ),
         Container(height: 2, color: Colors.black),
         Expanded(
-          child: _buildLabeledRemoteTile(uid: 3, label: _consultPatientName),
+          child: _buildLabeledRemoteTile(
+              uid: 3, label: _guestDisplayName ?? _consultPatientName),
         ),
       ],
     );
@@ -1047,6 +1065,19 @@ class _DoctorVideoCallScreenState extends State<DoctorVideoCallScreen>
           _TopBtn(Icons.note_alt_rounded,
               () => setState(() => _showNotes = !_showNotes),
               tooltip: 'Consultation notes'),
+          const SizedBox(width: 8),
+          // Patient's pre-consultation form (age, symptoms, allergies…).
+          // Doctor-only: this screen lives in the doctor app and the form is
+          // never sent over the video channel. Form doc id is the appointment
+          // id for scheduled visits, the consultation id for Quick Connect.
+          _TopBtn(Icons.assignment_rounded, () {
+            context.push(AppRoutes.preConsultationSummary, extra: {
+              'appointmentId': (_appointmentId?.isNotEmpty == true)
+                  ? _appointmentId!
+                  : widget.consultationId,
+              'patientName': _consultPatientName,
+            });
+          }, tooltip: 'Pre-consultation form'),
           const SizedBox(width: 8),
           _TopBtn(Icons.medical_information_rounded, () {
             if (_patientId != null && _patientId!.isNotEmpty) {

@@ -1,14 +1,15 @@
+import '../../../../core/widgets/call_screen_tracker.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:screen_protector/screen_protector.dart';
 import 'agora_call_service.dart';
 import 'call_ui_widgets.dart';
+import 'guest_firebase.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/router/app_router.dart';
 
@@ -73,6 +74,7 @@ class _GuestVideoCallScreenState extends State<GuestVideoCallScreen>
   @override
   void initState() {
     super.initState();
+    CallScreenTracker.enter();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     _enableScreenProtection();
     _pulseController = AnimationController(
@@ -83,6 +85,7 @@ class _GuestVideoCallScreenState extends State<GuestVideoCallScreen>
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
     _agora = AgoraCallService(
+      functions: GuestFirebase.functions,
       onRemoteJoined: (uid) {
         if (!mounted) return;
         final isFirst = _remoteUids.isEmpty;
@@ -121,7 +124,7 @@ class _GuestVideoCallScreenState extends State<GuestVideoCallScreen>
   // video tile if they're also on this call (see `_buildRemoteView`).
   Future<void> _loadBookerLabel() async {
     try {
-      final snap = await FirebaseFirestore.instance
+      final snap = await GuestFirebase.firestore
           .collection('appointments')
           .doc(widget.appointmentId)
           .get();
@@ -191,7 +194,7 @@ class _GuestVideoCallScreenState extends State<GuestVideoCallScreen>
   }
 
   void _watchConsultation() {
-    _consultSub = FirebaseFirestore.instance
+    _consultSub = GuestFirebase.firestore
         .collection('consultations')
         .doc(widget.consultationId)
         .snapshots()
@@ -261,6 +264,7 @@ class _GuestVideoCallScreenState extends State<GuestVideoCallScreen>
 
   @override
   void dispose() {
+    CallScreenTracker.leave();
     _consultSub?.cancel();
     _pulseController.dispose();
     _agora.dispose();
@@ -918,7 +922,7 @@ class _GuestVideoCallScreenState extends State<GuestVideoCallScreen>
     final isLastToLeave = _agora.remoteUids.isEmpty;
     if (!fromRemote && isLastToLeave && widget.consultationId.isNotEmpty) {
       try {
-        await FirebaseFirestore.instance
+        await GuestFirebase.firestore
             .collection('consultations')
             .doc(widget.consultationId)
             .update({'status': 'ended', 'endedAt': FieldValue.serverTimestamp()});
@@ -932,7 +936,7 @@ class _GuestVideoCallScreenState extends State<GuestVideoCallScreen>
     // fields on the one appointment their join link is scoped to.
     if ((fromRemote || isLastToLeave) && widget.appointmentId.isNotEmpty) {
       try {
-        await FirebaseFirestore.instance
+        await GuestFirebase.firestore
             .collection('appointments')
             .doc(widget.appointmentId)
             .update({'status': 'completed', 'completedAt': FieldValue.serverTimestamp()});
@@ -944,9 +948,9 @@ class _GuestVideoCallScreenState extends State<GuestVideoCallScreen>
     await _agora.dispose();
     // The guest's Firebase Auth session is scoped to exactly this
     // appointment and has no meaning anywhere else in the app — drop it so
-    // splash/router logic doesn't mistake it for a real logged-in account.
+    // it never lingers on this device after the call (it is a separate Firebase app, so the user's own login is untouched).
     try {
-      await FirebaseAuth.instance.signOut();
+      await GuestFirebase.auth.signOut();
     } catch (_) {}
     if (!mounted) return;
     _showEndedSheet(context);
@@ -1033,7 +1037,7 @@ class _GuestConsultationChatState extends State<_GuestConsultationChat> {
   final _scroll = ScrollController();
   bool _sending = false;
 
-  String get _uid => FirebaseAuth.instance.currentUser?.uid ?? 'guest';
+  String get _uid => GuestFirebase.auth.currentUser?.uid ?? 'guest';
   String get _chatPath => 'consultations/${widget.consultationId}/messages';
 
   Future<void> _send() async {
@@ -1041,7 +1045,7 @@ class _GuestConsultationChatState extends State<_GuestConsultationChat> {
     if (text.isEmpty || _sending) return;
     setState(() => _sending = true);
     _ctrl.clear();
-    await FirebaseFirestore.instance.collection(_chatPath).add({
+    await GuestFirebase.firestore.collection(_chatPath).add({
       'text': text,
       'senderId': _uid,
       // Rendered on the doctor's side exactly like the patient's own
@@ -1117,7 +1121,7 @@ class _GuestConsultationChatState extends State<_GuestConsultationChat> {
           const Divider(height: 1),
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
+              stream: GuestFirebase.firestore
                   .collection(_chatPath)
                   .orderBy('timestamp', descending: false)
                   .snapshots(),

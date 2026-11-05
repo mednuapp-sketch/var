@@ -7,9 +7,11 @@ import '../../../core/constants/app_spacing.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/services/feedback_service.dart';
+import '../../../core/utils/distance.dart';
 import '../../../core/widgets/add_to_cart_button.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../../cart/providers/cart_provider.dart';
+import '../../home/providers/location_provider.dart';
 
 class EquipmentScreen extends ConsumerStatefulWidget {
   // When set, scopes the catalog to one admin-managed vendor (see
@@ -186,104 +188,64 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen> with SingleTi
       body: CustomScrollView(
         key: ValueKey(_retryKey),
         slivers: [
-          SliverAppBar(
-            pinned: true,
-            expandedHeight: AppSpacing.headerHeight(context) + _tabBarHeight,
-            backgroundColor: AppColors.primaryDark,
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-              onPressed: () => context.safeBack(),
-            ),
+          AppSliverHeader(
+            icon: Icons.medical_services_rounded,
+            title: widget.vendorName ?? 'Medical Equipment',
+            subtitle: widget.vendorId != null
+                ? 'Rent or buy from this vendor'
+                : 'Rent or buy medical equipment online',
+            color: AppColors.primaryDark,
+            gradient: AppColors.primaryGradient,
             actions: const [CartBadgeAction()],
             bottom: PreferredSize(
-              preferredSize: const Size.fromHeight(_tabBarHeight),
-              child: Container(
-                decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
-                child: TabBar(
-                  controller: _tabController,
-                  indicatorColor: Colors.white,
-                  indicatorWeight: 3,
-                  labelColor: Colors.white,
-                  unselectedLabelColor: Colors.white60,
-                  labelStyle: const TextStyle(
-                      fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w700),
-                  unselectedLabelStyle: const TextStyle(
-                      fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w500),
-                  tabs: const [
-                    Tab(
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.event_available_rounded, size: 16),
-                          SizedBox(width: 5),
-                          Flexible(
-                            child: Text('Rent', maxLines: 1, overflow: TextOverflow.ellipsis),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Tab(
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.shopping_cart_rounded, size: 16),
-                          SizedBox(width: 5),
-                          Flexible(
-                            child: Text('Buy', maxLines: 1, overflow: TextOverflow.ellipsis),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            flexibleSpace: FlexibleSpaceBar(
-              background: Container(
-                decoration: const BoxDecoration(
-                  gradient: AppColors.primaryGradient,
-                ),
-                child: SafeArea(
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      // expandedHeight already reserves _tabBarHeight on top of
-                      // the hero content's own height, so the centered
-                      // title/subtitle only need to stay clear of that trailing
-                      // strip — they're never squeezed by it.
-                      return SingleChildScrollView(
-                        physics: const ClampingScrollPhysics(),
-                        child: ConstrainedBox(
-                          constraints: BoxConstraints(
-                              minHeight: constraints.maxHeight - _tabBarHeight),
-                          child: Padding(
-                            padding: AppSpacing.headerPaddingWithBottomWidget(context),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.medical_services_rounded, color: Colors.white, size: AppSpacing.headerIconSize(context)),
-                                SizedBox(height: AppSpacing.headerIconGap(context)),
-                                Text(widget.vendorName ?? 'Medical Equipment',
-                                    maxLines: 1, overflow: TextOverflow.ellipsis,
-                                    style: AppTextStyles.onPrimaryH2),
-                                Text(
-                                    widget.vendorId != null
-                                        ? 'Rent or buy from this vendor'
-                                        : 'Rent or buy medical equipment online',
-                                    maxLines: 1, overflow: TextOverflow.ellipsis,
-                                    style: AppTextStyles.onPrimaryBody),
-                              ],
-                            ),
+                        preferredSize: const Size.fromHeight(_tabBarHeight),
+                        child: Container(
+                          decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
+                          child: TabBar(
+                            controller: _tabController,
+                            indicatorColor: Colors.white,
+                            indicatorWeight: 3,
+                            labelColor: Colors.white,
+                            unselectedLabelColor: Colors.white60,
+                            labelStyle: const TextStyle(
+                                fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w700),
+                            unselectedLabelStyle: const TextStyle(
+                                fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w500),
+                            tabs: const [
+                              Tab(
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.event_available_rounded, size: 16),
+                                    SizedBox(width: 5),
+                                    Flexible(
+                                      child: Text('Rent', maxLines: 1, overflow: TextOverflow.ellipsis),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Tab(
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.shopping_cart_rounded, size: 16),
+                                    SizedBox(width: 5),
+                                    Flexible(
+                                      child: Text('Buy', maxLines: 1, overflow: TextOverflow.ellipsis),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      );
-                    },
-                  ),
-                ),
-              ),
-            ),
+                      ),
           ),
+          // Service providers — live from `equipment_vendors`, independent of
+          // whether any equipment is listed yet. Hidden inside a vendor's own
+          // scoped catalog.
+          if (widget.vendorId == null)
+            const SliverToBoxAdapter(child: _EquipmentProvidersSection()),
           SliverToBoxAdapter(
             child: StreamBuilder<QuerySnapshot>(
               stream: (() {
@@ -336,42 +298,6 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen> with SingleTi
                 return Padding(
                   padding: AppSpacing.page(context),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    // Find a specific vendor banner — hidden once already
-                    // viewing one vendor's own scoped catalog.
-                    if (widget.vendorId == null)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 16),
-                        child: GestureDetector(
-                          onTap: () => context.push(AppRoutes.equipmentVendors),
-                          child: Container(
-                            padding: const EdgeInsets.all(14),
-                            decoration: BoxDecoration(
-                              gradient: const LinearGradient(colors: [Color(0xFFECEFF1), Color(0xFFE3F2FD)]),
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(color: const Color(0xFF37474F).withValues(alpha: 0.3)),
-                            ),
-                            child: Row(children: [
-                              Container(
-                                width: 44, height: 44,
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF37474F).withValues(alpha: 0.12),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: const Icon(Icons.person_search_rounded, color: Color(0xFF37474F), size: 26),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                                const Text('Find Equipment Vendors Near You', style: TextStyle(
-                                    fontFamily: 'Poppins', fontSize: 13, fontWeight: FontWeight.w700,
-                                    color: Color(0xFF37474F))),
-                                Text('Browse by vendor · rent or buy locally',
-                                    style: TextStyle(fontFamily: 'Poppins', fontSize: 11, color: context.appTextSecondary)),
-                              ])),
-                              const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Color(0xFF37474F)),
-                            ]),
-                          ),
-                        ),
-                      ),
                     const Text('Available Equipment', style: AppTextStyles.h4),
                     SizedBox(height: AppSpacing.cardGap(context)),
                     if (visible.isEmpty)
@@ -529,4 +455,170 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen> with SingleTi
     title: 'No Equipment Listed',
     message: 'Medical equipment will appear here once added.',
   );
+}
+
+/// Live "Service Providers" strip: enabled vendors from `equipment_vendors`
+/// (admin-listed + auto-fed from approved partner vendors), nearest first.
+/// Tapping a vendor opens that vendor's own catalog; "View all" opens the
+/// full searchable list.
+class _EquipmentProvidersSection extends ConsumerWidget {
+  const _EquipmentProvidersSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final loc = ref.watch(locationProvider);
+
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('equipment_vendors')
+          .where('isEnabled', isEqualTo: true)
+          .snapshots(),
+      builder: (context, snap) {
+        final pad = AppSpacing.page(context);
+        final vendors = (snap.data?.docs ?? const []).map((doc) {
+          final d = doc.data();
+          final lat = (d['lat'] as num?)?.toDouble();
+          final lng = (d['lng'] as num?)?.toDouble();
+          double? km;
+          if (loc.lat != null && loc.lng != null && lat != null && lng != null) {
+            km = distanceKm(loc.lat!, loc.lng!, lat, lng);
+          }
+          return {
+            'id': doc.id,
+            'name': ((d['name'] as String?) ?? 'Equipment Vendor').trim(),
+            'city': ((d['city'] as String?) ?? '').trim(),
+            'open': (d['acceptingOrders'] as bool?) ?? true,
+            'km': km,
+          };
+        }).toList()
+          ..sort((a, b) {
+            final ka = a['km'] as double?, kb = b['km'] as double?;
+            if (ka == null && kb == null) return 0;
+            if (ka == null) return 1;
+            if (kb == null) return -1;
+            return ka.compareTo(kb);
+          });
+
+        return Padding(
+          padding: EdgeInsets.only(top: pad.top, bottom: 4),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: pad.horizontal / 2),
+              child: Row(children: [
+                const Expanded(child: Text('Service Providers', style: AppTextStyles.h4)),
+                if (vendors.isNotEmpty)
+                  TextButton(
+                    onPressed: () => context.push(AppRoutes.equipmentVendors),
+                    child: const Text('View all'),
+                  ),
+              ]),
+            ),
+            if (snap.hasError)
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: pad.horizontal / 2),
+                child: Text('Could not load providers.',
+                    style: AppTextStyles.bodySmall.copyWith(color: AppColors.error)),
+              )
+            else if (!snap.hasData)
+              SizedBox(
+                height: 112,
+                child: AppShimmer(
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    padding: EdgeInsets.symmetric(horizontal: pad.horizontal / 2),
+                    itemCount: 3,
+                    separatorBuilder: (_, __) => const SizedBox(width: 12),
+                    itemBuilder: (_, __) => Container(
+                      width: 200,
+                      decoration: BoxDecoration(
+                          color: context.appSurface, borderRadius: BorderRadius.circular(16)),
+                    ),
+                  ),
+                ),
+              )
+            else if (vendors.isEmpty)
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: pad.horizontal / 2),
+                child: Text('No service providers listed yet. They appear here as soon as they join.',
+                    style: AppTextStyles.bodySmall.copyWith(color: context.appTextHint)),
+              )
+            else
+              SizedBox(
+                height: 112,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  padding: EdgeInsets.symmetric(horizontal: pad.horizontal / 2),
+                  itemCount: vendors.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 12),
+                  itemBuilder: (_, i) => _ProviderChipCard(vendor: vendors[i]),
+                ),
+              ),
+            const SizedBox(height: 4),
+          ]),
+        );
+      },
+    );
+  }
+}
+
+class _ProviderChipCard extends StatelessWidget {
+  final Map<String, Object?> vendor;
+  const _ProviderChipCard({required this.vendor});
+
+  @override
+  Widget build(BuildContext context) {
+    final open = vendor['open'] == true;
+    final km = vendor['km'] as double?;
+    final city = vendor['city'] as String;
+    final place = km != null
+        ? '${km.toStringAsFixed(1)} km away'
+        : (city.isNotEmpty ? city : 'Location not set');
+
+    return GestureDetector(
+      onTap: () => context.push(
+        AppRoutes.equipmentMenu.replaceFirst(':id', vendor['id'] as String),
+        extra: {'vendorName': vendor['name']},
+      ),
+      child: Container(
+        width: 210,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: context.appSurface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: context.appBorder),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Container(
+              width: 36, height: 36,
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.medical_services_rounded, size: 20, color: AppColors.primary),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(vendor['name'] as String,
+                  style: AppTextStyles.labelLarge, maxLines: 2, overflow: TextOverflow.ellipsis),
+            ),
+          ]),
+          const Spacer(),
+          Row(children: [
+            Icon(Icons.location_on_outlined, size: 13, color: context.appTextHint),
+            const SizedBox(width: 3),
+            Flexible(
+              child: Text(place,
+                  style: AppTextStyles.labelSmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+            ),
+          ]),
+          const SizedBox(height: 4),
+          Text(open ? 'Open · View equipment' : 'Closed right now',
+              style: AppTextStyles.labelSmall.copyWith(
+                  color: open ? const Color(0xFF2E7D32) : AppColors.error,
+                  fontWeight: FontWeight.w600)),
+        ]),
+      ),
+    );
+  }
 }

@@ -651,24 +651,24 @@ class SpecialtiesSection extends StatelessWidget {
 
   static const _specs = [
     _Spec('General', Icons.medical_services_rounded, Color(0xFF1565C0)),
-    _Spec('Cardiology', Icons.favorite_rounded, Color(0xFFC62828)),
-    _Spec('Dermatology', Icons.face_rounded, Color(0xFFE65100)),
+    _Spec('Cardiology', Icons.favorite_rounded, Color(0xFFC62828), 'cardiology'),
+    _Spec('Dermatology', Icons.face_rounded, Color(0xFFE65100), 'dermatology'),
     _Spec('Gynaecology', Icons.pregnant_woman_rounded, Color(0xFF522546)),
     _Spec('Paediatrics', Icons.child_care_rounded, Color(0xFF6A1B9A)),
-    _Spec('ENT', Icons.hearing_rounded, Color(0xFF00695C)),
-    _Spec('Orthopaedics', Icons.accessibility_new_rounded, Color(0xFF283593)),
-    _Spec('Neurology', Icons.psychology_rounded, Color(0xFF3D1D36)),
+    _Spec('ENT', Icons.hearing_rounded, Color(0xFF00695C), 'ent'),
+    _Spec('Orthopaedics', Icons.accessibility_new_rounded, Color(0xFF283593), 'orthopaedics'),
+    _Spec('Neurology', Icons.psychology_rounded, Color(0xFF3D1D36), 'neurology'),
     _Spec('Ophthalmology', Icons.visibility_rounded, Color(0xFF2E7D32)),
-    _Spec('Psychiatry', Icons.self_improvement_rounded, Color(0xFF00838F)),
-    _Spec('Endocrinology', Icons.science_rounded, Color(0xFF558B2F)),
-    _Spec('Gastroenterology', Icons.monitor_heart_rounded, Color(0xFFE65100)),
-    _Spec('Nephrology', Icons.water_drop_rounded, Color(0xFF283593)),
-    _Spec('Urology', Icons.health_and_safety_rounded, Color(0xFF633058)),
-    _Spec('Pulmonology', Icons.air_rounded, Color(0xFF006064)),
-    _Spec('General Surgery', Icons.cut_rounded, Color(0xFF4E342E)),
-    _Spec('Dental', Icons.mood_rounded, Color(0xFF00838F)),
-    _Spec('Rheumatology', Icons.elderly_rounded, Color(0xFF827717)),
-    _Spec('Oncology', Icons.biotech_rounded, Color(0xFFBF360C)),
+    _Spec('Psychiatry', Icons.self_improvement_rounded, Color(0xFF00838F), 'psychiatry'),
+    _Spec('Endocrinology', Icons.science_rounded, Color(0xFF558B2F), 'endocrinology'),
+    _Spec('Gastroenterology', Icons.monitor_heart_rounded, Color(0xFFE65100), 'gastroenterology'),
+    _Spec('Nephrology', Icons.water_drop_rounded, Color(0xFF283593), 'nephrology'),
+    _Spec('Urology', Icons.health_and_safety_rounded, Color(0xFF633058), 'urology'),
+    _Spec('Pulmonology', Icons.air_rounded, Color(0xFF006064), 'pulmonology'),
+    _Spec('General Surgery', Icons.cut_rounded, Color(0xFF4E342E), 'surgery'),
+    _Spec('Dental', Icons.mood_rounded, Color(0xFF00838F), 'dental'),
+    _Spec('Rheumatology', Icons.elderly_rounded, Color(0xFF827717), 'rheumatology'),
+    _Spec('Oncology', Icons.biotech_rounded, Color(0xFFBF360C), 'oncology'),
   ];
 
   @override
@@ -710,7 +710,8 @@ class _Spec {
   final String label;
   final IconData icon;
   final Color color;
-  const _Spec(this.label, this.icon, this.color);
+  final String? asset;
+  const _Spec(this.label, this.icon, this.color, [this.asset]);
 }
 
 class _SpecChip extends StatelessWidget {
@@ -745,7 +746,18 @@ class _SpecChip extends StatelessWidget {
                 ),
               ],
             ),
-            child: Icon(spec.icon, color: spec.color, size: 24),
+            child: spec.asset == null
+                ? Icon(spec.icon, color: spec.color, size: 24)
+                : Padding(
+                    padding: const EdgeInsets.all(10),
+                    child: Image.asset(
+                      'assets/icons/specialities/${spec.asset}.png',
+                      fit: BoxFit.contain,
+                      cacheWidth: 96,
+                      errorBuilder: (_, __, ___) =>
+                          Icon(spec.icon, color: spec.color, size: 24),
+                    ),
+                  ),
           ),
           const SizedBox(height: 5),
           Text(

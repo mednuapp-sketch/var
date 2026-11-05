@@ -40,7 +40,7 @@ extension VisitStatusX on VisitStatus {
 
 /// UI-only care category — drives icon/color coding across the module the
 /// same way `EmergencyType` does for the Ambulance module.
-enum CareType { elderlyCare, postSurgery, physiotherapy, medicationManagement, generalNursing }
+enum CareType { elderlyCare, postSurgery, physiotherapy, medicationManagement, generalNursing, assistance }
 
 extension CareTypeX on CareType {
   String get label {
@@ -55,6 +55,8 @@ extension CareTypeX on CareType {
         return 'Medication Management';
       case CareType.generalNursing:
         return 'General Nursing';
+      case CareType.assistance:
+        return 'Care Assistance';
     }
   }
 
@@ -70,6 +72,8 @@ extension CareTypeX on CareType {
         return Icons.medication_rounded;
       case CareType.generalNursing:
         return Icons.volunteer_activism_rounded;
+      case CareType.assistance:
+        return Icons.support_agent_rounded;
     }
   }
 
@@ -88,6 +92,8 @@ extension CareTypeX on CareType {
         return AppColors.primaryDark;
       case CareType.generalNursing:
         return AppColors.primaryLight;
+      case CareType.assistance:
+        return const Color(0xFF00897B);
     }
   }
 }
@@ -113,6 +119,23 @@ class Visit {
   final List<CareNote> notes;
   final List<String> photoPaths;
 
+  /// Who has claimed the visit (`null` while it sits in the open pool).
+  final String? caregiverId;
+
+  /// The patient's `service_requests.type` — 'care_assistant' | 'caregivers'.
+  /// Keeps care-assistant jobs out of the Nurse module and vice versa.
+  final String sourceType;
+
+  /// Set when a Care Assistant explicitly accepts the request; the Cloud
+  /// Function mirrors it to the patient's booking as `accepted`.
+  final DateTime? acceptedAt;
+
+  /// Partners who declined this request from the open pool.
+  final List<String> declinedBy;
+
+  /// What the patient booked (`duration`, `durationLabel`, `rate`, ...).
+  final Map<String, dynamic> serviceDetails;
+
   const Visit({
     required this.id,
     required this.type,
@@ -127,6 +150,11 @@ class Visit {
     required this.tasks,
     required this.notes,
     required this.photoPaths,
+    this.caregiverId,
+    this.sourceType = 'caregivers',
+    this.acceptedAt,
+    this.declinedBy = const [],
+    this.serviceDetails = const {},
   });
 
   /// Parses a `caregiver_visits` document. Subcollection-backed [tasks] and
@@ -158,6 +186,14 @@ class Visit {
       photoPaths: (d['photoUrls'] as List<dynamic>? ?? const [])
           .map((e) => e.toString())
           .toList(),
+      caregiverId: d['caregiverId'] as String?,
+      sourceType: d['sourceType'] as String? ?? 'caregivers',
+      acceptedAt: (d['acceptedAt'] as Timestamp?)?.toDate(),
+      declinedBy: (d['declinedBy'] as List<dynamic>? ?? const [])
+          .map((e) => e.toString())
+          .toList(),
+      serviceDetails: Map<String, dynamic>.from(
+          (d['serviceDetails'] as Map?) ?? const <String, dynamic>{}),
     );
   }
 
@@ -195,7 +231,25 @@ class Visit {
         tasks: tasks ?? this.tasks,
         notes: notes ?? this.notes,
         photoPaths: photoPaths ?? this.photoPaths,
+        caregiverId: caregiverId,
+        sourceType: sourceType,
+        acceptedAt: acceptedAt,
+        declinedBy: declinedBy,
+        serviceDetails: serviceDetails,
       );
+
+  bool get isCareAssistantJob => sourceType == 'care_assistant';
+
+  /// In the open pool: nobody has claimed it yet.
+  bool get isOpenRequest => caregiverId == null && status == VisitStatus.scheduled;
+
+  /// Pinned to / claimed by [uid] but not yet accepted — the assistant still
+  /// has to Accept or Decline it.
+  bool awaitingResponseFrom(String uid) =>
+      caregiverId == uid && status == VisitStatus.scheduled && acceptedAt == null;
+
+  String get durationLabel =>
+      (serviceDetails['durationLabel'] as String?) ?? '$durationMinutes min';
 
   int get completedTaskCount => tasks.where((t) => t.isDone).length;
   double get taskProgress => tasks.isEmpty ? 0 : completedTaskCount / tasks.length;

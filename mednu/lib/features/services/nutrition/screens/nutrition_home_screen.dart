@@ -74,75 +74,13 @@ class NutritionHomeScreen extends ConsumerWidget {
     );
   }
 
-  SliverAppBar _buildAppBar(BuildContext context) {
-    return SliverAppBar(
-      pinned: true,
-      expandedHeight: R.h(context, 170),
-      backgroundColor: const Color(0xFF33691E), // matches nutritionGrad's dark stop so the collapsed bar doesn't jump to an unrelated color
-      leading: IconButton(
-        icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
-        onPressed: () => context.canPop() ? context.pop() : context.go(AppRoutes.home),
-      ),
-      flexibleSpace: FlexibleSpaceBar(
-        collapseMode: CollapseMode.parallax,
-        background: Container(
-          decoration: const BoxDecoration(gradient: AppColors.nutritionGrad),
-          child: Stack(
-            children: [
-              Positioned(
-                top: -R.h(context, 30),
-                right: -R.w(context, 30),
-                child: Container(
-                  width: R.w(context, 160),
-                  height: R.h(context, 160),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white.withValues(alpha: 0.05),
-                  ),
-                ),
-              ),
-              SafeArea(
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    return SingleChildScrollView(
-                      physics: const ClampingScrollPhysics(),
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                        child: Padding(
-                          padding: EdgeInsets.fromLTRB(R.p(context, 20), R.p(context, 52), R.p(context, 20), R.p(context, 16)),
-                          child: Row(
-                            children: [
-                              Container(
-                                padding: EdgeInsets.all(R.p(context, 10)),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.18),
-                                  borderRadius: BorderRadius.circular(R.r(context, 14)),
-                                ),
-                                child: Icon(Icons.restaurant_rounded, color: Colors.white, size: R.w(context, 26)),
-                              ),
-                              SizedBox(width: R.w(context, 14)),
-                              const Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text('Diet & Dietician', style: AppTextStyles.onPrimaryH2),
-                                    Text('Your daily wellness hub', style: AppTextStyles.onPrimaryBody),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+  Widget _buildAppBar(BuildContext context) {
+    return const AppSliverHeader(
+      icon: Icons.restaurant_rounded,
+      title: 'Diet & Dietician',
+      subtitle: 'Your daily wellness hub',
+      color: Color(0xFF33691E),
+      gradient: AppColors.nutritionGrad,
     );
   }
 }
@@ -793,17 +731,6 @@ class _NutritionistCard extends StatelessWidget {
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      const Icon(Icons.star_rounded, color: Color(0xFFF9A825), size: 14),
-                      const SizedBox(width: 2),
-                      Text(
-                        nutritionist.rating.toStringAsFixed(1),
-                        style: AppTextStyles.labelSmall.copyWith(color: context.appTextPrimary),
-                      ),
-                      Text(
-                        ' (${nutritionist.reviewCount})',
-                        style: AppTextStyles.bodySmall.copyWith(color: context.appTextHint),
-                      ),
-                      const SizedBox(width: 8),
                       Icon(Icons.work_rounded, color: context.appTextHint, size: 11),
                       const SizedBox(width: 2),
                       Text(

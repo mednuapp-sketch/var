@@ -154,7 +154,9 @@ class _HospitalsScreenState extends State<HospitalsScreen> {
   }
 
   List<NearbyHospital> get _displayList {
-    var src = _hospitals ?? const <NearbyHospital>[];
+    // Copy: the null-case const list (and the stored list itself) must never
+    // be sorted in place below — sorting a const list throws.
+    var src = List<NearbyHospital>.of(_hospitals ?? const <NearbyHospital>[]);
 
     if (_query.isNotEmpty) {
       src = src
@@ -241,16 +243,16 @@ class _HospitalsScreenState extends State<HospitalsScreen> {
           ),
           slivers: [
             // ── App Bar ──────────────────────────────────────────────────────
-            SliverAppBar(
-              pinned: true,
-              expandedHeight: R.h(context, 156),
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              leading: IconButton(
-                icon: const Icon(Icons.arrow_back_ios_new_rounded,
-                    color: Colors.white, size: 20),
-                onPressed: () => context.canPop() ? context.pop() : context.go(AppRoutes.home),
+            AppSliverHeader(
+              icon: Icons.local_hospital_rounded,
+              title: 'Hospitals',
+              subtitle: (!isLoading && hospitals.isNotEmpty)
+                  ? '${hospitals.length} hospitals${_locStatus == _LocStatus.ready ? ' • Near you' : ''}'
+                  : 'Our registered hospital partners',
+              gradient: const LinearGradient(
+                colors: [AppColors.primaryDark, AppColors.primary, AppColors.secondaryLight],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
               actions: [
                 // Sort toggle
@@ -266,7 +268,6 @@ class _HospitalsScreenState extends State<HospitalsScreen> {
                       borderRadius: BorderRadius.circular(R.r(context, 20)),
                     ),
                     child: Row(
-                      mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(
                           _sort == _SortMode.distance
@@ -278,19 +279,13 @@ class _HospitalsScreenState extends State<HospitalsScreen> {
                         SizedBox(width: R.p(context, 4)),
                         Text(
                           _sort == _SortMode.distance ? 'Distance' : 'Name',
-                          style: AppTextStyles.labelSmall
-                              .copyWith(color: Colors.white),
+                          style: AppTextStyles.labelSmall.copyWith(color: Colors.white),
                         ),
                       ],
                     ),
                   ),
                 ),
               ],
-              flexibleSpace: _HospitalHeader(
-                totalCount: hospitals.length,
-                isLoading: isLoading,
-                locStatus: _locStatus,
-              ),
             ),
 
             // ── Search + filters ─────────────────────────────────────────────
@@ -516,185 +511,6 @@ class _HospitalsScreenState extends State<HospitalsScreen> {
 
 // ── Header ─────────────────────────────────────────────────────────────────────
 
-class _HospitalHeader extends StatelessWidget {
-  final int totalCount;
-  final bool isLoading;
-  final _LocStatus locStatus;
-
-  const _HospitalHeader({
-    required this.totalCount,
-    required this.isLoading,
-    required this.locStatus,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [AppColors.primaryDark, AppColors.primary, AppColors.secondaryLight],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      child: Stack(
-        children: [
-          Positioned(
-            top: -30, right: -30,
-            child: Container(
-              width: R.w(context, 140), height: R.h(context, 140),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white.withValues(alpha: 0.06),
-              ),
-            ),
-          ),
-          Positioned(
-            bottom: 30, left: -20,
-            child: Container(
-              width: R.w(context, 90), height: R.h(context, 90),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white.withValues(alpha: 0.04),
-              ),
-            ),
-          ),
-          SafeArea(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                return SingleChildScrollView(
-                  physics: const ClampingScrollPhysics(),
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                    child: Padding(
-              padding: EdgeInsets.fromLTRB(R.p(context, 20), R.p(context, 56), R.p(context, 20), R.p(context, 16)),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: R.w(context, 44), height: R.h(context, 44),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.18),
-                          borderRadius: BorderRadius.circular(R.r(context, 14)),
-                        ),
-                        child: Icon(Icons.local_hospital_rounded,
-                            color: Colors.white, size: R.w(context, 24)),
-                      ),
-                      SizedBox(width: R.p(context, 12)),
-                      const Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Hospitals',
-                              style: TextStyle(
-                                fontFamily: 'Poppins',
-                                fontSize: 20,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.white,
-                              ),
-                            ),
-                            Text(
-                              'Our registered hospital partners',
-                              style: TextStyle(
-                                fontFamily: 'Poppins',
-                                fontSize: 12,
-                                color: Colors.white70,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (locStatus == _LocStatus.ready)
-                        Container(
-                          padding: EdgeInsets.symmetric(
-                              horizontal: R.p(context, 8), vertical: R.p(context, 4)),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(R.r(context, 8)),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.my_location_rounded,
-                                  color: Colors.white70, size: R.w(context, 11)),
-                              SizedBox(width: R.p(context, 4)),
-                              const Text(
-                                'Near You',
-                                style: TextStyle(
-                                  fontFamily: 'Poppins',
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                    ],
-                  ),
-                  if (!isLoading && totalCount > 0) ...[
-                    SizedBox(height: R.h(context, 14)),
-                    Row(
-                      children: [
-                        _StatPill(
-                          icon: Icons.apartment_rounded,
-                          label: '$totalCount Hospitals',
-                        ),
-                      ],
-                    ),
-                  ],
-                ],
-              ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _StatPill extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  const _StatPill({required this.icon, required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    final bg = Colors.white.withValues(alpha: 0.15);
-    final border = Colors.white.withValues(alpha: 0.25);
-    const fg = Colors.white;
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: R.p(context, 10), vertical: R.p(context, 5)),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(R.r(context, 20)),
-        border: Border.all(color: border),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: R.w(context, 12), color: fg),
-          SizedBox(width: R.p(context, 5)),
-          Text(label,
-              style: const TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: fg,
-              )),
-        ],
-      ),
-    );
-  }
-}
-
 // ── Radius Chip ───────────────────────────────────────────────────────────────
 
 class _RadiusChip extends StatelessWidget {
@@ -892,11 +708,6 @@ class _NearbyHospitalCard extends StatelessWidget {
     return '${d.toStringAsFixed(1)} km';
   }
 
-  String _formatCount(int count) {
-    if (count >= 1000) return '${(count / 1000).toStringAsFixed(1)}k';
-    return count.toString();
-  }
-
   String get _typeBadge {
     final name = hospital.name.toLowerCase();
     if (name.contains('lab') || name.contains('diagnostic')) return 'Lab';
@@ -1085,15 +896,6 @@ class _NearbyHospitalCard extends StatelessWidget {
                                     label: _distanceLabel,
                                     bg: const Color(0xFFE8F5E9),
                                     fg: AppColors.success,
-                                  ),
-                                if (hospital.rating != null)
-                                  _InfoChip(
-                                    icon: Icons.star_rounded,
-                                    label: hospital.userRatingsTotal != null
-                                        ? '${hospital.rating!.toStringAsFixed(1)} (${_formatCount(hospital.userRatingsTotal!)})'
-                                        : hospital.rating!.toStringAsFixed(1),
-                                    bg: const Color(0xFFFFF8E1),
-                                    fg: const Color(0xFFF57F17),
                                   ),
                               ],
                             ),

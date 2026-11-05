@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/utils/r.dart';
+import '../../../core/widgets/ux_widgets.dart';
 
 class HelpSupportScreen extends StatefulWidget {
   const HelpSupportScreen({super.key});
@@ -173,65 +174,11 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
   }
 
   Widget _buildAppBar(BuildContext context) {
-    return SliverAppBar(
-      pinned: true,
-      expandedHeight: R.h(context, 170),
-      backgroundColor: AppColors.primary,
-      leading: IconButton(
-        icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-        onPressed: () => context.safeBack(),
-      ),
-      flexibleSpace: FlexibleSpaceBar(
-        collapseMode: CollapseMode.pin,
-        background: Container(
-          decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
-          child: SafeArea(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                return SingleChildScrollView(
-                  physics: const ClampingScrollPhysics(),
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                    child: Padding(
-                      padding: EdgeInsets.fromLTRB(R.p(context, 20), R.p(context, 56),
-                          R.p(context, 20), R.p(context, 16)),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Container(
-                            padding: EdgeInsets.all(R.p(context, 10)),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(R.r(context, 12)),
-                            ),
-                            child: Icon(Icons.support_agent_rounded, color: Colors.white, size: R.w(context, 28)),
-                          ),
-                          SizedBox(height: R.h(context, 10)),
-                          const Text(
-                            'Help & Support',
-                            style: TextStyle(
-                              fontFamily: 'Poppins', fontSize: 22,
-                              fontWeight: FontWeight.w800, color: Colors.white,
-                            ),
-                          ),
-                          const Text(
-                            'We\'re here to help you 24/7',
-                            style: TextStyle(
-                              fontFamily: 'Poppins', fontSize: 12,
-                              color: Colors.white70,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ),
-      ),
+    return const AppSliverHeader(
+      icon: Icons.support_agent_rounded,
+      title: 'Help & Support',
+      subtitle: 'We\'re here to help you 24/7',
+      gradient: AppColors.primaryGradient,
     );
   }
 

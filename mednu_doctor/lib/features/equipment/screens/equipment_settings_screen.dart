@@ -27,7 +27,7 @@ class EquipmentSettingsScreen extends StatefulWidget {
 class _EquipmentSettingsScreenState extends State<EquipmentSettingsScreen> {
   bool _notifyNewOrders = true;
   bool _notifyDeliveryUpdates = true;
-  bool _whatsappOptIn = false;
+  bool _whatsappOptIn = true;
   String _appVersion = '';
 
   // Biometric lock state — device-local, independent of the profile stream.
@@ -85,7 +85,7 @@ class _EquipmentSettingsScreenState extends State<EquipmentSettingsScreen> {
     if (uid == null) return;
     try {
       final doc = await FirebaseFirestore.instance.collection('equipment_profiles').doc(uid).get();
-      if (mounted) setState(() => _whatsappOptIn = doc.data()?['whatsappOptIn'] == true);
+      if (mounted) setState(() => _whatsappOptIn = doc.data()?['whatsappOptIn'] != false);
     } catch (_) {}
   }
 

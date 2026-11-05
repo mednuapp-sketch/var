@@ -1,11 +1,10 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
 import '../../../core/constants/app_text_styles.dart';
-import '../../../core/router/app_router.dart';
 import '../../../core/services/feedback_service.dart';
 import '../../../core/utils/r.dart';
 import '../../../core/widgets/add_to_cart_button.dart';
@@ -78,6 +77,8 @@ class _CareAssistantScreenState extends ConsumerState<CareAssistantScreen> {
       'specialty':    raw['specialty'] as String? ?? 'Home & Hospital Assistance',
       'experience':   raw['experience'] as String? ?? '',
       'bio':          raw['bio'] as String? ?? '',
+      'photoUrl':     raw['photoUrl'] as String? ?? '',
+      'languages':    (raw['languages'] as List<dynamic>? ?? const []).map((e) => e.toString()).toList(),
       'rating':       (raw['rating'] as num?)?.toDouble() ?? 0.0,
       'isVerified':   raw['isVerified'] as bool? ?? false,
       'rateHourly':   (raw['rateHourly'] as num?)?.toInt() ?? 0,
@@ -158,16 +159,12 @@ class _CareAssistantScreenState extends ConsumerState<CareAssistantScreen> {
 
           return CustomScrollView(
             slivers: [
-              SliverAppBar(
-                pinned: true,
-                backgroundColor: _themeColor,
-                expandedHeight: AppSpacing.headerHeight(context),
-                leading: IconButton(
-                  icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-                  onPressed: () => context.canPop()
-                      ? context.safeBack()
-                      : context.go(AppRoutes.home),
-                ),
+              AppSliverHeader(
+                icon: Icons.support_agent_rounded,
+                title: 'Care Assistant',
+                subtitle: 'Book a trusted person to help your loved ones',
+                color: _themeColor,
+                gradient: AppColors.heroBannerGradient,
                 actions: [
                   IconButton(
                     icon: Stack(children: [
@@ -186,39 +183,6 @@ class _CareAssistantScreenState extends ConsumerState<CareAssistantScreen> {
                   ),
                   const CartBadgeAction(),
                 ],
-                flexibleSpace: FlexibleSpaceBar(
-                  background: Container(
-                    decoration: const BoxDecoration(
-                      gradient: AppColors.heroBannerGradient,
-                    ),
-                    child: SafeArea(
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          return SingleChildScrollView(
-                            physics: const ClampingScrollPhysics(),
-                            child: ConstrainedBox(
-                              constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                              child: Padding(
-                                padding: AppSpacing.headerPadding(context),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.support_agent_rounded, color: Colors.white, size: AppSpacing.headerIconSize(context)),
-                                    SizedBox(height: AppSpacing.headerIconGap(context)),
-                                    const Text('Care Assistant', style: AppTextStyles.onPrimaryH2),
-                                    const Text('Book a trusted person to help your loved ones', style: AppTextStyles.onPrimaryBody),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-                ),
               ),
               SliverToBoxAdapter(
                 child: Padding(
@@ -296,6 +260,36 @@ class _CareAssistantScreenState extends ConsumerState<CareAssistantScreen> {
 
                     SizedBox(height: AppSpacing.sectionGap(context)),
 
+                    // Service providers — live from `care_assistants`
+                    // (admin-listed + auto-fed from approved partner assistants).
+                    Row(children: [
+                      const Expanded(child: Text('Service Providers', style: AppTextStyles.h4)),
+                      if (snap.hasData && !snap.hasError)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: _themeColor.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [
+                            Container(
+                              width: 6, height: 6,
+                              decoration: const BoxDecoration(
+                                  color: Color(0xFF2E7D32), shape: BoxShape.circle),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              filtered.length == assistants.length
+                                  ? '${assistants.length} available'
+                                  : '${filtered.length} of ${assistants.length}',
+                              style: AppTextStyles.labelSmall.copyWith(
+                                  color: _themeColor, fontWeight: FontWeight.w600),
+                            ),
+                          ]),
+                        ),
+                    ]),
+                    SizedBox(height: AppSpacing.cardGap(context)),
+
                     // Content
                     if (!snap.hasData && !snap.hasError)
                       _buildSkeleton()
@@ -316,7 +310,6 @@ class _CareAssistantScreenState extends ConsumerState<CareAssistantScreen> {
                       )
                     else
                       ...filtered.map((a) {
-                        final rating = a['rating'] as double;
                         final isVerified = a['isVerified'] as bool;
                         final amount = _amountFor(a, _filters.duration);
                         return Container(
@@ -336,10 +329,18 @@ class _CareAssistantScreenState extends ConsumerState<CareAssistantScreen> {
                               Stack(children: [
                                 Container(
                                   width: 56, height: 56,
+                                  clipBehavior: Clip.antiAlias,
                                   decoration: BoxDecoration(
                                       color: _themeColor.withValues(alpha: 0.15),
                                       shape: BoxShape.circle),
-                                  child: const Icon(Icons.support_agent_rounded, size: 30, color: _themeColor),
+                                  child: (a['photoUrl'] as String).isNotEmpty
+                                      ? CachedNetworkImage(
+                                          imageUrl: a['photoUrl'] as String,
+                                          fit: BoxFit.cover,
+                                          errorWidget: (_, __, ___) => const Icon(
+                                              Icons.support_agent_rounded, size: 30, color: _themeColor),
+                                        )
+                                      : const Icon(Icons.support_agent_rounded, size: 30, color: _themeColor),
                                 ),
                                 if (isVerified)
                                   Positioned(
@@ -405,14 +406,21 @@ class _CareAssistantScreenState extends ConsumerState<CareAssistantScreen> {
                                 ),
                               ]),
                             ]),
+                            if ((a['bio'] as String).isNotEmpty) ...[
+                              const SizedBox(height: 10),
+                              Text(a['bio'] as String,
+                                  style: AppTextStyles.bodySmall,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis),
+                            ],
                             const SizedBox(height: 10),
                             Wrap(spacing: 6, runSpacing: 4, children: [
                               if ((a['gender'] as String).isNotEmpty)
                                 _Badge(label: a['gender'] as String, color: AppColors.secondaryDark),
                               if ((a['experience'] as String).isNotEmpty)
                                 _Badge(label: '${a['experience']} exp', color: AppColors.primaryDark),
-                              if (rating > 0)
-                                _Badge(label: '⭐ ${rating.toStringAsFixed(1)}', color: AppColors.secondary),
+                              if ((a['languages'] as List).isNotEmpty)
+                                _Badge(label: (a['languages'] as List).join(' · '), color: AppColors.info),
                             ]),
                           ]),
                         );

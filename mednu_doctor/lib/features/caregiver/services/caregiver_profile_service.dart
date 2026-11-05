@@ -43,6 +43,12 @@ class CaregiverProfileService {
     String email = '',
     String gender = '',
     String serviceType = 'caregiver',
+    // Care Assistant only — the patient app prices four duration tiers.
+    num? rateHalfDay,
+    num? rateFullDay,
+    num? rateMultiDay,
+    String? bio,
+    List<String>? languages,
   }) async {
     String? fcmToken;
     try {
@@ -58,6 +64,11 @@ class CaregiverProfileService {
       'certifications': certifications,
       'specialties': specialties,
       'hourlyRate': hourlyRate,
+      if (rateHalfDay != null) 'rateHalfDay': rateHalfDay,
+      if (rateFullDay != null) 'rateFullDay': rateFullDay,
+      if (rateMultiDay != null) 'rateMultiDay': rateMultiDay,
+      if (bio != null) 'bio': bio,
+      if (languages != null) 'languages': languages,
       'documentsVerified': false,
       'status': 'pending',
       'isVerified': false,

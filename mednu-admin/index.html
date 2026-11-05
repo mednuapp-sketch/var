@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>MedNU Admin Panel</title>
-  <link rel="stylesheet" href="css/style.css?v=20260912a" />
+  <link rel="stylesheet" href="css/style.css?v=20261105a" />
   <!-- Tabler Icons -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css" />
   <!-- Chart.js -->
@@ -60,51 +60,226 @@
       </div>
     </div>
     <nav class="nav">
-      <div class="nav-section-label" data-section="overview">Overview</div>
+      <!-- Role dashboard: every non-Director profile lands here (Director keeps the full Overview) -->
+      <div class="nav-item nav-home" data-tab="home" data-title="My Dashboard" title="Your workspace — only the sections your profile can open">
+        <i class="ti ti-smart-home nav-icon" aria-hidden="true"></i> My Dashboard
+      </div>
+
+      <!-- ===== 1. MAIN — approvals of accounts + profile-change requests ===== -->
+      <div class="nav-section-label" data-section="main" onclick="toggleNavSection(this)"><span class="nav-section-text"><i class="ti ti-layout-dashboard" aria-hidden="true"></i>Main</span> <i class="ti ti-chevron-down nav-section-chevron" aria-hidden="true"></i></div>
       <div class="nav-item active" data-tab="overview" data-title="Overview" title="Live snapshot of key metrics across the whole platform">
         <i class="ti ti-layout-dashboard nav-icon" aria-hidden="true"></i> Overview
       </div>
-
-      <div class="nav-section-label" data-section="clinical" onclick="toggleNavSection(this)">Clinical Care &amp; Bookings <i class="ti ti-chevron-down nav-section-chevron" aria-hidden="true"></i></div>
       <!-- Maternity section hidden, restore when asked
       <div class="nav-item" data-tab="maternity" data-title="Maternity Care Management" title="Pregnancy checkups, alerts, and profiles">
         <i class="ti ti-heart nav-icon" aria-hidden="true"></i> Maternity
         <span class="nav-badge nav-badge-red" id="nav-maternity-alerts" style="display:none;">0</span>
       </div>
       -->
-      <div class="nav-item" data-tab="doctors" data-title="Doctors" title="Approve, manage, and monitor registered doctors">
+      <div class="nav-item" data-tab="doctors" data-title="Doctor Approvals" title="Review documents and approve or reject doctor accounts">
         <i class="ti ti-stethoscope nav-icon" aria-hidden="true"></i> Doctors
       </div>
-      <div class="nav-item" data-tab="spec-requests" data-title="Doctor Specialization Requests" title="Doctors asking to add a new specialization to their profile">
-        <i class="ti ti-certificate nav-icon" aria-hidden="true"></i> Doctor Spec Requests
+      <div class="nav-item" data-tab="caregiver-partners" data-title="Nurse Approvals" title="Review documents and approve or reject nurse accounts">
+        <i class="ti ti-user-heart nav-icon" aria-hidden="true"></i> Nurses
+        <span class="nav-badge nav-badge-red" id="nav-caregiver-partners-count" style="display:none;">0</span>
+      </div>
+      <div class="nav-item" data-tab="lab-partners" data-title="Lab &amp; Diagnostics Approvals" title="Review documents and approve or reject diagnostic lab accounts">
+        <i class="ti ti-microscope nav-icon" aria-hidden="true"></i> Lab and Diagnostics
+        <span class="nav-badge nav-badge-red" id="nav-lab-partners-count" style="display:none;">0</span>
+      </div>
+      <div class="nav-item" data-tab="pharmacy-partners" data-title="Pharmacy Approvals" title="Review documents and approve or reject pharmacy accounts">
+        <i class="ti ti-building-store nav-icon" aria-hidden="true"></i> Pharmacy
+        <span class="nav-badge nav-badge-red" id="nav-pharmacy-partners-count" style="display:none;">0</span>
+      </div>
+      <div class="nav-item" data-tab="ambulance-partners" data-title="Ambulance Approvals" title="Review documents and approve or reject ambulance accounts">
+        <i class="ti ti-ambulance nav-icon" aria-hidden="true"></i> Ambulance
+        <span class="nav-badge nav-badge-red" id="nav-ambulance-partners-count" style="display:none;">0</span>
+      </div>
+      <div class="nav-item" data-tab="physio-partners" data-title="Physiotherapy Approvals" title="Review documents and approve or reject physiotherapist accounts">
+        <i class="ti ti-activity nav-icon" aria-hidden="true"></i> Physiotherapy
+        <span class="nav-badge nav-badge-red" id="nav-physio-partners-count" style="display:none;">0</span>
+      </div>
+      <div class="nav-item" data-tab="nutrition-partners" data-title="Dietician Approvals" title="Review documents and approve or reject dietician accounts">
+        <i class="ti ti-leaf nav-icon" aria-hidden="true"></i> Dietician
+        <span class="nav-badge nav-badge-red" id="nav-nutrition-partners-count" style="display:none;">0</span>
+      </div>
+      <div class="nav-item" data-tab="hospital-partners" data-title="Hospital Approvals" title="Billing-desk logins for hospital staff, linked to a Hospital Directory entry">
+        <i class="ti ti-building-hospital nav-icon" aria-hidden="true"></i> Hospitals
+        <span class="nav-badge nav-badge-red" id="nav-hospital-partners-count" style="display:none;">0</span>
+      </div>
+      <div class="nav-item" data-tab="care-assistant-partners" data-title="Care Assistant Approvals" title="Review documents and approve or reject care assistant accounts">
+        <i class="ti ti-nurse nav-icon" aria-hidden="true"></i> Care Assistants
+      </div>
+      <div class="nav-item" data-tab="equipment-partners" data-title="Equipment Approvals" title="Equipment vendors awaiting or holding verification — approving one publishes its menu to patients">
+        <i class="ti ti-wheelchair nav-icon" aria-hidden="true"></i> Equipment
+        <span class="nav-badge nav-badge-red" id="nav-equipment-partners-count" style="display:none;">0</span>
+      </div>
+      <div class="nav-item" data-tab="counselling-partners" data-title="Counsellor Approvals" title="Review documents and approve or reject counsellor accounts">
+        <i class="ti ti-message-circle nav-icon" aria-hidden="true"></i> Counsellors
+        <span class="nav-badge nav-badge-red" id="nav-counselling-partners-count" style="display:none;">0</span>
+      </div>
+      <div class="nav-item" data-tab="spec-requests" data-title="Requests" title="Changes partners and doctors ask to make to their profile — approve or discard">
+        <i class="ti ti-git-pull-request nav-icon" aria-hidden="true"></i> Requests
         <span class="nav-badge nav-badge-red" id="nav-spec-requests-count" style="display:none;">0</span>
       </div>
-      <div class="nav-item" data-tab="patients" data-title="Patients" title="Registered patient accounts">
+
+      <!-- ===== 2. PARTNER ACCOUNTS — read-only directory: IDs + status, no documents ===== -->
+      <div class="nav-section-label" data-section="partner-accounts" onclick="toggleNavSection(this)"><span class="nav-section-text"><i class="ti ti-id-badge-2" aria-hidden="true"></i>Partner Accounts</span> <i class="ti ti-chevron-down nav-section-chevron" aria-hidden="true"></i></div>
+      <div class="nav-item" data-tab="acct-doctors" data-title="Doctor Accounts" title="All doctor accounts, IDs and status">
+        <i class="ti ti-stethoscope nav-icon" aria-hidden="true"></i> Doctors
+      </div>
+      <div class="nav-item" data-tab="acct-nurses" data-title="Nurse Accounts" title="All nurse accounts, IDs and status">
+        <i class="ti ti-user-heart nav-icon" aria-hidden="true"></i> Nurses
+      </div>
+      <div class="nav-item" data-tab="acct-lab" data-title="Lab &amp; Diagnostics Accounts" title="All lab accounts, IDs and status">
+        <i class="ti ti-microscope nav-icon" aria-hidden="true"></i> Lab and Diagnostics
+      </div>
+      <div class="nav-item" data-tab="acct-pharmacy" data-title="Pharmacy Accounts" title="All pharmacy accounts, IDs and status">
+        <i class="ti ti-building-store nav-icon" aria-hidden="true"></i> Pharmacy
+      </div>
+      <div class="nav-item" data-tab="acct-ambulance" data-title="Ambulance Accounts" title="All ambulance accounts, IDs and status">
+        <i class="ti ti-ambulance nav-icon" aria-hidden="true"></i> Ambulance
+      </div>
+      <div class="nav-item" data-tab="acct-physio" data-title="Physiotherapy Accounts" title="All physiotherapist accounts, IDs and status">
+        <i class="ti ti-activity nav-icon" aria-hidden="true"></i> Physiotherapy
+      </div>
+      <div class="nav-item" data-tab="acct-dietician" data-title="Dietician Accounts" title="All dietician accounts, IDs and status">
+        <i class="ti ti-leaf nav-icon" aria-hidden="true"></i> Dietician
+      </div>
+      <div class="nav-item" data-tab="acct-hospitals" data-title="Hospital Accounts" title="All hospital accounts, IDs and status">
+        <i class="ti ti-building-hospital nav-icon" aria-hidden="true"></i> Hospitals
+      </div>
+      <div class="nav-item" data-tab="acct-care-assistants" data-title="Care Assistant Accounts" title="All care assistant accounts, IDs and status">
+        <i class="ti ti-nurse nav-icon" aria-hidden="true"></i> Care Assistants
+      </div>
+      <div class="nav-item" data-tab="acct-equipment" data-title="Equipment Accounts" title="All equipment vendor accounts, IDs and status">
+        <i class="ti ti-wheelchair nav-icon" aria-hidden="true"></i> Equipment
+      </div>
+      <div class="nav-item" data-tab="acct-counsellors" data-title="Counsellor Accounts" title="All counsellor accounts, IDs and status">
+        <i class="ti ti-message-circle nav-icon" aria-hidden="true"></i> Counsellors
+      </div>
+
+      <!-- ===== 3. FINANCE ===== -->
+      <div class="nav-section-label" data-section="finance" onclick="toggleNavSection(this)"><span class="nav-section-text"><i class="ti ti-coin-rupee" aria-hidden="true"></i>Finance</span> <i class="ti ti-chevron-down nav-section-chevron" aria-hidden="true"></i></div>
+      <div class="nav-item" data-tab="revenue" data-title="Revenue" title="Platform revenue and payment trends">
+        <i class="ti ti-chart-bar nav-icon" aria-hidden="true"></i> Revenue
+      </div>
+      <div class="nav-item" data-tab="wallet" data-title="Wallet &amp; Transactions" title="Patient wallet balances and transaction history">
+        <i class="ti ti-wallet nav-icon" aria-hidden="true"></i> Wallet
+        <span class="nav-badge nav-badge-red" id="nav-wallet-count" style="display:none;">0</span>
+      </div>
+      <div class="nav-item" data-tab="settlements" data-title="Settlements" title="Partner payout settlement tracking">
+        <i class="ti ti-cash nav-icon" aria-hidden="true"></i> Settlements
+      </div>
+      <div class="nav-item" data-tab="commission-rules" data-title="Commission" title="Commission percentage configured per service type">
+        <i class="ti ti-percentage nav-icon" aria-hidden="true"></i> Commission
+      </div>
+      <div class="nav-item" data-tab="coupons" data-title="Coupons" title="Discount coupon codes">
+        <i class="ti ti-ticket nav-icon" aria-hidden="true"></i> Coupons
+      </div>
+      <div class="nav-item" data-tab="refunds" data-title="Refunds" title="Refund requests and processing">
+        <i class="ti ti-receipt-refund nav-icon" aria-hidden="true"></i> Refunds
+      </div>
+      <div class="nav-item" data-tab="referrals" data-title="Referrals" title="Referral program rules and payouts">
+        <i class="ti ti-share nav-icon" aria-hidden="true"></i> Referrals
+      </div>
+      <div class="nav-item" data-tab="reports" data-title="Finance Reports" title="Generate and download reports for all financial data">
+        <i class="ti ti-report-money nav-icon" aria-hidden="true"></i> Reports
+      </div>
+      <div class="nav-item" data-tab="bill-discounts" data-title="Discounts" title="Discount schemes tied to a specific hospital's billing">
+        <i class="ti ti-discount-2 nav-icon" aria-hidden="true"></i> Discounts
+        <span class="nav-badge nav-badge-green" id="nav-bill-discount-count" style="display:none;">0</span>
+      </div>
+
+      <!-- ===== 4. SUPPORT ===== -->
+      <div class="nav-section-label" data-section="support" onclick="toggleNavSection(this)"><span class="nav-section-text"><i class="ti ti-headset" aria-hidden="true"></i>Support</span> <i class="ti ti-chevron-down nav-section-chevron" aria-hidden="true"></i></div>
+      <div class="nav-item" data-tab="patients" data-title="Patients" title="All registered patient accounts and their IDs">
         <i class="ti ti-users nav-icon" aria-hidden="true"></i> Patients
       </div>
-      <div class="nav-item" data-tab="appointments" data-title="Appointments" title="All booked doctor appointments">
-        <i class="ti ti-calendar nav-icon" aria-hidden="true"></i> Appointments
+      <div class="nav-item" data-tab="appointments" data-title="Appointments" title="Appointments and live video/voice consultations">
+        <i class="ti ti-calendar nav-icon" aria-hidden="true"></i> Appointments and Live Calls
         <span class="nav-badge nav-badge-red" id="nav-appt-count" style="display:none;">0</span>
-      </div>
-      <div class="nav-item" data-tab="calls" data-title="Live Calls" title="Live and recent video/voice consultations">
-        <i class="ti ti-phone-call nav-icon" aria-hidden="true"></i> Live Calls
         <span class="nav-badge nav-badge-red" id="nav-calls-count" style="display:none;">0</span>
+      </div>
+      <div class="nav-item" data-tab="tickets" data-title="Support Tickets" title="Patient and doctor support tickets">
+        <i class="ti ti-headset nav-icon" aria-hidden="true"></i> Support Tickets
+        <span class="nav-badge" id="nav-ticket-count">0</span>
+      </div>
+      <div class="nav-item" data-tab="operation-logs" data-title="Operation Logs" title="Audit trail of admin actions">
+        <i class="ti ti-activity-heartbeat nav-icon" aria-hidden="true"></i> Operation Logs
+        <span class="nav-badge nav-badge-red" id="nav-error-logs-count" style="display:none;">0</span>
+      </div>
+      <div class="nav-item" data-tab="requests" data-title="Service Tickets" title="Live queue of patient requests for a booked service">
+        <i class="ti ti-clipboard-list nav-icon" aria-hidden="true"></i> Service Tickets
+        <span class="nav-badge nav-badge-red" id="nav-requests-count" style="display:none;">0</span>
+      </div>
+      <div class="nav-item" data-tab="order-tracking" data-title="Tracking of Orders" title="Follow pharmacy, equipment and diagnostic orders end to end">
+        <i class="ti ti-package nav-icon" aria-hidden="true"></i> Tracking of Orders
+      </div>
+      <div class="nav-item" data-tab="ambulance-tracking" data-title="Ambulance Tracking" title="Live ambulance requests and trips">
+        <i class="ti ti-map-pin nav-icon" aria-hidden="true"></i> Ambulance Tracking
+      </div>
+      <div class="nav-item" data-tab="minor-requests" data-title="Minor Requests" title="Profile photo and phone number change requests">
+        <i class="ti ti-photo-edit nav-icon" aria-hidden="true"></i> Minor Requests
+        <span class="nav-badge nav-badge-red" id="nav-minor-requests-count" style="display:none;">0</span>
+      </div>
+
+      <!-- ===== 5. MARKETING ===== -->
+      <div class="nav-section-label" data-section="marketing" onclick="toggleNavSection(this)"><span class="nav-section-text"><i class="ti ti-speakerphone" aria-hidden="true"></i>Marketing</span> <i class="ti ti-chevron-down nav-section-chevron" aria-hidden="true"></i></div>
+      <div class="nav-item" data-tab="campaigns" data-title="Campaigns" title="Promotional campaign configuration">
+        <i class="ti ti-rocket nav-icon" aria-hidden="true"></i> Campaigns
+      </div>
+      <div class="nav-item" data-tab="banners" data-title="Banners" title="Home-screen promotional banners shown to patients">
+        <i class="ti ti-photo nav-icon" aria-hidden="true"></i> Banners
+        <span class="nav-badge nav-badge-green" id="nav-banner-count" style="display:none;">0</span>
+      </div>
+      <div class="nav-item" data-tab="broadcast" data-title="Broadcast" title="Send an announcement notification to patients or doctors">
+        <i class="ti ti-send nav-icon" aria-hidden="true"></i> Broadcast
+      </div>
+      <div class="nav-item" data-tab="web-ads" data-title="Website Ads" title="Ad shown in the middle of the public website (separate from app banners)">
+        <i class="ti ti-ad-2 nav-icon" aria-hidden="true"></i> Web Ads
+        <span class="nav-badge nav-badge-green" id="nav-web-ad-count" style="display:none;">0</span>
+      </div>
+
+      <!-- ===== 6. QUALITY ASSESSMENT ===== -->
+      <div class="nav-section-label" data-section="quality" onclick="toggleNavSection(this)"><span class="nav-section-text"><i class="ti ti-shield-check" aria-hidden="true"></i>Quality Assessment</span> <i class="ti ti-chevron-down nav-section-chevron" aria-hidden="true"></i></div>
+      <div class="nav-item" data-tab="feedback" data-title="Feedback" title="Patient-submitted feedback">
+        <i class="ti ti-star nav-icon" aria-hidden="true"></i> Feedback
+        <span class="nav-badge nav-badge-green" id="nav-feedback-count" style="display:none;">0</span>
+      </div>
+      <div class="nav-item" data-tab="operation-logs" data-title="Operation Logs" title="Audit trail of admin actions">
+        <i class="ti ti-activity-heartbeat nav-icon" aria-hidden="true"></i> Operation Logs
+      </div>
+      <div class="nav-item" data-tab="quality-reports" data-title="Quality Reports" title="Generate and download reports for quality analytics">
+        <i class="ti ti-report-analytics nav-icon" aria-hidden="true"></i> Reports
+      </div>
+      <div class="nav-item" data-tab="quality-analytics" data-title="Weekly Quality Analytics" title="Auto-computed weekly doctor quality/rating scorecard">
+        <i class="ti ti-chart-area-line nav-icon" aria-hidden="true"></i> Quality Analytics
+        <span class="nav-badge nav-badge-red" id="nav-quality-flagged" style="display:none;">0</span>
+      </div>
+      <div class="nav-item" data-tab="reviews" data-title="Doctor Reviews" title="Patient reviews left on doctor profiles">
+        <i class="ti ti-message-star nav-icon" aria-hidden="true"></i> Doctor Reviews
+        <span class="nav-badge nav-badge-red" id="nav-reviews-flagged" style="display:none;">0</span>
+      </div>
+
+      <!-- ===== 7. MISCELLANEOUS ===== -->
+      <div class="nav-section-label" data-section="misc" onclick="toggleNavSection(this)"><span class="nav-section-text"><i class="ti ti-dots-circle-horizontal" aria-hidden="true"></i>Miscellaneous</span> <i class="ti ti-chevron-down nav-section-chevron" aria-hidden="true"></i></div>
+      <div class="nav-item" data-tab="health-articles" data-title="Health Articles" title="Health education articles shown in the patient app">
+        <i class="ti ti-books nav-icon" aria-hidden="true"></i> Health Articles
+        <span class="nav-badge nav-badge-green" id="nav-health-articles-count" style="display:none;">0</span>
+      </div>
+      <div class="nav-item" data-tab="prescriptions" data-title="Prescriptions and Reports" title="Look up a prescription by Rx ID">
+        <i class="ti ti-file-description nav-icon" aria-hidden="true"></i> Prescriptions and Reports
+      </div>
+      <div class="nav-item" data-tab="health-data" data-title="Health Data" title="Health data of a single patient, looked up by patient ID">
+        <i class="ti ti-heartbeat nav-icon" aria-hidden="true"></i> Health Data
       </div>
       <div class="nav-item" data-tab="medicines" data-title="MedNU Pharmacy" title="MedNu's own medicine catalog and prescription analytics">
         <i class="ti ti-pill nav-icon" aria-hidden="true"></i> MedNU Pharmacy
       </div>
-      <div class="nav-item" data-tab="prescriptions" data-title="Prescription Lookup" title="Look up a prescription by Rx ID">
-        <i class="ti ti-file-description nav-icon" aria-hidden="true"></i> Prescriptions
-      </div>
-
-      <div class="nav-section-label" data-section="service-catalog" onclick="toggleNavSection(this)">Service Catalog &amp; Requests <i class="ti ti-chevron-down nav-section-chevron" aria-hidden="true"></i></div>
       <div class="nav-item" data-tab="services" data-title="Service Catalog" title="Define the non-doctor services patients can book (physio, nutrition, equipment, etc.)">
         <i class="ti ti-tools nav-icon" aria-hidden="true"></i> Service Catalog
         <span class="nav-badge nav-badge-green" id="nav-services-count" style="display:none;">0</span>
-      </div>
-      <div class="nav-item" data-tab="requests" data-title="Patient Service Requests" title="Live queue of patient requests for a booked service">
-        <i class="ti ti-clipboard-list nav-icon" aria-hidden="true"></i> Patient Requests
-        <span class="nav-badge nav-badge-red" id="nav-requests-count" style="display:none;">0</span>
       </div>
       <div class="nav-item" data-tab="nutrition" data-title="Nutrition Programs" title="Nutrition program bookings, meal logs, goals, and diet plans">
         <i class="ti ti-salad nav-icon" aria-hidden="true"></i> Nutrition Programs
@@ -118,8 +293,6 @@
         <i class="ti ti-nurse nav-icon" aria-hidden="true"></i> Care Assistant Directory
         <span class="nav-badge nav-badge-green" id="nav-care-assistants-count" style="display:none;">0</span>
       </div>
-
-      <div class="nav-section-label" data-section="directory" onclick="toggleNavSection(this)">Directory &amp; Facilities <i class="ti ti-chevron-down nav-section-chevron" aria-hidden="true"></i></div>
       <div class="nav-item" data-tab="hospitals" data-title="Hospital Directory" title="Patient-facing hospital listings admins curate">
         <i class="ti ti-building-hospital nav-icon" aria-hidden="true"></i> Hospital Directory
         <span class="nav-badge nav-badge-green" id="nav-hospital-count" style="display:none;">0</span>
@@ -132,130 +305,17 @@
         <i class="ti ti-tools nav-icon" aria-hidden="true"></i> Equipment Vendors
         <span class="nav-badge nav-badge-green" id="nav-equipment-vendor-count" style="display:none;">0</span>
       </div>
-
-      <div class="nav-section-label" data-section="partners" onclick="toggleNavSection(this)">Partner Accounts &amp; Verification <i class="ti ti-chevron-down nav-section-chevron" aria-hidden="true"></i></div>
-      <div class="nav-item" data-tab="ambulance-partners" data-title="Ambulance Partners" title="Self-registered ambulance driver accounts awaiting or holding verification">
-        <i class="ti ti-steering-wheel nav-icon" aria-hidden="true"></i> Ambulance Partners
-        <span class="nav-badge nav-badge-red" id="nav-ambulance-partners-count" style="display:none;">0</span>
-      </div>
-      <div class="nav-item" data-tab="caregiver-partners" data-title="Care Partners" title="Self-registered nurse accounts awaiting or holding verification">
-        <i class="ti ti-user-heart nav-icon" aria-hidden="true"></i> Care Partners
-        <span class="nav-badge nav-badge-red" id="nav-caregiver-partners-count" style="display:none;">0</span>
-      </div>
-      <div class="nav-item" data-tab="pharmacy-partners" data-title="Pharmacy Partners" title="Third-party pharmacy vendor accounts awaiting or holding verification">
-        <i class="ti ti-building-store nav-icon" aria-hidden="true"></i> Pharmacy Partners
-        <span class="nav-badge nav-badge-red" id="nav-pharmacy-partners-count" style="display:none;">0</span>
-      </div>
-      <div class="nav-item" data-tab="equipment-partners" data-title="Equipment Vendors" title="Medical equipment vendors awaiting or holding verification — approving one publishes its menu to patients">
-        <i class="ti ti-wheelchair nav-icon" aria-hidden="true"></i> Equipment Vendors
-        <span class="nav-badge nav-badge-red" id="nav-equipment-partners-count" style="display:none;">0</span>
-      </div>
-      <div class="nav-item" data-tab="lab-partners" data-title="Lab Partners" title="Diagnostic lab partner accounts awaiting or holding verification">
-        <i class="ti ti-microscope nav-icon" aria-hidden="true"></i> Lab Partners
-        <span class="nav-badge nav-badge-red" id="nav-lab-partners-count" style="display:none;">0</span>
-      </div>
-      <div class="nav-item" data-tab="physio-partners" data-title="Physiotherapist Partners" title="Physiotherapist partner accounts awaiting or holding verification">
-        <i class="ti ti-activity nav-icon" aria-hidden="true"></i> Physio Partners
-        <span class="nav-badge nav-badge-red" id="nav-physio-partners-count" style="display:none;">0</span>
-      </div>
-      <div class="nav-item" data-tab="counselling-partners" data-title="Counsellor Partners" title="Counsellor partner accounts awaiting or holding verification">
-        <i class="ti ti-message-circle nav-icon" aria-hidden="true"></i> Counsellor Partners
-        <span class="nav-badge nav-badge-red" id="nav-counselling-partners-count" style="display:none;">0</span>
-      </div>
-      <div class="nav-item" data-tab="nutrition-partners" data-title="Dietician Partners" title="Dietician partner accounts awaiting or holding verification">
-        <i class="ti ti-leaf nav-icon" aria-hidden="true"></i> Dietician Partners
-        <span class="nav-badge nav-badge-red" id="nav-nutrition-partners-count" style="display:none;">0</span>
-      </div>
-      <div class="nav-item" data-tab="hospital-partners" data-title="Hospital Partners" title="Billing-desk login for hospital staff, linked to a Hospital Directory entry">
-        <i class="ti ti-building-hospital nav-icon" aria-hidden="true"></i> Hospital Partners
-        <span class="nav-badge nav-badge-red" id="nav-hospital-partners-count" style="display:none;">0</span>
-      </div>
-
-      <div class="nav-section-label" data-section="commerce" onclick="toggleNavSection(this)">Commerce &amp; Payments <i class="ti ti-chevron-down nav-section-chevron" aria-hidden="true"></i></div>
-      <div class="nav-item" data-tab="revenue" data-title="Revenue" title="Platform revenue and payment trends">
-        <i class="ti ti-chart-bar nav-icon" aria-hidden="true"></i> Revenue
-      </div>
-      <div class="nav-item" data-tab="wallet" data-title="Wallet &amp; Transactions" title="Patient wallet balances and transaction history">
-        <i class="ti ti-wallet nav-icon" aria-hidden="true"></i> Wallet
-        <span class="nav-badge nav-badge-red" id="nav-wallet-count" style="display:none;">0</span>
-      </div>
-      <div class="nav-item" data-tab="settlements" data-title="Settlement Dashboard" title="Partner payout settlement tracking">
-        <i class="ti ti-cash nav-icon" aria-hidden="true"></i> Settlements
-      </div>
-      <div class="nav-item" data-tab="commission-rules" data-title="Commission Rules" title="Commission percentage configured per service type">
-        <i class="ti ti-percentage nav-icon" aria-hidden="true"></i> Commission Rules
-      </div>
-      <div class="nav-item" data-tab="coupons" data-title="Coupons" title="Discount coupon codes">
-        <i class="ti ti-ticket nav-icon" aria-hidden="true"></i> Coupons
-      </div>
-      <div class="nav-item" data-tab="campaigns" data-title="Campaigns" title="Promotional campaign configuration">
-        <i class="ti ti-rocket nav-icon" aria-hidden="true"></i> Campaigns
-      </div>
-      <div class="nav-item" data-tab="refunds" data-title="Refunds" title="Refund requests and processing">
-        <i class="ti ti-receipt-refund nav-icon" aria-hidden="true"></i> Refunds
-      </div>
-      <div class="nav-item" data-tab="bill-discounts" data-title="Hospital Bill Discounts" title="Discount schemes tied to a specific hospital's billing">
-        <i class="ti ti-discount-2 nav-icon" aria-hidden="true"></i> Bill Discounts
-        <span class="nav-badge nav-badge-green" id="nav-bill-discount-count" style="display:none;">0</span>
-      </div>
-
-      <div class="nav-section-label" data-section="content" onclick="toggleNavSection(this)">Content &amp; Marketing <i class="ti ti-chevron-down nav-section-chevron" aria-hidden="true"></i></div>
-      <div class="nav-item" data-tab="banners" data-title="Promotional Banners" title="Home-screen promotional banners shown to patients">
-        <i class="ti ti-speakerphone nav-icon" aria-hidden="true"></i> Banners
-        <span class="nav-badge nav-badge-green" id="nav-banner-count" style="display:none;">0</span>
-      </div>
-      <div class="nav-item" data-tab="web-ads" data-title="Website Ads" title="Ad shown in the middle of the public website (separate from app banners)">
-        <i class="ti ti-ad-2 nav-icon" aria-hidden="true"></i> Web Ads
-        <span class="nav-badge nav-badge-green" id="nav-web-ad-count" style="display:none;">0</span>
-      </div>
-      <div class="nav-item" data-tab="referrals" data-title="Referral Settings" title="Referral program rules and payouts">
-        <i class="ti ti-share nav-icon" aria-hidden="true"></i> Referrals
-      </div>
-      <div class="nav-item" data-tab="health-articles" data-title="Health Education Articles" title="Health education articles shown in the patient app">
-        <i class="ti ti-books nav-icon" aria-hidden="true"></i> Health Articles
-        <span class="nav-badge nav-badge-green" id="nav-health-articles-count" style="display:none;">0</span>
-      </div>
-      <div class="nav-item" data-tab="broadcast" data-title="Broadcast Notifications" title="Send an announcement notification to patients or doctors">
-        <i class="ti ti-send nav-icon" aria-hidden="true"></i> Broadcast
-      </div>
-
-      <div class="nav-section-label" data-section="quality-support" onclick="toggleNavSection(this)">Quality &amp; Support <i class="ti ti-chevron-down nav-section-chevron" aria-hidden="true"></i></div>
-      <div class="nav-item" data-tab="quality-analytics" data-title="Weekly Quality Analytics" title="Auto-computed weekly doctor quality/rating scorecard">
-        <i class="ti ti-chart-area-line nav-icon" aria-hidden="true"></i> Quality Analytics
-        <span class="nav-badge nav-badge-red" id="nav-quality-flagged" style="display:none;">0</span>
-      </div>
-      <div class="nav-item" data-tab="feedback" data-title="Patient Feedback" title="Patient-submitted feedback">
-        <i class="ti ti-star nav-icon" aria-hidden="true"></i> Feedback
-        <span class="nav-badge nav-badge-green" id="nav-feedback-count" style="display:none;">0</span>
-      </div>
-      <div class="nav-item" data-tab="reviews" data-title="Doctor Reviews" title="Patient reviews left on doctor profiles">
-        <i class="ti ti-message-star nav-icon" aria-hidden="true"></i> Reviews
-        <span class="nav-badge nav-badge-red" id="nav-reviews-flagged" style="display:none;">0</span>
-      </div>
       <div class="nav-item" data-tab="deletion-requests" data-title="Account Deletion Requests" title="Patient and partner account deletion requests (Director only)">
         <i class="ti ti-user-x nav-icon" aria-hidden="true"></i> Deletion Requests
         <span class="nav-badge nav-badge-red" id="nav-deletion-count" style="display:none;">0</span>
       </div>
-      <div class="nav-item" data-tab="tickets" data-title="Support Tickets" title="Patient and doctor support tickets">
-        <i class="ti ti-headset nav-icon" aria-hidden="true"></i> Support
-        <span class="nav-badge" id="nav-ticket-count">0</span>
-      </div>
-
-      <div class="nav-section-label" data-section="system" onclick="toggleNavSection(this)">System &amp; Admin <i class="ti ti-chevron-down nav-section-chevron" aria-hidden="true"></i></div>
-      <div class="nav-item" data-tab="operation-logs" data-title="Operation Logs" title="Audit trail of admin actions">
-        <i class="ti ti-activity nav-icon" aria-hidden="true"></i> Operation Logs
-        <span class="nav-badge nav-badge-red" id="nav-error-logs-count" style="display:none;">0</span>
-      </div>
-      <div class="nav-item" data-tab="reports" data-title="Reports" title="Generate and download platform reports (PDF/Excel/CSV)">
-        <i class="ti ti-report nav-icon" aria-hidden="true"></i> Reports
-      </div>
     </nav>
     <div class="sidebar-footer">
       <div class="admin-info">
-        <div class="admin-avatar">AD</div>
-        <div>
-          <div class="admin-name">Admin</div>
-          <div class="admin-role">Super Admin</div>
+        <div class="admin-avatar" id="admin-avatar">AD</div>
+        <div class="admin-meta">
+          <div class="admin-name" id="admin-name">Admin</div>
+          <div class="admin-role" id="admin-role">Director</div>
         </div>
         <button class="logout-btn" id="logout-btn" title="Logout">
           <i class="ti ti-logout" aria-hidden="true"></i>
@@ -272,7 +332,9 @@
           <i class="ti ti-menu-2"></i>
         </button>
         <div class="page-info">
+          <div class="page-crumb" id="page-crumb">Main</div>
           <div class="page-title" id="page-title">Overview</div>
+          <div class="page-sub" id="page-sub"></div>
         </div>
         <div class="topbar-divider" style="display:none;" id="topbar-div-left"></div>
         <div id="last-refresh-tag" style="display:none;">
@@ -783,6 +845,23 @@
 
       <!-- ===== SPECIALIZATION REQUESTS TAB ===== -->
       <div id="tab-spec-requests" class="tab-section">
+        <!-- Profile changes awaiting approval (partners + doctors) -->
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-header">
+            <div>
+              <span class="card-title">Profile Change Requests</span>
+              <div class="data-fresh-label"><i class="ti ti-edit"></i> Active partners and doctors who edited their profile — nothing goes live until you approve</div>
+            </div>
+            <span class="pill pill-pending" id="pcr-count-pill">0 waiting</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Account</th><th>Type</th><th>Account ID</th><th>Fields changed</th><th>Actions</th></tr></thead>
+              <tbody id="pcr-tbody"><tr><td colspan="5" class="loading">Loading requests…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+
         <!-- Summary stats row -->
         <div class="grid-4" style="margin-bottom:16px;">
           <div class="card" style="text-align:center;padding:18px 12px;">
@@ -805,7 +884,7 @@
 
         <div class="card">
           <div class="card-header">
-            <span class="card-title">Doctor Specialization Requests</span>
+            <span class="card-title">Specialization Requests</span>
             <div style="display:flex;gap:8px;">
               <input id="sr-search" type="text" class="search-input" placeholder="Search by doctor or specialization..." />
               <select id="sr-status-filter" class="filter-select">
@@ -1028,46 +1107,51 @@
         </div>
       </div>
 
-      <!-- ===== REPORTS TAB ===== -->
+      <!-- ===== FINANCE REPORTS TAB ===== -->
       <div id="tab-reports" class="tab-section">
         <div class="card" style="margin-bottom:16px;">
-          <div class="card-header"><span class="card-title">Generate Report</span></div>
+          <div class="card-header"><span class="card-title">Financial Reports</span></div>
           <div class="report-form">
             <div class="form-group">
               <label class="form-label">Report type</label>
-              <select id="report-type" class="filter-select" style="width:100%;">
-                <option>Revenue Summary</option>
-                <option>Doctor Performance</option>
-                <option>Patient Analytics</option>
-                <option>Medicine Usage</option>
-                <option>Support Tickets</option>
+              <select id="fr-type" class="filter-select" style="width:100%;">
+                <option value="payments">Revenue &amp; Payments</option>
+                <option value="transactions">Wallet Transactions</option>
+                <option value="settlements">Partner Settlements</option>
+                <option value="commission_rules">Commission Rules</option>
+                <option value="coupons">Coupons</option>
+                <option value="refunds">Refunds</option>
+                <option value="referrals">Referrals</option>
+                <option value="hospital_bill_discounts">Bill Discounts</option>
+                <option value="hospital_bill_payments">Hospital Bill Payments</option>
               </select>
             </div>
             <div class="form-group">
               <label class="form-label">Date range</label>
-              <select id="report-range" class="filter-select" style="width:100%;">
-                <option>This Month</option>
-                <option>Last 3 Months</option>
-                <option>Last 6 Months</option>
-                <option>This Year</option>
+              <select id="fr-range" class="filter-select" style="width:100%;">
+                <option value="30">Last 30 days</option>
+                <option value="90">Last 3 months</option>
+                <option value="180">Last 6 months</option>
+                <option value="365">Last 12 months</option>
+                <option value="0">All time</option>
               </select>
             </div>
             <div class="form-group">
               <label class="form-label">Format</label>
-              <select class="filter-select" style="width:100%;">
-                <option>PDF</option>
-                <option>Excel</option>
-                <option>CSV</option>
+              <select id="fr-format" class="filter-select" style="width:100%;">
+                <option value="csv">CSV</option>
+                <option value="xls">Excel</option>
+                <option value="pdf">PDF (print)</option>
               </select>
             </div>
-            <button id="generate-report-btn" class="btn-generate">
+            <button type="button" id="fr-generate-btn" class="btn-generate" onclick="generateScopedReport('fr')">
               <i class="ti ti-download"></i> Generate
             </button>
           </div>
         </div>
         <div class="card">
           <div class="card-header"><span class="card-title">Generated Reports</span></div>
-          <div id="reports-list"><div class="loading">Loading reports...</div></div>
+          <div id="fr-reports-list"><div class="loading">Loading reports...</div></div>
         </div>
       </div>
 
@@ -2577,6 +2661,10 @@
 
       <!-- ===== APPOINTMENTS TAB ===== -->
       <div id="tab-appointments" class="tab-section">
+        <div class="seg-switch" role="tablist">
+          <button class="seg-btn active" onclick="switchTab('appointments','Appointments')">Appointments</button>
+          <button class="seg-btn" onclick="switchTab('calls','Live Calls')">Live Calls</button>
+        </div>
 
         <!-- Stats Row -->
         <div class="metrics-grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:20px;">
@@ -2658,6 +2746,10 @@
 
       <!-- ===== LIVE CALLS TAB ===== -->
       <div id="tab-calls" class="tab-section">
+        <div class="seg-switch" role="tablist">
+          <button class="seg-btn" onclick="switchTab('appointments','Appointments')">Appointments</button>
+          <button class="seg-btn active" onclick="switchTab('calls','Live Calls')">Live Calls</button>
+        </div>
 
         <!-- Stats Row -->
         <div class="metrics-grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:20px;">
@@ -3806,7 +3898,7 @@
         </div>
         <div class="card">
           <div class="card-header">
-            <span class="card-title">All Care Partners</span>
+            <span class="card-title" id="cp-title">All Care Partners</span>
             <button class="btn btn-outline" id="cp-bulk-approve-btn" onclick="bulkApproveSelectedPartners('caregiver')" disabled>
               <i class="ti ti-checks"></i> Approve Selected (<span id="cp-selected-count">0</span>)
             </button>
@@ -4714,6 +4806,216 @@
         </div>
       </div>
 
+
+      <!-- ===== MY DASHBOARD (role-specific home) ===== -->
+      <div id="tab-home" class="tab-section">
+        <div class="home-hero">
+          <div class="home-hero-text">
+            <div class="home-eyebrow" id="home-eyebrow">Welcome back</div>
+            <h2 class="home-title" id="home-title">My Dashboard</h2>
+            <p class="home-sub" id="home-sub"></p>
+          </div>
+          <div class="home-role-chip" id="home-role-chip"><i class="ti ti-shield-check"></i> <span>Profile</span></div>
+        </div>
+        <div id="home-attention" class="home-attention" style="display:none;"></div>
+        <div id="home-sections" class="home-sections"></div>
+      </div>
+
+      <!-- ===== PARTNER ACCOUNTS (read-only list: ID + status — no documents) ===== -->
+      <div id="tab-accounts" class="tab-section">
+        <div class="acct-privacy-note">
+          <i class="ti ti-lock"></i>
+          <span>Account directory only. Verification documents and approvals are handled by the Director under <b>Main</b>.</span>
+        </div>
+        <div class="grid-4 acct-stats" id="acct-stats"></div>
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <span class="card-title" id="acct-title">Accounts</span>
+              <div class="data-fresh-label" id="acct-sub"></div>
+            </div>
+            <div class="card-tools">
+              <input id="acct-search" type="text" class="search-input" placeholder="Search name, ID, phone, city…" oninput="renderAccountsView()" />
+              <select id="acct-status-filter" class="filter-select" onchange="renderAccountsView()">
+                <option value="all">All status</option>
+                <option value="active">Active</option>
+                <option value="pending">Pending</option>
+                <option value="flagged">Flagged</option>
+                <option value="deactivated">Deactivated</option>
+              </select>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Account</th><th>Account ID</th><th>Phone</th><th>Location</th><th>Rating</th><th>Joined</th><th>Status</th></tr>
+              </thead>
+              <tbody id="acct-tbody"><tr><td colspan="7" class="loading">Loading accounts…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== MINOR REQUESTS (profile photo + phone number changes) ===== -->
+      <div id="tab-minor-requests" class="tab-section">
+        <div class="grid-4" style="margin-bottom:16px;">
+          <div class="card stat-tile"><div class="stat-num" style="color:#f57f17;" id="mr-count-pending">0</div><div class="stat-lbl">Pending</div></div>
+          <div class="card stat-tile"><div class="stat-num" style="color:#2e7d32;" id="mr-count-approved">0</div><div class="stat-lbl">Approved</div></div>
+          <div class="card stat-tile"><div class="stat-num" style="color:#c62828;" id="mr-count-rejected">0</div><div class="stat-lbl">Rejected</div></div>
+          <div class="card stat-tile"><div class="stat-num" style="color:var(--primary);" id="mr-count-total">0</div><div class="stat-lbl">Total</div></div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Profile Photo &amp; Phone Number Changes</span>
+            <div class="card-tools">
+              <select id="mr-type-filter" class="filter-select" onchange="renderMinorRequests()">
+                <option value="all">All types</option>
+                <option value="photo">Profile photo</option>
+                <option value="phone">Phone number</option>
+              </select>
+              <select id="mr-status-filter" class="filter-select" onchange="renderMinorRequests()">
+                <option value="pending">Pending</option>
+                <option value="all">All status</option>
+                <option value="approved">Approved</option>
+                <option value="rejected">Rejected</option>
+              </select>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>User</th><th>Change</th><th>Current</th><th>Requested</th><th>Submitted</th><th>Status</th><th>Actions</th></tr></thead>
+              <tbody id="mr-tbody"><tr><td colspan="7" class="loading">Loading requests…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== TRACKING OF ORDERS ===== -->
+      <div id="tab-order-tracking" class="tab-section">
+        <div class="grid-4" style="margin-bottom:16px;" id="ot-stats"></div>
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <span class="card-title">Order Tracking</span>
+              <div class="data-fresh-label"><i class="ti ti-broadcast"></i> Live — pharmacy, equipment and diagnostic orders</div>
+            </div>
+            <div class="card-tools">
+              <input id="ot-search" type="text" class="search-input" placeholder="Search order ID, patient, vendor…" oninput="renderOrderTracking()" />
+              <select id="ot-type-filter" class="filter-select" onchange="renderOrderTracking()">
+                <option value="all">All orders</option>
+                <option value="pharmacy">Pharmacy</option>
+                <option value="equipment">Equipment</option>
+                <option value="diagnostics">Diagnostics</option>
+              </select>
+              <select id="ot-status-filter" class="filter-select" onchange="renderOrderTracking()">
+                <option value="all">All status</option>
+                <option value="open">In progress</option>
+                <option value="done">Delivered / completed</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Order</th><th>Type</th><th>Patient</th><th>Vendor</th><th>Amount</th><th>Placed</th><th>Status</th></tr></thead>
+              <tbody id="ot-tbody"><tr><td colspan="7" class="loading">Loading orders…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== AMBULANCE TRACKING ===== -->
+      <div id="tab-ambulance-tracking" class="tab-section">
+        <div class="grid-4" style="margin-bottom:16px;" id="at-stats"></div>
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <span class="card-title">Ambulance Requests &amp; Trips</span>
+              <div class="data-fresh-label"><i class="ti ti-broadcast"></i> Live — ambulance_requests</div>
+            </div>
+            <div class="card-tools">
+              <input id="at-search" type="text" class="search-input" placeholder="Search patient, driver, pickup…" oninput="renderAmbulanceTracking()" />
+              <select id="at-status-filter" class="filter-select" onchange="renderAmbulanceTracking()">
+                <option value="all">All status</option>
+                <option value="active">On the way / in progress</option>
+                <option value="pending">Waiting for a driver</option>
+                <option value="done">Completed</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Request</th><th>Patient</th><th>Driver</th><th>Pickup</th><th>Destination</th><th>Placed</th><th>Status</th></tr></thead>
+              <tbody id="at-tbody"><tr><td colspan="7" class="loading">Loading ambulance requests…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== HEALTH DATA (of a patient ID) ===== -->
+      <div id="tab-health-data" class="tab-section">
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-header">
+            <div>
+              <span class="card-title">Patient Health Data</span>
+              <div class="data-fresh-label"><i class="ti ti-lock"></i> Sensitive — opened by exact patient ID only. Every lookup is recorded in Operation Logs.</div>
+            </div>
+          </div>
+          <form class="hd-search" onsubmit="lookupHealthData(event)">
+            <input id="hd-patient-id" type="text" class="search-input" placeholder="Enter patient ID (e.g. the UID shown under Support → Patients)" autocomplete="off" />
+            <button type="submit" class="btn-primary" id="hd-search-btn"><i class="ti ti-search"></i> Look up</button>
+          </form>
+        </div>
+        <div id="hd-result">
+          <div class="empty-state"><div class="empty-icon"><i class="ti ti-heartbeat"></i></div><p>Enter a patient ID to view their health data.</p></div>
+        </div>
+      </div>
+
+      <!-- ===== QUALITY REPORTS ===== -->
+      <div id="tab-quality-reports" class="tab-section">
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-header"><span class="card-title">Quality Analytics Reports</span></div>
+          <div class="report-form">
+            <div class="form-group">
+              <label class="form-label">Report type</label>
+              <select id="qr-type" class="filter-select" style="width:100%;">
+                <option value="doctor_reviews">Doctor Reviews</option>
+                <option value="feedback">Patient Feedback</option>
+                <option value="weekly_quality_reports">Weekly Quality Scorecards</option>
+                <option value="support_tickets">Support Tickets</option>
+                <option value="operation_logs">Operation Logs</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Date range</label>
+              <select id="qr-range" class="filter-select" style="width:100%;">
+                <option value="30">Last 30 days</option>
+                <option value="90">Last 3 months</option>
+                <option value="180">Last 6 months</option>
+                <option value="365">Last 12 months</option>
+                <option value="0">All time</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Format</label>
+              <select id="qr-format" class="filter-select" style="width:100%;">
+                <option value="csv">CSV</option>
+                <option value="xls">Excel</option>
+                <option value="pdf">PDF (print)</option>
+              </select>
+            </div>
+            <button type="button" id="qr-generate-btn" class="btn-generate" onclick="generateScopedReport('qr')">
+              <i class="ti ti-download"></i> Generate
+            </button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">Generated Reports</span></div>
+          <div id="qr-reports-list"><div class="loading">Loading reports...</div></div>
+        </div>
+      </div>
+
     </div><!-- /content -->
   </div><!-- /main -->
 </div><!-- /app -->
@@ -4808,7 +5110,8 @@
 </div>
 
 <script src="js/firebase-config.js?v=20260925a"></script>
-<script src="js/app.js?v=20260925a"></script>
+<script src="js/app.js?v=20261105a"></script>
+<script src="js/panel.js?v=20261105a"></script>
 <script src="js/web-ads.js?v=20260925a"></script>
 </body>
 </html>

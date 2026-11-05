@@ -6,7 +6,7 @@
  * implementing its own retry loop.
  */
 
-const {onDocumentWritten} = require("firebase-functions/v2/firestore");
+const {onDocumentWritten, onDocumentCreated} = require("firebase-functions/v2/firestore");
 const {getFirestore} = require("firebase-admin/firestore");
 const {
   REGION,
@@ -24,7 +24,7 @@ const {
   WHATSAPP_VERIFY_TOKEN,
   WHATSAPP_PHONE_NUMBER_ID,
 } = require("./config");
-const {getRecipient, notifyOnce, formatWhen, shortId, parseApptDateTime, cleanName} = require("./notify");
+const {getRecipient, guestRecipient, oneLine, notifyOnce, formatWhen, shortId, parseApptDateTime, cleanName} = require("./notify");
 
 // Every trigger needs at least the send secrets/params (notifyOnce ->
 // sendTemplate reads them); listed once here and spread into each trigger's
@@ -310,7 +310,64 @@ const onSettlementWritten = onDocumentWritten(
   },
 );
 
+// ── Prescriptions (prescriptions/{id}) ──────────────────────────────────────
+//
+// Fires once when a doctor issues a prescription. Goes to the account holder
+// (only if they opted in to WhatsApp, like every other patient message) and,
+// when the booking was made for a family member with a guest phone number, to
+// that number too. Each send is deduped per prescription + recipient, so a
+// retry never double-sends.
+const onPrescriptionCreated = onDocumentCreated(
+  {
+    document: `${COLLECTIONS.prescriptions}/{prescriptionId}`,
+    region: REGION,
+    retry: true,
+    secrets: _SEND_SECRETS,
+  },
+  async (event) => {
+    const rx = event.data?.data();
+    if (!rx) return;
+    const prescriptionId = event.params.prescriptionId;
+
+    const doctorName = cleanName(rx.doctorName) || "your doctor";
+    const forName = cleanName(rx.patientName) || "the patient";
+    const diagnosis = oneLine(rx.diagnosis, 120) || "see the MedNU app";
+    const medicineList = (Array.isArray(rx.medicines) ? rx.medicines : [])
+      .map((m) => {
+        const name = oneLine(m?.medicineName || m?.name, 40);
+        if (!name) return "";
+        const bits = [oneLine(m?.strength, 20), oneLine(m?.duration, 15)].filter(Boolean);
+        return bits.length ? `${name} (${bits.join(", ")})` : name;
+      })
+      .filter(Boolean);
+    const medicines = oneLine(medicineList.join("; "), 500) || "see the MedNU app";
+    const rxId = rx.rxId || shortId(prescriptionId, "RX");
+
+    const send = (dedupeKey, recipient) =>
+      notifyOnce(
+        dedupeKey,
+        recipient,
+        "mednu_prescription_ready",
+        [recipient.firstName, doctorName, forName, diagnosis, medicines, rxId],
+        prescriptionId,
+      );
+
+    const patient = await getRecipient(COLLECTIONS.users, rx.patientId, rx.patientName);
+    if (patient) await send(`rx_patient:${prescriptionId}`, patient);
+
+    if (rx.appointmentId) {
+      const apptSnap = await getFirestore().collection(COLLECTIONS.appointments).doc(rx.appointmentId).get();
+      const appt = apptSnap.data() || {};
+      const guest = guestRecipient(appt.guestPhone, appt.guestDisplayName || appt.patientName);
+      if (guest && (!patient || guest.phone !== patient.phone)) {
+        await send(`rx_guest:${prescriptionId}`, guest);
+      }
+    }
+  },
+);
+
 module.exports = {
+  onPrescriptionCreated,
   onAppointmentWritten,
   onOrderWritten,
   onLabServiceRequestWritten,

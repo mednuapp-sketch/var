@@ -40,6 +40,9 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
   final _clinicNameCtrl = TextEditingController();
   final _clinicAddrCtrl = TextEditingController();
   String? _selectedSpec;
+  // 'online' | 'inperson' | 'both' — decides whether clinic details are asked.
+  String _consultMode = 'online';
+  bool get _needsClinic => _consultMode != 'online';
   String? _clinicAddrError;
   double? _clinicLat;
   double? _clinicLng;
@@ -102,6 +105,17 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    // Phone comes from the OTP login; show it so the field is truly auto-filled.
+    final digits = (FirebaseAuth.instance.currentUser?.phoneNumber ?? '')
+        .replaceAll(RegExp(r'\D'), '');
+    if (digits.length >= 10) {
+      _phoneCtrl.text = digits.substring(digits.length - 10);
+    }
+  }
+
+  @override
   void dispose() {
     _pageController.dispose();
     _nameCtrl.dispose();
@@ -155,10 +169,13 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
     if (_expCtrl.text.trim().isEmpty) {
       _snack('Please enter years of experience'); return false;
     }
-    if (_feeCtrl.text.trim().isEmpty) {
-      _snack('Please enter your consultation fee'); return false;
+    if (Validators.money(_feeCtrl.text, min: 1) != null) {
+      _snack('Please enter a valid consultation fee'); return false;
     }
-    if (_clinicAddrCtrl.text.trim().isEmpty) {
+    if (int.tryParse(_expCtrl.text.trim()) == null) {
+      _snack('Please enter your experience as a number of years'); return false;
+    }
+    if (_needsClinic && _clinicAddrCtrl.text.trim().isEmpty) {
       setState(() => _clinicAddrError = 'Enter your clinic/hospital consultation address');
       _snack('Please enter your consultation address'); return false;
     }
@@ -230,7 +247,12 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
   // ── Submit ────────────────────────────────────────────────────────────────
 
   Future<void> _submit() async {
-    if (!_allDocsUploaded) {
+    // Re-check every step, not just the documents, so no earlier page's
+    // details can be skipped on the way to the final submit.
+    if (!_validatePage1() || !_validatePage2()) return;
+    final docFiles = [_mbbsDegreeFile, _specCertFile, _mbbsRegCertFile,
+        _renewalCertFile, _profilePhotoFile];
+    if (!_allDocsUploaded || docFiles.any((f) => !f!.existsSync())) {
       _snack('Please upload all 5 required documents before submitting');
       return;
     }
@@ -277,12 +299,12 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
         fee:                _feeCtrl.text.trim(),
         gender:             _selectedGender,
         registrationNumber: _regNoCtrl.text.trim(),
-        clinicName:         _clinicNameCtrl.text.trim(),
-        clinicAddress:      _clinicAddrCtrl.text.trim(),
+        clinicName:         _needsClinic ? _clinicNameCtrl.text.trim() : '',
+        clinicAddress:      _needsClinic ? _clinicAddrCtrl.text.trim() : '',
         languages:          _selectedLanguages,
-        clinicLat:          _clinicLat,
-        clinicLng:          _clinicLng,
-        clinicCity:         _clinicCity,
+        clinicLat:          _needsClinic ? _clinicLat : null,
+        clinicLng:          _needsClinic ? _clinicLng : null,
+        clinicCity:         _needsClinic ? _clinicCity : '',
         documentUrls:       urls,
       );
 
@@ -352,15 +374,31 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
 
   Widget _buildStepBar() => Container(
     color: Colors.white,
-    padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+    padding: const EdgeInsets.fromLTRB(8, 12, 8, 14),
     child: Row(
       children: List.generate(4, (i) {
         final isActive = i == _currentPage;
         final isDone   = i < _currentPage;
+        final lineColor = (i < _currentPage) ? AppColors.success : AppColors.divider;
+        final prevLineColor = (i - 1 < _currentPage) ? AppColors.success : AppColors.divider;
         return Expanded(
-          child: Row(children: [
-            Expanded(
-              child: Column(children: [
+          child: Column(children: [
+            SizedBox(
+              height: 32,
+              child: Stack(alignment: Alignment.center, children: [
+                // Connector lines run centre-to-edge so circles stay centred
+                // over their (equal-width) label columns.
+                Row(children: [
+                  Expanded(
+                    child: Container(
+                        height: 2, color: i == 0 ? Colors.transparent : prevLineColor),
+                  ),
+                  const SizedBox(width: 32),
+                  Expanded(
+                    child: Container(
+                        height: 2, color: i == 3 ? Colors.transparent : lineColor),
+                  ),
+                ]),
                 AnimatedContainer(
                   duration: const Duration(milliseconds: 250),
                   width: 32, height: 32,
@@ -376,27 +414,27 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
                     size: 16,
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
+              ]),
+            ),
+            const SizedBox(height: 6),
+            SizedBox(
+              width: double.infinity,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
                   _stepLabels[i],
+                  maxLines: 1,
+                  softWrap: false,
+                  textAlign: TextAlign.center,
                   style: TextStyle(
                     fontFamily: 'Inter',
-                    fontSize: 9,
+                    fontSize: 11,
                     fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
                     color: isActive ? AppColors.primary : AppColors.textHint,
                   ),
                 ),
-              ]),
-            ),
-            if (i < 3)
-              Expanded(
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 250),
-                  height: 2,
-                  margin: const EdgeInsets.only(bottom: 18),
-                  color: isDone ? AppColors.success : AppColors.divider,
-                ),
               ),
+            ),
           ]),
         );
       }),
@@ -577,6 +615,35 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
         )).toList(),
       ),
       const SizedBox(height: 20),
+      const _SectionHeader(icon: Icons.event_available_rounded, title: 'How will you consult?', subtitle: 'Choose how patients can book you'),
+      const SizedBox(height: 12),
+      Wrap(spacing: 8, runSpacing: 8, children: [
+        for (final m in const [
+          ('online', 'Online', Icons.videocam_rounded),
+          ('inperson', 'In-person', Icons.local_hospital_rounded),
+          ('both', 'Both', Icons.swap_horiz_rounded),
+        ])
+          ChoiceChip(
+            avatar: Icon(m.$3, size: 16,
+                color: _consultMode == m.$1 ? AppColors.primary : AppColors.textSecondary),
+            label: Text(m.$2, style: const TextStyle(fontFamily: 'Inter', fontSize: 13)),
+            selected: _consultMode == m.$1,
+            selectedColor: AppColors.primary.withValues(alpha: 0.12),
+            showCheckmark: false,
+            onSelected: (_) => setState(() {
+              _consultMode = m.$1;
+              _clinicAddrError = null;
+            }),
+          ),
+      ]),
+      if (_needsClinic) ..._clinicSection(),
+      const SizedBox(height: 32),
+      _NextButton(onTap: () { if (_validatePage2()) _nextPage(); }),
+    ]),
+  );
+
+  List<Widget> _clinicSection() => [
+      const SizedBox(height: 20),
       const _SectionHeader(icon: Icons.local_hospital_rounded, title: 'Clinic / Hospital Details', subtitle: 'Where patients will meet you in person'),
       const SizedBox(height: 14),
       _field('Clinic / Hospital Name', _clinicNameCtrl, 'e.g. Sunshine Multispeciality Clinic'),
@@ -610,10 +677,7 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
           style: TextStyle(fontFamily: 'Inter', fontSize: 11, color: AppColors.textSecondary),
         ),
       ),
-      const SizedBox(height: 32),
-      _NextButton(onTap: () { if (_validatePage2()) _nextPage(); }),
-    ]),
-  );
+  ];
 
   // ── PAGE 3 — Document Upload ──────────────────────────────────────────────
 

@@ -369,8 +369,6 @@ class _EquipmentProfileScreenState extends ConsumerState<EquipmentProfileScreen>
                 name: profile.name,
                 subtitle: profile.licenseNumber.isEmpty ? null : 'License ${profile.licenseNumber}',
                 stats: [
-                  PartnerHeroStat(label: 'Rating', value: profile.rating.toStringAsFixed(1), icon: Icons.star_rounded),
-                  PartnerHeroStat(label: 'Reviews', value: '${profile.totalReviews}', icon: Icons.rate_review_outlined),
                   PartnerHeroStat(label: 'Status', value: profile.status == 'active' ? 'Active' : 'Pending', icon: Icons.verified_outlined),
                 ],
               ),

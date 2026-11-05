@@ -45,8 +45,8 @@ class PartnerDocumentType {
   ];
 
   static const caregiver = <PartnerDocumentType>[
-    PartnerDocumentType('caregiver_id', 'Nurse ID'),
-    PartnerDocumentType('certificates', 'Certificates'),
+    PartnerDocumentType('caregiver_id', 'Government ID / Nurse ID'),
+    PartnerDocumentType('certificates', 'Certificates / Police Verification'),
     PartnerDocumentType('address_proof', 'Address Proof'),
   ];
 

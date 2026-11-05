@@ -23,7 +23,7 @@ class LabSettingsScreen extends StatefulWidget {
 class _LabSettingsScreenState extends State<LabSettingsScreen> {
   bool _notifyNewBookings = true;
   bool _notifySampleCollection = true;
-  bool _whatsappOptIn = false;
+  bool _whatsappOptIn = true;
   String _appVersion = '';
 
   // Biometric lock state — device-local, independent of the profile stream
@@ -82,7 +82,7 @@ class _LabSettingsScreenState extends State<LabSettingsScreen> {
     if (uid == null) return;
     try {
       final doc = await FirebaseFirestore.instance.collection('lab_profiles').doc(uid).get();
-      if (mounted) setState(() => _whatsappOptIn = doc.data()?['whatsappOptIn'] == true);
+      if (mounted) setState(() => _whatsappOptIn = doc.data()?['whatsappOptIn'] != false);
     } catch (_) {}
   }
 

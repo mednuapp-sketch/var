@@ -484,7 +484,7 @@ class _DoctorLoginScreenState extends State<DoctorLoginScreen>
           final statusSnap = role == AppRole.doctor
               ? doctorSnap
               : await FirebaseFirestore.instance
-                  .collection('${role.firestoreValue}_profiles')
+                  .collection(role.profileCollection)
                   .doc(uid)
                   .get();
           if (!mounted || !context.mounted) return;

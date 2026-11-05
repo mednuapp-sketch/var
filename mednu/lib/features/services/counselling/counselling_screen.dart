@@ -280,50 +280,15 @@ class _CounsellingScreenState extends State<CounsellingScreen> {
       backgroundColor: context.appBackground,
       body: CustomScrollView(
         slivers: [
-          SliverAppBar(
-            pinned: true,
-            backgroundColor: const Color(0xFF3D1D36),
-            expandedHeight: AppSpacing.headerHeight(context),
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-              onPressed: () => context.safeBack(),
-            ),
-            flexibleSpace: FlexibleSpaceBar(
-              background: Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Color(0xFF3D1D36), Color(0xFF633058)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                ),
-                child: SafeArea(
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      return SingleChildScrollView(
-                        physics: const ClampingScrollPhysics(),
-                        child: ConstrainedBox(
-                          constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                          child: Padding(
-                            padding: AppSpacing.headerPadding(context),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.psychology_rounded, color: Colors.white, size: AppSpacing.headerIconSize(context)),
-                                SizedBox(height: AppSpacing.headerIconGap(context)),
-                                const Text('Therapy and Counselling', style: AppTextStyles.onPrimaryH2),
-                                const Text('Confidential mental health support', style: AppTextStyles.onPrimaryBody),
-                              ],
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ),
+          const AppSliverHeader(
+            icon: Icons.psychology_rounded,
+            title: 'Therapy and Counselling',
+            subtitle: 'Confidential mental health support',
+            color: Color(0xFF3D1D36),
+            gradient: LinearGradient(
+              colors: [Color(0xFF3D1D36), Color(0xFF633058)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             ),
           ),
           SliverToBoxAdapter(

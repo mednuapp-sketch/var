@@ -2,11 +2,9 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
-import '../../../core/router/app_router.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../../../core/utils/r.dart';
 
@@ -386,28 +384,18 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
   }
 
   // ── App Bar ────────────────────────────────────────────
-  SliverAppBar _buildAppBar() {
+  Widget _buildAppBar() {
     final serviceIcon =
         _serviceTypeIcons[_serviceType] ?? Icons.medical_services_rounded;
-    return SliverAppBar(
-      pinned: true,
-      expandedHeight: R.h(context, 160),
-      backgroundColor: _kGreen,
-      leading: Padding(
-        padding: EdgeInsets.all(R.p(context, 8)),
-        child: Material(
-          color: Colors.white.withValues(alpha: 0.15),
-          shape: const CircleBorder(),
-          child: InkWell(
-            onTap: () => context.canPop() ? context.pop() : context.go(AppRoutes.home),
-            customBorder: const CircleBorder(),
-            child: Padding(
-              padding: EdgeInsets.all(R.p(context, 8)),
-              child: Icon(Icons.arrow_back_ios_new_rounded,
-                  color: Colors.white, size: R.w(context, 18)),
-            ),
-          ),
-        ),
+    return AppSliverHeader(
+      icon: serviceIcon,
+      title: _serviceName,
+      subtitle: 'Track your booking',
+      color: _kGreen,
+      gradient: const LinearGradient(
+        colors: [Color(0xFF1B5E20), _kGreen],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
       ),
       actions: [
         Padding(
@@ -420,65 +408,6 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen>
           ),
         ),
       ],
-      flexibleSpace: FlexibleSpaceBar(
-        collapseMode: CollapseMode.pin,
-        background: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Color(0xFF1B5E20), _kGreen],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-          ),
-          child: SafeArea(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                return SingleChildScrollView(
-                  physics: const ClampingScrollPhysics(),
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                    child: Padding(
-                      padding: EdgeInsets.fromLTRB(R.p(context, 20), R.p(context, 52), R.p(context, 20), R.p(context, 16)),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Container(
-                            width: R.w(context, 52), height: R.h(context, 52),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(R.r(context, 16)),
-                            ),
-                            child: Icon(serviceIcon, color: Colors.white, size: R.w(context, 28)),
-                          ),
-                          SizedBox(width: R.w(context, 14)),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  _serviceName,
-                                  style: AppTextStyles.onPrimaryH2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                const Text(
-                                  'Track your booking',
-                                  style: AppTextStyles.onPrimaryBody,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ),
-      ),
     );
   }
 

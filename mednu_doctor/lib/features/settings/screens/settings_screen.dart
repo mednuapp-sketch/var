@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../shared_core/providers/role_providers.dart';
+import '../../../shared_core/widgets/role_switcher_sheet.dart';
 import '../../auth/screens/partner_role_select_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -31,7 +32,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _notifAppointments     = true;
   bool _notifConsultations    = true;
   bool _notifPayments         = true;
-  bool _whatsappOptIn         = false;
+  bool _whatsappOptIn         = true;
   int  _apptReminderMinutes   = 15;
   bool _loading = true;
   String _appVersion = '';
@@ -59,7 +60,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           setState(() {
             _doctorName     = profile?['name'] as String?;
             _doctorSpecialty = profile?['specialty'] as String?;
-            _whatsappOptIn  = profile?['whatsappOptIn'] == true;
+            _whatsappOptIn  = profile?['whatsappOptIn'] != false;
           });
         }
       } catch (_) {}
@@ -362,6 +363,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             onTap: () => context.push(AppRoutes.helpSupport),
                           ),
                           _divider(),
+                          if (ProviderScope.containerOf(context)
+                              .read(roleEngineProvider)
+                              .canSwitchRoles) ...[
+                            _SettingsTile(
+                              icon: Icons.swap_horiz_rounded,
+                              iconColor: AppColors.primary,
+                              title: 'Switch profile',
+                              onTap: () => showRoleSwitcherSheet(context),
+                            ),
+                            _divider(),
+                          ],
                           _SettingsTile(
                             icon: Icons.add_circle_outline_rounded,
                             iconColor: AppColors.primary,
@@ -371,7 +383,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   .read(roleEngineProvider)
                                   .roles;
                               Navigator.of(context).push(MaterialPageRoute(
-                                builder: (_) => PartnerRoleSelectScreen(existingRoles: roles.toSet()),
+                                builder: (_) => PartnerRoleSelectScreen(existingRoles: roles.toSet(), addingService: true),
                               ));
                             },
                           ),

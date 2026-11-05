@@ -4,7 +4,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/utils/r.dart';
 
-import '../../../core/router/app_router.dart';
+import '../../../core/widgets/ux_widgets.dart';
 // ─────────────────────────────────────────────────────────────────────────────
 //  Privacy Policy Screen
 // ─────────────────────────────────────────────────────────────────────────────
@@ -101,107 +101,11 @@ class PrivacyPolicyScreen extends StatelessWidget {
         physics: const BouncingScrollPhysics(),
         slivers: [
           // Hero header
-          SliverAppBar(
-            pinned: true,
-            expandedHeight: R.h(context, 200),
-            leading: Padding(
-              padding: EdgeInsets.all(R.p(context, 8)),
-              child: Material(
-                color: Colors.white.withValues(alpha: 0.15),
-                shape: const CircleBorder(),
-                child: InkWell(
-                  onTap: () => context.safeBack(),
-                  customBorder: const CircleBorder(),
-                  child: Padding(
-                    padding: EdgeInsets.all(R.p(context, 8)),
-                    child: Icon(Icons.arrow_back_ios_new_rounded,
-                        color: Colors.white, size: R.w(context, 18)),
-                  ),
-                ),
-              ),
-            ),
-            flexibleSpace: FlexibleSpaceBar(
-              collapseMode: CollapseMode.pin,
-              background: Container(
-                decoration: const BoxDecoration(
-                    gradient: AppColors.primaryGradient),
-                child: Stack(
-                  children: [
-                    Positioned(
-                      top: -50, right: -40,
-                      child: Container(
-                        width: R.w(context, 160), height: R.h(context, 160),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.white.withValues(alpha: 0.06),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      bottom: 0, left: -20,
-                      child: Container(
-                        width: R.w(context, 100), height: R.h(context, 100),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.white.withValues(alpha: 0.05),
-                        ),
-                      ),
-                    ),
-                    SafeArea(
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          return SingleChildScrollView(
-                            physics: const ClampingScrollPhysics(),
-                            reverse: true,
-                            child: ConstrainedBox(
-                              constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                              child: Padding(
-                        padding: EdgeInsets.fromLTRB(R.p(context, 20), R.p(context, 48), R.p(context, 20), R.p(context, 20)),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            Container(
-                              padding: EdgeInsets.all(R.p(context, 10)),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(R.r(context, 12)),
-                              ),
-                              child: Icon(
-                                  Icons.privacy_tip_rounded,
-                                  color: Colors.white, size: R.w(context, 24)),
-                            ),
-                            SizedBox(height: R.h(context, 12)),
-                            const Text(
-                              'Privacy Policy',
-                              style: TextStyle(
-                                fontFamily: 'Poppins',
-                                fontSize: 26,
-                                fontWeight: FontWeight.w800,
-                                color: Colors.white,
-                              ),
-                            ),
-                            SizedBox(height: R.h(context, 4)),
-                            const Text(
-                              'Last updated: $_lastUpdated',
-                              style: TextStyle(
-                                fontFamily: 'Poppins',
-                                fontSize: 12,
-                                color: Colors.white60,
-                              ),
-                            ),
-                          ],
-                        ),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+          const AppSliverHeader(
+            icon: Icons.privacy_tip_rounded,
+            title: 'Privacy Policy',
+            subtitle: 'Last updated: $_lastUpdated',
+            gradient: AppColors.primaryGradient,
           ),
 
           SliverToBoxAdapter(

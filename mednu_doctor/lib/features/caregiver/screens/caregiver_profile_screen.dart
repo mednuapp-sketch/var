@@ -62,7 +62,7 @@ class _CaregiverProfileScreenState extends ConsumerState<CaregiverProfileScreen>
     var lat = current.lat;
     var lng = current.lng;
     var gender = current.gender.isEmpty ? 'Female' : current.gender;
-    var serviceType = current.serviceType;
+    final serviceType = current.serviceType;
 
     const fieldGap = SizedBox(height: 16);
 
@@ -77,26 +77,6 @@ class _CaregiverProfileScreenState extends ConsumerState<CaregiverProfileScreen>
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 TextField(controller: name, decoration: const InputDecoration(labelText: 'Full name')),
-                fieldGap,
-                Text('I offer', style: AppTextStyles.labelMedium.copyWith(color: AppColors.textSecondary)),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    (value: 'caregiver', label: 'Nurse'),
-                    (value: 'care_assistant', label: 'Care Assistant'),
-                  ].map((opt) => ChoiceChip(
-                        label: Text(opt.label),
-                        selected: serviceType == opt.value,
-                        onSelected: (_) => setDialogState(() => serviceType = opt.value),
-                        selectedColor: AppColors.primary.withValues(alpha: 0.16),
-                        labelStyle: TextStyle(
-                          color: serviceType == opt.value ? AppColors.primary : AppColors.textSecondary,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      )).toList(),
-                ),
                 fieldGap,
                 Text('Gender', style: AppTextStyles.labelMedium.copyWith(color: AppColors.textSecondary)),
                 const SizedBox(height: 8),

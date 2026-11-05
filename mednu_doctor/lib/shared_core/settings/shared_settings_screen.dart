@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../features/auth/screens/partner_role_select_screen.dart';
 import '../models/app_role.dart';
 import '../providers/role_providers.dart';
+import '../widgets/role_switcher_sheet.dart';
 import '../../core/widgets/ux_widgets.dart';
 import 'settings_models.dart';
 import 'settings_widgets.dart';
@@ -48,6 +49,20 @@ class SharedSettingsScreen extends ConsumerWidget {
             sliver: SliverList(
               delegate: SliverChildListDelegate([
                 for (final section in sections) SharedSettingsSection(data: section),
+                if (engine.canSwitchRoles)
+                  SharedSettingsSection(
+                    data: SettingsSectionData(
+                      title: 'Profiles',
+                      items: [
+                        SettingsItemData(
+                          icon: Icons.swap_horiz_rounded,
+                          title: 'Switch profile',
+                          subtitle: 'Move between your services',
+                          onTap: () => showRoleSwitcherSheet(context),
+                        ),
+                      ],
+                    ),
+                  ),
                 if (canAddService)
                   SharedSettingsSection(
                     data: SettingsSectionData(
@@ -58,7 +73,7 @@ class SharedSettingsScreen extends ConsumerWidget {
                           title: 'Add another service',
                           subtitle: 'Offer an additional service from this account',
                           onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                            builder: (_) => PartnerRoleSelectScreen(existingRoles: engine.roles.toSet()),
+                            builder: (_) => PartnerRoleSelectScreen(existingRoles: engine.roles.toSet(), addingService: true),
                           )),
                         ),
                       ],

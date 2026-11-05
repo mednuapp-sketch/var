@@ -223,52 +223,17 @@ class PhysioScreen extends ConsumerWidget {
       backgroundColor: context.appBackground,
       body: CustomScrollView(
         slivers: [
-          SliverAppBar(
-            pinned: true,
-            backgroundColor: const Color(0xFF0D47A1),
-            expandedHeight: AppSpacing.headerHeight(context),
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-              onPressed: () => context.canPop() ? context.pop() : context.go(AppRoutes.home),
+          const AppSliverHeader(
+            icon: Icons.fitness_center_rounded,
+            title: 'Physiotherapy',
+            subtitle: 'Certified physiotherapists • Online & Home',
+            color: Color(0xFF0D47A1),
+            gradient: LinearGradient(
+              colors: [Color(0xFF0D47A1), Color(0xFF42A5F5)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             ),
-            actions: const [CartBadgeAction()],
-            flexibleSpace: FlexibleSpaceBar(
-              background: Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Color(0xFF0D47A1), Color(0xFF42A5F5)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                ),
-                child: SafeArea(
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      return SingleChildScrollView(
-                        physics: const ClampingScrollPhysics(),
-                        child: ConstrainedBox(
-                          constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                          child: Padding(
-                            padding: AppSpacing.headerPadding(context),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.fitness_center_rounded, color: Colors.white, size: AppSpacing.headerIconSize(context)),
-                                SizedBox(height: AppSpacing.headerIconGap(context)),
-                                const Text('Physiotherapy', style: AppTextStyles.onPrimaryH2),
-                                const Text('Certified physiotherapists • Online & Home', style: AppTextStyles.onPrimaryBody),
-                              ],
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ),
-            ),
+            actions: [CartBadgeAction()],
           ),
           SliverToBoxAdapter(
             child: Padding(

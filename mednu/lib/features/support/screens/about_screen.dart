@@ -6,6 +6,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/utils/r.dart';
+import '../../../core/widgets/ux_widgets.dart';
 
 class AboutScreen extends StatefulWidget {
   const AboutScreen({super.key});
@@ -38,70 +39,13 @@ class _AboutScreenState extends State<AboutScreen> {
       backgroundColor: context.appBackground,
       body: CustomScrollView(
         slivers: [
-          SliverAppBar(
-            pinned: true,
-            expandedHeight: R.h(context, 220),
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-              onPressed: () => context.safeBack(),
-            ),
-            flexibleSpace: FlexibleSpaceBar(
-              background: Container(
-                decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
-                child: SafeArea(
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      return SingleChildScrollView(
-                        physics: const ClampingScrollPhysics(),
-                        child: ConstrainedBox(
-                          constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                          child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      SizedBox(height: R.h(context, 20)),
-                      Container(
-                        width: R.w(context, 80), height: R.h(context, 80),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(R.r(context, 22)),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.25),
-                              blurRadius: 16,
-                              offset: const Offset(0, 6),
-                            ),
-                          ],
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(R.r(context, 22)),
-                          child: Image.asset(
-                            'assets/icons/mednu_logo.png',
-                            fit: BoxFit.contain,
-                          ),
-                        ),
-                      ),
-                      SizedBox(height: R.h(context, 12)),
-                      const Text('MedNU', style: TextStyle(fontFamily: 'Poppins', fontSize: 24, fontWeight: FontWeight.w800, color: Colors.white)),
-                      SizedBox(height: R.h(context, 4)),
-                      const Text('Your Family Healthcare Partner', style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: Colors.white70)),
-                      SizedBox(height: R.h(context, 4)),
-                      if (_version.isNotEmpty)
-                        Container(
-                          padding: EdgeInsets.symmetric(horizontal: R.p(context, 12), vertical: R.p(context, 4)),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha:0.15),
-                            borderRadius: BorderRadius.circular(R.r(context, 12)),
-                          ),
-                          child: Text(_version, style: const TextStyle(fontFamily: 'Poppins', fontSize: 11, color: Colors.white70)),
-                        ),
-                    ],
-                  ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ),
-            ),
+          AppSliverHeader(
+            icon: Icons.info_rounded,
+            title: 'About MedNU',
+            subtitle: _version.isNotEmpty
+                ? 'Your Family Healthcare Partner • $_version'
+                : 'Your Family Healthcare Partner',
+            gradient: AppColors.primaryGradient,
           ),
 
           SliverToBoxAdapter(

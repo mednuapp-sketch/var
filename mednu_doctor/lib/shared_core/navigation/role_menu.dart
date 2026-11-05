@@ -231,6 +231,33 @@ List<NavItem> buildMenuForRole(AppRole role) {
           route: AppRoutes.caregiverProfile,
         ),
       ];
+    case AppRole.careAssistant:
+      return const [
+        NavItem(
+          label: 'Dashboard',
+          icon: Icons.space_dashboard_outlined,
+          activeIcon: Icons.space_dashboard_rounded,
+          route: AppRoutes.careAssistantDashboard,
+        ),
+        NavItem(
+          label: 'Requests',
+          icon: Icons.inbox_outlined,
+          activeIcon: Icons.inbox_rounded,
+          route: AppRoutes.careAssistantRequests,
+        ),
+        NavItem(
+          label: 'Earnings',
+          icon: Icons.account_balance_wallet_outlined,
+          activeIcon: Icons.account_balance_wallet_rounded,
+          route: AppRoutes.careAssistantEarnings,
+        ),
+        NavItem(
+          label: 'Profile',
+          icon: Icons.person_outline_rounded,
+          activeIcon: Icons.person_rounded,
+          route: AppRoutes.careAssistantProfile,
+        ),
+      ];
     case AppRole.physiotherapist:
       return const [
         NavItem(

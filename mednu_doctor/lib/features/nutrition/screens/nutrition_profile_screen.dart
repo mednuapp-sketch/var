@@ -90,9 +90,12 @@ class _NutritionProfileScreenState extends ConsumerState<NutritionProfileScreen>
       builder: (dialogContext) => StatefulBuilder(
         builder: (dialogContext, setDialogState) => AlertDialog(
           insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+          titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+          actionsPadding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
           title: const Text('Dietician Details'),
           content: SingleChildScrollView(
-            padding: const EdgeInsets.only(top: 6, bottom: 4),
+            padding: const EdgeInsets.only(top: 8, bottom: 8),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -131,17 +134,34 @@ class _NutritionProfileScreenState extends ConsumerState<NutritionProfileScreen>
                       lng = result.lng;
                     });
                   },
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(12),
                   child: InputDecorator(
                     decoration: _dialogField('Service Area').copyWith(
-                      prefixIcon: const Icon(Icons.location_on_outlined, color: AppColors.textSecondary),
-                      suffixIcon: const Icon(Icons.map_outlined, color: AppColors.primary),
-                      helperText: 'Tap to pick the city/area you serve on the map',
-                      helperMaxLines: 2,
+                      prefixIcon: const Icon(Icons.location_on_outlined, size: 20, color: AppColors.textSecondary),
+                      prefixIconConstraints: const BoxConstraints(minWidth: 44, minHeight: 20),
+                      suffixIcon: const Icon(Icons.map_outlined, size: 20, color: AppColors.primary),
+                      suffixIconConstraints: const BoxConstraints(minWidth: 44, minHeight: 20),
                     ),
                     child: Text(
                       city.isEmpty ? 'Select on map' : city,
-                      style: TextStyle(color: city.isEmpty ? AppColors.textHint : AppColors.textPrimary),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 14,
+                        color: city.isEmpty ? AppColors.textHint : AppColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 4),
+                    child: Text(
+                      'Tap to pick the city/area you serve on the map',
+                      style: TextStyle(fontFamily: 'Inter', fontSize: 11, color: AppColors.textSecondary),
                     ),
                   ),
                 ),
@@ -150,9 +170,10 @@ class _NutritionProfileScreenState extends ConsumerState<NutritionProfileScreen>
                   controller: bio,
                   minLines: 3,
                   maxLines: 4,
-                  decoration: _dialogField('About you'),
+                  textAlignVertical: TextAlignVertical.top,
+                  decoration: _dialogField('About you').copyWith(alignLabelWithHint: true),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 18),
                 const Align(
                   alignment: Alignment.centerLeft,
                   child: Text('Languages Spoken', style: AppTextStyles.labelMedium),
@@ -160,8 +181,11 @@ class _NutritionProfileScreenState extends ConsumerState<NutritionProfileScreen>
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
-                  runSpacing: 8,
+                  runSpacing: 0,
+                  alignment: WrapAlignment.start,
                   children: NutritionProfileScreen._allLanguages.map((lang) => FilterChip(
+                    visualDensity: VisualDensity.compact,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     label: Text(lang),
                     selected: selectedLanguages.contains(lang),
                     onSelected: (v) => setDialogState(() {
@@ -517,8 +541,6 @@ class _NutritionProfileScreenState extends ConsumerState<NutritionProfileScreen>
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    _HeroStat(label: 'Rating', value: profile.rating.toStringAsFixed(1), icon: Icons.star_rounded),
-                    Container(width: 1, height: 30, color: Colors.white24),
                     _HeroStat(label: 'Experience', value: '${profile.experienceYears} yrs', icon: Icons.workspace_premium_outlined),
                     Container(width: 1, height: 30, color: Colors.white24),
                     _HeroStat(label: 'Fee', value: '₹${profile.consultationFee}', icon: Icons.currency_rupee_rounded),

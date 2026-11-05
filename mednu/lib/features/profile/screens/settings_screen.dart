@@ -43,7 +43,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _biometricSupported = false;
   bool _locationAccess = true;
   bool _loadingBiometric = true;
-  bool _whatsappOptIn = false;
+  bool _whatsappOptIn = true;
   String _appVersion = '';
 
   @override
@@ -61,7 +61,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     try {
       final snap = await FirebaseFirestore.instance.collection('users').doc(uid).get();
       if (mounted) {
-        setState(() => _whatsappOptIn = snap.data()?['whatsappOptIn'] == true);
+        setState(() => _whatsappOptIn = snap.data()?['whatsappOptIn'] != false);
       }
     } catch (_) {}
   }
@@ -687,7 +687,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   _NavTile(Icons.star_outline_rounded, 'Rate App',
                       'Rate us on Play Store', () async {
                     final uri = Uri.parse(
-                        'https://play.google.com/store/apps/details?id=com.mednu.app');
+                        'https://play.google.com/store/apps/details?id=com.mednu.mednu');
                     if (await canLaunchUrl(uri)) {
                       await launchUrl(uri, mode: LaunchMode.externalApplication);
                     }

@@ -459,13 +459,15 @@ class _FamilyManagementScreenState extends ConsumerState<FamilyManagementScreen>
       backgroundColor: context.appBackground,
       body: CustomScrollView(
         slivers: [
-          SliverAppBar(
-            pinned: true,
-            backgroundColor: const Color(0xFF33172C),
-            expandedHeight: 140,
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-              onPressed: () => context.safeBack(),
+          AppSliverHeader(
+            icon: Icons.family_restroom_rounded,
+            title: 'Family Members',
+            subtitle: '${_members.length} member${_members.length == 1 ? '' : 's'} added',
+            color: const Color(0xFF33172C),
+            gradient: const LinearGradient(
+              colors: [Color(0xFF33172C), Color(0xFF522546), Color(0xFF633058)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             ),
             actions: [
               if (!_atLimit)
@@ -475,89 +477,6 @@ class _FamilyManagementScreenState extends ConsumerState<FamilyManagementScreen>
                   onPressed: () => _tryAdd(context),
                 ),
             ],
-            flexibleSpace: FlexibleSpaceBar(
-              collapseMode: CollapseMode.pin,
-              background: Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Color(0xFF33172C), Color(0xFF522546), Color(0xFF633058)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                ),
-                child: Stack(
-                  children: [
-                    Positioned(
-                      top: -30, right: -30,
-                      child: Container(
-                        width: 130, height: 130,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.white.withValues(alpha:0.06),
-                        ),
-                      ),
-                    ),
-                    SafeArea(
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          return SingleChildScrollView(
-                            physics: const ClampingScrollPhysics(),
-                            child: ConstrainedBox(
-                              constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                              child: Padding(
-                                padding: const EdgeInsets.fromLTRB(20, 52, 20, 16),
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Row(children: [
-                                      Container(
-                                        width: 46, height: 46,
-                                        decoration: BoxDecoration(
-                                          color: Colors.white.withValues(alpha:0.15),
-                                          shape: BoxShape.circle,
-                                          border: Border.all(color: Colors.white.withValues(alpha:0.3)),
-                                        ),
-                                        child: const Icon(Icons.family_restroom_rounded,
-                                            color: Colors.white, size: 24),
-                                      ),
-                                      const SizedBox(width: 14),
-                                      Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          const Text(
-                                            'Family Members',
-                                            style: TextStyle(
-                                              fontFamily: 'Poppins',
-                                              fontSize: 18,
-                                              fontWeight: FontWeight.w700,
-                                              color: Colors.white,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            '${_members.length} member${_members.length == 1 ? '' : 's'} added',
-                                            style: const TextStyle(
-                                              fontFamily: 'Poppins',
-                                              fontSize: 12,
-                                              color: Colors.white70,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ]),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
           ),
 
           if (_loading)

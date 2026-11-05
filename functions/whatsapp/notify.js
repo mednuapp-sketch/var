@@ -37,7 +37,7 @@ async function getRecipient(collection, uid, fallbackName) {
   const snap = await getFirestore().collection(collection).doc(uid).get();
   if (!snap.exists) return null;
   const d = snap.data() || {};
-  if (d.whatsappOptIn !== true) return null;
+  if (d.whatsappOptIn === false) return null; // on by default; only an explicit opt-out (toggle or STOP reply) skips
 
   const rawPhone = d.whatsappPhone || d.phone;
   const phone = normalizePhone(rawPhone);
@@ -187,4 +187,29 @@ function shortId(docId, prefix = "BK") {
   return `${prefix}-${tail || "000000"}`;
 }
 
-module.exports = {getRecipient, notifyOnce, formatWhen, formatTime, shortId, parseApptDateTime, cleanName};
+/**
+ * Recipient for someone with no MedNU profile to look up — i.e. a guest whose
+ * phone number the booking account holder typed in for exactly this purpose
+ * (the guest-join link). Returns null if there is no usable number.
+ * @param {string} rawPhone
+ * @param {string} [name]
+ */
+function guestRecipient(rawPhone, name) {
+  const phone = normalizePhone(rawPhone);
+  if (!phone) return null;
+  const fullName = cleanName(name);
+  const firstName = fullName ? fullName.split(" ")[0] : "there";
+  return {phone, firstName, fullName, lang: WHATSAPP_DEFAULT_LANG.value()};
+}
+
+/**
+ * Flattens free text into a single line safe for a template parameter: Meta
+ * rejects newlines, tabs and 4+ consecutive spaces in a body param. Truncates
+ * to `max` characters with an ellipsis.
+ */
+function oneLine(raw, max = 200) {
+  const s = String(raw || "").replace(/\s+/g, " ").trim();
+  return s.length > max ? `${s.slice(0, max - 1).trimEnd()}…` : s;
+}
+
+module.exports = {getRecipient, guestRecipient, oneLine, notifyOnce, formatWhen, formatTime, shortId, parseApptDateTime, cleanName};

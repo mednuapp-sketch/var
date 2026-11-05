@@ -284,7 +284,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
         '${doc.exp}+ years experience\n'
         '💊 Consultation fee: ₹${doc.fee}\n\n'
         'Book an appointment on MedNU — your trusted healthcare partner.\n'
-        'Download: https://play.google.com/store/apps/details?id=com.mednu.app';
+        'Download: https://play.google.com/store/apps/details?id=com.mednu.mednu';
     await Share.share(text, subject: 'Doctor Profile – ${doc.name}');
   }
 

@@ -430,7 +430,9 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                     final data = snap.data?.data();
                     final name = data?['name'] as String? ?? 'Doctor';
                     final specialty = data?['specialty'] as String? ?? 'General Physician';
-                    final photoUrl = data?['photoUrl'] as String?;
+                    final pending = data?['pendingChanges'];
+                    final photoUrl = (pending is Map ? pending['photoUrl'] as String? : null) ??
+                        data?['photoUrl'] as String?;
                     final isVerified = data?['isVerified'] as bool? ?? false;
                     return Padding(
                       padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -562,6 +564,58 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                   ],
                 ),
               ),
+
+              // Verified doctors who haven't saved a weekly schedule yet get a
+              // prominent prompt so availability is set up before the first
+              // consultation. Disappears once `availability` exists.
+              if (uid != null)
+                StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                  stream: DoctorAuthService.profileStream(uid),
+                  builder: (context, snap) {
+                    final data = snap.data?.data();
+                    final verified = data?['isVerified'] as bool? ?? false;
+                    final hasAvailability = data?['availability'] is Map;
+                    if (!verified || hasAvailability) return const SizedBox.shrink();
+                    return Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      child: Material(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(18),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(18),
+                          onTap: () => context.push(AppRoutes.schedule),
+                          child: Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(18),
+                              border: Border.all(color: AppColors.primary.withValues(alpha: 0.3), width: 1.5),
+                              boxShadow: [BoxShadow(color: AppColors.primary.withValues(alpha: 0.08), blurRadius: 12, offset: const Offset(0, 4))],
+                            ),
+                            child: Row(children: [
+                              Container(
+                                width: 46, height: 46,
+                                decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.1), shape: BoxShape.circle),
+                                child: const Icon(Icons.edit_calendar_rounded, color: AppColors.primary, size: 24),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                  Text('Set your availability',
+                                      style: AppTextStyles.labelLarge.copyWith(color: AppColors.primary, fontWeight: FontWeight.w700)),
+                                  const SizedBox(height: 2),
+                                  const Text('You\'re verified! Set your weekly schedule so patients can book you.',
+                                      style: AppTextStyles.bodySmall),
+                                ]),
+                              ),
+                              const SizedBox(width: 8),
+                              const Icon(Icons.chevron_right_rounded, color: AppColors.primary),
+                            ]),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
 
               // Wallet summary (reads the same appointments.fee aggregation
               // as the Earnings tab — see shared_core/wallet/wallet_repository.dart)
@@ -1947,8 +2001,13 @@ class _EarningsTab extends StatelessWidget {
                           behavior: SnackBarBehavior.floating,
                         ));
                       } : null,
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: AppColors.primary),
-                      child: Text('Withdraw ₹$monthEarnings', style: const TextStyle(fontWeight: FontWeight.w700)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: AppColors.primary,
+                        disabledBackgroundColor: Colors.white.withValues(alpha: 0.25),
+                        disabledForegroundColor: Colors.white70,
+                      ),
+                      child: const Text('Withdraw', style: TextStyle(fontWeight: FontWeight.w700)),
                     ),
                   ),
                 ]),
@@ -2081,7 +2140,9 @@ class _ProfileTab extends StatelessWidget {
                     final specialty = data?['specialty'] as String? ?? '';
                     final fee       = data?['fee']        ?? '–';
                     final total     = data?['totalConsultations']?.toString() ?? '0';
-                    final photoUrl  = data?['photoUrl'] as String?;
+                    final pending   = data?['pendingChanges'];
+                    final photoUrl  = (pending is Map ? pending['photoUrl'] as String? : null) ??
+                        data?['photoUrl'] as String?;
                     return Container(
                       padding: const EdgeInsets.all(20),
                       decoration: const BoxDecoration(gradient: AppColors.primaryGradient, borderRadius: BorderRadius.all(Radius.circular(20))),
@@ -2090,12 +2151,6 @@ class _ProfileTab extends StatelessWidget {
                         const SizedBox(height: 12),
                         Text(name, style: const TextStyle(fontFamily: 'Inter', fontSize: 20, fontWeight: FontWeight.w700, color: Colors.white)),
                         Text(specialty, style: const TextStyle(fontFamily: 'Inter', fontSize: 13, color: Colors.white70)),
-                        const SizedBox(height: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                          decoration: BoxDecoration(color: Colors.white.withValues(alpha:0.2), borderRadius: BorderRadius.circular(10)),
-                          child: const Text('✓ MCI Verified', style: TextStyle(fontFamily: 'Inter', fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white)),
-                        ),
                         const SizedBox(height: 16),
                         Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
                           _ProfStat(total, 'Patients'),

@@ -116,7 +116,6 @@ class PreConsultationFormScreen extends StatefulWidget {
 
 class _PreConsultationFormScreenState extends State<PreConsultationFormScreen> {
   final _ageCtrl = TextEditingController();
-  final _phoneCtrl = TextEditingController();
   final _reasonCtrl = TextEditingController();
   final _symptomsOtherCtrl = TextEditingController();
 
@@ -158,8 +157,6 @@ class _PreConsultationFormScreenState extends State<PreConsultationFormScreen> {
       }
       final g = data['gender'] as String?;
       if (g != null && _kGenders.contains(g)) _gender = g;
-      _phoneCtrl.text =
-          FirebaseAuth.instance.currentUser?.phoneNumber?.trim() ?? '';
       final allergies = (data['allergies'] as String? ?? '').trim();
       final conditions = (data['chronicConditions'] as String? ?? '').trim();
       setState(() {
@@ -174,7 +171,6 @@ class _PreConsultationFormScreenState extends State<PreConsultationFormScreen> {
   @override
   void dispose() {
     _ageCtrl.dispose();
-    _phoneCtrl.dispose();
     _reasonCtrl.dispose();
     _symptomsOtherCtrl.dispose();
     for (final c in _detailCtrls.values) {
@@ -211,7 +207,6 @@ class _PreConsultationFormScreenState extends State<PreConsultationFormScreen> {
     return {
       'age': _ageCtrl.text.trim(),
       'gender': _gender ?? '',
-      'phone': _phoneCtrl.text.trim(),
       'reasonForVisit': _reasonCtrl.text.trim(),
       'symptoms': _activeKeys(_kSymptoms),
       'otherSymptoms': _symptomsOtherCtrl.text.trim(),
@@ -436,15 +431,6 @@ class _PreConsultationFormScreenState extends State<PreConsultationFormScreen> {
                           ),
                         ),
                       ]),
-                      const SizedBox(height: 14),
-                      _LabeledField(
-                        label: 'Contact number',
-                        child: TextField(
-                          controller: _phoneCtrl,
-                          keyboardType: TextInputType.phone,
-                          decoration: _inputDecoration(hint: 'Phone number'),
-                        ),
-                      ),
                       const SizedBox(height: 14),
                       _LabeledField(
                         label: 'Reason for today\'s consultation',

@@ -414,8 +414,6 @@ class _CounsellingProfileScreenState extends ConsumerState<CounsellingProfileScr
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    _HeroStat(label: 'Rating', value: profile.rating.toStringAsFixed(1), icon: Icons.star_rounded),
-                    Container(width: 1, height: 30, color: Colors.white24),
                     _HeroStat(label: 'Sessions', value: '${profile.totalSessions}', icon: Icons.event_note_rounded),
                     Container(width: 1, height: 30, color: Colors.white24),
                     _HeroStat(label: 'Rate/hr', value: '₹${profile.hourlyRate}', icon: Icons.currency_rupee_rounded),

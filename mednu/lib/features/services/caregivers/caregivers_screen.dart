@@ -1,11 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
 import '../../../core/constants/app_text_styles.dart';
-import '../../../core/router/app_router.dart';
 import '../../../core/services/feedback_service.dart';
 import '../../../core/utils/distance.dart';
 import '../../../core/utils/r.dart';
@@ -358,14 +356,12 @@ class _CaregiversScreenState extends ConsumerState<CaregiversScreen> {
 
           return CustomScrollView(
             slivers: [
-              SliverAppBar(
-                pinned: true,
-                backgroundColor: AppColors.primaryDark,
-                expandedHeight: AppSpacing.headerHeight(context),
-                leading: IconButton(
-                  icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-                  onPressed: () => context.canPop() ? context.pop() : context.go(AppRoutes.home),
-                ),
+              AppSliverHeader(
+                icon: Icons.elderly_rounded,
+                title: 'Nurses',
+                subtitle: 'Trained & verified home nurses',
+                color: AppColors.primaryDark,
+                gradient: AppColors.primaryGradient,
                 actions: [
                   IconButton(
                     icon: Stack(children: [
@@ -384,39 +380,6 @@ class _CaregiversScreenState extends ConsumerState<CaregiversScreen> {
                   ),
                   const CartBadgeAction(),
                 ],
-                flexibleSpace: FlexibleSpaceBar(
-                  background: Container(
-                    decoration: const BoxDecoration(
-                      gradient: AppColors.primaryGradient,
-                    ),
-                    child: SafeArea(
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          return SingleChildScrollView(
-                            physics: const ClampingScrollPhysics(),
-                            child: ConstrainedBox(
-                              constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                              child: Padding(
-                                padding: AppSpacing.headerPadding(context),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.elderly_rounded, color: Colors.white, size: AppSpacing.headerIconSize(context)),
-                                    SizedBox(height: AppSpacing.headerIconGap(context)),
-                                    const Text('Nurses', style: AppTextStyles.onPrimaryH2),
-                                    const Text('Trained & verified home nurses', style: AppTextStyles.onPrimaryBody),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-                ),
               ),
               SliverToBoxAdapter(
                 child: Padding(

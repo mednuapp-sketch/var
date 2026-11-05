@@ -6,7 +6,6 @@ import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../core/constants/app_spacing.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/services/feedback_service.dart';
@@ -120,52 +119,17 @@ class _DiagnosticsScreenState extends ConsumerState<DiagnosticsScreen> {
             ),
       body: CustomScrollView(
         slivers: [
-          SliverAppBar(
-            pinned: true,
-            backgroundColor: _themeColor,
-            expandedHeight: AppSpacing.headerHeight(context),
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
-              onPressed: () => context.canPop() ? context.pop() : context.go(AppRoutes.home),
+          AppSliverHeader(
+            icon: Icons.science_rounded,
+            title: 'Diagnostics',
+            subtitle: 'Realtime availability',
+            color: _themeColor,
+            gradient: const LinearGradient(
+              colors: [Color(0xFF0097A7), Color(0xFF26C6DA)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             ),
             actions: const [CartBadgeAction()],
-            flexibleSpace: FlexibleSpaceBar(
-              background: Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Color(0xFF0097A7), Color(0xFF26C6DA)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                ),
-                child: SafeArea(
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      return SingleChildScrollView(
-                        physics: const ClampingScrollPhysics(),
-                        child: ConstrainedBox(
-                          constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                          child: Padding(
-                            padding: AppSpacing.headerPadding(context),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.science_rounded, color: Colors.white, size: AppSpacing.headerIconSize(context)),
-                                SizedBox(height: AppSpacing.headerIconGap(context)),
-                                const Text('Diagnostics', style: AppTextStyles.onPrimaryH2),
-                                const Text('Realtime availability', style: AppTextStyles.onPrimaryBody),
-                              ],
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ),
-            ),
           ),
           SliverToBoxAdapter(
             child: StreamBuilder<QuerySnapshot>(
@@ -536,8 +500,6 @@ class _LabsNearYouSectionState extends ConsumerState<_LabsNearYouSection> {
                   child: Column(
                     children: labs.map((lab) {
                       final address = lab['address'] as String;
-                      final rating = lab['rating'] as double;
-                      final totalReviews = lab['totalReviews'] as int;
                       final distanceLabel = _distanceLabel(lab['distanceKm'] as double?);
                       return GestureDetector(
                         onTap: () => context.push(AppRoutes.labMenu.replaceFirst(':id', lab['id'] as String)),
@@ -578,12 +540,6 @@ class _LabsNearYouSectionState extends ConsumerState<_LabsNearYouSection> {
                                   spacing: 6,
                                   runSpacing: 4,
                                   children: [
-                                    _LabInfoChip(
-                                      icon: Icons.star_rounded,
-                                      label: totalReviews > 0 ? '${rating.toStringAsFixed(1)} ($totalReviews)' : 'New',
-                                      bg: const Color(0xFFFFF8E1),
-                                      fg: const Color(0xFFF57F17),
-                                    ),
                                     if (distanceLabel.isNotEmpty)
                                       _LabInfoChip(
                                         icon: Icons.near_me_rounded,

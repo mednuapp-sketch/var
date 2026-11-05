@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/router/app_router.dart';
 import '../../core/constants/app_text_styles.dart';
 import '../../core/services/feedback_service.dart';
 import '../models/app_role.dart';
@@ -49,6 +50,7 @@ class _RoleSwitcherSheet extends ConsumerWidget {
     ref.read(roleSwitchInProgressProvider.notifier).state = true;
     try {
       await ref.read(activeRoleProvider.notifier).switchTo(role);
+      await refreshRouterActiveRole();
       if (!context.mounted) return;
       Navigator.of(context).pop();
       // Land on the new role's home destination — a role switch is a
@@ -90,10 +92,10 @@ class _RoleSwitcherSheet extends ConsumerWidget {
                 ),
               ),
             ),
-            const Text('Switch role', style: AppTextStyles.h3),
+            const Text('Switch profile', style: AppTextStyles.h3),
             const SizedBox(height: 4),
             const Text(
-              'Your account, all your services in one place.',
+              'All your services on this number. Tap one to switch.',
               style: AppTextStyles.bodyMedium,
             ),
             const SizedBox(height: 18),
@@ -137,10 +139,16 @@ class _RoleSwitcherSheet extends ConsumerWidget {
                 onTap: switching
                     ? null
                     : () {
-                        Navigator.of(context).pop();
-                        Navigator.of(context).push(MaterialPageRoute(
+                        // Grab the navigator first: after pop() this sheet's
+                        // context is deactivated and Navigator.of(context)
+                        // would throw.
+                        final navigator = Navigator.of(context);
+                        final roles = engine.roles.toSet();
+                        navigator.pop();
+                        navigator.push(MaterialPageRoute(
                           builder: (_) => PartnerRoleSelectScreen(
-                            existingRoles: engine.roles.toSet(),
+                            existingRoles: roles,
+                            addingService: true,
                           ),
                         ));
                       },

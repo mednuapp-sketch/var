@@ -29,9 +29,21 @@ class PartnerRoleSelectScreen extends StatelessWidget {
   /// filtered out of the list.
   final Set<AppRole> existingRoles;
 
-  const PartnerRoleSelectScreen({super.key, this.existingRoles = const {}});
+  /// True when opened from an already-registered account (settings / role
+  /// switcher). Set explicitly because [existingRoles] can be empty for a
+  /// legacy account whose `roles` field was never written, which used to
+  /// make this screen behave like first-time sign-up (no back button, and a
+  /// `context.go` that wiped the navigation stack).
+  final bool addingService;
 
-  bool get _isAddingToExistingAccount => existingRoles.isNotEmpty;
+  const PartnerRoleSelectScreen({
+    super.key,
+    this.existingRoles = const {},
+    this.addingService = false,
+  });
+
+  bool get _isAddingToExistingAccount =>
+      addingService || existingRoles.isNotEmpty;
 
   /// The self-registerable roles, in the order they are offered.
   /// [AppRole.counsellor] is deliberately absent — counselling accounts are
@@ -43,6 +55,7 @@ class PartnerRoleSelectScreen extends StatelessWidget {
     AppRole.equipment,
     AppRole.ambulance,
     AppRole.caregiver,
+    AppRole.careAssistant,
     AppRole.physiotherapist,
     AppRole.hospital,
     AppRole.nutritionist,
@@ -89,7 +102,15 @@ class PartnerRoleSelectScreen extends StatelessWidget {
             fontWeight: FontWeight.w800,
           ),
         ),
-        automaticallyImplyLeading: _isAddingToExistingAccount,
+        automaticallyImplyLeading: false,
+        leading: Navigator.of(context).canPop()
+            ? IconButton(
+                tooltip: 'Back',
+                icon: const Icon(Icons.arrow_back_ios_new_rounded,
+                    color: Colors.white),
+                onPressed: () => Navigator.of(context).pop(),
+              )
+            : null,
         iconTheme: const IconThemeData(color: Colors.white),
         // Solid fallback so the title never sits on the light Scaffold
         // background if the gradient flexibleSpace fails to paint before

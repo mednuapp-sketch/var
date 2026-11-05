@@ -1,3 +1,4 @@
+import '../../../../core/widgets/call_screen_tracker.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
@@ -63,6 +64,7 @@ class _OutgoingCallScreenState extends State<OutgoingCallScreen>
   @override
   void initState() {
     super.initState();
+    CallScreenTracker.enter();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     _initAnimations();
     WakelockPlus.enable();
@@ -257,6 +259,7 @@ class _OutgoingCallScreenState extends State<OutgoingCallScreen>
 
   @override
   void dispose() {
+    CallScreenTracker.leave();
     _ripple1.dispose();
     _ripple2.dispose();
     _ripple3.dispose();

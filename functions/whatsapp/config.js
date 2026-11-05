@@ -28,6 +28,7 @@ const COLLECTIONS = {
   users: "users",
   doctors: "doctors",
   appointments: "appointments",
+  prescriptions: "prescriptions",
   orders: "orders",
   serviceRequests: "service_requests",
   payments: "payments",
