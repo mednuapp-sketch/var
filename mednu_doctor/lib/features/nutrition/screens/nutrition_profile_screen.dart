@@ -85,6 +85,8 @@ class _NutritionProfileScreenState extends ConsumerState<NutritionProfileScreen>
       ...current.languages.isEmpty ? const ['English'] : current.languages,
     };
 
+    String? formError;
+
     final saved = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
@@ -199,12 +201,36 @@ class _NutritionProfileScreenState extends ConsumerState<NutritionProfileScreen>
                     checkmarkColor: AppColors.primary,
                   )).toList(),
                 ),
+                if (formError != null) ...[
+                  const SizedBox(height: 12),
+                  Text(formError!,
+                      style: AppTextStyles.caption.copyWith(color: AppColors.error)),
+                ],
               ],
             ),
           ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
-            TextButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Save')),
+            TextButton(
+              onPressed: () {
+                String? error;
+                final fee = num.tryParse(consultationFee.text.trim());
+                final yearsText = experienceYears.text.trim();
+                if (name.text.trim().length < 2) {
+                  error = 'Enter your full name.';
+                } else if (fee == null || fee <= 0) {
+                  error = 'Enter a valid consultation fee greater than ₹0.';
+                } else if (yearsText.isNotEmpty && int.tryParse(yearsText) == null) {
+                  error = 'Enter your experience as a whole number of years.';
+                }
+                if (error != null) {
+                  setDialogState(() => formError = error);
+                  return;
+                }
+                Navigator.pop(dialogContext, true);
+              },
+              child: const Text('Save'),
+            ),
           ],
         ),
       ),

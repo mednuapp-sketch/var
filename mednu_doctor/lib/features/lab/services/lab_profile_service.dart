@@ -39,6 +39,7 @@ class LabProfileService {
     double? latitude,
     double? longitude,
     String city = '',
+    Map<String, dynamic>? staffDetails,
   }) async {
     String? fcmToken;
     try {
@@ -63,6 +64,7 @@ class LabProfileService {
       'rating': 0.0,
       'totalReviews': 0,
       'createdAt': FieldValue.serverTimestamp(),
+      if (staffDetails != null) 'staffDetails': staffDetails,
       if (fcmToken != null) 'fcmToken': fcmToken,
     });
   }

@@ -237,6 +237,20 @@ class PharmacyOrderService {
         throw const PharmacyOrderConflictException('This order can no longer be cancelled.');
       }
 
+      // Declining an UNCLAIMED pool order only hides it from this pharmacy:
+      // add our uid to `declinedBy` and leave status/pharmacyId alone so the
+      // order stays 'pending' for every other pharmacy (and for the patient).
+      // It only fails for everyone once every active pharmacy declined or it
+      // expires (see `_failPoolJobIfAllDeclined` in functions/index.js). An
+      // order pinned to this pharmacy still cancels outright (refunds).
+      if (data['pharmacyId'] == null && data['status'] == 'pending') {
+        tx.update(orderRef, {
+          'declinedBy': FieldValue.arrayUnion([pharmacyId]),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+        return;
+      }
+
       if (data['status'] != 'pending') {
         for (final e in stockEntries) {
           tx.set(e.key, {'stock': FieldValue.increment(e.value)}, SetOptions(merge: true));

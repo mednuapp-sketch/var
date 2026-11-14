@@ -12,6 +12,7 @@ import '../../../core/utils/validators.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../../../shared_core/documents/partner_document_models.dart';
 import '../../../shared_core/documents/partner_document_service.dart';
+import '../../../shared_core/documents/staff_details_form.dart';
 import '../../location/models/precise_address.dart';
 import '../../location/screens/map_location_picker_screen.dart';
 import '../models/pharmacy_profile.dart';
@@ -38,6 +39,7 @@ class _PharmacyOnboardingScreenState extends State<PharmacyOnboardingScreen> {
   String _addressCity = '';
   final _phoneCtrl = TextEditingController();
   final Map<String, File?> _pickedDocs = {};
+  final _staff = StaffDetailsController('pharmacy');
   final _selectedCategories = <String>{};
   bool _deliveryAvailable = true;
   bool _saving = false;
@@ -57,14 +59,20 @@ class _PharmacyOnboardingScreenState extends State<PharmacyOnboardingScreen> {
     _licenseCtrl.dispose();
     _addressCtrl.dispose();
     _phoneCtrl.dispose();
+    _staff.dispose();
     super.dispose();
   }
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    final staffError = _staff.firstError();
+    if (staffError != null) {
+      FeedbackService.showError(context, staffError);
+      return;
+    }
     final missingDocs = [
       for (final type in PartnerDocumentType.pharmacy)
-        if (_pickedDocs[type.key] == null) type.label,
+        if (!type.optional && _pickedDocs[type.key] == null) type.label,
     ];
     if (missingDocs.isNotEmpty) {
       FeedbackService.showError(
@@ -93,6 +101,7 @@ class _PharmacyOnboardingScreenState extends State<PharmacyOnboardingScreen> {
         phone: Validators.normalizePhone(_phoneCtrl.text.trim()),
         deliveryAvailable: _deliveryAvailable,
         categoriesOffered: _selectedCategories.toList(),
+        staffDetails: _staff.toMap(),
       );
 
       // Verification documents, uploaded now that the profile exists — must
@@ -185,6 +194,15 @@ class _PharmacyOnboardingScreenState extends State<PharmacyOnboardingScreen> {
                       );
                     }).toList(),
                   ),
+                  const SizedBox(height: 22),
+                  const Text('Staff Details', style: AppTextStyles.h4),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Enter these details here, then upload the matching documents below.',
+                    style: AppTextStyles.caption,
+                  ),
+                  const SizedBox(height: 12),
+                  StaffDetailsFields(controller: _staff),
                   const SizedBox(height: 22),
                   const Text('Verification Documents', style: AppTextStyles.h4),
                   const SizedBox(height: 4),
@@ -309,7 +327,9 @@ class _PharmacyOnboardingScreenState extends State<PharmacyOnboardingScreen> {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-              child: Text(type.label, style: AppTextStyles.labelLarge),
+              child: Text(
+                        type.optional ? '${type.label} (optional)' : type.label,
+                        style: AppTextStyles.labelLarge),
             ),
             ListTile(
               leading: const Icon(Icons.camera_alt_rounded),
@@ -345,7 +365,9 @@ class _PharmacyOnboardingScreenState extends State<PharmacyOnboardingScreen> {
     return FormField<File?>(
       initialValue: _pickedDocs[type.key],
       validator: (_) =>
-          _pickedDocs[type.key] == null ? '${type.label} is required' : null,
+          (!type.optional && _pickedDocs[type.key] == null)
+              ? '${type.label} is required'
+              : null,
       builder: (state) {
         final file = _pickedDocs[type.key];
         return Container(
@@ -363,7 +385,9 @@ class _PharmacyOnboardingScreenState extends State<PharmacyOnboardingScreen> {
               Row(
                 children: [
                   Expanded(
-                    child: Text(type.label, style: AppTextStyles.labelLarge),
+                    child: Text(
+                        type.optional ? '${type.label} (optional)' : type.label,
+                        style: AppTextStyles.labelLarge),
                   ),
                   if (file != null)
                     const Icon(Icons.check_circle_rounded,

@@ -6,7 +6,10 @@ import 'package:intl/intl.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_text_styles.dart';
 import '../../../../core/router/app_router.dart';
+import '../models/weight_loss_plan.dart';
 import '../providers/nutrition_provider.dart';
+import '../services/nutrition_service.dart';
+import '../utils/nutrition_slot_utils.dart';
 import '../../../../core/widgets/ux_widgets.dart';
 
 // ── Nutrition theme ───────────────────────────────────────────────────────────
@@ -35,6 +38,9 @@ class _BookNutritionAppointmentScreenState
   String? _selectedSlot;
   String _healthGoal = 'Weight Loss';
   final _notesCtrl = TextEditingController();
+  final int? _planMonths = selectedWeightLossMonths.value;
+  // Guards the payment hand-off against a double-tap opening two payment screens.
+  bool _openingPayment = false;
 
   static const _goals = [
     'Weight Loss',
@@ -45,13 +51,6 @@ class _BookNutritionAppointmentScreenState
     'PCOS Diet',
     'Heart Healthy Diet',
     'General Wellness',
-  ];
-
-  static const _defaultSlots = [
-    '09:00 AM', '09:30 AM', '10:00 AM', '10:30 AM',
-    '11:00 AM', '11:30 AM', '02:00 PM', '02:30 PM',
-    '03:00 PM', '03:30 PM', '04:00 PM', '04:30 PM',
-    '05:00 PM', '06:00 PM',
   ];
 
   // Derived getters ──────────────────────────────────────────────────────────
@@ -67,15 +66,12 @@ class _BookNutritionAppointmentScreenState
   bool get _isOnline   => widget.extra['isOnline'] as bool? ?? true;
   bool get _isInPerson => widget.extra['isInPerson'] as bool? ?? false;
 
-  List<String> get _availableSlots {
-    final slots = widget.extra['slots'] as Map<String, dynamic>?;
-    if (slots == null) return _defaultSlots;
-    final dayName  = DateFormat('EEEE').format(_selectedDate);
-    final daySlots = slots[dayName] as List?;
-    return daySlots != null && daySlots.isNotEmpty
-        ? List<String>.from(daySlots)
-        : _defaultSlots;
-  }
+  List<String> get _availableSlots => nutritionSlotsFor(
+        slots: widget.extra['slots'] as Map<String, dynamic>?,
+        scheduleConfigured: widget.extra['scheduleConfigured'] as bool? ?? false,
+        blockedSlots: widget.extra['blockedSlots'] as Map<String, dynamic>?,
+        date: _selectedDate,
+      );
 
   // Calendar date range ──────────────────────────────────────────────────────
   late final List<DateTime> _dateRange;
@@ -110,6 +106,22 @@ class _BookNutritionAppointmentScreenState
       return;
     }
 
+    // Re-check the slot against the server index right before booking/paying.
+    if (await NutritionService.isSlotTaken(
+        _nutritionistId, _dateKey, _selectedSlot!)) {
+      if (!mounted) return;
+      setState(() => _selectedSlot = null);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('That slot was just booked. Please pick another time.'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    if (!mounted) return;
+
     // A ₹0 nutritionist consultation has no payment concept at all — book
     // directly, same as every other free-of-charge service in the app.
     if (_fee <= 0) {
@@ -124,9 +136,17 @@ class _BookNutritionAppointmentScreenState
                 notes: _notesCtrl.text.trim(),
                 fee: _fee,
                 healthGoal: _healthGoal,
+                extraFields: _planMonths == null
+                    ? const {}
+                    : {
+                        'planType': 'weight_loss',
+                        'planMonths': _planMonths,
+                        'planConsultations': _planMonths,
+                      },
               );
       if (!mounted) return;
       if (success) {
+        selectedWeightLossMonths.value = null;
         _showSuccessDialog();
       } else {
         final error = ref.read(nutritionBookingProvider).error;
@@ -148,9 +168,12 @@ class _BookNutritionAppointmentScreenState
     // here (not just the auto-added `patientId`) because every other
     // nutrition query/rule keys off `userId`, not `patientId`.
     final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
+    if (uid == null || _openingPayment) return;
     final user = FirebaseAuth.instance.currentUser!;
-    final result = await context.push<Map<String, dynamic>>(
+    _openingPayment = true;
+    final Map<String, dynamic>? result;
+    try {
+      result = await context.push<Map<String, dynamic>>(
       AppRoutes.payment,
       extra: {
         'amount': _fee.toInt().toString(),
@@ -171,11 +194,22 @@ class _BookNutritionAppointmentScreenState
           'notes': _notesCtrl.text.trim(),
           'fee': _fee,
           'healthGoal': _healthGoal,
+          // Weight-loss programme chosen on the Diet Plans screen: one
+          // consultation per month for `planMonths` months.
+          if (_planMonths != null) ...{
+            'planType': 'weight_loss',
+            'planMonths': _planMonths,
+            'planConsultations': _planMonths,
+          },
         },
       },
     );
+    } finally {
+      _openingPayment = false;
+    }
     if (!mounted) return;
     if (result?['bookingId'] != null) {
+      selectedWeightLossMonths.value = null;
       _showSuccessDialog();
     }
   }
@@ -307,7 +341,7 @@ class _BookNutritionAppointmentScreenState
             // ── Date picker (calendar-style strip) ────
             const _SectionHeader(label: 'Select Date'),
             const SizedBox(height: 10),
-            _DateStrip(
+            NutritionDateStrip(
               dates: _dateRange,
               selected: _selectedDate,
               onSelect: (d) =>
@@ -337,13 +371,13 @@ class _BookNutritionAppointmentScreenState
                   ],
                 ),
               ),
-              error: (_, __) => _SlotGrid(
+              error: (_, __) => NutritionSlotGrid(
                 slots: _availableSlots,
                 bookedSlots: const [],
                 selected: _selectedSlot,
                 onSelect: (s) => setState(() => _selectedSlot = s),
               ),
-              data: (booked) => _SlotGrid(
+              data: (booked) => NutritionSlotGrid(
                 slots: _availableSlots,
                 bookedSlots: booked,
                 selected: _selectedSlot,
@@ -352,6 +386,29 @@ class _BookNutritionAppointmentScreenState
             ),
             const SizedBox(height: 20),
 
+            if (_planMonths != null) ...[
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: _kGreenBg,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.event_repeat_rounded, color: _kGreen, size: 20),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Weight Loss Plan · $_planMonths months (1 consultation every month)',
+                        style: AppTextStyles.bodySmall.copyWith(
+                            color: _kGreen, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+            ],
             // ── Health goal ───────────────────────────
             const _SectionHeader(label: 'Health Goal'),
             const SizedBox(height: 10),
@@ -634,22 +691,23 @@ class _TypeCard extends StatelessWidget {
 
 // ── Calendar date strip ───────────────────────────────────────────────────────
 
-class _DateStrip extends StatefulWidget {
+class NutritionDateStrip extends StatefulWidget {
   final List<DateTime> dates;
   final DateTime selected;
   final ValueChanged<DateTime> onSelect;
 
-  const _DateStrip({
+  const NutritionDateStrip({
+    super.key,
     required this.dates,
     required this.selected,
     required this.onSelect,
   });
 
   @override
-  State<_DateStrip> createState() => _DateStripState();
+  State<NutritionDateStrip> createState() => _NutritionDateStripState();
 }
 
-class _DateStripState extends State<_DateStrip> {
+class _NutritionDateStripState extends State<NutritionDateStrip> {
   late final ScrollController _scrollCtrl;
 
   @override
@@ -790,13 +848,14 @@ class _DateStripState extends State<_DateStrip> {
 
 // ── Slot grid ─────────────────────────────────────────────────────────────────
 
-class _SlotGrid extends StatelessWidget {
+class NutritionSlotGrid extends StatelessWidget {
   final List<String> slots;
   final List<String> bookedSlots;
   final String? selected;
   final ValueChanged<String> onSelect;
 
-  const _SlotGrid({
+  const NutritionSlotGrid({
+    super.key,
     required this.slots,
     required this.bookedSlots,
     required this.selected,
@@ -805,6 +864,30 @@ class _SlotGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (slots.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: context.appSurface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: context.appBorder),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.event_busy_rounded, color: context.appTextHint, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'No time slots are available on this day. Please pick another date.',
+                style: AppTextStyles.bodySmall
+                    .copyWith(color: context.appTextSecondary, height: 1.4),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
     return Wrap(
       spacing: 10,
       runSpacing: 10,

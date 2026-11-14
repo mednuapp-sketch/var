@@ -10,6 +10,7 @@ import '../../../core/utils/distance.dart';
 import '../../../core/utils/r.dart';
 import '../../home/providers/location_provider.dart';
 import '../../../core/widgets/ux_widgets.dart';
+import '../../../core/widgets/provider_availability.dart';
 
 /// Provider-first equipment browsing — pick a nearby vendor, then see that
 /// vendor's own equipment (same shape as Pharmacy's provider list →
@@ -107,6 +108,10 @@ class _EquipmentVendorsScreenState extends ConsumerState<EquipmentVendorsScreen>
                           }).toList()
                         : all;
                     nearby.sort((a, b) {
+                      // Vendors that paused orders sink below available ones.
+                      final oa = a['open'] == false ? 1 : 0;
+                      final ob = b['open'] == false ? 1 : 0;
+                      if (oa != ob) return oa.compareTo(ob);
                       final da = a['distanceKm'] as double?;
                       final db = b['distanceKm'] as double?;
                       if (da == null && db == null) return 0;
@@ -172,7 +177,19 @@ class _VendorCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final v = vendor;
     final distanceKm = v['distanceKm'] as double?;
+    final closed = v['open'] == false;
 
+    return Column(children: [
+      if (closed)
+        NotAcceptingBanner(
+          compact: true,
+          margin: EdgeInsets.fromLTRB(R.p(context, 16), 0, R.p(context, 16), R.p(context, 6)),
+        ),
+      GreyscaleIfUnavailable(unavailable: closed, child: _card(context, v, distanceKm)),
+    ]);
+  }
+
+  Widget _card(BuildContext context, Map<String, Object?> v, double? distanceKm) {
     return Container(
       margin: EdgeInsets.fromLTRB(R.p(context, 16), 0, R.p(context, 16), R.p(context, 12)),
       padding: EdgeInsets.all(R.p(context, 16)),
@@ -202,12 +219,6 @@ class _VendorCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(v['name'] as String, style: AppTextStyles.labelLarge, maxLines: 1, overflow: TextOverflow.ellipsis),
-                    if (v['open'] == false)
-                      Padding(
-                        padding: EdgeInsets.only(top: R.h(context, 2)),
-                        child: Text('Closed right now',
-                            style: AppTextStyles.labelSmall.copyWith(color: AppColors.error)),
-                      ),
                     SizedBox(height: R.h(context, 4)),
                     Row(children: [
                       Icon(Icons.location_on_outlined, size: R.w(context, 13), color: context.appTextHint),

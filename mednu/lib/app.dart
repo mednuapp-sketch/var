@@ -43,6 +43,8 @@ class _MedNUAppState extends ConsumerState<MedNUApp>
   StreamSubscription<QuerySnapshot>? _doctorCompletionSub;
   StreamSubscription<QuerySnapshot>? _nutritionCompletionSub;
   StreamSubscription<QuerySnapshot>? _physioCompletionSub;
+  StreamSubscription<QuerySnapshot>? _counsellingCompletionSub;
+  StreamSubscription<QuerySnapshot>? _consultationCompletionSub;
   bool _initialNotifLoad = true;
   List<UnifiedBooking>? _pendingReminderBookings;
   bool _reminderSyncRunning = false;
@@ -55,6 +57,8 @@ class _MedNUAppState extends ConsumerState<MedNUApp>
   final Map<String, String> _lastAppointmentStatus = {};
   final Map<String, String> _lastNutritionStatus = {};
   final Map<String, String> _lastPhysioStatus = {};
+  final Map<String, String> _lastCounsellingStatus = {};
+  final Map<String, String> _lastConsultationStatus = {};
 
   @override
   void initState() {
@@ -72,6 +76,8 @@ class _MedNUAppState extends ConsumerState<MedNUApp>
       _doctorCompletionSub?.cancel();
       _nutritionCompletionSub?.cancel();
       _physioCompletionSub?.cancel();
+      _counsellingCompletionSub?.cancel();
+      _consultationCompletionSub?.cancel();
       _initialNotifLoad = true;
       _lastAlertedCallId = null;
       _pendingReminderBookings = null;
@@ -79,9 +85,13 @@ class _MedNUAppState extends ConsumerState<MedNUApp>
       _lastAppointmentStatus.clear();
       _lastNutritionStatus.clear();
       _lastPhysioStatus.clear();
+      _lastCounsellingStatus.clear();
+      _lastConsultationStatus.clear();
 
       if (user == null) {
         FirebaseCrashlytics.instance.setUserIdentifier('');
+        // Biometric lock only applies while someone is logged in.
+        if (mounted && _isLocked) setState(() => _isLocked = false);
         return;
       }
 
@@ -199,6 +209,23 @@ class _MedNUAppState extends ConsumerState<MedNUApp>
         lastStatus: _lastAppointmentStatus,
         source: FollowUpSource.doctor,
       );
+      // Quick Connect (instant) consultations: a `consultations` doc with no
+      // appointmentId (scheduled appointments also create a consultation doc
+      // when the doctor starts the call, but they already prompt via the
+      // appointments listener above, so skip those to avoid double-firing).
+      _consultationCompletionSub = _watchFollowUpCompletion(
+        query: FirebaseFirestore.instance
+            .collection('consultations')
+            .where('patientId', isEqualTo: user.uid),
+        lastStatus: _lastConsultationStatus,
+        source: FollowUpSource.doctor,
+        completionStatuses: const {'ended', 'completed'},
+        accept: (d) {
+          final apptId = d['appointmentId'];
+          return (apptId == null || (apptId is String && apptId.isEmpty)) &&
+              (d['callerType'] as String? ?? 'patient') == 'patient';
+        },
+      );
       _nutritionCompletionSub = _watchFollowUpCompletion(
         query: FirebaseFirestore.instance
             .collection('nutrition_appointments')
@@ -214,6 +241,16 @@ class _MedNUAppState extends ConsumerState<MedNUApp>
         lastStatus: _lastPhysioStatus,
         source: FollowUpSource.physio,
       );
+      // Counsellor sessions are `service_requests` too (type 'counselling');
+      // without this a completed counselling session never offered a follow-up.
+      _counsellingCompletionSub = _watchFollowUpCompletion(
+        query: FirebaseFirestore.instance
+            .collection('service_requests')
+            .where('patientId', isEqualTo: user.uid)
+            .where('type', isEqualTo: 'counselling'),
+        lastStatus: _lastCounsellingStatus,
+        source: FollowUpSource.counselling,
+      );
     });
   }
 
@@ -227,6 +264,8 @@ class _MedNUAppState extends ConsumerState<MedNUApp>
     required Query<Map<String, dynamic>> query,
     required Map<String, String> lastStatus,
     required FollowUpSource source,
+    Set<String> completionStatuses = const {'completed'},
+    bool Function(Map<String, dynamic> data)? accept,
   }) {
     return query.snapshots().listen((snap) {
       for (final change in snap.docChanges) {
@@ -236,8 +275,9 @@ class _MedNUAppState extends ConsumerState<MedNUApp>
         final oldStatus = lastStatus[change.doc.id];
         lastStatus[change.doc.id] = newStatus;
         if (change.type == DocumentChangeType.modified &&
-            oldStatus != 'completed' &&
-            newStatus == 'completed') {
+            !completionStatuses.contains(oldStatus) &&
+            completionStatuses.contains(newStatus) &&
+            (accept == null || accept(data))) {
           _showFollowUpPrompt(source, data);
         }
       }
@@ -261,6 +301,9 @@ class _MedNUAppState extends ConsumerState<MedNUApp>
         providerId = data['assignedTo'] as String? ?? '';
         providerName =
             data['assignedToName'] as String? ?? 'your physiotherapist';
+      case FollowUpSource.counselling:
+        providerId = data['assignedTo'] as String? ?? '';
+        providerName = data['assignedToName'] as String? ?? 'your counsellor';
     }
     // No provider to follow up with (e.g. a physio request never got
     // assigned before being marked completed) — nothing useful to show.
@@ -357,11 +400,14 @@ class _MedNUAppState extends ConsumerState<MedNUApp>
     _doctorCompletionSub?.cancel();
     _nutritionCompletionSub?.cancel();
     _physioCompletionSub?.cancel();
+    _counsellingCompletionSub?.cancel();
+    _consultationCompletionSub?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 
   Future<void> _checkInitialLock() async {
+    if (FirebaseAuth.instance.currentUser == null) return;
     if (await BiometricService.isBiometricEnabled()) {
       if (mounted) setState(() => _isLocked = true);
     }
@@ -373,6 +419,7 @@ class _MedNUAppState extends ConsumerState<MedNUApp>
       _wentToBackground = true;
     } else if (state == AppLifecycleState.resumed && _wentToBackground) {
       _wentToBackground = false;
+      if (FirebaseAuth.instance.currentUser == null) return;
       if (await BiometricService.isBiometricEnabled()) {
         if (mounted) setState(() => _isLocked = true);
       }

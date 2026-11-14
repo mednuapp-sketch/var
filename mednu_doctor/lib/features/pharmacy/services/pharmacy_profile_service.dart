@@ -38,6 +38,7 @@ class PharmacyProfileService {
     double? latitude,
     double? longitude,
     String city = '',
+    Map<String, dynamic>? staffDetails,
   }) async {
     String? fcmToken;
     try {
@@ -63,6 +64,7 @@ class PharmacyProfileService {
       'totalReviews': 0,
       'acceptingOrders': true,
       'createdAt': FieldValue.serverTimestamp(),
+      if (staffDetails != null) 'staffDetails': staffDetails,
       if (fcmToken != null) 'fcmToken': fcmToken,
     });
   }

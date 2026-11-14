@@ -64,6 +64,7 @@ class PartnerDocumentService {
   Future<Map<String, dynamic>> uploadToStorage({
     required String docType,
     required File file,
+    String? label,
     void Function(double progress)? onProgress,
   }) async {
     final size = await file.length();
@@ -101,6 +102,7 @@ class PartnerDocumentService {
       'fileName': file.path.split(Platform.pathSeparator).last,
       'contentType': contentType,
       'sizeBytes': size,
+      if (label != null && label.trim().isNotEmpty) 'label': label.trim(),
     };
   }
 
@@ -124,10 +126,11 @@ class PartnerDocumentService {
     required String docType,
     required File file,
     String? previousStoragePath,
+    String? label,
     void Function(double progress)? onProgress,
   }) async {
     final meta = await uploadToStorage(
-        docType: docType, file: file, onProgress: onProgress);
+        docType: docType, file: file, label: label, onProgress: onProgress);
     final storagePath = meta['storagePath'] as String;
 
     // `set(merge: true)` rather than `update()` so a partner whose profile doc

@@ -10,6 +10,7 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/services/feedback_service.dart';
 import '../../../shared_core/providers/role_providers.dart';
 
 /// Physiotherapist/Counsellor equivalent of [DoctorOutgoingCallScreen] —
@@ -134,7 +135,10 @@ class _ProviderOutgoingCallScreenState extends State<ProviderOutgoingCallScreen>
       });
     } catch (e) {
       debugPrint('[ProviderOutgoing] Failed to create consultation: $e');
-      if (mounted) context.pop();
+      if (mounted) {
+        FeedbackService.showError(context, "Couldn't start the call. Please try again.");
+        _safeClose();
+      }
       return;
     }
 
@@ -266,20 +270,34 @@ class _ProviderOutgoingCallScreenState extends State<ProviderOutgoingCallScreen>
             ),
           ),
           child: SafeArea(
-            child: Column(
-              children: [
-                const SizedBox(height: 40),
-                _buildStatusLabel(),
-                const Spacer(),
-                _buildAvatarWithRipples(),
-                const SizedBox(height: 28),
-                _buildPatientInfo(),
-                const SizedBox(height: 12),
-                _buildTimer(),
-                const Spacer(),
-                if (_callState == _CallState.calling) _buildCancelButton(),
-                const SizedBox(height: 48),
-              ],
+            // Scrollable fallback so short screens / landscape never overflow;
+            // on normal phones the Spacers still centre the avatar.
+            child: LayoutBuilder(
+              builder: (context, constraints) => SingleChildScrollView(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: IntrinsicHeight(
+                    child: Column(
+                      children: [
+                        const SizedBox(height: 40),
+                        _buildStatusLabel(),
+                        const Spacer(),
+                        _buildAvatarWithRipples(),
+                        const SizedBox(height: 28),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          child: _buildPatientInfo(),
+                        ),
+                        const SizedBox(height: 12),
+                        _buildTimer(),
+                        const Spacer(),
+                        if (_callState == _CallState.calling) _buildCancelButton(),
+                        const SizedBox(height: 48),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             ),
           ),
         ),

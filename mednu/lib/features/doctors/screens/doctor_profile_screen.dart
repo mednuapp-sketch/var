@@ -3,6 +3,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:share_plus/share_plus.dart';
@@ -10,6 +11,7 @@ import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/providers/platform_fee_provider.dart';
 import '../../../core/utils/r.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../../intake/services/doctor_booking_flow.dart';
@@ -35,7 +37,7 @@ const _kSessionDurations = [15, 30, 45, 60];
 int _feeForDuration(int baseFee, int minutes) =>
     baseFee <= 0 ? 0 : ((baseFee * minutes) / 30).round();
 
-class DoctorProfileScreen extends StatefulWidget {
+class DoctorProfileScreen extends ConsumerStatefulWidget {
   final String doctorId;
   final int? initialDuration;
   // 'video' | 'inperson' — carried from the Find Doctors tab the patient
@@ -55,10 +57,10 @@ class DoctorProfileScreen extends StatefulWidget {
     this.rescheduleType,
   });
   @override
-  State<DoctorProfileScreen> createState() => _DoctorProfileScreenState();
+  ConsumerState<DoctorProfileScreen> createState() => _DoctorProfileScreenState();
 }
 
-class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
+class _DoctorProfileScreenState extends ConsumerState<DoctorProfileScreen> {
   late final List<DateTime> _dates;
   int _selectedDateIndex = 0;
   String? _selectedSlot;
@@ -105,6 +107,22 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
   Timer? _slotTimer;
 
   bool get _isRescheduling => widget.rescheduleAppointmentId != null;
+
+  /// Informational platform fee for the selected duration/type. The payment
+  /// screen adds it centrally (this screen only passes the base fee). Never
+  /// applies when rescheduling (no payment screen) or to free consultations.
+  int _infoFee(DocData doc) {
+    if (_isRescheduling || _feeForDuration(doc.fee, _selectedDuration) <= 0) return 0;
+    return platformFeeFor(
+        ref, _consultationType == 'Video' ? 'video_consultation' : 'consultation',
+        providerId: widget.doctorId);
+  }
+
+  /// Total the payment screen will charge (base + platform fee), for display.
+  /// Uses `ref.read` so it is safe from dialogs; the screen's build watches
+  /// [platformFeeConfigProvider] so the visible total stays in sync.
+  int _totalFor(DocData doc) =>
+      _feeForDuration(doc.fee, _selectedDuration) + _infoFee(doc);
 
   @override
   void initState() {
@@ -306,7 +324,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
     if (avail == null) return true;
     final schedule = avail['schedule'] as Map<String, dynamic>?;
     if (schedule == null) return true;
-    final dayName = DateFormat('EEE').format(date);
+    final dayName = DateFormat('EEE', 'en').format(date);
     final ds = schedule[dayName] as Map<String, dynamic>?;
     return ds?['enabled'] == true;
   }
@@ -319,7 +337,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
     final slotDuration = (avail['slotDuration'] as num?)?.toInt() ?? 30;
     final schedule = avail['schedule'] as Map<String, dynamic>?;
     if (schedule == null) return _kDefaultSlots.toList();
-    final dayName = DateFormat('EEE').format(date);
+    final dayName = DateFormat('EEE', 'en').format(date);
     final ds = schedule[dayName] as Map<String, dynamic>?;
     if (ds == null || ds['enabled'] != true) return [];
     final startStr = ds['start'] as String? ?? '09:00';
@@ -414,6 +432,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
     final dateKey = _selectedDateKey;
     final slot    = _selectedSlot!;
     final duration = _selectedDuration;
+    // BASE consultation fee only: the payment screen adds the platform fee.
     final amount  = _feeForDuration(doc.fee, duration);
     final db      = FirebaseFirestore.instance;
 
@@ -652,6 +671,16 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                   _ConfirmRow(Icons.timer_outlined,
                       '$_selectedDuration min · ₹${_feeForDuration(doc.fee, _selectedDuration)}',
                       const Color(0xFFF9943B)),
+                  if (_infoFee(doc) > 0) ...[
+                    const SizedBox(height: 10),
+                    _ConfirmRow(Icons.receipt_long_rounded,
+                        'Platform fee · ₹${_infoFee(doc)}',
+                        const Color(0xFF6B7280)),
+                    const SizedBox(height: 10),
+                    _ConfirmRow(Icons.currency_rupee_rounded,
+                        'Total · ₹${_totalFor(doc)}',
+                        AppColors.primary),
+                  ],
                 ],
               ]),
             ),
@@ -698,6 +727,8 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
   // ──────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
+    // Subscribe so totals shown below refresh when the admin fee loads/changes.
+    ref.watch(platformFeeConfigProvider);
     if (_loadingDoc) return _buildSkeleton(context);
     if (_doc == null) return _buildNotFound(context);
     final doc = _doc!;
@@ -1515,7 +1546,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                 Text(
                   _isRescheduling
                       ? '$_consultationType · $_selectedDuration min'
-                      : '$_consultationType · $_selectedDuration min · ₹${_feeForDuration(doc.fee, _selectedDuration)}',
+                      : '$_consultationType · $_selectedDuration min · ₹${_totalFor(doc)}${_infoFee(doc) > 0 ? ' (incl. platform fee)' : ''}',
                   style: const TextStyle(
                     fontFamily: 'Poppins', fontSize: 11.5, color: Color(0xFF6B7280),
                     fontWeight: FontWeight.w500,
@@ -1594,8 +1625,8 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                         Text(_isRescheduling
                             ? 'Confirm Reschedule'
                             : widget.initialMode == 'quickConnect'
-                                ? 'Connect Now · ₹${_feeForDuration(doc.fee, _selectedDuration)}'
-                                : 'Book Appointment · ₹${_feeForDuration(doc.fee, _selectedDuration)}',
+                                ? 'Connect Now · ₹${_totalFor(doc)}'
+                                : 'Book Appointment · ₹${_totalFor(doc)}',
                           style: const TextStyle(
                             fontFamily: 'Poppins', fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white,
                           )),

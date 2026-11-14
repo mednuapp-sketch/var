@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -6,8 +7,8 @@ import 'package:geolocator/geolocator.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
 import '../../../core/constants/app_text_styles.dart';
+import '../../../core/constants/payment_config.dart';
 import '../../../core/router/app_router.dart';
-import '../../../core/services/booking_service.dart';
 import '../../../core/utils/r.dart';
 import '../../home/providers/location_provider.dart';
 import '../../location/providers/saved_addresses_provider.dart';
@@ -23,42 +24,65 @@ const _kGreen = Color(0xFF2E7D32);
 // Ambulance types
 // ─────────────────────────────────────────────────────────────────────────────
 class _AmbulanceType {
+  /// Key into `app_config/ambulance_rates.types` ('basic' | 'als' | 'icu').
+  final String key;
   final String name;
-  final String price;
   final String description;
   final IconData icon;
-  final int priceNum;
+
+  /// Rate range for this vehicle type. Defaults are the former hardcoded
+  /// prices (min == max); the live range comes from
+  /// `app_config/ambulance_rates` (set by the admin).
+  final int fareMin;
+  final int fareMax;
 
   const _AmbulanceType({
+    required this.key,
     required this.name,
-    required this.price,
     required this.description,
     required this.icon,
-    required this.priceNum,
+    required this.fareMin,
+    required this.fareMax,
   });
+
+  _AmbulanceType withRange(int min, int max) => _AmbulanceType(
+        key: key,
+        name: name,
+        description: description,
+        icon: icon,
+        fareMin: min,
+        fareMax: max,
+      );
+
+  /// '₹500' when min == max, otherwise '₹500 – ₹800'.
+  String get price =>
+      fareMin == fareMax ? '₹$fareMin' : '₹$fareMin – ₹$fareMax';
 }
 
 const _types = [
   _AmbulanceType(
+    key: 'basic',
     name: 'Basic',
-    price: '₹500',
     description: 'For non-critical patients & transport',
     icon: Icons.local_shipping_rounded,
-    priceNum: 500,
+    fareMin: 500,
+    fareMax: 500,
   ),
   _AmbulanceType(
+    key: 'als',
     name: 'Advanced Life Support',
-    price: '₹1200',
     description: 'Critical patients with paramedic team',
     icon: Icons.medical_services_rounded,
-    priceNum: 1200,
+    fareMin: 1200,
+    fareMax: 1200,
   ),
   _AmbulanceType(
+    key: 'icu',
     name: 'ICU Ambulance',
-    price: '₹2500',
     description: 'Mobile ICU with full medical equipment',
     icon: Icons.health_and_safety_rounded,
-    priceNum: 2500,
+    fareMin: 2500,
+    fareMax: 2500,
   ),
 ];
 
@@ -82,6 +106,41 @@ class _AmbulanceScreenState extends ConsumerState<AmbulanceScreen> {
   bool _locationLoading = false;
   bool _providerSynced = false; // prevent repeated syncs
 
+  // Admin-defined rate ranges (app_config/ambulance_rates); until the doc
+  // loads (or when it is missing) the defaults in [_types] apply.
+  Map<String, (int, int)> _rates = {};
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _ratesSub;
+
+  /// [_types] with the live admin range applied.
+  List<_AmbulanceType> get _liveTypes => _types.map((t) {
+        final r = _rates[t.key];
+        return r == null ? t : t.withRange(r.$1, r.$2);
+      }).toList();
+
+  void _listenRates() {
+    _ratesSub = FirebaseFirestore.instance
+        .collection('app_config')
+        .doc('ambulance_rates')
+        .snapshots()
+        .listen((snap) {
+      final types = snap.data()?['types'];
+      final next = <String, (int, int)>{};
+      if (types is Map) {
+        for (final t in _types) {
+          final v = types[t.key];
+          if (v is Map) {
+            final mn = (v['min'] as num?)?.round();
+            final mx = (v['max'] as num?)?.round();
+            if (mn != null && mx != null && mn >= 0 && mx >= mn) {
+              next[t.key] = (mn, mx);
+            }
+          }
+        }
+      }
+      if (mounted) setState(() => _rates = next);
+    }, onError: (_) {});
+  }
+
   final _notesCtrl = TextEditingController();
   String _patientName = '';
   String _patientPhone = '';
@@ -90,11 +149,13 @@ class _AmbulanceScreenState extends ConsumerState<AmbulanceScreen> {
   void initState() {
     super.initState();
     _prefillPatient();
+    _listenRates();
     WidgetsBinding.instance.addPostFrameCallback((_) => _tryProviderSync());
   }
 
   @override
   void dispose() {
+    _ratesSub?.cancel();
     _notesCtrl.dispose();
     super.dispose();
   }
@@ -263,8 +324,9 @@ class _AmbulanceScreenState extends ConsumerState<AmbulanceScreen> {
       return;
     }
 
-    final typeData = _types.firstWhere((t) => t.name == _selectedType,
-        orElse: () => _types.first);
+    final liveTypes = _liveTypes;
+    final typeData = liveTypes.firstWhere((t) => t.name == _selectedType,
+        orElse: () => liveTypes.first);
 
     // Show 3-step confirmation sheet
     _showBookingProgressSheet(typeData);
@@ -283,22 +345,61 @@ class _AmbulanceScreenState extends ConsumerState<AmbulanceScreen> {
           Navigator.pop(context);
           setState(() => _busy = true);
           try {
-            await BookingService.createRequest(
-              type: 'ambulance',
-              serviceName: '${typeData.name} Ambulance',
-              patientName: _patientName.isNotEmpty ? _patientName : 'Emergency',
-              patientPhone: _patientPhone,
-              address: _location!.formatted,
-              preferredDate: 'Immediate',
-              preferredTime: 'Now',
-              notes: _notesCtrl.text.trim(),
-              serviceDetails: {
+            // PAY AFTER THE TRIP: no payment screen at booking time. A
+            // customer with an unpaid finished trip cannot book another.
+            final uid = FirebaseAuth.instance.currentUser?.uid;
+            if (uid == null) throw StateError('not signed in');
+            final due = await FirebaseFirestore.instance
+                .collection('service_requests')
+                .where('patientId', isEqualTo: uid)
+                .where('type', isEqualTo: 'ambulance')
+                .where('paymentStatus', isEqualTo: 'payment_due')
+                .limit(1)
+                .get();
+            if (!mounted) return;
+            if (due.docs.isNotEmpty) {
+              setState(() => _busy = false);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Please pay for your previous trip first.',
+                      style: TextStyle(fontFamily: 'Poppins')),
+                  backgroundColor: _kRed,
+                ),
+              );
+              return;
+            }
+            await FirebaseFirestore.instance.collection('service_requests').add({
+              'type': 'ambulance',
+              'serviceName': '${typeData.name} Ambulance',
+              'patientId': uid,
+              'patientName': _patientName.isNotEmpty ? _patientName : 'Emergency',
+              'patientPhone': _patientPhone,
+              'address': _location!.formatted,
+              'preferredDate': 'Immediate',
+              'preferredTime': 'Now',
+              'notes': _notesCtrl.text.trim(),
+              'serviceDetails': {
                 'ambulanceType': typeData.name,
-                'price': typeData.priceNum,
+                'ambulanceTypeKey': typeData.key,
+                'price': typeData.fareMax,
+                'fareMin': typeData.fareMin,
+                'fareMax': typeData.fareMax,
+                'priceNote':
+                    "Pay after the trip at the matched driver's rate within this range",
                 'locationData': _location!.toBookingMap(),
               },
-            );
-            if (mounted) setState(() { _busy = false; _done = true; });
+              // Nothing is charged or credited from a made-up figure; the
+              // server computes the fare at completion (fareFinal).
+              'amount': 0,
+              'paymentStatus':
+                  kRequirePayment ? 'pay_after_trip' : 'not_required',
+              'status': 'pending',
+              'assignedTo': null,
+              'createdAt': FieldValue.serverTimestamp(),
+              'updatedAt': FieldValue.serverTimestamp(),
+            });
+            if (!mounted) return;
+            setState(() { _busy = false; _done = true; });
           } catch (_) {
             if (mounted) {
               setState(() => _busy = false);
@@ -742,7 +843,7 @@ class _AmbulanceScreenState extends ConsumerState<AmbulanceScreen> {
         children: [
           const Text('Select Ambulance Type', style: AppTextStyles.h4),
           SizedBox(height: R.h(context, 12)),
-          ..._types.map((t) {
+          ..._liveTypes.map((t) {
             final selected = _selectedType == t.name;
             return GestureDetector(
               onTap: () => setState(() => _selectedType = t.name),
@@ -1102,6 +1203,14 @@ class _BookingProgressSheetState extends State<_BookingProgressSheet> {
               '${widget.typeData.name} Ambulance — ${widget.typeData.price}',
               style: const TextStyle(fontFamily: 'Poppins', fontSize: 13, color: Colors.black54),
             ),
+            if (widget.typeData.fareMin != widget.typeData.fareMax) ...[
+              const SizedBox(height: 6),
+              Text(
+                'You pay after the trip at the matched driver\'s rate (₹${widget.typeData.fareMin} – ₹${widget.typeData.fareMax} range).',
+                style: const TextStyle(fontFamily: 'Poppins', fontSize: 11.5, color: Colors.black54),
+                textAlign: TextAlign.center,
+              ),
+            ],
             const SizedBox(height: 4),
             Text(
               widget.location.formatted,

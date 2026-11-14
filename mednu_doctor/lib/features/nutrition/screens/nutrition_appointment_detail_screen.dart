@@ -11,6 +11,7 @@ import '../../../shared_core/shared_core.dart';
 import '../models/nutrition_appointment.dart';
 import '../providers/nutrition_providers.dart';
 import '../services/nutrition_appointment_service.dart';
+import 'nutrition_reschedule_sheet.dart';
 
 /// Full detail for a single appointment — patient card, schedule, health
 /// goal, a simple provider-notes field, and a status-driven action bar.
@@ -97,6 +98,13 @@ class _NutritionAppointmentDetailScreenState extends ConsumerState<NutritionAppo
     }
   }
 
+  Future<void> _reschedule(NutritionAppointment a) async {
+    final uid = NutritionAppointmentService.currentUid;
+    if (uid == null || _busy) return;
+    final moved = await showNutritionRescheduleSheet(context, appointment: a, nutritionistId: uid);
+    if (moved && mounted) FeedbackService.showSuccess(context, 'Appointment rescheduled — the patient was notified');
+  }
+
   Future<void> _saveNotes() async {
     if (_busy) return;
     setState(() => _busy = true);
@@ -112,7 +120,8 @@ class _NutritionAppointmentDetailScreenState extends ConsumerState<NutritionAppo
 
   @override
   Widget build(BuildContext context) {
-    final appointment = ref.watch(nutritionAppointmentDocProvider(widget.appointmentId)).valueOrNull;
+    final appointmentAsync = ref.watch(nutritionAppointmentDocProvider(widget.appointmentId));
+    final appointment = appointmentAsync.valueOrNull;
 
     if (appointment != null && _loadedFor != appointment.id) {
       _loadedFor = appointment.id;
@@ -124,11 +133,15 @@ class _NutritionAppointmentDetailScreenState extends ConsumerState<NutritionAppo
       title: 'Appointment Details',
       showBottomNav: false,
       body: appointment == null
-          ? const AppEmptyState(
-              icon: Icons.search_off_rounded,
-              title: 'Appointment not found',
-              message: 'This appointment may have been removed.',
-            )
+          ? (appointmentAsync.isLoading
+              ? const PageLoadingState()
+              : appointmentAsync.hasError
+                  ? const NetworkErrorState()
+                  : const AppEmptyState(
+                      icon: Icons.search_off_rounded,
+                      title: 'Appointment not found',
+                      message: 'This appointment may have been removed.',
+                    ))
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
@@ -158,7 +171,7 @@ class _NutritionAppointmentDetailScreenState extends ConsumerState<NutritionAppo
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(appointment.consultationType, style: AppTextStyles.onPrimaryH2.copyWith(fontSize: 18), overflow: TextOverflow.ellipsis),
+                            Text(appointment.consultationLabel, style: AppTextStyles.onPrimaryH2.copyWith(fontSize: 18), overflow: TextOverflow.ellipsis),
                             Text(
                               appointment.date.isNotEmpty
                                   ? '${appointment.date} • ${appointment.timeSlot}'
@@ -202,6 +215,25 @@ class _NutritionAppointmentDetailScreenState extends ConsumerState<NutritionAppo
                     ],
                   ),
                 ),
+                if (appointment.isPlan) ...[
+                  const SizedBox(height: 16),
+                  PremiumCard(
+                    child: Row(
+                      children: [
+                        const Icon(Icons.event_repeat_rounded, color: AppColors.primary),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'Weight Loss Plan: ${appointment.planMonths} months · '
+                            '${appointment.planConsultations ?? appointment.planMonths} '
+                            'consultations (1 per month).',
+                            style: AppTextStyles.bodyMedium,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 if (appointment.healthGoal.isNotEmpty) ...[
                   const SizedBox(height: 16),
                   PremiumCard(
@@ -277,6 +309,15 @@ class _NutritionAppointmentDetailScreenState extends ConsumerState<NutritionAppo
                   onComplete: () => _setStatus('completed', 'Appointment completed'),
                   onCancel: () => _setStatus('cancelled', 'Appointment cancelled'),
                 ),
+                if (appointment.status == NutritionAppointmentStatus.pending ||
+                    appointment.status == NutritionAppointmentStatus.confirmed) ...[
+                  const SizedBox(height: 10),
+                  OutlinedButton.icon(
+                    onPressed: _busy ? null : () => _reschedule(appointment),
+                    icon: const Icon(Icons.event_repeat_rounded, size: 18),
+                    label: const Text('Reschedule'),
+                  ),
+                ],
               ],
             ),
     );

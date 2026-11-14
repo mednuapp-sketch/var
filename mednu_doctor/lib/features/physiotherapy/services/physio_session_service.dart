@@ -130,6 +130,31 @@ class PhysioSessionService {
         buildUpdate: (d) => {'status': 'completed'},
       );
 
+  /// Provider-proposed new slot. Only the schedule fields are written (the
+  /// firestore.rules reschedule branch whitelists exactly these keys and
+  /// requires status unchanged + not started); the Cloud Function mirrors it
+  /// onto the patient's service request, moves the slot-index entry, notifies
+  /// the patient, and reverts it if the slot was taken in the meantime.
+  static Future<void> reschedule(
+    String sessionId, {
+    required String physiotherapistId,
+    required String date,
+    required String time,
+  }) =>
+      _transitionSession(
+        sessionId,
+        precondition: (d) =>
+            d['physiotherapistId'] == physiotherapistId &&
+            (d['status'] == 'accepted' || d['status'] == 'pending'),
+        conflictMessage: 'This session can no longer be rescheduled.',
+        buildUpdate: (d) => {
+          'preferredDate': date,
+          'preferredTime': time,
+          'rescheduledAt': FieldValue.serverTimestamp(),
+          'rescheduledBy': 'provider',
+        },
+      );
+
   static Future<void> cancel(String sessionId, {required String physiotherapistId}) =>
       _transitionSession(
         sessionId,

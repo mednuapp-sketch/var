@@ -48,8 +48,17 @@ class ReviewService {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw Exception('Not authenticated');
 
-    final patientName =
-        user.displayName ?? user.phoneNumber ?? 'Patient';
+    // Reviews are readable by every signed-in user, and phone-auth accounts
+    // have no displayName — falling back to the phone number published the
+    // reviewer's number. Use the profile name, else a neutral label.
+    var patientName = (user.displayName ?? '').trim();
+    if (patientName.isEmpty) {
+      try {
+        final u = await _db.collection('users').doc(user.uid).get();
+        patientName = (u.data()?['name'] as String? ?? '').trim();
+      } catch (_) {}
+    }
+    if (patientName.isEmpty) patientName = 'Patient';
 
     await _db.runTransaction((tx) async {
       // Double-check eligibility inside transaction.

@@ -81,10 +81,13 @@ class _PharmacyDashboardScreenState extends ConsumerState<PharmacyDashboardScree
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Accepting New Orders', style: AppTextStyles.labelLarge),
+                const Text('Accepting orders', style: AppTextStyles.labelLarge),
                 Text(
-                  isOn ? 'Visible in the order queue' : 'Paused — new orders are hidden',
+                  isOn
+                      ? 'Turn off to pause new orders; customers will see you as unavailable'
+                      : 'Paused — customers see you as unavailable and cannot order',
                   style: AppTextStyles.caption,
+                  maxLines: 3,
                   overflow: TextOverflow.ellipsis,
                 ),
               ],

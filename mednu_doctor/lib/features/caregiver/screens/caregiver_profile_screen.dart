@@ -475,12 +475,12 @@ class _CaregiverProfileScreenState extends ConsumerState<CaregiverProfileScreen>
         ),
       ],
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
         children: [
           if (profile.hasPendingChanges) const PendingReviewBanner(),
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
             decoration: BoxDecoration(
               gradient: const LinearGradient(colors: [AppColors.primaryDark, AppColors.primary, AppColors.secondary], begin: Alignment.topLeft, end: Alignment.bottomRight),
               borderRadius: BorderRadius.circular(24),
@@ -489,11 +489,11 @@ class _CaregiverProfileScreenState extends ConsumerState<CaregiverProfileScreen>
             child: Column(
               children: [
                 _buildAvatar(profile),
-                const SizedBox(height: 14),
+                const SizedBox(height: 10),
                 Text(profile.name, style: const TextStyle(fontFamily: 'Inter', fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white)),
-                const SizedBox(height: 4),
+                const SizedBox(height: 2),
                 Text('${profile.experienceYears} years of experience', style: const TextStyle(fontFamily: 'Inter', fontSize: 12, color: Colors.white70)),
-                const SizedBox(height: 18),
+                const SizedBox(height: 12),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
@@ -505,7 +505,7 @@ class _CaregiverProfileScreenState extends ConsumerState<CaregiverProfileScreen>
                     Container(width: 1, height: 30, color: Colors.white24),
                     _HeroStat(label: 'Visits', value: '${profile.totalVisits}', icon: Icons.event_note_rounded),
                     Container(width: 1, height: 30, color: Colors.white24),
-                    _HeroStat(label: 'Rate/hr', value: '₹${profile.hourlyRate}', icon: Icons.currency_rupee_rounded),
+                    _HeroStat(label: 'Hourly charges', value: '₹${profile.hourlyRate}', icon: Icons.currency_rupee_rounded),
                   ],
                 ),
               ],
@@ -553,6 +553,9 @@ class _CaregiverProfileScreenState extends ConsumerState<CaregiverProfileScreen>
             const SizedBox(height: 16),
             PartnerDocumentsSection(
               role: 'caregiver',
+              // A legacy care-assistant profile registered under the Nurse
+              // role must show the ID-only checklist, not the nurse one.
+              typeKey: profile.serviceType == 'care_assistant' ? 'care_assistant' : null,
               uid: CaregiverProfileService.currentUid!,
               documents: profile.documents,
               documentVerification: profile.documentVerification,

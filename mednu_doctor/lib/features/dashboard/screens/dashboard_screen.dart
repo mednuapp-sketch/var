@@ -18,6 +18,8 @@ import '../../../core/services/presence_service.dart';
 import '../../../core/utils/r.dart';
 import '../../auth/services/doctor_auth_service.dart';
 import '../../location/services/doctor_location_service.dart';
+import '../../../core/widgets/mednu_components.dart' show MedNuConfirmationDialog;
+import '../../earnings/quick_connect_earnings.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../../../core/widgets/pre_consultation_summary_card.dart';
 import '../../../shared_core/shared_core.dart';
@@ -675,11 +677,10 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
               const SizedBox(height: 20),
 
               // Upcoming appointments
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16),
-                child: Text('Upcoming Appointments', style: AppTextStyles.h4),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: SectionHeader(title: 'Upcoming Appointments'),
               ),
-              const SizedBox(height: 10),
               StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                 stream: _upcomingStream,
                 builder: (context, snap) {
@@ -696,28 +697,12 @@ class _HomeTabState extends ConsumerState<_HomeTab> {
                   final limited = sorted.take(5).toList();
 
                   if (limited.isEmpty) {
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      child: Container(
-                        padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: AppColors.divider)),
-                        child: Column(children: [
-                          const Icon(Icons.calendar_today_outlined, size: 36, color: AppColors.textHint),
-                          const SizedBox(height: 8),
-                          Text('No upcoming appointments', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textHint)),
-                          const SizedBox(height: 10),
-                          TextButton(
-                            onPressed: () => context.push(AppRoutes.schedule),
-                            style: TextButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(horizontal: 4),
-                              minimumSize: const Size(0, 32),
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            ),
-                            child: const Text('Set Availability',
-                                style: TextStyle(fontFamily: 'Inter', fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary)),
-                          ),
-                        ]),
-                      ),
+                    return AppEmptyState(
+                      icon: Icons.event_available_rounded,
+                      title: 'No upcoming appointments',
+                      message: 'New booked appointments will appear here.',
+                      actionLabel: 'Set Availability',
+                      onAction: () => context.push(AppRoutes.schedule),
                     );
                   }
                   return Column(
@@ -820,8 +805,13 @@ class _RealStatsRow extends StatelessWidget {
           .snapshots(),
       builder: (context, snap) {
         final docs = snap.data?.docs ?? [];
-        final totalEarnings = docs.fold<num>(0, (acc, d) => acc + ((d.data()['fee'] as num?) ?? 0));
-        final consultations = docs.length;
+        return QuickConnectEarningsBuilder(
+          uid: uid!,
+          builder: (context, quick) {
+        final quickToday = quick.where((e) => e.data()['date'] == today).toList();
+        final totalEarnings = docs.fold<num>(0, (acc, d) => acc + ((d.data()['fee'] as num?) ?? 0)) +
+            quickToday.fold<num>(0, (acc, e) => acc + ((e.data()['fee'] as num?) ?? 0));
+        final consultations = docs.length + quickToday.length;
 
         return Padding(
           padding: EdgeInsets.symmetric(horizontal: R.p(context, 16)),
@@ -830,6 +820,8 @@ class _RealStatsRow extends StatelessWidget {
             SizedBox(width: R.p(context, 10)),
             _StatCard('Consultations', '$consultations', Icons.video_call_rounded, AppColors.secondary),
           ]),
+        );
+          },
         );
       },
     );
@@ -1754,13 +1746,18 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
     if (confirm == true && mounted) {
       FeedbackService.showLoading(context, 'Marking visit complete...');
       try {
-        await FirebaseFirestore.instance
-            .collection('appointments')
-            .doc(docId)
-            .update({
-          'status':      'completed',
-          'completedAt': FieldValue.serverTimestamp(),
-          'updatedAt':   FieldValue.serverTimestamp(),
+        final apptRef = FirebaseFirestore.instance.collection('appointments').doc(docId);
+        await FirebaseFirestore.instance.runTransaction((tx) async {
+          final snap = await tx.get(apptRef);
+          // Never turn a cancelled appointment into 'completed'.
+          if (snap.data()?['status'] == 'cancelled') {
+            throw StateError('appointment_cancelled');
+          }
+          tx.update(apptRef, {
+            'status':      'completed',
+            'completedAt': FieldValue.serverTimestamp(),
+            'updatedAt':   FieldValue.serverTimestamp(),
+          });
         });
         final uid = DoctorAuthService.currentUid;
         if (uid != null) await AppointmentReminderService.cancelReminders(uid, docId);
@@ -1783,7 +1780,9 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
         if (mounted) {
           FeedbackService.showError(
             context,
-            'Failed to mark visit complete. Please try again.',
+            e is StateError
+                ? 'This appointment was cancelled and cannot be completed.'
+                : 'Failed to mark visit complete. Please try again.',
           );
         }
       }
@@ -1858,28 +1857,168 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
   // query filters on status == 'booked', so writing a separate 'rescheduled'
   // status would make the appointment vanish from the patient's list.
   Future<void> _rescheduleAppointment(String docId, Map<String, dynamic> data) async {
+    final uid = DoctorAuthService.currentUid;
+    if (uid == null) return;
     final currentDate = DateTime.tryParse(data['date'] as String? ?? '') ?? DateTime.now();
     final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    // Doctor's own availability (working days, slot length, blocked slots).
+    Map<String, dynamic>? avail;
+    try {
+      final doc = await FirebaseFirestore.instance.collection('doctors').doc(uid).get();
+      avail = doc.data()?['availability'] as Map<String, dynamic>?;
+    } catch (_) {
+      if (mounted) FeedbackService.showError(context, 'Could not load your availability. Please try again.');
+      return;
+    }
+    if (!mounted) return;
+    final schedule = avail?['schedule'] as Map<String, dynamic>?;
+
+    bool isWorkingDay(DateTime d) {
+      // No schedule configured: the patient app falls back to default slots too.
+      if (schedule == null) return true;
+      final ds = schedule[DateFormat('EEE', 'en').format(d)] as Map<String, dynamic>?;
+      return ds?['enabled'] == true;
+    }
+
+    // First selectable working day on/after the appointment's current date.
+    DateTime? initial;
+    final from = currentDate.isBefore(today)
+        ? today
+        : DateTime(currentDate.year, currentDate.month, currentDate.day);
+    for (var i = 0; i <= 90; i++) {
+      final d = from.add(Duration(days: i));
+      if (isWorkingDay(d)) {
+        initial = d;
+        break;
+      }
+    }
+    if (initial == null) {
+      FeedbackService.showError(context, 'You have no working days set. Update your availability first.');
+      return;
+    }
     final pickedDate = await showDatePicker(
       context: context,
-      initialDate: currentDate.isBefore(now) ? now : currentDate,
-      firstDate: now,
-      lastDate: now.add(const Duration(days: 90)),
-      helpText: 'Reschedule to',
+      initialDate: initial,
+      firstDate: today,
+      lastDate: today.add(const Duration(days: 90)),
+      helpText: 'Reschedule to (working days only)',
+      selectableDayPredicate: isWorkingDay,
     );
     if (pickedDate == null || !mounted) return;
-
-    final pickedTime = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.now(),
-      helpText: 'Reschedule time',
-    );
-    if (pickedTime == null || !mounted) return;
-
-    final h = pickedTime.hourOfPeriod == 0 ? 12 : pickedTime.hourOfPeriod;
-    final period = pickedTime.period == DayPeriod.am ? 'AM' : 'PM';
-    final timeStr = '${h.toString().padLeft(2, '0')}:${pickedTime.minute.toString().padLeft(2, '0')} $period';
     final dateStr = DateFormat('yyyy-MM-dd').format(pickedDate);
+
+    // Slots already taken: other appointments of this doctor on that date
+    // (any live status) plus the server-maintained appointment_slots index
+    // (the source the patient app uses), ignoring this appointment's own hold.
+    final taken = <String>{};
+    FeedbackService.showLoading(context, 'Checking available slots...');
+    try {
+      final db = FirebaseFirestore.instance;
+      final appts = await db.collection('appointments')
+          .where('doctorId', isEqualTo: uid)
+          .where('date', isEqualTo: dateStr)
+          .get();
+      for (final d in appts.docs) {
+        if (d.id == docId) continue;
+        final st = (d.data()['status'] as String? ?? '').toLowerCase();
+        if (st == 'cancelled' || st == 'completed') continue;
+        final t = d.data()['time'] as String?;
+        if (t != null) taken.add(t.trim().toUpperCase());
+      }
+      final slotDocs = await db.collection('appointment_slots')
+          .where('doctorId', isEqualTo: uid)
+          .where('date', isEqualTo: dateStr)
+          .get();
+      for (final d in slotDocs.docs) {
+        if (d.data()['appointmentId'] == docId) continue;
+        final t = d.data()['time'] as String?;
+        if (t != null) taken.add(t.trim().toUpperCase());
+      }
+    } catch (_) {
+      if (mounted) {
+        FeedbackService.dismiss(context);
+        FeedbackService.showError(context, 'Could not check slot availability. Please try again.');
+      }
+      return;
+    }
+    if (!mounted) return;
+    FeedbackService.dismiss(context);
+
+    // Build valid slots for that day (zero-padded 'HH:MM AM').
+    final blockedByDate = avail?['blockedSlots'] as Map<String, dynamic>?;
+    final blocked = ((blockedByDate?[dateStr] as List?) ?? const [])
+        .map((e) => e.toString().trim().toUpperCase())
+        .toSet();
+    final slotDuration = (avail?['slotDuration'] as num?)?.toInt() ?? 30;
+    final ds = schedule?[DateFormat('EEE', 'en').format(pickedDate)] as Map<String, dynamic>?;
+    int startMins = 9 * 60, endMins = 17 * 60;
+    try {
+      if (ds != null) {
+        final sp = (ds['start'] as String? ?? '09:00').split(':');
+        final ep = (ds['end'] as String? ?? '17:00').split(':');
+        startMins = int.parse(sp[0]) * 60 + int.parse(sp[1]);
+        endMins = int.parse(ep[0]) * 60 + int.parse(ep[1]);
+      }
+    } catch (_) {}
+    final isToday = pickedDate.year == today.year &&
+        pickedDate.month == today.month &&
+        pickedDate.day == today.day;
+    final nowMins = now.hour * 60 + now.minute;
+    final slots = <String>[];
+    for (int m = startMins; m + slotDuration <= endMins; m += slotDuration) {
+      if (isToday && m <= nowMins) continue; // past times
+      final h = m ~/ 60;
+      final dh = h == 0 ? 12 : (h > 12 ? h - 12 : h);
+      final label = '${dh.toString().padLeft(2, '0')}:${(m % 60).toString().padLeft(2, '0')} ${h < 12 ? 'AM' : 'PM'}';
+      if (blocked.contains(label) || taken.contains(label)) continue;
+      slots.add(label);
+    }
+    if (slots.isEmpty) {
+      FeedbackService.showError(context,
+          'No free slots on ${DateFormat('d MMM').format(pickedDate)} (past, blocked or already booked). Pick another day.');
+      return;
+    }
+
+    final timeStr = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => SafeArea(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.7),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Select a new time', style: AppTextStyles.labelLarge),
+                const SizedBox(height: 4),
+                Text(
+                  '${DateFormat('EEE, d MMM').format(pickedDate)} - only free slots are shown',
+                  style: AppTextStyles.caption,
+                ),
+                const SizedBox(height: 16),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: slots
+                      .map((t) => ActionChip(
+                            label: Text(t),
+                            onPressed: () => Navigator.of(ctx).pop(t),
+                          ))
+                      .toList(),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    if (timeStr == null || !mounted) return;
 
     FeedbackService.showLoading(context, 'Rescheduling appointment...');
     try {
@@ -1888,8 +2027,7 @@ class _AppointmentsTabState extends State<_AppointmentsTab> with SingleTickerPro
         'time':      timeStr,
         'updatedAt': FieldValue.serverTimestamp(),
       });
-      final uid = DoctorAuthService.currentUid;
-      if (uid != null) await AppointmentReminderService.cancelReminders(uid, docId);
+      await AppointmentReminderService.cancelReminders(uid, docId);
       await OperationLogger.logSuccess(
         action: DoctorOpAction.appointmentRescheduled,
         entityId: docId,
@@ -1932,10 +2070,35 @@ class _EarningsTab extends StatelessWidget {
           .snapshots(),
       builder: (context, snap) {
         final allDocs = snap.data?.docs ?? [];
-        final docs = allDocs
+        final apptDocs = allDocs
             .where((d) => d.data()['status'] == 'completed')
+            .map(EarningEntry.fromDoc)
             .toList();
+        return QuickConnectEarningsBuilder(
+          uid: uid,
+          builder: (context, quick) => _buildEarnings(
+            context,
+            allDocs: allDocs,
+            apptCompletedCount: apptDocs.length,
+            docs: [...apptDocs, ...quick],
+            today: today,
+            weekStartStr: weekStartStr,
+            monthStart: monthStart,
+          ),
+        );
+      },
+    );
+  }
 
+  Widget _buildEarnings(
+    BuildContext context, {
+    required List<QueryDocumentSnapshot<Map<String, dynamic>>> allDocs,
+    required int apptCompletedCount,
+    required List<EarningEntry> docs,
+    required String today,
+    required String weekStartStr,
+    required String monthStart,
+  }) {
         // Calculate earnings segments
         num todayEarnings = 0;
         num weekEarnings  = 0;
@@ -2021,7 +2184,7 @@ class _EarningsTab extends StatelessWidget {
                 _QuickEarnCard(
                   'Completion Rate',
                   allDocs.isNotEmpty
-                      ? '${((docs.length / allDocs.length) * 100).round()}%'
+                      ? '${((apptCompletedCount / allDocs.length) * 100).round()}%'
                       : '–',
                   Icons.check_circle_rounded,
                   AppColors.success,
@@ -2083,8 +2246,6 @@ class _EarningsTab extends StatelessWidget {
             ],
           ),
         );
-      },
-    );
   }
 }
 
@@ -2193,6 +2354,14 @@ class _ProfileTab extends StatelessWidget {
           const SizedBox(height: 8),
           OutlinedButton.icon(
             onPressed: () async {
+              final confirmed = await MedNuConfirmationDialog.show(
+                context,
+                title: 'Sign Out',
+                message: 'Are you sure you want to sign out?',
+                confirmLabel: 'Sign Out',
+                destructive: true,
+              );
+              if (!confirmed || !context.mounted) return;
               await DoctorAuthService.signOut();
               if (context.mounted) context.go(AppRoutes.login);
             },

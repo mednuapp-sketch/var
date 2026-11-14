@@ -128,15 +128,22 @@ class LabBookingService {
         buildUpdate: (d) => {'status': 'accepted'},
       );
 
+  /// Declines a booking.
+  ///  - Unclaimed (open pool, `labId == null`): only HIDES it from this lab —
+  ///    the lab's uid is added to `declinedBy` and the shared booking stays
+  ///    'pending' for every other lab (and for the patient). It fails for
+  ///    everyone only once every active lab declined, or it expires (see
+  ///    `_failPoolJobIfAllDeclined` in functions/index.js).
+  ///  - Pinned to this lab (patient booked from its own catalogue): rejects the
+  ///    booking outright, which refunds the patient (unchanged behaviour).
   static Future<void> rejectBooking(String bookingId, String labId) => _transitionBooking(
         bookingId,
-        // A lab claiming-then-rejecting still needs labId set so the rule
-        // that scopes updates to the owning lab keeps applying; an
-        // unclaimed reject (declining without ever accepting) is also valid.
         precondition: (d) =>
             (d['labId'] == null || d['labId'] == labId) && d['status'] == 'pending',
         conflictMessage: 'This booking is no longer available to reject.',
-        buildUpdate: (d) => {'labId': labId, 'status': 'rejected'},
+        buildUpdate: (d) => d['labId'] == null
+            ? {'declinedBy': FieldValue.arrayUnion([labId])}
+            : {'status': 'rejected'},
       );
 
   static Future<void> assignTechnician(

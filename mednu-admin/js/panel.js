@@ -671,7 +671,6 @@ const REPORT_SOURCES = {
   payments:                { label: 'Revenue & Payments',        date: 'createdAt', scope: 'finance' },
   transactions:            { label: 'Wallet Transactions',       date: 'createdAt', scope: 'finance' },
   settlements:             { label: 'Partner Settlements',       date: 'createdAt', scope: 'finance' },
-  commission_rules:        { label: 'Commission Rules',          date: null,        scope: 'finance' },
   coupons:                 { label: 'Coupons',                   date: null,        scope: 'finance' },
   refunds:                 { label: 'Refunds',                   date: 'createdAt', scope: 'finance' },
   referrals:               { label: 'Referrals',                 date: 'createdAt', scope: 'finance' },

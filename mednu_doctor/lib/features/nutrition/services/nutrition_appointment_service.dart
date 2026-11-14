@@ -41,4 +41,36 @@ class NutritionAppointmentService {
       'updatedAt': FieldValue.serverTimestamp(),
     });
   }
+
+  /// Slot labels already held on [date] by other appointments of this
+  /// dietician (server-maintained `nutrition_slots` index; readable by any
+  /// signed-in user).
+  static Future<Set<String>> takenSlots(String nutritionistId, String date,
+      {String? exceptAppointmentId}) async {
+    final snap = await _db
+        .collection('nutrition_slots')
+        .where('nutritionistId', isEqualTo: nutritionistId)
+        .where('date', isEqualTo: date)
+        .get();
+    return snap.docs
+        .where((d) => d.data()['appointmentId'] != exceptAppointmentId)
+        .map((d) => (d.data()['timeSlot'] as String?) ?? '')
+        .where((t) => t.isNotEmpty)
+        .toSet();
+  }
+
+  /// Provider-proposed move of a pending/confirmed appointment. Only these
+  /// keys may change (firestore.rules `_validNutritionReschedule`); status and
+  /// the weight-loss plan fields are untouched. The slot-index trigger frees
+  /// the old slot / takes the new one, reverts a taken/off-schedule target and
+  /// notifies the patient.
+  static Future<void> reschedule(String id, String date, String timeSlot) {
+    return _appointments.doc(id).update({
+      'date': date,
+      'timeSlot': timeSlot,
+      'rescheduledAt': FieldValue.serverTimestamp(),
+      'rescheduledBy': 'provider',
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
 }

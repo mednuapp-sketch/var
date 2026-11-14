@@ -23,8 +23,12 @@ final labProfileProvider = StreamProvider.autoDispose<LabProfile?>((ref) {
 
 final availableBookingsProvider =
     StreamProvider.autoDispose<List<DiagnosticBooking>>((ref) {
-  return LabBookingService.availableBookingsStream()
-      .map((snap) => snap.docs.map(DiagnosticBooking.fromDoc).toList());
+  final uid = LabProfileService.currentUid;
+  // Hide jobs this lab already declined (they stay open for other labs).
+  return LabBookingService.availableBookingsStream().map((snap) => snap.docs
+      .where((d) => !((d.data()['declinedBy'] as List?)?.contains(uid) ?? false))
+      .map(DiagnosticBooking.fromDoc)
+      .toList());
 });
 
 // ── Dashboard metrics — one realtime query, computed client-side ─────────

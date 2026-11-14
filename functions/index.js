@@ -115,16 +115,10 @@ exports.onNewConsultation = onDocumentCreated(
     const doctorId = data.doctorId;
     if (!doctorId) return;
 
-    // Fetch the doctor's FCM token from Firestore.
-    const doctorDoc = await getFirestore()
-      .collection("doctors")
-      .doc(doctorId)
-      .get();
-
-    if (!doctorDoc.exists) return;
-
-    const fcmToken = doctorDoc.data().fcmToken;
-    if (!fcmToken) {
+    // Freshest FCM token for this doctor (doctors/{uid} + role profiles),
+    // newest `fcmTokenUpdatedAt` wins so a new phone gets the call.
+    const tokenCandidates = await _providerTokenCandidates(getFirestore(), doctorId);
+    if (!tokenCandidates.length) {
       console.log(`Doctor ${doctorId} has no FCM token — skipping push.`);
       return;
     }
@@ -134,8 +128,6 @@ exports.onNewConsultation = onDocumentCreated(
     const consultationType = data.consultationType || "Video";
 
     const message = {
-      token: fcmToken,
-
       // Data payload: Flutter app receives this in foreground & background.
       data: {
         type: "incoming_consultation",
@@ -181,12 +173,8 @@ exports.onNewConsultation = onDocumentCreated(
       },
     };
 
-    try {
-      const response = await getMessaging().send(message);
-      console.log(`FCM sent to doctor ${doctorId}: ${response}`);
-    } catch (err) {
-      console.error(`FCM failed for doctor ${doctorId}:`, err);
-    }
+    const sent = await _sendToProviderCandidates(getMessaging(), tokenCandidates, message, `doctor ${doctorId}`);
+    if (sent) console.log(`FCM sent to doctor ${doctorId}`);
   }
 );
 
@@ -979,6 +967,16 @@ exports.onEmergencyDoctorRequest = onDocumentCreated(
       try {
         const res = await getMessaging().sendEachForMulticast(message);
         console.log(`Emergency FCM batch ${Math.floor(i / 500) + 1}: ${res.successCount}/${chunk.length} sent.`);
+        // Drop tokens FCM reports as dead so they stop being targeted.
+        await Promise.all(res.responses.map((r, j) => {
+          if (r.success || !_INVALID_FCM_TOKEN_CODES.includes(r.error && r.error.code)) return null;
+          const uid = doctorIds[i + j];
+          return uid && db.collection("doctors").doc(uid).update({
+            fcmToken: FieldValue.delete(),
+            fcmTokenUpdatedAt: FieldValue.delete(),
+            fcmPlatform: FieldValue.delete(),
+          }).catch(() => {});
+        }));
       } catch (err) {
         console.error(`Emergency FCM batch ${Math.floor(i / 500) + 1} failed:`, err);
       }
@@ -1551,6 +1549,8 @@ exports.onServiceRequestStatusChange = onDocumentUpdated(
     }
     // Internal-only status values — no user-facing notification needed.
     if (["duplicate", "notified", "pending"].includes(after.status)) return;
+    // _rejectPinnedProviderNotAccepting already sent the patient its own message.
+    if (after.status === "cancelled" && after.cancelReason === "provider_not_accepting") return;
 
     const patientId = after.patientId || after.userId;
     if (!patientId) return;
@@ -2127,15 +2127,66 @@ function _ledgerDoc({ uid, walletType, type, amount, category, title, descriptio
 //                 purpose?: string }
 // Response:     { order_id: string, amount: number, currency: string }
 exports.createRazorpayOrder = onCall({ enforceAppCheck: true }, async (request) => {
-  const { amount, currency = "INR", receipt, purpose } = request.data || {};
+  let { amount, currency = "INR", receipt, purpose, tripRequestId } = request.data || {};
 
   const uid = request.auth?.uid;
   if (!uid) {
     throw new HttpsError("unauthenticated", "Sign in to start a payment.");
   }
 
+  // Pay-after-trip (ambulance): the order is for the server-stored amount due
+  // on THIS existing booking, never a client-sent figure. captureTripPayment
+  // binds the order to the request via `purpose`.
+  if (tripRequestId !== undefined && tripRequestId !== null) {
+    const due = await _tripPaymentDue(getFirestore(), uid, tripRequestId);
+    amount = Math.round(due.amountDue * 100);
+    purpose = `trip:${due.id}`;
+    receipt = `trip_${due.id}`.slice(0, 40);
+  }
+
   if (!amount || typeof amount !== "number" || amount < 100) {
     throw new HttpsError("invalid-argument", "Amount must be a number ≥ 100 paise.");
+  }
+
+  // Early price check (checkout orders only): the payment screen passes the
+  // booking context so a stale/tampered price is rejected BEFORE the customer
+  // is charged at the gateway. capturePayment/captureCartPayment re-check
+  // authoritatively (and bind the order amount), so omitting this context
+  // gains a cheat nothing — see price notes above _expectedPriceFor.
+  {
+    const ctx = request.data || {};
+    const db0 = getFirestore();
+    const cartItems = Array.isArray(ctx.items) ? ctx.items : null;
+    const single = typeof ctx.serviceType === "string" && typeof ctx.bookingCollection === "string" &&
+      ctx.bookingData && typeof ctx.bookingData === "object" && !Array.isArray(ctx.bookingData);
+    if (single) _assertBookingCollectionAllowed(ctx.bookingCollection);
+    if (cartItems) {
+      for (const it of cartItems) {
+        if (it && typeof it.bookingCollection === "string") _assertBookingCollectionAllowed(it.bookingCollection);
+      }
+    }
+    if ((cartItems && cartItems.length && cartItems.length <= 50) || single) {
+      const enforce0 = await _priceCheckEnforced(db0);
+      if (single && !cartItems) {
+        const claimed = Number(ctx.originalAmount);
+        if (Number.isFinite(claimed) && claimed > 0) {
+          await _verifyBookingPrice(db0, {
+            uid, serviceType: ctx.serviceType.trim(), bookingCollection: ctx.bookingCollection.trim(),
+            bookingData: ctx.bookingData, claimedAmount: claimed, enforce: enforce0, source: "createRazorpayOrder",
+          });
+        }
+      } else if (cartItems) {
+        for (const it of cartItems) {
+          const claimed = Number(it && it.amount);
+          if (!it || typeof it.serviceType !== "string" || typeof it.bookingCollection !== "string" ||
+              !it.bookingData || typeof it.bookingData !== "object" || !(claimed > 0)) continue;
+          await _verifyBookingPrice(db0, {
+            uid, serviceType: it.serviceType.trim(), bookingCollection: it.bookingCollection.trim(),
+            bookingData: it.bookingData, claimedAmount: claimed, enforce: enforce0, source: "createRazorpayOrder",
+          });
+        }
+      }
+    }
   }
 
   const razorpay = new Razorpay({
@@ -2450,6 +2501,105 @@ exports.spendWalletBalance = onCall({ enforceAppCheck: true }, async (request) =
   }
 });
 
+// ── Wallet: reverse an in-app debit whose booking capture failed ──────────────
+//
+// payment_screen debits MedNU Money / the main wallet via spendWalletBalance
+// (idempotency keys `<base>-mm` / `<base>-w`) BEFORE calling capturePayment /
+// captureCartPayment. If that capture then fails, this credits both legs back
+// exactly once. It refuses when a payments doc exists for the attempt (the
+// booking WAS captured) and when the debit entry does not exist for the caller.
+// Ledger ids are deterministic, so retries are no-ops.
+//
+// Request data: { idempotencyKey: <base key>, razorpayPaymentId?: string }
+// Response:     { success: true, refunded: <rupees>, alreadyRefunded?: true }
+exports.refundWalletSpend = onCall({ enforceAppCheck: true }, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Sign in to continue.");
+
+  const { idempotencyKey, razorpayPaymentId } = request.data || {};
+  if (typeof idempotencyKey !== "string" || !idempotencyKey.trim() || idempotencyKey.length > 190) {
+    throw new HttpsError("invalid-argument", "idempotencyKey is required.");
+  }
+  const base = idempotencyKey.trim();
+  const db = getFirestore();
+  const userRef = db.collection("users").doc(uid);
+
+  // Every payments doc id this attempt could have produced (see capturePayment
+  // / captureCartPayment: `<method>:<uid>:<key>`, razorpay by payment id, cart
+  // items `<cartId>:<i>`).
+  const paymentIds = [
+    _ledgerId(`already_settled:${uid}:${base}`),
+    _ledgerId(`wallet:${uid}:${base}`),
+    _ledgerId(`${_ledgerId(`already_settled:${uid}:${base}`)}:0`),
+  ];
+  if (typeof razorpayPaymentId === "string" && razorpayPaymentId.trim()) {
+    const rzCart = _ledgerId(`razorpay:${razorpayPaymentId.trim()}`);
+    paymentIds.push(rzCart, _ledgerId(`${rzCart}:0`));
+  }
+
+  const legs = [
+    { walletType: "mednu_money", suffix: "-mm", label: "MedNU Money" },
+    { walletType: "main", suffix: "-w", label: "wallet" },
+  ].map((l) => {
+    const spendSource = `spend:${uid}:${base}${l.suffix}`;
+    const reverseSource = `spend_reversal:${uid}:${base}${l.suffix}`;
+    return {
+      ...l, reverseSource,
+      spendRef: db.collection("wallet_ledger").doc(_ledgerId(spendSource)),
+      reverseRef: db.collection("wallet_ledger").doc(_ledgerId(reverseSource)),
+    };
+  });
+
+  try {
+    const outcome = await db.runTransaction(async (t) => {
+      const userSnap = await t.get(userRef);
+      const paymentSnaps = await Promise.all(paymentIds.map((id) => t.get(db.collection("payments").doc(id))));
+      const legSnaps = await Promise.all(legs.map(async (l) => ({
+        spend: await t.get(l.spendRef), reverse: await t.get(l.reverseRef),
+      })));
+
+      if (paymentSnaps.some((s) => s.exists)) {
+        throw new HttpsError("failed-precondition", "This booking was already recorded; nothing to refund.");
+      }
+      const toRefund = legs
+        .map((l, i) => ({ ...l, ...legSnaps[i] }))
+        .filter((l) => l.spend.exists && l.spend.get("uid") === uid && l.spend.get("type") === "debit");
+      if (!toRefund.length) {
+        throw new HttpsError("not-found", "No wallet debit found for this payment attempt.");
+      }
+
+      let refunded = 0;
+      const balances = { walletBalance: _walletBalanceOf(userSnap, "walletBalance"),
+                         mednuMoneyBalance: _walletBalanceOf(userSnap, "mednuMoneyBalance") };
+      for (const l of toRefund) {
+        if (l.reverse.exists) continue; // already reversed
+        const amount = _round2(Number(l.spend.get("amount")) || 0);
+        if (!(amount > 0)) continue;
+        const field = _walletField(l.walletType);
+        balances[field] = _round2(balances[field] + amount);
+        refunded = _round2(refunded + amount);
+        t.set(userRef, { [field]: balances[field] }, { merge: true });
+        t.set(userRef.collection("transactions").doc(), _legacyTxDoc({
+          title: "Payment Refunded", amount, type: "credit", category: "refund",
+          description: "Booking could not be completed", walletType: l.walletType,
+        }));
+        t.set(l.reverseRef, _ledgerDoc({
+          uid, walletType: l.walletType, type: "credit", amount, category: "refund",
+          title: "Payment Refunded", description: "Booking could not be completed",
+          source: l.reverseSource, balanceAfter: balances[field],
+        }));
+      }
+      return { refunded, alreadyRefunded: refunded === 0 };
+    });
+    _logWallet("INFO", "wallet_spend_reversed", { uid, base, ...outcome });
+    return { success: true, ...outcome };
+  } catch (err) {
+    if (err instanceof HttpsError) throw err;
+    _logWallet("ERROR", "wallet_spend_reverse_failed", { uid, base, error: err.message });
+    throw new HttpsError("internal", "Could not refund your wallet right now. Please contact support.");
+  }
+});
+
 // ── Wallet: Transfer to another MedNU user ────────────────────────────────────
 //
 // Request data: { recipientPhone: string, amount: number }
@@ -2574,36 +2724,20 @@ exports.transferWalletBalance = onCall({ enforceAppCheck: true }, async (request
 //
 // Request data: { referralId: string }
 // Response:     { success: true, alreadyRewarded?: true }
-exports.grantReferralReward = onCall({ enforceAppCheck: true }, async (request) => {
-  const uid = request.auth?.uid;
-  if (!uid) throw new HttpsError("unauthenticated", "Sign in to continue.");
+// Shared payout: used by the callable below (legacy conditions) and by the
+// first-booking trigger (`system: true`). `uid` is always the REFERRED user.
+async function _grantReferralRewardCore(db, referralId, uid, { system = false } = {}) {
+  const referralRef = db.collection("referrals").doc(referralId);
 
-  const { referralId } = request.data || {};
-  if (typeof referralId !== "string" || !referralId.trim()) {
-    throw new HttpsError("invalid-argument", "A referral id is required.");
-  }
-
-  const db = getFirestore();
-  const referralRef = db.collection("referrals").doc(referralId.trim());
-
-  // Admin-configured ceilings — the referral doc is written by the client at
-  // signup, so its stored amounts are capped by live config server-side.
-  let capReferrer = Infinity;
-  let capReferred = Infinity;
-  try {
-    const cfg = await db.collection("referralConfig").doc("settings").get();
-    if (cfg.exists) {
-      if (cfg.get("rewardsEnabled") === false) {
-        throw new HttpsError("failed-precondition", "Referral rewards are currently disabled.");
-      }
-      const r = cfg.get("referrerReward");
-      const d = cfg.get("referredReward");
-      if (typeof r === "number") capReferrer = r;
-      if (typeof d === "number") capReferred = d;
-    }
-  } catch (err) {
-    if (err instanceof HttpsError) throw err;
-    _logWallet("WARNING", "referral_config_read_failed", { uid, referralId, error: err.message });
+  // Reward amount is set by the admin at app_config/referral and read HERE, at
+  // grant time (never from the referral doc or the client). Missing doc,
+  // enabled !== true or amount 0 => nothing is granted and the referral stays
+  // 'pending'. Only the REFERRER is rewarded.
+  const cfgSnap = await db.collection("app_config").doc("referral").get();
+  const rewardAmount = cfgSnap.exists && cfgSnap.get("enabled") === true
+    ? _round2(Math.max(0, Number(cfgSnap.get("rewardAmount")) || 0)) : 0;
+  if (!(rewardAmount > 0)) {
+    return { success: true, granted: false };
   }
 
   try {
@@ -2627,18 +2761,19 @@ exports.grantReferralReward = onCall({ enforceAppCheck: true }, async (request) 
       if (r.status !== "pending") {
         throw new HttpsError("failed-precondition", "This referral is not eligible for a reward.");
       }
+      // First-booking referrals are paid ONLY by the server-side booking
+      // trigger (_grantReferralOnFirstBooking), never on a client's say-so.
+      if (r.triggerCondition === "first_booking" && !system) {
+        throw new HttpsError("failed-precondition", "This reward is granted automatically after your first booking.");
+      }
 
       const referrerId = typeof r.referrerId === "string" ? r.referrerId : "";
       if (!referrerId || referrerId === uid) {
         throw new HttpsError("failed-precondition", "Referral is malformed.");
       }
 
-      const referrerReward = Math.max(
-        0, Math.min(Number(r.referrerRewardAmount) || 0, capReferrer)
-      );
-      const referredReward = Math.max(
-        0, Math.min(Number(r.referredRewardAmount) || 0, capReferred)
-      );
+      const referrerReward = rewardAmount;
+      const referredReward = 0; // the referred customer gets nothing
 
       const referrerRef = db.collection("users").doc(referrerId);
       const referredRef = db.collection("users").doc(uid);
@@ -2727,6 +2862,7 @@ exports.grantReferralReward = onCall({ enforceAppCheck: true }, async (request) 
       t.update(referralRef, {
         status: "rewarded",
         rewardedAt: FieldValue.serverTimestamp(),
+        rewardedAmount: referrerReward,
       });
 
       return { alreadyRewarded: false, referrerId, referrerReward, referredReward };
@@ -2781,7 +2917,129 @@ exports.grantReferralReward = onCall({ enforceAppCheck: true }, async (request) 
     _logWallet("ERROR", "referral_reward_failed", { uid, referralId, error: err.message });
     throw new HttpsError("internal", "Could not grant the referral reward.");
   }
+}
+
+exports.grantReferralReward = onCall({ enforceAppCheck: true }, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Sign in to continue.");
+
+  const { referralId } = request.data || {};
+  if (typeof referralId !== "string" || !referralId.trim()) {
+    throw new HttpsError("invalid-argument", "A referral id is required.");
+  }
+  return _grantReferralRewardCore(getFirestore(), referralId.trim(), uid);
 });
+
+// ── Referral: apply a code at sign-up (server-side lookup) ────────────────────
+//
+// `users` is owner-readable only, so the client can never look up the owner of
+// a referral code. This does it with the Admin SDK: rejects unknown codes and
+// self-referral, records `referredBy`/`referredByCode` on the caller's own
+// user doc ONCE, and creates the `referrals/ref_<uid>` doc (status 'pending',
+// triggerCondition 'first_booking'). The reward itself is paid by
+// _grantReferralOnFirstBooking when that user's first booking is COMPLETED.
+// Only the referrer is rewarded; the amount is the admin's app_config/referral
+// rewardAmount, read at grant time.
+//
+// Request data: { code: string }
+// Response:     { success: true, applied: boolean, reason?: string }
+exports.applyReferralCode = onCall({ enforceAppCheck: true }, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Sign in to continue.");
+  const code = String(request.data?.code ?? "").trim().toUpperCase();
+  if (!code || code.length > 32) throw new HttpsError("invalid-argument", "Enter a valid referral code.");
+
+  const db = getFirestore();
+  const userRef = db.collection("users").doc(uid);
+  const userSnap = await userRef.get();
+  if (!userSnap.exists) throw new HttpsError("failed-precondition", "Complete your profile first.");
+  if (userSnap.get("referredBy")) return { success: true, applied: false, reason: "already_applied" };
+
+  const cfgSnap = await db.collection("referralConfig").doc("settings").get();
+  const cfg = cfgSnap.exists ? cfgSnap.data() : {};
+  if (cfg.referralEnabled === false) {
+    throw new HttpsError("failed-precondition", "Referral program is currently inactive.");
+  }
+  const expiry = cfg.offerExpiryDate?.toDate?.();
+  if (expiry && expiry.getTime() < Date.now()) {
+    throw new HttpsError("failed-precondition", "Referral program is currently inactive.");
+  }
+
+  const ownerSnap = await db.collection("users").where("referralCode", "==", code).limit(1).get();
+  if (ownerSnap.empty) throw new HttpsError("not-found", "Invalid referral code.");
+  const referrerDoc = ownerSnap.docs[0];
+  if (referrerDoc.id === uid) throw new HttpsError("invalid-argument", "You cannot use your own referral code.");
+
+  const maxLimit = Number(cfg.maxReferralLimit) || 0;
+  if (maxLimit > 0) {
+    const used = await db.collection("referrals").where("referrerId", "==", referrerDoc.id).get();
+    if (used.size >= maxLimit) {
+      throw new HttpsError("failed-precondition", "This referral code has reached its limit.");
+    }
+  }
+
+  const referralRef = db.collection("referrals").doc(`ref_${uid}`);
+  const applied = await db.runTransaction(async (t) => {
+    const [freshUser, existing] = await Promise.all([t.get(userRef), t.get(referralRef)]);
+    if (freshUser.get("referredBy") || existing.exists) return false;
+    t.set(referralRef, {
+      referrerId: referrerDoc.id,
+      referrerName: referrerDoc.get("name") || "",
+      referredUserId: uid,
+      referralCode: code,
+      status: "pending",
+      // Amount is NOT stored: it is read from app_config/referral at grant time.
+      referrerRewardAmount: 0,
+      referredRewardAmount: 0,
+      triggerCondition: "first_booking",
+      createdAt: FieldValue.serverTimestamp(),
+      rewardedAt: null,
+    });
+    t.set(userRef, { referredBy: referrerDoc.id, referredByCode: code }, { merge: true });
+    return true;
+  });
+  return { success: true, applied, ...(applied ? {} : { reason: "already_applied" }) };
+});
+
+// Pays the referral once the referred user's FIRST booking is completed. Idempotent
+// twice over: the referral doc must still be 'pending', and the payout
+// transaction writes deterministic `referral:<id>:*` ledger entries.
+async function _grantReferralOnFirstBooking(patientId) {
+  if (!patientId) return;
+  const db = getFirestore();
+  try {
+    const snap = await db.collection("referrals")
+      .where("referredUserId", "==", patientId).where("status", "==", "pending").limit(1).get();
+    if (snap.empty || snap.docs[0].get("triggerCondition") !== "first_booking") return;
+    await _grantReferralRewardCore(db, snap.docs[0].id, patientId, { system: true });
+  } catch (err) {
+    // Non-fatal (e.g. rewards currently disabled): stays 'pending' and is
+    // retried when the patient's next booking completes.
+    _logWallet("WARNING", "referral_first_booking_failed", { patientId, error: err.message });
+  }
+}
+// Owner rule: the reward is paid when the referred user's FIRST booking is
+// COMPLETED (not created). Fires only on the status transition INTO the
+// collection's completed state; cancelled/other statuses never pay. The first
+// booking to complete flips the referral out of 'pending', so later completed
+// bookings find nothing pending and do nothing (no double pay).
+function _completedReferralTrigger(collection, patientFields, completedStatuses) {
+  return onDocumentUpdated(`${collection}/{docId}`, async (event) => {
+    const before = event.data?.before?.data();
+    const after = event.data?.after?.data();
+    if (!before || !after || before.status === after.status) return;
+    if (!completedStatuses.includes(after.status)) return;
+    if (completedStatuses.includes(before.status)) return;
+    const patientId = patientFields.map((f) => after[f]).find((v) => v);
+    await _grantReferralOnFirstBooking(patientId);
+  });
+}
+exports.onServiceRequestCompletedReferral = _completedReferralTrigger("service_requests", ["patientId", "userId"], ["completed"]);
+exports.onAppointmentCompletedReferral = _completedReferralTrigger("appointments", ["patientId"], ["completed"]);
+exports.onOrderCompletedReferral = _completedReferralTrigger("orders", ["patientId", "userId"], ["delivered", "completed"]);
+exports.onNutritionAppointmentCompletedReferral = _completedReferralTrigger("nutrition_appointments", ["userId", "patientId"], ["completed"]);
+exports.onConsultationCompletedReferral = _completedReferralTrigger("consultations", ["patientId"], ["completed", "ended"]);
+exports.onHospitalAppointmentCompletedReferral = _completedReferralTrigger("hospital_appointments", ["patientId"], ["completed"]);
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PAYMENT DISTRIBUTION & SETTLEMENT ENGINE
@@ -2850,6 +3108,7 @@ const _PROVIDER_FIELD_BY_SERVICE = {
   equipment: "vendorId",
   ambulance: "ambulanceId",
   caregiver: "caregiverId",
+  care_assistant: "caregiverId",
   nursing: "caregiverId",
   home_care: "caregiverId",
   physiotherapy: "physiotherapistId",
@@ -2890,9 +3149,102 @@ function _auditLogDoc({ actorId, action, targetType, targetId, before, after }) 
 // Mirrors _sendPatientNotification's shape/dedup/never-throw contract for the
 // provider side, which previously had no shared equivalent (doctor/broadcast
 // paths each inlined their own messaging().send() calls).
+// Hospital earnings/settlement/appointment notifications are addressed to the
+// hospital CATALOG id, but billing-desk logins are keyed by their own uid
+// (`hospital_profiles/{uid}.hospitalId` links them). Resolves a catalog id to
+// the active linked login uid(s); returns [] when none (or on any error).
+async function _resolveHospitalRecipients(db, hospitalId) {
+  try {
+    const snap = await db.collection("hospital_profiles")
+      .where("hospitalId", "==", String(hospitalId))
+      .where("status", "==", "active")
+      .limit(10).get();
+    return snap.docs.map((d) => d.id).filter((id) => id !== hospitalId);
+  } catch (_) {
+    return [];
+  }
+}
+
+// ── Freshest-token resolution for provider pushes ────────────────────────────
+// A partner can hold several docs that each carry an `fcmToken` (doctors/{uid}
+// plus one {role}_profiles/{uid} per role). The apps now write
+// `fcmTokenUpdatedAt` alongside the token, so when the partner moves to a new
+// phone the newest write wins. Candidates are returned best-first and
+// de-duplicated by token string (refs = every doc holding that token, so a
+// dead token can be cleaned from all of them).
+const _PROVIDER_TOKEN_COLLECTIONS = [
+  "doctors", "lab_profiles", "pharmacy_profiles", "ambulance_profiles", "caregiver_profiles",
+  "nutritionist_profiles", "physiotherapist_profiles", "counsellor_profiles",
+  "hospital_profiles", "equipment_profiles",
+];
+const _INVALID_FCM_TOKEN_CODES = [
+  "messaging/registration-token-not-registered",
+  "messaging/invalid-registration-token",
+];
+
+async function _providerTokenCandidates(db, uid, collections = _PROVIDER_TOKEN_COLLECTIONS) {
+  const snaps = await Promise.all(collections.map((col) =>
+    db.collection(col).doc(uid).get().catch(() => null)));
+  const byToken = new Map();
+  snaps.forEach((snap, order) => {
+    if (!snap || !snap.exists) return;
+    const token = snap.get("fcmToken");
+    if (!token || typeof token !== "string") return;
+    const ts = snap.get("fcmTokenUpdatedAt");
+    const ms = ts && typeof ts.toMillis === "function" ? ts.toMillis() : 0;
+    const cur = byToken.get(token);
+    if (cur) {
+      cur.refs.push(snap.ref);
+      if (ms > cur.ms) cur.ms = ms;
+    } else {
+      byToken.set(token, { token, ms, order, refs: [snap.ref] });
+    }
+  });
+  // Newest timestamp first; missing timestamps (legacy) sort last, ties keep
+  // collection order (doctors first).
+  return [...byToken.values()].sort((a, b) => (b.ms - a.ms) || (a.order - b.order));
+}
+
+// Sends `message` (without `token`) to the freshest candidate. Only an
+// invalid/unregistered-token error moves on to the next candidate (and deletes
+// the dead token from every doc it came from); any other failure is logged.
+// Returns true when a send succeeded. Never throws.
+async function _sendToProviderCandidates(messaging, candidates, message, label = "provider") {
+  for (const cand of candidates) {
+    try {
+      await messaging.send({ ...message, token: cand.token });
+      return true;
+    } catch (err) {
+      if (_INVALID_FCM_TOKEN_CODES.includes(err && err.code)) {
+        console.warn(`FCM token invalid for ${label}; removing it from ${cand.refs.map((r) => r.path).join(", ")}`);
+        await Promise.all(cand.refs.map((ref) => ref.update({
+          fcmToken: FieldValue.delete(),
+          fcmTokenUpdatedAt: FieldValue.delete(),
+          fcmPlatform: FieldValue.delete(),
+        }).catch(() => {})));
+        continue;
+      }
+      console.error(`FCM send failed for ${label}:`, err && err.message);
+      return false;
+    }
+  }
+  return false;
+}
+
 async function _sendProviderNotification(db, messaging, providerId, opts) {
   const { title, body, type, serviceType = "general", bookingId = "", extraData = {} } = opts;
   if (!providerId || !title || !body || !type) return;
+
+  // Hospital service types: the id is a catalog id, so fan out to the linked
+  // billing-desk uid(s) up front. `_hospitalResolved` stops recursion.
+  if (!opts._hospitalResolved && String(serviceType).startsWith("hospital")) {
+    const uids = await _resolveHospitalRecipients(db, providerId);
+    if (uids.length) {
+      await Promise.all(uids.map((u) =>
+        _sendProviderNotification(db, messaging, u, { ...opts, _hospitalResolved: true })));
+      return;
+    }
+  }
 
   if (bookingId) {
     const dedupKey = `${type}_${bookingId}`;
@@ -2919,36 +3271,33 @@ async function _sendProviderNotification(db, messaging, providerId, opts) {
     return;
   }
 
-  let fcmToken = null;
+  // Providers may be doctors, labs, pharmacies, ambulances, caregivers, etc. —
+  // each keeps its profile in its own collection. Pick the FRESHEST token
+  // across all of them (new phone wins), de-duplicated.
+  let tokenCandidates = [];
   try {
-    // Providers may be doctors, labs, pharmacies, ambulances, or caregivers —
-    // each keeps its profile in its own collection. Cheap enough to probe in
-    // order since this only runs on real settlement/earnings events.
-    const candidates = [
-      "doctors", "lab_profiles", "pharmacy_profiles", "ambulance_profiles", "caregiver_profiles",
-      "nutritionist_profiles", "physiotherapist_profiles", "counsellor_profiles",
-      "hospital_profiles", "equipment_profiles",
-    ];
-    for (const col of candidates) {
-      const snap = await db.collection(col).doc(providerId).get();
-      if (snap.exists && snap.get("fcmToken")) { fcmToken = snap.get("fcmToken"); break; }
-    }
+    tokenCandidates = await _providerTokenCandidates(db, providerId);
   } catch (_) {}
-  if (!fcmToken) return;
-
-  try {
-    await messaging.send({
-      token: fcmToken,
-      notification: { title, body },
-      data: Object.fromEntries(
-        Object.entries({ type, serviceType, bookingId, ...extraData }).map(([k, v]) => [k, String(v)])
-      ),
-      android: { priority: "high" },
-      apns: { payload: { aps: { sound: "default" } } },
-    });
-  } catch (err) {
-    console.error(`FCM send failed for provider ${providerId}:`, err.message);
+  if (!tokenCandidates.length) {
+    // No direct token: the id may be a hospital catalog id (e.g. from a
+    // settlement notification whose serviceType isn't hospital_*). Only then
+    // pay for the hospital lookup, and never recurse twice.
+    if (!opts._hospitalResolved) {
+      const uids = await _resolveHospitalRecipients(db, providerId);
+      await Promise.all(uids.map((u) =>
+        _sendProviderNotification(db, messaging, u, { ...opts, _hospitalResolved: true })));
+    }
+    return;
   }
+
+  await _sendToProviderCandidates(messaging, tokenCandidates, {
+    notification: { title, body },
+    data: Object.fromEntries(
+      Object.entries({ type, serviceType, bookingId, ...extraData }).map(([k, v]) => [k, String(v)])
+    ),
+    android: { priority: "high" },
+    apns: { payload: { aps: { sound: "default" } } },
+  }, `provider ${providerId}`);
 }
 
 // ── New-job broadcast helper ─────────────────────────────────────────────────
@@ -3047,35 +3396,41 @@ async function _sendAdminAlert(db, messaging, opts) {
   await _pushToAllAdmins(db, messaging, { title, body, type });
 }
 
-// ── Commission engine ─────────────────────────────────────────────────────────
+// ── Settlement engine: fee-only model ─────────────────────────────────────────
 //
-// `ruleSnap` must already have been read via tx.get(...) by the caller —
-// this function does no I/O so it can be used on either side of a
-// transaction's read/write boundary.
-function _computeCommissionFromRule(ruleSnap, providerId, amount) {
-  const base = _round2(Math.max(0, amount));
-  if (base <= 0) return { commission: 0, providerAmount: 0 };
-  if (!ruleSnap || !ruleSnap.exists) {
-    // No admin-configured rule yet for this service — default to 0% rather
-    // than guessing. Logged loudly elsewhere so it gets noticed.
-    return { commission: 0, providerAmount: base };
-  }
-  const rule = ruleSnap.data() || {};
-  const override = providerId && rule.providerOverrides ? rule.providerOverrides[providerId] : null;
-  const type = (override && override.type) || rule.type;
-  const percentage = Number((override && override.percentage) ?? rule.percentage ?? 0);
-  const fixedAmount = Number((override && override.fixedAmount) ?? rule.fixedAmount ?? 0);
+// Owner decision: the platform earns ONLY the admin-set platform fee
+// (app_config/platform_fee, per service type) that the patient app adds on top
+// of the price. No commission is taken from providers: commission is always 0
+// and providerAmount = paidAmount - platformFee (floor 0).
+//
+// Reads app_config/platform_fee inside a transaction (read phase). The fee is
+// recomputed server-side with the same normalisation as the patient app.
+async function _readCommissionRuleTx(db, tx) {
+  // Name kept for call-site compatibility; it now returns the platform-fee config.
+  return tx.get(db.collection("app_config").doc("platform_fee"));
+}
 
-  let commission = 0;
-  if (type === "percentage") {
-    commission = base * (percentage / 100);
-  } else if (type === "fixed") {
-    commission = fixedAmount;
-  } else if (type === "hybrid") {
-    commission = fixedAmount + base * (percentage / 100);
-  }
-  commission = Math.max(0, Math.min(_round2(commission), base));
-  return { commission, providerAmount: _round2(base - commission) };
+// `feeSnap` is the snapshot from _readCommissionRuleTx. Pure: no I/O.
+// `amount` = what the provider is settled against (paid amount, or the full
+// pre-discount amount for free_consultation coupons). The fee is capped at the
+// original (pre-discount) amount so a mis-set fee can never exceed the payment.
+// `feeProviderId` (optional) enables the partner-specific fee override.
+function _computeProviderSplit(feeSnap, serviceType, amount, originalAmount, feeProviderId) {
+  const base = _round2(Math.max(0, Number(amount) || 0));
+  const cfg = feeSnap && feeSnap.exists ? feeSnap.data() : null;
+  const cap = _round2(Math.max(0, originalAmount === undefined ? base : Number(originalAmount) || 0));
+  const platformFee = Math.min(PriceH.platformFeeFor(cfg, serviceType, feeProviderId), cap);
+  const providerAmount = _round2(Math.max(0, base - platformFee));
+  return {
+    commission: 0, platformFee, providerAmount,
+    baseAmount: _round2(Math.max(0, cap - platformFee)),
+  };
+}
+
+// Back-compat wrapper (deprecated: fee-only model): commission is always 0.
+function _computeCommissionFromRule(feeSnap, providerId, amount, serviceType, originalAmount) {
+  const r = _computeProviderSplit(feeSnap, serviceType, amount, originalAmount, providerId);
+  return { commission: 0, providerAmount: r.providerAmount, platformFee: r.platformFee, baseAmount: r.baseAmount };
 }
 
 // ── Coupon engine ─────────────────────────────────────────────────────────────
@@ -3160,6 +3515,316 @@ function _generateOpRxId() {
   return `MN-${date}-${suffix}`;
 }
 
+// ── Server-authoritative pricing ─────────────────────────────────────────────
+//
+// The patient app sends the amount it wants to pay; nothing used to compare it
+// with the real price. `_expectedPriceFor` derives the acceptable total from
+// trusted Firestore data (provider/catalogue docs + app_config/platform_fee);
+// `_verifyBookingPrice` rejects a mismatch BEFORE any money is recorded.
+// Flag: settlement_config/global.enforcePriceCheck — enforced unless it is
+// explicitly `false` (then mismatches are only logged as price_mismatch).
+// Types whose price cannot be derived are skipped and logged price_check_skipped.
+const PriceH = require("./price_helpers");
+const _PRICE_ERR_MISMATCH = "Price mismatch. Please refresh and try again.";
+const _PRICE_ERR_UNAVAILABLE = "One or more items are no longer available. Please refresh and try again.";
+const _HOSPITAL_OP_DEFAULT_FEE = 99; // mirrors kHospitalOpFee in the patient app
+const _AMBULANCE_DEFAULT_RATES = { basic: 500, als: 1200, icu: 2500 };
+const _PRICED_SERVICE_TYPES = new Set([
+  "ambulance", "physiotherapy", "counselling", "diagnostics", "lab_tests", "equipment",
+  "equipment_hiring", "caregivers", "caregiver", "nursing", "home_care", "care_assistant",
+]);
+// Exactly the collections the patient app books into through PaymentScreen
+// (grep `bookingCollection:` in mednu/lib). capturePayment / captureCartPayment
+// create the booking doc in the collection the client names, so anything else
+// would let a client write arbitrary docs (e.g. into `users`) as itself.
+const _ALLOWED_BOOKING_COLLECTIONS = new Set([
+  "appointments", "consultations", "service_requests", "orders",
+  "nutrition_appointments", "hospital_appointments", "hospital_bill_payments",
+]);
+function _assertBookingCollectionAllowed(col) {
+  if (typeof col !== "string" || !_ALLOWED_BOOKING_COLLECTIONS.has(col)) {
+    throw new HttpsError("invalid-argument", "Unsupported booking collection.");
+  }
+}
+
+async function _priceCheckEnforced(db) {
+  try {
+    const s = await db.collection("settlement_config").doc("global").get();
+    return !(s.exists && s.get("enforcePriceCheck") === false);
+  } catch (err) {
+    return true;
+  }
+}
+
+// Returns {skipped, reason} | {unavailable, reason} | {specs:[...], platformFee}.
+// `specs` are the acceptable TOTALS (base price + platform fee), see price_helpers.matchesSpec.
+async function _expectedPriceFor(db, serviceType, bookingCollection, bookingData, uid) {
+  const bd = bookingData && typeof bookingData === "object" ? bookingData : {};
+  const sd = bd.serviceDetails && typeof bd.serviceDetails === "object" ? bd.serviceDetails : {};
+  const skip = (reason) => ({ skipped: true, reason });
+  const gone = (reason) => ({ unavailable: true, reason });
+  const safeId = (v) => (typeof v === "string" && v.trim() && !v.includes("/") && v.length < 400 ? v.trim() : null);
+  const getDoc = async (col, id) => {
+    const s = await db.collection(col).doc(id).get();
+    return s.exists ? s.data() : null;
+  };
+
+  const pfSnap = await db.collection("app_config").doc("platform_fee").get();
+  const pfCfg = pfSnap.exists ? pfSnap.data() : null;
+  const pf = PriceH.platformFeeFor(pfCfg, serviceType, PriceH.feeProviderIdFor(serviceType, bd));
+  const exact =(base) => ({ specs: [{ type: "exact", value: base + pf }], platformFee: pf });
+  const multiple = (units, maxQty = 100) => {
+    const u = [...new Set(units.filter((x) => x > 0))];
+    return u.length ? { specs: u.map((unit) => ({ type: "multiple", unit, maxQty, extra: pf })), platformFee: pf } : null;
+  };
+  const byName = async (types, name) => {
+    const n = typeof name === "string" ? name.trim() : "";
+    if (!n) return [];
+    const q = await db.collection("services").where("name", "==", n).limit(20).get();
+    return q.docs.map((d) => d.data()).filter((d) => types.includes(d.type));
+  };
+
+  // ── Collection-keyed bookings ──────────────────────────────────────────────
+  if (bookingCollection === "appointments") {
+    const id = safeId(bd.doctorId);
+    if (!id) return gone("missing_doctor");
+    const d = await getDoc("doctors", id);
+    if (!d) return gone("doctor_not_found");
+    const fee = PriceH.parseRupees(d.fee);
+    if (fee === null || fee <= 0) return skip("doctor_fee_unavailable");
+    const dur = [15, 30, 45, 60].includes(Number(bd.duration)) ? Number(bd.duration) : 30;
+    return exact(PriceH.feeForDuration(Math.round(fee), dur));
+  }
+  if (bookingCollection === "consultations") {
+    const id = safeId(bd.doctorId);
+    if (!id) return gone("missing_provider");
+    if (bd.providerRole === "physiotherapist") {
+      const d = await getDoc("physiotherapists", id);
+      if (!d) return gone("physio_not_found");
+      const rate = PriceH.parseRupees(d.onlineRate);
+      if (rate === null || rate <= 0) return skip("physio_online_rate_unavailable");
+      return exact(Math.round(rate));
+    }
+    const d = await getDoc("doctors", id);
+    if (!d) return gone("doctor_not_found");
+    const fee = PriceH.parseRupees(d.fee);
+    if (fee === null || fee <= 0) return skip("doctor_fee_unavailable");
+    return exact(Math.round(fee));
+  }
+  if (bookingCollection === "nutrition_appointments") {
+    const id = safeId(bd.nutritionistId);
+    if (!id) return gone("missing_nutritionist");
+    const d = (await getDoc("nutritionists", id)) || (await getDoc("nutritionist_profiles", id));
+    if (!d) return gone("nutritionist_not_found");
+    const fee = PriceH.parseRupees(d.consultationFee);
+    if (fee === null || fee <= 0) return skip("nutrition_fee_unavailable");
+    return exact(Math.trunc(fee));
+  }
+  if (bookingCollection === "hospital_appointments") {
+    // Flat OP fee in the app (kHospitalOpFee) — only underpayment is rejected.
+    let base = _HOSPITAL_OP_DEFAULT_FEE;
+    const cfg = await getDoc("settlement_config", "global");
+    const cfgFee = cfg ? PriceH.parseRupees(cfg.hospitalOpFee) : null;
+    if (cfgFee !== null && cfgFee > 0) base = cfgFee;
+    return { specs: [{ type: "atLeast", value: base + pf }], platformFee: pf };
+  }
+  if (bookingCollection === "hospital_bill_payments") {
+    return skip("hospital_bill_amount_entered_by_patient");
+  }
+  if (bookingCollection === "orders") {
+    const items = Array.isArray(bd.items) ? bd.items : [];
+    if (!items.length || items.length > 50) return gone("bad_order_items");
+    const ids = items.map((i) => safeId(i && i.id));
+    if (ids.some((x) => !x)) return gone("order_item_missing_id");
+    const uniq = [...new Set(ids)];
+    const snaps = await db.getAll(...uniq.map((id) => db.collection("medicines_catalogue").doc(id)));
+    const priceById = {};
+    for (const s of snaps) {
+      if (!s.exists || s.get("isActive") === false) return gone("medicine_unavailable");
+      priceById[s.id] = s.get("price");
+    }
+    const total = PriceH.sumLines(items.map((i, k) => ({ price: priceById[ids[k]], count: i.count })));
+    if (total === null || !(total > 0)) return gone("bad_order_lines");
+    return exact(total);
+  }
+
+  // ── service_requests: keyed by service type ────────────────────────────────
+  if (bookingCollection === "service_requests") {
+    const t = _PRICED_SERVICE_TYPES.has(serviceType) ? serviceType
+      : (_PRICED_SERVICE_TYPES.has(bd.type) ? bd.type : serviceType);
+
+    if (t === "ambulance") {
+      const n = String(sd.ambulanceType || "").trim().toLowerCase();
+      const key = n === "basic" ? "basic"
+        : (n === "advanced life support" || n === "als") ? "als"
+          : (n === "icu ambulance" || n === "icu") ? "icu" : null;
+      if (!key) return gone("unknown_ambulance_type");
+      const cfg = await getDoc("app_config", "ambulance_rates");
+      const r = cfg && cfg.types && cfg.types[key];
+      const min = r ? PriceH.parseRupees(r.min) : null;
+      const max = r ? PriceH.parseRupees(r.max) : null;
+      if (min !== null && max !== null && max >= min) {
+        return { specs: [{ type: "range", min: min + pf, max: max + pf }], platformFee: pf };
+      }
+      return exact(_AMBULANCE_DEFAULT_RATES[key]);
+    }
+    if (t === "counselling") {
+      const id = safeId(bd.counsellorId);
+      if (!id) return gone("missing_counsellor");
+      const d = await getDoc("counsellors", id);
+      if (!d) return gone("counsellor_not_found");
+      const rate = PriceH.parseRupees(d.hourlyRate);
+      if (rate === null || rate <= 0) return skip("counsellor_rate_unavailable");
+      return exact(Math.round(rate));
+    }
+    if (t === "physiotherapy") {
+      if (sd.sessionType) {
+        // Cart item priced from the admin `services` catalogue (no id carried).
+        const docs = await byName(["physiotherapy"], bd.serviceName || sd.sessionType);
+        const r = multiple(docs.map((d) => Math.trunc(Number(d.price) || 0)));
+        return r || skip("physio_catalogue_entry_not_found");
+      }
+      const id = safeId(bd.physiotherapistId);
+      if (!id) return gone("missing_physiotherapist");
+      const d = await getDoc("physiotherapists", id);
+      if (!d) return gone("physio_not_found");
+      const field = { online: "onlineRate", home: "homeRate", clinic: "clinicRate" }[bd.consultMode] || "hourlyRate";
+      const rate = PriceH.parseRupees(d[field]);
+      if (rate === null || rate <= 0) return skip("physio_rate_unavailable");
+      return exact(Math.round(rate));
+    }
+    if (t === "diagnostics" || t === "lab_tests") {
+      const lab = safeId(sd.sourceLabId);
+      const test = safeId(sd.sourceTestId);
+      if (lab && test) {
+        const d = await getDoc("lab_tests_catalogue", `ltinv_${lab}_${test}`);
+        if (!d || d.isActive === false) return gone("lab_test_unavailable");
+        return multiple([Math.trunc(Number(d.price) || 0)]) || skip("lab_test_price_unavailable");
+      }
+      const docs = await byName(["diagnostics", "lab_tests"], bd.serviceName || sd.testName);
+      return multiple(docs.map((d) => Math.trunc(Number(d.price) || 0))) || skip("diagnostics_catalogue_entry_not_found");
+    }
+    if (t === "equipment" || t === "equipment_hiring") {
+      const mode = sd.mode;
+      if (mode !== "rent" && mode !== "buy") return gone("bad_equipment_mode");
+      const days = Number(sd.rentalDays);
+      if (mode === "rent" && !(Number.isInteger(days) && days >= 1 && days <= 365)) return gone("bad_rental_days");
+      const unitOf = (d) => (mode === "rent" ? Math.trunc(Number(d.price) || 0) * days : Math.trunc(Number(d.purchasePrice) || 0));
+      let docs;
+      const v = safeId(sd.sourceVendorId);
+      const it = safeId(sd.sourceItemId);
+      if (v && it) {
+        const d = await getDoc("services", `eqi_${v}_${it}`);
+        if (!d) return gone("equipment_unavailable");
+        docs = [d];
+      } else {
+        docs = await byName(["equipment", "equipment_hiring"], bd.serviceName || sd.equipmentName);
+      }
+      const units = docs.map(unitOf).filter((x) => x > 0);
+      if (!units.length) return v && it ? skip("equipment_price_unavailable") : skip("equipment_catalogue_entry_not_found");
+      const q = Number(sd.quantity);
+      if (Number.isInteger(q) && q >= 1 && q <= 100) {
+        return { specs: units.map((u) => ({ type: "exact", value: u * q + pf })), platformFee: pf };
+      }
+      return multiple(units);
+    }
+    if (["caregivers", "caregiver", "nursing", "home_care"].includes(t)) {
+      const id = safeId(sd.sourceCaregiverId);
+      if (!id) return gone("missing_caregiver");
+      const d = await getDoc("caregivers", id);
+      if (!d) return gone("caregiver_not_found");
+      const day = Math.trunc(Number(d.ratePerDay) || 0);
+      const hour = d.ratePerHour != null ? Math.trunc(Number(d.ratePerHour) || 0) : (day > 0 ? Math.floor(day / 8) : 0);
+      const h12 = d.ratePer12Hr != null ? Math.trunc(Number(d.ratePer12Hr) || 0) : (hour > 0 ? hour * 12 : 0);
+      const unit = ["morning", "evening", "night"].includes(sd.shiftType) ? day
+        : ["day12", "night12"].includes(sd.shiftType) ? h12 : null;
+      if (unit === null) return gone("bad_shift_type");
+      return multiple([unit]) || skip("caregiver_rate_unavailable");
+    }
+    if (t === "care_assistant") {
+      const id = safeId(sd.assistantId);
+      if (!id) return gone("missing_assistant");
+      const d = await getDoc("care_assistants", id);
+      if (!d) return gone("assistant_not_found");
+      const field = { hourly: "rateHourly", halfDay: "rateHalfDay", fullDay: "rateFullDay", multiDay: "rateMultiDay" }[sd.duration];
+      if (!field) return gone("bad_assistant_duration");
+      return multiple([Math.trunc(Number(d[field]) || 0)]) || skip("assistant_rate_unavailable");
+    }
+    // Unknown service type for a service_requests booking: never silently
+    // skip the price check (that was a bypass). Rejected when enforcing.
+    return { unavailable: true, unsupported: true, reason: "unsupported_service_type" };
+  }
+  return { unavailable: true, unsupported: true, reason: "unsupported_booking_collection" };
+}
+
+// Throws HttpsError on mismatch when enforcing. Returns {checked, platformFee}.
+// Lookup failures never block a payment (logged, treated as skipped).
+async function _verifyBookingPrice(db, { uid, serviceType, bookingCollection, bookingData, claimedAmount, enforce, source }) {
+  let exp;
+  try {
+    exp = await _expectedPriceFor(db, serviceType, bookingCollection, bookingData, uid);
+  } catch (err) {
+    _logSettlement("ERROR", "price_check_error", { uid, serviceType, bookingCollection, source, error: err.message });
+    return { checked: false, platformFee: 0 };
+  }
+  if (exp.skipped) {
+    _logSettlement("INFO", "price_check_skipped", { uid, serviceType, bookingCollection, source, reason: exp.reason });
+    return { checked: false, platformFee: 0 };
+  }
+  const bad = exp.unavailable || !PriceH.matchesAny(claimedAmount, exp.specs);
+  if (bad) {
+    _logSettlement("WARNING", "price_mismatch", {
+      uid, serviceType, bookingCollection, source, claimedAmount, enforce,
+      reason: exp.unavailable ? exp.reason : "amount_differs",
+      expected: exp.unavailable ? null : exp.specs,
+    });
+    if (enforce) {
+      if (exp.unsupported) throw new HttpsError("invalid-argument", "Unsupported service type.");
+      throw new HttpsError("failed-precondition", exp.unavailable ? _PRICE_ERR_UNAVAILABLE : _PRICE_ERR_MISMATCH);
+    }
+    return { checked: false, platformFee: 0 };
+  }
+  return { checked: true, platformFee: exp.platformFee || 0 };
+}
+
+// Booking docs are written verbatim from the client's bookingData, and several
+// partner-side triggers read the price straight off them (service_requests.amount,
+// orders.total). After a successful check, stamp the server-known base price so a
+// payer cannot pay the validated total yet record an inflated amount for payouts.
+function _stampedPrice(bookingCollection, check, claimedAmount) {
+  if (!check || !check.checked) return {};
+  const base = _round2(claimedAmount - check.platformFee);
+  if (!(base > 0)) return {};
+  if (bookingCollection === "service_requests") return { amount: base };
+  if (bookingCollection === "orders") return { total: base };
+  return {};
+}
+
+// Wallet-leg verification. payment_screen debits MedNU Money / main wallet via
+// spendWalletBalance with deterministic wallet_ledger ids derived from
+// `spend:<uid>:<base>-mm` and `...-w` BEFORE capture, so a claimed
+// walletPortionAmount can be proved: the ledger docs must exist, belong to this
+// uid and be debits. Reads happen inside the capture transaction.
+// Returns { sum, legs } or throws when enforcing and the claim is not backed.
+async function _verifyWalletPortion(tx, db, { uid, baseKey, claimed, enforce, source }) {
+  if (!(claimed > 0.005)) return { sum: 0, verified: true };
+  const key = typeof baseKey === "string" ? baseKey.trim() : "";
+  let sum = 0;
+  if (key && key.length <= 190) {
+    const refs = ["-mm", "-w"].map((s) => db.collection("wallet_ledger").doc(_ledgerId(`spend:${uid}:${key}${s}`)));
+    const snaps = await Promise.all(refs.map((r) => tx.get(r)));
+    sum = PriceH.sumVerifiedDebits(snaps.map((s) => (s.exists ? s.data() : null)), uid);
+  }
+  const ok = sum + 0.01 >= claimed;
+  if (!ok) {
+    _logSettlement("WARNING", "wallet_portion_unverified", { uid, source, claimed, found: sum, hasKey: !!key, enforce });
+    if (enforce) {
+      throw new HttpsError("failed-precondition", "Wallet payment could not be verified. Contact support.");
+    }
+  }
+  return { sum, verified: ok };
+}
+
 // ── Unified payment capture ───────────────────────────────────────────────────
 //
 // Replaces every screen's own hand-rolled "write a payments/booking doc after
@@ -3215,7 +3880,7 @@ exports.capturePayment = onCall({ enforceAppCheck: true }, async (request) => {
     paymentMethod,
     walletPortionAmount: rawWalletPortion,
     razorpay_order_id, razorpay_payment_id, razorpay_signature,
-    idempotencyKey,
+    idempotencyKey, walletDebitKey,
   } = request.data || {};
 
   if (typeof serviceType !== "string" || !serviceType.trim()) {
@@ -3224,6 +3889,7 @@ exports.capturePayment = onCall({ enforceAppCheck: true }, async (request) => {
   if (typeof bookingCollection !== "string" || !bookingCollection.trim()) {
     throw new HttpsError("invalid-argument", "bookingCollection is required.");
   }
+  _assertBookingCollectionAllowed(bookingCollection);
   if (!bookingData || typeof bookingData !== "object" || Array.isArray(bookingData)) {
     throw new HttpsError("invalid-argument", "bookingData is required.");
   }
@@ -3274,8 +3940,8 @@ exports.capturePayment = onCall({ enforceAppCheck: true }, async (request) => {
   const couponId = typeof couponCode === "string" && couponCode.trim() ? couponCode.trim().toUpperCase() : null;
   const couponRef = couponId ? db.collection("coupons").doc(couponId) : null;
   const redemptionRef = couponRef ? couponRef.collection("redemptions").doc(uid) : null;
-  const commissionRuleRef = db.collection("commission_rules").doc(serviceType);
 
+  const enforcePrice = await _priceCheckEnforced(db);
   let outcome;
   try {
     outcome = await db.runTransaction(async (tx) => {
@@ -3284,10 +3950,15 @@ exports.capturePayment = onCall({ enforceAppCheck: true }, async (request) => {
       if (existingPayment.exists) {
         return { alreadyCaptured: true, payment: existingPayment.data() };
       }
+      // Server-authoritative price check — before any money is recorded.
+      const priceCheck = await _verifyBookingPrice(db, {
+        uid, serviceType, bookingCollection, bookingData,
+        claimedAmount: originalAmount, enforce: enforcePrice, source: "capturePayment",
+      });
       const couponSnap = couponRef ? await tx.get(couponRef) : null;
       const redemptionSnap = redemptionRef ? await tx.get(redemptionRef) : null;
       const userSnap = paymentMethod === "wallet" ? await tx.get(userRef) : null;
-      const ruleSnap = await tx.get(commissionRuleRef);
+      const feeSnap = await _readCommissionRuleTx(db, tx);
       const orderSnap = razorpayOrderRef ? await tx.get(razorpayOrderRef) : null;
 
       // ── Coupon ───────────────────────────────────────────────────────────
@@ -3304,6 +3975,24 @@ exports.capturePayment = onCall({ enforceAppCheck: true }, async (request) => {
 
       if (walletPortionAmount > paidAmount + 0.01) {
         throw new HttpsError("invalid-argument", "walletPortionAmount cannot exceed the payable amount.");
+      }
+      // The wallet / MedNU Money legs were debited by spendWalletBalance before
+      // this call (see payment_screen). Prove the claimed portion from the
+      // deterministic ledger entries instead of trusting the client's number.
+      if (paymentMethod !== "wallet" && walletPortionAmount > 0) {
+        await _verifyWalletPortion(tx, db, {
+          uid, baseKey: paymentMethod === "razorpay" ? walletDebitKey : idempotencyKey,
+          claimed: walletPortionAmount, enforce: enforcePrice, source: "captureCartPayment",
+        });
+      }
+      // The wallet / MedNU Money legs were debited by spendWalletBalance before
+      // this call (see payment_screen). Prove the claimed portion from the
+      // deterministic ledger entries instead of trusting the client's number.
+      if (paymentMethod !== "wallet" && walletPortionAmount > 0) {
+        await _verifyWalletPortion(tx, db, {
+          uid, baseKey: paymentMethod === "razorpay" ? walletDebitKey : idempotencyKey,
+          claimed: walletPortionAmount, enforce: enforcePrice, source: "capturePayment",
+        });
       }
 
       if (paymentMethod === "wallet") {
@@ -3344,10 +4033,12 @@ exports.capturePayment = onCall({ enforceAppCheck: true }, async (request) => {
         }
       }
 
-      // ── Commission (provisional if no provider is assigned yet) ────────────
+      // ── Fee-only split (no commission): provider gets paid - platform fee ──
       const providerId = bookingData[_PROVIDER_FIELD_BY_SERVICE[serviceType]] || bookingData.providerId || null;
       const commissionBase = isFreeConsultation ? originalAmount : paidAmount;
-      const { commission, providerAmount } = _computeCommissionFromRule(ruleSnap, providerId, commissionBase);
+      const { commission, platformFee, baseAmount, providerAmount } =
+        _computeProviderSplit(feeSnap, serviceType, commissionBase, originalAmount,
+          PriceH.feeProviderIdFor(serviceType, bookingData));
 
       // ── Writes ───────────────────────────────────────────────────────────
       if (paymentMethod === "wallet") {
@@ -3370,6 +4061,7 @@ exports.capturePayment = onCall({ enforceAppCheck: true }, async (request) => {
 
       tx.set(bookingRef, {
         ...bookingData,
+        ..._stampedPrice(bookingCollection, priceCheck, originalAmount),
         ...(isInPersonAppointment ? { rxId: _generateOpRxId() } : {}),
         patientId: uid,
         paymentId,
@@ -3382,8 +4074,8 @@ exports.capturePayment = onCall({ enforceAppCheck: true }, async (request) => {
         paymentId, patientId: uid, providerId, serviceType,
         bookingRef: { collection: bookingCollection, id: bookingRef.id },
         originalAmount, discount, couponCode: couponId,
-        paidAmount, walletPortionAmount, commissionBase, commission, providerAmount,
-        commissionFinal: !!providerId,
+        paidAmount, walletPortionAmount, commissionBase, baseAmount, platformFee, commission, providerAmount,
+        commissionFinal: true,
         paymentMethod,
         razorpayPaymentId: paymentMethod === "razorpay" ? razorpay_payment_id : null,
         status: "completed",
@@ -3395,7 +4087,7 @@ exports.capturePayment = onCall({ enforceAppCheck: true }, async (request) => {
       tx.set(paymentRef, paymentDoc);
 
       // Ledger — mirrors the spec's worked example: Payment Received /
-      // Coupon Expense / Commission Reserved, written together as one batch.
+      // Coupon Expense / Platform fee, written together as one batch.
       tx.set(db.collection("wallet_ledger").doc(), _ledgerDoc({
         uid, walletType: "platform", type: "credit", amount: paidAmount,
         category: "payment_received", title: "Payment Received",
@@ -3409,8 +4101,8 @@ exports.capturePayment = onCall({ enforceAppCheck: true }, async (request) => {
         }));
       }
       tx.set(db.collection("wallet_ledger").doc(), _ledgerDoc({
-        uid: "platform", walletType: "platform", type: "credit", amount: commission,
-        category: "commission_reserved", title: "Commission Reserved",
+        uid: "platform", walletType: "platform", type: "credit", amount: platformFee,
+        category: "commission_reserved", title: "Platform fee",
         description: serviceType, source: `payment:${paymentId}:commission`, balanceAfter: null,
       }));
 
@@ -3522,7 +4214,7 @@ exports.captureCartPayment = onCall({ enforceAppCheck: true }, async (request) =
     paymentMethod,
     walletPortionAmount: rawWalletPortion,
     razorpay_order_id, razorpay_payment_id, razorpay_signature,
-    idempotencyKey,
+    idempotencyKey, walletDebitKey,
   } = request.data || {};
 
   if (!Array.isArray(items) || !items.length) {
@@ -3538,6 +4230,7 @@ exports.captureCartPayment = onCall({ enforceAppCheck: true }, async (request) =
     if (typeof it.bookingCollection !== "string" || !it.bookingCollection.trim()) {
       throw new HttpsError("invalid-argument", `Item ${i}: bookingCollection is required.`);
     }
+    _assertBookingCollectionAllowed(it.bookingCollection);
     if (!it.bookingData || typeof it.bookingData !== "object" || Array.isArray(it.bookingData)) {
       throw new HttpsError("invalid-argument", `Item ${i}: bookingData is required.`);
     }
@@ -3599,10 +4292,10 @@ exports.captureCartPayment = onCall({ enforceAppCheck: true }, async (request) =
       ...it, paymentId,
       paymentRef: db.collection("payments").doc(paymentId),
       bookingRef: db.collection(it.bookingCollection).doc(),
-      ruleRef: db.collection("commission_rules").doc(it.serviceType),
     };
   });
 
+  const enforcePrice = await _priceCheckEnforced(db);
   let outcome;
   try {
     outcome = await db.runTransaction(async (tx) => {
@@ -3612,15 +4305,24 @@ exports.captureCartPayment = onCall({ enforceAppCheck: true }, async (request) =
         const allSnaps = await Promise.all(itemRefs.map((it) => tx.get(it.paymentRef)));
         return { alreadyCaptured: true, payments: allSnaps.map((s) => s.data()) };
       }
+      // Server-authoritative price check per item — before any money is recorded.
+      const priceChecks = [];
+      for (const it of itemRefs) {
+        priceChecks.push(await _verifyBookingPrice(db, {
+          uid, serviceType: it.serviceType, bookingCollection: it.bookingCollection,
+          bookingData: it.bookingData, claimedAmount: it.amount,
+          enforce: enforcePrice, source: "captureCartPayment",
+        }));
+      }
       const couponSnap = couponRef ? await tx.get(couponRef) : null;
       const redemptionSnap = redemptionRef ? await tx.get(redemptionRef) : null;
       const userSnap = paymentMethod === "wallet" ? await tx.get(userRef) : null;
       const orderSnap = razorpayOrderRef ? await tx.get(razorpayOrderRef) : null;
-      const ruleSnaps = await Promise.all(itemRefs.map((it) => tx.get(it.ruleRef)));
+      const feeSnap = await _readCommissionRuleTx(db, tx);
 
       // ── Coupon — applied once against the cart total; the discount is
       // prorated across items by each item's share of that total so
-      // per-item commission still lands on the right number ────────────────
+      // per-item provider amount still lands on the right number ───────────
       let discount = 0;
       let isFreeConsultation = false;
       if (couponRef) {
@@ -3694,10 +4396,13 @@ exports.captureCartPayment = onCall({ enforceAppCheck: true }, async (request) =
         // which silently zeroed out every provider's payout on a cart
         // checkout using a free_consultation coupon instead of honouring it.
         const itemCommissionBase = isFreeConsultation ? it.amount : itemPaid;
-        const { commission, providerAmount } = _computeCommissionFromRule(ruleSnaps[i], providerId, itemCommissionBase);
+        const { commission, platformFee, baseAmount, providerAmount } =
+          _computeProviderSplit(feeSnap, it.serviceType, itemCommissionBase, it.amount,
+            PriceH.feeProviderIdFor(it.serviceType, it.bookingData));
 
         tx.set(it.bookingRef, {
           ...it.bookingData,
+          ..._stampedPrice(it.bookingCollection, priceChecks[i], it.amount),
           patientId: uid,
           paymentId: it.paymentId,
           paymentStatus: "paid",
@@ -3709,8 +4414,8 @@ exports.captureCartPayment = onCall({ enforceAppCheck: true }, async (request) =
           paymentId: it.paymentId, patientId: uid, providerId, serviceType: it.serviceType,
           bookingRef: { collection: it.bookingCollection, id: it.bookingRef.id },
           cartId, originalAmount: it.amount, discount: itemDiscount, couponCode: couponId,
-          paidAmount: itemPaid, commissionBase: itemCommissionBase, commission, providerAmount,
-          commissionFinal: !!providerId,
+          paidAmount: itemPaid, commissionBase: itemCommissionBase, baseAmount, platformFee, commission, providerAmount,
+          commissionFinal: true,
           paymentMethod,
           razorpayPaymentId: paymentMethod === "razorpay" ? razorpay_payment_id : null,
           status: "completed", settlementStatus: "pending", settlementId: null,
@@ -3732,8 +4437,8 @@ exports.captureCartPayment = onCall({ enforceAppCheck: true }, async (request) =
           }));
         }
         tx.set(db.collection("wallet_ledger").doc(), _ledgerDoc({
-          uid: "platform", walletType: "platform", type: "credit", amount: commission,
-          category: "commission_reserved", title: "Commission Reserved",
+          uid: "platform", walletType: "platform", type: "credit", amount: platformFee,
+          category: "commission_reserved", title: "Platform fee",
           description: it.serviceType, source: `payment:${it.paymentId}:commission`, balanceAfter: null,
         }));
       });
@@ -3795,6 +4500,248 @@ exports.captureCartPayment = onCall({ enforceAppCheck: true }, async (request) =
   };
 });
 
+// ── Pay-after-trip (ambulance) ────────────────────────────────────────────────
+//
+// Real-mode ambulance bookings are created with paymentStatus 'pay_after_trip'
+// and amount 0. On completion the server (onAmbulanceRequestStatusChange ->
+// _recordAmbulanceFinalFare) records `fareFinal` (matched driver's rate clamped
+// into the admin range), adds the platform fee and flips the booking to
+// 'payment_due' with `amountDue`. Those fields are server-written only
+// (firestore.rules blocks client create/update of them), so `amountDue` is the
+// server-computed amount. captureTripPayment settles THAT existing booking —
+// it must not use capturePayment, which creates a new booking doc.
+async function _tripPaymentDue(db, uid, requestId) {
+  if (typeof requestId !== "string" || !requestId.trim() || requestId.includes("/")) {
+    throw new HttpsError("invalid-argument", "requestId is required.");
+  }
+  const snap = await db.collection("service_requests").doc(requestId.trim()).get();
+  if (!snap.exists || snap.get("patientId") !== uid) {
+    throw new HttpsError("permission-denied", "This booking does not belong to you.");
+  }
+  if (snap.get("type") !== "ambulance" || snap.get("paymentStatus") !== "payment_due") {
+    throw new HttpsError("failed-precondition", "No payment is due for this booking.");
+  }
+  const amountDue = _round2(Number(snap.get("amountDue")));
+  if (!Number.isFinite(amountDue) || amountDue <= 0) {
+    throw new HttpsError("failed-precondition", "Amount due is not available yet. Please try again shortly.");
+  }
+  return { id: snap.id, data: snap.data(), amountDue };
+}
+
+// Request data: { requestId, paymentMethod: 'razorpay' | 'wallet',
+//   razorpay_order_id?, razorpay_payment_id?, razorpay_signature?, idempotencyKey? }
+// (walletPortionAmount is accepted but must be 0: trip payments are either
+// fully wallet or fully gateway.) Replaying the same razorpay payment id /
+// idempotencyKey returns the same result without moving money twice.
+exports.captureTripPayment = onCall({ enforceAppCheck: true }, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Sign in to continue.");
+
+  const {
+    requestId, paymentMethod, walletPortionAmount: rawWalletPortion,
+    razorpay_order_id, razorpay_payment_id, razorpay_signature, idempotencyKey,
+  } = request.data || {};
+
+  if (!["razorpay", "wallet"].includes(paymentMethod)) {
+    throw new HttpsError("invalid-argument", "Unknown payment method.");
+  }
+  if (rawWalletPortion !== undefined && Number(rawWalletPortion) !== 0) {
+    throw new HttpsError("invalid-argument", "Trip payments cannot be split between wallet and gateway.");
+  }
+  const rid = typeof requestId === "string" ? requestId.trim() : "";
+  if (!rid || rid.includes("/")) throw new HttpsError("invalid-argument", "requestId is required.");
+
+  const db = getFirestore();
+  const messaging = getMessaging();
+
+  let paymentIdSource;
+  let razorpayOrderRef = null;
+  if (paymentMethod === "razorpay") {
+    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+      throw new HttpsError("invalid-argument", "Missing Razorpay verification fields.");
+    }
+    const expected = crypto.createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+      .update(`${razorpay_order_id}|${razorpay_payment_id}`).digest("hex");
+    if (expected !== razorpay_signature) {
+      _logSettlement("WARNING", "trip_capture_signature_mismatch", { uid, orderId: razorpay_order_id });
+      throw new HttpsError("unauthenticated", "Payment signature verification failed.");
+    }
+    paymentIdSource = `razorpay:${razorpay_payment_id}`;
+    razorpayOrderRef = db.collection("razorpay_orders").doc(String(razorpay_order_id));
+  } else {
+    if (typeof idempotencyKey !== "string" || !idempotencyKey.trim() || idempotencyKey.length > 200) {
+      throw new HttpsError("invalid-argument", "idempotencyKey is required.");
+    }
+    paymentIdSource = `wallet:${uid}:${idempotencyKey.trim()}`;
+  }
+
+  const paymentId = _ledgerId(paymentIdSource);
+  const paymentRef = db.collection("payments").doc(paymentId);
+  const userRef = db.collection("users").doc(uid);
+  const requestRef = db.collection("service_requests").doc(rid);
+
+  let outcome;
+  try {
+    outcome = await db.runTransaction(async (tx) => {
+      // ── Reads ──────────────────────────────────────────────────────────
+      const existingPayment = await tx.get(paymentRef);
+      if (existingPayment.exists) {
+        const ref = existingPayment.get("bookingRef");
+        if (!ref || ref.id !== rid || existingPayment.get("patientId") !== uid) {
+          throw new HttpsError("failed-precondition", "This payment was already used for another booking.");
+        }
+        return { alreadyCaptured: true, payment: existingPayment.data() };
+      }
+      const reqSnap = await tx.get(requestRef);
+      if (!reqSnap.exists || reqSnap.get("patientId") !== uid) {
+        throw new HttpsError("permission-denied", "This booking does not belong to you.");
+      }
+      if (reqSnap.get("type") !== "ambulance" || reqSnap.get("paymentStatus") !== "payment_due") {
+        throw new HttpsError("failed-precondition", "No payment is due for this booking.");
+      }
+      // Server-computed amount (written at trip completion) — never client input.
+      const amountDue = _round2(Number(reqSnap.get("amountDue")));
+      const fareFinal = _round2(Number(reqSnap.get("fareFinal")));
+      const platformFee = _round2(Number(reqSnap.get("platformFee")) || 0);
+      if (!(amountDue > 0) || !(fareFinal > 0)) {
+        throw new HttpsError("failed-precondition", "Amount due is not available yet. Please try again shortly.");
+      }
+      const providerId = reqSnap.get("assignedTo") || null;
+      if (!providerId) {
+        throw new HttpsError("failed-precondition", "This trip has no assigned ambulance.");
+      }
+      const userSnap = paymentMethod === "wallet" ? await tx.get(userRef) : null;
+      const orderSnap = razorpayOrderRef ? await tx.get(razorpayOrderRef) : null;
+
+      if (paymentMethod === "wallet") {
+        if (_walletBalanceOf(userSnap, "walletBalance") < amountDue) {
+          throw new HttpsError("failed-precondition", "Insufficient wallet balance.");
+        }
+      } else {
+        if (!orderSnap || !orderSnap.exists) {
+          throw new HttpsError("failed-precondition", "Payment order not found. Contact support.");
+        }
+        if (orderSnap.get("uid") !== uid) {
+          _logSettlement("WARNING", "trip_capture_order_uid_mismatch", { uid, orderUid: orderSnap.get("uid") });
+          throw new HttpsError("permission-denied", "This payment order does not belong to you.");
+        }
+        // The order must have been created for THIS booking and for the amount due.
+        if (orderSnap.get("purpose") !== `trip:${rid}` || orderSnap.get("status") === "consumed") {
+          throw new HttpsError("failed-precondition", "Payment order does not match this booking. Contact support.");
+        }
+        const orderedAmount = _round2(Number(orderSnap.get("amountPaise") || 0) / 100);
+        if (Math.abs(orderedAmount - amountDue) > 0.01) {
+          _logSettlement("WARNING", "trip_capture_amount_mismatch", { uid, orderedAmount, amountDue });
+          throw new HttpsError("failed-precondition", "Payment amount does not match the amount due. Contact support.");
+        }
+      }
+
+      // Fee-only model: provider earns the trip fare, the platform keeps the
+      // platform fee recorded on the booking at completion; no commission.
+      const commissionBase = amountDue;
+      const commission = 0;
+      const baseAmount = fareFinal;
+      const providerAmount = fareFinal;
+
+      // ── Writes ─────────────────────────────────────────────────────────
+      if (paymentMethod === "wallet") {
+        const balance = _walletBalanceOf(userSnap, "walletBalance");
+        tx.set(userRef, { walletBalance: _round2(balance - amountDue) }, { merge: true });
+        tx.set(userRef.collection("transactions").doc(), _legacyTxDoc({
+          title: "Ambulance Trip Payment", amount: amountDue, type: "debit",
+          category: "booking_payment", walletType: "main",
+        }));
+      }
+      if (razorpayOrderRef) {
+        tx.update(razorpayOrderRef, {
+          status: "consumed", paymentId: razorpay_payment_id, consumedAt: FieldValue.serverTimestamp(),
+        });
+      }
+
+      const paymentDoc = {
+        paymentId, patientId: uid, providerId, serviceType: "ambulance",
+        bookingRef: { collection: "service_requests", id: rid },
+        originalAmount: amountDue, discount: 0, couponCode: null,
+        paidAmount: amountDue, walletPortionAmount: paymentMethod === "wallet" ? amountDue : 0,
+        commissionBase, baseAmount, platformFee, commission, providerAmount,
+        commissionFinal: true,
+        paymentMethod,
+        razorpayPaymentId: paymentMethod === "razorpay" ? razorpay_payment_id : null,
+        status: "completed",
+        settlementStatus: "pending",
+        settlementId: null,
+        createdAt: FieldValue.serverTimestamp(),
+        completedAt: FieldValue.serverTimestamp(),
+      };
+      tx.set(paymentRef, paymentDoc);
+      tx.update(requestRef, {
+        paymentId, paymentStatus: "paid", paidAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+
+      tx.set(db.collection("wallet_ledger").doc(), _ledgerDoc({
+        uid, walletType: "platform", type: "credit", amount: amountDue,
+        category: "payment_received", title: "Payment Received",
+        description: "ambulance", source: `payment:${paymentId}:received`, balanceAfter: null,
+      }));
+      tx.set(db.collection("wallet_ledger").doc(), _ledgerDoc({
+        uid: "platform", walletType: "platform", type: "credit", amount: platformFee,
+        category: "commission_reserved", title: "Platform fee",
+        description: "ambulance", source: `payment:${paymentId}:commission`, balanceAfter: null,
+      }));
+
+      return {
+        alreadyCaptured: false, payment: paymentDoc, providerId, fareFinal,
+        patientName: reqSnap.get("patientName"),
+      };
+    });
+  } catch (err) {
+    if (err instanceof HttpsError) throw err;
+    _logSettlement("ERROR", "capture_trip_payment_failed", { uid, requestId: rid, error: err.message });
+    _sendAdminAlert(db, messaging, {
+      title: "Failed Payment", body: `captureTripPayment failed for ${rid}: ${err.message}`,
+      type: "failed_payment", extraData: { uid, requestId: rid },
+    }).catch(() => {});
+    throw new HttpsError("internal", "Payment could not be recorded. Contact support before retrying.");
+  }
+
+  if (!outcome.alreadyCaptured) {
+    // Single provider credit path = settlement: makes this payment 'eligible'
+    // and credits provider_wallets.pendingEarnings exactly once.
+    try {
+      await _transitionPaymentToEligible(db, {
+        sourceCollection: "service_requests", sourceId: rid,
+        providerId: outcome.providerId, serviceType: "ambulance",
+      });
+    } catch (err) {
+      _logSettlement("ERROR", "trip_payment_eligible_failed", { requestId: rid, error: err.message });
+    }
+    // The partner's legacy earnings ledger was deferred at completion for this
+    // booking; write it now (create() never duplicates).
+    try {
+      await db.collection("ambulance_transactions").doc(rid).create({
+        ambulanceId: outcome.providerId, requestId: rid, type: "earning",
+        amount: outcome.fareFinal, status: "credited",
+        patientName: outcome.patientName || "Patient",
+        createdAt: FieldValue.serverTimestamp(),
+      });
+    } catch (err) {
+      if (err.code !== 6 && !/already exists/i.test(String(err.message))) {
+        _logSettlement("WARNING", "trip_ledger_write_failed", { requestId: rid, error: err.message });
+      }
+    }
+    _sendPatientNotification(db, messaging, uid, {
+      title: "Payment Successful",
+      body: `₹${outcome.payment.paidAmount.toFixed(0)} paid for your ambulance trip.`,
+      type: "payment_successful", serviceType: "ambulance", bookingId: rid,
+    }).catch(() => {});
+  }
+  _logSettlement("INFO", outcome.alreadyCaptured ? "trip_capture_replay" : "trip_capture_success", {
+    paymentId, uid, requestId: rid, paidAmount: outcome.payment.paidAmount,
+  });
+  return { paymentId, bookingId: rid, ...outcome.payment };
+});
+
 // ── Transition a payment into the settlement queue ────────────────────────────
 //
 // Called once by every vertical's own completion trigger, on the same
@@ -3806,30 +4753,104 @@ exports.captureCartPayment = onCall({ enforceAppCheck: true }, async (request) =
 // all writes" rule. Safe to call unconditionally on every invocation of the
 // caller's trigger, including redeliveries: it no-ops unless
 // payments/{id}.settlementStatus is still "pending".
+// ── TEST-MODE earnings (bookings made while kRequirePayment is false) ─────────
+//
+// The patient app creates those bookings directly with paymentStatus
+// 'not_required' and no paymentId, so the real engine has nothing to settle and
+// the partner's wallet stayed empty. When `settlement_config/global.
+// testCreditEnabled === true` (default OFF — set it only on a test project), a
+// completed not_required booking credits the provider's `pendingEarnings` and
+// writes one `wallet_ledger` entry flagged `isTest: true`; the provider gets the full amount (fee-only model, no commission).
+// It never creates a `payments` doc or an `eligible` payment, so the daily
+// settlement queue can never batch test money into a real payout.
+//
+// Safety: the flag is the only thing standing between a client-written
+// `paymentStatus: 'not_required'` and a wallet credit, so it MUST stay off in
+// production. The ledger doc id is deterministic, so redeliveries and replays
+// never double-credit. Must be called inside the caller's transaction BEFORE
+// any write (all reads first).
+async function _creditTestEarningsTx(db, tx, { sourceSnap, sourceCollection, sourceId, providerId, serviceType }) {
+  const cfgSnap = await tx.get(db.collection("settlement_config").doc("global"));
+  if (!cfgSnap.exists || cfgSnap.get("testCreditEnabled") !== true) return false;
+
+  const ledgerId = _ledgerId(`test:${sourceCollection}:${sourceId}`);
+  const ledgerRef = db.collection("wallet_ledger").doc(ledgerId);
+  const existing = await tx.get(ledgerRef);
+  if (existing.exists) return false;
+
+  const src = sourceSnap.data() || {};
+  // Each vertical's booking doc names its price differently.
+  // (hospital_bill_payments stores the discounted charge as `finalAmount`.)
+  // Ambulance bookings are charged the range max but earn the matched driver's
+  // rate: `fareFinal` (set by onAmbulanceRequestStatusChange before this runs).
+  const ambulanceFinal = serviceType === "ambulance" && Number(src.fareFinal) > 0 ? Number(src.fareFinal) : null;
+  const amount = _round2(ambulanceFinal ?? Number(src.amount ?? src.fee ?? src.total ?? src.fare ?? src.totalAmount ?? src.finalAmount ?? 0));
+  if (!(amount > 0)) {
+    _logSettlement("WARNING", "test_credit_skipped_no_amount", { sourceCollection, sourceId, serviceType });
+    return false;
+  }
+
+  const walletRef = db.collection("provider_wallets").doc(providerId);
+  const walletSnap = await tx.get(walletRef);
+
+  // Fee-only model: provider is credited the full booking amount.
+  const providerAmount = amount;
+  const pendingBefore = walletSnap.exists ? Number(walletSnap.get("pendingEarnings")) || 0 : 0;
+
+  tx.set(walletRef, {
+    providerId, serviceType,
+    pendingEarnings: _round2(pendingBefore + providerAmount),
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+
+  tx.set(ledgerRef, {
+    ..._ledgerDoc({
+      uid: providerId, walletType: "provider", type: "credit", amount: providerAmount,
+      category: "settlement_pending", title: "Earnings (Test Booking)",
+      description: `${serviceType} · booking ₹${amount}`,
+      source: `test:${sourceCollection}:${sourceId}`, balanceAfter: null,
+    }),
+    isTest: true,
+  });
+  return true;
+}
+
 async function _transitionPaymentToEligible(db, { sourceCollection, sourceId, providerId, serviceType }) {
   if (!sourceCollection || !sourceId || !providerId) return;
   try {
-    await db.runTransaction(async (tx) => {
+    const transitioned = await db.runTransaction(async (tx) => {
       const sourceRef = db.collection(sourceCollection).doc(sourceId);
       const sourceSnap = await tx.get(sourceRef);
       const paymentId = sourceSnap.exists ? sourceSnap.get("paymentId") : null;
-      if (!paymentId) return;
+      if (!paymentId) {
+        if (sourceSnap.exists && sourceSnap.get("paymentStatus") === "not_required") {
+          return await _creditTestEarningsTx(db, tx, { sourceSnap, sourceCollection, sourceId, providerId, serviceType });
+        }
+        return false;
+      }
 
       const paymentRef = db.collection("payments").doc(paymentId);
       const paymentSnap = await tx.get(paymentRef);
-      if (!paymentSnap.exists || paymentSnap.get("settlementStatus") !== "pending") return;
+      if (!paymentSnap.exists || paymentSnap.get("settlementStatus") !== "pending") return false;
       const payment = paymentSnap.data();
 
-      const ruleSnap = await tx.get(db.collection("commission_rules").doc(serviceType));
+      // New (fee-only) payments already carry the final split. Legacy docs
+      // (no platformFee field) are re-split fee-only so no commission survives.
+      const hasFeeSplit = typeof payment.platformFee === "number";
+      const feeSnap = hasFeeSplit ? null : await _readCommissionRuleTx(db, tx);
       const walletRef = db.collection("provider_wallets").doc(providerId);
       const walletSnap = await tx.get(walletRef);
 
       const commissionBase = Number(payment.commissionBase) || 0;
-      const { commission, providerAmount } = _computeCommissionFromRule(ruleSnap, providerId, commissionBase);
+      const split = hasFeeSplit
+        ? { commission: 0, platformFee: payment.platformFee, providerAmount: Number(payment.providerAmount) || 0 }
+        : _computeProviderSplit(feeSnap, payment.serviceType || serviceType, commissionBase, Number(payment.originalAmount) || commissionBase, providerId);
+      const { commission, providerAmount } = split;
       const adjustment = _round2(providerAmount - (Number(payment.providerAmount) || 0));
 
       tx.update(paymentRef, {
         providerId, commission, providerAmount, commissionFinal: true,
+        ...(hasFeeSplit ? {} : { platformFee: split.platformFee, baseAmount: split.baseAmount }),
         settlementStatus: "eligible", eligibleAt: FieldValue.serverTimestamp(),
       });
 
@@ -3837,7 +4858,7 @@ async function _transitionPaymentToEligible(db, { sourceCollection, sourceId, pr
         tx.set(db.collection("wallet_ledger").doc(), _ledgerDoc({
           uid: "platform", walletType: "platform",
           type: adjustment > 0 ? "debit" : "credit", amount: Math.abs(adjustment),
-          category: "commission_adjustment", title: "Commission Adjustment",
+          category: "commission_adjustment", title: "Platform fee adjustment",
           description: `Finalized on provider assignment for payment ${paymentId}`,
           source: `payment:${paymentId}:adjustment`, balanceAfter: null,
         }));
@@ -3855,9 +4876,12 @@ async function _transitionPaymentToEligible(db, { sourceCollection, sourceId, pr
         category: "settlement_pending", title: "Earnings Pending Settlement",
         description: serviceType, source: `payment:${paymentId}:eligible`, balanceAfter: null,
       }));
+      return true;
     });
 
-    _sendProviderNotification(db, getMessaging(), providerId, {
+    // Only notify when this call actually credited something — redeliveries,
+    // unpaid bookings and disabled test-credit are silent no-ops.
+    if (transitioned) _sendProviderNotification(db, getMessaging(), providerId, {
       title: "New Earnings", body: "A completed booking is now pending settlement.",
       type: "new_earnings", serviceType,
     }).catch(() => {});
@@ -3901,20 +4925,14 @@ exports.onAppointmentCreated = onDocumentCreated(
       payload: { appointmentId, consultationType: data.consultationType || "Video", rxId: data.rxId || null },
     }).catch((err) => console.error("Failed to write doctor_notifications:", err.message));
 
-    const doctorDoc = await db.collection("doctors").doc(doctorId).get();
-    const fcmToken = doctorDoc.exists ? doctorDoc.data().fcmToken : null;
-    if (!fcmToken) return;
-    try {
-      await getMessaging().send({
-        token: fcmToken,
-        notification: { title, body },
-        data: { type: "new_appointment", appointmentId, doctorId },
-        android: { priority: "high" },
-        apns: { payload: { aps: { sound: "default" } } },
-      });
-    } catch (err) {
-      console.error("FCM send failed for new appointment:", err.message);
-    }
+    const tokenCandidates = await _providerTokenCandidates(db, doctorId);
+    if (!tokenCandidates.length) return;
+    await _sendToProviderCandidates(getMessaging(), tokenCandidates, {
+      notification: { title, body },
+      data: { type: "new_appointment", appointmentId, doctorId },
+      android: { priority: "high" },
+      apns: { payload: { aps: { sound: "default" } } },
+    }, `doctor ${doctorId} (new appointment)`);
   }
 );
 
@@ -3935,19 +4953,210 @@ exports.onAppointmentSettlement = onDocumentUpdated(
     const before = event.data.before.data();
     const after = event.data.after.data();
     if (before.status === after.status) return;
-    if (after.status !== "completed" || !after.doctorId) return;
+    // Only a genuine 'completed' credits; 'cancelled' (or anything else) never does.
+    if (after.status !== "completed" || after.status === "cancelled" || !after.doctorId) return;
+
+    // Owner rule: a booked appointment earns even if the patient never joined
+    // (no-show), but only once the booked slot has COMPLETED. If the call was
+    // ended / marked completed before the slot's end, defer crediting to
+    // settleDeferredAppointments. Unparseable date/time -> slotEnd null ->
+    // credit immediately (previous behaviour).
+    const db = getFirestore();
+    const slotEndMs = await _apptSlotEndMs(db, after);
+    if (slotEndMs !== null && Date.now() < slotEndMs) {
+      await event.data.after.ref.update({
+        settlementDeferredUntil: Timestamp.fromMillis(slotEndMs),
+      });
+      return;
+    }
+
+    await _transitionPaymentToEligible(db, _appointmentSettlementArgs(event.params.appointmentId, after));
+  }
+);
+
+// Slot end (UTC epoch ms) = IST slot start + doctor's availability.slotDuration
+// (minutes, default 30). Pure arithmetic lives in _slotEndFromStartMs.
+const _DEFAULT_SLOT_MINUTES = 30;
+function _slotEndFromStartMs(startMs, slotMinutes) {
+  const mins = Number(slotMinutes);
+  const dur = Number.isFinite(mins) && mins > 0 ? mins : _DEFAULT_SLOT_MINUTES;
+  return startMs + dur * 60 * 1000;
+}
+async function _apptSlotEndMs(db, appt) {
+  const startMs = _apptSlotStartMs(appt.date, appt.time);
+  if (startMs === null) return null;
+  let slotMinutes = _DEFAULT_SLOT_MINUTES;
+  try {
+    if (appt.doctorId) {
+      const docSnap = await db.collection("doctors").doc(appt.doctorId).get();
+      const v = docSnap.exists ? docSnap.get("availability.slotDuration") : null;
+      if (typeof v === "number" && v > 0) slotMinutes = v;
+    }
+  } catch (_) {
+    // fall back to default slot length
+  }
+  return _slotEndFromStartMs(startMs, slotMinutes);
+}
+// Every real writer of consultationType uses capitalized 'Video' (see
+// consultation_screen.dart, doctor_profile_screen.dart's _consultationType) —
+// a lowercase compare never matched and finalized video bookings against the
+// 'consultation' commission rule.
+function _appointmentSettlementArgs(appointmentId, appt) {
+  return {
+    sourceCollection: "appointments",
+    sourceId: appointmentId,
+    providerId: appt.doctorId,
+    serviceType: appt.consultationType === "Video" ? "video_consultation" : "consultation",
+  };
+}
+
+// Credits appointments that were marked completed before their slot ended,
+// once the slot end has passed. Idempotent: _transitionPaymentToEligible only
+// acts on payments still 'pending' (and test credits are guarded likewise), and
+// the marker is cleared afterwards so a redelivered run skips the doc.
+exports.settleDeferredAppointments = onSchedule({ schedule: "every 15 minutes", timeZone: "UTC" }, async () => {
+  const db = getFirestore();
+  const snap = await db.collection("appointments")
+    .where("settlementDeferredUntil", "<=", Timestamp.now())
+    .limit(300)
+    .get();
+  if (snap.empty) return;
+
+  let settled = 0;
+  for (const doc of snap.docs) {
+    const d = doc.data();
+    try {
+      // Status may have changed since deferral (e.g. cancelled): never credit then.
+      if (d.status === "completed" && d.doctorId) {
+        await _transitionPaymentToEligible(db, _appointmentSettlementArgs(doc.id, d));
+        settled++;
+      }
+      await doc.ref.update({ settlementDeferredUntil: FieldValue.delete() });
+    } catch (err) {
+      console.error(`settleDeferredAppointments: ${doc.id} failed:`, err.message);
+    }
+  }
+  console.log(`settleDeferredAppointments: settled ${settled} of ${snap.size} deferred appointment(s).`);
+});
+
+// ── Quick (instant) video consultations ──────────────────────────────────────
+//
+// `consultations` is where "Quick Connect" bookings land (consultation_screen
+// .dart pays for them via capturePayment with serviceType 'video_consultation'),
+// but unlike `appointments` it had NO completion -> settlement bridge, so the
+// doctor was never credited for them. The provider video call screen ends the
+// session with status 'ended'; the patient-side flow can also set 'completed'.
+// Provider-initiated calls have no paymentId / paymentStatus, so this no-ops
+// for them.
+exports.onConsultationSettlement = onDocumentUpdated(
+  "consultations/{consultationId}",
+  async (event) => {
+    const before = event.data.before.data();
+    const after = event.data.after.data();
+    if (before.status === after.status) return;
+    if (!["completed", "ended"].includes(after.status) || !after.doctorId) return;
+    if (["completed", "ended"].includes(before.status)) return;
+    // Scheduled-appointment consultation docs never credit: only the parent
+    // appointment does (onAppointmentSettlement, after the slot has ended).
+    if (after.appointmentId) return;
+    // A PATIENT can end their own consultation, so a payout needs proof the
+    // doctor actually joined: the doctor reached 'active' (a status the patient
+    // cannot write; patient may only write ongoing/declined/missed/cancelled/
+    // ended) — either the previous status was 'active' or onConsultationDoctorJoined
+    // already stamped doctorJoinedAt. Never credited otherwise (no earnings).
+    if (before.status !== "active" && !after.doctorJoinedAt) {
+      _logSettlement("WARNING", "consultation_credit_skipped_doctor_not_joined", {
+        consultationId: event.params.consultationId, from: before.status, to: after.status,
+      });
+      return;
+    }
 
     await _transitionPaymentToEligible(getFirestore(), {
-      sourceCollection: "appointments",
-      sourceId: event.params.appointmentId,
+      sourceCollection: "consultations",
+      sourceId: event.params.consultationId,
       providerId: after.doctorId,
-      // Every real writer of this field uses capitalized 'Video' (see
-      // consultation_screen.dart, doctor_profile_screen.dart's
-      // _consultationType) — this was comparing against lowercase 'video',
-      // which never matched, so every appointment silently finalized
-      // against the 'consultation' commission rule even when
-      // capturePayment had correctly billed it as 'video_consultation'.
-      serviceType: after.consultationType === "Video" ? "video_consultation" : "consultation",
+      serviceType: "video_consultation",
+    });
+  }
+);
+
+// ── Server-side appointment completion (patients can't self-complete) ───────
+//
+// firestore.rules no longer lets a patient write appointments.status =
+// 'completed' (it can trigger provider earnings via onAppointmentSettlement).
+// Completion is decided server-side from the consultation instead:
+//   1. When the doctor/provider joins (consultation status -> 'active', which a
+//      patient is barred from writing) stamp `doctorJoinedAt` — evidence that the
+//      call really took place.
+//   2. When the consultation transitions to 'ended'/'completed' and has an
+//      `appointmentId`, complete that appointment if it is still in an active
+//      state and the doctor joined. Idempotent; never overrides
+//      cancelled/missed/expired/completed. onAppointmentSettlement then runs as
+//      designed (credit after the slot end via settlementDeferredUntil).
+// The doctor app's own direct completion writes keep working (provider branch).
+exports.onConsultationDoctorJoined = onDocumentUpdated(
+  "consultations/{consultationId}",
+  async (event) => {
+    const before = event.data.before.data();
+    const after = event.data.after.data();
+    if (before.status === after.status || after.status !== "active") return;
+    if (after.doctorJoinedAt) return;
+    await event.data.after.ref.update({ doctorJoinedAt: FieldValue.serverTimestamp() });
+  }
+);
+
+// Quick Connect paid up front (capturePayment -> consultations, status
+// 'pending'). If the doctor declines or never answers (expireStaleConsultations
+// -> 'missed') the patient gets the full amount back automatically, matching
+// the other services' provider-failure refunds. Appointment-linked consultation
+// docs carry no paymentId of their own, so _autoRefundBooking no-ops for them.
+exports.onConsultationNoAnswerRefund = onDocumentUpdated(
+  "consultations/{consultationId}",
+  async (event) => {
+    const before = event.data.before.data();
+    const after = event.data.after.data();
+    if (before.status === after.status || !["missed", "declined"].includes(after.status)) return;
+    // Only a request that was never accepted ('pending'); once the doctor accepted
+    // ('ongoing') a patient-written 'missed' must not trigger a refund.
+    if (before.status !== "pending") return;
+    if (after.appointmentId || !after.paymentId || after.cancelledBy === "patient") return;
+    await _autoRefundBooking(getFirestore(), "consultations", event.params.consultationId,
+      "The doctor did not answer the Quick Connect request");
+  }
+);
+
+const _COMPLETABLE_APPOINTMENT_STATUSES = [
+  "booked", "confirmed", "upcoming", "scheduled", "ongoing", "in_progress",
+  "active", "consultation_started",
+];
+exports.onConsultationEndedCompleteAppointment = onDocumentUpdated(
+  "consultations/{consultationId}",
+  async (event) => {
+    const before = event.data.before.data();
+    const after = event.data.after.data();
+    if (before.status === after.status) return;
+    if (!["ended", "completed"].includes(after.status)) return;
+    if (["ended", "completed"].includes(before.status)) return;
+    const appointmentId = after.appointmentId;
+    if (!appointmentId || typeof appointmentId !== "string") return;
+    // The call must really have happened: the doctor reached 'active'
+    // (before.status) or was stamped doctorJoinedAt by the trigger above.
+    if (before.status !== "active" && !after.doctorJoinedAt) return;
+
+    const db = getFirestore();
+    const apptRef = db.collection("appointments").doc(appointmentId);
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(apptRef);
+      if (!snap.exists) return;
+      const appt = snap.data();
+      // The consultation must belong to this appointment's own patient/doctor.
+      if (appt.patientId !== after.patientId || appt.doctorId !== after.doctorId) return;
+      if (!_COMPLETABLE_APPOINTMENT_STATUSES.includes(appt.status)) return;
+      tx.update(apptRef, {
+        status: "completed",
+        completedAt: FieldValue.serverTimestamp(),
+        completedBy: "system",
+      });
     });
   }
 );
@@ -4012,6 +5221,8 @@ exports.onSupportChatMessageCreated = onDocumentCreated(
 );
 
 // ── Admin: Commission rules ───────────────────────────────────────────────────
+// deprecated: fee-only model — the settlement engine no longer reads
+// commission_rules. Kept (with its data) for rollback/audit; nothing calls it.
 //
 // Request data: { serviceType, type: 'percentage'|'fixed'|'hybrid',
 //                  percentage?, fixedAmount?, providerOverrides? }
@@ -4026,6 +5237,11 @@ exports.setCommissionRule = onCall({ enforceAppCheck: true }, async (request) =>
   }
   if (!_COMMISSION_TYPES.includes(type)) {
     throw new HttpsError("invalid-argument", "type must be percentage, fixed, or hybrid.");
+  }
+  // Every service type the settlement engine can finalise with (a typo'd id
+  // would otherwise create a rule nothing ever reads).
+  if (!Object.prototype.hasOwnProperty.call(_PROVIDER_FIELD_BY_SERVICE, serviceType.trim())) {
+    throw new HttpsError("invalid-argument", `Unknown serviceType "${serviceType.trim()}".`);
   }
   const ruleRef = db.collection("commission_rules").doc(serviceType.trim());
   const before = (await ruleRef.get()).data() || null;
@@ -4495,6 +5711,16 @@ async function _refundPayment(db, paymentId, reason, actorId) {
       userSnap = await tx.get(db.collection("users").doc(payment.patientId));
     }
 
+    // An 'eligible' payment already credited the provider's pendingEarnings
+    // (see _transitionPaymentToEligible) but isn't in any settlement batch, so
+    // nothing else would ever take that credit back. Read here (all reads
+    // before writes) and reverse below.
+    const reverseProviderPending = freshPayment?.settlementStatus === "eligible" &&
+      freshPayment.providerId && Number(freshPayment.providerAmount) > 0;
+    const providerWalletRef = reverseProviderPending
+      ? db.collection("provider_wallets").doc(freshPayment.providerId) : null;
+    const providerWalletSnap = providerWalletRef ? await tx.get(providerWalletRef) : null;
+
     if (userSnap) {
       const userRef = db.collection("users").doc(payment.patientId);
       const balanceAfter = _round2(_walletBalanceOf(userSnap, "walletBalance") + payment.paidAmount);
@@ -4512,6 +5738,21 @@ async function _refundPayment(db, paymentId, reason, actorId) {
     });
     tx.update(paymentRef, { status: "refunded", settlementStatus: wasSettled ? "paid" : "failed" });
 
+    if (providerWalletRef) {
+      const reverseAmt = _round2(Number(freshPayment.providerAmount));
+      const pendingNow = providerWalletSnap.exists ? Number(providerWalletSnap.get("pendingEarnings")) || 0 : 0;
+      tx.set(providerWalletRef, {
+        pendingEarnings: _round2(Math.max(0, pendingNow - reverseAmt)),
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+      tx.set(db.collection("wallet_ledger").doc(), _ledgerDoc({
+        uid: freshPayment.providerId, walletType: "provider", type: "debit", amount: reverseAmt,
+        category: "settlement_reversal", title: "Earnings Reversed (Refund)",
+        description: `Payment ${paymentId} refunded before settlement`,
+        source: `payment:${paymentId}:provider_reversal`, balanceAfter: null,
+      }));
+    }
+
     if (payment.paidAmount > 0) {
       tx.set(db.collection("wallet_ledger").doc(), _ledgerDoc({
         uid: "platform", walletType: "platform", type: "debit", amount: payment.paidAmount,
@@ -4519,10 +5760,12 @@ async function _refundPayment(db, paymentId, reason, actorId) {
         description: reason || null, source: `payment:${paymentId}:refund`, balanceAfter: null,
       }));
     }
-    if (!wasSettled && payment.commission > 0) {
+    // Fee-only model: reverse the platform fee (legacy docs: their stored commission).
+    const feeToReverse = Number(payment.platformFee) > 0 ? Number(payment.platformFee) : Number(payment.commission) || 0;
+    if (!wasSettled && feeToReverse > 0) {
       tx.set(db.collection("wallet_ledger").doc(), _ledgerDoc({
-        uid: "platform", walletType: "platform", type: "debit", amount: payment.commission,
-        category: "commission_reversal", title: "Commission Reversed",
+        uid: "platform", walletType: "platform", type: "debit", amount: feeToReverse,
+        category: "commission_reversal", title: "Platform fee reversed",
         source: `payment:${paymentId}:commission_reversal`, balanceAfter: null,
       }));
     }
@@ -4593,6 +5836,204 @@ async function _autoRefundOnProviderFailure(db, before, after, failStatuses, sou
   if (after.cancelledBy === "patient") return;
   await _autoRefundBooking(db, sourceCollection, sourceId, reason);
 }
+
+// ── Pinned provider has paused orders (the "accepting orders" switch) ───────
+// A patient pinned an order/booking to one pharmacy / lab / equipment vendor
+// that has its switch off (`acceptingOrders` / lab `acceptingBookings` ===
+// false). The patient app greys such providers out and blocks adding to the
+// cart, so this only fires for a race (switch flipped after the cart was
+// built) or a direct write. Same shape as the `slot_taken` system cancel:
+// the source doc is cancelled by "system", a paid booking is auto-refunded
+// through _autoRefundBooking, and the patient is told why. No provider-side
+// doc is ever created, so the paused partner is never bothered.
+// onServiceRequestStatusChange skips its generic "cancelled" push for this
+// cancelReason (see there) so the patient gets exactly one message.
+async function _rejectPinnedProviderNotAccepting(db, sourceCollection, sourceId, data, providerName, label) {
+  const ref = db.collection(sourceCollection).doc(sourceId);
+  await ref.update({
+    status: "cancelled",
+    cancelledBy: "system",
+    cancelReason: "provider_not_accepting",
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  await _autoRefundBooking(db, sourceCollection, sourceId, "The provider is not accepting orders right now");
+  console.log(JSON.stringify({
+    module: "provider_availability", event: "order_rejected_provider_not_accepting",
+    sourceCollection, sourceId, label,
+  }));
+  const patientId = data.patientId || data.userId;
+  if (!patientId) return;
+  const who = providerName || `This ${label}`;
+  await _sendPatientNotification(db, getMessaging(), patientId, {
+    title: "Provider Unavailable",
+    body: `${who} isn't accepting orders right now. Please pick another${data.paymentId ? " — your payment is being refunded" : ""}.`,
+    type: "provider_not_accepting",
+    bookingId: sourceId,
+    actionType: "open_service",
+  }).catch(() => {});
+}
+
+// ── Customer-cancel refund policy (paid bookings only) ──────────────────────
+// A no-op for bookings without a paymentId (test/pay-later bookings).
+//   a) provider has NOT accepted yet (previous status in `preAccept`)
+//        -> full automatic refund via _autoRefundBooking (idempotent: it
+//           claims payments/{id}.autoRefundClaimedAt first).
+//   b) provider accepted but the service has not started
+//        -> NO automatic refund; a `refund_requests/{id}` doc is created for
+//           the admin to Approve/Reject (resolveRefundRequest). Deterministic
+//           doc id + create() => redelivered triggers cannot duplicate it.
+//   c) service already started (_CANCEL_STARTED_STATUSES) -> nothing; the
+//      patient UI does not offer cancel there.
+// The patient is recognised by `cancelledBy: "patient"`, which the patient
+// app stamps and firestore.rules only let the patient set to that value
+// (provider mirrors/system cancels never carry it).
+const _CANCEL_POLICY = {
+  service_requests: { patientField: "patientId", preAccept: ["pending", "requested"] },
+  appointments: { patientField: "patientId", preAccept: ["pending"] },
+  orders: { patientField: "patientId", preAccept: ["pending", "prescription_required"] },
+  nutrition_appointments: { patientField: "userId", preAccept: ["pending"] },
+  consultations: { patientField: "patientId", preAccept: ["pending", "ringing", "calling"] },
+  hospital_appointments: { patientField: "patientId", preAccept: [] },
+};
+const _CANCEL_STARTED_STATUSES = [
+  "in_progress", "started", "arrived", "consultation_started", "active", "checked_in",
+  "sample_collected", "report_ready", "out_for_delivery", "delivered", "completed", "ended",
+];
+
+async function _applyCancelRefundPolicy(db, collection, bookingId, before, after) {
+  if (!before || !after) return;
+  if (before.status === after.status || after.status !== "cancelled") return;
+  if (after.cancelledBy !== "patient" || !after.paymentId) return;
+  const cfg = _CANCEL_POLICY[collection];
+  if (!cfg) return;
+  const prev = String(before.status || "").toLowerCase();
+  if (_CANCEL_STARTED_STATUSES.includes(prev)) {
+    _logSettlement("INFO", "cancel_after_start_ignored", { collection, bookingId, prev });
+    return;
+  }
+
+  if (cfg.preAccept.includes(prev)) {
+    await _autoRefundBooking(db, collection, bookingId, "Cancelled by the customer before the provider accepted");
+    return;
+  }
+
+  try {
+    const paymentSnap = await db.collection("payments").doc(after.paymentId).get();
+    if (!paymentSnap.exists) return;
+    const payment = paymentSnap.data();
+    if (payment.status !== "completed" || !(Number(payment.paidAmount) > 0)) return;
+    const patientId = after[cfg.patientField] || payment.patientId;
+    const requestRef = db.collection("refund_requests").doc(_ledgerId(`${collection}:${bookingId}`));
+    try {
+      await requestRef.create({
+        paymentId: after.paymentId, bookingCollection: collection, bookingId, patientId,
+        amount: payment.paidAmount, serviceType: payment.serviceType || null,
+        providerId: payment.providerId || null,
+        reason: after.cancelReason || "Cancelled by the customer after the provider accepted",
+        status: "pending", createdAt: FieldValue.serverTimestamp(),
+      });
+    } catch (err) {
+      if (err.code === 6 || /ALREADY_EXISTS/.test(String(err.message))) return; // redelivery
+      throw err;
+    }
+    const messaging = getMessaging();
+    _sendPatientNotification(db, messaging, patientId, {
+      title: "Cancellation Received",
+      body: "Your booking was cancelled. As the provider had already accepted it, your refund request has been sent to our team for review.",
+      type: "refund_request_received", bookingId,
+    }).catch(() => {});
+    _sendAdminAlert(db, messaging, {
+      title: "Refund Request",
+      body: `A customer cancelled an accepted booking (${collection}/${bookingId}). Review the refund of ₹${Number(payment.paidAmount).toFixed(0)}.`,
+      type: "refund_request", extraData: { paymentId: after.paymentId, bookingId, bookingCollection: collection },
+    }).catch(() => {});
+  } catch (err) {
+    _logSettlement("ERROR", "refund_request_create_failed", { collection, bookingId, error: err.message });
+    throw err; // let the platform retry the trigger
+  }
+}
+
+function _cancelPolicyTrigger(collection) {
+  return onDocumentUpdated(`${collection}/{docId}`, async (event) => {
+    await _applyCancelRefundPolicy(
+      getFirestore(), collection, event.params.docId,
+      event.data.before.data(), event.data.after.data());
+  });
+}
+exports.onServiceRequestCancelRefundPolicy = _cancelPolicyTrigger("service_requests");
+exports.onAppointmentCancelRefundPolicy = _cancelPolicyTrigger("appointments");
+exports.onOrderCancelRefundPolicy = _cancelPolicyTrigger("orders");
+exports.onNutritionCancelRefundPolicy = _cancelPolicyTrigger("nutrition_appointments");
+exports.onConsultationCancelRefundPolicy = _cancelPolicyTrigger("consultations");
+exports.onHospitalAppointmentCancelRefundPolicy = _cancelPolicyTrigger("hospital_appointments");
+
+// Admin decision on a refund request. Approve reuses the shared refund engine
+// (same checks as issueRefund); Reject records the note. Either way the
+// patient is notified. The request is claimed ('processing') first so a
+// double-click cannot refund twice.
+// Request data: { requestId, decision: 'approve'|'reject', note? }
+exports.resolveRefundRequest = onCall({ enforceAppCheck: true }, async (request) => {
+  const uid = request.auth?.uid;
+  const db = getFirestore();
+  await _assertAdmin(db, uid);
+  const { requestId, decision, note } = request.data || {};
+  if (typeof requestId !== "string" || !requestId.trim()) {
+    throw new HttpsError("invalid-argument", "requestId is required.");
+  }
+  if (decision !== "approve" && decision !== "reject") {
+    throw new HttpsError("invalid-argument", "decision must be approve or reject.");
+  }
+  const adminNote = typeof note === "string" ? note.trim().slice(0, 500) : "";
+  if (decision === "reject" && !adminNote) {
+    throw new HttpsError("invalid-argument", "Add a note explaining why the refund is rejected.");
+  }
+
+  const reqRef = db.collection("refund_requests").doc(requestId.trim());
+  const claimed = await db.runTransaction(async (tx) => {
+    const snap = await tx.get(reqRef);
+    if (!snap.exists) throw new HttpsError("not-found", "Refund request not found.");
+    if (snap.get("status") !== "pending") {
+      throw new HttpsError("failed-precondition", `This request is already ${snap.get("status")}.`);
+    }
+    tx.update(reqRef, { status: "processing" });
+    return snap.data();
+  });
+
+  const messaging = getMessaging();
+  if (decision === "reject") {
+    await reqRef.update({
+      status: "rejected", adminNote, resolvedBy: uid, resolvedAt: FieldValue.serverTimestamp(),
+    });
+    await db.collection("audit_logs").add(_auditLogDoc({
+      actorId: uid, action: "rejectRefundRequest", targetType: "refund_requests", targetId: reqRef.id,
+      before: { status: "pending" }, after: { status: "rejected", adminNote },
+    }));
+    _sendPatientNotification(db, messaging, claimed.patientId, {
+      title: "Refund Request Update",
+      body: `Your refund request was not approved. ${adminNote}`,
+      type: "refund_request_rejected", bookingId: claimed.bookingId,
+    }).catch(() => {});
+    return { success: true, status: "rejected" };
+  }
+
+  let result;
+  try {
+    result = await _refundPayment(db, claimed.paymentId, adminNote || "Customer cancellation approved by admin", uid);
+  } catch (err) {
+    await reqRef.update({ status: "pending" }).catch(() => {}); // let the admin retry or reject
+    throw err;
+  }
+  await reqRef.update({
+    status: "approved", adminNote, refundId: result.refundId,
+    resolvedBy: uid, resolvedAt: FieldValue.serverTimestamp(),
+  });
+  await db.collection("audit_logs").add(_auditLogDoc({
+    actorId: uid, action: "approveRefundRequest", targetType: "refund_requests", targetId: reqRef.id,
+    before: { status: "pending" }, after: { status: "approved", refundId: result.refundId },
+  }));
+  // _refundPayment already sent the "Refund Processed" push to the patient.
+  return { success: true, status: "approved", refundId: result.refundId };
+});
 
 // ══════════════════════════════════════════════════════════════════════════
 // ── Lab & Diagnostics module ────────────────────────────────────────────────
@@ -4696,6 +6137,38 @@ async function _releasePoolJobContact(db, collection, docId, before, after) {
   }
 }
 
+// ── Declining an OPEN (unclaimed) pool job ───────────────────────────────
+// A partner declining a job nobody has claimed only hides it for themselves:
+// the app adds their uid to `declinedBy` and nothing else (firestore.rules'
+// `declinedBy` branch), so the shared doc stays 'pending' for every other
+// partner and the patient still sees 'pending' (no status change is mirrored).
+// Only when EVERY currently active partner of that role has declined is the
+// job failed with `failFields` (the same terminal state the hourly stale
+// cleanup uses, so the existing mirror + auto-refund path runs). Otherwise it
+// just waits for someone to claim it or for the stale cleanup to expire it.
+// Declining a PINNED (directly assigned) booking is unchanged: the app rejects
+// it outright (status change), which refunds.
+async function _failPoolJobIfAllDeclined(db, collection, profileCollection, docId, before, after, failFields) {
+  const spec = _POOL_JOB_SPECS[collection];
+  if (!spec || after[spec.providerField] || after.status !== "pending") return;
+  const declined = Array.isArray(after.declinedBy) ? after.declinedBy : [];
+  if (declined.length === 0 || declined.length === (Array.isArray(before.declinedBy) ? before.declinedBy.length : 0)) return;
+
+  const activeSnap = await db.collection(profileCollection).where("status", "==", "active").select().get();
+  if (activeSnap.empty) return;
+  const declinedSet = new Set(declined);
+  if (!activeSnap.docs.every((d) => declinedSet.has(d.id))) return;
+
+  const ref = db.collection(collection).doc(docId);
+  const failed = await db.runTransaction(async (tx) => {
+    const cur = (await tx.get(ref)).data();
+    if (!cur || cur[spec.providerField] || cur.status !== "pending") return false;
+    tx.update(ref, { ...failFields, updatedAt: FieldValue.serverTimestamp() });
+    return true;
+  });
+  if (failed) console.log(`[pool_decline] ${collection}/${docId} declined by every active ${profileCollection} -> ${failFields.status}`);
+}
+
 const _DIAGNOSTIC_TYPES = ["diagnostics", "lab_tests"];
 
 // Lab-side status -> the exact service_requests status vocabulary already
@@ -4769,6 +6242,12 @@ exports.onDiagnosticServiceRequestCreated = onDocumentCreated(
     if (details.sourceLabId) {
       const labSnap = await db.collection("lab_profiles").doc(details.sourceLabId).get();
       if (labSnap.exists && labSnap.data().status === "active") {
+        if (labSnap.data().acceptingBookings === false) {
+          // The lab paused new bookings (Zomato-style closed switch).
+          await _rejectPinnedProviderNotAccepting(
+            db, "service_requests", requestId, data, labSnap.data().name, "lab");
+          return;
+        }
         pinnedLabId = details.sourceLabId;
       } else {
         _logLab("WARNING", "source_lab_inactive_falling_back_to_pool", {
@@ -4781,7 +6260,9 @@ exports.onDiagnosticServiceRequestCreated = onDocumentCreated(
       sourceRequestId: requestId,
       type: data.type,
       testName: details.testName || data.serviceName || "Diagnostic Test",
-      price: details.price ?? data.amount ?? 0,
+      // Server-stamped `amount` first; client serviceDetails.price only as a
+      // last-resort display fallback when nothing was stamped.
+      price: data.amount ?? details.price ?? 0,
       amount: data.amount ?? details.price ?? 0,
       patientId: data.patientId,
       patientName: data.patientName || "Patient",
@@ -4869,6 +6350,7 @@ exports.onDiagnosticBookingStatusChange = onDocumentUpdated(
     const bookingId = event.params.bookingId;
     const db = getFirestore();
     await _releasePoolJobContact(db, "diagnostic_bookings", bookingId, before, after);
+    await _failPoolJobIfAllDeclined(db, "diagnostic_bookings", "lab_profiles", bookingId, before, after, { status: "expired" });
 
     const statusChanged = before.status !== after.status;
     await _autoRefundOnProviderFailure(db, before, after, ["rejected", "expired", "cancelled"], "service_requests",
@@ -5409,6 +6891,12 @@ exports.onMedicineOrderCreated = onDocumentCreated(
     if (data.pharmacyId) {
       const pharmacySnap = await db.collection("pharmacy_profiles").doc(data.pharmacyId).get();
       if (pharmacySnap.exists && pharmacySnap.data().status === "active") {
+        if (pharmacySnap.data().acceptingOrders === false) {
+          // The pharmacy paused new orders (Zomato-style closed switch).
+          await _rejectPinnedProviderNotAccepting(
+            db, "orders", orderId, data, pharmacySnap.data().name, "pharmacy");
+          return;
+        }
         pinnedPharmacyId = data.pharmacyId;
       } else {
         _logPharmacy("WARNING", "source_pharmacy_inactive_falling_back_to_pool", {
@@ -5750,6 +7238,7 @@ exports.onPharmacyOrderStatusChange = onDocumentUpdated(
     const orderId = event.params.orderId;
     const db = getFirestore();
     await _releasePoolJobContact(db, "pharmacy_orders", orderId, before, after);
+    await _failPoolJobIfAllDeclined(db, "pharmacy_orders", "pharmacy_profiles", orderId, before, after, { status: "cancelled" });
 
     const statusChanged = before.status !== after.status;
     const deliveryPersonChanged = before.deliveryPersonName !== after.deliveryPersonName;
@@ -6309,6 +7798,15 @@ async function _routeEquipmentRequestToVendor(db, requestId, data, details, amou
     return true;
   }
 
+  // A shop that paused orders is rejected exactly like the pharmacy / lab
+  // case (system cancel + auto-refund + one patient message) instead of
+  // creating an order only to reject it.
+  if (vendor.acceptingOrders === false) {
+    await _rejectPinnedProviderNotAccepting(db, "service_requests", requestId, data, vendor.name, "vendor");
+    _logEquipment("WARNING", "equipment_order_rejected_vendor_not_accepting", { requestId, vendorId });
+    return true;
+  }
+
   const quantity = Math.max(1, Number(details.quantity) || 1);
 
   // The patient's app already hides sold-out items, but two patients can book
@@ -6316,9 +7814,7 @@ async function _routeEquipmentRequestToVendor(db, requestId, data, details, amou
   // Such an order is created and immediately rejected, which runs the normal
   // status path: patient notified, payment auto-refunded.
   let unavailableReason = null;
-  if (vendor.acceptingOrders === false) {
-    unavailableReason = "The shop is currently closed.";
-  } else if (details.sourceItemId) {
+  if (details.sourceItemId) {
     const itemSnap = await db.collection("equipment_profiles").doc(String(vendorId))
       .collection("items").doc(String(details.sourceItemId)).get();
     if (!itemSnap.exists) {
@@ -6675,6 +8171,143 @@ async function _findNearestOnlineAmbulance(db, lat, lng, excludeIds = []) {
   return bestDistance <= _AMBULANCE_MAX_MATCH_RADIUS_KM ? best : null;
 }
 
+// ambulance_profiles carries the driver's name as `driverName` (there is no
+// `name` field), so _providerDisplayName cannot resolve it. The patient app
+// shows `service_requests.assignedToName`, falling back to the raw uid.
+async function _ambulanceDisplayName(db, id) {
+  if (!id) return null;
+  try {
+    const snap = await db.collection("ambulance_profiles").doc(id).get();
+    const d = snap.exists ? snap.data() : null;
+    return (d && (d.driverName || d.name)) || null;
+  } catch {
+    return null;
+  }
+}
+
+// ── Range-based ambulance fare ──────────────────────────────────────────────
+// Bookings carry a rate range (serviceDetails.fareMin/fareMax, from
+// app_config/ambulance_rates at booking time) and are CHARGED the max
+// (`amount`). The final fare is the matched driver's own
+// `ambulance_profiles.ratePerTrip` clamped into that range (range min when the
+// driver hasn't set one). Legacy bookings without a range return null and keep
+// the old `fare` behaviour untouched.
+function _ambulanceFareRange(details) {
+  const min = Number(details?.fareMin);
+  const max = Number(details?.fareMax);
+  if (!Number.isFinite(min) || !Number.isFinite(max) || min < 0 || max < min) return null;
+  return { min, max };
+}
+
+// RATE LOCK: when `lockedRate` (ambulance_requests.lockedRate, snapshotted when
+// the driver accepted / was matched) is a valid number it is used instead of the
+// driver's CURRENT ratePerTrip, so a later rate change never affects a trip that
+// was already accepted. Legacy requests without a lock fall back to the live rate.
+async function _ambulanceFinalFare(db, ambulanceId, range, lockedRate = null) {
+  if (!range || !ambulanceId) return null;
+  const locked = (lockedRate === null || lockedRate === undefined || lockedRate === "") ? NaN : Number(lockedRate);
+  if (Number.isFinite(locked) && locked >= 0) {
+    return _round2(Math.min(range.max, Math.max(range.min, locked)));
+  }
+  let rate = NaN;
+  try {
+    const snap = await db.collection("ambulance_profiles").doc(ambulanceId).get();
+    rate = Number(snap.exists ? snap.get("ratePerTrip") : NaN);
+  } catch (_) { /* fall back to range min */ }
+  if (!Number.isFinite(rate) || rate < 0) rate = range.min;
+  return _round2(Math.min(range.max, Math.max(range.min, rate)));
+}
+
+// Records the final fare on the customer's service_request. The customer was
+// charged `amount` (== range max); the gap is `fareDifference`. Only a booking
+// with a real payment (paymentId) is flagged `refundDifferencePending` - the
+// refund machinery (_refundPayment) is full-refund only, so the partial
+// refund of the difference is NOT automated here (needs an owner/finance
+// decision). Test bookings (no paymentId) just carry fareFinal, which the test
+// credit reads.
+async function _recordAmbulanceFinalFare(db, serviceRequestId, finalFare, { completed = false, ambulanceId = null, lockedRate = null, lock = false } = {}) {
+  const ref = db.collection("service_requests").doc(serviceRequestId);
+  const snap = await ref.get();
+  if (!snap.exists) return { deferLedger: false };
+  const d = snap.data();
+
+  // PAY-AFTER-TRIP (real mode): the booking carried no up-front charge. On
+  // completion the final fare is re-resolved against the SERVER rate range
+  // (app_config/ambulance_rates, not the client-written fareMin/fareMax), the
+  // platform fee is added and the booking goes to 'payment_due'. Only the
+  // pay_after_trip -> payment_due edge writes these, so redeliveries are no-ops.
+  if (completed && d.paymentStatus === "pay_after_trip") {
+    const serverRange = await _ambulanceServerRange(db, d.serviceDetails);
+    let fare = finalFare;
+    if (serverRange && ambulanceId) {
+      // Prefer the rate locked at accept (passed in, else the service_request's
+      // lockedFare) over the driver's current ratePerTrip.
+      const f = await _ambulanceFinalFare(db, ambulanceId, serverRange,
+        lockedRate !== null && lockedRate !== undefined ? lockedRate : d.lockedFare);
+      if (f !== null) fare = f;
+    }
+    if (Number.isFinite(fare) && fare > 0) {
+      const feeCfg = await db.collection("app_config").doc("platform_fee").get();
+      const platformFee = PriceH.platformFeeFor(feeCfg.exists ? feeCfg.data() : null, "ambulance");
+      const amountDue = _round2(fare + platformFee);
+      await ref.update({
+        fareFinal: fare,
+        fareDifference: 0,
+        platformFee,
+        amountDue,
+        paymentStatus: "payment_due",
+        paymentDueAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      if (d.patientId) {
+        await _sendPatientNotification(db, getMessaging(), d.patientId, {
+          title: "Trip completed",
+          body: `Trip completed. Please pay ₹${amountDue.toFixed(0)}`,
+          type: "ambulance_payment_due", serviceType: "ambulance", bookingId: serviceRequestId,
+          actionType: "open_trip_payment", extraData: { amountDue },
+        });
+      }
+      return { deferLedger: true };
+    }
+    _logAmbulance("ERROR", "pay_after_trip_no_fare", { requestId: serviceRequestId });
+    return { deferLedger: true };
+  }
+
+  const charged = Number(d.amount);
+  const update = { fareFinal: finalFare };
+  if (lock) update.lockedFare = finalFare; // rate lock snapshot (set at accept / match, not at completion)
+  if (Number.isFinite(charged)) {
+    const diff = _round2(Math.max(0, charged - finalFare));
+    update.fareDifference = diff;
+    if (completed && d.paymentId && diff > 0) update.refundDifferencePending = true;
+  }
+  const changed = Object.keys(update).some((k) => d[k] !== update[k]);
+  if (changed) await ref.update(update);
+  // Already awaiting payment (a redelivered completion): keep the partner
+  // ledger deferred until captureTripPayment writes it.
+  return { deferLedger: d.paymentStatus === "payment_due" };
+}
+
+// Server-side rate range for a vehicle type (admin-set app_config/ambulance_rates),
+// so the pay-after-trip amount never depends on the client-written fareMin/fareMax.
+// Falls back to the booking's own range only when the config is unusable.
+async function _ambulanceServerRange(db, details) {
+  const raw = String(details?.ambulanceType || details?.ambulanceTypeKey || "").trim().toLowerCase();
+  const key = raw === "basic" ? "basic"
+    : (raw === "advanced life support" || raw === "als") ? "als"
+      : (raw === "icu ambulance" || raw === "icu") ? "icu" : null;
+  try {
+    if (key) {
+      const cfg = await db.collection("app_config").doc("ambulance_rates").get();
+      const r = cfg.exists ? cfg.get("types")?.[key] : null;
+      const min = r ? PriceH.parseRupees(r.min) : null;
+      const max = r ? PriceH.parseRupees(r.max) : null;
+      if (min !== null && max !== null && max >= min) return { min, max };
+    }
+  } catch (_) { /* fall through to the booking's range */ }
+  return _ambulanceFareRange(details);
+}
+
 // ── 1) Mirror new ambulance service_requests into ambulance_requests ────────
 exports.onAmbulanceServiceRequestCreated = onDocumentCreated(
   "service_requests/{requestId}",
@@ -6708,6 +8341,12 @@ exports.onAmbulanceServiceRequestCreated = onDocumentCreated(
     const pickupLat = details.locationData?.lat;
     const pickupLng = details.locationData?.lng;
     const matchedAmbulanceId = await _findNearestOnlineAmbulance(db, pickupLat, pickupLng);
+    // Admin-set server range (app_config/ambulance_rates), not the client-written fareMin/fareMax.
+    const fareRange = await _ambulanceServerRange(db, details);
+    // Pinned straight to a driver: show that driver's own rate (clamped into
+    // the range) as the fare instead of the charged max.
+    const matchedFare = matchedAmbulanceId
+      ? await _ambulanceFinalFare(db, matchedAmbulanceId, fareRange) : null;
 
     await _setPoolJob(db, requestRef, "ambulance_requests", {
       sourceRequestId: requestId,
@@ -6722,7 +8361,12 @@ exports.onAmbulanceServiceRequestCreated = onDocumentCreated(
       dropAddress: details.dropAddress || "",
       distanceKm: details.distanceKm ?? 0,
       etaMinutes: details.etaMinutes ?? 0,
-      fare: data.amount ?? details.fare ?? 0,
+      // Pay-after-trip bookings carry amount 0 (nothing charged up front), so
+      // an unclaimed job shows the range minimum until a driver's own rate applies.
+      fare: matchedFare ?? (fareRange && !(Number(data.amount) > 0) ? fareRange.min : (data.amount ?? 0)),
+      ...(fareRange ? { fareMin: fareRange.min, fareMax: fareRange.max } : {}),
+      // Rate lock (provisional while pinned; re-locked when the driver accepts).
+      ...(matchedFare !== null ? { lockedRate: matchedFare, lockedRateAmbulanceId: matchedAmbulanceId } : {}),
       emergencyType: _ambulanceEmergencyType(details.ambulanceType),
       ambulanceId: matchedAmbulanceId,
       matchAttempts: matchedAmbulanceId ? [matchedAmbulanceId] : [],
@@ -6741,13 +8385,19 @@ exports.onAmbulanceServiceRequestCreated = onDocumentCreated(
     // right `ambulance_profiles/{assignedTo}` doc to stream from the moment
     // the match happens, not only after the driver accepts.
     if (matchedAmbulanceId) {
+      const matchedName = await _ambulanceDisplayName(db, matchedAmbulanceId);
       await db.collection("service_requests").doc(requestId).update({
         assignedTo: matchedAmbulanceId,
+        ...(matchedName ? { assignedToName: matchedName } : {}),
       }).catch((err) => {
         _logAmbulance("WARNING", "initial_assignedTo_mirror_failed", { requestId, error: err.message });
       });
     }
 
+    if (matchedFare !== null) {
+      await _recordAmbulanceFinalFare(db, requestId, matchedFare, { lock: true }).catch((err) =>
+        _logAmbulance("WARNING", "provisional_fare_record_failed", { requestId, error: err.message }));
+    }
     _logAmbulance("INFO", "ambulance_request_created", { requestId, matchedAmbulanceId });
 
     // Ambulance is always pinned to exactly one nearest driver, never
@@ -6822,6 +8472,54 @@ async function _redispatchDeclinedAmbulance(db, requestId) {
 // the fully-open pool once no more online candidates exist.
 const _AMBULANCE_MATCH_TIMEOUT_SECONDS = 45;
 
+// If NO ambulance has accepted a request this many minutes after it was
+// created, the admin is alerted ONCE (admin_alerts + push, type
+// 'ambulance_unaccepted'; guarded by `adminAlertedAt` on the request doc).
+// Owner-tunable. The 2-hour auto-cancel (_AMBULANCE_STALE_PENDING_HOURS) is
+// unchanged.
+const _AMBULANCE_UNACCEPTED_ALERT_MINUTES = 10;
+
+// Owner-customisable via app_config/ambulance_settings.unacceptedAlertMinutes
+// (1..240, Director-edited in the admin panel). Falls back to the constant above
+// when missing/invalid. `cache` is a per-invocation holder ({}), so one sweep
+// reads the config once.
+async function _ambulanceAlertMinutes(db, cache = {}) {
+  if (cache.minutes !== undefined) return cache.minutes;
+  let minutes = _AMBULANCE_UNACCEPTED_ALERT_MINUTES;
+  try {
+    const snap = await db.collection("app_config").doc("ambulance_settings").get();
+    const v = snap.exists ? Number(snap.get("unacceptedAlertMinutes")) : NaN;
+    if (Number.isFinite(v) && v >= 1 && v <= 240) minutes = v;
+  } catch (_) { /* keep the default */ }
+  cache.minutes = minutes;
+  return minutes;
+}
+
+// Idempotent: claims `adminAlertedAt` in a transaction (without touching
+// `updatedAt`, which the reassign sweep uses as its staleness clock) and only
+// the invocation that wins the claim sends the alert. Admin SDK write, so
+// firestore.rules are not involved.
+async function _alertAdminIfAmbulanceUnaccepted(db, doc, data, cache = {}) {
+  if (data.status !== "pending" || data.adminAlertedAt) return false;
+  const createdAt = data.createdAt?.toDate?.();
+  const alertMinutes = await _ambulanceAlertMinutes(db, cache);
+  if (!createdAt || Date.now() - createdAt.getTime() < alertMinutes * 60 * 1000) return false;
+  const claimed = await db.runTransaction(async (tx) => {
+    const fresh = await tx.get(doc.ref);
+    if (!fresh.exists || fresh.get("status") !== "pending" || fresh.get("adminAlertedAt")) return false;
+    tx.update(doc.ref, { adminAlertedAt: FieldValue.serverTimestamp() });
+    return true;
+  });
+  if (!claimed) return false;
+  await _sendAdminAlert(db, getMessaging(), {
+    title: "Ambulance Request Not Accepted",
+    body: `No ambulance has accepted request ${doc.id} for ${alertMinutes}+ minutes. Please arrange one manually.`,
+    type: "ambulance_unaccepted",
+    extraData: { requestId: doc.id, patientId: data.patientId || "" },
+  }).catch(() => {});
+  return true;
+}
+
 exports.reassignStaleAmbulanceAssignments = onSchedule(
   { schedule: "every 1 minutes", timeZone: "UTC" },
   async () => {
@@ -6843,8 +8541,11 @@ exports.reassignStaleAmbulanceAssignments = onSchedule(
     let openedToPool = 0;
     let skipped = 0;
 
+    const alertCache = {};
     for (const doc of pendingSnap.docs) {
       const data = doc.data();
+      await _alertAdminIfAmbulanceUnaccepted(db, doc, data, alertCache).catch((err) =>
+        _logAmbulance("WARNING", "unaccepted_alert_failed", { requestId: doc.id, error: err.message }));
       if (!data.ambulanceId) continue; // already open-pool — nothing to reassign.
       const updatedAt = data.updatedAt?.toDate?.() ?? data.createdAt?.toDate?.() ?? new Date(0);
       if (updatedAt > cutoff.toDate()) continue; // matched recently — not stale yet.
@@ -6958,7 +8659,18 @@ exports.onAmbulanceRequestStatusChange = onDocumentUpdated(
         mappedStatus = before.status === "pending" ? "rejected" : "cancelled";
       }
       if (statusChanged && mappedStatus) update.status = mappedStatus;
-      if (claimChanged && after.ambulanceId) update.assignedTo = after.ambulanceId;
+      if (claimChanged && after.ambulanceId) {
+        update.assignedTo = after.ambulanceId;
+        const driverName = await _ambulanceDisplayName(db, after.ambulanceId);
+        if (driverName) update.assignedToName = driverName;
+      } else if (claimChanged && before.ambulanceId && !after.ambulanceId &&
+                 !["completed", "cancelled"].includes(after.status)) {
+        // The matched driver timed out and nobody else is online: the request
+        // is back in the open pool, so the patient's live-tracking screen must
+        // not keep pointing at the previous driver.
+        update.assignedTo = FieldValue.delete();
+        update.assignedToName = FieldValue.delete();
+      }
 
       if (Object.keys(update).length > 1) {
         const serviceRequestRef = db.collection("service_requests").doc(after.sourceRequestId || requestId);
@@ -6988,6 +8700,35 @@ exports.onAmbulanceRequestStatusChange = onDocumentUpdated(
       }
     }
 
+    // ── Claim / re-match: the fare becomes the new driver's own rate ────────
+    // (range-based bookings only; clamped into [fareMin, fareMax], range min
+    // when unset). Provisional until completion re-resolves it below.
+    // RATE LOCK: the driver's rate is snapshotted (lockedRate / lockedFare) when
+    // the request is claimed, re-matched to a new driver, OR accepted by the
+    // pinned driver (pending -> accepted keeps the same ambulanceId, so it is
+    // not a claimChanged edge). Completion uses the lock, never the live rate.
+    const acceptEdge = statusChanged && before.status === "pending" && after.status === "accepted";
+    if ((claimChanged || acceptEdge) && after.ambulanceId && !["completed", "cancelled"].includes(after.status)) {
+      try {
+        const srId = after.sourceRequestId || requestId;
+        // Prefer the server rate range over the client-written fareMin/fareMax.
+        const sr = await db.collection("service_requests").doc(srId).get();
+        const range = (await _ambulanceServerRange(db, sr.exists ? sr.get("serviceDetails") : null)) ||
+          _ambulanceFareRange({ fareMin: after.fareMin, fareMax: after.fareMax });
+        const claimFare = await _ambulanceFinalFare(db, after.ambulanceId, range); // live rate -> becomes the lock
+        if (claimFare !== null) {
+          const lockUpdate = {};
+          if (after.fare !== claimFare) lockUpdate.fare = claimFare;
+          if (after.lockedRate !== claimFare) lockUpdate.lockedRate = claimFare;
+          if (after.lockedRateAmbulanceId !== after.ambulanceId) lockUpdate.lockedRateAmbulanceId = after.ambulanceId;
+          if (Object.keys(lockUpdate).length) await event.data.after.ref.update(lockUpdate);
+          await _recordAmbulanceFinalFare(db, srId, claimFare, { lock: true });
+        }
+      } catch (err) {
+        _logAmbulance("WARNING", "claim_fare_update_failed", { requestId, error: err.message });
+      }
+    }
+
     // ── Completion: trip record + ledger credit, both exactly once ─────────
     if (statusChanged && after.status === "completed" && before.status !== "completed" && after.ambulanceId) {
       const tripRef   = db.collection("ambulance_trips").doc(requestId);
@@ -6999,12 +8740,40 @@ exports.onAmbulanceRequestStatusChange = onDocumentUpdated(
       // time, not time-since-acceptance.
       const requestedAt = after.requestedAt?.toDate?.() || after.createdAt?.toDate?.() || new Date();
       const durationMinutes = Math.max(0, Math.round((Date.now() - requestedAt.getTime()) / 60000));
-      const fare = after.fare ?? 0;
+      let fare = after.fare ?? 0;
+      // Pay-after-trip bookings: the partner's legacy ledger credit is
+      // deferred until the customer's payment is captured (captureTripPayment
+      // writes it) so an unpaid trip never shows as credited earnings.
+      let deferLedger = false;
+
+      // Range-based booking: the earning is the matched driver's own rate
+      // clamped into [fareMin, fareMax] (range min when unset), NOT the
+      // charged max. Recorded on the service_request BEFORE the settlement /
+      // test-credit hop below so that hop sees `fareFinal`.
+      try {
+        const srId = after.sourceRequestId || requestId;
+        // Prefer the server rate range over the client-written fareMin/fareMax.
+        const sr = await db.collection("service_requests").doc(srId).get();
+        const range = (await _ambulanceServerRange(db, sr.exists ? sr.get("serviceDetails") : null)) ||
+          _ambulanceFareRange({ fareMin: after.fareMin, fareMax: after.fareMax });
+        // Use the rate locked at accept (only if it was locked for THIS driver);
+        // legacy requests without a lock fall back to the live rate.
+        const lockedRate = (after.lockedRateAmbulanceId === after.ambulanceId && Number.isFinite(Number(after.lockedRate)))
+          ? Number(after.lockedRate) : null;
+        const finalFare = await _ambulanceFinalFare(db, after.ambulanceId, range, lockedRate);
+        if (finalFare !== null) {
+          fare = finalFare;
+          const rec = await _recordAmbulanceFinalFare(db, srId, finalFare, { completed: true, ambulanceId: after.ambulanceId, lockedRate });
+          deferLedger = !!(rec && rec.deferLedger);
+        }
+      } catch (err) {
+        _logAmbulance("ERROR", "final_fare_resolve_failed", { requestId, error: err.message });
+      }
 
       const written = await db.runTransaction(async (tx) => {
         const existingTrip = await tx.get(tripRef);
         const existingTx   = await tx.get(ledgerRef);
-        if (existingTrip.exists && existingTx.exists) return false;
+        if (existingTrip.exists && (existingTx.exists || deferLedger)) return false;
 
         if (!existingTrip.exists) {
           tx.set(tripRef, {
@@ -7021,7 +8790,7 @@ exports.onAmbulanceRequestStatusChange = onDocumentUpdated(
             completedAt: FieldValue.serverTimestamp(),
           });
         }
-        if (!existingTx.exists) {
+        if (!existingTx.exists && !deferLedger) {
           tx.set(ledgerRef, {
             ambulanceId: after.ambulanceId,
             requestId,
@@ -7069,6 +8838,13 @@ exports.cleanupStaleAmbulanceRequests = onSchedule({ schedule: "every 60 minutes
   if (staleSnap.empty) {
     _logAmbulance("INFO", "stale_cleanup_none_found");
     return;
+  }
+
+  // Backstop for the minute sweep: alert on anything that is about to be
+  // auto-cancelled without the admin ever having been told.
+  const alertCache = {};
+  for (const doc of staleSnap.docs) {
+    await _alertAdminIfAmbulanceUnaccepted(db, doc, doc.data(), alertCache).catch(() => {});
   }
 
   const { updated, skipped } = await _expireStaleDocs(staleSnap.docs, { status: "cancelled", updatedAt: FieldValue.serverTimestamp() });
@@ -7274,10 +9050,10 @@ exports.onCaregiverServiceRequestCreated = onDocumentCreated(
 
     if (pinnedCaregiverId) {
       await _sendProviderNotification(db, getMessaging(), pinnedCaregiverId, {
-        title: isCareAssistant ? "New Care Request" : "New Visit Assigned",
+        title: isCareAssistant ? "New Care Request" : "New Visit Request",
         body: isCareAssistant
           ? `${(data.patientName || "A patient").split(" ")[0]} requested you. Open the app to accept.`
-          : `A new ${data.serviceName || "nurse"} visit has been assigned to you.`,
+          : `${(data.patientName || "A patient").split(" ")[0]} requested a ${data.serviceName || "nurse"} visit with you. Open the app to accept.`,
         type: "new_caregiver_visit", serviceType: "caregiver", bookingId: requestId,
       });
     } else {
@@ -7367,18 +9143,52 @@ exports.onCaregiverVisitStatusChange = onDocumentUpdated(
           });
         }
       }
+      // Provider cancelled a visit they had ALREADY accepted (not yet started):
+      // acceptedAt was cleared in the same write. The patient's booking goes
+      // back to 'pending' (it was 'accepted') and they are told we are finding
+      // another provider. No refund: the original payment stays on the booking
+      // and carries over to whoever takes the job next.
+      const cancelledAfterAccept = !!before.acceptedAt && !after.acceptedAt;
       const requestRef = db.collection("service_requests").doc(after.sourceRequestId || visitId);
-      await requestRef.update({
+      const unassign = {
         assignedTo: FieldValue.delete(),
         assignedToName: FieldValue.delete(),
         updatedAt: FieldValue.serverTimestamp(),
-      }).catch((err) => _logCaregiver("WARNING", "unassign_mirror_failed", { visitId, error: err.message }));
+      };
+      if (cancelledAfterAccept) {
+        const reqSnap = await requestRef.get().catch(() => null);
+        if (reqSnap && reqSnap.exists && reqSnap.data().status === "accepted") {
+          unassign.status = "pending";
+          // Lets the patient app show "<Role> cancelled. We're finding another"
+          // with a Cancel option; a patient cancel from this 'pending' state is
+          // refunded in full by _applyCancelRefundPolicy (preAccept).
+          unassign.providerReleasedAt = FieldValue.serverTimestamp();
+          unassign.providerReleasedRole = isCareAssistant ? "care_assistant" : "nurse";
+          unassign.providerReleasedNote = "provider_cancelled";
+        }
+      }
+      await requestRef.update(unassign)
+        .catch((err) => _logCaregiver("WARNING", "unassign_mirror_failed", { visitId, error: err.message }));
+      if (cancelledAfterAccept && after.patientId) {
+        await _sendPatientNotification(db, getMessaging(), after.patientId, {
+          title: isCareAssistant ? "Care Assistant Unavailable" : "Nurse Unavailable",
+          body: `Your ${isCareAssistant ? "care assistant" : "nurse"} had to cancel. We are finding another for you — no action needed.`,
+          type: "caregiver_provider_cancelled",
+          serviceType: "caregiver",
+          bookingId: after.sourceRequestId || visitId,
+          actionType: "open_service",
+          extraData: { status: "pending" },
+        }).catch((err) => _logCaregiver("WARNING", "provider_cancel_patient_notify_failed", { visitId, error: err.message }));
+        _logCaregiver("INFO", "caregiver_visit_released_after_accept", { visitId, providerId: before.caregiverId });
+      }
       await _broadcastNewJobToActiveProviders(db, getMessaging(), {
         profileCollection: "caregiver_profiles",
-        title: "New Care Assistant Request",
-        body: "A patient needs a care assistant. Open the app to accept.",
+        title: isCareAssistant ? "New Care Assistant Request" : "New Visit Request Available",
+        body: isCareAssistant
+          ? "A patient needs a care assistant. Open the app to accept."
+          : "A nurse visit request is available to claim. Open the app to accept.",
         type: "new_caregiver_visit", serviceType: "caregiver", bookingId: visitId,
-        profileFilter: (d) => _caregiverServiceType(d.data()) === "care_assistant",
+        profileFilter: (d) => (_caregiverServiceType(d.data()) === "care_assistant") === isCareAssistant,
         excludeIds: after.declinedBy || [],
       });
     }
@@ -7394,6 +9204,10 @@ exports.onCaregiverVisitStatusChange = onDocumentUpdated(
       if (statusChanged && mappedStatus) update.status = mappedStatus;
       if ((claimChanged || acceptedNow) && after.caregiverId) {
         update.assignedTo = after.caregiverId;
+        // A new provider took the job: drop the "provider cancelled" banner.
+        update.providerReleasedAt = FieldValue.delete();
+        update.providerReleasedRole = FieldValue.delete();
+        update.providerReleasedNote = FieldValue.delete();
         // Human-readable name so the patient app can show who accepted.
         const providerName = await _providerDisplayName(db, "caregiver_profiles", after.caregiverId);
         if (providerName) update.assignedToName = providerName;
@@ -7411,6 +9225,10 @@ exports.onCaregiverVisitStatusChange = onDocumentUpdated(
         // check-in must never drag 'in_progress' backwards to 'accepted'.
         if (update.assignedTo && !update.status && currentData?.status === "pending" &&
             // A pinned care-assistant job must wait for their explicit Accept.
+            // (A pinned nurse job also waits: it is born pinned, so no claim
+            // edge fires and only the acceptedAt stamp reaches here. A nurse
+            // claiming from the open pool, incl. legacy builds that claim
+            // without acceptedAt, is still accepted immediately.)
             (!isCareAssistant || after.acceptedAt)) {
           update.status = "accepted";
         }
@@ -7459,7 +9277,9 @@ exports.onCaregiverVisitStatusChange = onDocumentUpdated(
         sourceCollection: "service_requests",
         sourceId: after.sourceRequestId || visitId,
         providerId: after.caregiverId,
-        serviceType: "caregiver",
+        // Care assistants can carry their own commission rule; the settlement
+        // helpers fall back to the 'caregiver' rule until one is configured.
+        serviceType: isCareAssistant ? "care_assistant" : "caregiver",
       });
     }
 
@@ -7701,7 +9521,7 @@ function _buildSessionDoc(data, providerIdField) {
     sourceRequestId: null, // overwritten by the caller with the real requestId
     type: data.type,
     sessionTitle: details.title || details.sessionType || data.serviceName || "Session",
-    price: details.price ?? data.amount ?? 0,
+    price: data.amount ?? details.price ?? 0,
     amount: data.amount ?? details.price ?? 0,
     patientId: data.patientId,
     patientName: data.patientName || "Patient",
@@ -7753,11 +9573,17 @@ exports.onPhysioServiceRequestCreated = onDocumentCreated(
     // status change happens to fire an update.
     if (sessionDoc.physiotherapistId) {
       const providerName = await _providerDisplayName(db, "physiotherapist_profiles", sessionDoc.physiotherapistId);
-      await snap.ref.update({
-        status: "accepted",
-        assignedTo: sessionDoc.physiotherapistId,
-        ...(providerName ? { assignedToName: providerName } : {}),
-        updatedAt: FieldValue.serverTimestamp(),
+      // Skipped when the slot index already cancelled this booking (lost a
+      // slot race) so a late 'accepted' can't resurrect it.
+      await db.runTransaction(async (tx) => {
+        const cur = await tx.get(snap.ref);
+        if (cur.exists && cur.data().status === "cancelled") return;
+        tx.update(snap.ref, {
+          status: "accepted",
+          assignedTo: sessionDoc.physiotherapistId,
+          ...(providerName ? { assignedToName: providerName } : {}),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
       }).catch((err) => {
         _logPhysio("ERROR", "preassigned_service_request_mirror_failed", { requestId, error: err.message });
       });
@@ -7953,11 +9779,17 @@ exports.onCounsellingServiceRequestCreated = onDocumentCreated(
     // here.
     if (sessionDoc.counsellorId) {
       const providerName = await _providerDisplayName(db, "counsellor_profiles", sessionDoc.counsellorId);
-      await snap.ref.update({
-        status: "accepted",
-        assignedTo: sessionDoc.counsellorId,
-        ...(providerName ? { assignedToName: providerName } : {}),
-        updatedAt: FieldValue.serverTimestamp(),
+      // Skipped when the slot index already cancelled this booking (lost a
+      // slot race) so a late 'accepted' can't resurrect it.
+      await db.runTransaction(async (tx) => {
+        const cur = await tx.get(snap.ref);
+        if (cur.exists && cur.data().status === "cancelled") return;
+        tx.update(snap.ref, {
+          status: "accepted",
+          assignedTo: sessionDoc.counsellorId,
+          ...(providerName ? { assignedToName: providerName } : {}),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
       }).catch((err) => {
         _logCounselling("ERROR", "preassigned_service_request_mirror_failed", { requestId, error: err.message });
       });
@@ -8135,9 +9967,92 @@ exports.cleanupStaleCounsellingSessions = onSchedule({ schedule: "every 60 minut
 // 'pending') -> admin approves -> this mirror publishes it into the
 // patient-facing `nutritionists/{uid}` catalogue. Same 1:1-doc mirror shape
 // as `onCaregiverProfileWriteForVisibility` (no subcollection involved).
+// Weekly schedule -> the shape the patient app's NutritionistModel reads.
+// `availability` (written straight by the dietician's Availability screen,
+// same shape as doctors/{uid}.availability) is
+//   { slotDuration, schedule: { Mon: {enabled,start:"HH:MM",end:"HH:MM"}, ... },
+//     blockedSlots: { "yyyy-MM-dd": ["09:00 AM", ...] }, clinicName, clinicAddress }
+// and slot labels are zero-padded "HH:MM AM" — identical to the doctor flow.
+const _NUTRITION_DAYS = [
+  ["Mon", "Monday"], ["Tue", "Tuesday"], ["Wed", "Wednesday"], ["Thu", "Thursday"],
+  ["Fri", "Friday"], ["Sat", "Saturday"], ["Sun", "Sunday"],
+];
+
+function _nutritionSlotLabel(mins) {
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  const period = h < 12 ? "AM" : "PM";
+  const dh = h === 0 ? 12 : (h > 12 ? h - 12 : h);
+  return `${String(dh).padStart(2, "0")}:${String(m).padStart(2, "0")} ${period}`;
+}
+
+function _nutritionDaySlots(dayCfg, slotDuration) {
+  if (!dayCfg || dayCfg.enabled !== true) return [];
+  const dur = Number(slotDuration) >= 5 ? Number(slotDuration) : 30;
+  const [sh, sm] = String(dayCfg.start || "09:00").split(":").map(Number);
+  const [eh, em] = String(dayCfg.end || "17:00").split(":").map(Number);
+  if ([sh, sm, eh, em].some((n) => Number.isNaN(n))) return [];
+  const startMins = sh * 60 + sm;
+  const endMins = eh * 60 + em;
+  const out = [];
+  for (let m = startMins; m + dur <= endMins; m += dur) out.push(_nutritionSlotLabel(m));
+  return out;
+}
+
+function _nutritionAvailabilityMirror(profile) {
+  const avail = profile.availability;
+  const mirror = {
+    isOnlineAvailable: profile.isOnlineAvailable !== false,
+    isInPersonAvailable: profile.isInPersonAvailable === true,
+    clinicName: (avail && avail.clinicName) || "",
+    clinicAddress: (avail && avail.clinicAddress) || "",
+    availableDays: [],
+    slots: {},
+    blockedSlots: {},
+    slotDuration: 30,
+    // false => the dietician never published a schedule: the patient app keeps
+    // its legacy default slots instead of showing "not available" every day.
+    scheduleConfigured: false,
+  };
+  if (!avail || typeof avail.schedule !== "object" || avail.schedule === null) return mirror;
+  mirror.scheduleConfigured = true;
+  mirror.slotDuration = Number(avail.slotDuration) >= 5 ? Number(avail.slotDuration) : 30;
+  for (const [short, full] of _NUTRITION_DAYS) {
+    const daySlots = _nutritionDaySlots(avail.schedule[short], mirror.slotDuration);
+    if (daySlots.length) {
+      mirror.slots[full] = daySlots;
+      mirror.availableDays.push(full);
+    }
+  }
+  // Only upcoming blocked dates are useful to patients; keeps the doc small.
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const blocked = avail.blockedSlots;
+  if (blocked && typeof blocked === "object") {
+    for (const [date, list] of Object.entries(blocked)) {
+      if (date >= todayKey && Array.isArray(list) && list.length) mirror.blockedSlots[date] = list.map(String);
+    }
+  }
+  return mirror;
+}
+
+// True when `timeSlot` on `date` is a real, unblocked slot of the dietician's
+// published schedule. No schedule published => legacy default slots, allow.
+function _nutritionSlotAllowed(profile, date, timeSlot) {
+  const avail = profile && profile.availability;
+  if (!avail || typeof avail.schedule !== "object" || avail.schedule === null) return true;
+  const d = new Date(`${date}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return false;
+  const short = _NUTRITION_DAYS[(d.getUTCDay() + 6) % 7][0];
+  const slots = _nutritionDaySlots(avail.schedule[short], avail.slotDuration);
+  if (!slots.includes(timeSlot)) return false;
+  const blocked = avail.blockedSlots && avail.blockedSlots[date];
+  return !(Array.isArray(blocked) && blocked.includes(timeSlot));
+}
+
 function _nutritionistListingDoc(profile, existingCreatedAt) {
   return {
     name: profile.name || "Nutritionist",
+    photoUrl: profile.photoUrl || "",
     qualification: profile.qualification || "",
     specialization: profile.specialization || "",
     experienceYears: profile.experienceYears ?? 0,
@@ -8153,12 +10068,11 @@ function _nutritionistListingDoc(profile, existingCreatedAt) {
     // the partner's online/offline toggle so the patient app can badge it.
     isAvailable: true,
     isOnline: profile.isOnline === true,
-    isOnlineAvailable: true,
-    isInPersonAvailable: false,
     languages: profile.languages || [],
     expertiseAreas: [],
-    availableDays: [],
-    slots: {},
+    // isOnlineAvailable / isInPersonAvailable / clinicName / clinicAddress /
+    // availableDays / slots / blockedSlots / slotDuration / scheduleConfigured
+    ..._nutritionAvailabilityMirror(profile),
     createdAt: existingCreatedAt || FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   };
@@ -8184,10 +10098,11 @@ exports.onNutritionistProfileWriteForVisibility = onDocumentWritten(
     }
 
     const existing = await listingRef.get();
-    await listingRef.set(
-      _nutritionistListingDoc(profile, existing.exists ? existing.data().createdAt : null),
-      { merge: true },
-    );
+    const listing = _nutritionistListingDoc(profile, existing.exists ? existing.data().createdAt : null);
+    // mergeFields (not a plain merge) so `slots`/`blockedSlots` are REPLACED:
+    // a plain merge deep-merges maps and would keep a day the dietician has
+    // since switched off.
+    await listingRef.set(listing, { mergeFields: Object.keys(listing) });
   }
 );
 
@@ -8229,6 +10144,163 @@ exports.onNutritionAppointmentCreated = onDocumentCreated(
   }
 );
 
+// ── Public "taken slot" index for nutrition appointments ─────────────────────
+// The booking screen used to query nutrition_appointments by nutritionistId to
+// grey out taken slots, but a patient is (rightly) not allowed to read other
+// patients' appointments, so that query was always permission-denied and every
+// slot looked free. `nutrition_slots/{nutritionistId}_{date}_{time}` holds only
+// nutritionistId/date/time and is server-written (firestore.rules: read-only
+// for signed-in users). A slot is held while the appointment is
+// pending/confirmed/in_progress.
+function _nutritionSlotOf(appt) {
+  if (!appt || !["pending", "confirmed", "in_progress"].includes(appt.status)) return null;
+  if (!appt.nutritionistId || !appt.date || !appt.timeSlot) return null;
+  return {
+    key: _slotKey(appt.nutritionistId, appt.date, appt.timeSlot),
+    nutritionistId: appt.nutritionistId, date: appt.date, timeSlot: appt.timeSlot,
+  };
+}
+
+exports.onNutritionAppointmentWrittenForSlots = onDocumentWritten(
+  "nutrition_appointments/{appointmentId}",
+  async (event) => {
+    const db = getFirestore();
+    const appointmentId = event.params.appointmentId;
+    const prev = _nutritionSlotOf(event.data.before?.exists ? event.data.before.data() : null);
+    const next = _nutritionSlotOf(event.data.after?.exists ? event.data.after.data() : null);
+    if (prev && next && prev.key === next.key) return;
+    const beforeData = event.data.before?.exists ? event.data.before.data() : null;
+    const afterData = event.data.after?.exists ? event.data.after.data() : null;
+    if (next) {
+      // Claim the new slot in one transaction (first to commit wins). Every
+      // booking path (direct write, capturePayment, reschedule) ends in a
+      // nutrition_appointments write, so this is the single place a slot is
+      // granted — same pattern as onAppointmentWrittenForSlots.
+      const slotRef = db.collection("nutrition_slots").doc(next.key);
+      let conflict = await db.runTransaction(async (tx) => {
+        const slotSnap = await tx.get(slotRef);
+        const holderId = slotSnap.exists ? slotSnap.data().appointmentId : null;
+        if (holderId && holderId !== appointmentId) {
+          const holder = await tx.get(db.collection("nutrition_appointments").doc(holderId));
+          if (holder.exists && _nutritionSlotOf(holder.data())?.key === next.key) return "taken";
+        }
+        tx.set(slotRef, {
+          nutritionistId: next.nutritionistId, date: next.date, timeSlot: next.timeSlot,
+          appointmentId, updatedAt: FieldValue.serverTimestamp(),
+        });
+        return null;
+      });
+      // A reschedule target must also be a real, unblocked slot of the
+      // dietician's published schedule (clients already filter this; the rules
+      // cannot read another doc cheaply, so it is enforced here).
+      if (!conflict && prev) {
+        const prof = await db.collection("nutritionist_profiles").doc(next.nutritionistId).get();
+        if (prof.exists && !_nutritionSlotAllowed(prof.data(), next.date, next.timeSlot)) {
+          conflict = "unavailable";
+          const mine = await slotRef.get();
+          if (mine.exists && mine.data().appointmentId === appointmentId) await slotRef.delete();
+        }
+      }
+      if (conflict) {
+        await _resolveNutritionSlotConflict(db, appointmentId, beforeData, afterData, prev, conflict);
+        return; // keep `prev` held: a rejected reschedule goes straight back to it
+      }
+    }
+    if (prev) {
+      const ref = db.collection("nutrition_slots").doc(prev.key);
+      await db.runTransaction(async (tx) => {
+        const snap = await tx.get(ref);
+        if (snap.exists && snap.data().appointmentId === appointmentId) tx.delete(ref);
+      });
+    }
+  }
+);
+
+// Losing side of a nutrition slot race. A reschedule into a taken/unavailable
+// slot is put back on its original date/time; a brand-new booking is
+// cancelled (cancelReason 'slot_taken') and auto-refunded if it was paid.
+async function _resolveNutritionSlotConflict(db, appointmentId, beforeData, afterData, prev, reason) {
+  const ref = db.collection("nutrition_appointments").doc(appointmentId);
+  const isReschedule = !!prev;
+  if (isReschedule) {
+    await ref.update({
+      date: beforeData.date,
+      timeSlot: beforeData.timeSlot,
+      slotConflictAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+  } else {
+    await ref.update({
+      status: "cancelled",
+      cancelledBy: "system",
+      cancelReason: "slot_taken",
+      slotConflictAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    await _autoRefundBooking(db, "nutrition_appointments", appointmentId,
+      "Slot was booked by another patient at the same moment");
+  }
+  console.log(JSON.stringify({
+    module: "nutrition_slots", event: isReschedule ? "reschedule_reverted" : "booking_cancelled_slot_taken",
+    reason, appointmentId, nutritionistId: afterData.nutritionistId, date: afterData.date, timeSlot: afterData.timeSlot,
+  }));
+  const taken = reason === "taken" ? "was just booked by someone else" : "is not available";
+  const msgNew = `${afterData.timeSlot} on ${afterData.date} ${taken}. Please pick another slot.`;
+  const msgKept = `${afterData.timeSlot} on ${afterData.date} ${taken}. The appointment stays at ${beforeData.timeSlot} on ${beforeData.date}.`;
+  // Tell whoever made the change (the other side never saw it succeed).
+  if (isReschedule && afterData.rescheduledBy === "provider") {
+    if (afterData.nutritionistId) {
+      await _sendProviderNotification(db, getMessaging(), afterData.nutritionistId, {
+        title: "Reschedule Not Possible", body: msgKept,
+        type: "nutrition_reschedule_conflict", serviceType: "nutrition", bookingId: appointmentId,
+      });
+    }
+    return;
+  }
+  if (!afterData.userId) return;
+  await _sendPatientNotification(db, getMessaging(), afterData.userId, {
+    title: isReschedule ? "Reschedule Not Possible" : "Slot No Longer Available",
+    body: isReschedule ? msgKept : msgNew,
+    type: isReschedule ? "nutrition_reschedule_conflict" : "nutrition_slot_conflict",
+    serviceType: "nutrition", bookingId: appointmentId, actionType: "open_service",
+  });
+}
+
+// Reschedule push to the other party. Keyed on `rescheduledAt` changing (the
+// slot-conflict revert does not touch it, so a bounced reschedule is silent
+// here and only the conflict notification above is sent).
+exports.onNutritionAppointmentRescheduled = onDocumentUpdated(
+  "nutrition_appointments/{appointmentId}",
+  async (event) => {
+    const before = event.data.before.data();
+    const after = event.data.after.data();
+    const tb = before.rescheduledAt?.toMillis?.() ?? null;
+    const ta = after.rescheduledAt?.toMillis?.() ?? null;
+    if (ta === null || ta === tb) return;
+    if (before.date === after.date && before.timeSlot === after.timeSlot) return;
+    if (!["pending", "confirmed"].includes(after.status)) return;
+    const db = getFirestore();
+    const messaging = getMessaging();
+    const appointmentId = event.params.appointmentId;
+    const when = `${after.date || ""} at ${after.timeSlot || ""}`.trim();
+    if (after.rescheduledBy === "provider") {
+      if (!after.userId) return;
+      await _sendPatientNotification(db, messaging, after.userId, {
+        title: "Appointment Rescheduled",
+        body: `${after.nutritionistName || "Your dietician"} moved your appointment to ${when}.`,
+        type: "nutrition_rescheduled", serviceType: "nutrition", bookingId: appointmentId,
+        actionType: "open_service", extraData: { status: after.status },
+      });
+    } else if (after.nutritionistId) {
+      await _sendProviderNotification(db, messaging, after.nutritionistId, {
+        title: "Appointment Rescheduled",
+        body: `${after.userName || "A patient"} moved their appointment to ${when}.`,
+        type: "nutrition_rescheduled", serviceType: "nutrition", bookingId: appointmentId,
+      });
+    }
+  }
+);
+
 // ── Nutrition status -> patient push ─────────────────────────────────────────
 // Patients read nutrition_appointments directly (no mirror), so the screen is
 // already live; this adds the push every other vertical sends. A cancel also
@@ -8239,6 +10311,8 @@ exports.onNutritionAppointmentStatusChange = onDocumentUpdated(
     const before = event.data.before.data();
     const after  = event.data.after.data();
     if (before.status === after.status) return;
+    // Slot-race loser: _resolveNutritionSlotConflict sends the one message that explains it.
+    if (after.status === "cancelled" && after.cancelReason === "slot_taken") return;
     const db = getFirestore();
     const messaging = getMessaging();
     const appointmentId = event.params.appointmentId;
@@ -8441,6 +10515,63 @@ exports.onHospitalAppointmentStatusChange = onDocumentUpdated(
 );
 
 // ══════════════════════════════════════════════════════════════════════════
+// ── Physio / Counselling availability (slot publishing) ─────────────────────
+// Partners write `availability: {slotDuration, schedule, blockedSlots}` on their
+// own profile doc — exactly the shape `doctors/{uid}.availability` uses (see
+// mednu_doctor availability_screen.dart). It is mirrored onto the public
+// listing doc (`physiotherapists`/`counsellors`) together with `availableDays`
+// (enabled weekday names) and `slots` ({Mon: ['09:00 AM', ...]}, labels
+// zero-padded 'HH:MM AM', blocked-by-date slots NOT applied there — those are
+// date-specific and live in `availability.blockedSlots`).
+const _THERAPY_WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+function _slotLabel(totalMins) {
+  const h = Math.floor(totalMins / 60);
+  const m = totalMins % 60;
+  const period = h < 12 ? "AM" : "PM";
+  const dh = h === 0 ? 12 : (h > 12 ? h - 12 : h);
+  return `${String(dh).padStart(2, "0")}:${String(m).padStart(2, "0")} ${period}`;
+}
+
+function _therapyAvailabilityOf(profile) {
+  const avail = profile && profile.availability;
+  if (!avail || typeof avail !== "object") return null;
+  const schedule = avail.schedule;
+  if (!schedule || typeof schedule !== "object") return null;
+  const slotDuration = Number(avail.slotDuration) > 0 ? Number(avail.slotDuration) : 30;
+  const slots = {};
+  const days = [];
+  for (const day of _THERAPY_WEEKDAYS) {
+    const ds = schedule[day];
+    if (!ds || ds.enabled !== true) continue;
+    const sp = String(ds.start || "09:00").split(":").map(Number);
+    const ep = String(ds.end || "17:00").split(":").map(Number);
+    if (sp.length < 2 || ep.length < 2 || sp.some(isNaN) || ep.some(isNaN)) continue;
+    const start = sp[0] * 60 + sp[1];
+    const end = ep[0] * 60 + ep[1];
+    const list = [];
+    for (let m = start; m + slotDuration <= end; m += slotDuration) list.push(_slotLabel(m));
+    if (!list.length) continue;
+    days.push(day);
+    slots[day] = list;
+  }
+  return { availability: avail, availableDays: days, slots };
+}
+
+// `set(..., {merge:true})` deep-merges maps, so a removed blockedSlots date
+// would linger on the listing; availability is therefore written with
+// `update` (which replaces the field wholesale) and only when it changed.
+async function _syncTherapyListingAvailability(listingRef, profile, existingListing) {
+  const next = _therapyAvailabilityOf(profile);
+  const prevJson = JSON.stringify(existingListing && existingListing.availability || null);
+  const nextJson = JSON.stringify(next ? next.availability : null);
+  if (prevJson === nextJson) return;
+  await listingRef.update(next
+    ? { availability: next.availability, availableDays: next.availableDays, slots: next.slots }
+    : { availability: FieldValue.delete(), availableDays: [], slots: {} });
+}
+
+// ══════════════════════════════════════════════════════════════════════════
 // ── Physiotherapist public catalogue mirror ──────────────────────────────────
 //
 // Physiotherapy already has a live booking pipeline (service_requests[type
@@ -8514,6 +10645,7 @@ exports.onPhysiotherapistProfileWriteForVisibility = onDocumentWritten(
       _physiotherapistListingDoc(profile, existing.exists ? existing.data().createdAt : null),
       { merge: true },
     );
+    await _syncTherapyListingAvailability(listingRef, profile, existing.exists ? existing.data() : null);
   }
 );
 // ══════════════════════════════════════════════════════════════════════════
@@ -8578,7 +10710,256 @@ exports.onCounsellorProfileWriteForVisibility = onDocumentWritten(
       _counsellorListingDoc(profile, existing.exists ? existing.data().createdAt : null),
       { merge: true },
     );
+    await _syncTherapyListingAvailability(listingRef, profile, existing.exists ? existing.data() : null);
   }
+);
+// ══════════════════════════════════════════════════════════════════════════
+
+// ══════════════════════════════════════════════════════════════════════════
+// ── Physio / Counselling: public slot index + reschedule mirror ─────────────
+// `physio_slots` / `counselling_slots` /{providerId}_{yyyy-MM-dd}_{HH-MM-AM}
+// hold only providerId/date/time (+ owning sessionId): the patient booking
+// picker reads them to grey out taken slots without being able to read other
+// patients' sessions. Server-written only (firestore.rules). A slot is held
+// while the session is pending/accepted/in_progress with a provider assigned.
+// Slots are only enforced for providers who have published availability, so a
+// provider on the free-text fallback never has a booking cancelled by it.
+const _THERAPY_SLOT_CFG = {
+  physio_sessions: {
+    sessions: "physio_sessions", slots: "physio_slots", providerField: "physiotherapistId",
+    profiles: "physiotherapist_profiles", serviceType: "physiotherapy", noun: "physiotherapy session",
+  },
+  counselling_sessions: {
+    sessions: "counselling_sessions", slots: "counselling_slots", providerField: "counsellorId",
+    profiles: "counsellor_profiles", serviceType: "counselling", noun: "counselling session",
+  },
+};
+
+// Patient app writes 'd/M/yyyy' (ServiceBookingSheet); partner/web may write
+// 'yyyy-MM-dd'. Both normalise to ISO so one slot has exactly one key.
+function _therapyDateIso(raw) {
+  const s = String(raw || "").trim();
+  let y; let mo; let d;
+  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (m) { y = +m[1]; mo = +m[2]; d = +m[3]; } else {
+    m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (!m) return null;
+    d = +m[1]; mo = +m[2]; y = +m[3];
+  }
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+  return `${y}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
+// '10:00 AM' / '9:00 am' / '14:30' (also with U+202F before AM/PM) -> '10:00 AM'.
+function _therapyTimeLabel(raw) {
+  const s = String(raw || "").replace(/[  ]/g, " ").trim();
+  const m = s.match(/^(\d{1,2}):(\d{2})\s*([AaPp][Mm])?$/);
+  if (!m) return null;
+  let h = +m[1];
+  const min = +m[2];
+  if (min > 59) return null;
+  if (m[3]) {
+    const pm = m[3].toUpperCase() === "PM";
+    if (h < 1 || h > 12) return null;
+    if (pm && h !== 12) h += 12;
+    if (!pm && h === 12) h = 0;
+  } else if (h > 23) return null;
+  return _slotLabel(h * 60 + min);
+}
+
+function _therapySlotOf(s, cfg) {
+  if (!s || !["pending", "accepted", "in_progress"].includes(s.status)) return null;
+  const providerId = s[cfg.providerField];
+  if (!providerId) return null;
+  const date = _therapyDateIso(s.preferredDate);
+  const time = _therapyTimeLabel(s.preferredTime);
+  if (!date || !time) return null;
+  return { key: _slotKey(providerId, date, time), providerId, date, time };
+}
+
+async function _therapySlotHandler(event, cfg) {
+  const db = getFirestore();
+  const sessionId = event.params.sessionId;
+  const beforeData = event.data.before?.exists ? event.data.before.data() : null;
+  const afterData = event.data.after?.exists ? event.data.after.data() : null;
+  const prev = _therapySlotOf(beforeData, cfg);
+  const next = _therapySlotOf(afterData, cfg);
+  if (prev && next && prev.key === next.key) return;
+
+  if (next) {
+    const prof = await db.collection(cfg.profiles).doc(next.providerId).get();
+    const published = prof.exists && !!_therapyAvailabilityOf(prof.data());
+    if (published) {
+      const slotRef = db.collection(cfg.slots).doc(next.key);
+      const conflict = await db.runTransaction(async (tx) => {
+        const slotSnap = await tx.get(slotRef);
+        const holderId = slotSnap.exists ? slotSnap.data().sessionId : null;
+        if (holderId && holderId !== sessionId) {
+          const holder = await tx.get(db.collection(cfg.sessions).doc(holderId));
+          if (holder.exists && _therapySlotOf(holder.data(), cfg)?.key === next.key) return true;
+        }
+        tx.set(slotRef, {
+          providerId: next.providerId, date: next.date, time: next.time, sessionId,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+        return false;
+      });
+      if (conflict) {
+        if (prev) await _therapyRevertReschedule(db, cfg, sessionId, beforeData, afterData);
+        else if (!beforeData) await _therapyCancelSlotLoser(db, cfg, sessionId, afterData);
+        // else: a pool job claimed by a provider whose slot is already taken —
+        // left alone (no slot held) rather than cancelling a confirmed job.
+        return;
+      }
+    }
+  }
+
+  if (prev) {
+    const ref = db.collection(cfg.slots).doc(prev.key);
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (snap.exists && snap.data().sessionId === sessionId) tx.delete(ref);
+    });
+  }
+}
+
+// Loser of a brand-new booking race: cancelled by the system; the status
+// mirror then cancels the service request and auto-refunds a paid booking.
+async function _therapyCancelSlotLoser(db, cfg, sessionId, afterData) {
+  await db.collection(cfg.sessions).doc(sessionId).update({
+    status: "cancelled", cancelledBy: "system", cancelReason: "slot_taken",
+    slotConflictAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+  });
+  console.log(JSON.stringify({ module: cfg.slots, event: "booking_cancelled_slot_taken", sessionId }));
+  if (!afterData.patientId) return;
+  await _sendPatientNotification(db, getMessaging(), afterData.patientId, {
+    title: "Slot Just Taken",
+    body: `Someone booked ${afterData.preferredTime} on ${afterData.preferredDate} a moment before you. Please pick another time${afterData.paymentId ? " — your payment is being refunded" : ""}.`,
+    type: `${cfg.serviceType}_slot_taken`, serviceType: cfg.serviceType, bookingId: sessionId, actionType: "open_service",
+  }).catch(() => {});
+}
+
+// A reschedule into a taken slot goes back to the original date/time.
+async function _therapyRevertReschedule(db, cfg, sessionId, beforeData, afterData) {
+  await db.collection(cfg.sessions).doc(sessionId).update({
+    preferredDate: beforeData.preferredDate || "",
+    preferredTime: beforeData.preferredTime || "",
+    rescheduledAt: beforeData.rescheduledAt ?? FieldValue.delete(),
+    rescheduledBy: beforeData.rescheduledBy ?? FieldValue.delete(),
+    slotConflictAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  console.log(JSON.stringify({ module: cfg.slots, event: "reschedule_reverted", sessionId }));
+  const opts = {
+    title: "Reschedule Not Possible",
+    body: `${afterData.preferredTime} on ${afterData.preferredDate} was just booked by someone else. The ${cfg.noun} stays at ${beforeData.preferredTime} on ${beforeData.preferredDate}.`,
+    type: `${cfg.serviceType}_reschedule_conflict`, serviceType: cfg.serviceType, bookingId: sessionId,
+  };
+  if (afterData.rescheduledBy === "provider") {
+    await _sendProviderNotification(db, getMessaging(), afterData[cfg.providerField], opts).catch(() => {});
+  } else if (afterData.patientId) {
+    await _sendPatientNotification(db, getMessaging(), afterData.patientId, { ...opts, actionType: "open_service" }).catch(() => {});
+  }
+}
+
+exports.onPhysioSessionWrittenForSlots = onDocumentWritten(
+  "physio_sessions/{sessionId}",
+  (event) => _therapySlotHandler(event, _THERAPY_SLOT_CFG.physio_sessions),
+);
+exports.onCounsellingSessionWrittenForSlots = onDocumentWritten(
+  "counselling_sessions/{sessionId}",
+  (event) => _therapySlotHandler(event, _THERAPY_SLOT_CFG.counselling_sessions),
+);
+
+// Patient reschedule: service_requests -> session (the rules only let a patient
+// touch preferredDate/preferredTime/rescheduledAt/rescheduledBy on a
+// pending/accepted request). If the session has already started the request is
+// put back to the session's values.
+exports.onTherapyServiceRequestRescheduled = onDocumentUpdated(
+  "service_requests/{requestId}",
+  async (event) => {
+    const before = event.data.before.data();
+    const after = event.data.after.data();
+    if (after.type !== "physiotherapy" && after.type !== "counselling") return;
+    if (before.preferredDate === after.preferredDate && before.preferredTime === after.preferredTime) return;
+    if (after.rescheduledBy !== "patient") return;
+
+    const cfg = after.type === "physiotherapy" ? _THERAPY_SLOT_CFG.physio_sessions : _THERAPY_SLOT_CFG.counselling_sessions;
+    const db = getFirestore();
+    const requestId = event.params.requestId;
+    const sessionRef = db.collection(cfg.sessions).doc(requestId);
+
+    const result = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(sessionRef);
+      if (!snap.exists) return null;
+      const s = snap.data();
+      if (!["pending", "accepted"].includes(s.status)) return { revert: s };
+      if (s.preferredDate === after.preferredDate && s.preferredTime === after.preferredTime) return null;
+      tx.update(sessionRef, {
+        preferredDate: after.preferredDate || "", preferredTime: after.preferredTime || "",
+        rescheduledAt: after.rescheduledAt || FieldValue.serverTimestamp(), rescheduledBy: "patient",
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      return { providerId: s[cfg.providerField] || null };
+    });
+    if (!result) return;
+    if (result.revert) {
+      await event.data.after.ref.update({
+        preferredDate: result.revert.preferredDate || "", preferredTime: result.revert.preferredTime || "",
+        rescheduledAt: FieldValue.delete(), rescheduledBy: FieldValue.delete(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      return;
+    }
+    if (result.providerId) {
+      await _sendProviderNotification(db, getMessaging(), result.providerId, {
+        title: "Session Rescheduled",
+        body: `${after.patientName || "A patient"} moved their ${cfg.noun} to ${after.preferredDate} at ${after.preferredTime}.`,
+        type: `${cfg.serviceType}_rescheduled`, serviceType: cfg.serviceType, bookingId: requestId,
+      }).catch(() => {});
+    }
+  }
+);
+
+// Provider reschedule (and conflict reverts): session -> service_requests, then
+// tell the patient. Idempotent: does nothing when the request already matches.
+async function _therapySessionRescheduleMirror(event, cfg) {
+  const before = event.data.before.data();
+  const after = event.data.after.data();
+  if (before.preferredDate === after.preferredDate && before.preferredTime === after.preferredTime) return;
+  const db = getFirestore();
+  const sessionId = event.params.sessionId;
+  const requestRef = db.collection("service_requests").doc(after.sourceRequestId || sessionId);
+
+  const mirrored = await db.runTransaction(async (tx) => {
+    const snap = await tx.get(requestRef);
+    if (!snap.exists) return false;
+    const r = snap.data();
+    if (r.preferredDate === after.preferredDate && r.preferredTime === after.preferredTime) return false;
+    tx.update(requestRef, {
+      preferredDate: after.preferredDate || "", preferredTime: after.preferredTime || "",
+      rescheduledAt: after.rescheduledAt ?? FieldValue.delete(),
+      rescheduledBy: after.rescheduledBy ?? FieldValue.delete(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    return true;
+  });
+  const conflictRevert = String(after.slotConflictAt?.toMillis?.() || "") !== String(before.slotConflictAt?.toMillis?.() || "");
+  if (mirrored && after.rescheduledBy === "provider" && !conflictRevert && after.patientId) {
+    await _sendPatientNotification(db, getMessaging(), after.patientId, {
+      title: "Session Rescheduled",
+      body: `Your provider moved your ${cfg.noun} to ${after.preferredDate} at ${after.preferredTime}.`,
+      type: `${cfg.serviceType}_rescheduled`, serviceType: cfg.serviceType, bookingId: sessionId, actionType: "open_service",
+    }).catch(() => {});
+  }
+}
+exports.onPhysioSessionRescheduled = onDocumentUpdated(
+  "physio_sessions/{sessionId}",
+  (event) => _therapySessionRescheduleMirror(event, _THERAPY_SLOT_CFG.physio_sessions),
+);
+exports.onCounsellingSessionRescheduled = onDocumentUpdated(
+  "counselling_sessions/{sessionId}",
+  (event) => _therapySessionRescheduleMirror(event, _THERAPY_SLOT_CFG.counselling_sessions),
 );
 // ══════════════════════════════════════════════════════════════════════════
 
@@ -8799,15 +11180,20 @@ async function _notifyPartnerApproved(db, messaging, role, uid, before, after) {
     data: {},
   }).catch((err) => console.error(`Failed to write provider_notifications for ${role} ${uid}:`, err.message));
 
-  const fcmToken = after.fcmToken;
-  if (!fcmToken) {
-    console.log(`No fcmToken on ${role}_profiles/${uid} — approval push skipped`);
+  // Freshest token across doctors/{uid} + all role profiles (falls back to the
+  // profile's own token if the lookup finds nothing).
+  let tokenCandidates = [];
+  try { tokenCandidates = await _providerTokenCandidates(db, uid); } catch (_) {}
+  if (!tokenCandidates.length && after.fcmToken) {
+    tokenCandidates = [{ token: after.fcmToken, ms: 0, order: 0, refs: [db.collection(`${role}_profiles`).doc(uid)] }];
+  }
+  if (!tokenCandidates.length) {
+    console.log(`No fcmToken for ${role} partner ${uid} — approval push skipped`);
     return;
   }
 
   try {
-    await messaging.send({
-      token: fcmToken,
+    await _sendToProviderCandidates(messaging, tokenCandidates, {
       data: { type: "partner_approved", role },
       android: {
         priority: "high",
@@ -8831,8 +11217,8 @@ async function _notifyPartnerApproved(db, messaging, role, uid, before, after) {
           aps: { alert: { title, body }, sound: "default", badge: 1 },
         },
       },
-    });
-    console.log(`Approval push sent → ${role} partner ${uid}`);
+    }, `${role} partner ${uid}`);
+    console.log(`Approval push attempted → ${role} partner ${uid}`);
   } catch (err) {
     console.error(`Approval push failed for ${role} partner ${uid}:`, err.message);
   }

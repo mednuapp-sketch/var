@@ -5,6 +5,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/services/feedback_service.dart';
 import '../../../core/widgets/ux_widgets.dart';
+import '../../../core/widgets/provider_availability.dart';
 import '../models/cart_item.dart';
 import '../providers/cart_provider.dart';
 import '../providers/pending_prescription_provider.dart';
@@ -20,6 +21,27 @@ class CartScreen extends ConsumerStatefulWidget {
 class _CartScreenState extends ConsumerState<CartScreen> {
   bool _checkingOut = false;
 
+  /// Cart items whose partner (pharmacy / lab / equipment vendor) has paused
+  /// new orders since the item was added. Checkout is blocked until removed.
+  List<CartItem> _blockedItems(List<CartItem> items) {
+    final pharmacies = ref.read(unavailablePharmacyIdsProvider).valueOrNull ?? const <String>{};
+    final labs = ref.read(unavailableLabIdsProvider).valueOrNull ?? const <String>{};
+    final vendors = ref.read(unavailableEquipmentVendorIdsProvider).valueOrNull ?? const <String>{};
+    return items.where((i) {
+      final d = i.serviceDetails;
+      if (i.type == 'medicine') return pharmacies.contains(d['sourcePharmacyId']);
+      if (i.type == 'diagnostics') return labs.contains(d['sourceLabId']);
+      if (i.type == 'equipment') return vendors.contains(d['sourceVendorId']);
+      return false;
+    }).toList();
+  }
+
+  static String _providerLabel(CartItem i) {
+    final d = i.serviceDetails;
+    final name = (i.type == 'medicine' ? d['pharmacyName'] : i.type == 'diagnostics' ? d['labName'] : d['vendorName']);
+    return (name is String && name.isNotEmpty) ? name : 'this provider';
+  }
+
   Future<void> _checkout() async {
     // Guard the whole flow, not just the post-payment writes — the details
     // sheet and the payment screen are both awaited, so without this a fast
@@ -27,6 +49,10 @@ class _CartScreenState extends ConsumerState<CartScreen> {
     if (_checkingOut) return;
     final items = ref.read(cartProvider);
     if (items.isEmpty) return;
+    if (_blockedItems(items).isNotEmpty) {
+      FeedbackService.showError(context, "Some items are from a provider that isn't accepting orders right now. Remove them to continue.");
+      return;
+    }
 
     setState(() => _checkingOut = true);
 
@@ -73,6 +99,15 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                   : item.serviceDetails,
               if (item.type == 'equipment' && item.serviceDetails['sourceItemId'] != null)
                 'vendorId': item.serviceDetails['sourceVendorId'],
+              // A specific physiotherapist chosen in physio_screen.dart is only
+              // stored inside serviceDetails; the physio mirror trigger
+              // (_buildSessionDoc in functions/index.js) reads it from the
+              // TOP LEVEL of the service_requests doc, so without this the
+              // patient's chosen physiotherapist was silently dropped and the
+              // session went to the open pool. Also used for commission
+              // attribution (_PROVIDER_FIELD_BY_SERVICE.physiotherapy).
+              if (item.type == 'physiotherapy' && item.serviceDetails['physiotherapistId'] != null)
+                'physiotherapistId': item.serviceDetails['physiotherapistId'],
               'amount': item.totalAmount,
               'status': 'pending',
               'assignedTo': null,
@@ -171,6 +206,11 @@ class _CartScreenState extends ConsumerState<CartScreen> {
   Widget build(BuildContext context) {
     final items = ref.watch(cartProvider);
     final total = ref.watch(cartTotalProvider);
+    // Watched here so the banner / checkout state rebuild live when a partner
+    // flips its switch; _blockedItems reads the same providers.
+    ref.watch(unavailablePharmacyIdsProvider);
+    ref.watch(unavailableLabIdsProvider);
+    ref.watch(unavailableEquipmentVendorIdsProvider);
 
     return Scaffold(
       backgroundColor: context.appBackground,
@@ -181,7 +221,27 @@ class _CartScreenState extends ConsumerState<CartScreen> {
         actions: [
           if (items.isNotEmpty)
             TextButton(
-              onPressed: () => ref.read(cartProvider.notifier).clear(),
+              onPressed: () async {
+                final ok = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    title: const Text('Clear cart?', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 17)),
+                    content: const Text('All items will be removed from your cart.', style: TextStyle(fontFamily: 'Poppins', fontSize: 14)),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        child: const Text('Cancel', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600)),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx, true),
+                        child: const Text('Clear', style: TextStyle(fontFamily: 'Poppins', color: AppColors.error, fontWeight: FontWeight.w600)),
+                      ),
+                    ],
+                  ),
+                );
+                if (ok == true && mounted) ref.read(cartProvider.notifier).clear();
+              },
               child: const Text('Clear', style: TextStyle(fontFamily: 'Poppins', color: AppColors.error, fontWeight: FontWeight.w600)),
             ),
         ],
@@ -199,12 +259,66 @@ class _CartScreenState extends ConsumerState<CartScreen> {
         onAction: () => context.push(AppRoutes.home),
       );
 
-  Widget _buildList(List<CartItem> items) => ListView.separated(
-        padding: const EdgeInsets.all(16),
-        itemCount: items.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 10),
-        itemBuilder: (_, i) => _CartItemTile(item: items[i]),
-      );
+  Widget _buildList(List<CartItem> items) {
+    final blocked = _blockedItems(items);
+    final blockedIds = blocked.map((b) => b.id).toSet();
+    return ListView.separated(
+      padding: const EdgeInsets.all(16),
+      itemCount: items.length + (blocked.isEmpty ? 0 : 1),
+      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      itemBuilder: (_, i) {
+        if (blocked.isNotEmpty) {
+          if (i == 0) return _buildBlockedBanner(blocked);
+          i -= 1;
+        }
+        return GreyscaleIfUnavailable(
+          unavailable: blockedIds.contains(items[i].id),
+          child: _CartItemTile(item: items[i]),
+        );
+      },
+    );
+  }
+
+  Widget _buildBlockedBanner(List<CartItem> blocked) {
+    final names = blocked.map(_providerLabel).toSet().join(', ');
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF4E5),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFFFD8A8)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Icon(Icons.pause_circle_outline_rounded, size: 20, color: Color(0xFFB45309)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              "$names isn't accepting orders right now. It will be back soon. "
+              "Remove ${blocked.length == 1 ? 'this item' : 'these items'} to check out.",
+              style: const TextStyle(fontFamily: 'Poppins', fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFFB45309), height: 1.4),
+            ),
+          ),
+        ]),
+        const SizedBox(height: 8),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton(
+            onPressed: () {
+              final notifier = ref.read(cartProvider.notifier);
+              for (final b in blocked) {
+                notifier.removeItem(b.id);
+              }
+            },
+            child: Text(
+              blocked.length == 1 ? 'Remove item' : 'Remove ${blocked.length} items',
+              style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, color: Color(0xFFB45309)),
+            ),
+          ),
+        ),
+      ]),
+    );
+  }
 
   Widget _buildCheckoutBar(int total) => Container(
         padding: const EdgeInsets.fromLTRB(16, 10, 16, 20),

@@ -31,6 +31,10 @@ class EquipmentProfile {
   final bool hasPendingChanges;
   final Map<String, dynamic> pendingChanges;
 
+  /// Typed staff details (`labTechnician` / `specialist` / `pharmacist`) captured
+  /// at registration. Empty for partners approved before this existed.
+  final Map<String, dynamic> staffDetails;
+
   const EquipmentProfile({
     required this.uid,
     required this.name,
@@ -53,6 +57,7 @@ class EquipmentProfile {
     this.documentVerification = const {},
     this.hasPendingChanges = false,
     this.pendingChanges = const {},
+    this.staffDetails = const {},
   });
 
   bool get isActive => status == 'active';
@@ -86,6 +91,8 @@ class EquipmentProfile {
       hasPendingChanges: (d['hasPendingChanges'] as bool?) ?? false,
       pendingChanges: Map<String, dynamic>.from(
           (d['pendingChanges'] as Map?) ?? const <String, dynamic>{}),
+      staffDetails: Map<String, dynamic>.from(
+          (d['staffDetails'] as Map?) ?? const <String, dynamic>{}),
     );
   }
 }

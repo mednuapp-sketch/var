@@ -37,16 +37,52 @@ class NutritionService {
 
   // Returns booked slot strings for a nutritionist on a given date
   static Stream<List<String>> bookedSlotsStream(String nutritionistId, String date) {
+    // Reads the server-maintained `nutrition_slots` index (see
+    // onNutritionAppointmentWrittenForSlots in functions/index.js). Querying
+    // nutrition_appointments directly was always permission-denied for a
+    // patient (they may only read their own), so every slot looked free.
     return _db
-        .collection('nutrition_appointments')
+        .collection('nutrition_slots')
         .where('nutritionistId', isEqualTo: nutritionistId)
         .where('date', isEqualTo: date)
-        .where('status', whereIn: ['pending', 'confirmed'])
         .snapshots()
         .map((s) => s.docs
             .map((d) => (d.data()['timeSlot'] as String?) ?? '')
             .where((t) => t.isNotEmpty)
             .toList());
+  }
+
+  /// Fresh server-side check that a slot is still free (the picker's live list
+  /// can be a moment stale). Key format mirrors `_slotKey` in functions/index.js.
+  /// Fails open on a read error — the server trigger is the real guard.
+  static Future<bool> isSlotTaken(
+      String nutritionistId, String date, String timeSlot,
+      {String? exceptAppointmentId}) async {
+    try {
+      final key =
+          '${nutritionistId}_${date}_${timeSlot.replaceAll(RegExp(r'[^A-Za-z0-9]'), '-')}';
+      final snap = await _db.collection('nutrition_slots').doc(key).get();
+      if (!snap.exists) return false;
+      return snap.data()?['appointmentId'] != exceptAppointmentId;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Patient-side reschedule of a pending/confirmed appointment. Only these
+  /// keys may change (firestore.rules `_validNutritionReschedule`); status and
+  /// the weight-loss plan fields (planType/planMonths/planConsultations) are
+  /// untouched. The server trigger frees the old slot / takes the new one and
+  /// reverts the change if the target was taken or is outside the schedule.
+  static Future<void> rescheduleAppointment(
+      String appointmentId, String date, String timeSlot) {
+    return _db.collection('nutrition_appointments').doc(appointmentId).update({
+      'date': date,
+      'timeSlot': timeSlot,
+      'rescheduledAt': FieldValue.serverTimestamp(),
+      'rescheduledBy': 'patient',
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
   }
 
   // ── Appointments ───────────────────────────────────────
@@ -61,6 +97,7 @@ class NutritionService {
     required String notes,
     required double fee,
     required String healthGoal,
+    Map<String, dynamic> extraFields = const {},
   }) async {
     final uid = _uid;
     if (uid == null) throw Exception('Not authenticated');
@@ -80,6 +117,7 @@ class NutritionService {
       'notes': notes,
       'fee': fee,
       'healthGoal': healthGoal,
+      ...extraFields,
       'createdAt': FieldValue.serverTimestamp(),
     });
     return ref.id;
@@ -100,6 +138,7 @@ class NutritionService {
   static Future<void> cancelAppointment(String appointmentId) async {
     await _db.collection('nutrition_appointments').doc(appointmentId).update({
       'status': 'cancelled',
+      'cancelledBy': 'patient', // drives the server-side refund policy
       'updatedAt': FieldValue.serverTimestamp(),
     });
   }

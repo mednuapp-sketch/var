@@ -35,11 +35,19 @@ class _VerificationPendingScreenState extends State<VerificationPendingScreen>
   // here instead of showing a "pending" wait for an application that can't be
   // reviewed.
   String? _partnerRole;
+  String? _partnerTypeKey;
   String? _partnerUid;
   List<String> _missingDocs = const [];
   Map<String, dynamic> _documents = const {};
   Map<String, dynamic> _documentVerification = const {};
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _statusSub;
+
+  // Re-review request: the owner may write only `resubmittedAt`/`resubmitNote`
+  // on their own profile while it is not active (see firestore.rules). Admin
+  // clears `resubmittedAt` again when it acts on the profile.
+  DocumentReference<Map<String, dynamic>>? _statusRef;
+  DateTime? _resubmittedAt;
+  bool _resubmitting = false;
 
   late AnimationController _pulseCtrl;
   late Animation<double> _pulse;
@@ -112,6 +120,7 @@ class _VerificationPendingScreenState extends State<VerificationPendingScreen>
               .collection(role.profileCollection)
               .doc(uid);
 
+    _statusRef = statusDocRef;
     _statusSub = statusDocRef.snapshots().listen(
       (snap) {
         if (!mounted) return;
@@ -134,14 +143,17 @@ class _VerificationPendingScreenState extends State<VerificationPendingScreen>
           _status = status;
           _loading = false;
           _partnerRole = isPartner ? role.documentRoleKey : null;
+          _partnerTypeKey = isPartner ? role.documentTypeKey : null;
           _partnerUid = uid;
+          final ra = data?['resubmittedAt'];
+          _resubmittedAt = ra is Timestamp ? ra.toDate() : null;
           _documents = Map<String, dynamic>.from(
               (data?['documents'] as Map?) ?? const {});
           _documentVerification = Map<String, dynamic>.from(
               (data?['documentVerification'] as Map?) ?? const {});
           _missingDocs = isPartner && snap.exists
               ? PartnerDocumentType.missingFor(
-                  role.documentRoleKey, data?['documents'])
+                  role.documentTypeKey, data?['documents'])
               : const [];
         });
       },
@@ -149,6 +161,74 @@ class _VerificationPendingScreenState extends State<VerificationPendingScreen>
         if (mounted) setState(() => _loading = false);
       },
     );
+  }
+
+  Future<void> _requestReReview() async {
+    final ref = _statusRef;
+    if (ref == null || _resubmitting) return;
+    final noteCtrl = TextEditingController();
+    final note = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Request re-review'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Let our team know you have updated your documents or details. '
+                'You can add an optional note.',
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: noteCtrl,
+                maxLines: 3,
+                maxLength: 300,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: const InputDecoration(
+                  hintText: 'Note for the review team (optional)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, noteCtrl.text.trim()),
+            child: const Text('Submit'),
+          ),
+        ],
+      ),
+    );
+    noteCtrl.dispose();
+    if (note == null || !mounted) return;
+    setState(() => _resubmitting = true);
+    try {
+      await ref.update({
+        'resubmittedAt': FieldValue.serverTimestamp(),
+        'resubmitNote': note,
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Re-review requested. Our team will take another look.'),
+        behavior: SnackBarBehavior.floating,
+      ));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Could not send request: $e'),
+        backgroundColor: AppColors.error,
+        behavior: SnackBarBehavior.floating,
+      ));
+    } finally {
+      if (mounted) setState(() => _resubmitting = false);
+    }
   }
 
   Future<void> _refreshStatus() async {
@@ -295,14 +375,16 @@ class _VerificationPendingScreenState extends State<VerificationPendingScreen>
                       padding: const EdgeInsets.fromLTRB(24, 28, 24, 40),
                       child: Column(
                         children: [
-                          if (_missingDocs.isNotEmpty &&
+                          if ((_missingDocs.isNotEmpty || isSuspended) &&
                               _partnerRole != null &&
-                              _partnerUid != null &&
-                              !isSuspended) ...[
-                            _MissingDocsNotice(missing: _missingDocs),
-                            const SizedBox(height: 12),
+                              _partnerUid != null) ...[
+                            if (_missingDocs.isNotEmpty)
+                              _MissingDocsNotice(missing: _missingDocs),
+                            if (_missingDocs.isNotEmpty)
+                              const SizedBox(height: 12),
                             PartnerDocumentsSection(
                               role: _partnerRole!,
+                              typeKey: _partnerTypeKey,
                               uid: _partnerUid!,
                               documents: _documents,
                               documentVerification: _documentVerification,
@@ -339,7 +421,7 @@ class _VerificationPendingScreenState extends State<VerificationPendingScreen>
                                 const SizedBox(height: 10),
                                 Text(
                                   isSuspended
-                                      ? 'Your application did not meet our verification requirements. Please contact our support team for more information or to resubmit.'
+                                      ? 'Your application did not meet our verification requirements. Update your documents below if needed, then tap "Request re-review" and our team will take another look.'
                                       : 'Your documents are being reviewed by our medical verification team. This usually takes 24–48 hours.',
                                   style: AppTextStyles.bodyMedium.copyWith(
                                     height: 1.6,
@@ -456,6 +538,62 @@ class _VerificationPendingScreenState extends State<VerificationPendingScreen>
 
                           const SizedBox(height: 28),
 
+                          // Re-review request (rejected, or pending with changes).
+                          if (_statusRef != null) ...[
+                            if (_resubmittedAt != null)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: const [
+                                    Icon(Icons.check_circle_rounded,
+                                        size: 16, color: AppColors.success),
+                                    SizedBox(width: 6),
+                                    Flexible(
+                                      child: Text(
+                                        'Re-review requested — awaiting our team',
+                                        style: TextStyle(
+                                          fontFamily: 'Inter',
+                                          fontSize: 12,
+                                          color: AppColors.success,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: SizedBox(
+                                width: double.infinity,
+                                height: 52,
+                                child: ElevatedButton.icon(
+                                  onPressed:
+                                      _resubmitting ? null : _requestReReview,
+                                  icon: _resubmitting
+                                      ? const SizedBox(
+                                          width: 16,
+                                          height: 16,
+                                          child: CircularProgressIndicator(
+                                              strokeWidth: 2),
+                                        )
+                                      : const Icon(Icons.replay_rounded,
+                                          size: 18),
+                                  label: Text(_resubmittedAt != null
+                                      ? 'Request re-review again'
+                                      : 'Request re-review'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.primary,
+                                    foregroundColor: Colors.white,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+
                           // Action buttons
                           // A pending service must not trap the account: let
                           // it hop to another of its profiles from here.
@@ -488,7 +626,7 @@ class _VerificationPendingScreenState extends State<VerificationPendingScreen>
                           SizedBox(
                             width: double.infinity,
                             height: 52,
-                            child: ElevatedButton.icon(
+                            child: OutlinedButton.icon(
                               onPressed: () async {
                                 await DoctorAuthService.signOut();
                                 if (mounted && context.mounted)
@@ -500,11 +638,14 @@ class _VerificationPendingScreenState extends State<VerificationPendingScreen>
                                     ? 'Contact Support & Sign Out'
                                     : 'Sign Out',
                               ),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: isSuspended
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: isSuspended
                                     ? AppColors.error
                                     : AppColors.primary,
-                                foregroundColor: Colors.white,
+                                side: BorderSide(
+                                    color: isSuspended
+                                        ? AppColors.error
+                                        : AppColors.primary),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(14),
                                 ),

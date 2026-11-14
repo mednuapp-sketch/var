@@ -528,15 +528,22 @@ class _WritePrescriptionScreenState extends State<WritePrescriptionScreen>
       // appointments stream flip the OP/prescription status without a
       // separate query (see mednu appointment_screen.dart card rendering).
       if (widget.appointmentId?.isNotEmpty == true) {
-        await FirebaseFirestore.instance
+        final apptRef = FirebaseFirestore.instance
             .collection('appointments')
-            .doc(widget.appointmentId!)
-            .update({
-          'status':        'completed',
-          'prescriptionId': prescRef.id,
-          'updatedAt':      FieldValue.serverTimestamp(),
-        })
-            .catchError((_) {});
+            .doc(widget.appointmentId!);
+        try {
+          // Never resurrect a cancelled appointment as 'completed' (the
+          // patient may have cancelled while the doctor was writing).
+          await FirebaseFirestore.instance.runTransaction((tx) async {
+            final snap = await tx.get(apptRef);
+            final cancelled = snap.data()?['status'] == 'cancelled';
+            tx.update(apptRef, {
+              if (!cancelled) 'status': 'completed',
+              'prescriptionId': prescRef.id,
+              'updatedAt':      FieldValue.serverTimestamp(),
+            });
+          });
+        } catch (_) {}
       }
 
       // Update consultation

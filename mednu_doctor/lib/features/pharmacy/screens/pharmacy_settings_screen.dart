@@ -96,7 +96,10 @@ class _PharmacySettingsScreenState extends State<PharmacySettingsScreen> {
     try {
       await WhatsAppOptInService.save(collection: 'pharmacy_profiles', uid: uid, value: value);
     } catch (_) {
-      if (mounted) setState(() => _whatsappOptIn = !value);
+      if (mounted) {
+        setState(() => _whatsappOptIn = !value);
+        FeedbackService.showError(context, 'Could not update WhatsApp notifications. Please try again.');
+      }
     }
   }
 

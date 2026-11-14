@@ -120,6 +120,8 @@ class _MaternityPrescriptionScreenState
         'type': 'maternity_prescription',
         'isRead': false,
         'createdAt': now,
+        // The patient app's notification list only shows items with deliverAt <= now.
+        'deliverAt': now,
       });
 
       await batch.commit();

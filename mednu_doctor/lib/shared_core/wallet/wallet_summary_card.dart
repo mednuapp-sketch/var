@@ -7,6 +7,36 @@ import '../widgets/shared_state_widgets.dart';
 import 'currency_formatter.dart';
 import 'wallet_providers.dart';
 
+/// Shown once on every partner earnings/wallet surface.
+const String kEarningsFeeNote =
+    'You receive the full service price. The platform fee is paid by the customer.';
+
+/// Subtle caption for earnings screens that do not use
+/// [SharedWalletSummaryCard] (which already carries the note).
+class EarningsFeeNote extends StatelessWidget {
+  const EarningsFeeNote({super.key});
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Padding(
+              padding: EdgeInsets.only(top: 1),
+              child: Icon(Icons.info_outline_rounded,
+                  size: 13, color: AppColors.textHint),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(kEarningsFeeNote,
+                  style: AppTextStyles.caption.copyWith(height: 1.35)),
+            ),
+          ],
+        ),
+      );
+}
+
 /// Compact wallet balance card for the dashboard. Reads from
 /// [walletSummaryProvider] — role-aware (see `wallet_providers.dart`):
 /// doctor/lab/pharmacy/ambulance/caregiver get real, live settlement-engine
@@ -45,7 +75,11 @@ class SharedWalletSummaryCard extends ConsumerWidget {
                 ),
               ],
             ),
-            child: Row(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+            Row(
               children: [
                 Container(
                   width: 44,
@@ -84,6 +118,16 @@ class SharedWalletSummaryCard extends ConsumerWidget {
                 ),
                 if (onTap != null)
                   const Icon(Icons.chevron_right_rounded, color: Colors.white70),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              kEarningsFeeNote,
+              style: AppTextStyles.caption.copyWith(
+                color: Colors.white.withValues(alpha: 0.8),
+                height: 1.35,
+              ),
+            ),
               ],
             ),
           ),

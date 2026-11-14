@@ -11,6 +11,7 @@ import 'package:mednu/core/widgets/ux_widgets.dart';
 import '../../health/providers/water_tracker_provider.dart';
 import '../models/notification_model.dart';
 import '../providers/notification_provider.dart';
+import '../../payment/screens/trip_payment_screen.dart';
 import '../services/notification_service.dart';
 import 'package:mednu/core/utils/r.dart';
 
@@ -892,6 +893,13 @@ class _NotifTile extends ConsumerWidget {
   };
 
   void _navigate(BuildContext context) {
+    // Ambulance pay-after-trip: open the payment flow for that booking.
+    if (notif.actionType == 'open_trip_payment' && notif.bookingId.isNotEmpty) {
+      Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => TripPaymentScreen(requestId: notif.bookingId),
+      ));
+      return;
+    }
     // Prescription notifications need a real Firestore fetch before we can
     // navigate — PrescriptionViewerScreen has no fetch-by-id fallback, so
     // pushing its plain route (as _routeFor would) renders a blank RX-0000
@@ -907,6 +915,20 @@ class _NotifTile extends ConsumerWidget {
                 notif.serviceType == 'medicine')) &&
         notif.bookingId.isNotEmpty) {
       context.push(AppRoutes.orderDetail, extra: {'orderId': notif.bookingId});
+      return;
+    }
+    if (notif.type == PatientNotifType.reviewPrompt) {
+      // Needs the appointment/doctor ids; a bare push left the review screen
+      // blank and every submit failed with "Invalid appointment ID".
+      if (notif.bookingId.isNotEmpty) {
+        context.push(AppRoutes.submitReview, extra: {
+          'appointmentId': notif.bookingId,
+          'doctorId': notif.doctorId,
+          'doctorName': notif.data['doctorName'] as String? ?? 'Doctor',
+        });
+      } else {
+        context.push(AppRoutes.appointment);
+      }
       return;
     }
     final route = _routeFor(notif);

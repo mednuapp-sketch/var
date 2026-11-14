@@ -238,9 +238,17 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
       await batch.commit();
 
+      // Non-fatal: the profile is already saved above. A referral failure
+      // (invalid code, or the lookup being denied by rules) must not report
+      // "could not complete your registration" — a retry would then fail on
+      // the already-created wallet doc and leave the new user stuck.
       if (referralCode != null && referralCode.trim().isNotEmpty) {
-        await ReferralService().applyReferralCode(
-          referralCode: referralCode.trim(), newUserId: uid);
+        try {
+          await ReferralService().applyReferralCode(
+            referralCode: referralCode.trim(), newUserId: uid);
+        } catch (e) {
+          debugPrint('[Auth] Referral code not applied: $e');
+        }
       }
 
       await _sec.write(key: 'last_phone', value: phone);

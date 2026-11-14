@@ -15,6 +15,7 @@ import '../../../core/services/feedback_service.dart';
 import '../models/vehicle_profile.dart';
 import '../providers/ambulance_providers.dart';
 import '../services/ambulance_profile_service.dart';
+import '../widgets/vehicle_type_picker.dart';
 
 /// Vehicle + driver identity — a hero plate-number card, a tap-to-change
 /// vehicle/driver avatar above it, an equipment checklist and document
@@ -62,8 +63,17 @@ class _AmbulanceVehicleProfileScreenState extends ConsumerState<AmbulanceVehicle
 
     final plate = TextEditingController(
         text: current.plateNumber == 'Not set' ? '' : current.plateNumber);
-    final vehicleType = TextEditingController(
-        text: current.vehicleType == 'Unverified' ? '' : current.vehicleType);
+    // Vehicle type is a pick-list. A legacy free-text type is pre-selected when
+    // the keyword guess recognises it; otherwise nothing is selected and the
+    // driver is prompted to choose.
+    String? typeKey = AmbulanceProfileService.rateKeyForVehicleType(
+        current.vehicleType == 'Unverified' ? '' : current.vehicleType,
+        typeKey: current.vehicleTypeKey);
+    String typeLabel = typeKey == null
+        ? ''
+        : (AmbulanceProfileService.defaultVehicleTypeLabels[typeKey] ?? '');
+    final typeNeedsPick = typeKey == null;
+    final formKey = GlobalKey<FormState>();
     final driverName = TextEditingController(text: current.driverName);
     final driverPhone = TextEditingController(text: current.driverPhone);
     final driverLicense = TextEditingController(text: current.driverLicense);
@@ -74,16 +84,22 @@ class _AmbulanceVehicleProfileScreenState extends ConsumerState<AmbulanceVehicle
       builder: (dialogContext) => AlertDialog(
         title: const Text('Vehicle & Driver Details'),
         content: SingleChildScrollView(
-          child: Column(
+          child: Form(
+            key: formKey,
+            child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               TextField(controller: plate, decoration: const InputDecoration(labelText: 'Plate number')),
-              TextField(
-                controller: vehicleType,
-                decoration: const InputDecoration(
-                  labelText: 'Vehicle type',
-                  hintText: 'Basic Life Support / Advanced Life Support / ICU on Wheels',
-                ),
+              const SizedBox(height: 8),
+              VehicleTypePicker(
+                value: typeKey,
+                helperText: typeNeedsPick
+                    ? 'Please choose your vehicle type from the list. It decides your rate range.'
+                    : null,
+                onChanged: (k, l) {
+                  typeKey = k;
+                  typeLabel = l;
+                },
               ),
               TextField(controller: driverName, decoration: const InputDecoration(labelText: 'Driver name')),
               TextField(
@@ -107,10 +123,16 @@ class _AmbulanceVehicleProfileScreenState extends ConsumerState<AmbulanceVehicle
               ),
             ],
           ),
+          ),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Save')),
+          TextButton(
+            onPressed: () {
+              if (formKey.currentState?.validate() ?? false) Navigator.pop(dialogContext, true);
+            },
+            child: const Text('Save'),
+          ),
         ],
       ),
     );
@@ -123,7 +145,6 @@ class _AmbulanceVehicleProfileScreenState extends ConsumerState<AmbulanceVehicle
     // dialog transition is ~150ms; 400ms leaves comfortable margin.
     unawaited(Future.delayed(const Duration(milliseconds: 400), () {
       plate.dispose();
-      vehicleType.dispose();
       driverName.dispose();
       driverPhone.dispose();
       driverLicense.dispose();
@@ -145,7 +166,8 @@ class _AmbulanceVehicleProfileScreenState extends ConsumerState<AmbulanceVehicle
         // firestore.rules rejects those keys, so they're deliberately absent.
         await AmbulanceProfileService.updateProfile(uid, {
           'plateNumber': plate.text.trim(),
-          'vehicleType': vehicleType.text.trim(),
+          'vehicleType': typeLabel,
+          'vehicleTypeKey': typeKey,
           'driverName': driverName.text.trim(),
           'driverPhone': driverPhone.text.trim(),
           'driverLicense': driverLicense.text.trim(),
@@ -155,7 +177,8 @@ class _AmbulanceVehicleProfileScreenState extends ConsumerState<AmbulanceVehicle
         await AmbulanceProfileService.createProfile(
           uid: uid,
           plateNumber: plate.text.trim(),
-          vehicleType: vehicleType.text.trim(),
+          vehicleType: typeLabel,
+          vehicleTypeKey: typeKey,
           driverName: driverName.text.trim(),
           driverPhone: driverPhone.text.trim(),
           driverLicense: driverLicense.text.trim(),
@@ -514,6 +537,8 @@ class _AmbulanceVehicleProfileScreenState extends ConsumerState<AmbulanceVehicle
           ),
           if (AmbulanceProfileService.currentUid != null) ...[
             const SizedBox(height: 16),
+            _RateCard(vehicle: vehicle),
+            const SizedBox(height: 16),
             PartnerDocumentsSection(
               role: 'ambulance',
               uid: AmbulanceProfileService.currentUid!,
@@ -523,6 +548,144 @@ class _AmbulanceVehicleProfileScreenState extends ConsumerState<AmbulanceVehicle
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+/// The driver's own per-trip rate, constrained to the admin range for their
+/// vehicle type (`app_config/ambulance_rates`). Unset -> range minimum applies.
+class _RateCard extends StatefulWidget {
+  final VehicleProfile vehicle;
+  const _RateCard({required this.vehicle});
+
+  @override
+  State<_RateCard> createState() => _RateCardState();
+}
+
+class _RateCardState extends State<_RateCard> {
+  Future<({double min, double max})?>? _rangeFuture;
+  String? _rangeKey;
+  bool _saving = false;
+
+  String _inr(num v) => '₹${v.toStringAsFixed(v == v.roundToDouble() ? 0 : 2)}';
+
+  Future<({double min, double max})?> _range() {
+    final key = AmbulanceProfileService.rateKeyForVehicleType(widget.vehicle.vehicleType,
+        typeKey: widget.vehicle.vehicleTypeKey);
+    if (_rangeFuture == null || key != _rangeKey) {
+      _rangeKey = key;
+      _rangeFuture = AmbulanceProfileService.fetchRateRange(key);
+    }
+    return _rangeFuture!;
+  }
+
+  Future<void> _editRate(({double min, double max}) range, double current) async {
+    final uid = AmbulanceProfileService.currentUid;
+    if (uid == null) return;
+    final ctrl = TextEditingController(text: current.toStringAsFixed(current == current.roundToDouble() ? 0 : 2));
+    String? error;
+    final newRate = await showDialog<double>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          title: const Text('Set your rate per trip'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Allowed range: ${_inr(range.min)} – ${_inr(range.max)}',
+                  style: AppTextStyles.bodySmall),
+              const SizedBox(height: 12),
+              TextField(
+                controller: ctrl,
+                autofocus: true,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: InputDecoration(
+                  labelText: 'Your rate (₹)',
+                  errorText: error,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
+            TextButton(
+              onPressed: () {
+                final v = double.tryParse(ctrl.text.trim());
+                if (v == null || v < range.min || v > range.max) {
+                  setLocal(() => error = 'Enter an amount between ${_inr(range.min)} and ${_inr(range.max)}');
+                  return;
+                }
+                Navigator.pop(dialogContext, v);
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+    unawaited(Future.delayed(const Duration(milliseconds: 400), ctrl.dispose));
+    if (newRate == null || !mounted) return;
+    setState(() => _saving = true);
+    try {
+      await AmbulanceProfileService.setRatePerTrip(uid, newRate);
+      if (mounted) FeedbackService.showSuccess(context, 'Your rate was updated');
+    } catch (_) {
+      if (mounted) FeedbackService.showError(context, "Couldn't save your rate. Please try again.");
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PremiumCard(
+      child: FutureBuilder<({double min, double max})?>(
+        future: _range(),
+        builder: (context, snap) {
+          final range = snap.data;
+          final loading = snap.connectionState != ConnectionState.done;
+          final stored = widget.vehicle.ratePerTrip;
+          // Show the effective (clamped) rate: unset -> range minimum.
+          final effective = range == null
+              ? stored
+              : (stored ?? range.min).clamp(range.min, range.max).toDouble();
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Expanded(child: Text('My Rate per Trip', style: AppTextStyles.labelMedium)),
+                  if (range != null)
+                    TextButton.icon(
+                      onPressed: _saving ? null : () => _editRate(range, effective ?? range.min),
+                      icon: const Icon(Icons.edit_outlined, size: 16),
+                      label: const Text('Edit'),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              if (loading)
+                const LinearProgressIndicator(minHeight: 2)
+              else if (range == null)
+                const Text(
+                  'Choose your vehicle type from the list (tap Edit on your vehicle details) to set a rate.',
+                  style: AppTextStyles.bodySmall,
+                )
+              else ...[
+                Text(_inr(effective ?? range.min),
+                    style: AppTextStyles.h4),
+                const SizedBox(height: 4),
+                Text(
+                  'Allowed range for your vehicle type: ${_inr(range.min)} – ${_inr(range.max)}'
+                  '${stored == null ? "\nNot set yet - the minimum applies to your trips." : ""}',
+                  style: AppTextStyles.bodySmall,
+                ),
+              ],
+            ],
+          );
+        },
       ),
     );
   }

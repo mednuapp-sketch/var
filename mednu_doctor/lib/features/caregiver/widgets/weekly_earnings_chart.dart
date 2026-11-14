@@ -14,7 +14,9 @@ class WeeklyEarningsChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final maxVal = values.isEmpty ? 100.0 : (values.reduce((a, b) => a > b ? a : b) * 1.25);
+    // All-zero (brand-new partner) must not give the chart a 0-height Y axis.
+    final peak = values.isEmpty ? 0.0 : values.reduce((a, b) => a > b ? a : b);
+    final maxVal = peak <= 0 ? 100.0 : peak * 1.25;
     return SizedBox(
       height: 180,
       child: BarChart(

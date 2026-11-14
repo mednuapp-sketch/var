@@ -428,6 +428,7 @@ class _CareAssistantProfileScreenState extends ConsumerState<CareAssistantProfil
             const SizedBox(height: 16),
             PartnerDocumentsSection(
               role: 'caregiver',
+              typeKey: 'care_assistant',
               uid: uid,
               documents: p.documents,
               documentVerification: p.documentVerification,

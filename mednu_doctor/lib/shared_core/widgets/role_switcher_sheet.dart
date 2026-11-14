@@ -77,7 +77,8 @@ class _RoleSwitcherSheet extends ConsumerWidget {
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-        child: Column(
+        child: SingleChildScrollView(
+         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -185,6 +186,7 @@ class _RoleSwitcherSheet extends ConsumerWidget {
               ),
             ],
           ],
+        ),
         ),
       ),
     );

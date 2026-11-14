@@ -10,6 +10,7 @@ import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/utils/r.dart';
 import '../../../core/widgets/ux_widgets.dart';
+import '../../../core/widgets/provider_availability.dart';
 import '../../home/providers/location_provider.dart';
 
 class PharmacyScreen extends ConsumerStatefulWidget {
@@ -48,6 +49,8 @@ class _PharmacyScreenState extends ConsumerState<PharmacyScreen> {
       'categories': ((d['categoriesOffered'] as List?) ?? const []).whereType<String>().toList(),
       'photoUrl': (d['photoUrl'] as String?) ?? '',
       'distanceKm': distanceKm,
+      // The pharmacy's own "Accepting New Orders" switch (absent = open).
+      'open': (d['acceptingOrders'] as bool?) ?? true,
     };
   }
 
@@ -212,6 +215,10 @@ class _PharmacyScreenState extends ConsumerState<PharmacyScreen> {
                       .map((d) => _toCard(d, myLocation.lat, myLocation.lng))
                       .toList();
                   all.sort((a, b) {
+                    // Pharmacies that paused orders sink below available ones.
+                    final oa = a['open'] == false ? 1 : 0;
+                    final ob = b['open'] == false ? 1 : 0;
+                    if (oa != ob) return oa.compareTo(ob);
                     final da = a['distanceKm'] as double?;
                     final db = b['distanceKm'] as double?;
                     if (da == null || db == null) return 0;
@@ -307,7 +314,20 @@ class _PharmacyCard extends StatelessWidget {
     final categories = (p['categories'] as List).cast<String>();
     final photoUrl = p['photoUrl'] as String? ?? '';
     final name = p['name'] as String;
+    final closed = p['open'] == false;
 
+    return Column(children: [
+      if (closed)
+        NotAcceptingBanner(
+          compact: true,
+          margin: EdgeInsets.fromLTRB(R.p(context, 16), 0, R.p(context, 16), R.p(context, 6)),
+        ),
+      GreyscaleIfUnavailable(unavailable: closed, child: _card(context, p, deliveryAvailable, distanceKm, categories, photoUrl, name)),
+    ]);
+  }
+
+  Widget _card(BuildContext context, Map<String, Object?> p, bool deliveryAvailable,
+      double? distanceKm, List<String> categories, String photoUrl, String name) {
     return Container(
       margin: EdgeInsets.fromLTRB(R.p(context, 16), 0, R.p(context, 16), R.p(context, 16)),
       decoration: BoxDecoration(

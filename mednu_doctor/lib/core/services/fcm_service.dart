@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:developer' as dev;
+import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -115,74 +117,210 @@ class FcmService {
     }
 
     // Save token when the user is already signed in.
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid != null) {
-      final token = await messaging.getToken();
-      if (token != null) await _saveToken(uid, token);
-    }
+    await syncTokenForCurrentUser(force: true);
 
-    // Watch auth state so we always save a fresh token after login.
+    // Watch auth state so a sign-in on a new phone re-registers immediately.
     _authSub?.cancel();
-    _authSub = FirebaseAuth.instance.authStateChanges().listen((user) async {
+    _authSub = FirebaseAuth.instance.authStateChanges().listen((user) {
       if (user == null) return;
-      final token = await messaging.getToken();
-      if (token != null) await _saveToken(user.uid, token);
+      syncTokenForCurrentUser(force: true);
     });
 
     // Keep the token current if Firebase rotates it.
     _tokenRefreshSub?.cancel();
-    _tokenRefreshSub = messaging.onTokenRefresh.listen((newToken) async {
-      final uid2 = FirebaseAuth.instance.currentUser?.uid;
-      if (uid2 != null) await _saveToken(uid2, newToken);
+    _tokenRefreshSub = messaging.onTokenRefresh.listen((newToken) {
+      syncTokenForCurrentUser(force: true, knownToken: newToken);
+    }, onError: (Object e) {
+      dev.log('[FCM] onTokenRefresh error: $e', name: 'FcmService');
     });
+
+    // Re-assert the token whenever the app returns to the foreground (covers
+    // failed/offline earlier writes and a token that changed while we were
+    // in the background).
+    if (!_lifecycleRegistered) {
+      _lifecycleRegistered = true;
+      WidgetsBinding.instance.addObserver(_ResumeObserver());
+    }
+  }
+
+  // ── Real-time token sync ──────────────────────────────────────────────────
+
+  static bool _lifecycleRegistered = false;
+  static bool _syncing = false;
+  static bool _dirty = true; // last attempt failed / never ran → retry
+  static String? _lastUid;
+  static DateTime? _lastSyncAt;
+  static const _resumeMinInterval = Duration(minutes: 30);
+
+  static String get _platform {
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.iOS:
+        return 'ios';
+      case TargetPlatform.android:
+        return 'android';
+      default:
+        return defaultTargetPlatform.name;
+    }
+  }
+
+  /// Collections that may hold this account's partner profile, derived from
+  /// `doctors/{uid}.roles`. Care Assistant shares `caregiver_profiles`.
+  static List<String> _profileCollections(List roles) {
+    final out = <String>{};
+    for (final r in roles) {
+      if (r is! String || r == 'doctor' || r == 'admin') continue;
+      out.add(r == 'care_assistant' ? 'caregiver_profiles' : '${r}_profiles');
+    }
+    return out.toList();
+  }
+
+  /// Writes this device's token to `doctors/{uid}` and every role profile the
+  /// account holds. Safe to call at any time; never throws. When [force] is
+  /// false (app resume) it is skipped if the last sync succeeded recently.
+  /// A failed attempt marks the sync dirty so the next trigger retries.
+  static Future<void> syncTokenForCurrentUser({
+    bool force = false,
+    String? knownToken,
+  }) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    if (_syncing) {
+      _dirty = true; // run again on the next trigger
+      return;
+    }
+    if (!force &&
+        !_dirty &&
+        _lastUid == uid &&
+        _lastSyncAt != null &&
+        DateTime.now().difference(_lastSyncAt!) < _resumeMinInterval) {
+      return;
+    }
+    _syncing = true;
+    try {
+      final token = knownToken ?? await FirebaseMessaging.instance.getToken();
+      if (token == null) {
+        _dirty = true;
+        return;
+      }
+      final ok = await _saveToken(uid, token);
+      _dirty = !ok;
+      if (ok) {
+        _lastUid = uid;
+        _lastSyncAt = DateTime.now();
+      }
+    } catch (e) {
+      _dirty = true;
+      dev.log('[FCM] token sync failed (will retry): $e', name: 'FcmService');
+    } finally {
+      _syncing = false;
+    }
+  }
+
+  /// Called right BEFORE sign-out (needs the auth session to write): removes
+  /// this device's token from the account's docs (only where it is still this
+  /// device's token — a newer phone's token is never wiped) and invalidates
+  /// the token on this device so a logged-out phone stops getting partner
+  /// pushes. Best effort and time-boxed so logout is never blocked.
+  static Future<void> clearTokenOnSignOut() async {
+    try {
+      await _clearTokenOnSignOut().timeout(const Duration(seconds: 8));
+    } catch (e) {
+      dev.log('[FCM] clear token on sign-out failed: $e', name: 'FcmService');
+    }
+    try {
+      await FirebaseMessaging.instance.deleteToken().timeout(const Duration(seconds: 5));
+    } catch (e) {
+      dev.log('[FCM] deleteToken failed: $e', name: 'FcmService');
+    }
+    _lastUid = null;
+    _lastSyncAt = null;
+    _dirty = true;
+  }
+
+  static Future<void> _clearTokenOnSignOut() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    final token = await FirebaseMessaging.instance.getToken();
+    if (token == null) return;
+    final db = FirebaseFirestore.instance;
+    final doctorRef = db.collection('doctors').doc(uid);
+    List roles = const [];
+    try {
+      final snap = await doctorRef.get();
+      roles = (snap.data()?['roles'] as List?) ?? const [];
+    } catch (_) {}
+    final refs = <DocumentReference<Map<String, dynamic>>>[
+      doctorRef,
+      for (final c in _profileCollections(roles)) db.collection(c).doc(uid),
+    ];
+    for (final ref in refs) {
+      try {
+        final s = await ref.get();
+        if (!s.exists || s.data()?['fcmToken'] != token) continue;
+        await ref.update({
+          'fcmToken': FieldValue.delete(),
+          'fcmTokenUpdatedAt': FieldValue.delete(),
+          'fcmPlatform': FieldValue.delete(),
+        });
+      } catch (e) {
+        dev.log('[FCM] clear token on ${ref.path} failed: $e', name: 'FcmService');
+      }
+    }
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 
-  static Future<void> _saveToken(String uid, String token) async {
-    try {
-      await FirebaseFirestore.instance
-          .collection('doctors')
-          .doc(uid)
-          .update({'fcmToken': token});
-    } catch (_) {
-      // Doc doesn't exist yet (new registration in progress) — the token will
-      // be included in saveProfile() when the doctor document is first created.
-      // Do NOT create the doc here; a premature partial doc causes the
-      // subsequent saveProfile() set(merge:true) to be treated as an update,
-      // which is blocked by Firestore rules because it sets the 'status' field.
-    }
-    await _saveTokenToRoleProfiles(uid, token);
-  }
+  /// Returns true when every doc that exists accepted the write (a missing
+  /// doc is not a failure — profile docs are never created just for a token).
+  static Future<bool> _saveToken(String uid, String token) async {
+    final db = FirebaseFirestore.instance;
+    final payload = <String, dynamic>{
+      'fcmToken': token,
+      'fcmTokenUpdatedAt': FieldValue.serverTimestamp(),
+      'fcmPlatform': _platform,
+    };
+    var ok = true;
 
-  /// Also keeps the token fresh on every non-Doctor role profile this
-  /// account holds (`lab_profiles`, `pharmacy_profiles`, etc.) — the
-  /// Cloud Function that pushes a "your application was approved"
-  /// notification reads `fcmToken` straight off that document, not
-  /// `doctors/{uid}`, so a token rotated after registration would
-  /// otherwise go stale there and the push would silently fail to deliver.
-  static Future<void> _saveTokenToRoleProfiles(String uid, String token) async {
-    try {
-      final doctorSnap =
-          await FirebaseFirestore.instance.collection('doctors').doc(uid).get();
-      final roles =
-          (doctorSnap.data()?['roles'] as List?)?.cast<String>() ?? const [];
-      for (final role in roles) {
-        if (role == 'doctor') continue;
-        try {
-          await FirebaseFirestore.instance
-              .collection('${role}_profiles')
-              .doc(uid)
-              .update({'fcmToken': token});
-        } catch (_) {
-          // Role profile doesn't exist yet (registration in progress) —
-          // createProfile() already writes the token at creation time.
-        }
+    Future<void> write(DocumentReference<Map<String, dynamic>> ref) async {
+      try {
+        // update(), not set(merge) — must never create a partial doc (a
+        // premature doctors/{uid} breaks the later registration write).
+        await ref.update(payload);
+      } on FirebaseException catch (e) {
+        if (e.code == 'not-found') return; // registration still in progress
+        ok = false; // permission-denied / unavailable / etc → retry later
+        dev.log('[FCM] token write to ${ref.path} failed (${e.code}); will retry',
+            name: 'FcmService');
+      } catch (e) {
+        ok = false;
+        dev.log('[FCM] token write to ${ref.path} failed: $e; will retry',
+            name: 'FcmService');
       }
-    } catch (_) {
-      // Couldn't read roles (offline, doc missing) — safe to skip; the
-      // token captured at registration still covers most of the pending
-      // window.
+    }
+
+    final doctorRef = db.collection('doctors').doc(uid);
+    List roles = const [];
+    try {
+      final snap = await doctorRef.get();
+      roles = (snap.data()?['roles'] as List?) ?? const [];
+    } catch (e) {
+      ok = false;
+      dev.log('[FCM] could not read roles (will retry): $e', name: 'FcmService');
+    }
+
+    await write(doctorRef);
+    for (final c in _profileCollections(roles)) {
+      await write(db.collection(c).doc(uid));
+    }
+    return ok;
+  }
+}
+
+class _ResumeObserver with WidgetsBindingObserver {
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      FcmService.syncTokenForCurrentUser();
     }
   }
 }

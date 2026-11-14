@@ -52,9 +52,12 @@ class _CounsellingProfileScreenState extends ConsumerState<CounsellingProfileScr
     final experienceYears = TextEditingController(
         text: current.experienceYears == 0 ? '' : '${current.experienceYears}');
 
+    String? formError;
+
     final saved = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
         title: const Text('Counsellor Details'),
         content: SingleChildScrollView(
           child: Column(
@@ -85,13 +88,38 @@ class _CounsellingProfileScreenState extends ConsumerState<CounsellingProfileScr
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(labelText: 'Years of experience'),
               ),
+              if (formError != null) ...[
+                const SizedBox(height: 12),
+                Text(formError!,
+                    style: const TextStyle(fontSize: 12, color: Color(0xFFD32F2F))),
+              ],
             ],
           ),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Save')),
+          TextButton(
+            onPressed: () {
+              String? error;
+              final rate = num.tryParse(hourlyRate.text.trim());
+              final yearsText = experienceYears.text.trim();
+              if (name.text.trim().length < 2) {
+                error = 'Enter your full name.';
+              } else if (rate == null || rate <= 0) {
+                error = 'Enter a valid hourly rate greater than ₹0.';
+              } else if (yearsText.isNotEmpty && int.tryParse(yearsText) == null) {
+                error = 'Enter your experience as a whole number of years.';
+              }
+              if (error != null) {
+                setDialogState(() => formError = error);
+                return;
+              }
+              Navigator.pop(dialogContext, true);
+            },
+            child: const Text('Save'),
+          ),
         ],
+      ),
       ),
     );
 
@@ -117,6 +145,16 @@ class _CounsellingProfileScreenState extends ConsumerState<CounsellingProfileScr
     final rate = num.tryParse(hourlyRate.text.trim()) ?? 0;
     final years = int.tryParse(experienceYears.text.trim()) ?? 0;
 
+    if (!context.mounted) return;
+    if (name.text.trim().length < 2) {
+      FeedbackService.showError(context, 'Enter your full name.');
+      return;
+    }
+    if (rate <= 0) {
+      FeedbackService.showError(context, 'Enter a valid hourly rate greater than ₹0.');
+      return;
+    }
+
     try {
       final exists = await CounsellingProfileService.profileExists(uid);
       if (exists) {
@@ -128,14 +166,13 @@ class _CounsellingProfileScreenState extends ConsumerState<CounsellingProfileScr
           'experienceYears': years,
         }, currentStatus: current.status);
       } else {
-        await CounsellingProfileService.createProfile(
-          uid: uid,
-          name: name.text.trim(),
-          certifications: split(certifications),
-          specialties: split(specialties),
-          hourlyRate: rate,
-          experienceYears: years,
-        );
+        // A profile only comes into being through registration, which also
+        // collects the verification documents (same rule as Physiotherapy).
+        if (context.mounted) {
+          FeedbackService.showError(
+              context, 'Please complete registration, including your documents, first.');
+        }
+        return;
       }
       if (context.mounted) FeedbackService.showSuccess(context, 'Profile saved');
     } catch (_) {

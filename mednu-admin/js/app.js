@@ -5,6 +5,13 @@
 
 // â”€â”€ Security: HTML escaping to prevent XSS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // ALWAYS call escHtml() before inserting Firestore data into innerHTML.
+// Only http(s) URLs may become an href: user-supplied document URLs could otherwise
+// carry a javascript: scheme that runs in the admin origin when clicked.
+function safeUrl(u) {
+  const t = String(u == null ? '' : u).trim();
+  return /^https?:\/\//i.test(t) ? t : '#';
+}
+
 function escHtml(str) {
   if (str == null) return '';
   return String(str)
@@ -61,7 +68,7 @@ const _ACCT_TABS = [
   'acct-doctors', 'acct-nurses', 'acct-lab', 'acct-pharmacy', 'acct-ambulance', 'acct-physio',
   'acct-dietician', 'acct-hospitals', 'acct-care-assistants', 'acct-equipment', 'acct-counsellors',
 ];
-const _FINANCE_TABS   = ['revenue', 'wallet', 'settlements', 'commission-rules', 'coupons', 'refunds', 'referrals', 'reports', 'bill-discounts'];
+const _FINANCE_TABS   = ['revenue', 'wallet', 'settlements', 'coupons', 'refunds', 'referrals', 'reports', 'bill-discounts'];
 const _SUPPORT_TABS   = ['patients', 'appointments', 'calls', 'tickets', 'operation-logs', 'requests', 'order-tracking', 'ambulance-tracking', 'minor-requests'];
 const _MARKETING_TABS = ['campaigns', 'banners', 'broadcast', 'web-ads'];
 const _QUALITY_TABS   = ['feedback', 'operation-logs', 'quality-reports', 'quality-analytics', 'reviews'];
@@ -300,7 +307,6 @@ function switchTab(tab, title, navItem) {
   if (tab === 'physio-partners')       loadPartnerEarnings('physiotherapy');
   if (tab === 'counselling-partners')  loadPartnerEarnings('counselling');
 
-  if (tab === 'commission-rules' && !_commissionRulesInited) { _commissionRulesInited = true; loadCommissionRules(); }
   if (tab === 'coupons' && !_couponsInited) { _couponsInited = true; loadCoupons(); }
   if (tab === 'campaigns' && !_campaignsInited) {
     _campaignsInited = true;
@@ -836,7 +842,7 @@ function renderDoctorsTable(doctors) {
       <td>${escHtml(d.phone || '—')}</td>
       <td>${escHtml(String(d.consultations || 0))}</td>
       <td>${(d.totalReviews > 0 && d.rating > 0) ? `â­ ${escHtml(d.rating.toFixed(1))} <span style="font-size:11px;color:#9E9E9E;">(${d.totalReviews})</span>` : '<span style="color:#BDBDBD;font-size:12px;">No reviews</span>'}</td>
-      <td><span class="pill pill-${escHtml(safeStatus)}">${escHtml(capitalize(d.status || 'Pending'))}</span></td>
+      <td><span class="pill pill-${escHtml(safeStatus)}">${escHtml(capitalize(d.status || 'Pending'))}</span>${resubmitBadgeHtml(d)}</td>
       <td>
         <button class="${d.hasPendingChanges ? 'btn btn-approve' : 'btn btn-outline'}" onclick="viewDoctor('${escHtml(d.id)}')">${(!d.status || d.status === 'pending') ? 'Review' : (d.hasPendingChanges ? 'Review Edit' : 'View')}</button>
         <button class="btn btn-outline" style="margin-left:4px;" onclick="editDoctorAdmin('${escHtml(d.id)}')" title="Edit" aria-label="Edit">
@@ -869,14 +875,33 @@ function renderDoctorsTableHead() {
     sortHeaderHtml('doctors', 'status', 'Status', 'filterDoctorsTable') +
     '<th>Actions</th>';
 }
+// A rejected/pending partner or doctor can ask for another look from their app
+// ("Request re-review" -> `resubmittedAt` + `resubmitNote` on their own profile).
+// The status filters get a "Re-review requested" option injected here rather
+// than in index.html so every partner table and the Doctors table share it.
+function _ensureResubmitFilterOption(selectId) {
+  const sel = document.getElementById(selectId);
+  if (!sel || Array.from(sel.options).some(o => o.value === 'resubmitted')) return;
+  const opt = document.createElement('option');
+  opt.value = 'resubmitted';
+  opt.textContent = 'Re-review requested';
+  sel.appendChild(opt);
+}
+function resubmitBadgeHtml(p) {
+  if (!p || !p.resubmittedAt || (p.status || 'pending') === 'active') return '';
+  const note = p.resubmitNote ? ' — ' + String(p.resubmitNote).slice(0, 200) : '';
+  return ` <span class="pill pill-pending" title="${escHtml('Partner asked for a re-review' + note)}">Re-review requested</span>`;
+}
 function filterDoctorsTable() {
   const q           = (document.getElementById('doctor-search')?.value || '').toLowerCase();
   const typeFilter   = document.getElementById('doctor-type-filter')?.value || 'all';
   const statusFilter = document.getElementById('doctor-status-filter')?.value || 'all';
 
+  _ensureResubmitFilterOption('doctor-status-filter');
   let list = allDoctors;
   if (typeFilter !== 'all') list = list.filter(d => (d.type || 'doctor') === typeFilter);
-  if (statusFilter !== 'all') list = list.filter(d => d.status === statusFilter);
+  if (statusFilter === 'resubmitted') list = list.filter(d => d.resubmittedAt && d.status !== 'active');
+  else if (statusFilter !== 'all') list = list.filter(d => d.status === statusFilter);
   if (q) {
     list = list.filter(d =>
       (d.name||'').toLowerCase().includes(q) ||
@@ -920,6 +945,7 @@ async function bulkApproveSelectedDoctors() {
       batch.update(db.collection('doctors').doc(id), {
         status: 'active',
         approvedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        resubmittedAt: null, resubmitNote: null,
       });
     });
     await batch.commit();
@@ -954,6 +980,7 @@ function onDoctorTypeChange() {
   const current = specialtyEl.value;
   specialtyEl.innerHTML = list.map(s => `<option value="${escHtml(s)}">${escHtml(s)}</option>`).join('');
   if (list.includes(current)) specialtyEl.value = current;
+  try { applyDoctorDocLabels(); } catch (_) { /* labels only; consts may not be initialised yet */ }
 }
 
 // ── Qualification documents (Add/Edit Doctor form) ──────────────────────────
@@ -961,12 +988,45 @@ function onDoctorTypeChange() {
 // so admin-added and self-registered doctors share the same `documents` map shape,
 // which showDoctorModal() already knows how to render.
 const DOCTOR_DOC_TYPES = {
-  mbbs_degree:   'MBBS Degree Certificate',
-  spec_cert:     'Specialization Certificate',
-  mbbs_reg_cert: 'MBBS Registration Certificate',
-  renewal_cert:  'Renewal Certificate',
-  profile_photo: 'Profile Photo',
+  mbbs_degree:       'UG Degree',
+  spec_cert:         'PG Degree',
+  mbbs_reg_cert:     'Registration - State',
+  state_reg_cert_2:  'Registration - State 2 (optional)',
+  state_reg_cert_3:  'Registration - State 3 (optional)',
+  national_reg_cert: 'Registration - National',
+  renewal_cert:      'Renewal Certificate (optional)',
+  other_cert:        'Other Certificate (optional)',
+  resume:            'Resume (optional)',
+  profile_photo:     'Profile Photo',
 };
+
+// Dental doctors (BDS/MDS/DCI) use the same storage keys with dental labels.
+// Same matching rule as isDentalSpecialty() in mednu_doctor/lib/core/utils/specialty_utils.dart.
+const _DENTAL_SPECIALTY_RE = /\b(dental|dentist|dentistry|orthodont|endodont|periodont|prosthodont)/i;
+function isDentalSpecialty(s) {
+  return typeof s === 'string' && _DENTAL_SPECIALTY_RE.test(s.trim());
+}
+const DOCTOR_DOC_TYPES_DENTAL = {
+  mbbs_degree:       'BDS Degree',
+  spec_cert:         'MDS Degree (optional)',
+  mbbs_reg_cert:     'State Dental Council Registration',
+  state_reg_cert_2:  'State Dental Council Registration 2 (optional)',
+  state_reg_cert_3:  'State Dental Council Registration 3 (optional)',
+  national_reg_cert: 'Dental Council of India (DCI) Registration',
+  renewal_cert:      'Renewal Certificate',
+  other_cert:        'Other Certificates (optional)',
+  resume:            'Resume (optional)',
+  profile_photo:     'Profile Photo',
+};
+// Relabel the Add/Edit Doctor form tiles for the entered specialty.
+function applyDoctorDocLabels() {
+  const types = isDentalSpecialty(document.getElementById('dr-specialty')?.value)
+    ? DOCTOR_DOC_TYPES_DENTAL : DOCTOR_DOC_TYPES;
+  Object.entries(types).forEach(([k, label]) => {
+    const el = document.querySelector(`#doc-tile-${k} .doc-upload-label`);
+    if (el) el.textContent = label;
+  });
+}
 
 let _doctorDocFiles = {};     // docType -> pending File selected in this form session
 let _existingDoctorDocs = {}; // docType -> already-uploaded URL (populated when editing)
@@ -1012,7 +1072,7 @@ function populateDoctorDocsUI(existingDocs) {
     const tileEl   = document.getElementById(`doc-tile-${docType}`);
     if (!statusEl) return;
     if (url) {
-      statusEl.innerHTML = `<a href="${escHtml(url)}" target="_blank" rel="noopener">View uploaded file</a>`;
+      statusEl.innerHTML = `<a href="${escHtml(safeUrl(url))}" target="_blank" rel="noopener">View uploaded file</a>`;
       if (btnEl) btnEl.innerHTML = '<i class="ti ti-replace"></i> Replace';
       if (tileEl) tileEl.classList.add('doc-uploaded');
     } else {
@@ -1128,6 +1188,7 @@ function editDoctorAdmin(id) {
   document.getElementById('dr-fee').value            = d.fee != null ? d.fee : '';
   document.getElementById('dr-active').checked       = d.status === 'active';
   populateDoctorDocsUI(d.documents);
+  applyDoctorDocLabels();
   document.getElementById('doctor-form-title').textContent = 'Edit Doctor / Therapist';
   document.getElementById('cancel-doctor-btn').style.display = 'inline-flex';
   document.getElementById('dr-name').scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -1154,6 +1215,7 @@ async function approveDoctor(id, btn) {
       await db.collection('doctors').doc(id).update({
         status: 'active',
         approvedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        resubmittedAt: null, resubmitNote: null,
       });
       showToast('Doctor approved successfully!');
     } catch (err) {
@@ -1172,6 +1234,7 @@ async function rejectDoctor(id, btn) {
       await db.collection('doctors').doc(id).update({
         status: 'suspended',
         rejectedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        resubmittedAt: null, resubmitNote: null,
       });
       showToast('Doctor rejected.');
     } catch (err) {
@@ -1193,20 +1256,14 @@ function showDoctorModal(d) {
   document.getElementById('doctor-modal')?.remove();
 
   const docs = d.documents || {};
-  const docKeys = {
-    mbbs_degree:   'MBBS Degree Certificate',
-    spec_cert:     'Specialization Certificate',
-    mbbs_reg_cert: 'MBBS Registration Certificate',
-    renewal_cert:  'Renewal Certificate',
-    profile_photo: 'Profile Photo',
-  };
+  const docKeys = isDentalSpecialty(d.specialty) ? DOCTOR_DOC_TYPES_DENTAL : DOCTOR_DOC_TYPES;
 
   const docHtml = Object.entries(docKeys).map(([key, label]) => {
     const url = docs[key];
     return url
       ? `<div style="margin-bottom:10px;">
            <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">${label}</div>
-           <a href="${escHtml(url)}" target="_blank" style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:var(--primary-light,#f3e5f5);color:var(--primary,#880E4F);border-radius:8px;font-size:13px;font-weight:600;text-decoration:none;">
+           <a href="${escHtml(safeUrl(url))}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:var(--primary-light,#f3e5f5);color:var(--primary,#880E4F);border-radius:8px;font-size:13px;font-weight:600;text-decoration:none;">
              <span> View Document
            </a>
          </div>`
@@ -1216,7 +1273,35 @@ function showDoctorModal(d) {
          </div>`;
   }).join('');
 
-  const isPending = !d.status || d.status === 'pending';
+  // Doctor-added optional "Other documents" (other_doc_1..5, titles in
+  // `documentLabels`) — listed after the fixed set, never required.
+  const _docLabels = d.documentLabels || {};
+  const otherDocHtml = Object.keys(docs).filter(k => /^other_doc_[1-5]$/.test(k) && docs[k]).sort().map(k => {
+    const title = String(_docLabels[k] || '').trim() || ('Other document ' + k.slice(-1));
+    return `<div style="margin-bottom:10px;">
+           <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;overflow-wrap:anywhere;">${escHtml(title)}</div>
+           <a href="${escHtml(safeUrl(docs[k]))}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:var(--primary-light,#f3e5f5);color:var(--primary,#880E4F);border-radius:8px;font-size:13px;font-weight:600;text-decoration:none;">
+             View Document
+           </a>
+         </div>`;
+  }).join('');
+  const docHtmlAll = docHtml + (otherDocHtml
+    ? `<div style="font-size:12px;font-weight:800;color:var(--text-secondary);margin:14px 0 8px;">Other documents (optional)</div>` + otherDocHtml
+    : '');
+
+  // A rejected (suspended) doctor who asked for a re-review gets the same
+  // Approve / Reject actions as a pending application.
+  const isPending = !d.status || d.status === 'pending' ||
+    (d.status === 'suspended' && !!d.resubmittedAt);
+
+  let resubmitHtml = '';
+  if (d.resubmittedAt && d.status !== 'active') {
+    resubmitHtml = `
+      <div style="margin-bottom:20px;padding:14px 16px;background:#e3f2fd;border:1px solid #90caf9;border-radius:14px;">
+        <div style="font-size:14px;font-weight:700;margin-bottom:4px;">Re-review requested${d.resubmittedAt && d.resubmittedAt.toDate ? ' · ' + escHtml(formatDate(d.resubmittedAt)) : ''}</div>
+        <div style="font-size:13px;color:#444;overflow-wrap:anywhere;">${d.resubmitNote ? escHtml(d.resubmitNote) : '<span style="color:#888;font-style:italic;">No note provided.</span>'}</div>
+      </div>`;
+  }
 
   // An active doctor's own profile edit lands in `pendingChanges` (see
   // _saveProfile in mednu_doctor's doctor_profile_screen.dart) and only goes
@@ -1276,27 +1361,28 @@ function showDoctorModal(d) {
       </div>
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px;">
-        ${[['Reg. Number', d.registrationNumber||'—'],['Qualifications', d.qualifications||'—'],['Fee', d.fee ? '₹'+d.fee : '—'],['Gender', d.gender||'—']].map(([l,v])=>`
+        ${[['Reg. Number', d.registrationNumber||'—'],['Qualifications', d.qualifications||'—'],['Fee', d.fee ? '₹'+d.fee : '—'],['Gender', d.gender||'—'],...(partnerFeeAmountFor(d.id) != null ? [['Platform fee', '₹'+partnerFeeAmountFor(d.id)+' (partner-specific)']] : [])].map(([l,v])=>`
           <div style="padding:12px;background:#f9f9f9;border-radius:10px;">
             <div style="font-size:11px;color:#aaa;font-weight:600;text-transform:uppercase;">${escHtml(l)}</div>
             <div style="font-size:14px;font-weight:600;margin-top:2px;">${escHtml(v)}</div>
           </div>`).join('')}
       </div>
 
+      ${resubmitHtml}
       ${pendingEditHtml}
 
       <div style="margin-bottom:20px;">
         <div style="font-size:14px;font-weight:700;margin-bottom:12px;"> Submitted Documents</div>
-        ${docHtml}
+        ${docHtmlAll}
       </div>
 
       <div style="display:flex;gap:10px;margin-bottom:8px;">
         ${isPending ? `
-          <button onclick="approveFromModal('${d.id}')" style="flex:1;padding:12px;background:#2e7d32;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;">âœ“ Approve Doctor</button>
-          <button onclick="rejectFromModal('${d.id}')" style="flex:1;padding:12px;background:#c62828;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;">âœ• Reject Doctor</button>
+          <button onclick="approveFromModal('${d.id}')" style="flex:1;padding:12px;background:#2e7d32;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;">✓ Approve Doctor</button>
+          <button onclick="rejectFromModal('${d.id}')" style="flex:1;padding:12px;background:#c62828;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;">✕ Reject Doctor</button>
         ` : `
           <div style="flex:1;padding:12px;text-align:center;border-radius:12px;font-weight:700;font-size:14px;background:${d.status==='active'?'#e8f5e9':'#fce4ec'};color:${d.status==='active'?'#2e7d32':'#c62828'};">
-            Status: ${d.status==='active'?'âœ“ Approved':'âœ• Rejected'}
+            Status: ${d.status==='active'?'✓ Approved':'✕ Rejected'}
           </div>
         `}
       </div>
@@ -1362,6 +1448,7 @@ async function approveFromModal(id) {
       await db.collection('doctors').doc(id).update({
         status: 'active',
         approvedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        resubmittedAt: null, resubmitNote: null,
       });
       showToast('Doctor approved successfully!');
       document.getElementById('doctor-modal')?.remove();
@@ -1380,6 +1467,7 @@ async function rejectFromModal(id) {
       await db.collection('doctors').doc(id).update({
         status: 'suspended',
         rejectedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        resubmittedAt: null, resubmitNote: null,
       });
       showToast('Doctor application rejected.');
       document.getElementById('doctor-modal')?.remove();
@@ -1576,11 +1664,11 @@ function viewSpecRequest(id) {
       ${isPending ? `
         <div style="margin-top:20px;">
           <div style="display:flex;gap:10px;margin-bottom:10px;">
-            <button onclick="approveSpecRequestFromModal('${r.id}')" style="flex:1;padding:13px;background:#2e7d32;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;">âœ“ Approve & Update Specialization</button>
+            <button onclick="approveSpecRequestFromModal('${r.id}')" style="flex:1;padding:13px;background:#2e7d32;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;">✓ Approve & Update Specialization</button>
           </div>
           <div style="display:flex;gap:10px;">
             <button onclick="setSpecRequestUnderReview('${r.id}')" style="flex:1;padding:13px;background:#e65100;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;"> Mark Under Review</button>
-            <button onclick="promptRejectSpecRequestFromModal('${r.id}')" style="flex:1;padding:13px;background:#c62828;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;">âœ• Reject</button>
+            <button onclick="promptRejectSpecRequestFromModal('${r.id}')" style="flex:1;padding:13px;background:#c62828;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;">✕ Reject</button>
           </div>
         </div>
       ` : ''}
@@ -2307,7 +2395,7 @@ function buildRevenueDetailChart(payments) {
       datasets: [
         { label: 'Consultations', data: consultData, backgroundColor: '#522546', borderRadius: 4 },
         { label: 'Subscriptions', data: subscData,   backgroundColor: '#1e8e3e', borderRadius: 4 },
-        { label: 'Commission',    data: commData,     backgroundColor: '#f29900', borderRadius: 4 }
+        { label: 'Platform fee',  data: commData,     backgroundColor: '#f29900', borderRadius: 4 }
       ]
     },
     options: {
@@ -2428,7 +2516,7 @@ async function toggleBanner(id, enabled) {
     });
     const banner = allBanners.find(b => b.id === id);
     if (banner) banner.isEnabled = enabled;
-    showToast(enabled ? 'Banner enabled âœ“' : 'Banner disabled');
+    showToast(enabled ? 'Banner enabled ✓' : 'Banner disabled');
     renderBannersList(allBanners);
   } catch (err) {
     showToast('Update failed: ' + err.message);
@@ -2626,11 +2714,11 @@ async function publishBanner() {
   try {
     if (_editingBannerId) {
       await db.collection('banners').doc(_editingBannerId).update(data);
-      showToast('Banner updated âœ“');
+      showToast('Banner updated ✓');
     } else {
       data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
       await db.collection('banners').add(data);
-      showToast('Banner published âœ“');
+      showToast('Banner published ✓');
     }
     resetBannerForm();
   } catch (err) {
@@ -2874,7 +2962,7 @@ async function updateRequestStatus(id, newStatus, btn) {
       status:    newStatus,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     });
-    showToast(`Request ${newStatus} âœ“`);
+    showToast(`Request ${newStatus} ✓`);
   } catch (err) {
     showToast('Update failed: ' + err.message);
     if (btn) { btn.disabled = false; btn.textContent = capitalize(newStatus); }
@@ -3312,11 +3400,11 @@ async function saveHospital() {
   try {
     if (_editingHospitalId) {
       await db.collection('hospitals').doc(_editingHospitalId).update(data);
-      showToast('Hospital updated âœ“');
+      showToast('Hospital updated ✓');
     } else {
       data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
       await db.collection('hospitals').add(data);
-      showToast('Hospital added âœ“');
+      showToast('Hospital added ✓');
     }
     cancelHospitalEdit();
   } catch (err) {
@@ -3375,7 +3463,7 @@ async function toggleHospital(id, enabled) {
       isEnabled: enabled,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     });
-    showToast(enabled ? 'Hospital enabled âœ“' : 'Hospital disabled');
+    showToast(enabled ? 'Hospital enabled ✓' : 'Hospital disabled');
   } catch (err) {
     showToast('Update failed: ' + err.message);
   }
@@ -3674,11 +3762,11 @@ async function saveAmbulance() {
   try {
     if (_editingAmbulanceId) {
       await db.collection('ambulances').doc(_editingAmbulanceId).update(data);
-      showToast('Ambulance service updated âœ“');
+      showToast('Ambulance service updated ✓');
     } else {
       data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
       await db.collection('ambulances').add(data);
-      showToast('Ambulance service added âœ“');
+      showToast('Ambulance service added ✓');
     }
     cancelAmbulanceEdit();
   } catch (err) {
@@ -3730,7 +3818,7 @@ async function toggleAmbulance(id, enabled) {
       isEnabled: enabled,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     });
-    showToast(enabled ? 'Ambulance service enabled âœ“' : 'Ambulance service disabled');
+    showToast(enabled ? 'Ambulance service enabled ✓' : 'Ambulance service disabled');
   } catch (err) {
     showToast('Update failed: ' + err.message);
   }
@@ -4057,12 +4145,12 @@ async function saveHealthArticle() {
   try {
     if (_editingHealthArticleId) {
       await db.collection('health_articles').doc(_editingHealthArticleId).update(data);
-      showToast('Article updated âœ“');
+      showToast('Article updated ✓');
     } else {
       data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
       data.views = 0;
       await db.collection('health_articles').add(data);
-      showToast('Article added âœ“');
+      showToast('Article added ✓');
     }
     cancelHealthArticleEdit();
   } catch (err) {
@@ -4115,7 +4203,7 @@ async function toggleHealthArticleVisibility(id, enabled) {
       isEnabled: enabled,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     });
-    showToast(enabled ? 'Article shown in app âœ“' : 'Article hidden from app');
+    showToast(enabled ? 'Article shown in app ✓' : 'Article hidden from app');
   } catch (err) {
     showToast('Update failed: ' + err.message);
   }
@@ -4127,7 +4215,7 @@ async function toggleHealthArticleFeatured(id, featured) {
       isFeatured: featured,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     });
-    showToast(featured ? 'Article featured âœ“' : 'Article unfeatured');
+    showToast(featured ? 'Article featured ✓' : 'Article unfeatured');
   } catch (err) {
     showToast('Update failed: ' + err.message);
   }
@@ -5092,11 +5180,11 @@ async function saveMedicineCatalogue() {
   try {
     if (_editingMedCatId) {
       await db.collection('medicines_catalogue').doc(_editingMedCatId).update(data);
-      showToast('Medicine updated âœ“');
+      showToast('Medicine updated ✓');
     } else {
       data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
       await db.collection('medicines_catalogue').add(data);
-      showToast('Medicine added to catalogue âœ“');
+      showToast('Medicine added to catalogue ✓');
     }
     cancelMedicineCatalogueEdit();
   } catch (e) {
@@ -5155,7 +5243,7 @@ async function toggleMedCatActive(id, currentlyActive) {
       isActive: !currentlyActive,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     });
-    showToast(currentlyActive ? 'Medicine hidden from app' : 'Medicine visible in app âœ“');
+    showToast(currentlyActive ? 'Medicine hidden from app' : 'Medicine visible in app ✓');
   } catch (e) { showToast('Update failed: ' + e.message); }
 }
 
@@ -5415,11 +5503,11 @@ async function saveService() {
   try {
     if (_editingServiceId) {
       await db.collection('services').doc(_editingServiceId).update(data);
-      showToast('Service updated âœ“');
+      showToast('Service updated ✓');
     } else {
       data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
       await db.collection('services').add(data);
-      showToast('Service added âœ“');
+      showToast('Service added ✓');
     }
     cancelServiceEdit();
   } catch (err) {
@@ -5492,7 +5580,7 @@ function previewServiceImage(event) {
 async function toggleService(id, enabled) {
   try {
     await db.collection('services').doc(id).update({ isEnabled: enabled, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
-    showToast(enabled ? 'Service enabled âœ“' : 'Service disabled');
+    showToast(enabled ? 'Service enabled ✓' : 'Service disabled');
   } catch (err) { showToast('Update failed: ' + err.message); }
 }
 
@@ -5682,7 +5770,7 @@ async function updateApptStatus(id, newStatus, btn) {
         }).catch(() => {});
       }
     }
-    showToast(`Appointment ${newStatus} âœ“`);
+    showToast(`Appointment ${newStatus} ✓`);
   } catch (err) {
     showToast('Update failed: ' + err.message);
     if (btn) { btn.disabled = false; btn.textContent = capitalize(newStatus); }
@@ -5895,7 +5983,7 @@ async function addWalletCredit() {
     });
 
     await batch.commit();
-    showToast(`₹${amount} credited to ${_selectedWalletUser.name || 'user'} âœ“`);
+    showToast(`₹${amount} credited to ${_selectedWalletUser.name || 'user'} ✓`);
     // Reset form
     document.getElementById('credit-user-search').value = '';
     document.getElementById('credit-amount').value = '';
@@ -6262,7 +6350,7 @@ async function sendBroadcast() {
       });
     }
 
-    showToast(`Notification sent to ${target.replace('_',' ')} âœ“`);
+    showToast(`Notification sent to ${target.replace('_',' ')} ✓`);
     // Reset form
     ['notif-title','notif-body','notif-link','notif-user-id'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
     loadBroadcasts();
@@ -8583,12 +8671,11 @@ const PARTNER_ROLES = {
     // (mednu_doctor/lib/shared_core/documents/partner_document_models.dart)
     // and the `ambulance_documents/{uid}/{docType}.{ext}` Storage path.
     docSlots: {
-      vehicle_registration: 'Vehicle Registration',
-      driver_license:       'Driver License',
-      vehicle_insurance:    'Vehicle Insurance',
-      vehicle_fitness:      'Vehicle Fitness Certificate',
-      emt_certificate:      'EMT / Paramedic Certificate',
-      address_proof:        'Address Proof',
+      driver_license:        "Driver's Licence",
+      vehicle_fitness:       'Ambulance Certificate',
+      vehicle_registration:  'C Book (RC Book)',
+      vehicle_insurance:     'Insurance',
+      pollution_certificate: 'Pollution Certificate',
     },
     nameOf: p => p.driverName || p.plateNumber || 'Unnamed partner',
     subOf:  p => p.vehicleType || '—',
@@ -8611,9 +8698,9 @@ const PARTNER_ROLES = {
     navBadge:     'nav-caregiver-partners-count',
     extraFilterId:'cp-specialty-filter',
     docSlots: {
-      caregiver_id:  'Nurse ID',
-      certificates:  'Certificates',
-      address_proof: 'Address Proof',
+      certificates:  'Basic Qualification + ANM / GNM / B.Sc. Nursing',
+      caregiver_id:  'Government ID Proof',
+      resume:        'Resume (optional)',
     },
     nameOf: p => p.name || 'Unnamed partner',
     subOf:  p => (p.specialties || []).join(', ') || '—',
@@ -8635,9 +8722,10 @@ const PARTNER_ROLES = {
     navBadge:     'nav-pharmacy-partners-count',
     extraFilterId:'pp-delivery-filter',
     docSlots: {
-      pharmacy_license:        'Pharmacy License',
-      pharmacist_registration: 'Registered Pharmacist Certificate',
-      address_proof:           'Address Proof',
+      pharmacy_license:        'Drug Licence Forms',
+      pharmacist_registration: 'Pharmacist Details',
+      trade_license:           'Trade Licence',
+      gst_certificate:         'GST Certificate',
     },
     nameOf: p => p.name || 'Unnamed pharmacy',
     subOf:  p => p.address || p.email || '—',
@@ -8667,9 +8755,10 @@ const PARTNER_ROLES = {
     // partner_document_models.dart (and the `equipment_documents/{uid}/...`
     // Storage path).
     docSlots: {
-      business_registration: 'Business / Trade Registration (GST / Shop Act)',
-      owner_id:              'Owner Government ID Proof',
-      address_proof:         'Shop Address Proof',
+      pharmacy_license:        'Drug Licence Forms',
+      pharmacist_registration: 'Pharmacist Details',
+      trade_license:           'Trade Licence',
+      gst_certificate:         'GST Certificate',
     },
     nameOf: p => p.name || 'Unnamed vendor',
     subOf:  p => p.address || p.email || '—',
@@ -8698,9 +8787,12 @@ const PARTNER_ROLES = {
     navBadge:     'nav-lab-partners-count',
     extraFilterId:'lp-service-filter',
     docSlots: {
-      lab_license:              'Lab License',
-      pathologist_registration: 'Pathologist Registration Certificate',
-      address_proof:            'Address Proof',
+      lab_license:              'Lab Licence',
+      maridi_certificate:       'Maridi Certificate',
+      lab_technician_details:   'Lab Technician Details',
+      pathologist_registration: 'Biochemist / Pathologist / Microbiologist Details',
+      trade_license:            'Trade Licence (optional)',
+      gst_certificate:          'GST Certificate',
     },
     nameOf: p => p.name || 'Unnamed lab',
     subOf:  p => p.address || p.email || '—',
@@ -8736,8 +8828,12 @@ const PARTNER_ROLES = {
     // `physiotherapist_documents/{uid}/{docType}.{ext}` Storage path segment
     // and the `documents.{docType}` field on `physiotherapist_profiles`.
     docSlots: {
-      physio_id:          'Government ID Proof',
-      physio_certificate: 'Physiotherapy Certification / Degree',
+      ug_certificate:        'UG Degree',
+      pg_certificate:        'PG Degree (optional)',
+      renewal_certificate:   'Renewal Certificate',
+      registration_state:    'Registration - State',
+      registration_national: 'Registration - National',
+      other_certificate:     'Others (optional)',
     },
     nameOf: p => p.name || 'Unnamed partner',
     subOf:  p => (p.specialties || []).join(', ') || p.city || '—',
@@ -8796,8 +8892,10 @@ const PARTNER_ROLES = {
     // `nutritionist_documents/{uid}/{docType}.{ext}` Storage path segment
     // and the `documents.{docType}` field on `nutritionist_profiles`.
     docSlots: {
-      nutritionist_id:       'Government ID Proof',
-      nutrition_certificate: 'Nutrition / Dietetics Certification',
+      ug_certificate:           'UG Degree',
+      pg_certificate:           'PG Degree (optional)',
+      registration_certificate: 'Registration Certificate',
+      other_certificate:        'Others (optional)',
     },
     nameOf: p => p.name || 'Unnamed partner',
     subOf:  p => p.specialization || p.qualification || '—',
@@ -8830,9 +8928,14 @@ const PARTNER_ROLES = {
     // `hospital_documents/{uid}/{docType}.{ext}` Storage path segment and
     // the `documents.{docType}` field on `hospital_profiles`.
     docSlots: {
-      hospital_registration: 'Hospital Registration Certificate',
-      authorization_letter:  'Authorization Letter (on Hospital Letterhead)',
-      hospital_contact_id:   'Contact Person Government ID',
+      dmho_license:          'DM&HO Licence',
+      fire_certificate:      'Fire Certificate',
+      maridi_certificate:    'Maridi Certificate',
+      gvmc_certificate:      'GVMC Certificate',
+      pollution_certificate: 'Pollution Certificate',
+      trade_license:         'Trade Licence',
+      gst_certificate:       'GST Certificate',
+      hospital_resume:       'Hospital Resume (optional)',
     },
     nameOf: p => p.hospitalName || p.contactName || 'Unnamed partner',
     subOf:  p => p.contactName || '—',
@@ -8842,6 +8945,39 @@ const PARTNER_ROLES = {
       (p.phone || '').toLowerCase().includes(q),
   },
 };
+
+// Optional document slots per profile collection — shown to admin but never
+// block approval. Keep in sync with `optional: true` entries in
+// mednu_doctor/lib/shared_core/documents/partner_document_models.dart.
+const PARTNER_OPTIONAL_DOCS = {
+  caregiver_profiles:       ['resume'],
+  lab_profiles:             ['trade_license'],
+  physiotherapist_profiles: ['pg_certificate', 'other_certificate'],
+  nutritionist_profiles:    ['pg_certificate', 'other_certificate'],
+  hospital_profiles:        ['hospital_resume'],
+};
+
+// A Care Assistant shares `caregiver_profiles` with nurses but only submits an ID.
+function partnerDocSlots(cfg, p) {
+  if (cfg.collection === 'caregiver_profiles' && p && p.serviceType === 'care_assistant') {
+    return { caregiver_id: 'Government ID Proof' };
+  }
+  return cfg.docSlots;
+}
+
+function partnerRequiredSlotKeys(cfg, p) {
+  const optional = PARTNER_OPTIONAL_DOCS[cfg.collection] || [];
+  return Object.keys(partnerDocSlots(cfg, p))
+    .filter(k => !optional.includes(k) && !k.startsWith('other_doc_'));
+}
+
+// Partner-added optional "Other documents" (keys other_doc_1..5, each with a
+// partner-typed `label`). Never part of the required checklist / roll-up.
+function partnerOtherDocKeys(docs) {
+  return Object.keys(docs || {})
+    .filter(k => /^other_doc_[1-5]$/.test(k) && docs[k] && docs[k].url)
+    .sort();
+}
 
 const _partnerData      = { ambulance: [], caregiver: [], pharmacy: [], equipment: [], lab: [], physiotherapy: [], counselling: [], nutrition: [], hospital: [] };
 const _partnerListeners = { ambulance: null, caregiver: null, pharmacy: null, equipment: null, lab: null, physiotherapy: null, counselling: null, nutrition: null, hospital: null };
@@ -8949,6 +9085,7 @@ function renderHospitalBillPaymentsTable(rows) {
 
 // ── Realtime listeners ───────────────────────────────────────────────────────
 function initPartnerListeners() {
+  startPlatformFeeCfgListener();
   Object.keys(PARTNER_ROLES).forEach(role => {
     const cfg = PARTNER_ROLES[role];
     if (_partnerListeners[role]) _partnerListeners[role]();
@@ -9003,7 +9140,9 @@ function _updatePartnerStats(role) {
   if (badge) {
     // Nav badge covers both "needs a look" states — new registrations AND
     // active partners with a profile edit awaiting approval.
-    const needsReview = pending + pendingEdits;
+    // ...and rejected partners who asked for a re-review.
+    const resubmitted = list.filter(p => partnerStatusOf(p) === 'suspended' && p.resubmittedAt).length;
+    const needsReview = pending + pendingEdits + resubmitted;
     badge.textContent = needsReview;
     badge.style.display = needsReview > 0 ? 'inline-flex' : 'none';
   }
@@ -9015,11 +9154,13 @@ let _caregiverKind = null; // 'nurse' | 'care_assistant' | null (= both)
 function filterPartnerTable(role) {
   const cfg    = PARTNER_ROLES[role];
   const q      = (document.getElementById(cfg.prefix + '-search')?.value || '').trim().toLowerCase();
+  _ensureResubmitFilterOption(cfg.prefix + '-status-filter');
   const status = document.getElementById(cfg.prefix + '-status-filter')?.value || 'all';
   const extra  = document.getElementById(cfg.extraFilterId)?.value || 'all';
 
   let list = _partnerData[role];
-  if (status !== 'all') list = list.filter(p => partnerStatusOf(p) === status);
+  if (status === 'resubmitted') list = list.filter(p => p.resubmittedAt && partnerStatusOf(p) !== 'active');
+  else if (status !== 'all') list = list.filter(p => partnerStatusOf(p) === status);
   if (extra  !== 'all') list = list.filter(p => cfg.extraMatch(p, extra));
   if (q)                list = list.filter(p => cfg.searchMatch(p, q));
   // Nurses and Care Assistants share caregiver_profiles (told apart by
@@ -9062,8 +9203,9 @@ function partnerActionsCell(role, p) {
   // modal first" treatment as a pending registration — Approve/Reject for the
   // edit itself live inside showPartnerModal(), not here.
   const hasEdit = st === 'active' && p.hasPendingChanges;
-  const viewLabel = st === 'pending' ? 'Review' : (hasEdit ? 'Review Edit' : 'View');
-  const viewClass = hasEdit ? 'btn btn-approve' : 'btn btn-outline';
+  const hasResubmit = st !== 'active' && !!p.resubmittedAt;
+  const viewLabel = (st === 'pending' || hasResubmit) ? 'Review' : (hasEdit ? 'Review Edit' : 'View');
+  const viewClass = (hasEdit || hasResubmit) ? 'btn btn-approve' : 'btn btn-outline';
   return actions +
     `<button class="${viewClass}" style="margin-left:4px;" onclick="showPartnerModal('${role}','${id}')">${viewLabel}</button>`;
 }
@@ -9084,7 +9226,7 @@ function _partnerBulkEligible(role, p) {
   const cfg = PARTNER_ROLES[role];
   const docs = (p && p.documents) || {};
   const vers = (p && p.documentVerification) || {};
-  const slots = Object.keys(cfg.docSlots);
+  const slots = partnerRequiredSlotKeys(cfg, p);
   const allVerified = slots.length === 0 ||
     slots.every(k => _partnerDocStatus(docs[k] || null, vers[k] || null) === 'verified');
   if (!allVerified) return false;
@@ -9129,6 +9271,8 @@ async function bulkApproveSelectedPartners(role) {
         approvedAt: firebase.firestore.FieldValue.serverTimestamp(),
         updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
         updatedBy: auth.currentUser?.email || 'admin',
+        resubmittedAt: null,
+        resubmitNote: null,
       };
       if (role === 'hospital') { payload.hospitalId = p.hospitalId; payload.hospitalName = p.hospitalName || ''; }
       batch.update(db.collection(cfg.collection).doc(id), payload);
@@ -9161,7 +9305,7 @@ function renderPartnerTable(role, list) {
     const avatar = `<div class="doc-avatar" style="background:${escHtml(color.bg)};color:${escHtml(color.fg)};">${escHtml(getInitials(name))}</div>`;
     const statusCell = `<td><span class="pill pill-${escHtml(st)}">${escHtml(capitalize(st))}</span>${
       p.hasPendingChanges ? ' <span class="pill pill-pending" title="Partner submitted a profile edit awaiting approval">Edit pending</span>' : ''
-    }</td>`;
+    }${resubmitBadgeHtml(p)}</td>`;
     const actions    = `<td>${partnerActionsCell(role, p)}</td>`;
     const eligible   = _partnerBulkEligible(role, p);
     const checkboxCell = `<td><input type="checkbox" ${eligible ? '' : 'disabled'} ${_partnerSelSet(role).has(p.id) ? 'checked' : ''} onchange="togglePartnerSelect('${role}','${escHtml(p.id)}', this.checked)" aria-label="Select ${escHtml(name)}" /></td>`;
@@ -9306,6 +9450,9 @@ function _setPartnerStatus(role, id, status, btn, successMsg) {
         status: status,
         updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
         updatedBy: auth.currentUser?.email || 'admin',
+        // Any admin decision answers a partner's "Request re-review".
+        resubmittedAt: null,
+        resubmitNote: null,
       };
       if (status === 'active')    payload.approvedAt = firebase.firestore.FieldValue.serverTimestamp();
       if (status === 'suspended') payload.rejectedAt = firebase.firestore.FieldValue.serverTimestamp();
@@ -9325,7 +9472,7 @@ function approvePartner(role, id, btn) {
   const p    = _partnerData[role].find(x => x.id === id);
   const docs = (p && p.documents) || {};
   const vers = (p && p.documentVerification) || {};
-  const slots = Object.keys(cfg.docSlots);
+  const slots = partnerRequiredSlotKeys(cfg, p);
   // A role with zero required doc slots has nothing to
   // verify, so it must not be treated the same as "verification incomplete"
   // — mirrors showPartnerModal's `allDocsVerified`. This used to read
@@ -9360,7 +9507,7 @@ function approveHospitalPartner(id, btn) {
   const p     = (_partnerData.hospital || []).find(x => x.id === id);
   const docs  = (p && p.documents) || {};
   const vers  = (p && p.documentVerification) || {};
-  const allVerified = Object.keys(cfg.docSlots).every(k =>
+  const allVerified = partnerRequiredSlotKeys(cfg, p).every(k =>
     _partnerDocStatus(docs[k] || null, vers[k] || null) === 'verified');
   if (!allVerified) {
     showToast('Verify every required document before approving.');
@@ -9378,6 +9525,8 @@ function approveHospitalPartner(id, btn) {
         approvedAt: firebase.firestore.FieldValue.serverTimestamp(),
         updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
         updatedBy: auth.currentUser?.email || 'admin',
+        resubmittedAt: null,
+        resubmitNote: null,
       });
       showToast('Hospital partner approved ✓');
       document.getElementById('partner-modal')?.remove();
@@ -9418,7 +9567,23 @@ async function approvePendingProfileEdit(role, id, btn) {
       const ref  = db.collection(cfg.collection).doc(id);
       const snap = await ref.get();
       const data = snap.exists ? (snap.data() || {}) : {};
-      const changes = data.pendingChanges || {};
+      const changes = Object.assign({}, data.pendingChanges || {});
+      // `availability` is a shared map (schedule, blockedSlots, ...): a pending
+      // {availability:{clinicName,...}} must deep-merge via dotted paths so the
+      // rest of the map is never overwritten.
+      if (changes.availability && typeof changes.availability === 'object' && !Array.isArray(changes.availability)) {
+        const av = changes.availability;
+        delete changes.availability;
+        Object.keys(av).forEach(k => { changes['availability.' + k] = av[k]; });
+      }
+      // `staffDetails` (lab technician / specialist / pharmacist typed details)
+      // likewise merges one level down so an edit to one sub-map (e.g. only
+      // the pharmacist) never wipes its siblings on the live doc.
+      if (changes.staffDetails && typeof changes.staffDetails === 'object' && !Array.isArray(changes.staffDetails)) {
+        const sd = changes.staffDetails;
+        delete changes.staffDetails;
+        Object.keys(sd).forEach(k => { changes['staffDetails.' + k] = sd[k]; });
+      }
       await ref.update(Object.assign({}, changes, {
         pendingChanges:  {},
         hasPendingChanges: false,
@@ -9485,9 +9650,12 @@ async function _writePartnerDocVerification(role, id, docType, status, reason, b
 
       // Roll-up: every canonical slot must be verified. The slot being written
       // right now is evaluated from `status`, the rest from stored data.
-      const allVerified = Object.keys(cfg.docSlots).every(k =>
+      // Other slots use the same freshness rule as _partnerDocStatus, so a
+      // document re-uploaded after it was verified no longer counts.
+      const allVerified = partnerRequiredSlotKeys(cfg, data).every(k =>
         k === docType ? status === 'verified'
-                      : ((data.documentVerification || {})[k] || {}).status === 'verified');
+                      : _partnerDocStatus((data.documents || {})[k] || null,
+                                          (data.documentVerification || {})[k] || null) === 'verified');
 
       await ref.update({
         ['documentVerification.' + docType]: {
@@ -9766,7 +9934,19 @@ function showPartnerModal(role, id) {
   // Captured alongside the rendered HTML (not recomputed) so the Approve
   // gate below reads the exact same per-slot status the admin sees in this
   // modal — every required slot must be individually marked Verified.
-  const docEntries = Object.entries(cfg.docSlots).map(([key, label]) => {
+  // Grandfathered partners (approved before the checklist changed) may hold
+  // files under keys that are no longer in `docSlots` — list them as
+  // "Other / legacy document" so they are never lost, and so an approved
+  // partner is never shown a "missing documents" state.
+  const _slotsNow = partnerDocSlots(cfg, p);
+  const _legacySlots = {};
+  Object.keys(docs).forEach(k => {
+    if (!(k in _slotsNow) && !k.startsWith('other_doc_') && docs[k] && (docs[k].url || typeof docs[k] === 'string')) {
+      _legacySlots[k] = 'Other / legacy document (' + k.replace(/_/g, ' ') + ')';
+    }
+  });
+  const _isActiveP = st === 'active';
+  const docEntries = Object.entries(Object.assign({}, _slotsNow, _legacySlots)).map(([key, label]) => {
     const doc  = docs[key] || null;
     const ver  = vers[key] || null;
     const stat = _partnerDocStatus(doc, ver);
@@ -9783,7 +9963,7 @@ function showPartnerModal(role, id) {
         <div class="partner-doc-file">
           <span class="partner-doc-icon"><i class="ti ti-${isPdf ? 'file-type-pdf' : 'photo'}"></i></span>
           <div style="min-width:0;">
-            <a href="${escHtml(doc.url)}" target="_blank" rel="noopener"
+            <a href="${escHtml(safeUrl(doc.url))}" target="_blank" rel="noopener"
                style="font-size:13px;font-weight:600;color:var(--primary,#880E4F);text-decoration:none;overflow-wrap:anywhere;">
               View / Download</a>
             <div style="font-size:11px;color:#888;">Uploaded ${escHtml(doc.uploadedAt ? formatDate(doc.uploadedAt) : '—')}</div>
@@ -9794,16 +9974,51 @@ function showPartnerModal(role, id) {
           <button class="btn btn-approve" onclick="verifyPartnerDocument('${role}','${pid}','${escHtml(key)}', this)">Verify</button>
           <button class="btn btn-reject" onclick="rejectPartnerDocument('${role}','${pid}','${escHtml(key)}', this)">Reject</button>
         </div>`
-      : '<span style="font-size:12px;color:#aaa;font-style:italic;">Not uploaded yet</span>'}
+      : `<span style="font-size:12px;color:#aaa;font-style:italic;">${_isActiveP ? 'Not on file (approved before this checklist)' : 'Not uploaded yet'}</span>`}
     </div>`;
-    return { stat, html };
+    return { key, stat, html };
   });
-  const docHtml = docEntries.map(e => e.html).join('');
+  // Partner-added optional "Other documents": titled by the partner, can be
+  // verified/rejected individually but never gate Approve or the roll-up.
+  const _otherKeys = partnerOtherDocKeys(docs);
+  const otherDocHtml = _otherKeys.length ? `<div style="grid-column:1/-1;font-size:12px;font-weight:800;color:var(--text-secondary);margin-top:6px;">Other documents (optional)</div>` +
+    _otherKeys.map(key => {
+      const doc = docs[key];
+      const ver = vers[key] || null;
+      const stat = _partnerDocStatus(doc, ver);
+      const chip = _DOC_STATUS_CHIPS[stat];
+      const isPdf = doc.contentType === 'application/pdf';
+      const reason = stat === 'rejected' && ver && ver.reason ? ver.reason : '';
+      const title = String(doc.label || '').trim() || ('Other document ' + key.slice(-1));
+      return `<div class="partner-doc-item">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;">
+        <span style="font-size:12px;font-weight:700;color:var(--text-secondary);overflow-wrap:anywhere;">${escHtml(title)}</span>
+        <span class="${chip.cls}">${escHtml(chip.label)}</span>
+      </div>
+      <div class="partner-doc-file">
+        <span class="partner-doc-icon"><i class="ti ti-${isPdf ? 'file-type-pdf' : 'photo'}"></i></span>
+        <div style="min-width:0;">
+          <a href="${escHtml(safeUrl(doc.url))}" target="_blank" rel="noopener"
+             style="font-size:13px;font-weight:600;color:var(--primary,#880E4F);text-decoration:none;overflow-wrap:anywhere;">
+            View / Download</a>
+          <div style="font-size:11px;color:#888;">Uploaded ${escHtml(doc.uploadedAt ? formatDate(doc.uploadedAt) : '—')}</div>
+        </div>
+      </div>
+      ${reason ? `<div style="font-size:11px;color:#c62828;margin-top:4px;overflow-wrap:anywhere;">Reason: ${escHtml(reason)}</div>` : ''}
+      <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
+        <button class="btn btn-approve" onclick="verifyPartnerDocument('${role}','${pid}','${escHtml(key)}', this)">Verify</button>
+        <button class="btn btn-reject" onclick="rejectPartnerDocument('${role}','${pid}','${escHtml(key)}', this)">Reject</button>
+      </div>
+    </div>`;
+    }).join('') : '';
+  const docHtml = docEntries.map(e => e.html).join('') + otherDocHtml;
   // A role with zero required doc slots (see
   // PARTNER_ROLES comment) has nothing to verify, so it must not be treated
   // the same as "verification incomplete"; only block Approve when there ARE
   // slots and not all of them are verified yet.
-  const allDocsVerified = docEntries.length === 0 || docEntries.every(e => e.stat === 'verified');
+  const _optionalDocKeys = PARTNER_OPTIONAL_DOCS[cfg.collection] || [];
+  const allDocsVerified = docEntries.length === 0 ||
+    docEntries.every(e => _optionalDocKeys.includes(e.key) || (e.key in _legacySlots) || e.stat === 'verified');
 
   let fields;
   if (role === 'ambulance') {
@@ -9820,6 +10035,14 @@ function showPartnerModal(role, id) {
       ['Phone',          p.phone || '—'],
       ['Email',          p.email || '—'],
       ['Listed As',      p.serviceType === 'care_assistant' ? 'Care Assistant' : 'Nurse'],
+      ...(p.serviceType === 'care_assistant' ? [
+        ['Affiliation',    p.affiliationType === 'organisation' ? 'Organisation' : (p.affiliationType === 'freelancer' ? 'Freelancer' : '—')],
+        ...(p.affiliationType === 'organisation' ? [
+          ['Organisation',         (p.organisation && p.organisation.name) || '—'],
+          ['Organisation Address', (p.organisation && p.organisation.address) || '—'],
+          ['Organisation Contact', (p.organisation && p.organisation.phone) || '—'],
+        ] : []),
+      ] : []),
       ['Gender',         p.gender || '—'],
       ['Service Area',   p.city || '—'],
       ['Hourly Rate',    p.hourlyRate ? formatCurrency(p.hourlyRate) + '/hr' : '—'],
@@ -9896,6 +10119,8 @@ function showPartnerModal(role, id) {
     ? Number(p.rating).toFixed(1) + ' ★ (' + p.totalReviews + ')'
     : 'No reviews']);
   fields.push(['Registered', p.createdAt ? formatDate(p.createdAt) : '—']);
+  { const pfOwn = partnerFeeAmountFor(p.id);
+    if (pfOwn != null) fields.push(['Platform fee', '₹' + pfOwn + ' (partner-specific)']); }
 
   // Once a partner is active, a self-edit never touches the live fields
   // directly (firestore.rules only lets an active owner write `pendingChanges`
@@ -9908,15 +10133,34 @@ function showPartnerModal(role, id) {
     const fmtVal = v => {
       if (v === null || v === undefined || v === '') return '—';
       if (Array.isArray(v)) return v.length ? v.join(', ') : '—';
-      if (typeof v === 'object') return JSON.stringify(v);
+      if (typeof v === 'object') {
+        // staffDetails sub-maps read as "Name · Reg. No. · Qualification".
+        if (typeof v.name === 'string' || typeof v.registrationNo === 'string') {
+          return [v.type, v.name, v.registrationNo ? 'Reg. ' + v.registrationNo : '', v.qualification]
+            .filter(Boolean).join(' · ') || '—';
+        }
+        return JSON.stringify(v);
+      }
       return String(v);
     };
-    const rows = Object.entries(pendingChanges).map(([key, newVal]) => {
+    // Expand a nested `availability` change into one row per field (old value
+    // = the live nested value) so the admin sees e.g. "Availability Clinic Name".
+    const pendingEntries = [];
+    Object.entries(pendingChanges).forEach(([key, newVal]) => {
+      if (key === 'availability' && newVal && typeof newVal === 'object' && !Array.isArray(newVal)) {
+        Object.entries(newVal).forEach(([k, v]) => pendingEntries.push(['availability ' + k, v, (p.availability || {})[k]]));
+      } else if (key === 'staffDetails' && newVal && typeof newVal === 'object' && !Array.isArray(newVal)) {
+        Object.entries(newVal).forEach(([k, v]) => pendingEntries.push(['staffDetails ' + k, v, (p.staffDetails || {})[k]]));
+      } else {
+        pendingEntries.push([key, newVal, p[key]]);
+      }
+    });
+    const rows = pendingEntries.map(([key, newVal, oldVal]) => {
       const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, c => c.toUpperCase());
       return `<div class="partner-doc-item" style="margin-bottom:8px;">
         <div style="font-size:11px;color:#aaa;font-weight:600;text-transform:uppercase;">${escHtml(label)}</div>
         <div style="font-size:13px;margin-top:2px;overflow-wrap:anywhere;">
-          <span style="color:#c62828;text-decoration:line-through;">${escHtml(fmtVal(p[key]))}</span>
+          <span style="color:#c62828;text-decoration:line-through;">${escHtml(fmtVal(oldVal))}</span>
           <i class="ti ti-arrow-right" style="margin:0 6px;color:#888;"></i>
           <span style="color:#2e7d32;font-weight:700;">${escHtml(fmtVal(newVal))}</span>
         </div>
@@ -9937,6 +10181,35 @@ function showPartnerModal(role, id) {
           <button onclick="approvePendingProfileEdit('${role}','${pid}', this)" style="flex:1;min-width:140px;padding:10px;background:#2e7d32;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">Approve Changes</button>
           <button onclick="rejectPendingProfileEdit('${role}','${pid}', this)" style="flex:1;min-width:140px;padding:10px;background:#c62828;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">Discard Changes</button>
         </div>
+      </div>`;
+  }
+
+  // Typed "Details" the client's checklist asks for next to the Lab Technician /
+  // Specialist / Pharmacist document slots (partner app writes `staffDetails`
+  // at registration). Legacy partners registered before this have none: shown
+  // as "Not provided", never blocking approval.
+  let staffDetailsHtml = '';
+  if (role === 'lab' || role === 'pharmacy' || role === 'equipment') {
+    const sd = (p.staffDetails && typeof p.staffDetails === 'object') ? p.staffDetails : {};
+    const staffGroups = role === 'lab'
+      ? [['Lab Technician', sd.labTechnician, [['Full name', 'name'], ['Registration / licence no.', 'registrationNo'], ['Qualification', 'qualification']]],
+         ['Biochemist / Pathologist / Microbiologist', sd.specialist, [['Specialist type', 'type'], ['Full name', 'name'], ['Registration no.', 'registrationNo']]]]
+      : [['Pharmacist', sd.pharmacist, [['Full name', 'name'], ['Pharmacy-council registration no.', 'registrationNo']]]];
+    staffDetailsHtml = `
+      <div style="margin-bottom:20px;">
+        <div style="font-size:14px;font-weight:700;margin-bottom:8px;">Staff details</div>
+        ${staffGroups.map(([title, obj, cols]) => {
+          const o = (obj && typeof obj === 'object') ? obj : null;
+          return `<div style="margin-bottom:10px;">
+            <div style="font-size:12px;font-weight:700;color:#555;margin-bottom:6px;">${escHtml(title)}</div>
+            ${o ? `<div class="partner-doc-grid">${cols.map(([l, k]) => `
+              <div class="partner-doc-item">
+                <div style="font-size:11px;color:#aaa;font-weight:600;text-transform:uppercase;">${escHtml(l)}</div>
+                <div style="font-size:14px;font-weight:600;margin-top:2px;overflow-wrap:anywhere;">${escHtml(o[k] ? String(o[k]) : '—')}</div>
+              </div>`).join('')}</div>`
+              : `<div style="font-size:12px;color:#888;font-style:italic;">Not provided</div>`}
+          </div>`;
+        }).join('')}
       </div>`;
   }
 
@@ -10000,6 +10273,12 @@ function showPartnerModal(role, id) {
         </div>
       </div>
 
+      ${(p.resubmittedAt && st !== 'active') ? `
+      <div style="margin-bottom:20px;padding:14px 16px;background:#e3f2fd;border:1px solid #90caf9;border-radius:14px;">
+        <div style="font-size:14px;font-weight:700;margin-bottom:4px;">Re-review requested${p.resubmittedAt.toDate ? ' · ' + escHtml(formatDate(p.resubmittedAt)) : ''}</div>
+        <div style="font-size:13px;color:#444;overflow-wrap:anywhere;">${p.resubmitNote ? escHtml(p.resubmitNote) : '<span style="color:#888;font-style:italic;">No note provided.</span>'}</div>
+        <div style="font-size:11px;color:#666;margin-top:6px;">Review the documents below, then Approve/Activate or Reject. Either action clears this request.</div>
+      </div>` : ''}
       ${pendingEditHtml}
 
       <div class="partner-doc-grid" style="margin-bottom:20px;">
@@ -10022,12 +10301,23 @@ function showPartnerModal(role, id) {
         </div>
       </div>
 
+      ${staffDetailsHtml}
+
       ${Object.keys(cfg.docSlots).length > 0 ? `
       <div style="margin-bottom:20px;">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
           <span style="font-size:14px;font-weight:700;">Uploaded Documents</span>
-          <span class="${p.documentsVerified ? 'pill pill-active' : 'pill pill-pending'}">
-            ${p.documentsVerified ? 'All documents verified' : 'Verification incomplete'}</span>
+          ${(() => {
+            // Computed with the per-slot freshness rule, not the stored boolean
+            // (which stays true after a re-upload).
+            const rollUp = partnerRequiredSlotKeys(cfg, p).every(k =>
+              _partnerDocStatus(docs[k] || null, vers[k] || null) === 'verified');
+            // An already-approved partner is grandfathered: never show them as
+            // "incomplete" because the checklist changed after their approval.
+            if (_isActiveP && !rollUp) return `<span class="pill pill-active">Approved (grandfathered)</span>`;
+            return `<span class="${rollUp ? 'pill pill-active' : 'pill pill-pending'}">
+            ${rollUp ? 'All documents verified' : 'Verification incomplete'}</span>`;
+          })()}
         </div>
         <div style="font-size:12px;color:#666;margin-bottom:10px;">
           Uploaded by the partner from their app. Verifying or rejecting a document here is the
@@ -10179,28 +10469,41 @@ function renderCombinedPendingList() {
 
 // ============================================================================
 //   PAYMENT DISTRIBUTION & SETTLEMENT ENGINE — ADMIN UI
-//   Commission Rules · Coupons · Campaigns · Settlement Dashboard · Refunds
-//   Plus: Revenue tab analytics charts (coupon usage, AOV, commission by
+//   Coupons · Campaigns · Settlement Dashboard · Refunds
+//   Plus: Revenue tab analytics charts (coupon usage, AOV, platform fee by
 //   service, top providers, refund rate).
 //
 //   Every Cloud Function callable throws HttpsError on failure — always
 //   surfaced via showToast(err.message), matching the rest of this file.
-//   commission_rules / coupons / settlements / refunds / payments are
+//   coupons / settlements / refunds / payments are
 //   read-only from this client (writes go through the callables below);
 //   campaigns and settlement_config are simple admin CRUD written directly
 //   with `db`, exactly like the existing Banners section.
 // ============================================================================
 
-const SETTLEMENT_SERVICE_TYPES = ['consultation', 'video_consultation', 'diagnostics', 'medicine', 'pharmacy', 'equipment', 'ambulance', 'caregiver'];
+// Every service type the backend settles with (functions/index.js
+// _PROVIDER_FIELD_BY_SERVICE). Fee-only model: the platform fee per service
+// is set in the Director-only Money Settings card (PLATFORM_FEE_SERVICES).
+const SETTLEMENT_SERVICE_TYPES = ['consultation', 'video_consultation', 'diagnostics', 'medicine', 'pharmacy', 'equipment', 'ambulance', 'caregiver', 'care_assistant', 'physiotherapy', 'counselling', 'nutrition', 'hospital_bill', 'hospital_op'];
 const SERVICE_TYPE_LABELS = {
   consultation: 'Consultation',
   video_consultation: 'Video Consultation',
   diagnostics: 'Diagnostics',
   medicine: 'Medicine',
   pharmacy: 'Pharmacy',
+  equipment: 'Equipment',
   ambulance: 'Ambulance',
   caregiver: 'Nurse',
+  care_assistant: 'Care Assistant',
+  physiotherapy: 'Physiotherapy',
+  counselling: 'Counselling',
+  nutrition: 'Nutrition',
+  lab_tests: 'Lab Tests',
+  hospital_bill: 'Hospital Bill Payment',
+  hospital_op: 'Hospital OP Appointment',
 };
+// Services shown in the platform-fee screen (hospital_bill is listed but normally carries no fee).
+const PLATFORM_FEE_SERVICES = ['consultation', 'video_consultation', 'diagnostics', 'medicine', 'pharmacy', 'equipment', 'ambulance', 'caregiver', 'care_assistant', 'physiotherapy', 'counselling', 'nutrition', 'hospital_op', 'hospital_bill'];
 function serviceTypeLabel(s) { return SERVICE_TYPE_LABELS[s] || s || '—'; }
 
 function renderServiceCheckboxes(containerId, selected) {
@@ -10240,13 +10543,17 @@ let _providerNameCache = {};
 async function resolveProviderName(providerId) {
   if (!providerId) return '—';
   if (_providerNameCache[providerId]) return _providerNameCache[providerId];
-  const candidates = ['doctors', 'lab_profiles', 'pharmacy_profiles', 'ambulance_partners', 'caregivers'];
+  // Current role-profile collections (the legacy `ambulance_partners` /
+  // `caregivers` collections no longer hold partner profiles).
+  const candidates = ['doctors', 'lab_profiles', 'pharmacy_profiles', 'ambulance_profiles',
+    'caregiver_profiles', 'equipment_profiles', 'physiotherapist_profiles',
+    'counsellor_profiles', 'nutritionist_profiles', 'hospital_profiles'];
   for (const col of candidates) {
     try {
       const snap = await db.collection(col).doc(providerId).get();
       if (snap.exists) {
         const d = snap.data();
-        const name = d.name || d.driverName || d.businessName || d.title || providerId;
+        const name = d.name || d.fullName || d.hospitalName || d.driverName || d.businessName || d.title || providerId;
         _providerNameCache[providerId] = name;
         return name;
       }
@@ -10254,147 +10561,6 @@ async function resolveProviderName(providerId) {
   }
   _providerNameCache[providerId] = providerId;
   return providerId;
-}
-
-// ============================================
-//   COMMISSION RULES
-// ============================================
-let allCommissionRules = {}; // keyed by serviceType
-let _commissionOverridesDraft = {};
-
-let _commissionRulesListener = null;
-function loadCommissionRules() {
-  if (_commissionRulesListener) return; // already live
-  _commissionRulesListener = db.collection('commission_rules').onSnapshot(snap => {
-    allCommissionRules = {};
-    snap.forEach(doc => { allCommissionRules[doc.id] = doc.data(); });
-    renderCommissionRulesTable();
-  }, err => {
-    console.error('Commission rules load error:', err);
-    const tbody = document.getElementById('commission-rules-tbody');
-    if (tbody) tbody.innerHTML = `<tr><td colspan="6" class="loading">Failed to load: ${escHtml(err.message)}</td></tr>`;
-  });
-}
-
-function renderCommissionRulesTable() {
-  const tbody = document.getElementById('commission-rules-tbody');
-  if (!tbody) return;
-  tbody.innerHTML = SETTLEMENT_SERVICE_TYPES.map(st => {
-    const rule = allCommissionRules[st];
-    let valueLabel = '<span style="color:var(--text-muted);">Not configured</span>';
-    let typeBadge = '—';
-    if (rule) {
-      typeBadge = inlineBadge(rule.type, '#F5E6F0', '#522546');
-      if (rule.type === 'percentage') valueLabel = `${rule.percentage || 0}%`;
-      else if (rule.type === 'fixed') valueLabel = `₹${rule.fixedAmount || 0}`;
-      else if (rule.type === 'hybrid') valueLabel = `${rule.percentage || 0}% + ₹${rule.fixedAmount || 0}`;
-    }
-    const overrideCount = rule && rule.providerOverrides ? Object.keys(rule.providerOverrides).length : 0;
-    const updated = rule && rule.updatedAt ? formatDate(rule.updatedAt) : '—';
-    return `<tr>
-      <td>${escHtml(serviceTypeLabel(st))}</td>
-      <td>${typeBadge}</td>
-      <td>${valueLabel}</td>
-      <td>${overrideCount > 0 ? overrideCount + ' override(s)' : '—'}</td>
-      <td>${escHtml(updated)}</td>
-      <td><button class="btn btn-outline" onclick="editCommissionRule('${st}')"><i class="ti ti-edit"></i> Edit</button></td>
-    </tr>`;
-  }).join('');
-}
-
-function editCommissionRule(serviceType) {
-  const rule = allCommissionRules[serviceType] || { type: 'percentage', percentage: 0, fixedAmount: 0, providerOverrides: {} };
-  document.getElementById('commission-service-type').value = serviceType;
-  document.getElementById('commission-type').value = rule.type || 'percentage';
-  document.getElementById('commission-percentage').value = rule.percentage || '';
-  document.getElementById('commission-fixed').value = rule.fixedAmount || '';
-  _commissionOverridesDraft = { ...(rule.providerOverrides || {}) };
-  renderCommissionOverridesDraft();
-  document.getElementById('commission-form-title').textContent = 'Editing: ' + serviceTypeLabel(serviceType);
-  document.getElementById('cancel-commission-btn').style.display = 'inline-flex';
-  document.getElementById('commission-editor').style.display = 'block';
-  commissionTypeChanged();
-  document.getElementById('tab-commission-rules').scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
-
-function cancelCommissionRuleEditor() {
-  document.getElementById('commission-editor').style.display = 'none';
-  document.getElementById('cancel-commission-btn').style.display = 'none';
-  document.getElementById('commission-form-title').textContent = 'Commission Rule — select a service below to edit';
-  _commissionOverridesDraft = {};
-}
-
-function commissionTypeChanged() {
-  const type = document.getElementById('commission-type').value;
-  document.getElementById('commission-percentage-group').style.display = (type === 'percentage' || type === 'hybrid') ? 'block' : 'none';
-  document.getElementById('commission-fixed-group').style.display = (type === 'fixed' || type === 'hybrid') ? 'block' : 'none';
-}
-
-function toggleOverridesPanel() {
-  const panel = document.getElementById('commission-overrides-panel');
-  const chevron = document.getElementById('commission-overrides-chevron');
-  const show = panel.style.display === 'none';
-  panel.style.display = show ? 'block' : 'none';
-  if (chevron) chevron.style.transform = show ? 'rotate(180deg)' : 'rotate(0deg)';
-}
-
-function renderCommissionOverridesDraft() {
-  const list = document.getElementById('commission-overrides-list');
-  const count = document.getElementById('commission-overrides-count');
-  const keys = Object.keys(_commissionOverridesDraft);
-  if (count) count.textContent = keys.length ? `(${keys.length})` : '';
-  if (!list) return;
-  if (!keys.length) {
-    list.innerHTML = '<div style="font-size:12px;color:var(--text-muted);">No provider-specific overrides.</div>';
-    return;
-  }
-  list.innerHTML = keys.map(pid => {
-    const o = _commissionOverridesDraft[pid];
-    const valLabel = o.type === 'fixed' ? `₹${o.fixedAmount || 0}` : `${o.percentage || 0}%`;
-    return `<div style="display:flex;align-items:center;gap:8px;font-size:12.5px;background:#f8fafc;padding:6px 10px;border-radius:8px;">
-      <span style="flex:1;font-family:monospace;">${escHtml(pid)}</span>
-      <span>${escHtml(o.type)} · ${valLabel}</span>
-      <button class="btn btn-reject" style="padding:3px 8px;" onclick="removeCommissionOverride('${escHtml(pid)}')" title="Remove override" aria-label="Remove override"><i class="ti ti-x"></i></button>
-    </div>`;
-  }).join('');
-}
-
-function addCommissionOverride() {
-  const pidInput = document.getElementById('override-provider-id');
-  const pid = pidInput.value.trim();
-  const type = document.getElementById('override-type').value;
-  const value = parseFloat(document.getElementById('override-value').value);
-  if (!pid) { showToast('Enter a provider ID first'); return; }
-  if (isNaN(value) || value < 0) { showToast('Enter a valid override value'); return; }
-  _commissionOverridesDraft[pid] = type === 'fixed' ? { type, fixedAmount: value } : { type, percentage: value };
-  pidInput.value = '';
-  document.getElementById('override-value').value = '';
-  renderCommissionOverridesDraft();
-}
-
-function removeCommissionOverride(pid) {
-  delete _commissionOverridesDraft[pid];
-  renderCommissionOverridesDraft();
-}
-
-async function saveCommissionRule() {
-  const serviceType = document.getElementById('commission-service-type').value;
-  const type = document.getElementById('commission-type').value;
-  const percentage = parseFloat(document.getElementById('commission-percentage').value) || 0;
-  const fixedAmount = parseFloat(document.getElementById('commission-fixed').value) || 0;
-  const btn = document.getElementById('save-commission-btn');
-  btn.disabled = true;
-  try {
-    await functions.httpsCallable('setCommissionRule')({
-      serviceType, type, percentage, fixedAmount, providerOverrides: _commissionOverridesDraft,
-    });
-    showToast('Commission rule saved ✓');
-    cancelCommissionRuleEditor();
-  } catch (err) {
-    showToast('Save failed: ' + err.message);
-  } finally {
-    btn.disabled = false;
-  }
 }
 
 // ============================================
@@ -10870,7 +11036,7 @@ function initSettlementDashboardListeners() {
   _paymentsSettlementListener = db.collection('payments').onSnapshot(snap => {
     allPaymentsForSettlement = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     updateSettlementStatTiles();
-    renderSettlementsTable(); // Earnings/Commission per provider are derived from payments too
+    renderSettlementsTable(); // Earnings/Platform fee per provider are derived from payments too
   }, err => console.error('settlements payments listener', err));
 
   _settlementsListener = db.collection('settlements').orderBy('createdAt', 'desc').onSnapshot(async snap => {
@@ -10889,6 +11055,114 @@ function initSettlementDashboardListeners() {
   }, err => console.error('settlements refunds listener', err));
 
   loadSettlementFrequency();
+  loadAmbulanceRates();
+}
+
+// ── Ambulance rate ranges: app_config/ambulance_rates ──────────────────────
+// { types: { <key>: { label, min, max } }, updatedAt, updatedBy }. Director-only
+// (firestore.rules app_config write). Defaults mirror the patient app's
+// previously hardcoded prices (min == max) so nothing changes until edited.
+const AMBULANCE_RATE_DEFAULTS = {
+  basic: { label: 'Basic', min: 500, max: 500 },
+  als:   { label: 'Advanced Life Support', min: 1200, max: 1200 },
+  icu:   { label: 'ICU Ambulance', min: 2500, max: 2500 },
+};
+
+async function loadAmbulanceRates() {
+  const card = document.getElementById('ambulance-rates-card');
+  const wrap = document.getElementById('ambulance-rates-rows');
+  if (!card || !wrap) return;
+  if (!isDirector()) { card.style.display = 'none'; return; }
+  card.style.display = '';
+  let stored = {};
+  try {
+    const snap = await db.collection('app_config').doc('ambulance_rates').get();
+    if (snap.exists) stored = snap.get('types') || {};
+  } catch (err) {
+    console.error('ambulance_rates load error', err);
+  }
+  try {
+    const s = await db.collection('app_config').doc('ambulance_settings').get();
+    const m = s.exists ? Number(s.get('unacceptedAlertMinutes')) : NaN;
+    const inp = document.getElementById('amb-alert-minutes');
+    if (inp) inp.value = (Number.isFinite(m) && m >= 1 && m <= 240) ? Math.round(m) : 10;
+  } catch (err) {
+    console.error('ambulance_settings load error', err);
+  }
+  wrap.innerHTML = Object.keys(AMBULANCE_RATE_DEFAULTS).map(key => {
+    const def = AMBULANCE_RATE_DEFAULTS[key];
+    const cur = stored[key] || {};
+    const min = Number.isFinite(Number(cur.min)) && cur.min !== undefined ? Number(cur.min) : def.min;
+    const max = Number.isFinite(Number(cur.max)) && cur.max !== undefined ? Number(cur.max) : def.max;
+    return `<div style="display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;">
+      <div style="min-width:200px;flex:1 1 200px;font-weight:600;padding-bottom:10px;">${def.label}</div>
+      <div class="form-group" style="margin:0;width:140px;">
+        <label class="form-label">Min (₹)</label>
+        <input type="number" min="0" step="1" class="form-input" id="amb-rate-min-${key}" value="${min}">
+      </div>
+      <div class="form-group" style="margin:0;width:140px;">
+        <label class="form-label">Max (₹)</label>
+        <input type="number" min="0" step="1" class="form-input" id="amb-rate-max-${key}" value="${max}">
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function saveAmbulanceRates() {
+  if (!isDirector()) { showToast('Only a Director can change ambulance rates.'); return; }
+  const types = {};
+  for (const key of Object.keys(AMBULANCE_RATE_DEFAULTS)) {
+    const def = AMBULANCE_RATE_DEFAULTS[key];
+    const min = Number(document.getElementById('amb-rate-min-' + key).value);
+    const max = Number(document.getElementById('amb-rate-max-' + key).value);
+    if (!Number.isFinite(min) || !Number.isFinite(max) || min < 0) {
+      showToast(`${def.label}: minimum must be a number of 0 or more`); return;
+    }
+    if (max < min) { showToast(`${def.label}: maximum must be greater than or equal to minimum`); return; }
+    types[key] = { label: def.label, min: Math.round(min), max: Math.round(max) };
+  }
+  const btn = document.getElementById('save-ambulance-rates-btn');
+  if (btn) btn.disabled = true;
+  try {
+    await db.collection('app_config').doc('ambulance_rates').set({
+      types, updatedBy: auth.currentUser?.email || 'admin',
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    const st = document.getElementById('ambulance-rates-status');
+    if (st) st.textContent = 'Saved just now';
+    showToast('Ambulance rates updated ✓');
+  } catch (err) {
+    showToast('Update failed: ' + err.message);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+// app_config/ambulance_settings { unacceptedAlertMinutes (1..240), updatedAt, updatedBy }.
+// Read by the ambulance sweep in functions (falls back to 10 when missing/invalid).
+async function saveAmbulanceAlertMinutes() {
+  if (!isDirector()) { showToast('Only a Director can change the alert time.'); return; }
+  const inp = document.getElementById('amb-alert-minutes');
+  const raw = Number(inp ? inp.value : NaN);
+  if (!Number.isInteger(raw) || raw < 1 || raw > 240) {
+    showToast('Alert time must be a whole number of minutes between 1 and 240'); return;
+  }
+  const btn = document.getElementById('save-ambulance-alert-btn');
+  if (btn) btn.disabled = true;
+  try {
+    await db.collection('app_config').doc('ambulance_settings').set({
+      unacceptedAlertMinutes: raw,
+      updatedBy: auth.currentUser?.email || 'admin',
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    const st = document.getElementById('ambulance-alert-status');
+    if (st) st.textContent = 'Saved just now';
+    showToast('Ambulance alert time updated ✓');
+  } catch (err) {
+    showToast('Update failed: ' + err.message);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
 function updateSettlementStatTiles() {
@@ -10896,10 +11170,9 @@ function updateSettlementStatTiles() {
   const completed = payments.filter(p => p.status === 'completed');
   const totalRevenue = completed.reduce((s, p) => s + (Number(p.paidAmount) || 0), 0);
   // Gated to completed payments, same as Total Revenue — a refunded payment's
-  // commission was already reversed via a commission_reversal ledger entry
-  // in issueRefund(), so counting it here again would overstate what's
-  // actually been earned.
-  const commissionEarned = completed.reduce((s, p) => s + (Number(p.commission) || 0), 0);
+  // platform fee was already reversed via a ledger entry in issueRefund(),
+  // so counting it here again would overstate what's actually been earned.
+  const commissionEarned = completed.reduce((s, p) => s + paymentPlatformFee(p), 0);
   const pendingSettlement = payments.filter(p => ['pending', 'eligible'].includes(p.settlementStatus)).reduce((s, p) => s + (Number(p.providerAmount) || 0), 0);
   const couponCost = payments.filter(p => Number(p.discount) > 0).reduce((s, p) => s + (Number(p.discount) || 0), 0);
   const failedCount = payments.filter(p => p.status === 'failed').length;
@@ -10915,10 +11188,16 @@ function updateSettlementStatTiles() {
   setText('stl-failed', failedCount);
 }
 
+// Fee-only model: the platform's take on a payment is its platformFee.
+// Legacy payments (no platformFee field) fall back to their stored amount.
+function paymentPlatformFee(p) {
+  return typeof p.platformFee === 'number' ? p.platformFee : (Number(p.commission) || 0);
+}
+
 function computeSettlementBreakdown(settlement) {
   const paymentIds = new Set(settlement.paymentIds || []);
   const related = allPaymentsForSettlement.filter(p => paymentIds.has(p.id));
-  const commission = related.reduce((s, p) => s + (Number(p.commission) || 0), 0);
+  const commission = related.reduce((s, p) => s + paymentPlatformFee(p), 0);
   const payable = Number(settlement.totalAmount) || 0;
   return { earnings: payable + commission, commission, payable };
 }
@@ -11069,8 +11348,335 @@ async function loadSettlementFrequency() {
     const snap = await db.collection('settlement_config').doc('global').get();
     const sel = document.getElementById('settlement-frequency');
     if (sel) sel.value = (snap.exists && snap.get('frequency')) || 'daily';
+    loadDirectorMoneySettings(snap);
   } catch (err) {
     console.error('settlement_config load error', err);
+  }
+}
+
+// ── Director-only money settings: test-credit switch + platform fee ─────────
+// testCreditEnabled lives in settlement_config/global (read by the settlement
+// engine); the platform fee in app_config/platform_fee (read by the patient
+// app). firestore.rules restrict both writes to a Director.
+async function loadDirectorMoneySettings(settlementSnap) {
+  const card = document.getElementById('director-money-settings');
+  if (!card) return;
+  if (!isDirector()) { card.style.display = 'none'; return; }
+  card.style.display = '';
+  const on = !!(settlementSnap && settlementSnap.exists && settlementSnap.get('testCreditEnabled') === true);
+  const cb = document.getElementById('test-credit-enabled');
+  if (cb) cb.checked = on;
+  const st = document.getElementById('test-credit-status');
+  if (st) st.textContent = on ? 'Currently ON — test bookings credit wallets.' : 'Currently OFF.';
+  try {
+    const [fee, ref] = await Promise.all([
+      db.collection('app_config').doc('platform_fee').get(),
+      db.collection('app_config').doc('referral').get(),
+    ]);
+    const d = fee.exists ? fee.data() : {};
+    // Old shape was { amount, enabled }: `amount` is the default fee.
+    const defAmt = Number(d.defaultAmount != null ? d.defaultAmount : d.amount) || 0;
+    const per = (d.services && typeof d.services === 'object') ? d.services : {};
+    const en = document.getElementById('platform-fee-enabled');
+    if (en) en.checked = d.enabled === true;
+    const defEl = document.getElementById('platform-fee-default');
+    if (defEl) defEl.value = defAmt > 0 ? defAmt : '';
+    _platformFeeCfg = d;
+    _pfDraft = {};
+    _pfRemoved = new Set();
+    if (d.providers && typeof d.providers === 'object') {
+      Object.entries(d.providers).forEach(([id, e]) => {
+        const amt = Number(e && typeof e === 'object' ? e.amount : e);
+        if (isFinite(amt) && amt >= 0) _pfDraft[id] = { amount: amt, label: (e && e.label) || '' };
+      });
+    }
+    renderPartnerFeeTable();
+    const grid = document.getElementById('platform-fee-services');
+    if (grid) grid.innerHTML = PLATFORM_FEE_SERVICES.map(st => `
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">${escHtml(serviceTypeLabel(st))}${st === 'hospital_bill' ? ' <span style="font-weight:400;color:var(--text-muted);">(bill payments normally carry no fee)</span>' : ''}</label>
+        <input type="number" min="0" step="1" class="form-input platform-fee-input" data-service="${st}"
+               value="${per[st] != null ? Number(per[st]) : ''}" placeholder="${defAmt || 0} (default)" />
+      </div>`).join('');
+    const fs = document.getElementById('platform-fee-status');
+    if (fs) fs.textContent = fee.exists
+      ? `Currently ${d.enabled ? 'ON' : 'OFF'}${d.updatedBy ? ' · set by ' + d.updatedBy : ''}`
+      : 'Not set — patients are not charged a platform fee.';
+    const rd = ref.exists ? ref.data() : {};
+    const rEn = document.getElementById('referral-reward-enabled');
+    const rAmt = document.getElementById('referral-reward-amount');
+    if (rEn) rEn.checked = rd.enabled === true;
+    if (rAmt) rAmt.value = Number(rd.rewardAmount) > 0 ? rd.rewardAmount : '';
+    const rs = document.getElementById('referral-reward-status');
+    if (rs) rs.textContent = ref.exists
+      ? `Currently ${rd.enabled ? 'ON' : 'OFF'} · ₹${Number(rd.rewardAmount) || 0} to the referrer`
+      : 'Not set — no referral reward is paid.';
+  } catch (err) {
+    console.error('app_config load error', err);
+  }
+}
+
+async function saveTestCreditEnabled(cb) {
+  if (!isDirector()) { showToast('Only a Director can change this.'); cb.checked = !cb.checked; return; }
+  const turningOn = cb.checked;
+  if (turningOn && !(await showConfirm(
+    'TEST PROJECTS ONLY: completed test bookings will credit partner wallets with money that does not exist. Keep this OFF in production. Continue?',
+    { title: 'Enable test credit?', confirmLabel: 'Turn ON' }
+  ))) { cb.checked = false; return; }
+  try {
+    await db.collection('settlement_config').doc('global').set({
+      testCreditEnabled: turningOn, updatedBy: auth.currentUser?.email || 'admin',
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    const st = document.getElementById('test-credit-status');
+    if (st) st.textContent = turningOn ? 'Currently ON — test bookings credit wallets.' : 'Currently OFF.';
+    showToast(turningOn ? 'Test credit turned ON' : 'Test credit turned OFF');
+  } catch (err) {
+    cb.checked = !turningOn;
+    showToast('Update failed: ' + err.message);
+  }
+}
+
+async function savePlatformFee() {
+  if (!isDirector()) { showToast('Only a Director can change the platform fee.'); return; }
+  const parse = v => (v === '' || v == null) ? null : Number(v);
+  const defaultAmount = parse(document.getElementById('platform-fee-default').value) ?? 0;
+  const services = {};
+  for (const el of document.querySelectorAll('.platform-fee-input')) {
+    const n = parse(el.value);
+    if (n == null) continue; // blank = use the default
+    if (!isFinite(n) || n < 0) { showToast(`Enter a fee of 0 or more for ${serviceTypeLabel(el.dataset.service)}`); return; }
+    services[el.dataset.service] = n;
+  }
+  if (!isFinite(defaultAmount) || defaultAmount < 0) { showToast('Enter a default fee of 0 or more'); return; }
+  const enabled = document.getElementById('platform-fee-enabled').checked;
+  const btn = document.getElementById('save-platform-fee-btn');
+  btn.disabled = true;
+  try {
+    // set() (not merge) on `services` so a blanked field is really removed;
+    // the legacy `amount` field is dropped in favour of defaultAmount.
+    await db.collection('app_config').doc('platform_fee').set({
+      enabled, defaultAmount, services,
+      amount: firebase.firestore.FieldValue.delete(),
+      updatedBy: auth.currentUser?.email || 'admin',
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    // merge keeps old keys inside `services`; overwrite the map explicitly.
+    await db.collection('app_config').doc('platform_fee').update({ services });
+    const fs = document.getElementById('platform-fee-status');
+    if (fs) fs.textContent = `Saved · ${enabled ? 'ON' : 'OFF'}`;
+    showToast('Platform fees saved ✓');
+  } catch (err) {
+    showToast('Save failed: ' + err.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ── Partner-specific platform fees (Director only) ───────────────────────────
+// app_config/platform_fee.providers = { <providerId>: { amount, label? } }.
+// Resolution (mirrors functions/price_helpers.js + the patient app):
+//   providers[id] ?? services[type] ?? defaultAmount ?? 0   (0 when disabled).
+let _platformFeeCfg = null;   // last app_config/platform_fee data (live listener)
+let _pfDraft = {};            // editable copy: id -> {amount, label}
+let _pfRemoved = new Set();   // ids removed locally, deleted on Save
+let _pfSelected = null;       // {id, name, role, svc}
+let _pfCfgUnsub = null;
+
+function startPlatformFeeCfgListener() {
+  if (_pfCfgUnsub) return;
+  try {
+    _pfCfgUnsub = db.collection('app_config').doc('platform_fee').onSnapshot(
+      snap => { _platformFeeCfg = snap.exists ? snap.data() : {}; },
+      () => {}
+    );
+  } catch (e) { /* read denied: modal line simply stays hidden */ }
+}
+
+function partnerFeeAmountFor(id) {
+  const e = _platformFeeCfg && _platformFeeCfg.providers && _platformFeeCfg.providers[id];
+  if (e == null) return null;
+  const n = Number(typeof e === 'object' ? e.amount : e);
+  return isFinite(n) && n >= 0 ? n : null;
+}
+
+// Fee the patient pays for a partner right now, ignoring the draft.
+function effectivePartnerFee(id, svc) {
+  const c = _platformFeeCfg;
+  if (!c || c.enabled !== true) return { fee: 0, source: 'fees are switched off' };
+  const own = partnerFeeAmountFor(id);
+  if (own != null) return { fee: own, source: 'partner-specific' };
+  const sv = c.services && c.services[svc];
+  if (sv != null && isFinite(Number(sv)) && Number(sv) >= 0) return { fee: Number(sv), source: 'service fee' };
+  return { fee: Number(c.defaultAmount != null ? c.defaultAmount : c.amount) || 0, source: 'default fee' };
+}
+
+const PF_ROLE_SERVICE = {
+  doctor: 'consultation', ambulance: 'ambulance', caregiver: 'caregiver', pharmacy: 'medicine',
+  equipment: 'equipment', lab: 'diagnostics', physiotherapy: 'physiotherapy',
+  counselling: 'counselling', nutrition: 'nutrition', hospital: 'hospital_op',
+};
+
+function pfPartnerCandidates() {
+  const out = [];
+  (allDoctors || []).forEach(d => out.push({
+    id: d.id, name: d.name || 'Unnamed doctor', role: 'Doctor', svc: PF_ROLE_SERVICE.doctor,
+    extra: [d.phone, d.email].filter(Boolean).join(' '),
+  }));
+  Object.keys(PARTNER_ROLES).forEach(role => {
+    const cfg = PARTNER_ROLES[role];
+    (_partnerData[role] || []).forEach(p => {
+      const isAssistant = role === 'caregiver' && p.serviceType === 'care_assistant';
+      out.push({
+        id: p.id, name: cfg.nameOf(p), role: isAssistant ? 'Care Assistant' : cfg.label,
+        svc: isAssistant ? 'care_assistant' : PF_ROLE_SERVICE[role],
+        extra: [p.phone, p.driverPhone, p.email].filter(Boolean).join(' '),
+      });
+    });
+  });
+  return out;
+}
+
+function pfPartnerSearch() {
+  const q = (document.getElementById('pf-partner-search').value || '').trim().toLowerCase();
+  const box = document.getElementById('pf-partner-results');
+  _pfSelected = null;
+  const sel = document.getElementById('pf-partner-selected');
+  if (sel) sel.textContent = '';
+  if (!q) { box.style.display = 'none'; return; }
+  const hits = pfPartnerCandidates()
+    .filter(c => (c.name + ' ' + c.id + ' ' + c.extra + ' ' + c.role).toLowerCase().includes(q))
+    .slice(0, 8);
+  box.innerHTML = hits.length ? hits.map(c => `
+    <button type="button" data-id="${escHtml(c.id)}" onclick="pfPickPartner(this.dataset.id)"
+      style="display:block;width:100%;text-align:left;padding:9px 12px;border:none;background:none;cursor:pointer;border-bottom:1px solid #f0f0f0;">
+      <div style="font-size:13px;font-weight:600;">${escHtml(c.name)}</div>
+      <div style="font-size:11px;color:#888;">${escHtml(c.role)} &middot; ${escHtml(c.id)}</div>
+    </button>`).join('')
+    : '<div style="padding:10px 12px;font-size:12px;color:#888;">No matching partner.</div>';
+  box.style.display = '';
+}
+
+function pfPickPartner(id) {
+  const c = pfPartnerCandidates().find(x => x.id === id);
+  if (!c) return;
+  _pfSelected = c;
+  document.getElementById('pf-partner-results').style.display = 'none';
+  document.getElementById('pf-partner-search').value = c.name;
+  const eff = effectivePartnerFee(c.id, c.svc);
+  const draft = _pfDraft[c.id];
+  document.getElementById('pf-partner-selected').innerHTML =
+    `${escHtml(c.role)} &middot; <code>${escHtml(c.id)}</code> &mdash; current effective fee: <b>&#8377;${eff.fee}</b> (${escHtml(eff.source)})`;
+  document.getElementById('pf-partner-amount').value = draft ? draft.amount : '';
+}
+
+function pfMarkUnsaved() {
+  const st = document.getElementById('pf-partner-status');
+  if (st) st.textContent = 'Unsaved changes - press "Save partner fees".';
+}
+
+function pfAddProvider() {
+  if (!isDirector()) { showToast('Only a Director can change the platform fee.'); return; }
+  if (!_pfSelected) { showToast('Search and select a partner first'); return; }
+  const raw = document.getElementById('pf-partner-amount').value;
+  const n = raw === '' ? NaN : Number(raw);
+  if (!isFinite(n) || n < 0) { showToast('Enter a fee of 0 or more'); return; }
+  _pfDraft[_pfSelected.id] = { amount: Math.round(n), label: _pfSelected.name, role: _pfSelected.role };
+  _pfRemoved.delete(_pfSelected.id);
+  _pfSelected = null;
+  document.getElementById('pf-partner-search').value = '';
+  document.getElementById('pf-partner-amount').value = '';
+  document.getElementById('pf-partner-selected').textContent = '';
+  renderPartnerFeeTable();
+  pfMarkUnsaved();
+}
+
+function pfRemoveProvider(id) {
+  delete _pfDraft[id];
+  _pfRemoved.add(id);
+  renderPartnerFeeTable();
+  pfMarkUnsaved();
+}
+
+function pfEditProvider(id) {
+  const e = _pfDraft[id];
+  if (!e) return;
+  const c = pfPartnerCandidates().find(x => x.id === id);
+  _pfSelected = c || { id, name: e.label || id, role: e.role || 'Partner', svc: null };
+  document.getElementById('pf-partner-search').value = _pfSelected.name;
+  document.getElementById('pf-partner-amount').value = e.amount;
+  document.getElementById('pf-partner-amount').focus();
+}
+
+function renderPartnerFeeTable() {
+  const body = document.getElementById('pf-partner-table');
+  if (!body) return;
+  const cands = {};
+  pfPartnerCandidates().forEach(c => { cands[c.id] = c; });
+  const ids = Object.keys(_pfDraft);
+  body.innerHTML = ids.length ? ids.map(id => {
+    const e = _pfDraft[id], c = cands[id];
+    const name = c ? c.name : (e.label || id);
+    const role = c ? c.role : (e.role || 'Unknown partner');
+    return `<tr>
+      <td><div style="font-weight:600;">${escHtml(name)}</div><div style="font-size:11px;color:#888;">${escHtml(id)}</div></td>
+      <td>${escHtml(role)}</td>
+      <td>&#8377;${escHtml(String(e.amount))}</td>
+      <td style="white-space:nowrap;">
+        <button type="button" class="btn" data-id="${escHtml(id)}" onclick="pfEditProvider(this.dataset.id)">Edit</button>
+        <button type="button" class="btn btn-reject" data-id="${escHtml(id)}" onclick="pfRemoveProvider(this.dataset.id)">Remove</button>
+      </td></tr>`;
+  }).join('') : '<tr><td colspan="4" style="color:var(--text-muted);">No partner-specific fees.</td></tr>';
+}
+
+async function savePartnerFees() {
+  if (!isDirector()) { showToast('Only a Director can change the platform fee.'); return; }
+  const patch = {};
+  for (const [id, e] of Object.entries(_pfDraft)) {
+    if (!isFinite(e.amount) || e.amount < 0) { showToast('Invalid fee for ' + (e.label || id)); return; }
+    patch[id] = { amount: e.amount, label: String(e.label || '').slice(0, 120) };
+  }
+  // Nested merge: only the touched ids change, so removing one entry never
+  // wipes the others (and concurrent edits to other ids survive).
+  _pfRemoved.forEach(id => { if (!(id in patch)) patch[id] = firebase.firestore.FieldValue.delete(); });
+  const btn = document.getElementById('pf-partner-save-btn');
+  btn.disabled = true;
+  try {
+    await db.collection('app_config').doc('platform_fee').set({
+      providers: patch,
+      updatedBy: auth.currentUser?.email || 'admin',
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    _pfRemoved = new Set();
+    const st = document.getElementById('pf-partner-status');
+    if (st) st.textContent = 'Saved';
+    showToast('Partner fees saved');
+  } catch (err) {
+    showToast('Save failed: ' + err.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function saveReferralReward() {
+  if (!isDirector()) { showToast('Only a Director can change the referral reward.'); return; }
+  const rewardAmount = Number(document.getElementById('referral-reward-amount').value || 0);
+  const enabled = document.getElementById('referral-reward-enabled').checked;
+  if (!isFinite(rewardAmount) || rewardAmount < 0) { showToast('Enter a reward of 0 or more'); return; }
+  const btn = document.getElementById('save-referral-reward-btn');
+  btn.disabled = true;
+  try {
+    await db.collection('app_config').doc('referral').set({
+      rewardAmount, enabled, updatedBy: auth.currentUser?.email || 'admin',
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    const rs = document.getElementById('referral-reward-status');
+    if (rs) rs.textContent = `Currently ${enabled ? 'ON' : 'OFF'} · ₹${rewardAmount} to the referrer`;
+    showToast('Referral reward saved ✓');
+  } catch (err) {
+    showToast('Save failed: ' + err.message);
+  } finally {
+    btn.disabled = false;
   }
 }
 
@@ -11089,7 +11695,7 @@ async function saveSettlementFrequency() {
 
 function exportSettlementsCsv() {
   if (!allSettlements.length) { showToast('No settlements to export'); return; }
-  const header = ['Settlement ID', 'Provider ID', 'Provider Name', 'Earnings', 'Commission', 'Payable', 'Status', 'Created At'];
+  const header = ['Settlement ID', 'Provider ID', 'Provider Name', 'Earnings', 'Platform fee', 'Payable', 'Status', 'Created At'];
   const rows = allSettlements.map(s => {
     const { earnings, commission, payable } = computeSettlementBreakdown(s);
     const providerName = _providerNameCache[s.providerId] || s.providerId || '';
@@ -11116,7 +11722,70 @@ let allRefunds = [];
 let _refundLookupPayment = null;
 
 let _refundsListener = null;
+// ── Refund requests (customer cancelled AFTER the provider accepted) ────────
+let _refundRequestsListener = null;
+let allRefundRequests = [];
+function loadRefundRequests() {
+  if (_refundRequestsListener) return;
+  _refundRequestsListener = db.collection('refund_requests').orderBy('createdAt', 'desc').limit(100).onSnapshot(snap => {
+    allRefundRequests = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderRefundRequests();
+  }, err => {
+    console.error('Refund requests load error:', err);
+    const tbody = document.getElementById('refund-requests-tbody');
+    if (tbody) tbody.innerHTML = `<tr><td colspan="7" class="loading">Failed to load: ${escHtml(err.message)}</td></tr>`;
+  });
+}
+
+function renderRefundRequests() {
+  const tbody = document.getElementById('refund-requests-tbody');
+  if (!tbody) return;
+  const pending = allRefundRequests.filter(r => r.status === 'pending' || r.status === 'processing').length;
+  const countEl = document.getElementById('refund-requests-count');
+  if (countEl) countEl.textContent = pending ? `· ${pending} awaiting decision` : '';
+  if (!allRefundRequests.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No refund requests.</td></tr>';
+    return;
+  }
+  const badge = s => s === 'approved' ? inlineBadge('Approved', '#e8f5e9', '#1e8e3e')
+    : s === 'rejected' ? inlineBadge('Rejected', '#fce8e6', '#c62828')
+    : s === 'processing' ? inlineBadge('Processing', '#e3f2fd', '#1565c0')
+    : inlineBadge('Pending', '#fff3e0', '#e65100');
+  tbody.innerHTML = allRefundRequests.map(r => {
+    const actions = r.status === 'pending'
+      ? `<button class="btn btn-outline" onclick="resolveRefundRequest('${escHtml(r.id)}','approve')"><i class="ti ti-check"></i> Approve</button>
+         <button class="btn btn-outline" style="color:var(--danger);" onclick="resolveRefundRequest('${escHtml(r.id)}','reject')"><i class="ti ti-x"></i> Reject</button>`
+      : (r.adminNote ? `<span style="font-size:12px;color:var(--text-muted);">${escHtml(r.adminNote)}</span>` : '—');
+    return `<tr>
+      <td style="font-family:monospace;font-size:11px;">${escHtml((r.bookingCollection || '') + '/' + (r.bookingId || ''))}</td>
+      <td style="font-family:monospace;font-size:11px;">${escHtml(r.patientId || '—')}</td>
+      <td>${formatCurrency(Number(r.amount) || 0)}</td>
+      <td style="max-width:220px;">${escHtml(r.reason || '—')}</td>
+      <td>${badge(r.status)}</td>
+      <td>${formatDate(r.createdAt)}</td>
+      <td style="white-space:nowrap;">${actions}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function resolveRefundRequest(requestId, decision) {
+  let note = '';
+  if (decision === 'reject') {
+    note = (prompt('Reason for rejecting this refund (shown to the customer):') || '').trim();
+    if (!note) { showToast('A note is required to reject'); return; }
+  } else if (!(await showConfirm('Approve this refund? The customer is refunded in full right away.', { title: 'Approve refund', confirmLabel: 'Approve' }))) {
+    return;
+  }
+  try {
+    await functions.httpsCallable('resolveRefundRequest')({ requestId, decision, note });
+    showToast(decision === 'approve' ? 'Refund approved and issued ✓' : 'Refund request rejected ✓');
+  } catch (err) {
+    showToast((decision === 'approve' ? 'Approve' : 'Reject') + ' failed: ' + err.message);
+  }
+}
+
 function loadRefunds() {
+  loadRefundRequests();
   if (_refundsListener) return; // already live
   _refundsListener = db.collection('refunds').orderBy('createdAt', 'desc').onSnapshot(async snap => {
     allRefunds = snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -11215,7 +11884,7 @@ async function submitRefund() {
 
 // ============================================
 //   REVENUE TAB — SETTLEMENT ENGINE ANALYTICS
-//   (Coupon Usage · AOV · Commission by Service · Top Providers · Refund Rate)
+//   (Coupon Usage · AOV · Platform Fee by Service · Top Providers · Refund Rate)
 //   One-time historical query on dashboard load, same convention as the
 //   existing buildRevenueChart()/buildMedicinesChart() etc. above.
 // ============================================
@@ -11290,7 +11959,7 @@ function buildCommissionByServiceChart(payments) {
   const totals = {};
   payments.filter(p => p.status === 'completed').forEach(p => {
     const st = p.serviceType || 'other';
-    totals[st] = (totals[st] || 0) + (Number(p.commission) || 0);
+    totals[st] = (totals[st] || 0) + paymentPlatformFee(p);
   });
   const labels = Object.keys(totals);
   const colors = ['#522546', '#633058', '#F9943B', '#1e8e3e', '#1565c0', '#f57f17', '#c62828'];
@@ -11366,9 +12035,8 @@ function buildRefundRateChart(payments, refunds) {
 // ============================================
 //   TAB WIRING — Payment Distribution & Settlement Engine
 //   Lazy-init guards for the branches folded into the canonical switchTab()
-//   above (commission-rules/coupons/campaigns/settlements/refunds).
+//   above (coupons/campaigns/settlements/refunds).
 // ============================================
-let _commissionRulesInited = false;
 let _couponsInited = false;
 let _campaignsInited = false;
 let _settlementsInited = false;

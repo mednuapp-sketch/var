@@ -76,10 +76,22 @@ class MyServicesService {
     );
 
     try {
-      await _db.collection(col).doc(booking.id).update({
-        'status':    newStatus,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
+      // Field set per collection to match what firestore.rules lets a patient
+      // write: consultations allow `cancelledAt` (not `updatedAt`);
+      // appointments need `cancelledBy:'patient'` so the doctor is notified.
+      final update = <String, dynamic>{'status': newStatus};
+      if (booking.source == BookingSource.consultation) {
+        if (isCancellation) update['cancelledAt'] = FieldValue.serverTimestamp();
+      } else {
+        update['updatedAt'] = FieldValue.serverTimestamp();
+      }
+      // `cancelledBy:'patient'` lets the server apply the refund policy
+      // (full refund before the provider accepts, admin review after) and
+      // notify the provider. Hospital bill payments are never cancellable.
+      if (isCancellation && booking.source != BookingSource.hospitalBillPayment) {
+        update['cancelledBy'] = 'patient';
+      }
+      await _db.collection(col).doc(booking.id).update(update);
 
       await OperationLogger.logSuccess(
         action: action,

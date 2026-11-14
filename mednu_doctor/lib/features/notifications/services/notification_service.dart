@@ -98,12 +98,17 @@ class NotificationService {
       _providerNotifs(uid).doc(notifId).update({'isRead': true});
 
   static Future<void> markAllProviderRead(String uid) async {
-    final batch = _db.batch();
     final snap = await _providerNotifs(uid).where('isRead', isEqualTo: false).get();
-    for (final doc in snap.docs) {
-      batch.update(doc.reference, {'isRead': true});
+    // Firestore caps a batch at 500 writes — commit in chunks of 400.
+    const chunkSize = 400;
+    for (var i = 0; i < snap.docs.length; i += chunkSize) {
+      final batch = _db.batch();
+      final end = (i + chunkSize < snap.docs.length) ? i + chunkSize : snap.docs.length;
+      for (final doc in snap.docs.sublist(i, end)) {
+        batch.update(doc.reference, {'isRead': true});
+      }
+      await batch.commit();
     }
-    await batch.commit();
   }
 
   // ── Patient notifications (read by the patient app) ───────────────────────

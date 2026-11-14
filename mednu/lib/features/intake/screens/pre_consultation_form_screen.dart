@@ -151,7 +151,13 @@ class _PreConsultationFormScreenState extends State<PreConsultationFormScreen> {
       final dob = data['dob'] as String? ?? '';
       if (dob.isNotEmpty) {
         try {
-          final years = DateTime.now().year - DateTime.parse(dob).year;
+          // Registration stores dob as dd/MM/yyyy; DateTime.parse only reads
+          // ISO yyyy-MM-dd, so accept both.
+          final dp = dob.split('/');
+          final birthYear = dp.length == 3
+              ? int.parse(dp[2])
+              : DateTime.parse(dob).year;
+          final years = DateTime.now().year - birthYear;
           if (years > 0 && years < 130) _ageCtrl.text = years.toString();
         } catch (_) {}
       }

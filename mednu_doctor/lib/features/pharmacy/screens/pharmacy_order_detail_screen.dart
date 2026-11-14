@@ -146,25 +146,37 @@ class _PharmacyOrderDetailScreenState extends ConsumerState<PharmacyOrderDetailS
     final ctrl = TextEditingController();
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Out for Delivery'),
-        content: TextField(
-          controller: ctrl,
-          decoration: const InputDecoration(labelText: 'Delivery person name'),
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: const Text('Out for Delivery'),
+          content: TextField(
+            controller: ctrl,
+            textCapitalization: TextCapitalization.words,
+            onChanged: (_) => setDialogState(() {}),
+            decoration: const InputDecoration(labelText: 'Delivery person name'),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+            // Disabled until a name is typed — previously Confirm closed the
+            // dialog and the empty name was dropped with no feedback.
+            FilledButton(
+              onPressed: ctrl.text.trim().isEmpty ? null : () => Navigator.pop(dialogContext, true),
+              child: const Text('Confirm'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Confirm')),
-        ],
       ),
     );
-    if (confirmed != true || ctrl.text.trim().isEmpty) return;
+    final deliveryPerson = ctrl.text.trim();
+    // Deferred: the dialog's TextField is still mid exit-animation here.
+    Future.delayed(const Duration(milliseconds: 400), ctrl.dispose);
+    if (confirmed != true || deliveryPerson.isEmpty) return;
 
     await _run(
       () => PharmacyOrderService.markOutForDelivery(
         order.id,
         pharmacyId: uid,
-        deliveryPersonName: ctrl.text.trim(),
+        deliveryPersonName: deliveryPerson,
       ),
       successMessage: 'Order is out for delivery',
     );

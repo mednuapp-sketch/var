@@ -88,4 +88,56 @@ class NutritionistProfileService {
       _db.collection('nutritionist_profiles').doc(uid).set({
         'isOnline': isOnline,
       }, SetOptions(merge: true));
+
+  /// Publishes the weekly schedule + consultation modes. Operational, so
+  /// (like `doctors.availability`) it is written directly even once `active`
+  /// — firestore.rules whitelists `availability`/`isOnlineAvailable`/
+  /// `isInPersonAvailable` — and `onNutritionistProfileWriteForVisibility`
+  /// re-mirrors it into the patient-facing `nutritionists/{uid}`.
+  /// Dotted paths so `availability.blockedSlots` is never wiped.
+  static Future<void> saveAvailability(
+    String uid, {
+    required int slotDuration,
+    required Map<String, dynamic> schedule,
+    required bool isOnlineAvailable,
+    required bool isInPersonAvailable,
+    required String clinicName,
+    required String clinicAddress,
+    required String currentStatus,
+    required bool clinicChanged,
+  }) async {
+    final ref = _db.collection('nutritionist_profiles').doc(uid);
+    final isActive = currentStatus == 'active';
+    await ref.update({
+      'availability.slotDuration': slotDuration,
+      'availability.schedule': schedule,
+      // Clinic details are patient-facing: once active they go through admin
+      // review (below) instead of being written live.
+      if (!isActive) 'availability.clinicName': clinicName,
+      if (!isActive) 'availability.clinicAddress': clinicAddress,
+      'availability.updatedAt': FieldValue.serverTimestamp(),
+      'isOnlineAvailable': isOnlineAvailable,
+      'isInPersonAvailable': isInPersonAvailable,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+    if (isActive && clinicChanged) {
+      // Nested map (not dotted keys); the admin approval deep-merges it into
+      // `availability` so the schedule/blockedSlots are never overwritten.
+      await PendingProfileEditService.apply(
+        ref: ref,
+        currentStatus: currentStatus,
+        fields: {
+          'availability': {'clinicName': clinicName, 'clinicAddress': clinicAddress},
+        },
+      );
+    }
+  }
+
+  /// `blockedSlots`: `yyyy-MM-dd` -> slot labels the patient app must hide.
+  static Future<void> saveBlockedSlots(String uid, Map<String, List<String>> blockedSlots) =>
+      _db.collection('nutritionist_profiles').doc(uid).update({
+        'availability.blockedSlots': blockedSlots,
+        'availability.updatedAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
 }

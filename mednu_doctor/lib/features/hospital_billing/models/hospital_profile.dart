@@ -20,7 +20,15 @@ class HospitalProfile {
   final Map<String, dynamic> documents;
   final Map<String, dynamic> documentVerification;
 
+  /// True once an approved desk has submitted an edit that's awaiting admin
+  /// review — see `PendingProfileEditService`. [pendingChanges] holds what
+  /// was last submitted.
+  final bool hasPendingChanges;
+  final Map<String, dynamic> pendingChanges;
+
   const HospitalProfile({
+    this.hasPendingChanges = false,
+    this.pendingChanges = const {},
     required this.uid,
     required this.contactName,
     required this.phone,
@@ -58,6 +66,9 @@ class HospitalProfile {
           (d['documents'] as Map?) ?? const <String, dynamic>{}),
       documentVerification: Map<String, dynamic>.from(
           (d['documentVerification'] as Map?) ?? const <String, dynamic>{}),
+      hasPendingChanges: (d['hasPendingChanges'] as bool?) ?? false,
+      pendingChanges: Map<String, dynamic>.from(
+          (d['pendingChanges'] as Map?) ?? const <String, dynamic>{}),
     );
   }
 }

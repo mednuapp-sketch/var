@@ -204,15 +204,15 @@ class _ShopOpenCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(open ? 'Shop open' : 'Shop closed', style: AppTextStyles.labelLarge),
+                Text(open ? 'Accepting orders' : 'Not accepting orders', style: AppTextStyles.labelLarge),
                 Text(
                   !live
                       ? 'Goes live for patients once approved'
                       : open
-                          ? 'Patients can book your equipment'
-                          : 'Your items show as unavailable',
+                          ? 'Turn off to pause new orders; customers will see you as unavailable'
+                          : 'Paused — customers see you as unavailable and cannot order',
                   style: AppTextStyles.bodySmall,
-                  maxLines: 2,
+                  maxLines: 3,
                   overflow: TextOverflow.ellipsis,
                 ),
               ],

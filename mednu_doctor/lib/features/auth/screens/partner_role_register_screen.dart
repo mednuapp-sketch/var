@@ -10,6 +10,7 @@ import '../../../shared_core/legal/partner_legal_screen.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/services/fcm_service.dart';
 import '../../../core/services/feedback_service.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/ux_widgets.dart';
@@ -17,8 +18,11 @@ import '../../../features/location/models/precise_address.dart';
 import '../../../features/location/screens/map_location_picker_screen.dart';
 import '../../../shared_core/documents/partner_document_models.dart';
 import '../../../shared_core/documents/partner_document_service.dart';
+import '../../../shared_core/documents/partner_other_documents.dart';
+import '../../../shared_core/documents/staff_details_form.dart';
 import '../../../shared_core/models/app_role.dart';
 import '../../ambulance/services/ambulance_profile_service.dart';
+import '../../ambulance/widgets/vehicle_type_picker.dart';
 import '../../caregiver/services/caregiver_profile_service.dart';
 import '../../counselling/services/counselling_profile_service.dart';
 import '../../equipment/models/equipment_profile.dart';
@@ -81,7 +85,9 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
 
   // Ambulance
   final _plateCtrl = TextEditingController();
-  final _vehicleTypeCtrl = TextEditingController();
+  // Ambulance vehicle type is picked from a list (canonical key + label).
+  String? _vehicleTypeKey;
+  String _vehicleTypeLabel = '';
   final _driverNameCtrl = TextEditingController();
   final _driverPhoneCtrl = TextEditingController();
   final _driverLicenseCtrl = TextEditingController();
@@ -103,6 +109,13 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
   // so a new caregiver's `care_assistants`/`caregivers` listing was missing
   // both fields until edited later.
   final String _caregiverServiceType = 'caregiver';
+
+  // Care Assistant only — freelancer, or working for an organisation (in which
+  // case the organisation's name, address and contact number are collected).
+  bool _careAssistantInOrg = false;
+  final _orgNameCtrl = TextEditingController();
+  final _orgAddressCtrl = TextEditingController();
+  final _orgPhoneCtrl = TextEditingController();
   String _caregiverGender = 'Female';
   // Shared across Caregiver/Physiotherapist/Nutritionist — the admin panel's
   // partner detail view shows "Experience" for all three (see app.js's
@@ -142,6 +155,17 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
   // never needs its own upload step.
   final Map<String, File?> _pickedDocs = {};
 
+  /// Titles of the optional extra documents (`other_doc_N`), whose picked
+  /// files live in [_pickedDocs] under the same key.
+  final Map<String, String> _otherDocLabels = {};
+
+  // Typed "Details" for the Lab Technician / Specialist / Pharmacist document
+  // slots (Lab, Pharmacy, Equipment only). Stored as `staffDetails`.
+  late final StaffDetailsController? _staff =
+      StaffDetails.appliesTo(widget.role.documentTypeKey)
+          ? StaffDetailsController(widget.role.documentTypeKey)
+          : null;
+
   AppRole get _role => widget.role;
 
   @override
@@ -162,7 +186,6 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
     _phoneCtrl.dispose();
     _emailCtrl.dispose();
     _plateCtrl.dispose();
-    _vehicleTypeCtrl.dispose();
     _driverNameCtrl.dispose();
     _driverPhoneCtrl.dispose();
     _driverLicenseCtrl.dispose();
@@ -175,10 +198,14 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
     _rateMultiDayCtrl.dispose();
     _experienceCtrl.dispose();
     _cityCtrl.dispose();
+    _orgNameCtrl.dispose();
+    _orgAddressCtrl.dispose();
+    _orgPhoneCtrl.dispose();
     _bioCtrl.dispose();
     _onlineRateCtrl.dispose();
     _homeRateCtrl.dispose();
     _clinicRateCtrl.dispose();
+    _staff?.dispose();
     super.dispose();
   }
 
@@ -204,10 +231,11 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     final missingDocs = [
-      for (final type in PartnerDocumentType.forRole(_role.documentRoleKey))
+      for (final type in PartnerDocumentType.forRole(_role.documentTypeKey))
         // A picked file can vanish (cache cleared, camera temp file) before
         // submit; treat that the same as never having picked one.
-        if (_pickedDocs[type.key] == null || !_pickedDocs[type.key]!.existsSync())
+        if (!type.optional &&
+            (_pickedDocs[type.key] == null || !_pickedDocs[type.key]!.existsSync()))
           type.label,
     ];
     if (missingDocs.isNotEmpty) {
@@ -215,6 +243,13 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
         context,
         'Upload all required documents before submitting: ${missingDocs.join(', ')}.',
       );
+      return;
+    }
+    // Backstop for the inline field errors (the Form validators above already
+    // block submit when a required typed detail is missing).
+    final staffError = _staff?.firstError();
+    if (staffError != null) {
+      FeedbackService.showError(context, staffError);
       return;
     }
     if (_role == AppRole.lab && _selectedServices.isEmpty) {
@@ -250,13 +285,26 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
       // 0 ── Upload the verification files to Storage first. Nothing is
       // written to Firestore yet, so if an upload fails the partner is left
       // on this form with no half-submitted profile in the approval queue.
-      final docTypes = PartnerDocumentType.forRole(_role.documentRoleKey);
+      final docTypes = PartnerDocumentType.forRole(_role.documentTypeKey);
       final uploadedDocs = <String, Map<String, dynamic>>{};
       if (docTypes.isNotEmpty) {
         final docService = PartnerDocumentService(_role.documentRoleKey, uid);
         for (final type in docTypes) {
-          uploadedDocs[type.key] = await docService.uploadToStorage(
-              docType: type.key, file: _pickedDocs[type.key]!);
+          final picked = _pickedDocs[type.key];
+          // Optional slot left empty — or its picked file vanished (cache
+          // cleared / camera temp file) since the form check above, which only
+          // verifies required slots; uploading it would throw and abort the
+          // whole submission over a document that is allowed to be absent.
+          if (picked == null || !picked.existsSync()) continue;
+          uploadedDocs[type.key] =
+              await docService.uploadToStorage(docType: type.key, file: picked);
+        }
+        // Optional extra documents — skipped when none (or the file vanished).
+        for (final e in _otherDocLabels.entries) {
+          final picked = _pickedDocs[e.key];
+          if (picked == null || !picked.existsSync()) continue;
+          uploadedDocs[e.key] = await docService.uploadToStorage(
+              docType: e.key, file: picked, label: e.value);
         }
       }
 
@@ -301,6 +349,26 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
 
       // 2 ── Role-specific operational profile.
       await _createRoleProfile(uid);
+
+      // 2b ── Care Assistant affiliation (freelancer vs organisation).
+      if (_role == AppRole.careAssistant) {
+        await FirebaseFirestore.instance
+            .collection(_role.profileCollection)
+            .doc(uid)
+            .set({
+          'affiliationType': _careAssistantInOrg ? 'organisation' : 'freelancer',
+          if (_careAssistantInOrg)
+            'organisation': {
+              'name': _orgNameCtrl.text.trim(),
+              'address': _orgAddressCtrl.text.trim(),
+              'phone': _orgPhoneCtrl.text.trim(),
+            },
+        }, SetOptions(merge: true));
+      }
+
+      // 2c ── Make sure the push token is on the new role's profile too (best
+      // effort, never blocks or fails registration).
+      FcmService.syncTokenForCurrentUser(force: true);
 
       // 3 ── Record the documents uploaded in step 0. Must run after step 2:
       // `_createRoleProfile` writes with a plain (non-merge) `set()`, so
@@ -360,6 +428,7 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
           phone: _phoneCtrl.text.trim(),
           email: _emailCtrl.text.trim(),
           servicesOffered: _selectedServices.toList(),
+          staffDetails: _staff?.toMap(),
         );
       case AppRole.pharmacy:
         return PharmacyProfileService.createProfile(
@@ -373,6 +442,7 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
           email: _emailCtrl.text.trim(),
           deliveryAvailable: _deliveryAvailable,
           categoriesOffered: _selectedCategories.toList(),
+          staffDetails: _staff?.toMap(),
         );
       case AppRole.equipment:
         return EquipmentProfileService.createProfile(
@@ -387,12 +457,14 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
           email: _emailCtrl.text.trim(),
           deliveryAvailable: _deliveryAvailable,
           categoriesOffered: _selectedCategories.toList(),
+          staffDetails: _staff?.toMap(),
         );
       case AppRole.ambulance:
         return AmbulanceProfileService.createProfile(
           uid: uid,
           plateNumber: _plateCtrl.text.trim(),
-          vehicleType: _vehicleTypeCtrl.text.trim(),
+          vehicleType: _vehicleTypeLabel,
+          vehicleTypeKey: _vehicleTypeKey,
           driverName: _driverNameCtrl.text.trim(),
           driverPhone: _driverPhoneCtrl.text.trim(),
           driverLicense: _driverLicenseCtrl.text.trim(),
@@ -699,8 +771,14 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
           _field(_plateCtrl, 'Vehicle Plate Number',
               Icons.confirmation_number_outlined),
           const SizedBox(height: 14),
-          _field(_vehicleTypeCtrl, 'Vehicle Type (e.g. BLS, ALS, ICU)',
-              Icons.airport_shuttle_outlined),
+          VehicleTypePicker(
+            value: _vehicleTypeKey,
+            helperText: 'Your rate range depends on the vehicle type.',
+            onChanged: (key, label) => setState(() {
+              _vehicleTypeKey = key;
+              _vehicleTypeLabel = label;
+            }),
+          ),
           const SizedBox(height: 14),
           _field(_driverNameCtrl, 'Driver Full Name', Icons.person_outline),
           const SizedBox(height: 14),
@@ -781,6 +859,35 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
           ),
           const SizedBox(height: 14),
           _addressPickerField('Service Area (city you serve)'),
+          const SizedBox(height: 14),
+          const Text('Are you a freelancer or from an organisation?',
+              style: AppTextStyles.h4),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [('Freelancer', false), ('Organisation', true)]
+                .map((o) => ChoiceChip(
+                      label: Text(o.$1),
+                      selected: _careAssistantInOrg == o.$2,
+                      onSelected: (_) =>
+                          setState(() => _careAssistantInOrg = o.$2),
+                      selectedColor: AppColors.primary.withValues(alpha: 0.14),
+                    ))
+                .toList(),
+          ),
+          if (_careAssistantInOrg) ...[
+            const SizedBox(height: 14),
+            _field(_orgNameCtrl, 'Organisation Name', Icons.business_rounded),
+            const SizedBox(height: 14),
+            _field(_orgAddressCtrl, 'Organisation Address',
+                Icons.location_city_rounded,
+                maxLines: 2),
+            const SizedBox(height: 14),
+            _field(_orgPhoneCtrl, 'Organisation Contact No.',
+                Icons.call_outlined,
+                keyboardType: TextInputType.phone),
+          ],
           const SizedBox(height: 14),
           _field(_specialtiesCtrl, 'Services you offer (e.g. Hospital escort, Report collection)',
               Icons.support_agent_rounded,
@@ -1010,14 +1117,25 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
   /// elsewhere. Returns nothing for roles with no doc requirement defined
   /// (`PartnerDocumentType.forRole` returns an empty list for those).
   List<Widget> _documentFieldsForRole() {
-    final types = PartnerDocumentType.forRole(_role.documentRoleKey);
+    final types = PartnerDocumentType.forRole(_role.documentTypeKey);
     if (types.isEmpty) return const [];
     return [
+      if (_staff != null) ...[
+        const SizedBox(height: 22),
+        const Text('Staff Details', style: AppTextStyles.h4),
+        const SizedBox(height: 4),
+        const Text(
+          'Enter these details here, then upload the matching documents below.',
+          style: AppTextStyles.caption,
+        ),
+        const SizedBox(height: 12),
+        StaffDetailsFields(controller: _staff),
+      ],
       const SizedBox(height: 22),
       const Text('Verification Documents', style: AppTextStyles.h4),
       const SizedBox(height: 4),
       const Text(
-        'Required for our team to verify your application.',
+        'Required for our team to verify your application. Documents marked optional can be skipped.',
         style: AppTextStyles.caption,
       ),
       const SizedBox(height: 10),
@@ -1025,7 +1143,96 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
         _documentPickerField(type),
         const SizedBox(height: 12),
       ],
+      ..._otherDocumentsFields(),
     ];
+  }
+
+  /// Optional "Other documents" block: up to 5 extra files, each with a
+  /// short typed title. Never required, never blocks submission.
+  List<Widget> _otherDocumentsFields() {
+    final keys = _otherDocLabels.keys.toList()..sort();
+    final atCap = keys.length >= PartnerDocumentType.maxOtherDocs;
+    return [
+      const SizedBox(height: 6),
+      const OtherDocumentsHeading(),
+      const SizedBox(height: 4),
+      const Text(
+        'If you have any other documents, you can add them here (up to 5). Optional.',
+        style: AppTextStyles.caption,
+      ),
+      const SizedBox(height: 10),
+      for (final k in keys) ...[
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceVariant,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.check_circle_rounded,
+                  color: AppColors.success, size: 18),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(_otherDocLabels[k] ?? '',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.labelLarge),
+                    Text(
+                      (_pickedDocs[k]?.path ?? '')
+                          .split(Platform.pathSeparator)
+                          .last,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.caption,
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                tooltip: 'Remove',
+                icon: const Icon(Icons.close_rounded, size: 20),
+                onPressed: () => setState(() {
+                  _otherDocLabels.remove(k);
+                  _pickedDocs.remove(k);
+                }),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+      ],
+      SizedBox(
+        width: double.infinity,
+        child: OutlinedButton.icon(
+          onPressed: atCap ? null : _addOtherDocument,
+          icon: const Icon(Icons.add_rounded),
+          label: Text(atCap
+              ? 'Maximum ${PartnerDocumentType.maxOtherDocs} documents added'
+              : 'Add another document'),
+        ),
+      ),
+      const SizedBox(height: 12),
+    ];
+  }
+
+  Future<void> _addOtherDocument() async {
+    final key = PartnerDocumentType.nextFreeOtherDocKey(_otherDocLabels.keys);
+    final uid = DoctorAuthService.currentUid;
+    if (key == null || uid == null) return;
+    final title = await askOtherDocumentTitle(context);
+    if (title == null || !mounted) return;
+    final file = await pickOtherDocumentFile(
+        context, PartnerDocumentService(_role.documentRoleKey, uid), title);
+    if (file == null || !mounted) return;
+    setState(() {
+      _otherDocLabels[key] = title;
+      _pickedDocs[key] = file;
+    });
   }
 
   Future<void> _pickDocument(PartnerDocumentType type) async {
@@ -1077,7 +1284,9 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
     return FormField<File?>(
       initialValue: _pickedDocs[type.key],
       validator: (_) =>
-          _pickedDocs[type.key] == null ? '${type.label} is required' : null,
+          (!type.optional && _pickedDocs[type.key] == null)
+              ? '${type.label} is required'
+              : null,
       builder: (state) {
         final file = _pickedDocs[type.key];
         return Container(
@@ -1095,7 +1304,9 @@ class _PartnerRoleRegisterScreenState extends State<PartnerRoleRegisterScreen> {
               Row(
                 children: [
                   Expanded(
-                    child: Text(type.label, style: AppTextStyles.labelLarge),
+                    child: Text(
+                        type.optional ? '${type.label} (optional)' : type.label,
+                        style: AppTextStyles.labelLarge),
                   ),
                   if (file != null)
                     const Icon(Icons.check_circle_rounded,

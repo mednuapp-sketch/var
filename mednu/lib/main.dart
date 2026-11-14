@@ -199,7 +199,18 @@ void _handleFcmNavigation(Map<String, dynamic> data) {
   } else if (type == 'period_tracker') {
     ctx.go(AppRoutes.periodTracker);
   } else if (type == 'review_prompt') {
-    ctx.go(AppRoutes.submitReview);
+    // SubmitReviewScreen needs the appointment/doctor ids — without `extra`
+    // it opened blank and every submit failed with "Invalid appointment ID".
+    final apptId = data['bookingId'] as String? ?? '';
+    if (apptId.isEmpty) {
+      ctx.go(AppRoutes.appointment);
+    } else {
+      ctx.go(AppRoutes.submitReview, extra: {
+        'appointmentId': apptId,
+        'doctorId': data['doctorId'] as String? ?? '',
+        'doctorName': data['doctorName'] as String? ?? 'Doctor',
+      });
+    }
   } else {
     ctx.go(AppRoutes.notifications);
   }

@@ -9,6 +9,7 @@ import '../../../core/services/feedback_service.dart';
 import '../../../core/utils/maps_launcher.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../../../shared_core/shared_core.dart';
+import '../../schedule/screens/provider_reschedule_sheet.dart';
 import '../models/physio_session.dart';
 import '../providers/physio_providers.dart';
 import '../services/physio_profile_service.dart';
@@ -89,18 +90,23 @@ class PhysioSessionDetailScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final session = ref.watch(physioSessionDocProvider(sessionId)).valueOrNull;
+    final sessionAsync = ref.watch(physioSessionDocProvider(sessionId));
+    final session = sessionAsync.valueOrNull;
 
     return SharedAppShell(
       currentRoute: '',
       title: 'Session Details',
       showBottomNav: false,
       body: session == null
-          ? const AppEmptyState(
-              icon: Icons.search_off_rounded,
-              title: 'Session not found',
-              message: 'This session may have been reassigned or removed.',
-            )
+          ? (sessionAsync.isLoading
+              ? const PageLoadingState()
+              : sessionAsync.hasError
+                  ? const NetworkErrorState()
+                  : const AppEmptyState(
+                      icon: Icons.search_off_rounded,
+                      title: 'Session not found',
+                      message: 'This session may have been reassigned or removed.',
+                    ))
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
@@ -258,6 +264,25 @@ class _PrimaryActionsState extends ConsumerState<_PrimaryActions> {
     }
   }
 
+  Future<void> _reschedule() async {
+    final uid = _uid;
+    if (uid == null || _busy) return;
+    final choice = await showProviderRescheduleSheet(
+      context,
+      profileCollection: 'physiotherapist_profiles',
+      slotCollection: 'physio_slots',
+      providerId: uid,
+      currentDate: widget.session.preferredDate,
+      currentTime: widget.session.preferredTime,
+    );
+    if (choice == null || !mounted) return;
+    await _run(
+      (uid) => PhysioSessionService.reschedule(widget.session.id,
+          physiotherapistId: uid, date: choice.date, time: choice.time),
+      'Session rescheduled to ${choice.date} at ${choice.time}',
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final session = widget.session;
@@ -300,6 +325,13 @@ class _PrimaryActionsState extends ConsumerState<_PrimaryActions> {
               onTap: _busy
                   ? null
                   : () => _run((uid) => PhysioSessionService.start(id, physiotherapistId: uid), 'Session started'),
+            ),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: _busy ? null : _reschedule,
+              icon: const Icon(Icons.event_repeat_rounded, size: 18),
+              label: const Text('Reschedule'),
+              style: OutlinedButton.styleFrom(foregroundColor: AppColors.primary),
             ),
             const SizedBox(height: 10),
             OutlinedButton.icon(

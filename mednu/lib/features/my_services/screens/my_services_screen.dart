@@ -420,6 +420,31 @@ class _BookingCard extends StatelessWidget {
                       ),
                     ],
                   ),
+                  if (booking.rawData['providerReleasedAt'] != null &&
+                      booking.status == BookingStatus.pending) ...[
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.info_outline_rounded,
+                          size: 14,
+                          color: Color(0xFFE65100),
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            '${booking.rawData['providerReleasedRole'] == 'care_assistant' ? 'Care assistant' : 'Nurse'} cancelled. Finding another.',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTextStyles.bodySmall.copyWith(
+                              color: const Color(0xFFE65100),
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   _CardActions(booking: booking),
                 ],

@@ -1355,12 +1355,17 @@ class _DoctorVideoCallScreenState extends State<DoctorVideoCallScreen>
         _appointmentId != null &&
         _appointmentId!.isNotEmpty) {
       try {
-        await FirebaseFirestore.instance
+        // Never turn a cancelled appointment into 'completed'.
+        final apptRef = FirebaseFirestore.instance
             .collection('appointments')
-            .doc(_appointmentId!)
-            .update({
-          'status': 'completed',
-          'completedAt': FieldValue.serverTimestamp(),
+            .doc(_appointmentId!);
+        await FirebaseFirestore.instance.runTransaction((tx) async {
+          final snap = await tx.get(apptRef);
+          if (snap.data()?['status'] == 'cancelled') return;
+          tx.update(apptRef, {
+            'status': 'completed',
+            'completedAt': FieldValue.serverTimestamp(),
+          });
         });
       } catch (e) {
         debugPrint('[DoctorVideoCall] Appointment complete failed: $e');

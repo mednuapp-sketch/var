@@ -32,13 +32,18 @@ class CaregiverVisitService {
 
   /// Visits not yet claimed by any caregiver — the shared, realtime
   /// assignment pool every caregiver partner sees.
-  static Stream<QuerySnapshot<Map<String, dynamic>>> availableVisitsStream() {
-    return _visits
+  ///
+  /// The pool is shared by nurse and care-assistant jobs and capped at 30, so
+  /// pass [sourceType] (`'care_assistant'`) to query one job kind server-side;
+  /// otherwise a burst of nurse jobs could push care-assistant jobs out of the
+  /// 30-doc window. The filtered query needs the
+  /// (caregiverId, status, sourceType, createdAt) composite index.
+  static Stream<QuerySnapshot<Map<String, dynamic>>> availableVisitsStream({String? sourceType}) {
+    Query<Map<String, dynamic>> q = _visits
         .where('caregiverId', isNull: true)
-        .where('status', isEqualTo: 'scheduled')
-        .orderBy('createdAt', descending: true)
-        .limit(30)
-        .snapshots();
+        .where('status', isEqualTo: 'scheduled');
+    if (sourceType != null) q = q.where('sourceType', isEqualTo: sourceType);
+    return q.orderBy('createdAt', descending: true).limit(30).snapshots();
   }
 
   /// Every visit this caregiver has claimed. Deliberately unordered (sorted
@@ -144,16 +149,46 @@ class CaregiverVisitService {
         },
       );
 
-  /// Check-in also claims the visit if it wasn't claimed yet, so a caregiver
-  /// arriving at a still-unassigned visit doesn't have to tap twice.
-  static Future<void> checkIn(String visitId, String caregiverId) => _transitionVisit(
+  /// Nurse / Care Assistant: cancel a visit they already accepted but have NOT
+  /// started. The visit is released back to the open pool (caregiverId and
+  /// acceptedAt cleared, this provider added to `declinedBy` so it is not
+  /// offered to them again). The Cloud Function puts the patient's booking back
+  /// to 'pending', tells the patient and re-broadcasts to other partners. No
+  /// refund is triggered — the original payment stays with the booking.
+  /// Refused once the visit has started (status is no longer 'scheduled').
+  static Future<void> cancelAccepted(String visitId, String caregiverId, {required String reason}) =>
+      _transitionVisit(
         visitId,
         precondition: (d) =>
-            (d['caregiverId'] == null || d['caregiverId'] == caregiverId) &&
-            d['status'] == 'scheduled',
-        conflictMessage: 'This visit is no longer available to check in to.',
-        buildUpdate: (d) => {'caregiverId': caregiverId, 'status': 'checkedIn'},
+            d['caregiverId'] == caregiverId && d['status'] == 'scheduled' && d['acceptedAt'] != null,
+        conflictMessage: 'This visit can no longer be cancelled — it has started or was changed.',
+        buildUpdate: (d) => {
+          'caregiverId': null,
+          'acceptedAt': FieldValue.delete(),
+          'declinedBy': FieldValue.arrayUnion([caregiverId]),
+          'providerCancelReason': reason.length > 200 ? reason.substring(0, 200) : reason,
+        },
       );
+
+  /// Check-in also claims the visit if it wasn't claimed yet, so a caregiver
+  /// arriving at a still-unassigned visit doesn't have to tap twice.
+  ///
+  /// firestore.rules only allows a claim (caregiverId null -> uid) while the
+  /// status stays 'scheduled', so an unclaimed visit is claimed in its own
+  /// write first and checked in by a second one; a single combined write is
+  /// rejected with permission-denied.
+  static Future<void> checkIn(String visitId, String caregiverId) async {
+    final snap = await _visits.doc(visitId).get();
+    if (snap.exists && snap.data()?['caregiverId'] == null) {
+      await claim(visitId, caregiverId);
+    }
+    return _transitionVisit(
+      visitId,
+      precondition: (d) => d['caregiverId'] == caregiverId && d['status'] == 'scheduled',
+      conflictMessage: 'This visit is no longer available to check in to.',
+      buildUpdate: (d) => {'status': 'checkedIn'},
+    );
+  }
 
   /// Retry-safe on purpose: re-running this after it already succeeded (a UI
   /// retry after a flaky response) is a no-op rather than an error. The

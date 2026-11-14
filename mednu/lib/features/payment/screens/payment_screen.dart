@@ -11,6 +11,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/constants/payment_config.dart';
 import '../../wallet/wallet_provider.dart';
+import '../../../core/providers/platform_fee_provider.dart';
 
 import '../../../core/router/app_router.dart';
 // ─────────────────────────────────────────────────────────────────────────────
@@ -104,7 +105,16 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen>
   // Stable for this screen instance's lifetime — reused across retries of
   // the same payment attempt so a flaky-network retry can never double-book
   // or double-charge (capturePayment dedupes on this exact string).
-  final String _idempotencyKey = DateTime.now().microsecondsSinceEpoch.toString();
+  // (Non-final only so a successful wallet refund can start a fresh attempt.)
+  String _idempotencyKey = DateTime.now().microsecondsSinceEpoch.toString();
+
+  // In-app balance legs already debited for this payment attempt (null = not
+  // yet). Lets a retry after a failed capture reuse them instead of debiting
+  // again or, worse, sending the customer to the gateway for money they have
+  // already paid.
+  int? _settledMednuMoney;
+  int? _settledWallet;
+  int get _settledTotal => (_settledMednuMoney ?? 0) + (_settledWallet ?? 0);
 
   final _upiController = TextEditingController();
   final _promoController = TextEditingController();
@@ -145,9 +155,45 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen>
     return b.maybeWhen(data: (v) => v.toInt(), orElse: () => 0);
   }
 
-  int get _totalAmount => widget.cartItems != null
-      ? widget.cartItems!.fold<int>(0, (s, it) => s + (num.tryParse(it['amount'].toString())?.round() ?? 0))
+  // ── Platform fee (central; per service, admin-controlled) ──
+  // The callers pass BASE prices only. Free (<= 0) bookings never get a fee.
+  int _baseOf(num? v) => (v ?? 0).round();
+  // [bookingData] lets the fee honour a partner-specific override (the
+  // provider id is derived exactly as the server does in capturePayment).
+  int _feeForBase(int base, String? serviceType, [Map? bookingData]) => base <= 0
+      ? 0
+      : platformFeeFor(ref, serviceType,
+          providerId: feeProviderIdFor(serviceType, bookingData));
+  Map? _itemBookingData(Map it) =>
+      it['bookingData'] is Map ? it['bookingData'] as Map : null;
+
+  int get _baseAmount => widget.cartItems != null
+      ? widget.cartItems!.fold<int>(0, (s, it) => s + _baseOf(num.tryParse(it['amount'].toString())))
       : int.tryParse(widget.amount) ?? 0;
+
+  /// Platform fee for the whole order (one fee per cart entry in cart mode).
+  int get _platformFee => widget.cartItems != null
+      ? widget.cartItems!.fold<int>(
+          0,
+          (s, it) =>
+              s +
+              _feeForBase(_baseOf(num.tryParse(it['amount'].toString())),
+                  it['serviceType']?.toString(), _itemBookingData(it)))
+      : _feeForBase(_baseAmount, widget.serviceType, widget.bookingData);
+
+  /// Cart entries with the platform fee folded into each item's `amount`, so
+  /// captureCartPayment's sum / coupon proration covers base + fee.
+  List<Map<String, dynamic>> get _cartItemsWithFee => [
+        for (final it in widget.cartItems!)
+          {
+            ...it,
+            'amount': _baseOf(num.tryParse(it['amount'].toString())) +
+                _feeForBase(_baseOf(num.tryParse(it['amount'].toString())),
+                    it['serviceType']?.toString(), _itemBookingData(it)),
+          },
+      ];
+
+  int get _totalAmount => _baseAmount + _platformFee;
   int get _afterPromo => (_totalAmount - _promoDiscount).clamp(0, _totalAmount);
   int get _mednuMoneyDeduction =>
       _useMednuMoney ? _afterPromo.clamp(0, _mednuMoneyBalance) : 0;
@@ -202,9 +248,12 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen>
       if (razorpayPaymentId != null) 'razorpay_payment_id': razorpayPaymentId,
       if (razorpaySignature != null) 'razorpay_signature': razorpaySignature,
       if (idempotencyKey != null) 'idempotencyKey': idempotencyKey,
+      // Razorpay + wallet portion: lets the server prove the claimed wallet
+      // portion from the `$_idempotencyKey-mm` / `-w` ledger debits.
+      if (paymentMethod == 'razorpay') 'walletDebitKey': _idempotencyKey,
     };
     if (isCart) {
-      payload['items'] = widget.cartItems;
+      payload['items'] = _cartItemsWithFee;
     } else {
       payload['serviceType'] = widget.serviceType;
       payload['bookingCollection'] = widget.bookingCollection;
@@ -240,13 +289,23 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen>
       final db = FirebaseFirestore.instance;
       if (widget.cartItems != null) {
         final payments = <Map<String, dynamic>>[];
+        // One atomic batch: a failure part-way through must not leave some of
+        // the cart's bookings created (the patient would see an error, retry
+        // and end up with duplicates of the ones that did go through).
+        final batch = db.batch();
         for (final item in widget.cartItems!) {
           final itemBookingData = (item['bookingData'] as Map).cast<String, dynamic>();
           final isInPersonAppointment = item['bookingCollection'] == 'appointments' &&
               itemBookingData['consultationType'] == 'In-Person';
+          final itemBase = _baseOf(num.tryParse(item['amount'].toString()));
+          final itemFee = _feeForBase(itemBase, item['serviceType']?.toString(), itemBookingData);
           final ref = db.collection(item['bookingCollection'] as String).doc();
-          await ref.set({
+          batch.set(ref, {
             ...itemBookingData,
+            // `amount` stays the BASE price (provider earnings read it); the
+            // platform's fee is recorded separately.
+            'platformFee': itemFee,
+            'baseAmount': itemBase,
             if (isInPersonAppointment) 'rxId': _generateOpRxId(),
             'patientId': uid,
             'paymentStatus': 'not_required',
@@ -257,9 +316,10 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen>
             'bookingId': ref.id,
             'bookingCollection': item['bookingCollection'],
             'serviceType': item['serviceType'],
-            'paidAmount': item['amount'],
+            'paidAmount': itemBase + itemFee,
           });
         }
+        await batch.commit();
         if (!mounted) return;
         setState(() => _isProcessing = false);
         _showSuccessSheet('NOPAY-$_idempotencyKey', cartPayments: payments);
@@ -269,6 +329,10 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen>
         final ref = db.collection(widget.bookingCollection!).doc();
         await ref.set({
           ...widget.bookingData!,
+          // `amount` stays the BASE price (provider earnings read it); the
+          // platform's fee is recorded separately.
+          'platformFee': _platformFee,
+          'baseAmount': _baseAmount,
           if (isInPersonAppointment) 'rxId': _generateOpRxId(),
           'patientId': uid,
           'paymentStatus': 'not_required',
@@ -327,9 +391,11 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen>
         cartPayments: (data['payments'] as List?)?.cast<Map>().map((m) => m.cast<String, dynamic>()).toList(),
       );
     } on FirebaseFunctionsException catch (e) {
+      final refunded = await _refundSettledDebits(e, razorpayPaymentId: paymentId);
       if (!mounted) return;
       setState(() => _isProcessing = false);
-      _showError(e.message ?? 'Payment could not be recorded. Contact support with ID: $paymentId');
+      final msg = e.message ?? 'Payment could not be recorded. Contact support with ID: $paymentId';
+      _showError(refunded ? '$msg $_walletRefundedNote' : msg);
     } catch (e) {
       if (!mounted) return;
       setState(() => _isProcessing = false);
@@ -367,38 +433,91 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen>
         .read(walletBalanceProvider)
         .maybeWhen(data: (v) => v.toInt(), orElse: () => 0);
 
-    final mednuMoney = _useMednuMoney ? _afterPromo.clamp(0, mednuMoneyBalance) : 0;
+    // A leg that was already debited on an earlier attempt of this same
+    // payment (capture failed afterwards) keeps its amount and is NOT debited
+    // again — the live balances have already dropped by it, so recomputing
+    // from them would be wrong.
+    final mednuMoney = _settledMednuMoney ??
+        (_useMednuMoney ? _afterPromo.clamp(0, mednuMoneyBalance) : 0);
     final afterMednuMoney = (_afterPromo - mednuMoney).clamp(0, _afterPromo);
-    final wallet = _useWallet ? afterMednuMoney.clamp(0, walletBalance) : 0;
+    final wallet = _settledWallet ??
+        (_useWallet ? afterMednuMoney.clamp(0, walletBalance) : 0);
     final service = ref.read(walletServiceProvider);
 
-    if (mednuMoney > 0) {
+    if (mednuMoney > 0 && _settledMednuMoney == null) {
       try {
         await service.deductMednuMoney(
           amount: mednuMoney.toDouble(),
           title: 'MedNU Money Used',
           category: 'consultation',
           description: widget.description,
+          idempotencyKey: '$_idempotencyKey-mm',
         );
+        _settledMednuMoney = mednuMoney;
       } catch (_) {
         return 'Could not apply your MedNU Money balance. Please try again.';
       }
     }
 
-    if (wallet > 0) {
+    if (wallet > 0 && _settledWallet == null) {
       try {
         await service.deductPayment(
           amount: wallet.toDouble(),
           title: 'Wallet Payment',
           category: 'payment',
           description: widget.description,
+          idempotencyKey: '$_idempotencyKey-w',
         );
+        _settledWallet = wallet;
       } catch (_) {
         return 'Could not debit your wallet. Please try again.';
       }
     }
     return null;
   }
+
+  static const String _walletRefundedNote =
+      'We refunded the amount taken from your wallet.';
+
+  /// Capture failed after wallet / MedNU Money legs were debited: ask the
+  /// server (`refundWalletSpend`) to credit them back exactly once. Only done
+  /// for a DEFINITE failure — an ambiguous one (timeout / network) may have
+  /// recorded the booking, so those keep the safe "tap Pay again" retry path.
+  /// Returns true when the money was returned; false keeps the existing
+  /// retry message (including when the refund call itself fails).
+  Future<bool> _refundSettledDebits(
+    FirebaseFunctionsException e, {
+    String? razorpayPaymentId,
+  }) async {
+    if (_settledTotal <= 0) return false;
+    const ambiguous = {
+      'unavailable', 'deadline-exceeded', 'unknown', 'cancelled', 'internal', 'aborted',
+    };
+    if (ambiguous.contains(e.code)) return false;
+    try {
+      await FirebaseFunctions.instance.httpsCallable('refundWalletSpend').call({
+        'idempotencyKey': _idempotencyKey,
+        if (razorpayPaymentId != null) 'razorpayPaymentId': razorpayPaymentId,
+      });
+      // Those debits are reversed: start a fresh attempt so a retry debits
+      // again under new keys instead of reusing the (reversed) ones.
+      _settledMednuMoney = null;
+      _settledWallet = null;
+      _idempotencyKey = DateTime.now().microsecondsSinceEpoch.toString();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// When part of the payment was already debited from the in-app balances
+  /// and the booking could not be recorded, tell the customer plainly that
+  /// retrying is safe (same idempotency keys -> no second debit/booking).
+  String _debitedNote(String base) => _settledTotal > 0
+      ? '$base ₹$_settledTotal was already taken from your wallet balance for '
+          'this booking; tap Pay again to finish it — you will not be charged twice. '
+          'If it keeps failing, contact support.'
+      : base;
 
   // ── Open Razorpay ──────────────────────────────────────
   Future<void> _openRazorpay() async {
@@ -408,19 +527,33 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen>
     // Fully covered by wallet / MedNU Money — no gateway leg at all, so the
     // in-app debit is the *only* thing that moves money here. It must
     // succeed before we report success, or the patient gets a free order.
-    if (_amountAfterWallet <= 0) {
+    final alreadyDebitedInFull = _settledTotal > 0 && _settledTotal >= _afterPromo;
+    if (_amountAfterWallet <= 0 || alreadyDebitedInFull) {
       final walletPortion = _afterPromo;
-      final error = await _applyBalanceDeductions();
-      if (!mounted) return;
-      if (error != null) {
-        setState(() => _isProcessing = false);
-        _showError(error);
-        return;
+
+      // Wallet-only (no MedNU Money leg, nothing debited yet): let
+      // capturePayment/captureCartPayment debit the main wallet itself,
+      // atomically in the same transaction that creates the booking — there
+      // is no window where money is taken but no booking exists.
+      final atomicWallet = _useWallet &&
+          _afterPromo > 0 &&
+          _mednuMoneyDeduction == 0 &&
+          _settledTotal == 0 &&
+          _walletDeduction >= _afterPromo;
+
+      if (!atomicWallet) {
+        final error = await _applyBalanceDeductions();
+        if (!mounted) return;
+        if (error != null) {
+          setState(() => _isProcessing = false);
+          _showError(error);
+          return;
+        }
       }
 
       try {
         final data = await _capture(
-          paymentMethod: 'already_settled',
+          paymentMethod: atomicWallet ? 'wallet' : 'already_settled',
           walletPortionAmount: walletPortion,
           idempotencyKey: _idempotencyKey,
         );
@@ -433,13 +566,15 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen>
           cartPayments: (data['payments'] as List?)?.cast<Map>().map((m) => m.cast<String, dynamic>()).toList(),
         );
       } on FirebaseFunctionsException catch (e) {
+        final refunded = await _refundSettledDebits(e);
         if (!mounted) return;
         setState(() => _isProcessing = false);
-        _showError(e.message ?? 'Could not complete payment. Please try again.');
+        final msg = e.message ?? 'Could not complete payment. Please try again.';
+        _showError(refunded ? '$msg $_walletRefundedNote' : _debitedNote(msg));
       } catch (e) {
         if (!mounted) return;
         setState(() => _isProcessing = false);
-        _showError('Could not complete payment. Please try again.');
+        _showError(_debitedNote('Could not complete payment. Please try again.'));
       }
       return;
     }
@@ -455,6 +590,16 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen>
         // the order so verifyRazorpayPayment knows not to credit the wallet.
         'purpose': 'checkout',
         'receipt': 'mednu_${DateTime.now().millisecondsSinceEpoch}',
+        // Booking context so the server can reject a stale/tampered price
+        // BEFORE the customer is charged (see createRazorpayOrder).
+        if (widget.cartItems != null)
+          'items': _cartItemsWithFee
+        else ...{
+          'serviceType': widget.serviceType,
+          'bookingCollection': widget.bookingCollection,
+          'bookingData': widget.bookingData,
+          'originalAmount': _totalAmount,
+        },
       });
       orderId = (result.data as Map)['order_id'] as String;
       _pendingOrderId = orderId;
@@ -508,7 +653,13 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen>
           .httpsCallable('validateCoupon')
           .call({
         'couponCode': code,
-        'serviceType': widget.serviceType,
+        // Cart mode has no single serviceType (it was null here, so any coupon
+        // restricted to specific services was wrongly rejected at preview).
+        // _applyCoupon accepts an array and requires every item be covered —
+        // the same check captureCartPayment applies at charge time.
+        'serviceType': widget.cartItems != null
+            ? widget.cartItems!.map((it) => it['serviceType']).toSet().toList()
+            : widget.serviceType,
         'orderAmount': _totalAmount,
       });
       if (!mounted) return;
@@ -569,6 +720,8 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Keep the fee live (admin can change it while this screen is open).
+    ref.watch(platformFeeConfigProvider);
     return Scaffold(
       backgroundColor: context.appBackground,
       appBar: _buildAppBar(),
@@ -745,10 +898,11 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen>
             ),
           ),
           const SizedBox(height: 14),
-          _SummaryRow('Subtotal', '₹${widget.amount}'),
-          const SizedBox(height: 8),
-          const _SummaryRow('Platform Fee', '₹0',
-              valueColor: _kGreen, valueNote: 'Waived'),
+          _SummaryRow('Subtotal', '₹$_baseAmount'),
+          if (_platformFee > 0) ...[
+            const SizedBox(height: 8),
+            _SummaryRow('Platform fee', '₹$_platformFee'),
+          ],
           if (_promoApplied) ...[
             const SizedBox(height: 8),
             _SummaryRow(
@@ -1463,7 +1617,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen>
       enableDrag: false,
       backgroundColor: Colors.transparent,
       builder: (sheetContext) => _SuccessSheet(
-        amount: widget.amount,
+        amount: _totalAmount.toString(),
         paymentId: paymentId,
         description: widget.description,
         onDone: () => Navigator.pop(sheetContext),
@@ -1678,10 +1832,15 @@ class _SuccessSheetState extends State<_SuccessSheet>
                     children: [
                       _ReceiptRow('Service', widget.description),
                       const SizedBox(height: 8),
-                      _ReceiptRow('Amount Paid', '₹${widget.amount}'),
+                      _ReceiptRow(
+                        kRequirePayment ? 'Amount Paid' : 'Amount',
+                        kRequirePayment
+                            ? '₹${widget.amount}'
+                            : 'No charge (test mode)',
+                      ),
                       const SizedBox(height: 8),
                       _ReceiptRow(
-                        'Transaction ID',
+                        kRequirePayment ? 'Transaction ID' : 'Booking reference',
                         widget.paymentId.length > 16
                             ? '${widget.paymentId.substring(0, 16)}…'
                             : widget.paymentId,

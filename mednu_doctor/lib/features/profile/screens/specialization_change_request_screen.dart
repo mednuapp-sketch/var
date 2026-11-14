@@ -7,6 +7,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
+import '../../../core/utils/specialty_utils.dart';
 import '../../auth/services/doctor_auth_service.dart';
 import '../../../core/widgets/ux_widgets.dart';
 
@@ -21,7 +22,7 @@ class SpecializationChangeRequestScreen extends StatefulWidget {
 class _SpecializationChangeRequestScreenState
     extends State<SpecializationChangeRequestScreen> {
   static const _specializations = [
-    'General Physician', 'Cardiology', 'Dermatology', 'Gynaecology',
+    'General', 'Cardiology', 'Dermatology', 'Gynaecology',
     'Paediatrics', 'Orthopaedics', 'Neurology', 'ENT', 'Oncology',
     'Psychiatry', 'Ophthalmology', 'Urology', 'General Surgery', 'Dental',
     'Radiology', 'Anaesthesiology', 'Gastroenterology', 'Nephrology',
@@ -29,7 +30,7 @@ class _SpecializationChangeRequestScreenState
   ];
 
   String  _currentSpec    = '';
-  String  _requestedSpec  = 'General Physician';
+  String  _requestedSpec  = 'General';
   bool    _loading        = true;
   bool    _submitting     = false;
 
@@ -54,7 +55,8 @@ class _SpecializationChangeRequestScreenState
 
     // Load doctor's current specialization
     final profile = await DoctorAuthService.getProfile(uid);
-    _currentSpec = (profile?['specialty'] as String?) ?? 'General Physician';
+    _currentSpec = (profile?['specialty'] as String?) ?? 'General';
+    if (_currentSpec == 'General Physician') _currentSpec = 'General';
 
     // Set default requested spec to something different
     _requestedSpec = _specializations.firstWhere(
@@ -626,11 +628,17 @@ class _SpecializationChangeRequestScreenState
                         fontWeight: FontWeight.w700, color: AppColors.warning)),
               ]),
               const SizedBox(height: 8),
-              ...[
-                'Specialization / Post-Graduate Degree Certificate',
-                'Medical Council Registration for New Specialization',
-                'Medical License or Practicing Certificate',
-              ].map((item) => Padding(
+              ...(isDentalSpecialty(_requestedSpec)
+                  ? const [
+                      'MDS / Post-Graduate Dental Degree Certificate (if any)',
+                      'State Dental Council Registration',
+                      'Dental Council of India (DCI) Registration or Renewal Certificate',
+                    ]
+                  : const [
+                      'Specialization / Post-Graduate Degree Certificate',
+                      'Medical Council Registration for New Specialization',
+                      'Medical License or Practicing Certificate',
+                    ]).map((item) => Padding(
                     padding: const EdgeInsets.only(bottom: 4),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,

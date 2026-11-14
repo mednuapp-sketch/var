@@ -190,8 +190,13 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
       );
 
       // Update photo URL if uploaded
+      // Best-effort: the account already exists at this point, so a failed
+      // photo/opt-in write must not show "error" and strand the user here
+      // (re-submitting fails on the already-created wallet doc).
       if (photoUrl != null && mounted) {
-        await ref.read(authProvider.notifier).updatePhotoUrl(photoUrl);
+        try {
+          await ref.read(authProvider.notifier).updatePhotoUrl(photoUrl);
+        } catch (_) {}
       }
 
       // Written as a separate merge write, strictly after the account's
@@ -201,11 +206,13 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
       if (_whatsappOptIn) {
         final uid = ref.read(authProvider).user?.uid;
         if (uid != null) {
-          await WhatsAppOptInService.save(
-            uid: uid,
-            value: true,
-            language: languageCode,
-          );
+          try {
+            await WhatsAppOptInService.save(
+              uid: uid,
+              value: true,
+              language: languageCode,
+            );
+          } catch (_) {}
         }
       }
 

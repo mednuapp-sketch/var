@@ -735,6 +735,8 @@ class _BookingBottomBar extends StatelessWidget {
                   'isOnline': nutritionist.isOnlineAvailable,
                   'isInPerson': nutritionist.isInPersonAvailable,
                   'availableDays': nutritionist.availableDays,
+                  'scheduleConfigured': nutritionist.scheduleConfigured,
+                  'blockedSlots': nutritionist.blockedSlots,
                 },
               ),
               icon: const Icon(Icons.calendar_today_rounded, size: 18),

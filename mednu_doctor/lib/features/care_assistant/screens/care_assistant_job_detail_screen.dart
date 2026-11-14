@@ -14,6 +14,7 @@ import '../../caregiver/models/visit.dart';
 import '../../caregiver/providers/caregiver_providers.dart';
 import '../../caregiver/services/caregiver_profile_service.dart';
 import '../../caregiver/services/caregiver_visit_service.dart';
+import '../../caregiver/widgets/cancel_visit_sheet.dart';
 import '../widgets/care_job_widgets.dart';
 
 /// One care-assistant job, end to end: review the request → Accept/Decline →
@@ -70,6 +71,15 @@ class _CareAssistantJobDetailScreenState extends ConsumerState<CareAssistantJobD
     if (!mounted) return;
     setState(() => _busy = false);
     if (ok && !accept) context.pop();
+  }
+
+  Future<void> _cancelAccepted(Visit visit) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    final ok = await cancelAcceptedVisitFlow(context, visit);
+    if (!mounted) return;
+    setState(() => _busy = false);
+    if (ok) context.pop();
   }
 
   @override
@@ -272,15 +282,30 @@ class _CareAssistantJobDetailScreenState extends ConsumerState<CareAssistantJobD
             ],
           )
         else if (accepted)
-          GradientButton(
-            label: 'Start Job',
-            icon: Icons.play_arrow_rounded,
-            isLoading: _busy,
-            colors: const [careAssistantTeal, Color(0xFF00695C)],
-            onTap: _busy
-                ? null
-                : () => _run((uid) => CaregiverVisitService.checkIn(visit.id, uid),
-                    success: 'Job started — the patient has been notified'),
+          Column(
+            children: [
+              GradientButton(
+                label: 'Start Job',
+                icon: Icons.play_arrow_rounded,
+                isLoading: _busy,
+                colors: const [careAssistantTeal, Color(0xFF00695C)],
+                onTap: _busy
+                    ? null
+                    : () => _run((uid) => CaregiverVisitService.checkIn(visit.id, uid),
+                        success: 'Job started — the patient has been notified'),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: _busy ? null : () => _cancelAccepted(visit),
+                icon: const Icon(Icons.event_busy_rounded, size: 18),
+                label: const Text('Cancel job'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.error,
+                  side: const BorderSide(color: AppColors.error),
+                  minimumSize: const Size.fromHeight(52),
+                ),
+              ),
+            ],
           )
         else if (inProgress)
           GradientButton(

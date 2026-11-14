@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/care_note.dart';
 import '../models/care_task.dart';
@@ -17,9 +20,59 @@ final availableCaregiverVisitsProvider =
     StreamProvider.autoDispose<List<Visit>>((ref) {
   final uid = CaregiverProfileService.currentUid;
   if (uid == null) return Stream.value(const []);
-  return CaregiverVisitService.availableVisitsStream()
-      .map((snap) => snap.docs.map(Visit.fromFirestore).toList());
+  List<Visit> parse(QuerySnapshot<Map<String, dynamic>> snap) =>
+      snap.docs.map(Visit.fromFirestore).toList();
+  final general = CaregiverVisitService.availableVisitsStream().map(parse);
+
+  // Care-assistant accounts additionally get a care-assistant-only pool query
+  // so their jobs can't be crowded out of the shared 30-doc window by nurse
+  // jobs. The unfiltered query stays so legacy care assistants registered
+  // under the Nurse role (who keep seeing everything) are unaffected.
+  final isCareAssistant =
+      ref.watch(caregiverProfileProvider).serviceType == 'care_assistant';
+  if (!isCareAssistant) return general;
+  final careOnly =
+      CaregiverVisitService.availableVisitsStream(sourceType: 'care_assistant').map(parse);
+  return _mergeVisitPools(general, careOnly);
 });
+
+/// Merges two pool streams into one de-duplicated list. Errors on the
+/// [secondary] stream (e.g. its composite index not built yet) are ignored so
+/// the [primary] pool keeps working.
+Stream<List<Visit>> _mergeVisitPools(
+    Stream<List<Visit>> primary, Stream<List<Visit>> secondary) {
+  late StreamController<List<Visit>> controller;
+  StreamSubscription<List<Visit>>? subA;
+  StreamSubscription<List<Visit>>? subB;
+  var a = const <Visit>[];
+  var b = const <Visit>[];
+  void emit() {
+    final byId = <String, Visit>{for (final v in a) v.id: v};
+    for (final v in b) {
+      byId[v.id] = v;
+    }
+    if (!controller.isClosed) controller.add(byId.values.toList());
+  }
+
+  controller = StreamController<List<Visit>>(
+    onListen: () {
+      subA = primary.listen((v) {
+        a = v;
+        emit();
+      }, onError: controller.addError);
+      subB = secondary.listen((v) {
+        b = v;
+        emit();
+      }, onError: (_) {});
+    },
+    onCancel: () async {
+      await subA?.cancel();
+      await subB?.cancel();
+      await controller.close();
+    },
+  );
+  return controller.stream;
+}
 
 final myCaregiverVisitsProvider = StreamProvider.autoDispose<List<Visit>>((ref) {
   final uid = CaregiverProfileService.currentUid;
@@ -57,7 +110,12 @@ final caregiverVisitsProvider = Provider.autoDispose<List<Visit>>((ref) {
   // 'care_assistant' under the Nurse role) keep seeing everything.
   final legacyCareAssistant =
       ref.watch(caregiverProfileProvider).serviceType == 'care_assistant';
-  final all = byId.values.where((v) => legacyCareAssistant || !v.isCareAssistantJob).toList()
+  // A job this partner declined / cancelled is not offered to them again.
+  final myUid = CaregiverProfileService.currentUid;
+  final all = byId.values
+      .where((v) => legacyCareAssistant || !v.isCareAssistantJob)
+      .where((v) => !(v.caregiverId == null && myUid != null && v.declinedBy.contains(myUid)))
+      .toList()
     ..sort((a, b) => a.scheduledAt.compareTo(b.scheduledAt));
   return all;
 });

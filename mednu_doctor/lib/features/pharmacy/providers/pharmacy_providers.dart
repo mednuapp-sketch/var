@@ -22,8 +22,12 @@ final pharmacyProfileProvider = StreamProvider.autoDispose<PharmacyProfile?>((re
 // ── Available (unclaimed) orders queue ──────────────────────────────────
 
 final availableOrdersProvider = StreamProvider.autoDispose<List<PharmacyOrder>>((ref) {
-  return PharmacyOrderService.availableOrdersStream()
-      .map((snap) => snap.docs.map(PharmacyOrder.fromDoc).toList());
+  final uid = PharmacyProfileService.currentUid;
+  // Hide orders this pharmacy already declined (they stay open for others).
+  return PharmacyOrderService.availableOrdersStream().map((snap) => snap.docs
+      .where((d) => !((d.data()['declinedBy'] as List?)?.contains(uid) ?? false))
+      .map(PharmacyOrder.fromDoc)
+      .toList());
 });
 
 // ── Dashboard metrics — one realtime query, computed client-side ─────────

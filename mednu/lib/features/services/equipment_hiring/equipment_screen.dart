@@ -10,6 +10,7 @@ import '../../../core/services/feedback_service.dart';
 import '../../../core/utils/distance.dart';
 import '../../../core/widgets/add_to_cart_button.dart';
 import '../../../core/widgets/ux_widgets.dart';
+import '../../../core/widgets/provider_availability.dart';
 import '../../cart/providers/cart_provider.dart';
 import '../../home/providers/location_provider.dart';
 
@@ -181,8 +182,14 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen> with SingleTi
     if (confirmed == true && mounted) _addRentToCart(eq, days);
   }
 
+  /// Vendors whose "accepting orders" switch is off (live). Items from them
+  /// render greyed out and cannot be rented / bought.
+  Set<String> _closedVendors = const {};
+
   @override
   Widget build(BuildContext context) {
+    _closedVendors = ref.watch(unavailableEquipmentVendorIdsProvider).valueOrNull ?? const {};
+    final scopedVendorClosed = widget.vendorId != null && _closedVendors.contains(widget.vendorId);
     return Scaffold(
       backgroundColor: context.appBackground,
       body: CustomScrollView(
@@ -246,6 +253,13 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen> with SingleTi
           // scoped catalog.
           if (widget.vendorId == null)
             const SliverToBoxAdapter(child: _EquipmentProvidersSection()),
+          if (scopedVendorClosed)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                child: const NotAcceptingBanner(),
+              ),
+            ),
           SliverToBoxAdapter(
             child: StreamBuilder<QuerySnapshot>(
               stream: (() {
@@ -331,7 +345,14 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen> with SingleTi
     final available = eq['isAvailable'] as bool;
     final soldOut = !available || (stock != null && stock <= 0);
     final lowStock = !soldOut && stock != null && stock <= 2;
+    final vendorClosed = _closedVendors.contains(eq['sourceVendorId']);
 
+    return GreyscaleIfUnavailable(unavailable: vendorClosed, child: _buildCardBody(
+      eq, color, deposit, desc, imageUrl, isRent, stock, soldOut, lowStock, vendorClosed));
+  }
+
+  Widget _buildCardBody(Map<String, dynamic> eq, Color color, int deposit, String desc,
+      String imageUrl, bool isRent, int? stock, bool soldOut, bool lowStock, bool vendorClosed) {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -380,7 +401,17 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen> with SingleTi
           )
         else if (desc.isNotEmpty)
           Text(desc, style: AppTextStyles.caption, maxLines: 1, overflow: TextOverflow.ellipsis),
-        if (soldOut || lowStock)
+        if (vendorClosed)
+          const Padding(
+            padding: EdgeInsets.only(top: 4),
+            child: Text(
+              'Not accepting orders · Back soon',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontFamily: 'Poppins', fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFFB45309)),
+            ),
+          )
+        else if (soldOut || lowStock)
           Padding(
             padding: const EdgeInsets.only(top: 4),
             child: Text(
@@ -397,7 +428,9 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen> with SingleTi
         SizedBox(
           width: double.infinity,
           child: ElevatedButton(
-            onPressed: soldOut ? null : () => isRent ? _showRentSheet(eq) : _addBuyToCart(eq),
+            onPressed: vendorClosed
+                ? () => showNotAcceptingSnack(context, 'vendor')
+                : soldOut ? null : () => isRent ? _showRentSheet(eq) : _addBuyToCart(eq),
             style: ElevatedButton.styleFrom(
               backgroundColor: color,
               minimumSize: const Size(double.infinity, 32),
@@ -405,7 +438,7 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen> with SingleTi
               elevation: 0,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
-            child: Text(soldOut ? 'Sold out' : (isRent ? 'Rent Now' : 'Buy Now'),
+            child: Text(vendorClosed ? 'Unavailable' : soldOut ? 'Sold out' : (isRent ? 'Rent Now' : 'Buy Now'),
                 style: const TextStyle(fontSize: 12, fontFamily: 'Poppins')),
           ),
         ),

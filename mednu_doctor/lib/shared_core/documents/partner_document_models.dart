@@ -7,86 +7,128 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 /// `{role}_documents/{uid}/`, and the Admin panel's `PARTNER_ROLES.docSlots`.
 /// Changing a key here means changing it in all three places.
 
-/// A document slot a role must fill in. `key` is the canonical docType.
+/// A document slot a role fills in. `key` is the canonical docType.
+/// [optional] slots can be left empty — they never block submission or
+/// admin approval.
 class PartnerDocumentType {
   final String key;
   final String label;
+  final bool optional;
 
-  const PartnerDocumentType(this.key, this.label);
+  const PartnerDocumentType(this.key, this.label, {this.optional = false});
+
+  // The lists below follow the client's document checklist per partner type.
+  // Where an old docType key still describes the same document it is reused,
+  // so files already uploaded by existing partners stay attached.
 
   static const lab = <PartnerDocumentType>[
-    PartnerDocumentType('lab_license', 'Lab License'),
-    PartnerDocumentType('pathologist_registration', 'Pathologist Registration Certificate'),
-    PartnerDocumentType('address_proof', 'Address Proof'),
+    PartnerDocumentType('lab_license', 'Lab Licence'),
+    PartnerDocumentType('maridi_certificate', 'Maridi Certificate'),
+    PartnerDocumentType('lab_technician_details', 'Lab Technician Details'),
+    PartnerDocumentType('pathologist_registration',
+        'Biochemist / Pathologist / Microbiologist Details (as per lab type)'),
+    PartnerDocumentType('trade_license', 'Trade Licence', optional: true),
+    PartnerDocumentType('gst_certificate', 'GST Certificate'),
   ];
 
   static const pharmacy = <PartnerDocumentType>[
-    PartnerDocumentType('pharmacy_license', 'Pharmacy License'),
-    PartnerDocumentType('pharmacist_registration', 'Registered Pharmacist Certificate'),
-    PartnerDocumentType('address_proof', 'Address Proof'),
+    PartnerDocumentType('pharmacy_license', 'Drug Licence Forms'),
+    PartnerDocumentType('pharmacist_registration', 'Pharmacist Details'),
+    PartnerDocumentType('trade_license', 'Trade Licence'),
+    PartnerDocumentType('gst_certificate', 'GST Certificate'),
   ];
 
-  /// A medical-equipment vendor rents/sells devices straight to patients, so
-  /// admin needs proof the business is real (trade/GST registration) and who
-  /// is behind it (owner ID) before its menu goes live.
-  static const equipment = <PartnerDocumentType>[
-    PartnerDocumentType('business_registration', 'Business / Trade Registration (GST / Shop Act)'),
-    PartnerDocumentType('owner_id', 'Owner Government ID Proof'),
-    PartnerDocumentType('address_proof', 'Shop Address Proof'),
-  ];
+  /// Client checklist for "Pharmacy & Equipment" is a single shared list.
+  static const equipment = pharmacy;
 
   static const ambulance = <PartnerDocumentType>[
-    PartnerDocumentType('vehicle_registration', 'Vehicle Registration'),
-    PartnerDocumentType('driver_license', 'Driver License'),
-    PartnerDocumentType('vehicle_insurance', 'Vehicle Insurance'),
-    PartnerDocumentType('vehicle_fitness', 'Vehicle Fitness Certificate'),
-    PartnerDocumentType('emt_certificate', 'EMT / Paramedic Certificate'),
-    PartnerDocumentType('address_proof', 'Address Proof'),
+    PartnerDocumentType('driver_license', "Driver's Licence"),
+    PartnerDocumentType('vehicle_fitness', 'Ambulance Certificate'),
+    PartnerDocumentType('vehicle_registration', 'C Book (RC Book)'),
+    PartnerDocumentType('vehicle_insurance', 'Insurance'),
+    PartnerDocumentType('pollution_certificate', 'Pollution Certificate'),
   ];
 
+  /// Nurse (stored under `caregiver_profiles`).
   static const caregiver = <PartnerDocumentType>[
-    PartnerDocumentType('caregiver_id', 'Government ID / Nurse ID'),
-    PartnerDocumentType('certificates', 'Certificates / Police Verification'),
-    PartnerDocumentType('address_proof', 'Address Proof'),
+    PartnerDocumentType('certificates',
+        'Basic Qualification + ANM / GNM / B.Sc. Nursing'),
+    PartnerDocumentType('resume', 'Resume', optional: true),
+    PartnerDocumentType('caregiver_id', 'Government ID Proof'),
   ];
 
-  /// A mental-health role — unlike Nutritionist/Hospital (which stay
-  /// `docSlots: {}` by design, see `PARTNER_ROLES` in the admin panel), this
-  /// one needs proof of who the applicant is and that they are actually
-  /// qualified to counsel before an admin can approve them.
+  /// Care Assistant — shares `caregiver_profiles`, but needs only an ID.
+  static const careAssistant = <PartnerDocumentType>[
+    PartnerDocumentType('caregiver_id', 'Government ID Proof'),
+  ];
+
+  /// A mental-health role — not part of the client's checklist, unchanged.
   static const counsellor = <PartnerDocumentType>[
     PartnerDocumentType('counsellor_id', 'Government ID Proof'),
     PartnerDocumentType('certificates', 'Certifications / Qualifications'),
   ];
 
-  /// A clinical role, same reasoning as [counsellor]: a physiotherapist
-  /// treats patients directly, so an admin needs ID + qualification proof
-  /// before approval — this used to be the one role left at `docSlots: {}`
-  /// alongside Nutritionist/Hospital, which was an intentional gap at the
-  /// time but not the right end state for a hands-on clinical role.
+  /// Physiotherapy / Dental.
   static const physiotherapist = <PartnerDocumentType>[
-    PartnerDocumentType('physio_id', 'Government ID Proof'),
-    PartnerDocumentType('physio_certificate', 'Physiotherapy Certification / Degree'),
+    PartnerDocumentType('ug_certificate', 'UG Degree'),
+    PartnerDocumentType('pg_certificate', 'PG Degree', optional: true),
+    PartnerDocumentType('renewal_certificate', 'Renewal Certificate'),
+    PartnerDocumentType('registration_state', 'Registration - State'),
+    PartnerDocumentType('registration_national', 'Registration - National'),
+    PartnerDocumentType('other_certificate', 'Others', optional: true),
   ];
 
-  /// Nutrition was originally left at `docSlots: {}` alongside Hospital,
-  /// treated as not needing verification since a dietician doesn't provide
-  /// hands-on clinical treatment. Brought in line with Counsellor/
-  /// Physiotherapist (ID + qualification proof) on request.
+  /// Dietician.
   static const nutritionist = <PartnerDocumentType>[
-    PartnerDocumentType('nutritionist_id', 'Government ID Proof'),
-    PartnerDocumentType('nutrition_certificate', 'Nutrition / Dietetics Certification'),
+    PartnerDocumentType('ug_certificate', 'UG Degree'),
+    PartnerDocumentType('pg_certificate', 'PG Degree', optional: true),
+    PartnerDocumentType('registration_certificate', 'Registration Certificate'),
+    PartnerDocumentType('other_certificate', 'Others', optional: true),
   ];
 
-  /// A hospital billing-desk login can read every bill payment filed against
-  /// the `hospitals/{hospitalId}` entry it's linked to, so admin needs proof
-  /// the hospital is real and that this person is authorised to act for it —
-  /// not just a phone number that happens to match the catalog entry.
   static const hospital = <PartnerDocumentType>[
-    PartnerDocumentType('hospital_registration', 'Hospital Registration Certificate'),
-    PartnerDocumentType('authorization_letter', 'Authorization Letter (on Hospital Letterhead)'),
-    PartnerDocumentType('hospital_contact_id', 'Contact Person Government ID'),
+    PartnerDocumentType('dmho_license', 'DM&HO Licence'),
+    PartnerDocumentType('fire_certificate', 'Fire Certificate'),
+    PartnerDocumentType('maridi_certificate', 'Maridi Certificate'),
+    PartnerDocumentType('gvmc_certificate', 'GVMC Certificate'),
+    PartnerDocumentType('pollution_certificate', 'Pollution Certificate'),
+    PartnerDocumentType('trade_license', 'Trade Licence'),
+    PartnerDocumentType('gst_certificate', 'GST Certificate'),
+    PartnerDocumentType('hospital_resume', 'Hospital Resume', optional: true),
   ];
+
+  /// Optional, partner-typed extra documents (`other_doc_1` .. `other_doc_5`)
+  /// available to every role. Deliberately NOT part of [forRole] / [missingFor]
+  /// — they never block submission or admin approval.
+  static const int maxOtherDocs = 5;
+  static const int maxOtherLabelLength = 60;
+  static const String otherDocPrefix = 'other_doc_';
+
+  static String otherDocKey(int n) => '$otherDocPrefix$n';
+
+  static bool isOtherDocKey(String key) => key.startsWith(otherDocPrefix);
+
+  /// Keys `other_doc_N` present in [documents], sorted by N.
+  static List<String> otherDocKeysIn(Object? documents) {
+    final map = documents is Map ? documents : const {};
+    final keys = [
+      for (final k in map.keys)
+        if (k is String &&
+            isOtherDocKey(k) &&
+            PartnerDocumentMeta.fromMap(map[k]) != null)
+          k,
+    ]..sort();
+    return keys;
+  }
+
+  /// First free `other_doc_N` slot given [usedKeys], or null at the cap.
+  static String? nextFreeOtherDocKey(Iterable<String> usedKeys) {
+    final used = usedKeys.toSet();
+    for (var n = 1; n <= maxOtherDocs; n++) {
+      if (!used.contains(otherDocKey(n))) return otherDocKey(n);
+    }
+    return null;
+  }
 
   /// Labels of the required documents for [role] that have no uploaded file
   /// in [documents] (the `{role}_profiles/{uid}.documents` map). Empty means
@@ -95,13 +137,14 @@ class PartnerDocumentType {
     final map = documents is Map ? documents : const {};
     return [
       for (final type in forRole(role))
-        if (PartnerDocumentMeta.fromMap(map[type.key]) == null) type.label,
+        if (!type.optional && PartnerDocumentMeta.fromMap(map[type.key]) == null)
+          type.label,
     ];
   }
 
   /// `role` is the same short token used for the Storage prefix and the
   /// `{role}_profiles` collection: 'lab' | 'pharmacy' | 'equipment' | 'ambulance' |
-  /// 'caregiver' | 'counsellor' | 'physiotherapist' | 'nutritionist' |
+  /// 'caregiver' | 'care_assistant' | 'counsellor' | 'physiotherapist' | 'nutritionist' |
   /// 'hospital'.
   static List<PartnerDocumentType> forRole(String role) {
     switch (role) {
@@ -115,6 +158,8 @@ class PartnerDocumentType {
         return ambulance;
       case 'caregiver':
         return caregiver;
+      case 'care_assistant':
+        return careAssistant;
       case 'counsellor':
         return counsellor;
       case 'physiotherapist':
@@ -139,6 +184,9 @@ class PartnerDocumentMeta {
   final int sizeBytes;
   final DateTime? uploadedAt;
 
+  /// Partner-typed title — only set on `other_doc_N` entries.
+  final String? label;
+
   const PartnerDocumentMeta({
     required this.url,
     required this.storagePath,
@@ -146,6 +194,7 @@ class PartnerDocumentMeta {
     required this.contentType,
     required this.sizeBytes,
     required this.uploadedAt,
+    this.label,
   });
 
   bool get isPdf => contentType == 'application/pdf';
@@ -162,6 +211,7 @@ class PartnerDocumentMeta {
       contentType: raw['contentType']?.toString() ?? '',
       sizeBytes: (raw['sizeBytes'] as num?)?.toInt() ?? 0,
       uploadedAt: ts is Timestamp ? ts.toDate() : null,
+      label: raw['label']?.toString(),
     );
   }
 }

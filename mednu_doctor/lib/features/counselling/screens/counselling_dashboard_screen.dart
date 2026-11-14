@@ -34,12 +34,9 @@ class _CounsellingDashboardScreenState extends ConsumerState<CounsellingDashboar
     if (uid != null) CounsellorPresenceService.instance.init(uid);
   }
 
-  @override
-  void dispose() {
-    CounsellorPresenceService.instance.setOnline(false);
-    CounsellorPresenceService.instance.dispose();
-    super.dispose();
-  }
+  // Presence intentionally NOT switched off here: partners stay online across
+  // tab changes until they flip the toggle, sign out (see
+  // PartnerPresenceShutdown) or the app is terminated.
 
   Future<void> _toggleOnline(bool value) async {
     if (_togglingInProgress) return;
@@ -56,6 +53,13 @@ class _CounsellingDashboardScreenState extends ConsumerState<CounsellingDashboar
     final metrics = ref.watch(counsellingDashboardMetricsProvider);
     final today = ref.watch(todayCounsellingSessionsProvider);
     final online = ref.watch(counsellingProfileProvider).isOnline;
+    // Distinguish "still loading" / "errored" from a genuinely empty list.
+    final streams = [
+      ref.watch(availableCounsellingSessionsProvider),
+      ref.watch(myCounsellingSessionsProvider),
+    ];
+    final sessionsLoading = today.isEmpty && streams.any((s) => s.isLoading && !s.hasValue);
+    final sessionsError = today.isEmpty && streams.any((s) => s.hasError && !s.hasValue);
 
     return SharedAppShell(
       currentRoute: AppRoutes.counsellingDashboard,
@@ -97,7 +101,14 @@ class _CounsellingDashboardScreenState extends ConsumerState<CounsellingDashboar
             action: today.isNotEmpty ? 'View all' : null,
             onAction: today.isNotEmpty ? () => context.push(AppRoutes.counsellingSessions) : null,
           ),
-          if (today.isEmpty)
+          if (sessionsError)
+            NetworkErrorState(onRetry: () {
+              ref.invalidate(availableCounsellingSessionsProvider);
+              ref.invalidate(myCounsellingSessionsProvider);
+            })
+          else if (sessionsLoading)
+            const CardLoadingState(itemCount: 2)
+          else if (today.isEmpty)
             const AppEmptyState(
               icon: Icons.event_available_rounded,
               title: 'No sessions scheduled today',

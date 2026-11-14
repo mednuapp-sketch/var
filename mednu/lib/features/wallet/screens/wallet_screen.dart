@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -13,6 +14,7 @@ import 'package:mednu/core/constants/payment_config.dart';
 import 'package:mednu/core/router/app_router.dart';
 import 'package:mednu/core/utils/r.dart';
 import 'package:mednu/core/widgets/ux_widgets.dart';
+import 'package:mednu/features/auth/providers/auth_provider.dart';
 import 'package:mednu/features/referral/referral_provider.dart';
 import 'package:mednu/features/referral/referral_service.dart';
 import 'package:mednu/features/wallet/wallet_provider.dart';
@@ -184,6 +186,10 @@ class WalletScreen extends ConsumerWidget {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      // Drag-to-dismiss pops the route directly (bypassing PopScope), which
+      // would tear the sheet down while Razorpay is open and lose the success
+      // callback. Barrier-tap / back are blocked in-sheet by PopScope.
+      enableDrag: false,
       backgroundColor: Colors.transparent,
       builder: (_) => const _AddMoneySheet(),
     );
@@ -578,9 +584,7 @@ class _ReferralBanner extends ConsumerWidget {
                         fontSize: 13, color: Colors.amber),
                   ),
                   Text(
-                    config.rewardsEnabled
-                        ? 'Earn ${config.referrerRewardFormatted} per referral'
-                        : config.bannerText,
+                    config.earnShort ?? config.bannerText,
                     style: AppTextStyles.bodySmall
                         .copyWith(color: context.appTextSecondary),
                   ),
@@ -626,10 +630,34 @@ class _ReferralSheet extends ConsumerWidget {
   final ReferralConfig config;
   const _ReferralSheet({required this.config});
 
+  static final Set<String> _codeGenAttempted = <String>{};
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
-    final referralCode = uid.isNotEmpty ? uid.substring(0, 8).toUpperCase() : '—';
+    // Real referral code from users/{uid}.referralCode (same source as the
+    // referral screen). If the profile has none yet, generate it once the
+    // same way the home screen does.
+    final userDoc = uid.isNotEmpty ? ref.watch(userDocProvider(uid)) : null;
+    final docData = userDoc?.valueOrNull;
+    final storedCode = (docData?['referralCode'] as String?)?.trim() ?? '';
+    final hasCode = storedCode.isNotEmpty;
+    final failed = userDoc?.hasError ?? false;
+    if (!hasCode && docData != null && uid.isNotEmpty &&
+        _codeGenAttempted.add(uid)) {
+      final name = docData['name'] as String? ?? 'MedNU User';
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        FirebaseFirestore.instance
+            .collection('users')
+            .doc(uid)
+            .update({'referralCode': generateReferralCode(name, uid)})
+            .catchError((_) {
+          _codeGenAttempted.remove(uid);
+        });
+      });
+    }
+    final referralCode =
+        hasCode ? storedCode : (failed ? 'Unavailable' : 'Generating your code…');
 
     return Container(
       decoration: BoxDecoration(
@@ -677,31 +705,27 @@ class _ReferralSheet extends ConsumerWidget {
           ),
           SizedBox(height: R.h(context, 20)),
 
-          // Reward cards
-          if (config.rewardsEnabled) ...[
-            Row(
+          // Reward (referrer only, paid when the friend's first booking completes)
+          Container(
+            width: double.infinity,
+            padding: EdgeInsets.all(R.p(context, 14)),
+            decoration: BoxDecoration(
+              color: Colors.amber.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(R.r(context, 14)),
+            ),
+            child: Row(
               children: [
+                const Icon(Icons.emoji_events_rounded, color: Colors.amber),
+                SizedBox(width: R.w(context, 10)),
                 Expanded(
-                  child: _RewardCard(
-                    label: 'You earn',
-                    amount: config.referrerRewardFormatted,
-                    icon: Icons.emoji_events_rounded,
-                    color: Colors.amber,
-                  ),
-                ),
-                SizedBox(width: R.w(context, 12)),
-                Expanded(
-                  child: _RewardCard(
-                    label: 'Friend gets',
-                    amount: config.referredRewardFormatted,
-                    icon: Icons.person_add_rounded,
-                    color: AppColors.primary,
-                  ),
+                  child: Text(config.earnLine,
+                      style: AppTextStyles.bodyMedium
+                          .copyWith(color: context.appTextSecondary)),
                 ),
               ],
             ),
-            SizedBox(height: R.h(context, 20)),
-          ],
+          ),
+          SizedBox(height: R.h(context, 20)),
 
           // Referral code box
           Text('Your Referral Code',
@@ -709,7 +733,7 @@ class _ReferralSheet extends ConsumerWidget {
                   .copyWith(color: context.appTextSecondary)),
           SizedBox(height: R.h(context, 8)),
           GestureDetector(
-            onTap: () {
+            onTap: !hasCode ? null : () {
               Clipboard.setData(ClipboardData(text: referralCode));
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Referral code copied!')),
@@ -727,14 +751,20 @@ class _ReferralSheet extends ConsumerWidget {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(referralCode,
-                      style: const TextStyle(
-                          fontFamily: 'Poppins',
-                          fontWeight: FontWeight.w800,
-                          fontSize: 20,
-                          letterSpacing: 4)),
-                  Icon(Icons.copy_rounded,
-                      color: AppColors.primary, size: R.w(context, 20)),
+                  Expanded(
+                    child: Text(referralCode,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontWeight: hasCode ? FontWeight.w800 : FontWeight.w500,
+                            fontSize: hasCode ? 20 : 14,
+                            letterSpacing: hasCode ? 4 : 0,
+                            color: hasCode ? null : context.appTextSecondary)),
+                  ),
+                  if (hasCode)
+                    Icon(Icons.copy_rounded,
+                        color: AppColors.primary, size: R.w(context, 20)),
                 ],
               ),
             ),
@@ -758,7 +788,7 @@ class _ReferralSheet extends ConsumerWidget {
               onPressed: () {
                 final msg = '${config.campaignMessage}\n\n'
                     'Use my referral code: *$referralCode*\n'
-                    'Download MedNU and get ${config.referredRewardFormatted} in your wallet!';
+                    'Download MedNU and sign up with my code!';
                 Share.share(msg, subject: config.campaignTitle);
               },
             ),
@@ -786,45 +816,6 @@ class _ReferralSheet extends ConsumerWidget {
                   .copyWith(color: AppColors.primary),
             ),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _RewardCard extends StatelessWidget {
-  final String label;
-  final String amount;
-  final IconData icon;
-  final Color color;
-  const _RewardCard(
-      {required this.label,
-      required this.amount,
-      required this.icon,
-      required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.symmetric(vertical: R.p(context, 14), horizontal: R.p(context, 12)),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha:0.07),
-        borderRadius: BorderRadius.circular(R.r(context, 14)),
-        border: Border.all(color: color.withValues(alpha:0.2)),
-      ),
-      child: Column(
-        children: [
-          Icon(icon, color: color, size: R.w(context, 22)),
-          SizedBox(height: R.h(context, 6)),
-          Text(amount,
-              style: TextStyle(
-                  fontFamily: 'Poppins',
-                  fontWeight: FontWeight.w800,
-                  fontSize: 18,
-                  color: color)),
-          Text(label,
-              style: AppTextStyles.bodySmall
-                  .copyWith(color: context.appTextSecondary)),
         ],
       ),
     );
@@ -1135,9 +1126,18 @@ class _AddMoneySheetState extends ConsumerState<_AddMoneySheet> {
   String? _pendingOrderId;
   double _pendingAmount = 0;
 
+  // True from the moment Razorpay is opened until its success/error callback
+  // arrives (stays true across the external-wallet hand-off). While set, the
+  // sheet cannot be dismissed, and if it is torn down anyway the success
+  // callback still runs the crediting callable.
+  bool _paymentOpen = false;
+  bool _disposed = false;
+  late final WalletService _walletService;
+
   @override
   void initState() {
     super.initState();
+    _walletService = ref.read(walletServiceProvider);
     _razorpay = Razorpay();
     _razorpay.on(Razorpay.EVENT_PAYMENT_SUCCESS, _onPaymentSuccess);
     _razorpay.on(Razorpay.EVENT_PAYMENT_ERROR, _onPaymentError);
@@ -1146,7 +1146,10 @@ class _AddMoneySheetState extends ConsumerState<_AddMoneySheet> {
 
   @override
   void dispose() {
-    _razorpay.clear();
+    _disposed = true;
+    // Keep the listeners alive if a payment is still open so the success
+    // callback is not lost; the callbacks clear Razorpay once they finish.
+    if (!_paymentOpen) _razorpay.clear();
     _controller.dispose();
     super.dispose();
   }
@@ -1173,6 +1176,7 @@ class _AddMoneySheetState extends ConsumerState<_AddMoneySheet> {
       if (!mounted) return;
       _pendingOrderId = order.orderId;
       _pendingAmount = amount;
+      _paymentOpen = true;
       _razorpay.open({
         'key': kRazorpayKeyId,
         'order_id': order.orderId,
@@ -1183,6 +1187,7 @@ class _AddMoneySheetState extends ConsumerState<_AddMoneySheet> {
         'theme': {'color': '#522546'},
       });
     } catch (e) {
+      _paymentOpen = false;
       if (!mounted) return;
       setState(() {
         _loading = false;
@@ -1191,12 +1196,18 @@ class _AddMoneySheetState extends ConsumerState<_AddMoneySheet> {
     }
   }
 
+  void _finishPayment() {
+    _paymentOpen = false;
+    if (_disposed) _razorpay.clear();
+  }
+
   Future<void> _onPaymentSuccess(PaymentSuccessResponse response) async {
     final orderId = response.orderId ?? _pendingOrderId ?? '';
     final paymentId = response.paymentId ?? '';
     final signature = response.signature ?? '';
     final amount = _pendingAmount;
     if (orderId.isEmpty || paymentId.isEmpty || signature.isEmpty) {
+      _finishPayment();
       if (!mounted) return;
       setState(() {
         _loading = false;
@@ -1205,11 +1216,14 @@ class _AddMoneySheetState extends ConsumerState<_AddMoneySheet> {
       return;
     }
     try {
-      await ref.read(walletServiceProvider).confirmTopUp(
+      // Uses the service captured in initState (not `ref`) and has no mounted
+      // guard before it, so the credit runs even if the sheet is gone.
+      await _walletService.confirmTopUp(
             orderId: orderId,
             paymentId: paymentId,
             signature: signature,
           );
+      _finishPayment();
       if (!mounted) return;
       // The balance itself arrives via balanceStream()'s realtime listener —
       // nothing to write here.
@@ -1218,6 +1232,7 @@ class _AddMoneySheetState extends ConsumerState<_AddMoneySheet> {
       nav.pop();
       _showSuccess(amount, messenger);
     } catch (e) {
+      _finishPayment();
       if (!mounted) return;
       setState(() {
         _loading = false;
@@ -1227,6 +1242,7 @@ class _AddMoneySheetState extends ConsumerState<_AddMoneySheet> {
   }
 
   void _onPaymentError(PaymentFailureResponse response) {
+    _finishPayment();
     if (!mounted) return;
     _pendingOrderId = null;
     setState(() {
@@ -1236,8 +1252,9 @@ class _AddMoneySheetState extends ConsumerState<_AddMoneySheet> {
   }
 
   void _onExternalWallet(ExternalWalletResponse response) {
-    if (!mounted) return;
-    setState(() => _loading = false);
+    // The external wallet app is now handling the payment and its result still
+    // arrives via the success/error callbacks — keep the sheet locked and the
+    // button disabled until then.
   }
 
   void _showSuccess(double amount, ScaffoldMessengerState messenger) {
@@ -1263,7 +1280,11 @@ class _AddMoneySheetState extends ConsumerState<_AddMoneySheet> {
   @override
   Widget build(BuildContext context) {
     final bottom = MediaQuery.of(context).viewInsets.bottom;
-    return Container(
+    return PopScope(
+      // Not dismissible (back / barrier tap) while an order is being created
+      // or Razorpay is open — dismissing would drop the success callback.
+      canPop: !(_loading || _paymentOpen),
+      child: Container(
       padding: EdgeInsets.fromLTRB(R.p(context, 20), R.p(context, 20), R.p(context, 20), R.p(context, 20) + bottom),
       decoration: BoxDecoration(
         color: context.appSurface,
@@ -1366,6 +1387,7 @@ class _AddMoneySheetState extends ConsumerState<_AddMoneySheet> {
           SizedBox(height: R.h(context, 4)),
         ],
       ),
+    ),
     );
   }
 }

@@ -140,6 +140,17 @@ class _CounsellingSettingsScreenState extends State<CounsellingSettingsScreen> {
       headerIcon: Icons.settings_rounded,
       sections: [
         SettingsSectionData(
+          title: 'Schedule',
+          items: [
+            SettingsItemData(
+              icon: Icons.calendar_month_rounded,
+              title: 'My Availability',
+              subtitle: 'Publish weekly slots patients can book',
+              onTap: () => context.push(AppRoutes.counsellingAvailability),
+            ),
+          ],
+        ),
+        SettingsSectionData(
           title: 'Notifications',
           items: [
             SettingsItemData(

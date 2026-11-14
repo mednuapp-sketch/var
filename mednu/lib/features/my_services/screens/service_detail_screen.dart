@@ -14,9 +14,12 @@ import '../../../core/router/app_router.dart';
 import '../../../core/services/feedback_service.dart';
 import '../../../core/utils/op_slip_service.dart';
 import '../../../core/utils/r.dart';
+import '../../../core/widgets/provider_slot_picker.dart';
 import '../models/unified_booking.dart';
 import '../providers/my_services_provider.dart';
+import '../../payment/screens/trip_payment_screen.dart';
 import '../services/my_services_service.dart';
+import '../../services/nutrition/screens/reschedule_nutrition_appointment_screen.dart';
 
 class ServiceDetailScreen extends ConsumerStatefulWidget {
   final UnifiedBooking booking;
@@ -88,6 +91,11 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildStatusCard(context, live),
+                    if (live.rawData['providerReleasedAt'] != null &&
+                        live.status == BookingStatus.pending) ...[
+                      SizedBox(height: R.h(context, 16)),
+                      _buildProviderReleasedBanner(context, live),
+                    ],
                     if (live.needsPrescriptionDecision || live.prescriptionWasRejected) ...[
                       SizedBox(height: R.h(context, 16)),
                       _buildPrescriptionBanner(context, live),
@@ -104,7 +112,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
                     _buildPaymentInfo(context, live),
                     SizedBox(height: R.h(context, 16)),
                     if (live.isCompleted && !_reviewSubmitted)
-                      _buildRatingSection(context),
+                      _buildRatingSection(context, live),
                     if (live.isCompleted && !_reviewSubmitted)
                       SizedBox(height: R.h(context, 16)),
                     _buildActionButtons(context, live),
@@ -250,6 +258,85 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  // ── Provider cancelled, job back in the pool ────────────────────────────────
+
+  Widget _buildProviderReleasedBanner(
+    BuildContext context,
+    UnifiedBooking live,
+  ) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final role = live.rawData['providerReleasedRole'] == 'care_assistant'
+        ? 'Care assistant'
+        : 'Nurse';
+    final paid = live.rawData['paymentId'] != null;
+    const accent = Color(0xFFE65100);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.darkCard : accent.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark ? AppColors.darkBorder : accent.withValues(alpha: 0.3),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.info_outline_rounded, color: accent, size: 22),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '$role cancelled. We\'re finding another for you.',
+                      style: AppTextStyles.labelLarge.copyWith(
+                        color: context.appTextPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      paid
+                          ? 'You can wait for a new provider, or cancel now and get a full refund.'
+                          : 'You can wait for a new provider, or cancel this booking.',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: context.appTextSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () => _confirmCancel(context, live),
+              icon: const Icon(Icons.cancel_outlined, size: 18),
+              label: const Text(
+                'Cancel booking',
+                style: TextStyle(fontFamily: 'Poppins'),
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.error,
+                side: const BorderSide(color: AppColors.error),
+                minimumSize: const Size.fromHeight(46),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -805,7 +892,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
 
   // ── Rating & Review Section ───────────────────────────────────────────────────
 
-  Widget _buildRatingSection(BuildContext context) {
+  Widget _buildRatingSection(BuildContext context, UnifiedBooking live) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return _SectionCard(
@@ -881,7 +968,7 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
             child: ElevatedButton.icon(
               onPressed: _userRating == 0 || _submittingReview
                   ? null
-                  : () => _submitReview(context),
+                  : () => _submitReview(context, live),
               icon: _submittingReview
                   ? const SizedBox(
                       width: 16,
@@ -923,8 +1010,17 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
         live.source != BookingSource.hospitalBillPayment &&
         live.medicineCancelAllowed &&
         live.isActive &&
+        live.status != BookingStatus.arrived &&
         live.status != BookingStatus.inProgress &&
-        live.status != BookingStatus.consultationStarted;
+        live.status != BookingStatus.consultationStarted &&
+        // A lab report that is already uploaded can't be cancelled — the lab
+        // has finished the work, and the cancel would only desync the
+        // patient's request from the lab's booking.
+        live.status != BookingStatus.reportReady &&
+        // The "provider cancelled, finding another" banner already carries its
+        // own Cancel booking button; don't show a duplicate here.
+        !(live.rawData['providerReleasedAt'] != null &&
+            live.status == BookingStatus.pending);
 
     // In-person doctor appointments get the same OP slip + directions
     // actions here as on the My Appointments card, so they work the same
@@ -961,6 +1057,18 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
           ],
           const SizedBox(height: 10),
         ],
+        if ((live.rawData['type'] as String? ?? '').toLowerCase() == 'ambulance' &&
+            live.rawData['paymentStatus'] == 'payment_due') ...[
+          _ActionButton(
+            icon: Icons.payments_rounded,
+            label: 'Pay now ₹${((live.rawData['amountDue'] as num?) ?? 0).toStringAsFixed(0)}',
+            color: AppColors.success,
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => TripPaymentScreen(requestId: live.id),
+            )),
+          ),
+          const SizedBox(height: 10),
+        ],
         if (live.isActive &&
             (live.rawData['type'] as String? ?? '').toLowerCase() == 'ambulance' &&
             live.rawData['assignedTo'] != null) ...[
@@ -979,7 +1087,10 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
             color: AppColors.primary,
             onTap: () => _contactSupport(context, live),
           ),
-        if (live.isActive) ...[
+        // Physio/counselling: only while pending/accepted (never once the
+        // session has started, or after it is cancelled/completed).
+        if (live.isActive &&
+            (!_isTherapyRequest(live) || _therapyCanReschedule(live))) ...[
           const SizedBox(height: 10),
           _ActionButton(
             icon: Icons.event_repeat_rounded,
@@ -1050,10 +1161,25 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
     }
   }
 
-  Future<void> _submitReview(BuildContext context) async {
+  Future<void> _submitReview(BuildContext context, UnifiedBooking live) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
     setState(() => _submittingReview = true);
-    await Future.delayed(const Duration(seconds: 1));
-    if (mounted) {
+    try {
+      // Previously this only waited one second and showed "Thank you" without
+      // saving anything. Persist to the admin-readable `feedback` collection.
+      await FirebaseFirestore.instance.collection('feedback').add({
+        'userId': uid,
+        'patientId': uid,
+        'bookingId': live.id,
+        'bookingSource': live.source.name,
+        'serviceType': live.serviceType,
+        'providerName': live.providerName ?? '',
+        'rating': _userRating,
+        'comment': _reviewCtrl.text.trim(),
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      if (!mounted) return;
       setState(() {
         _submittingReview = false;
         _reviewSubmitted = true;
@@ -1061,13 +1187,75 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
       if (context.mounted) {
         FeedbackService.showSuccess(context, 'Thank you for your review!');
       }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _submittingReview = false);
+      if (context.mounted) {
+        FeedbackService.showError(
+            context, 'Could not submit your review. Please try again.');
+      }
     }
   }
 
   // Only doctor appointments can be rescheduled from here — the flow needs a
   // doctorId + slot picker, which other service types (medicine, lab tests,
   // equipment, etc.) don't have.
+  bool _isTherapyRequest(UnifiedBooking live) =>
+      live.source == BookingSource.serviceRequest &&
+      TherapySlots.supports((live.rawData['type'] as String? ?? '').toLowerCase());
+
+  bool _therapyCanReschedule(UnifiedBooking live) =>
+      live.status == BookingStatus.pending || live.status == BookingStatus.confirmed;
+
+  Future<void> _rescheduleTherapy(BuildContext context, UnifiedBooking live) async {
+    if (!_therapyCanReschedule(live)) {
+      FeedbackService.showInfo(
+          context, 'This session has started or ended and can no longer be rescheduled.');
+      return;
+    }
+    final type = (live.rawData['type'] as String? ?? '').toLowerCase();
+    final providerId = (live.rawData[type == 'physiotherapy' ? 'physiotherapistId' : 'counsellorId']
+            as String?) ??
+        live.rawData['assignedTo'] as String?;
+    final ok = await showTherapyRescheduleSheet(
+      context,
+      requestId: live.id,
+      type: type,
+      providerId: providerId,
+      currentDate: live.date,
+      currentTime: live.time,
+      color: type == 'physiotherapy' ? const Color(0xFF00838F) : AppColors.primary,
+    );
+    if (ok && context.mounted) {
+      FeedbackService.showSuccess(
+          context, 'Reschedule requested. Your provider has been notified.');
+    }
+  }
+
   void _rescheduleBooking(BuildContext context, UnifiedBooking live) {
+    if (_isTherapyRequest(live)) {
+      _rescheduleTherapy(context, live);
+      return;
+    }
+    if (live.source == BookingSource.nutrition) {
+      final st = (live.rawData['status'] as String? ?? '').toLowerCase();
+      final nutritionistId = live.rawData['nutritionistId'] as String? ?? '';
+      if (!const {'pending', 'confirmed'}.contains(st) || nutritionistId.isEmpty) {
+        FeedbackService.showInfo(context,
+            'This appointment can no longer be rescheduled.');
+        return;
+      }
+      Navigator.of(context).push(MaterialPageRoute<bool>(
+        builder: (_) => RescheduleNutritionAppointmentScreen(
+          appointmentId: live.id,
+          nutritionistId: nutritionistId,
+          nutritionistName: live.providerName ?? 'your dietician',
+          currentDate: live.date,
+          currentTimeSlot: live.time,
+        ),
+      ));
+      return;
+    }
     final doctorId = live.rawData['doctorId'] as String? ?? '';
     if (live.source != BookingSource.appointment || doctorId.isEmpty) {
       FeedbackService.showInfo(context, 'Reschedule coming soon.');
@@ -1092,6 +1280,19 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
     );
   }
 
+  /// What will happen to the money. Only paid bookings (they carry a
+  /// paymentId) get a note: a full automatic refund while the provider has not
+  /// accepted yet, otherwise a request that our team reviews.
+  String _cancelRefundNote(UnifiedBooking live) {
+    final paid = live.rawData['paymentId'] != null;
+    if (!paid) return '';
+    final awaiting = live.status == BookingStatus.pending ||
+        live.status == BookingStatus.requested;
+    return awaiting
+        ? '\n\nRefund: Full refund — you will be refunded automatically.'
+        : '\n\nRefund: Sent to admin for review — we will notify you of the decision.';
+  }
+
   Future<void> _confirmCancel(BuildContext context, UnifiedBooking live) async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -1101,9 +1302,10 @@ class _ServiceDetailScreenState extends ConsumerState<ServiceDetailScreen>
           'Cancel Booking',
           style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700),
         ),
-        content: const Text(
-          'Are you sure you want to cancel this booking?\nThis action cannot be undone.',
-          style: TextStyle(fontFamily: 'Poppins', height: 1.5),
+        content: Text(
+          'Are you sure you want to cancel this booking?\nThis action cannot be undone.'
+          '${_cancelRefundNote(live)}',
+          style: const TextStyle(fontFamily: 'Poppins', height: 1.5),
         ),
         actions: [
           TextButton(

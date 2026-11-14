@@ -552,7 +552,13 @@ class _DoctorProfileCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final displayName = name ?? 'Doctor';
+    // Stored names may already include a "Dr." prefix — strip it so we
+    // never render "Dr. Dr. Name" (and the avatar initial isn't "D" from "Dr.").
+    final cleanedName = (name ?? '')
+        .trim()
+        .replaceFirst(RegExp(r'^(dr\.?\s*)+', caseSensitive: false), '')
+        .trim();
+    final displayName = cleanedName.isEmpty ? 'Doctor' : cleanedName;
     final displaySpec = specialty ?? 'General Physician';
 
     return Container(

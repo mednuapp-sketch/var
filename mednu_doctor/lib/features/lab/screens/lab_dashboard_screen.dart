@@ -246,12 +246,14 @@ class _AcceptingBookingsCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  accepting ? 'Accepting New Bookings' : 'Not Accepting Bookings',
+                  accepting ? 'Accepting bookings' : 'Not accepting bookings',
                   style: AppTextStyles.labelLarge,
                   overflow: TextOverflow.ellipsis,
                 ),
                 Text(
-                  accepting ? 'Visible for new diagnostic test bookings' : 'Hidden from new booking requests',
+                  accepting
+                      ? 'Turn off to pause new bookings; customers will see you as unavailable'
+                      : 'Paused — customers see you as unavailable and cannot book',
                   style: AppTextStyles.bodySmall,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,

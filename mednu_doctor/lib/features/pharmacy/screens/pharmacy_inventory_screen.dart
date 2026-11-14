@@ -108,7 +108,11 @@ class PharmacyInventoryScreen extends ConsumerWidget {
                           final name = nameCtrl.text.trim();
                           final price = num.tryParse(priceCtrl.text.trim()) ?? 0;
                           final stock = int.tryParse(stockCtrl.text.trim()) ?? 0;
-                          if (name.isEmpty || saving) return;
+                          if (saving) return;
+                          if (name.isEmpty) {
+                            FeedbackService.showError(sheetContext, 'Enter the medicine name.');
+                            return;
+                          }
                           if (price <= 0) {
                             FeedbackService.showError(sheetContext, 'Enter a price greater than 0.');
                             return;
@@ -212,7 +216,11 @@ class PharmacyInventoryScreen extends ConsumerWidget {
               ),
               onDismissed: (_) {
                 if (uid != null) {
-                  PharmacyInventoryService.deleteItem(uid, items[i].id);
+                  PharmacyInventoryService.deleteItem(uid, items[i].id).catchError((_) {
+                    if (context.mounted) {
+                      FeedbackService.showError(context, 'Could not remove the item. Check your connection.');
+                    }
+                  });
                 }
               },
               child: _InventoryTile(item: items[i], pharmacyId: uid ?? ''),

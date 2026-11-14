@@ -10,6 +10,7 @@ import '../../core/utils/r.dart';
 import '../../core/widgets/ux_widgets.dart';
 import 'partner_document_models.dart';
 import 'partner_document_service.dart';
+import 'partner_other_documents.dart';
 
 /// The "Documents" section every partner profile screen shows — one
 /// [PartnerDocumentUploadCard] per canonical docType for that role.
@@ -21,6 +22,10 @@ class PartnerDocumentsSection extends StatelessWidget {
   /// 'lab' | 'pharmacy' | 'ambulance' | 'caregiver'.
   final String role;
   final String uid;
+
+  /// Overrides which checklist is shown when it differs from [role] (a Care
+  /// Assistant uploads under 'caregiver' but has its own list).
+  final String? typeKey;
 
   /// Raw `documents` / `documentVerification` maps straight off
   /// `{role}_profiles/{uid}` — passed in so this widget reuses the profile
@@ -40,6 +45,7 @@ class PartnerDocumentsSection extends StatelessWidget {
     super.key,
     required this.role,
     required this.uid,
+    this.typeKey,
     required this.documents,
     required this.documentVerification,
     this.locked = false,
@@ -47,10 +53,12 @@ class PartnerDocumentsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final types = PartnerDocumentType.forRole(role);
+    final types = PartnerDocumentType.forRole(typeKey ?? role);
     if (types.isEmpty) return const SizedBox.shrink();
+    final requiredCount = types.where((t) => !t.optional).length;
 
     final verifiedCount = types.where((t) {
+      if (t.optional) return false;
       final meta = PartnerDocumentMeta.fromMap(documents[t.key]);
       return PartnerDocumentVerification.fromMap(
             documentVerification[t.key],
@@ -59,6 +67,42 @@ class PartnerDocumentsSection extends StatelessWidget {
           ).status ==
           PartnerDocumentStatus.verified;
     }).length;
+
+    // Grandfathered (already-approved) partners may hold documents under keys
+    // from an older checklist, and the checklist may have gained slots they can
+    // never fill (rules lock `documents` once active). So when locked: only show
+    // slots that actually have a file, add any legacy-key files as read-only
+    // rows so nothing is lost, and never show a "0/N verified" warning.
+    final knownKeys = types.map((t) => t.key).toSet();
+    final shownTypes = locked
+        ? types
+            .where((t) => PartnerDocumentMeta.fromMap(documents[t.key]) != null)
+            .toList()
+        : types;
+    final legacyTypes = locked
+        ? [
+            for (final e in documents.entries)
+              if (!knownKeys.contains(e.key) &&
+                  !PartnerDocumentType.isOtherDocKey(e.key) &&
+                  PartnerDocumentMeta.fromMap(e.value) != null)
+                PartnerDocumentType(
+                    e.key, 'Other / legacy document (${e.key.replaceAll('_', ' ')})',
+                    optional: true),
+          ]
+        : const <PartnerDocumentType>[];
+    final cardTypes = [...shownTypes, ...legacyTypes];
+
+    // Optional partner-added documents (other_doc_1..5) with their own titles.
+    final otherKeys = PartnerDocumentType.otherDocKeysIn(documents);
+    final otherTypes = [
+      for (final k in otherKeys)
+        PartnerDocumentType(
+          k,
+          (PartnerDocumentMeta.fromMap(documents[k])?.label ?? '').trim().isEmpty
+              ? 'Other document ${k.substring(k.length - 1)}'
+              : PartnerDocumentMeta.fromMap(documents[k])!.label!.trim(),
+        ),
+    ];
 
     return PremiumCard(
       child: Column(
@@ -70,15 +114,22 @@ class PartnerDocumentsSection extends StatelessWidget {
                 child: Text('Documents', style: AppTextStyles.labelMedium),
               ),
               const Spacer(),
-              StatusBadge(
-                label: '$verifiedCount/${types.length} verified',
-                color: verifiedCount == types.length
-                    ? AppColors.success
-                    : AppColors.warning,
-                icon: verifiedCount == types.length
-                    ? Icons.verified_rounded
-                    : Icons.pending_outlined,
-              ),
+              if (locked)
+                const StatusBadge(
+                  label: 'Approved',
+                  color: AppColors.success,
+                  icon: Icons.verified_rounded,
+                )
+              else
+                StatusBadge(
+                  label: '$verifiedCount/$requiredCount verified',
+                  color: verifiedCount == requiredCount
+                      ? AppColors.success
+                      : AppColors.warning,
+                  icon: verifiedCount == requiredCount
+                      ? Icons.verified_rounded
+                      : Icons.pending_outlined,
+                ),
             ],
           ),
           const SizedBox(height: 6),
@@ -96,7 +147,7 @@ class PartnerDocumentsSection extends StatelessWidget {
               return Wrap(
                 spacing: 12,
                 runSpacing: 12,
-                children: types.map((type) {
+                children: cardTypes.map((type) {
                   final meta = PartnerDocumentMeta.fromMap(documents[type.key]);
                   return SizedBox(
                     width: itemWidth,
@@ -117,6 +168,59 @@ class PartnerDocumentsSection extends StatelessWidget {
               );
             },
           ),
+          if (otherTypes.isNotEmpty || !locked) ...[
+            const SizedBox(height: 18),
+            const OtherDocumentsHeading(),
+            const SizedBox(height: 4),
+            Text(
+              locked
+                  ? 'Additional documents you submitted.'
+                  : 'Anything else you would like us to see, such as a fellowship or '
+                      'extra certificate. These never block your approval.',
+              style: AppTextStyles.caption,
+            ),
+            const SizedBox(height: 10),
+            if (otherTypes.isNotEmpty)
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final twoUp = constraints.maxWidth >= 600;
+                  final itemWidth = twoUp
+                      ? (constraints.maxWidth - 12) / 2
+                      : constraints.maxWidth;
+                  return Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: otherTypes.map((type) {
+                      final meta =
+                          PartnerDocumentMeta.fromMap(documents[type.key]);
+                      return SizedBox(
+                        width: itemWidth,
+                        child: PartnerDocumentUploadCard(
+                          role: role,
+                          uid: uid,
+                          type: type,
+                          meta: meta,
+                          locked: locked,
+                          verification: PartnerDocumentVerification.fromMap(
+                            documentVerification[type.key],
+                            hasDocument: meta != null,
+                            uploadedAt: meta?.uploadedAt,
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  );
+                },
+              ),
+            if (!locked) ...[
+              if (otherTypes.isNotEmpty) const SizedBox(height: 12),
+              AddOtherDocumentButton(
+                role: role,
+                uid: uid,
+                usedKeys: otherKeys,
+              ),
+            ],
+          ],
         ],
       ),
     );
@@ -449,7 +553,9 @@ class _PartnerDocumentUploadCardState extends State<PartnerDocumentUploadCard> {
             children: [
               Expanded(
                 child: Text(
-                  widget.type.label,
+                  widget.type.optional
+                      ? '${widget.type.label} (optional)'
+                      : widget.type.label,
                   style: AppTextStyles.labelLarge,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,

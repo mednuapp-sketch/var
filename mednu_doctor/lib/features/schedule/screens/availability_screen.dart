@@ -161,11 +161,12 @@ class _AvailabilityScreenState extends State<AvailabilityScreen> {
           .collection('doctors')
           .doc(uid)
           .update({
-        'availability': {
-          'slotDuration': _slotDuration,
-          'schedule': schedule,
-          'updatedAt': FieldValue.serverTimestamp(),
-        },
+        // Dotted paths (not a whole `availability` map) so saving the weekly
+        // schedule never wipes `availability.blockedSlots`, which the Block
+        // Slots screen writes into the same map.
+        'availability.slotDuration': _slotDuration,
+        'availability.schedule': schedule,
+        'availability.updatedAt': FieldValue.serverTimestamp(),
       });
 
       if (!mounted) return;
@@ -240,7 +241,7 @@ class _AvailabilityScreenState extends State<AvailabilityScreen> {
           // ── Gradient App Bar ─────────────────────────────
           SliverAppBar(
             pinned: true,
-            expandedHeight: 72,
+            toolbarHeight: 64,
             backgroundColor: AppColors.primary,
             foregroundColor: Colors.white,
             elevation: 0,
@@ -277,10 +278,7 @@ class _AvailabilityScreenState extends State<AvailabilityScreen> {
                       ),
                     ),
             ],
-            flexibleSpace: const FlexibleSpaceBar(
-              collapseMode: CollapseMode.pin,
-              background: _AvailabilityHeader(),
-            ),
+            flexibleSpace: const _AvailabilityHeader(),
           ),
 
           SliverToBoxAdapter(
@@ -472,18 +470,16 @@ class _AvailabilityHeader extends StatelessWidget {
             ),
           ),
           SafeArea(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                return SingleChildScrollView(
-                  physics: const ClampingScrollPhysics(),
-                  child: ConstrainedBox(
-                    constraints:
-                        BoxConstraints(minHeight: constraints.maxHeight),
-                    child: Padding(
-                      // Sits level with the back arrow / Save in the toolbar
-                      // instead of in a second row beneath them.
-                      padding: const EdgeInsets.fromLTRB(56, 6, 100, 0),
-                      child: Row(children: [
+            bottom: false,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: SizedBox(
+                height: 64,
+                child: Padding(
+                  // Sits level with the back arrow / Save in the toolbar
+                  // instead of in a second row beneath them.
+                  padding: const EdgeInsets.fromLTRB(56, 0, 100, 0),
+                  child: Row(children: [
                         Container(
                           width: 44,
                           height: 44,
@@ -525,11 +521,9 @@ class _AvailabilityHeader extends StatelessWidget {
                             ],
                           ),
                         ),
-                      ]),
-                    ),
-                  ),
-                );
-              },
+                  ]),
+                ),
+              ),
             ),
           ),
         ],

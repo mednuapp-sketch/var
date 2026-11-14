@@ -119,6 +119,7 @@ class NutritionBookingNotifier extends StateNotifier<BookingState> {
     required String notes,
     required double fee,
     required String healthGoal,
+    Map<String, dynamic> extraFields = const {},
   }) async {
     state = state.copyWith(isLoading: true, error: null);
     try {
@@ -132,6 +133,7 @@ class NutritionBookingNotifier extends StateNotifier<BookingState> {
         notes: notes,
         fee: fee,
         healthGoal: healthGoal,
+        extraFields: extraFields,
       );
       state = state.copyWith(isLoading: false, confirmedId: id);
       return true;

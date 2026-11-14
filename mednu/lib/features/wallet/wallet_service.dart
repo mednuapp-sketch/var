@@ -178,11 +178,14 @@ class WalletService {
   // Both debit paths go through the `spendWalletBalance` callable, which
   // re-reads the balance server-side, checks sufficiency, debits and writes
   // both ledgers in one Firestore transaction.
+  // [idempotencyKey] (optional) makes the debit replay-safe server-side: a
+  // retry with the same key is a no-op instead of a second debit.
   Future<void> deductPayment({
     required double amount,
     required String title,
     String category = 'payment',
     String? description,
+    String? idempotencyKey,
   }) =>
       _spend(
         walletType: 'main',
@@ -190,6 +193,7 @@ class WalletService {
         title: title,
         category: category,
         description: description,
+        idempotencyKey: idempotencyKey,
       );
 
   Future<void> deductMednuMoney({
@@ -197,6 +201,7 @@ class WalletService {
     required String title,
     String category = 'payment',
     String? description,
+    String? idempotencyKey,
   }) =>
       _spend(
         walletType: 'mednu_money',
@@ -204,6 +209,7 @@ class WalletService {
         title: title,
         category: category,
         description: description,
+        idempotencyKey: idempotencyKey,
       );
 
   Future<void> _spend({
@@ -212,6 +218,7 @@ class WalletService {
     required String title,
     required String category,
     String? description,
+    String? idempotencyKey,
   }) async {
     if (_uid.isEmpty) throw Exception('Not authenticated');
     if (amount <= 0) throw Exception('Amount must be positive');
@@ -222,6 +229,7 @@ class WalletService {
         'title': title,
         'category': category,
         if (description != null) 'description': description,
+        if (idempotencyKey != null) 'idempotencyKey': idempotencyKey,
       });
     } on FirebaseFunctionsException catch (e) {
       // Preserves the message shape the UI already surfaces, e.g.

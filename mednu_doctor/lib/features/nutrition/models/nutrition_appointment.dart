@@ -59,6 +59,23 @@ class NutritionAppointment {
   final num fee;
   final DateTime createdAt;
 
+  /// Weight-loss programme chosen by the patient (null for a single
+  /// consultation): `planMonths` months, one consultation per month.
+  final int? planMonths;
+  final int? planConsultations;
+  String get consultationLabel {
+    switch (consultationType) {
+      case 'online':
+        return 'Online Consultation';
+      case 'in_person':
+        return 'In-Person Consultation';
+      default:
+        return consultationType;
+    }
+  }
+
+  bool get isPlan => planMonths != null && planMonths! > 0;
+
   const NutritionAppointment({
     required this.id,
     required this.status,
@@ -73,6 +90,8 @@ class NutritionAppointment {
     required this.healthGoal,
     required this.fee,
     required this.createdAt,
+    this.planMonths,
+    this.planConsultations,
   });
 
   factory NutritionAppointment.fromFirestore(DocumentSnapshot<Object?> doc) {
@@ -91,6 +110,8 @@ class NutritionAppointment {
       healthGoal: d['healthGoal'] as String? ?? '',
       fee: (d['fee'] as num?) ?? 0,
       createdAt: (d['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      planMonths: (d['planMonths'] as num?)?.toInt(),
+      planConsultations: (d['planConsultations'] as num?)?.toInt(),
     );
   }
 

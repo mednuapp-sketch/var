@@ -88,8 +88,19 @@ class LabTestInventoryScreen extends ConsumerWidget {
                         ? null
                         : () async {
                             final name = nameCtrl.text.trim();
-                            final price = num.tryParse(priceCtrl.text.trim()) ?? 0;
-                            if (name.isEmpty || saving) return;
+                            final price = num.tryParse(priceCtrl.text.trim());
+                            if (saving) return;
+                            if (name.isEmpty) {
+                              FeedbackService.showError(sheetContext, 'Enter the test name.');
+                              return;
+                            }
+                            // A missing/zero price used to be saved silently as
+                            // ₹0 — a ₹0 booking never reaches the payment or
+                            // earnings pipeline, so the lab would work for free.
+                            if (price == null || price <= 0) {
+                              FeedbackService.showError(sheetContext, 'Enter a price greater than 0.');
+                              return;
+                            }
                             setSheetState(() => saving = true);
                             try {
                               await LabTestInventoryService.addTest(
@@ -182,7 +193,11 @@ class LabTestInventoryScreen extends ConsumerWidget {
               ),
               onDismissed: (_) {
                 if (uid != null) {
-                  LabTestInventoryService.deleteTest(uid, tests[i].id);
+                  LabTestInventoryService.deleteTest(uid, tests[i].id).catchError((_) {
+                    if (context.mounted) {
+                      FeedbackService.showError(context, 'Could not remove the test. Check your connection.');
+                    }
+                  });
                 }
               },
               child: _TestTile(item: tests[i], labId: uid ?? ''),

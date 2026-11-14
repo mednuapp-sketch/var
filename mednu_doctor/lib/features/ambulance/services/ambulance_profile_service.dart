@@ -34,6 +34,7 @@ class AmbulanceProfileService {
     required String uid,
     required String plateNumber,
     required String vehicleType,
+    String? vehicleTypeKey,
     required String driverName,
     required String driverPhone,
     required String driverLicense,
@@ -48,6 +49,7 @@ class AmbulanceProfileService {
       'uid': uid,
       'plateNumber': plateNumber,
       'vehicleType': vehicleType,
+      if (vehicleTypeKey != null) 'vehicleTypeKey': vehicleTypeKey,
       'driverName': driverName,
       'driverPhone': driverPhone,
       'driverLicense': driverLicense,
@@ -83,4 +85,65 @@ class AmbulanceProfileService {
         currentStatus: currentStatus,
         fields: {'photoUrl': photoUrl},
       );
+
+  /// Canonical vehicle types (keys of `app_config/ambulance_rates.types`) with
+  /// the fallback labels used when that config is missing.
+  static const Map<String, String> defaultVehicleTypeLabels = {
+    'basic': 'Basic',
+    'als': 'Advanced Life Support',
+    'icu': 'ICU Ambulance',
+  };
+
+  /// key -> label for the vehicle-type pick-list, using the labels the admin
+  /// rates carry in `app_config/ambulance_rates` (defaults when absent).
+  static Future<Map<String, String>> fetchVehicleTypeLabels() async {
+    final labels = Map<String, String>.from(defaultVehicleTypeLabels);
+    try {
+      final snap = await _db.collection('app_config').doc('ambulance_rates').get();
+      final types = snap.data()?['types'] as Map?;
+      if (types != null) {
+        for (final k in labels.keys.toList()) {
+          final l = (types[k] as Map?)?['label'];
+          if (l is String && l.trim().isNotEmpty) labels[k] = l.trim();
+        }
+      }
+    } catch (_) {}
+    return labels;
+  }
+
+  /// Rate-config key for a profile: the canonical `vehicleTypeKey` when it is
+  /// valid, otherwise the legacy keyword guess on the free-text `vehicleType`.
+  /// Null when unrecognised.
+  static String? rateKeyForVehicleType(String vehicleType, {String? typeKey}) {
+    if (typeKey != null && defaultVehicleTypeLabels.containsKey(typeKey)) return typeKey;
+    final s = vehicleType.toLowerCase();
+    if (s.contains('icu')) return 'icu';
+    if (s.contains('advanced') || s.contains('als')) return 'als';
+    if (s.contains('basic') || s.contains('bls')) return 'basic';
+    return null;
+  }
+
+  /// Admin-defined rate range for a type key, falling back to the previous
+  /// hardcoded prices (min == max) when `app_config/ambulance_rates` is
+  /// missing or lacks that type. Returns {min, max} or null for unknown keys.
+  static Future<({double min, double max})?> fetchRateRange(String? key) async {
+    const defaults = {'basic': 500.0, 'als': 1200.0, 'icu': 2500.0};
+    if (key == null || !defaults.containsKey(key)) return null;
+    try {
+      final snap = await _db.collection('app_config').doc('ambulance_rates').get();
+      final t = (snap.data()?['types'] as Map?)?[key] as Map?;
+      final mn = (t?['min'] as num?)?.toDouble();
+      final mx = (t?['max'] as num?)?.toDouble();
+      if (mn != null && mx != null && mn >= 0 && mx >= mn) return (min: mn, max: mx);
+    } catch (_) {}
+    return (min: defaults[key]!, max: defaults[key]!);
+  }
+
+  /// Saves the driver's own rate. A direct write (not a pending-review edit):
+  /// `ratePerTrip` is in firestore.rules' active-profile whitelist.
+  static Future<void> setRatePerTrip(String uid, double rate) =>
+      _db.collection('ambulance_profiles').doc(uid).update({
+        'ratePerTrip': rate,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
 }

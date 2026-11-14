@@ -6,6 +6,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class VehicleProfile {
   final String plateNumber;
   final String vehicleType; // 'Basic Life Support' | 'Advanced Life Support' | 'ICU on Wheels'
+  /// Canonical type key ('basic' | 'als' | 'icu') picked from the list; null
+  /// for legacy profiles that only have the free-text [vehicleType].
+  final String? vehicleTypeKey;
   final String driverName;
   final String driverPhone;
   final String driverLicense;
@@ -37,9 +40,16 @@ class VehicleProfile {
   final bool hasPendingChanges;
   final Map<String, dynamic> pendingChanges;
 
+  /// The driver's own per-trip rate (INR), chosen inside the admin range for
+  /// their vehicle type (`app_config/ambulance_rates`). Null = not set yet;
+  /// the range minimum then applies. Written directly (not via pending
+  /// review) — see firestore.rules' active-profile whitelist.
+  final double? ratePerTrip;
+
   const VehicleProfile({
     required this.plateNumber,
     required this.vehicleType,
+    this.vehicleTypeKey,
     required this.driverName,
     required this.driverPhone,
     required this.driverLicense,
@@ -53,6 +63,7 @@ class VehicleProfile {
     this.photoUrl = '',
     this.hasPendingChanges = false,
     this.pendingChanges = const {},
+    this.ratePerTrip,
   });
 
   /// What the Vehicle Profile screen renders before the partner has
@@ -76,6 +87,7 @@ class VehicleProfile {
     return VehicleProfile(
       plateNumber: d['plateNumber'] as String? ?? 'Not set',
       vehicleType: d['vehicleType'] as String? ?? 'Unverified',
+      vehicleTypeKey: d['vehicleTypeKey'] as String?,
       driverName: d['driverName'] as String? ?? '',
       driverPhone: d['driverPhone'] as String? ?? '',
       driverLicense: d['driverLicense'] as String? ?? '',
@@ -94,6 +106,7 @@ class VehicleProfile {
       hasPendingChanges: d['hasPendingChanges'] as bool? ?? false,
       pendingChanges: Map<String, dynamic>.from(
           (d['pendingChanges'] as Map?) ?? const <String, dynamic>{}),
+      ratePerTrip: (d['ratePerTrip'] as num?)?.toDouble(),
     );
   }
 }

@@ -39,13 +39,9 @@ class _AmbulanceDashboardScreenState extends ConsumerState<AmbulanceDashboardScr
     if (uid != null) AmbulancePresenceService.instance.init(uid);
   }
 
-  @override
-  void dispose() {
-    AmbulanceLocationService.stopTracking();
-    AmbulancePresenceService.instance.setOnline(false);
-    AmbulancePresenceService.instance.dispose();
-    super.dispose();
-  }
+  // Presence intentionally NOT switched off here: partners stay online across
+  // tab changes until they flip the toggle, sign out (see
+  // PartnerPresenceShutdown) or the app is terminated.
 
   void _handleLocationDisabled() {
     AmbulanceLocationService.stopTracking();

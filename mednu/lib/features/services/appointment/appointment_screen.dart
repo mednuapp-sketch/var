@@ -641,6 +641,7 @@ class _AppointmentScreenState extends State<AppointmentScreen>
                               onCancel: () => _cancelAppointment(
                                 appointments[i].id,
                                 appointments[i].reference.parent.id,
+                                data['paymentId'] != null,
                               ),
                             ),
                           ],
@@ -655,6 +656,7 @@ class _AppointmentScreenState extends State<AppointmentScreen>
                               onCancel: () => _cancelAppointment(
                                 appointments[i].id,
                                 appointments[i].reference.parent.id,
+                                data['paymentId'] != null,
                               ),
                             ),
                             const SizedBox(height: 10),
@@ -826,6 +828,7 @@ class _AppointmentScreenState extends State<AppointmentScreen>
   Future<void> _cancelAppointment(
     String docId, [
     String collection = 'appointments',
+    bool paid = false,
   ]) async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -835,8 +838,12 @@ class _AppointmentScreenState extends State<AppointmentScreen>
           'Cancel Appointment?',
           style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700),
         ),
-        content: const Text(
-          'This will free up the slot for other patients.',
+        content: Text(
+          paid
+              ? 'This will free up the slot for other patients.\n\nRefund: your '
+                  'request is sent to our team for review, since the booking '
+                  'is already confirmed.'
+              : 'This will free up the slot for other patients.',
           style: TextStyle(fontFamily: 'Poppins', fontSize: 13),
         ),
         actions: [
@@ -860,7 +867,9 @@ class _AppointmentScreenState extends State<AppointmentScreen>
             .doc(docId)
             .update({
               'status': 'cancelled',
-              'cancelledBy': 'patient',
+              // firestore.rules allow status + updatedAt + cancelledBy:'patient'
+              // for hospital_appointments too.
+              'cancelledBy': 'patient', // drives the server-side refund policy
               'updatedAt': FieldValue.serverTimestamp(),
             });
         // Slot availability is derived from appointments where status == 'booked';
@@ -1538,6 +1547,15 @@ class _ScheduledJoinSectionState extends State<_ScheduledJoinSection>
         existingStatus = cSnap.data()?['status'] as String?;
       }
     } catch (_) {}
+
+    // A previous attempt that already finished without the visit happening
+    // (missed / declined / cancelled / ended) must not be reused — the call
+    // screen would instantly bounce back. Fall through and start a fresh one.
+    const deadStatuses = {'ended', 'missed', 'declined', 'rejected', 'cancelled'};
+    if (existingStatus != null && deadStatuses.contains(existingStatus)) {
+      consultationId = null;
+      existingStatus = null;
+    }
 
     if (!mounted) {
       setState(() => _joining = false);

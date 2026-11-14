@@ -11,6 +11,7 @@ import '../../../core/services/feedback_service.dart';
 import '../../../core/utils/r.dart';
 import '../../../core/widgets/add_to_cart_button.dart';
 import '../../../core/widgets/ux_widgets.dart';
+import '../../../core/widgets/provider_availability.dart';
 import '../../cart/models/cart_item.dart';
 import '../../cart/providers/cart_provider.dart';
 import '../../cart/providers/pending_prescription_provider.dart';
@@ -240,7 +241,15 @@ class _MedicineScreenState extends ConsumerState<MedicineScreen> {
 
   /// Entry point for manual "Add" taps on the general catalogue: gates
   /// Rx-required medicines behind a prescription before adding.
+  bool _pharmacyClosed(String? pharmacyId) =>
+      pharmacyId != null &&
+      (ref.read(unavailablePharmacyIdsProvider).valueOrNull ?? const {}).contains(pharmacyId);
+
   Future<void> _addMedToCart(Map<String, dynamic> med) async {
+    if (_pharmacyClosed(med['sourcePharmacyId'] as String?)) {
+      showNotAcceptingSnack(context, 'pharmacy');
+      return;
+    }
     if (med['requiresPrescription'] == true) {
       final ok = await _ensurePrescriptionFor(med['name'] as String);
       if (!ok || !mounted) return;
@@ -254,6 +263,10 @@ class _MedicineScreenState extends ConsumerState<MedicineScreen> {
   /// [_addAllPrescriptionMeds]), which is already a verified prescription.
   Future<void> _performAddToCart(Map<String, dynamic> med) async {
     final sourcePharmacyId = med['sourcePharmacyId'] as String?;
+    if (_pharmacyClosed(sourcePharmacyId)) {
+      showNotAcceptingSnack(context, 'pharmacy');
+      return;
+    }
     if (sourcePharmacyId != null) {
       final conflict = ref.read(cartProvider.notifier)
           .conflictFor(type: 'medicine', vendorKey: 'pharmacy:$sourcePharmacyId');
@@ -326,6 +339,10 @@ class _MedicineScreenState extends ConsumerState<MedicineScreen> {
       final med = _catalogue.where((c) => (c['name'] as String).toLowerCase().contains(keyword)).firstOrNull;
       if (med == null || _cartItemForMed(med['id'] as String) != null) continue;
       final medPharmacyId = med['sourcePharmacyId'] as String?;
+      if (_pharmacyClosed(medPharmacyId)) {
+        skipped++;
+        continue;
+      }
       if (targetPharmacyId != null && medPharmacyId != null && medPharmacyId != targetPharmacyId) {
         skipped++;
         continue;
@@ -348,7 +365,7 @@ class _MedicineScreenState extends ConsumerState<MedicineScreen> {
     if (mounted) {
       final parts = <String>[
         if (added > 0) '$added medicine${added > 1 ? 's' : ''} added to cart',
-        if (skipped > 0) '$skipped skipped (different pharmacy)',
+        if (skipped > 0) '$skipped skipped (different or unavailable pharmacy)',
       ];
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(parts.isEmpty ? 'Medicines already in cart' : parts.join(', ')),
@@ -360,6 +377,8 @@ class _MedicineScreenState extends ConsumerState<MedicineScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final closedPharmacies = ref.watch(unavailablePharmacyIdsProvider).valueOrNull ?? const <String>{};
+    final scopedPharmacyClosed = widget.pharmacyId != null && closedPharmacies.contains(widget.pharmacyId);
     return Scaffold(
       backgroundColor: context.appBackground,
       body: CustomScrollView(
@@ -381,6 +400,8 @@ class _MedicineScreenState extends ConsumerState<MedicineScreen> {
           ),
           SliverToBoxAdapter(
             child: Column(children: [
+              if (scopedPharmacyClosed)
+                NotAcceptingBanner(margin: EdgeInsets.fromLTRB(R.p(context, 16), R.h(context, 14), R.p(context, 16), 0)),
               if (ref.watch(pendingPrescriptionProvider) != null) ...[
                 SizedBox(height: R.h(context, 14)),
                 Container(
@@ -511,7 +532,8 @@ class _MedicineScreenState extends ConsumerState<MedicineScreen> {
                   final id = med['id'] as String;
                   final cartItem = _cartItemForMed(id);
                   final cartCount = cartItem?.quantity ?? 0;
-                  return _MedicineCard(
+                  final medClosed = closedPharmacies.contains(med['sourcePharmacyId']);
+                  return GreyscaleIfUnavailable(unavailable: medClosed, child: _MedicineCard(
                     medicine: med,
                     cartCount: cartCount,
                     onAdd: () => _addMedToCart(med),
@@ -529,7 +551,7 @@ class _MedicineScreenState extends ConsumerState<MedicineScreen> {
                         }
                       }
                     },
-                  );
+                  ));
                 }),
 
               const SizedBox(height: 110),

@@ -34,12 +34,9 @@ class _PhysioDashboardScreenState extends ConsumerState<PhysioDashboardScreen> {
     if (uid != null) PhysioPresenceService.instance.init(uid);
   }
 
-  @override
-  void dispose() {
-    PhysioPresenceService.instance.setOnline(false);
-    PhysioPresenceService.instance.dispose();
-    super.dispose();
-  }
+  // Presence intentionally NOT switched off here: partners stay online across
+  // tab changes until they flip the toggle, sign out (see
+  // PartnerPresenceShutdown) or the app is terminated.
 
   Future<void> _toggleOnline(bool value) async {
     if (_togglingInProgress) return;
@@ -56,6 +53,13 @@ class _PhysioDashboardScreenState extends ConsumerState<PhysioDashboardScreen> {
     final metrics = ref.watch(physioDashboardMetricsProvider);
     final today = ref.watch(todayPhysioSessionsProvider);
     final online = ref.watch(physioProfileProvider).isOnline;
+    // Distinguish "still loading" / "errored" from a genuinely empty list.
+    final streams = [
+      ref.watch(availablePhysioSessionsProvider),
+      ref.watch(myPhysioSessionsProvider),
+    ];
+    final sessionsLoading = today.isEmpty && streams.any((s) => s.isLoading && !s.hasValue);
+    final sessionsError = today.isEmpty && streams.any((s) => s.hasError && !s.hasValue);
 
     return SharedAppShell(
       currentRoute: AppRoutes.physioDashboard,
@@ -97,7 +101,14 @@ class _PhysioDashboardScreenState extends ConsumerState<PhysioDashboardScreen> {
             action: today.isNotEmpty ? 'View all' : null,
             onAction: today.isNotEmpty ? () => context.push(AppRoutes.physioSessions) : null,
           ),
-          if (today.isEmpty)
+          if (sessionsError)
+            NetworkErrorState(onRetry: () {
+              ref.invalidate(availablePhysioSessionsProvider);
+              ref.invalidate(myPhysioSessionsProvider);
+            })
+          else if (sessionsLoading)
+            const CardLoadingState(itemCount: 2)
+          else if (today.isEmpty)
             const AppEmptyState(
               icon: Icons.event_available_rounded,
               title: 'No sessions scheduled today',

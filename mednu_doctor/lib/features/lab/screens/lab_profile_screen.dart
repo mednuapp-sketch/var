@@ -34,6 +34,12 @@ class _LabProfileScreenState extends ConsumerState<LabProfileScreen> {
   String _addressCity = '';
   final _phoneCtrl = TextEditingController();
 
+  // Typed staff details (see StaffDetailsController) — edited like any other
+  // profile field, so an active partner's change goes through admin review.
+  final _staff = StaffDetailsController('lab');
+  Map<String, dynamic> _staffStored = const {};
+  bool _staffHad = false;
+
   // Photo upload state — mirrors HospitalProfileScreen's tap-to-change
   // avatar pattern (_buildAvatar/_showPhotoOptions/_pickAndUpload/_removePhoto).
   File? _localImage;
@@ -67,11 +73,21 @@ class _LabProfileScreenState extends ConsumerState<LabProfileScreen> {
       FeedbackService.showError(context, phoneError);
       return;
     }
+    Map<String, dynamic>? staffMap;
+    if (_staffHad || !_staff.isBlank) {
+      final staffError = _staff.firstError();
+      if (staffError != null) {
+        FeedbackService.showError(context, staffError);
+        return;
+      }
+      if (_staff.differsFrom(_staffStored)) staffMap = _staff.toMap();
+    }
     final uid = LabProfileService.currentUid;
     if (uid == null) return;
     setState(() => _saving = true);
     try {
       await LabProfileService.updateProfile(uid, {
+        if (staffMap != null) 'staffDetails': staffMap,
         'name': _nameCtrl.text.trim(),
         'address': _addressCtrl.text.trim(),
         if (_addressLat != null) 'latitude': _addressLat,
@@ -94,6 +110,7 @@ class _LabProfileScreenState extends ConsumerState<LabProfileScreen> {
     _nameCtrl.dispose();
     _addressCtrl.dispose();
     _phoneCtrl.dispose();
+    _staff.dispose();
     super.dispose();
   }
 
@@ -415,6 +432,24 @@ class _LabProfileScreenState extends ConsumerState<LabProfileScreen> {
                 ),
               ),
               const SizedBox(height: 16),
+              PremiumCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Staff Details', style: AppTextStyles.labelMedium),
+                    const SizedBox(height: 12),
+                    if (_editing)
+                      StaffDetailsFields(controller: _staff, validateOnInteraction: true)
+                    else
+                      StaffDetailsReadOnly(
+                        role: 'lab',
+                        details: StaffDetailsController.effective(
+                            profile.staffDetails, profile.pendingChanges),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
               PartnerDocumentsSection(
                 role: 'lab',
                 uid: profile.uid,
@@ -427,7 +462,14 @@ class _LabProfileScreenState extends ConsumerState<LabProfileScreen> {
                 GradientButton(label: 'Save Changes', isLoading: _saving, onTap: _save)
               else
                 OutlinedButton.icon(
-                  onPressed: () => setState(() => _editing = true),
+                  onPressed: () {
+                    final eff = StaffDetailsController.effective(
+                        profile.staffDetails, profile.pendingChanges);
+                    _staff.load(eff);
+                    _staffStored = eff;
+                    _staffHad = !StaffDetailsController.isEmpty('lab', eff);
+                    setState(() => _editing = true);
+                  },
                   icon: const Icon(Icons.edit_outlined, size: 18),
                   label: const Text('Edit Profile'),
                 ),

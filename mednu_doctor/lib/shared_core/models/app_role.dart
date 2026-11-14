@@ -173,6 +173,11 @@ extension AppRoleX on AppRole {
   /// keyed by profile collection name rather than role.
   String get documentRoleKey => this == AppRole.careAssistant ? 'caregiver' : firestoreValue;
 
+  /// Key into `PartnerDocumentType.forRole` — differs from [documentRoleKey]
+  /// for a Care Assistant, which stores files like a caregiver but has its
+  /// own (ID-only) checklist.
+  String get documentTypeKey => firestoreValue;
+
   static AppRole fromFirestoreValue(String? raw) {
     switch (raw) {
       case 'doctor':

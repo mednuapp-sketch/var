@@ -24,6 +24,7 @@ import '../../features/patients/screens/patient_detail_screen.dart';
 import '../../features/patients/screens/pre_consultation_summary_screen.dart';
 import '../../features/patients/screens/patients_list_screen.dart';
 import '../../features/schedule/screens/availability_screen.dart';
+import '../../features/schedule/screens/provider_availability_screen.dart';
 import '../../features/schedule/screens/block_slots_screen.dart';
 import '../../features/profile/screens/doctor_profile_screen.dart';
 import '../../features/notifications/screens/doctor_notifications_screen.dart';
@@ -108,6 +109,7 @@ import '../../features/nutrition/screens/nutrition_appointment_detail_screen.dar
 import '../../features/nutrition/screens/nutrition_earnings_screen.dart';
 import '../../features/nutrition/screens/nutrition_profile_screen.dart';
 import '../../features/nutrition/screens/nutrition_settings_screen.dart';
+import '../../features/nutrition/screens/nutrition_availability_screen.dart';
 import '../../features/hospital_billing/screens/hospital_payments_screen.dart';
 import '../../features/hospital_billing/screens/hospital_appointments_screen.dart';
 import '../../features/hospital_billing/screens/hospital_earnings_screen.dart';
@@ -437,6 +439,7 @@ class AppRoutes {
   static const physioEarnings        = '/physio/earnings';
   static const physioProfile         = '/physio/profile';
   static const physioSettings        = '/physio/settings';
+  static const physioAvailability    = '/physio/availability';
 
   // ── Counselling partner module (Firestore-backed) ────────────────────────
   static const counsellingDashboard     = '/counselling/dashboard';
@@ -445,6 +448,7 @@ class AppRoutes {
   static const counsellingEarnings      = '/counselling/earnings';
   static const counsellingProfile       = '/counselling/profile';
   static const counsellingSettings      = '/counselling/settings';
+  static const counsellingAvailability  = '/counselling/availability';
 
   // ── Nutrition partner module (admin-provisioned, no onboarding step) ─────
   static const nutritionDashboard           = '/nutrition/dashboard';
@@ -453,6 +457,7 @@ class AppRoutes {
   static const nutritionEarnings            = '/nutrition/earnings';
   static const nutritionProfile             = '/nutrition/profile';
   static const nutritionSettings            = '/nutrition/settings';
+  static const nutritionAvailability        = '/nutrition/availability';
 
   // ── Hospital billing-desk partner module ──────────────────────────────────
   static const hospitalPayments = '/hospital/payments';
@@ -624,7 +629,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           return PartnerRoleRegisterScreen(role: role);
         },
       ),
-      GoRoute(path: AppRoutes.verificationPending, builder: (c, s) => const VerificationPendingScreen()),
+      // Keyed on the active role: switching between two not-yet-approved
+      // profiles stays on this same location, and without a new key the
+      // screen kept watching the previous role's profile doc.
+      GoRoute(path: AppRoutes.verificationPending, builder: (c, s) => VerificationPendingScreen(key: ValueKey(_authChangeNotifier.role))),
       GoRoute(path: AppRoutes.dashboard,           builder: (c, s) => const DashboardScreen()),
       GoRoute(path: AppRoutes.incomingRequest,     builder: (c, s) => const IncomingRequestScreen()),
       GoRoute(path: AppRoutes.emergencyRequests,   builder: (c, s) => const EmergencyRequestsScreen()),
@@ -895,6 +903,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: AppRoutes.physioEarnings, pageBuilder: (c, s) => const NoTransitionPage(child: PhysioEarningsScreen())),
       GoRoute(path: AppRoutes.physioProfile,  pageBuilder: (c, s) => const NoTransitionPage(child: PhysioProfileScreen())),
       GoRoute(path: AppRoutes.physioSettings, builder: (c, s) => const PhysioSettingsScreen()),
+      GoRoute(
+        path: AppRoutes.physioAvailability,
+        builder: (c, s) => const ProviderAvailabilityScreen(collection: 'physiotherapist_profiles'),
+      ),
 
       // ── Counselling partner module ────────────────────────────────────────
       GoRoute(path: AppRoutes.counsellingDashboard, pageBuilder: (c, s) => const NoTransitionPage(child: CounsellingDashboardScreen())),
@@ -909,6 +921,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: AppRoutes.counsellingEarnings, pageBuilder: (c, s) => const NoTransitionPage(child: CounsellingEarningsScreen())),
       GoRoute(path: AppRoutes.counsellingProfile,  pageBuilder: (c, s) => const NoTransitionPage(child: CounsellingProfileScreen())),
       GoRoute(path: AppRoutes.counsellingSettings, builder: (c, s) => const CounsellingSettingsScreen()),
+      GoRoute(
+        path: AppRoutes.counsellingAvailability,
+        builder: (c, s) => const ProviderAvailabilityScreen(collection: 'counsellor_profiles'),
+      ),
 
       // ── Nutrition partner module ──────────────────────────────────────────
       GoRoute(path: AppRoutes.nutritionDashboard,    pageBuilder: (c, s) => const NoTransitionPage(child: NutritionDashboardScreen())),
@@ -923,6 +939,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: AppRoutes.nutritionEarnings, pageBuilder: (c, s) => const NoTransitionPage(child: NutritionEarningsScreen())),
       GoRoute(path: AppRoutes.nutritionProfile,  pageBuilder: (c, s) => const NoTransitionPage(child: NutritionProfileScreen())),
       GoRoute(path: AppRoutes.nutritionSettings, builder: (c, s) => const NutritionSettingsScreen()),
+      GoRoute(path: AppRoutes.nutritionAvailability, builder: (c, s) => const NutritionAvailabilityScreen()),
 
       // ── Hospital billing-desk partner module ──────────────────────────────
       GoRoute(path: AppRoutes.hospitalPayments, pageBuilder: (c, s) => const NoTransitionPage(child: HospitalPaymentsScreen())),

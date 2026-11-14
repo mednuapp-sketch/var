@@ -141,6 +141,17 @@ class _PhysioSettingsScreenState extends State<PhysioSettingsScreen> {
       headerIcon: Icons.settings_rounded,
       sections: [
         SettingsSectionData(
+          title: 'Schedule',
+          items: [
+            SettingsItemData(
+              icon: Icons.calendar_month_rounded,
+              title: 'My Availability',
+              subtitle: 'Publish weekly slots patients can book',
+              onTap: () => context.push(AppRoutes.physioAvailability),
+            ),
+          ],
+        ),
+        SettingsSectionData(
           title: 'Notifications',
           items: [
             SettingsItemData(

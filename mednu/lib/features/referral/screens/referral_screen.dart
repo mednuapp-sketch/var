@@ -422,10 +422,8 @@ class _RewardBanner extends StatelessWidget {
           border: Border.all(
               color: AppColors.primary.withValues(alpha: 0.15)),
         ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
+        child: config.hasActiveReward
+            ? Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('You Earn',
@@ -435,37 +433,24 @@ class _RewardBanner extends StatelessWidget {
                       style: AppTextStyles.display
                           .copyWith(color: AppColors.primary)),
                   const SizedBox(height: 2),
-                  Text('per successful referral',
+                  Text(
+                      'when a friend you refer completes their first booking',
                       style: AppTextStyles.bodySmall
                           .copyWith(color: context.appTextSecondary)),
                 ],
-              ),
-            ),
-            Container(
-                width: 1, height: 60,
-                color: AppColors.primary.withValues(alpha: 0.15)),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.only(left: 18),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Friend Gets',
-                        style: AppTextStyles.bodySmall
+              )
+            : Row(
+                children: [
+                  const Icon(Icons.info_outline_rounded,
+                      color: AppColors.primary, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(config.earnLine,
+                        style: AppTextStyles.bodyMedium
                             .copyWith(color: context.appTextSecondary)),
-                    Text(config.referredRewardFormatted,
-                        style: AppTextStyles.display
-                            .copyWith(color: AppColors.secondary)),
-                    const SizedBox(height: 2),
-                    Text('on joining MedNU',
-                        style: AppTextStyles.bodySmall
-                            .copyWith(color: context.appTextSecondary)),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -658,8 +643,7 @@ class _SocialShareRow extends StatelessWidget {
 
   String get _shareText =>
       'Join MedNU — India\'s smarter healthcare app! 🏥\n'
-      'Use my referral code *$referralCode* to get '
-      '${config.referredRewardFormatted} when you sign up.\n'
+      'Use my referral code *$referralCode* when you sign up.\n'
       'Download: $referralLink';
 
   void _share() => Share.share(_shareText,
@@ -809,18 +793,19 @@ class _HowItWorks extends StatelessWidget {
           ),
           const _StepRow(
             number: '2',
-            title: 'Friend Signs Up',
+            title: 'Friend Signs Up & Books',
             desc:
-                'Your friend downloads MedNU and enters your code at registration.',
+                'Your friend downloads MedNU, enters your code at registration and books a service.',
             icon: Icons.person_add_rounded,
             color: AppColors.secondary,
           ),
           _StepRow(
             number: '3',
-            title: 'Both Earn Rewards',
-            desc:
-                'You get ${config.referrerRewardFormatted} and your friend gets '
-                '${config.referredRewardFormatted} — instantly in your wallets.',
+            title: 'You Earn a Reward',
+            desc: config.hasActiveReward
+                ? 'You get ${config.referrerRewardFormatted} in your wallet once '
+                    'your friend completes their first booking.'
+                : 'Referral rewards are not active right now.',
             icon: Icons.account_balance_wallet_rounded,
             color: AppColors.success,
             isLast: true,
@@ -1136,7 +1121,7 @@ class _ReferralCard extends StatelessWidget {
                     Text(
                       isRewarded
                           ? '+₹${record.referrerRewardAmount.toStringAsFixed(0)} credited to wallet'
-                          : 'Reward on ${record.triggerCondition.replaceAll('_', ' ')}',
+                          : 'Reward after their first completed booking',
                       style: AppTextStyles.bodySmall.copyWith(
                         color: statusColor,
                         fontWeight: FontWeight.w600,
@@ -1323,8 +1308,7 @@ class _ShareBar extends StatelessWidget {
             onPressed: () {
               Share.share(
                 'Join MedNU — India\'s smarter healthcare app!\n'
-                'Use my referral code $referralCode to get '
-                '${config.referredRewardFormatted} in your wallet.\n'
+                'Use my referral code $referralCode when you sign up.\n'
                 'Download now: $referralLink',
                 subject: 'Join MedNU with my referral code',
               );
@@ -1337,7 +1321,9 @@ class _ShareBar extends StatelessWidget {
             ),
             icon: const Icon(Icons.share_rounded, size: 20),
             label: Text(
-              'Share & Earn ${config.referrerRewardFormatted}',
+              config.hasActiveReward
+                  ? 'Share & Earn ${config.referrerRewardFormatted}'
+                  : 'Share MedNU',
               style: const TextStyle(
                 fontFamily: 'Poppins',
                 fontSize: 15,

@@ -136,8 +136,12 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // 6 boxes + 5 default 8dp separators must fit inside the 24dp page
+    // padding: a fixed 52dp box overflowed every phone narrower than ~400dp.
+    final pinWidth = ((MediaQuery.sizeOf(context).width - 48 - 40) / 6)
+        .clamp(38.0, 52.0);
     final defaultPinTheme = PinTheme(
-      width: 52,
+      width: pinWidth,
       height: 56,
       textStyle: AppTextStyles.h3.copyWith(color: AppColors.textPrimary),
       decoration: BoxDecoration(

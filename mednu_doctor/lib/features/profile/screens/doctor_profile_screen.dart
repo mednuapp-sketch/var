@@ -11,6 +11,7 @@ import '../../../core/router/app_router.dart';
 import '../../auth/services/doctor_auth_service.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../../../core/utils/validators.dart';
+import '../../../core/utils/specialty_utils.dart';
 import '../../location/models/precise_address.dart';
 import '../../location/screens/map_location_picker_screen.dart';
 
@@ -30,7 +31,9 @@ class _DoctorProfileEditScreenState extends State<DoctorProfileEditScreen> {
   final _clinicAddrCtrl = TextEditingController();
 
   static const _specializations = [
-    'General Physician', 'Cardiology', 'Dermatology', 'Gynaecology',
+    // 'General' matches registration + patient-app filter (legacy
+    // 'General Physician' is normalised on load).
+    'General', 'Cardiology', 'Dermatology', 'Gynaecology',
     'Paediatrics', 'Orthopaedics', 'Neurology', 'ENT', 'Oncology',
     'Psychiatry', 'Ophthalmology', 'Urology', 'Radiology', 'Anaesthesiology',
   ];
@@ -40,7 +43,7 @@ class _DoctorProfileEditScreenState extends State<DoctorProfileEditScreen> {
     'Malayalam', 'Marathi', 'Bengali',
   ];
 
-  String       _selectedSpec      = 'General Physician';
+  String       _selectedSpec      = 'General';
   List<String> _selectedLanguages = ['English'];
   bool         _loading           = true;
   bool         _saving            = false;
@@ -50,6 +53,7 @@ class _DoctorProfileEditScreenState extends State<DoctorProfileEditScreen> {
   bool         _isActive        = false;
   // Labels of required verification documents the doctor hasn't uploaded.
   List<String> _missingDocs     = const [];
+  String?      _docHint;   // non-blocking nudge for approved doctors
   String?      _nameError;
   String?      _clinicAddrError;
   double?      _clinicLat;
@@ -81,16 +85,27 @@ class _DoctorProfileEditScreenState extends State<DoctorProfileEditScreen> {
       if (data != null) {
         _isActive = data['status'] == 'active';
         final docs = data['documents'];
-        const required = {
-          'mbbs_degree': 'MBBS Degree',
-          'spec_cert': 'Specialization Certificate',
-          'mbbs_reg_cert': 'MBBS Registration Certificate',
-          'renewal_cert': 'Renewal Certificate',
-        };
-        _missingDocs = [
-          for (final e in required.entries)
-            if (docs is! Map || (docs[e.key]?.toString() ?? '').isEmpty) e.value,
+        bool has(String k) =>
+            docs is Map && (docs[k]?.toString() ?? '').isNotEmpty;
+        final dental = isDentalSpecialty(data['specialty']?.toString());
+        final labels = doctorDocLabels(dental: dental);
+        // Dental: BDS + state dental council required, MDS optional.
+        // Renewal certificate is required for dentists who are still being
+        // verified; already-approved doctors are grandfathered and only get a
+        // gentle hint (never blocked for a document they were not asked for).
+        final required = <String>[
+          'mbbs_degree',
+          if (!dental) 'spec_cert',
+          'mbbs_reg_cert',
+          if (dental && !_isActive) 'renewal_cert',
         ];
+        _missingDocs = [
+          for (final k in required)
+            if (!has(k)) labels[k]!,
+        ];
+        _docHint = (dental && _isActive && !has('renewal_cert'))
+            ? 'Add your Renewal Certificate from your profile documents to keep your verification up to date.'
+            : null;
         // Show the doctor their own submitted-but-unapproved edits on top of
         // the live values so re-opening the screen doesn't look like a revert.
         final pending = data['pendingChanges'];
@@ -109,7 +124,8 @@ class _DoctorProfileEditScreenState extends State<DoctorProfileEditScreen> {
         _clinicCity          = data['clinicCity'] as String? ?? '';
         _currentPhotoUrl     = data['photoUrl']    as String?;
 
-        final spec = data['specialty'] as String?;
+        var spec = data['specialty'] as String?;
+        if (spec == 'General Physician') spec = 'General';
         if (spec != null && _specializations.contains(spec)) _selectedSpec = spec;
 
         final langs = data['languages'];
@@ -213,7 +229,7 @@ class _DoctorProfileEditScreenState extends State<DoctorProfileEditScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(_isActive
-            ? 'Changes submitted for admin review. They go live once approved.'
+            ? 'Changes submitted for admin review. They go live once approved.${_docHint == null ? '' : '\n$_docHint'}'
             : 'Profile updated successfully ✅'),
         backgroundColor: AppColors.success,
         behavior: SnackBarBehavior.floating,

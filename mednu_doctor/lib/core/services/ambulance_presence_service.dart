@@ -30,6 +30,9 @@ class AmbulancePresenceService with WidgetsBindingObserver {
 
   void init(String uid) {
     _uid = uid;
+    // Idempotent: the dashboard can be re-mounted (tab switches) while the
+    // service stays alive, so never register the observer twice.
+    WidgetsBinding.instance.removeObserver(this);
     WidgetsBinding.instance.addObserver(this);
   }
 

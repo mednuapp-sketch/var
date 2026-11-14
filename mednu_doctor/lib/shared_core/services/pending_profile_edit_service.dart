@@ -25,9 +25,18 @@ class PendingProfileEditService {
     required Map<String, dynamic> fields,
   }) async {
     // `lab_profiles` -> 'lab', `physiotherapist_profiles` -> 'physiotherapist'.
-    final role = ref.parent.id.replaceAll('_profiles', '');
-    if (PartnerDocumentType.forRole(role).isNotEmpty) {
+    var role = ref.parent.id.replaceAll('_profiles', '');
+    // Already-approved partners are grandfathered: the document checklist has
+    // changed since they were approved (their `documents` map may hold legacy
+    // keys) and rules lock `documents` once active, so they could never
+    // satisfy it. Admin already vetted them — never block their edits.
+    if (currentStatus != 'active' &&
+        PartnerDocumentType.forRole(role).isNotEmpty) {
       final snap = await ref.get();
+      // Care Assistants share `caregiver_profiles` but have their own list.
+      if (role == 'caregiver' && snap.data()?['serviceType'] == 'care_assistant') {
+        role = 'care_assistant';
+      }
       final missing =
           PartnerDocumentType.missingFor(role, snap.data()?['documents']);
       if (missing.isNotEmpty) {

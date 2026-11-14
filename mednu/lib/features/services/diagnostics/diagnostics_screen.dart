@@ -11,6 +11,7 @@ import '../../../core/router/app_router.dart';
 import '../../../core/services/feedback_service.dart';
 import '../../../core/widgets/add_to_cart_button.dart';
 import '../../../core/widgets/ux_widgets.dart';
+import '../../../core/widgets/provider_availability.dart';
 import '../../cart/providers/cart_provider.dart';
 import '../../home/providers/location_provider.dart';
 import '../../my_services/models/unified_booking.dart';
@@ -420,13 +421,21 @@ class _LabsNearYouSectionState extends ConsumerState<_LabsNearYouSection> {
                 'rating': ((data['rating'] as num?) ?? 0).toDouble(),
                 'totalReviews': (data['totalReviews'] as int?) ?? 0,
                 'distanceKm': distanceKm,
+                // The lab's own "Accepting New Bookings" switch (absent = open).
+                'open': (data['acceptingBookings'] as bool?) ?? true,
               };
             }).toList();
 
-            // Nearest first; labs with no coordinates on file sink to the bottom
-            // instead of scattering through the list.
-            labs.sort((a, b) => ((a['distanceKm'] as double?) ?? double.infinity)
-                .compareTo((b['distanceKm'] as double?) ?? double.infinity));
+            // Available labs first, then nearest first; labs with no
+            // coordinates on file sink to the bottom instead of scattering
+            // through the list. Labs that paused bookings go last.
+            labs.sort((a, b) {
+              final oa = a['open'] == false ? 1 : 0;
+              final ob = b['open'] == false ? 1 : 0;
+              if (oa != ob) return oa.compareTo(ob);
+              return ((a['distanceKm'] as double?) ?? double.infinity)
+                  .compareTo((b['distanceKm'] as double?) ?? double.infinity);
+            });
 
             // A city filter browses that city outright, ignoring the
             // device's live location entirely; otherwise fall back to the
@@ -501,7 +510,10 @@ class _LabsNearYouSectionState extends ConsumerState<_LabsNearYouSection> {
                     children: labs.map((lab) {
                       final address = lab['address'] as String;
                       final distanceLabel = _distanceLabel(lab['distanceKm'] as double?);
-                      return GestureDetector(
+                      final closed = lab['open'] == false;
+                      return Column(children: [
+                        if (closed) const NotAcceptingBanner(compact: true, margin: EdgeInsets.only(bottom: 6)),
+                        GreyscaleIfUnavailable(unavailable: closed, child: GestureDetector(
                         onTap: () => context.push(AppRoutes.labMenu.replaceFirst(':id', lab['id'] as String)),
                         child: Container(
                           margin: const EdgeInsets.only(bottom: 10),
@@ -555,7 +567,8 @@ class _LabsNearYouSectionState extends ConsumerState<_LabsNearYouSection> {
                             ],
                           ),
                         ),
-                      );
+                      )),
+                      ]);
                     }).toList(),
                   ),
                 ),

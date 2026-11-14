@@ -5,7 +5,10 @@ import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../auth/services/doctor_auth_service.dart';
+import '../quick_connect_earnings.dart';
 import '../../../core/widgets/ux_widgets.dart';
+import '../../../core/router/app_router.dart';
+import '../../../shared_core/wallet/wallet_summary_card.dart' show EarningsFeeNote;
 
 class DoctorEarningsScreen extends StatefulWidget {
   const DoctorEarningsScreen({super.key});
@@ -48,7 +51,20 @@ class _DoctorEarningsScreenState extends State<DoctorEarningsScreen> {
               if (ts == null) return true;
               return ts.toDate().isAfter(cutoff);
             }).toList();
-            return _EarningsBody(uid: uid, allDocs: allDocs);
+            final apptEntries = allDocs.map(EarningEntry.fromDoc).toList();
+            // Quick-connect (instant) consultations have no appointment doc -
+            // fold their fees into the same analytics.
+            return QuickConnectEarningsBuilder(
+              uid: uid,
+              builder: (context, quick) {
+                final recentQuick = quick.where((e) {
+                  final ts = e.data()['createdAt'] as Timestamp?;
+                  return ts == null || ts.toDate().isAfter(cutoff);
+                }).toList();
+                return _EarningsBody(
+                    uid: uid, allDocs: apptEntries, quickConnect: recentQuick);
+              },
+            );
           },
         ),
       ),
@@ -121,7 +137,11 @@ class _GradientAppBar extends StatelessWidget {
     return SliverAppBar(
       expandedHeight: hasData ? 220 : 80,
       pinned: true,
-      leading: const BackButton(color: Colors.white),
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+        tooltip: 'Back',
+        onPressed: () => context.safeBack(),
+      ),
       backgroundColor: AppColors.primary,
       elevation: 0,
       title: Text(
@@ -249,9 +269,14 @@ class _GradientAppBar extends StatelessWidget {
 
 class _EarningsBody extends StatelessWidget {
   final String uid;
-  final List<QueryDocumentSnapshot<Map<String, dynamic>>> allDocs;
+  final List<EarningEntry> allDocs;
+  final List<EarningEntry> quickConnect;
 
-  const _EarningsBody({required this.uid, required this.allDocs});
+  const _EarningsBody({
+    required this.uid,
+    required this.allDocs,
+    this.quickConnect = const [],
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -263,8 +288,9 @@ class _EarningsBody extends StatelessWidget {
         DateFormat('yyyy-MM-dd').format(DateTime(now.year, now.month, 1));
 
     // ── Partition by status ──────────────────────────────────────────────────
-    final completed =
+    final apptCompleted =
         allDocs.where((d) => d.data()['status'] == 'completed').toList();
+    final completed = [...apptCompleted, ...quickConnect];
     final cancelled =
         allDocs.where((d) => d.data()['status'] == 'cancelled').toList();
     final upcoming = allDocs.where((d) {
@@ -311,7 +337,7 @@ class _EarningsBody extends StatelessWidget {
 
     // ── Completion rate ──────────────────────────────────────────────────────
     final completionRate = allDocs.isNotEmpty
-        ? '${((completed.length / allDocs.length) * 100).round()}%'
+        ? '${((apptCompleted.length / allDocs.length) * 100).round()}%'
         : '–';
 
     // ── Weekly bar chart (last 7 days, index 0=oldest, 6=today) ─────────────
@@ -424,7 +450,7 @@ class _EarningsBody extends StatelessWidget {
                       const _SectionHeader(title: 'Consultation Analytics'),
                       const SizedBox(height: 12),
                       _ConsultGrid(
-                        total: allDocs.length,
+                        total: allDocs.length + quickConnect.length,
                         completed: completed.length,
                         cancelled: cancelled.length,
                         upcoming: upcoming.length,
@@ -510,6 +536,8 @@ class _EarningsBody extends StatelessWidget {
                   delay: const Duration(milliseconds: 220),
                   child: _WalletSection(uid: uid),
                 ),
+                const SizedBox(height: 10),
+                const EarningsFeeNote(),
                 const SizedBox(height: 22),
 
                 // ── Recent Transactions ────────────────────────────────────
@@ -1293,7 +1321,7 @@ class _WalletStat extends StatelessWidget {
 }
 
 class _TransactionTile extends StatelessWidget {
-  final QueryDocumentSnapshot<Map<String, dynamic>> doc;
+  final EarningEntry doc;
   const _TransactionTile({required this.doc});
 
   @override

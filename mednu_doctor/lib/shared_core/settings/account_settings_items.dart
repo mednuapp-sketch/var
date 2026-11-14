@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/router/app_router.dart';
 import '../../core/services/feedback_service.dart';
+import '../../core/services/fcm_service.dart';
+import '../../core/services/partner_presence_shutdown.dart';
 import '../../core/widgets/mednu_components.dart';
 import '../services/role_prefs.dart';
 import '../legal/partner_legal_screen.dart';
@@ -75,6 +77,8 @@ class AccountSettingsItems {
       // (Doctor + 8 partner roles), so it must not depend on any single
       // role's own auth service. Clears the cached "active role" the same
       // way DoctorAuthService.signOut() did, then signs out of Firebase.
+      await PartnerPresenceShutdown.goOfflineAll();
+      await FcmService.clearTokenOnSignOut();
       await RolePrefs.clear();
       await FirebaseAuth.instance.signOut();
       if (context.mounted) context.go(AppRoutes.login);

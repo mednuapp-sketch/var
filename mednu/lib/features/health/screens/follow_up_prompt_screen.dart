@@ -5,7 +5,7 @@ import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
 
 /// Which of the three follow-up-eligible service lines just completed.
-enum FollowUpSource { doctor, nutrition, physio }
+enum FollowUpSource { doctor, nutrition, physio, counselling }
 
 /// Shown in real time the moment a Doctor consultation, Dietician
 /// consultation, or Physiotherapy session flips to `completed` — pushed from
@@ -26,16 +26,24 @@ class FollowUpPromptScreen extends StatelessWidget {
     this.providerSpecialty,
   });
 
+  /// A psychiatric consultation should be followed up with the same doctor,
+  /// so the prompt recommends it rather than just offering it.
+  bool get _isPsychiatry =>
+      source == FollowUpSource.doctor &&
+      (providerSpecialty ?? '').toLowerCase().contains('psychiatr');
+
   String get _sessionLabel => switch (source) {
         FollowUpSource.doctor => 'consultation',
         FollowUpSource.nutrition => 'diet consultation',
         FollowUpSource.physio => 'therapy session',
+        FollowUpSource.counselling => 'counselling session',
       };
 
   IconData get _icon => switch (source) {
         FollowUpSource.doctor => Icons.medical_services_rounded,
         FollowUpSource.nutrition => Icons.restaurant_menu_rounded,
         FollowUpSource.physio => Icons.fitness_center_rounded,
+        FollowUpSource.counselling => Icons.psychology_rounded,
       };
 
   void _bookFollowUp(BuildContext context) {
@@ -44,12 +52,13 @@ class FollowUpPromptScreen extends StatelessWidget {
       case FollowUpSource.doctor:
         context.push('/doctors/$providerId');
       case FollowUpSource.nutrition:
-        context.push(AppRoutes.nutritionBookAppointment, extra: {
-          'nutritionistId': providerId,
-          'nutritionistName': providerName,
-        });
+        // The profile screen carries the fee, slots and availability the
+        // booking screen needs (a bare id/name left it with no slots).
+        context.push('/nutrition/nutritionist/$providerId');
       case FollowUpSource.physio:
         context.push('/physio/therapist/$providerId');
+      case FollowUpSource.counselling:
+        context.push('/counselling/counsellor/$providerId');
     }
   }
 
@@ -122,7 +131,9 @@ class FollowUpPromptScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Would you like to book a follow-up appointment?',
+                          _isPsychiatry
+                              ? 'We recommend a follow-up with $providerName to review your progress. Would you like to book it now?'
+                              : 'Would you like to book a follow-up appointment?',
                           textAlign: TextAlign.center,
                           style: AppTextStyles.bodyMedium
                               .copyWith(color: context.appTextSecondary),
@@ -141,10 +152,12 @@ class FollowUpPromptScreen extends StatelessWidget {
                               child: InkWell(
                                 borderRadius: BorderRadius.circular(14),
                                 onTap: () => _bookFollowUp(context),
-                                child: const Center(
+                                child: Center(
                                   child: Text(
-                                    'Book Follow-up',
-                                    style: TextStyle(
+                                    _isPsychiatry
+                                        ? 'Book Follow-up with Same Doctor'
+                                        : 'Book Follow-up',
+                                    style: const TextStyle(
                                       fontFamily: 'Poppins',
                                       fontSize: 15,
                                       fontWeight: FontWeight.w700,

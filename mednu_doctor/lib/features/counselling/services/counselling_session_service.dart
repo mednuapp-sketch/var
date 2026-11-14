@@ -112,6 +112,27 @@ class CounsellingSessionService {
         buildUpdate: (d) => {'status': 'completed'},
       );
 
+  /// Provider-proposed new slot — see PhysioSessionService.reschedule.
+  static Future<void> reschedule(
+    String sessionId, {
+    required String counsellorId,
+    required String date,
+    required String time,
+  }) =>
+      _transitionSession(
+        sessionId,
+        precondition: (d) =>
+            d['counsellorId'] == counsellorId &&
+            (d['status'] == 'accepted' || d['status'] == 'pending'),
+        conflictMessage: 'This session can no longer be rescheduled.',
+        buildUpdate: (d) => {
+          'preferredDate': date,
+          'preferredTime': time,
+          'rescheduledAt': FieldValue.serverTimestamp(),
+          'rescheduledBy': 'provider',
+        },
+      );
+
   static Future<void> cancel(String sessionId, {required String counsellorId}) =>
       _transitionSession(
         sessionId,

@@ -14,6 +14,8 @@ import '../models/visit.dart';
 import '../providers/caregiver_providers.dart';
 import '../services/caregiver_profile_service.dart';
 import '../services/caregiver_visit_service.dart';
+import '../widgets/cancel_visit_sheet.dart';
+import '../../care_assistant/widgets/care_job_widgets.dart' show respondToCareRequest;
 
 /// Full detail for a single visit — patient card, care-plan chips, address,
 /// and a status-driven action that carries the visit from check-in through
@@ -107,12 +109,12 @@ class CaregiverVisitDetailScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 16),
                 PremiumCard(
-                  onTap: () => openAddressInMaps(context, visit.address),
+                  onTap: visit.address.isEmpty ? null : () => openAddressInMaps(context, visit.address),
                   child: Row(
                     children: [
                       const Icon(Icons.location_on_outlined, color: AppColors.primary),
                       const SizedBox(width: 10),
-                      Expanded(child: Text(visit.address, style: AppTextStyles.bodyMedium)),
+                      Expanded(child: Text(visit.address.isEmpty ? 'Address shared after you accept' : visit.address, style: AppTextStyles.bodyMedium)),
                       const Icon(Icons.directions_rounded, color: AppColors.primary),
                     ],
                   ),
@@ -234,17 +236,83 @@ class _PrimaryActionState extends ConsumerState<_PrimaryAction> {
     }
   }
 
+  Future<void> _respond(Visit visit, bool accept) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    final ok = await respondToCareRequest(context, visit, accept: accept);
+    if (!mounted) return;
+    setState(() => _busy = false);
+    if (ok && !accept) context.pop();
+  }
+
+  Future<void> _cancel(Visit visit) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    final ok = await cancelAcceptedVisitFlow(context, visit);
+    if (!mounted) return;
+    setState(() => _busy = false);
+    if (ok) context.pop();
+  }
+
   @override
   Widget build(BuildContext context) {
     final visit = widget.visit;
+    final uid = CaregiverProfileService.currentUid;
 
     switch (visit.status) {
       case VisitStatus.scheduled:
-        return GradientButton(
-          label: 'Check In',
-          icon: Icons.login_rounded,
-          isLoading: _busy,
-          onTap: _busy ? null : () => _checkIn(visit.id),
+        // Pinned to this nurse (or still in the open pool) and not yet
+        // accepted: explicit Accept / Decline, same flow as care assistants.
+        final awaiting = (uid != null && visit.awaitingResponseFrom(uid)) ||
+            (visit.isOpenRequest && uid != null && !visit.declinedBy.contains(uid));
+        if (awaiting) {
+          return Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: _busy ? null : () => _respond(visit, false),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.error,
+                    side: const BorderSide(color: AppColors.error),
+                    minimumSize: const Size.fromHeight(52),
+                  ),
+                  child: const Text('Decline'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 2,
+                child: GradientButton(
+                  label: 'Accept Visit',
+                  icon: Icons.check_circle_outline_rounded,
+                  isLoading: _busy,
+                  onTap: _busy ? null : () => _respond(visit, true),
+                ),
+              ),
+            ],
+          );
+        }
+        if (!canCancelAcceptedVisit(visit, uid)) return const SizedBox();
+        return Column(
+          children: [
+            GradientButton(
+              label: 'Check In',
+              icon: Icons.login_rounded,
+              isLoading: _busy,
+              onTap: _busy ? null : () => _checkIn(visit.id),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: _busy ? null : () => _cancel(visit),
+              icon: const Icon(Icons.event_busy_rounded, size: 18),
+              label: const Text('Cancel visit'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.error,
+                side: const BorderSide(color: AppColors.error),
+                minimumSize: const Size.fromHeight(52),
+              ),
+            ),
+          ],
         );
       case VisitStatus.checkedIn:
         return GradientButton(

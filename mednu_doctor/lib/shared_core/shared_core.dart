@@ -48,6 +48,7 @@ export 'wallet/wallet_summary_card.dart';
 export 'documents/partner_document_models.dart';
 export 'documents/partner_document_service.dart';
 export 'documents/partner_document_upload_card.dart';
+export 'documents/staff_details_form.dart';
 
 // Settings
 export 'settings/account_deletion_service.dart';

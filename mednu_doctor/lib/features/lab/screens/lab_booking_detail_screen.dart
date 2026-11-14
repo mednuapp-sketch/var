@@ -79,6 +79,8 @@ class _LabBookingDetailScreenState extends ConsumerState<LabBookingDetailScreen>
             children: [
               TextField(
                 controller: nameCtrl,
+                textCapitalization: TextCapitalization.words,
+                onChanged: (_) => setSheetState(() {}),
                 decoration: const InputDecoration(labelText: 'Technician name'),
               ),
               const SizedBox(height: 12),
@@ -110,7 +112,10 @@ class _LabBookingDetailScreenState extends ConsumerState<LabBookingDetailScreen>
           actions: [
             TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
             FilledButton(
-              onPressed: nameCtrl.text.trim().isEmpty && pickedTime == null
+              // Both the name and the collection time are required by
+              // _assignTechnician below; previously this enabled with only one
+              // of them and the dialog then closed with no feedback.
+              onPressed: nameCtrl.text.trim().isEmpty || pickedTime == null
                   ? null
                   : () => Navigator.pop(dialogContext, true),
               child: const Text('Assign'),

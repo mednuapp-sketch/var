@@ -16,6 +16,7 @@ import '../../features/home/providers/location_provider.dart';
 import '../../features/location/providers/saved_addresses_provider.dart';
 import '../../features/location/models/saved_address.dart';
 import '../../features/location/screens/map_location_picker_screen.dart';
+import 'provider_slot_picker.dart';
 import 'rating_feedback_sheet.dart';
 
 class ServiceBookingSheet extends ConsumerStatefulWidget {
@@ -108,6 +109,40 @@ class _ServiceBookingSheetState extends ConsumerState<ServiceBookingSheet> {
   bool _dateError = false;
   bool _timeError = false;
 
+  // Real-slot booking for a pinned physiotherapist/counsellor: when that
+  // provider has published availability, the free-text date/time row is
+  // replaced by a date strip + slot grid. No availability (or no pinned
+  // provider) keeps the original free-text fallback.
+  ProviderAvailability? _availability;
+  bool _availLoading = false;
+  DateTime? _slotDate;
+
+  String? get _slotProviderId {
+    if (!TherapySlots.supports(widget.type)) return null;
+    final v = widget.extraFields[
+        widget.type == 'physiotherapy' ? 'physiotherapistId' : 'counsellorId'];
+    return v is String && v.isNotEmpty ? v : null;
+  }
+
+  bool get _useSlotPicker => _availability != null && _slotProviderId != null;
+
+  Future<void> _loadAvailability() async {
+    final id = _slotProviderId;
+    if (id == null) return;
+    setState(() => _availLoading = true);
+    ProviderAvailability? a;
+    try {
+      a = await TherapySlots.loadAvailability(widget.type, id);
+    } catch (_) {
+      a = null; // fall back to free text rather than block booking
+    }
+    if (!mounted) return;
+    setState(() {
+      _availability = a;
+      _availLoading = false;
+    });
+  }
+
   // Selected address info
   String _selectedAddr = '';
   double? _selectedLat;
@@ -128,6 +163,7 @@ class _ServiceBookingSheetState extends ConsumerState<ServiceBookingSheet> {
   void initState() {
     super.initState();
     _prefill();
+    _loadAvailability();
     _manualAddrCtrl.addListener(_onAddrChanged);
     WidgetsBinding.instance
         .addPostFrameCallback((_) => _prefillAddress());
@@ -624,6 +660,27 @@ class _ServiceBookingSheetState extends ConsumerState<ServiceBookingSheet> {
     });
     if (!formValid || !dateValid || !timeValid) return;
 
+    // Slot pre-flight: the server slot index is the final arbiter if two
+    // patients race, but this catches the common "just taken" case up front.
+    final slotProvider = _slotProviderId;
+    final slotDate = _slotDate;
+    if (_useSlotPicker && slotProvider != null && slotDate != null) {
+      var free = true;
+      try {
+        free = await TherapySlots.isSlotFree(widget.type, slotProvider, slotDate, _time);
+      } catch (_) {}
+      if (!mounted) return;
+      if (!free) {
+        setState(() {
+          _time = '';
+          _timeError = true;
+        });
+        FeedbackService.showWarning(
+            context, 'That slot was just booked. Please pick another time.');
+        return;
+      }
+    }
+
     final finalAddr = _useManualEntry
         ? _manualAddrCtrl.text.trim()
         : _selectedAddr;
@@ -1057,12 +1114,47 @@ class _ServiceBookingSheetState extends ConsumerState<ServiceBookingSheet> {
                   const SizedBox(height: 14),
 
                   _label('Preferred Date & Time *'),
-                  Row(children: [
-                    Expanded(child: _datePicker()),
-                    const SizedBox(width: 10),
-                    Expanded(child: _timePicker()),
-                  ]),
-                  if (_dateError || _timeError) ...[
+                  if (_availLoading)
+                    const SizedBox(
+                      height: 56,
+                      child: Center(
+                        child: SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(strokeWidth: 2)),
+                      ),
+                    )
+                  else if (_useSlotPicker) ...[
+                    ProviderSlotPicker(
+                      type: widget.type,
+                      providerId: _slotProviderId!,
+                      availability: _availability!,
+                      color: widget.themeColor,
+                      hasError: _dateError || _timeError,
+                      onChanged: (d, s) => setState(() {
+                        _slotDate = d;
+                        _date = d == null ? '' : TherapySlots.formatDate(d);
+                        _time = s ?? '';
+                        _dateError = false;
+                        _timeError = false;
+                      }),
+                    ),
+                    if (_dateError || _timeError)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 6),
+                        child: Text(
+                          'Select a date and a time slot',
+                          style: TextStyle(
+                              fontFamily: 'Poppins', fontSize: 11, color: Colors.red),
+                        ),
+                      ),
+                  ] else
+                    Row(children: [
+                      Expanded(child: _datePicker()),
+                      const SizedBox(width: 10),
+                      Expanded(child: _timePicker()),
+                    ]),
+                  if (!_useSlotPicker && (_dateError || _timeError)) ...[
                     const SizedBox(height: 6),
                     Row(children: [
                       Expanded(

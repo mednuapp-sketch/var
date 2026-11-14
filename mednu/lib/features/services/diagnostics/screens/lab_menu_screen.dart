@@ -6,6 +6,7 @@ import '../../../../core/constants/app_text_styles.dart';
 import '../../../../core/services/feedback_service.dart';
 import '../../../../core/widgets/add_to_cart_button.dart';
 import '../../../../core/widgets/ux_widgets.dart';
+import '../../../../core/widgets/provider_availability.dart';
 import '../../../cart/providers/cart_provider.dart';
 
 /// A single lab's test menu — the "food" screen in the hotel/lab-first
@@ -43,7 +44,13 @@ class _LabMenuScreenState extends ConsumerState<LabMenuScreen> {
   /// several tests can be picked and added to the cart in one go.
   final Map<String, Map<String, dynamic>> _selected = {};
 
+  bool get _closed => (ref.read(unavailableLabIdsProvider).valueOrNull ?? const {}).contains(widget.labId);
+
   void _toggle(Map<String, dynamic> test) {
+    if (_closed) {
+      showNotAcceptingSnack(context, 'lab');
+      return;
+    }
     final id = test['id'] as String;
     setState(() {
       if (_selected.containsKey(id)) {
@@ -60,6 +67,10 @@ class _LabMenuScreenState extends ConsumerState<LabMenuScreen> {
   Future<void> _addSelectedToCart() async {
     final tests = _selected.values.toList();
     if (tests.isEmpty) return;
+    if (_closed) {
+      showNotAcceptingSnack(context, 'lab');
+      return;
+    }
     final vendorKey = 'lab:${widget.labId}';
     final conflict = ref.read(cartProvider.notifier).conflictFor(type: 'diagnostics', vendorKey: vendorKey);
     if (conflict != null) {
@@ -108,10 +119,11 @@ class _LabMenuScreenState extends ConsumerState<LabMenuScreen> {
   Widget build(BuildContext context) {
     final labName = _lab?['name'] as String? ?? 'Lab';
     final address = _lab?['address'] as String? ?? '';
+    final closed = ref.watch(unavailableLabIdsProvider).valueOrNull?.contains(widget.labId) ?? false;
 
     return Scaffold(
       backgroundColor: context.appBackground,
-      bottomNavigationBar: _selected.isEmpty
+      bottomNavigationBar: _selected.isEmpty || closed
           ? null
           : SafeArea(
               child: Padding(
@@ -153,6 +165,8 @@ class _LabMenuScreenState extends ConsumerState<LabMenuScreen> {
           ),
           SliverToBoxAdapter(
             child: Column(children: [
+              if (closed)
+                const NotAcceptingBanner(margin: EdgeInsets.fromLTRB(16, 12, 16, 0)),
               Padding(
                 padding: const EdgeInsets.all(16),
                 child: TextField(
@@ -213,7 +227,7 @@ class _LabMenuScreenState extends ConsumerState<LabMenuScreen> {
                     child: Column(children: tests.map((t) {
                       final duration = t['duration'] as String;
                       final picked = _selected.containsKey(t['id']);
-                      return GestureDetector(
+                      return GreyscaleIfUnavailable(unavailable: closed, child: GestureDetector(
                         behavior: HitTestBehavior.opaque,
                         onTap: () => _toggle(t),
                         child: Container(
@@ -247,7 +261,7 @@ class _LabMenuScreenState extends ConsumerState<LabMenuScreen> {
                             size: 26,
                           ),
                         ]),
-                      ));
+                      )));
                     }).toList()),
                   );
                 },

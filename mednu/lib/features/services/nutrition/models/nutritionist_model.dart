@@ -26,6 +26,15 @@ class NutritionistModel {
   final String clinicName;
   final List<String> availableDays;
   final Map<String, List<String>> slots; // day -> list of time slots
+
+  /// True once the dietician has published a weekly schedule (mirrored from
+  /// their Availability screen). When false the booking screen falls back to
+  /// its legacy default slots.
+  final bool scheduleConfigured;
+
+  /// `yyyy-MM-dd` -> slot labels the dietician blocked for that date.
+  final Map<String, List<String>> blockedSlots;
+  final String clinicAddress;
   final DateTime createdAt;
 
   const NutritionistModel({
@@ -52,6 +61,9 @@ class NutritionistModel {
     required this.availableDays,
     required this.slots,
     required this.createdAt,
+    this.scheduleConfigured = false,
+    this.blockedSlots = const {},
+    this.clinicAddress = '',
   });
 
   factory NutritionistModel.fromFirestore(DocumentSnapshot doc) {
@@ -83,6 +95,12 @@ class NutritionistModel {
           ) ??
           {},
       createdAt: (d['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      scheduleConfigured: d['scheduleConfigured'] as bool? ?? false,
+      blockedSlots: (d['blockedSlots'] as Map<String, dynamic>?)?.map(
+            (k, v) => MapEntry(k, List<String>.from(v as List? ?? [])),
+          ) ??
+          {},
+      clinicAddress: d['clinicAddress'] as String? ?? '',
     );
   }
 

@@ -5,7 +5,10 @@ import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
+import '../../../shared_core/models/app_role.dart';
+import '../../../shared_core/navigation/role_menu.dart';
 import '../../../shared_core/notifications/shared_notification_providers.dart';
+import '../../../shared_core/providers/role_providers.dart';
 import '../models/notification_model.dart';
 import '../../../core/widgets/ux_widgets.dart';
 
@@ -469,7 +472,7 @@ class _NotifTile extends ConsumerWidget {
     if (!notif.isRead) {
       sharedMarkNotificationRead(ref, notif.id);
     }
-    final route = _routeFor(notif);
+    final route = _routeFor(notif, ref.read(roleEngineProvider).activeRole);
     if (route != null) {
       context.push(route,
           extra:
@@ -477,12 +480,18 @@ class _NotifTile extends ConsumerWidget {
     }
   }
 
-  String? _routeFor(NotificationModel n) {
+  String? _routeFor(NotificationModel n, AppRole role) {
     switch (n.type) {
       case NotifType.consultationRequest:
         return AppRoutes.incomingRequest;
       case NotifType.payment:
-        return AppRoutes.earnings;
+        // AppRoutes.earnings is the Doctor's own screen — every other role
+        // has its own Earnings tab in its menu.
+        if (role == AppRole.doctor || role == AppRole.admin) return AppRoutes.earnings;
+        for (final item in buildMenuForRole(role)) {
+          if (item.label == 'Earnings') return item.route;
+        }
+        return null;
       case NotifType.appointment:
         return AppRoutes.schedule;
       case NotifType.emergencyRequest:
@@ -494,6 +503,19 @@ class _NotifTile extends ConsumerWidget {
         // `service_requests[type=emergency_doctor]` docs this notification
         // is about.
         return AppRoutes.emergencyRequests;
+      case NotifType.booking:
+        // Open the active role's own bookings / orders / jobs list.
+        if (role == AppRole.doctor || role == AppRole.admin) {
+          return AppRoutes.schedule;
+        }
+        const bookingLabels = {
+          'Bookings', 'Orders', 'Requests', 'Visits', 'Sessions',
+          'Appointments',
+        };
+        for (final item in buildMenuForRole(role)) {
+          if (bookingLabels.contains(item.label)) return item.route;
+        }
+        return null;
       case NotifType.review:
       case NotifType.summary:
       case NotifType.patientFollowup:
@@ -538,6 +560,9 @@ class _NotifTile extends ConsumerWidget {
         return const _NotifMeta(Icons.verified_rounded, AppColors.success);
       case NotifType.accountRejected:
         return const _NotifMeta(Icons.cancel_rounded, AppColors.error);
+      case NotifType.booking:
+        return const _NotifMeta(
+            Icons.assignment_turned_in_rounded, AppColors.primary);
       case NotifType.unknown:
         return const _NotifMeta(
             Icons.notifications_rounded, AppColors.textSecondary);

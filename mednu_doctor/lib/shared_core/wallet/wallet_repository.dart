@@ -200,7 +200,9 @@ class SettlementWalletRepository implements WalletRepository {
     return WalletTransaction(
       id: doc.id,
       title: title,
-      subtitle: category == 'provider_settlement' ? 'Paid out' : 'Pending settlement',
+      subtitle: category == 'provider_settlement'
+          ? 'Paid out'
+          : (d['isTest'] == true ? 'Test booking · pending' : 'Pending settlement'),
       amount: amount,
       type: d['type'] == 'debit' ? WalletTransactionType.debit : WalletTransactionType.credit,
       date: createdAt,
@@ -309,8 +311,17 @@ class SettlementWithLegacyWalletRepository implements WalletRepository {
       final balance = (walletData?['availableBalance'] as num?) ?? 0;
       final pending = (walletData?['pendingEarnings'] as num?) ?? 0;
       final paidThisMonth = (walletData?['paidThisMonth'] as num?) ?? 0;
-      final combined = [...settlementTransactions, ...legacyTransactions]
-        ..sort((a, b) => b.date.compareTo(a.date));
+      // A test-mode settlement credit (`test:service_requests:<sessionId>`,
+      // see _creditTestEarningsTx in functions/index.js) and the legacy
+      // ledger row describe the SAME completed session. The Earnings
+      // screens sum this list for Today/Week/Month, so keep only the
+      // settlement row (net of commission) to avoid counting it twice.
+      final settlementIds = {for (final t in settlementTransactions) t.id};
+      final combined = [
+        ...settlementTransactions,
+        ...legacyTransactions
+            .where((t) => !settlementIds.contains('test:service_requests:${t.id}')),
+      ]..sort((a, b) => b.date.compareTo(a.date));
       controller.add(WalletSummary(
         balance: balance,
         pendingAmount: pending,
@@ -367,7 +378,9 @@ class SettlementWithLegacyWalletRepository implements WalletRepository {
     return WalletTransaction(
       id: doc.id,
       title: title,
-      subtitle: category == 'provider_settlement' ? 'Paid out' : 'Pending settlement',
+      subtitle: category == 'provider_settlement'
+          ? 'Paid out'
+          : (d['isTest'] == true ? 'Test booking · pending' : 'Pending settlement'),
       amount: amount,
       type: d['type'] == 'debit' ? WalletTransactionType.debit : WalletTransactionType.credit,
       date: createdAt,

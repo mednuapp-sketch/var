@@ -4,12 +4,15 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
 // ── Referral Config ───────────────────────────────────────
+// Only the REFERRER earns. The amount and on/off switch come live from
+// Firestore `app_config/referral` {rewardAmount, enabled}; the reward is paid
+// when the referred friend's first booking is COMPLETED. The legacy
+// `referralConfig/settings` doc is still honoured for the programme-wide
+// switch / expiry (the server enforces both when a code is applied).
 class ReferralConfig {
   final bool referralEnabled;
   final bool rewardsEnabled;
   final double referrerReward;
-  final double referredReward;
-  final String rewardTriggerCondition;
   final int maxReferralLimit; // 0 = unlimited
   final String campaignTitle;
   final String campaignMessage;
@@ -17,45 +20,54 @@ class ReferralConfig {
   final DateTime? offerExpiryDate;
 
   const ReferralConfig({
-    this.referralEnabled = true,
-    this.rewardsEnabled = true,
-    this.referrerReward = 50.0,
-    this.referredReward = 25.0,
-    this.rewardTriggerCondition = 'on_signup',
+    this.referralEnabled = false,
+    this.rewardsEnabled = false,
+    this.referrerReward = 0.0,
     this.maxReferralLimit = 0,
     this.campaignTitle = 'Refer & Earn',
-    this.campaignMessage = 'Invite friends to MedNU and earn rewards!',
-    this.bannerText = 'Share & earn per referral',
+    this.campaignMessage = 'Invite friends to MedNU.',
+    this.bannerText = 'Share MedNU with friends',
     this.offerExpiryDate,
   });
 
-  factory ReferralConfig.fromMap(Map<String, dynamic> data) {
+  /// [reward] is `app_config/referral`; [settings] is the legacy
+  /// `referralConfig/settings` (optional).
+  factory ReferralConfig.fromDocs(
+      Map<String, dynamic>? reward, Map<String, dynamic>? settings) {
+    final s = settings ?? const <String, dynamic>{};
+    final enabled = reward?['enabled'] == true;
+    final amount = (reward?['rewardAmount'] as num?)?.toDouble() ?? 0.0;
     return ReferralConfig(
-      referralEnabled: data['referralEnabled'] as bool? ?? true,
-      rewardsEnabled: data['rewardsEnabled'] as bool? ?? true,
-      referrerReward: (data['referrerReward'] as num?)?.toDouble() ?? 50.0,
-      referredReward: (data['referredReward'] as num?)?.toDouble() ?? 25.0,
-      rewardTriggerCondition:
-          data['rewardTriggerCondition'] as String? ?? 'on_signup',
-      maxReferralLimit: (data['maxReferralLimit'] as num?)?.toInt() ?? 0,
-      campaignTitle: data['campaignTitle'] as String? ?? 'Refer & Earn',
-      campaignMessage: data['campaignMessage'] as String? ??
-          'Invite friends to MedNU and earn rewards!',
-      bannerText:
-          data['bannerText'] as String? ?? 'Share & earn per referral',
-      offerExpiryDate:
-          (data['offerExpiryDate'] as Timestamp?)?.toDate(),
+      referralEnabled: enabled && (s['referralEnabled'] as bool? ?? true),
+      rewardsEnabled: enabled && amount > 0,
+      referrerReward: amount > 0 ? amount : 0.0,
+      maxReferralLimit: (s['maxReferralLimit'] as num?)?.toInt() ?? 0,
+      campaignTitle: s['campaignTitle'] as String? ?? 'Refer & Earn',
+      campaignMessage:
+          s['campaignMessage'] as String? ?? 'Invite friends to MedNU.',
+      bannerText: s['bannerText'] as String? ?? 'Share MedNU with friends',
+      offerExpiryDate: (s['offerExpiryDate'] as Timestamp?)?.toDate(),
     );
   }
 
   bool get isExpired =>
       offerExpiryDate != null && DateTime.now().isAfter(offerExpiryDate!);
 
+  /// True only when a reward amount can honestly be promised.
+  bool get hasActiveReward =>
+      referralEnabled && rewardsEnabled && referrerReward > 0 && !isExpired;
+
   String get referrerRewardFormatted =>
       '₹${referrerReward.toStringAsFixed(0)}';
 
-  String get referredRewardFormatted =>
-      '₹${referredReward.toStringAsFixed(0)}';
+  /// Headline used everywhere the reward is mentioned.
+  String get earnLine => hasActiveReward
+      ? 'Earn $referrerRewardFormatted when a friend you refer completes their first booking'
+      : 'Referral rewards are not active right now';
+
+  /// Short version for banners / buttons (null when inactive).
+  String? get earnShort =>
+      hasActiveReward ? 'Earn $referrerRewardFormatted per referral' : null;
 }
 
 // ── Referral Record ───────────────────────────────────────
@@ -107,20 +119,12 @@ class ReferralValidationResult {
   final bool isValid;
   final String? referrerName;
   final String? error;
-  // Reward amounts pulled live from admin referralConfig
-  final double referredReward;
-  final double referrerReward;
 
   const ReferralValidationResult({
     required this.isValid,
     this.referrerName,
     this.error,
-    this.referredReward = 0.0,
-    this.referrerReward = 0.0,
   });
-
-  String get referredRewardFormatted  => '₹${referredReward.toStringAsFixed(0)}';
-  String get referrerRewardFormatted  => '₹${referrerReward.toStringAsFixed(0)}';
 }
 
 // ── Referral Service ──────────────────────────────────────
@@ -133,11 +137,19 @@ class ReferralService {
   DocumentReference get _configRef =>
       _db.collection('referralConfig').doc('settings');
 
-  // ── Stream config in realtime ─────────────────────────
+  DocumentReference get _rewardRef =>
+      _db.collection('app_config').doc('referral');
+
+  // ── Stream config in realtime (live from Firestore) ───
   Stream<ReferralConfig> configStream() {
-    return _configRef.snapshots().map((snap) {
-      if (!snap.exists) return const ReferralConfig();
-      return ReferralConfig.fromMap(snap.data() as Map<String, dynamic>);
+    return _rewardRef.snapshots().asyncMap((snap) async {
+      Map<String, dynamic>? settings;
+      try {
+        final s = await _configRef.get();
+        settings = s.data() as Map<String, dynamic>?;
+      } catch (_) {}
+      return ReferralConfig.fromDocs(
+          snap.data() as Map<String, dynamic>?, settings);
     });
   }
 
@@ -190,10 +202,10 @@ class ReferralService {
     }
     try {
       final configSnap = await _configRef.get();
-      final config = configSnap.exists
-          ? ReferralConfig.fromMap(configSnap.data() as Map<String, dynamic>)
-          : const ReferralConfig();
-      if (!config.referralEnabled || config.isExpired) {
+      final settings = configSnap.data() as Map<String, dynamic>?;
+      final expiry = (settings?['offerExpiryDate'] as Timestamp?)?.toDate();
+      if ((settings?['referralEnabled'] as bool? ?? true) == false ||
+          (expiry != null && DateTime.now().isAfter(expiry))) {
         return const ReferralValidationResult(
           isValid: false, error: 'Referral program is currently inactive.',
         );
@@ -212,8 +224,6 @@ class ReferralService {
       return ReferralValidationResult(
         isValid: true,
         referrerName: name,
-        referredReward: config.referredReward,
-        referrerReward: config.referrerReward,
       );
     } catch (_) {
       return const ReferralValidationResult(
@@ -223,73 +233,24 @@ class ReferralService {
   }
 
   // ── Apply referral code on new user signup ────────────
+  //
+  // `users` is owner-readable only, so the code is resolved SERVER-side by the
+  // `applyReferralCode` callable: it rejects unknown codes and self-referral,
+  // records who referred this user, and creates the referral record. The
+  // reward (for the referrer only) is paid automatically by the server once
+  // the new user's FIRST booking is completed. Returns true when a referral was recorded; throws on
+  // rejection (the caller treats that as non-fatal).
   Future<bool> applyReferralCode({
     required String referralCode,
     required String newUserId,
   }) async {
     final code = referralCode.trim().toUpperCase();
     if (code.isEmpty || newUserId.isEmpty) return false;
-
-    final configSnap = await _configRef.get();
-    final config = configSnap.exists
-        ? ReferralConfig.fromMap(configSnap.data() as Map<String, dynamic>)
-        : const ReferralConfig();
-
-    if (!config.referralEnabled || config.isExpired) return false;
-
-    // Find referrer
-    final query = await _db
-        .collection('users')
-        .where('referralCode', isEqualTo: code)
-        .limit(1)
-        .get();
-    if (query.docs.isEmpty) return false;
-
-    final referrerId = query.docs.first.id;
-    if (referrerId == newUserId) return false;
-
-    // Ensure new user hasn't already been referred
-    final alreadyReferred = await _db
-        .collection('referrals')
-        .where('referredUserId', isEqualTo: newUserId)
-        .limit(1)
-        .get();
-    if (alreadyReferred.docs.isNotEmpty) return false;
-
-    // Check max referral limit per referrer
-    if (config.maxReferralLimit > 0) {
-      final count = await _db
-          .collection('referrals')
-          .where('referrerId', isEqualTo: referrerId)
-          .where('status', whereIn: ['rewarded', 'pending'])
-          .get();
-      if (count.size >= config.maxReferralLimit) return false;
-    }
-
-    final isOnSignup = config.rewardTriggerCondition == 'on_signup';
-    final referralRef = _db.collection('referrals').doc();
-
-    // Always created as 'pending'. Only the server may move it to 'rewarded',
-    // and it does so in the same transaction that credits both wallets — so
-    // the status field doubles as the payout idempotency guard.
-    await referralRef.set({
-      'referrerId': referrerId,
-      'referrerName': query.docs.first.data()['name'] ?? '',
-      'referredUserId': newUserId,
-      'referralCode': code,
-      'status': 'pending',
-      'referrerRewardAmount': config.referrerReward,
-      'referredRewardAmount': config.referredReward,
-      'triggerCondition': config.rewardTriggerCondition,
-      'createdAt': FieldValue.serverTimestamp(),
-      'rewardedAt': null,
-    });
-
-    if (isOnSignup && config.rewardsEnabled) {
-      await _grantReward(referralRef.id);
-    }
-
-    return true;
+    final result = await FirebaseFunctions.instance
+        .httpsCallable('applyReferralCode')
+        .call({'code': code});
+    final data = (result.data as Map?) ?? const {};
+    return data['applied'] == true;
   }
 
   // ── Trigger reward for non-signup conditions ──────────

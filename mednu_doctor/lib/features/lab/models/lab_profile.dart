@@ -37,6 +37,10 @@ class LabProfile {
   final bool hasPendingChanges;
   final Map<String, dynamic> pendingChanges;
 
+  /// Typed staff details (`labTechnician` / `specialist` / `pharmacist`) captured
+  /// at registration. Empty for partners approved before this existed.
+  final Map<String, dynamic> staffDetails;
+
   const LabProfile({
     required this.uid,
     required this.name,
@@ -58,6 +62,7 @@ class LabProfile {
     this.documentVerification = const {},
     this.hasPendingChanges = false,
     this.pendingChanges = const {},
+    this.staffDetails = const {},
   });
 
   factory LabProfile.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
@@ -88,6 +93,8 @@ class LabProfile {
       hasPendingChanges: (d['hasPendingChanges'] as bool?) ?? false,
       pendingChanges: Map<String, dynamic>.from(
           (d['pendingChanges'] as Map?) ?? const <String, dynamic>{}),
+      staffDetails: Map<String, dynamic>.from(
+          (d['staffDetails'] as Map?) ?? const <String, dynamic>{}),
     );
   }
 }

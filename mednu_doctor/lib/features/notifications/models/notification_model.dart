@@ -10,6 +10,9 @@ enum NotifType {
   patientFollowup,
   accountApproved,
   accountRejected,
+  /// New / cancelled booking, order, session or job for a partner role
+  /// (`new_lab_booking`, `new_pharmacy_order`, `new_ambulance_request`, ...).
+  booking,
   unknown,
 }
 
@@ -38,12 +41,27 @@ class NotificationModel {
       case 'emergency_request':    return NotifType.emergencyRequest;
       case 'review':               return NotifType.review;
       case 'payment':              return NotifType.payment;
+      // Backend `_sendProviderNotification` earnings/settlement types.
+      case 'new_earnings':
+      case 'settlement_approved':
+      case 'money_sent':           return NotifType.payment;
       case 'appointment':          return NotifType.appointment;
       case 'summary':              return NotifType.summary;
       case 'patient_followup':     return NotifType.patientFollowup;
       case 'account_approved':     return NotifType.accountApproved;
       case 'account_rejected':     return NotifType.accountRejected;
-      default:                     return NotifType.unknown;
+      case 'booking_cancelled_by_patient':
+      case 'nutrition_cancelled':
+      case 'hospital_appointment_cancelled':
+                                   return NotifType.booking;
+      default:
+        // Every backend "new job for you" push is `new_<service>_<noun>`
+        // (new_lab_booking, new_pharmacy_order, new_equipment_order,
+        // new_physio_session, new_counselling_session, new_ambulance_request,
+        // new_caregiver_visit, new_appointment, new_nutrition_appointment,
+        // new_hospital_appointment). `new_earnings` is matched above.
+        if (raw.startsWith('new_')) return NotifType.booking;
+        return NotifType.unknown;
     }
   }
 

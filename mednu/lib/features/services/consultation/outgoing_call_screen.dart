@@ -236,6 +236,7 @@ class _OutgoingCallScreenState extends State<OutgoingCallScreen>
           .doc(widget.consultationId)
           .update({
         'status': 'cancelled',
+        'cancelledBy': 'patient', // drives the server-side refund policy
         'cancelledAt': FieldValue.serverTimestamp(),
       });
     } catch (e) {

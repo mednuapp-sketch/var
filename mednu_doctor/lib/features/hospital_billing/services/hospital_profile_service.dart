@@ -2,6 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
+import '../../../shared_core/services/pending_profile_edit_service.dart';
+
 /// Mirrors `PhysioProfileService` for the Hospital role: a thin static-method
 /// wrapper around `hospital_profiles/{uid}`. Collection name matches
 /// `AppRole.hospital.firestoreValue + '_profiles'` exactly — the router's
@@ -101,23 +103,44 @@ class HospitalProfileService {
 
   /// `status`/`hospitalId`/`hospitalName` are rejected by firestore.rules for
   /// a self-update — only `contactName`/`phone`-shaped edits reach Firestore.
+  ///
+  /// Once [currentStatus] is 'active' the edit is diverted into
+  /// `pendingChanges` for admin review (firestore.rules) instead of touching
+  /// the live fields — see [PendingProfileEditService]. [pending] is the
+  /// already-submitted snapshot, merged in so a later edit doesn't drop an
+  /// earlier one that's still awaiting review.
   static Future<void> updateContactInfo(
     String uid, {
     required String contactName,
     required String phone,
+    required String currentStatus,
+    Map<String, dynamic> pending = const {},
   }) =>
-      _db.collection('hospital_profiles').doc(uid).set({
-        'contactName': contactName,
-        'phone': phone,
-      }, SetOptions(merge: true));
+      PendingProfileEditService.apply(
+        ref: _db.collection('hospital_profiles').doc(uid),
+        currentStatus: currentStatus,
+        fields: {
+          if (currentStatus == 'active') ...pending,
+          'contactName': contactName,
+          'phone': phone,
+        },
+      );
 
-  /// `photoUrl` isn't in firestore.rules' protected-fields list for this
-  /// collection (`status`/`hospitalId`/`hospitalName` only), so a self-write
-  /// is allowed — same trust boundary as [updateContactInfo]. Used by
-  /// [HospitalProfileScreen]'s avatar upload/remove flow, mirroring
-  /// `DoctorAuthService.updatePhotoUrl`.
-  static Future<void> updatePhotoUrl(String uid, String photoUrl) =>
-      _db.collection('hospital_profiles').doc(uid).set({
-        'photoUrl': photoUrl,
-      }, SetOptions(merge: true));
+  /// Used by [HospitalProfileScreen]'s avatar upload/remove flow. Once
+  /// [currentStatus] is 'active' the new photo goes to review, not live —
+  /// see [updateContactInfo].
+  static Future<void> updatePhotoUrl(
+    String uid,
+    String photoUrl, {
+    required String currentStatus,
+    Map<String, dynamic> pending = const {},
+  }) =>
+      PendingProfileEditService.apply(
+        ref: _db.collection('hospital_profiles').doc(uid),
+        currentStatus: currentStatus,
+        fields: {
+          if (currentStatus == 'active') ...pending,
+          'photoUrl': photoUrl,
+        },
+      );
 }

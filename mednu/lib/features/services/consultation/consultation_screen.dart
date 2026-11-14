@@ -11,6 +11,7 @@ import '../../../core/constants/app_spacing.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/constants/therapy_specialties.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/providers/platform_fee_provider.dart';
 import '../../../core/utils/doctor_role_filter.dart';
 import '../../../core/utils/r.dart';
 import '../../../core/widgets/ux_widgets.dart';
@@ -280,7 +281,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
     final slotDuration = (avail['slotDuration'] as num?)?.toInt() ?? 30;
     final schedule = avail['schedule'] as Map<String, dynamic>?;
     if (schedule == null) return _kDefaultSlots.toList();
-    final dayName = DateFormat('EEE').format(date);
+    final dayName = DateFormat('EEE', 'en').format(date);
     final ds = schedule[dayName] as Map<String, dynamic>?;
     if (ds == null || ds['enabled'] != true) return [];
     final startStr = ds['start'] as String? ?? '09:00';
@@ -299,7 +300,15 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
         slots.add(
             '${displayH.toString().padLeft(2, '0')}:${min.toString().padLeft(2, '0')} $period');
       }
-      return slots;
+      // Slots the doctor blocked for this date (availability.blockedSlots —
+      // written by the partner app's Block a Slot screen). The doctor profile
+      // picker already hid these; this tab still offered them as bookable.
+      final blockedByDate = avail['blockedSlots'] as Map<String, dynamic>?;
+      final blocked = (blockedByDate?[DateFormat('yyyy-MM-dd').format(date)] as List?)
+              ?.map((e) => e.toString())
+              .toSet() ??
+          const <String>{};
+      return blocked.isEmpty ? slots : slots.where((s) => !blocked.contains(s)).toList();
     } catch (_) {
       return _kDefaultSlots.toList();
     }
@@ -310,7 +319,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
     if (avail == null) return true;
     final schedule = avail['schedule'] as Map<String, dynamic>?;
     if (schedule == null) return true;
-    final dayName = DateFormat('EEE').format(date);
+    final dayName = DateFormat('EEE', 'en').format(date);
     final ds = schedule[dayName] as Map<String, dynamic>?;
     return ds?['enabled'] == true;
   }
@@ -579,6 +588,9 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
     // Fetch patient's stored FCM token + profile photo from 'users' collection.
     String patientFcmToken = '';
     String patientPhotoUrl = '';
+    // Phone-auth accounts have no displayName/email, so the doctor saw a
+    // generic "Patient" — use the name from the patient's profile.
+    String patientName = user.displayName ?? user.email ?? 'Patient';
     try {
       final patSnap = await FirebaseFirestore.instance
           .collection('users')
@@ -586,6 +598,8 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
           .get();
       patientFcmToken = patSnap.data()?['fcmToken'] as String? ?? '';
       patientPhotoUrl = patSnap.data()?['photoUrl'] as String? ?? '';
+      final profileName = (patSnap.data()?['name'] as String? ?? '').trim();
+      if (profileName.isNotEmpty) patientName = profileName;
     } catch (_) {}
 
     final feeStr = (doctor['fee'] as String? ?? '').replaceAll('₹', '').trim();
@@ -625,7 +639,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
           'bookingData': {
             'status': 'pending',
             'callerType': 'patient',
-            'patientName': user.displayName ?? user.email ?? 'Patient',
+            'patientName': patientName,
             'patientFcmToken': patientFcmToken,
             'patientPhotoUrl': patientPhotoUrl,
             'doctorId': doctor['uid'] ?? '',
@@ -1069,11 +1083,14 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
                   children: [
                     _FeeRow('Consultation Fee', _selectedDoctor!['fee']),
                     const Divider(height: 20),
-                    const _FeeRow('Platform Fee', '₹20'),
-                    const Divider(height: 20),
+                    if (_infoFee(_selectedDoctor!, _selectedType, watch: true) > 0) ...[
+                      _FeeRow('Platform fee (added at payment)',
+                          '₹${_infoFee(_selectedDoctor!, _selectedType, watch: true)}'),
+                      const Divider(height: 20),
+                    ],
                     _FeeRow(
                       'Total',
-                      '₹${(int.tryParse(_selectedDoctor!['fee'].replaceAll('₹', '').trim()) ?? 0) + 20}',
+                      '₹${(int.tryParse(_selectedDoctor!['fee'].toString().replaceAll('₹', '').trim()) ?? 0) + _infoFee(_selectedDoctor!, _selectedType, watch: true)}',
                       isBold: true,
                     ),
                   ],
@@ -1137,7 +1154,23 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
         displayDate: DateFormat('EEE, d MMM yyyy').format(selectedDate),
         time: _scheduleSlots[_selectedTimeIndex],
         type: _selectedType,
+        platformFee: _infoFee(_selectedDoctor!, _selectedType),
       ),
+    );
+  }
+
+  /// Informational only: the payment screen adds the platform fee centrally.
+  /// Free (0) consultations never carry a fee.
+  int _infoFee(Map<String, dynamic> doctor, String type, {bool watch = false}) {
+    final base = int.tryParse(
+            doctor['fee'].toString().replaceAll('₹', '').trim()) ??
+        0;
+    if (base <= 0) return 0;
+    return platformFeeFor(
+      ref,
+      type.toLowerCase() == 'video' ? 'video_consultation' : 'consultation',
+      watch: watch,
+      providerId: doctor['uid']?.toString(),
     );
   }
 }
@@ -1561,6 +1594,9 @@ class _BookingConfirmSheet extends StatefulWidget {
   final String displayDate; // Human-readable for UI
   final String time;
   final String type;
+  /// Admin-set platform fee (rupees), DISPLAY ONLY: the payment screen adds
+  /// it centrally on top of the base consultation fee passed to it.
+  final int platformFee;
 
   const _BookingConfirmSheet({
     required this.doctor,
@@ -1568,6 +1604,7 @@ class _BookingConfirmSheet extends StatefulWidget {
     required this.displayDate,
     required this.time,
     required this.type,
+    this.platformFee = 0,
   });
 
   @override
@@ -1635,7 +1672,7 @@ class _BookingConfirmSheetState extends State<_BookingConfirmSheet> {
       // Parse fee robustly — handles int and double values stored in Firestore
       final feeStr = widget.doctor['fee']?.toString().replaceAll('₹', '').trim() ?? '0';
       final consultFee = int.tryParse(feeStr) ?? (double.tryParse(feeStr)?.toInt() ?? 0);
-      final totalFee = consultFee + 20;
+      final totalFee = consultFee; // base only; fee is added at payment
 
       final db = FirebaseFirestore.instance;
 
@@ -1806,8 +1843,11 @@ class _BookingConfirmSheetState extends State<_BookingConfirmSheet> {
             _ConfirmRow(Icons.calendar_today_rounded, 'Date', widget.displayDate),
             _ConfirmRow(Icons.access_time_rounded, 'Time', widget.time),
             _ConfirmRow(Icons.video_call_rounded, 'Type', '${widget.type} Consultation'),
+            if (widget.platformFee > 0)
+              _ConfirmRow(Icons.receipt_long_rounded, 'Platform fee (added at payment)',
+                  '₹${widget.platformFee}'),
             _ConfirmRow(Icons.currency_rupee_rounded, 'Total',
-                '₹${(int.tryParse(widget.doctor['fee'].replaceAll('₹', '').trim()) ?? 0) + 20}'),
+                '₹${(int.tryParse(widget.doctor['fee'].toString().replaceAll('₹', '').trim()) ?? 0) + widget.platformFee}'),
             if (_familyMembers.isNotEmpty) ...[
               const SizedBox(height: 20),
               Align(

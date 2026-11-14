@@ -826,7 +826,11 @@ class _DoctorListView extends StatelessWidget {
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: q.snapshots(),
       builder: (context, snap) {
-        if (snap.connectionState == ConnectionState.waiting) {
+        // `q.snapshots()` is a new stream on every rebuild (each search
+        // keystroke / filter tap), which flips the state back to `waiting`
+        // while still carrying the previous docs — only show the skeleton
+        // when there is genuinely nothing to show yet, to avoid flicker.
+        if (snap.connectionState == ConnectionState.waiting && !snap.hasData) {
           return ListView.builder(
             padding: const EdgeInsets.symmetric(vertical: 10),
             itemCount: 5,

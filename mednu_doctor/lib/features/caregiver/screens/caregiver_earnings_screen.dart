@@ -34,6 +34,10 @@ class CaregiverEarningsScreen extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          // Shared settlement wallet (provider_wallets / wallet_ledger) so
+          // pending + test credits are visible here too.
+          const SharedWalletSummaryCard(horizontalPadding: 0),
+          const SizedBox(height: 16),
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(

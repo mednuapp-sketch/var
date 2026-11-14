@@ -136,7 +136,7 @@ class _TimelineTile extends StatelessWidget {
                       children: [
                         Expanded(
                           child: Text(
-                            appointment.consultationType,
+                            appointment.consultationLabel,
                             style: AppTextStyles.labelLarge.copyWith(color: appointment.status.color),
                             overflow: TextOverflow.ellipsis,
                           ),

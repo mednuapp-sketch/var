@@ -57,6 +57,8 @@ class _NutritionDashboardScreenState extends ConsumerState<NutritionDashboardScr
             online: online,
             onChanged: _toggling ? null : _toggleOnline,
           ),
+          const SizedBox(height: 12),
+          _ManageAvailabilityTile(onTap: () => context.push(AppRoutes.nutritionAvailability)),
           const SizedBox(height: 20),
           staticGrid(
             crossAxisCount: R.isTablet(context) ? 4 : 2,
@@ -102,6 +104,46 @@ class _NutritionDashboardScreenState extends ConsumerState<NutritionDashboardScr
           else
             Column(children: today.take(3).map((a) => _AppointmentPreviewCard(appointment: a)).toList()),
         ],
+      ),
+    );
+  }
+}
+
+class _ManageAvailabilityTile extends StatelessWidget {
+  final VoidCallback onTap;
+  const _ManageAvailabilityTile({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return TapScale(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.divider),
+        ),
+        child: Row(children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(11),
+            ),
+            child: const Icon(Icons.calendar_month_rounded, color: AppColors.primary, size: 20),
+          ),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Availability & Slots', style: AppTextStyles.labelLarge),
+              Text('Set your weekly schedule, modes and blocked times',
+                  style: AppTextStyles.caption, maxLines: 2, overflow: TextOverflow.ellipsis),
+            ]),
+          ),
+          const Icon(Icons.chevron_right_rounded, color: AppColors.textHint),
+        ]),
       ),
     );
   }

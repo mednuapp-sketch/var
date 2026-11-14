@@ -1280,25 +1280,12 @@ class _VideoCallScreenState extends State<VideoCallScreen>
         debugPrint('[VideoCall] End-call status update failed: $e');
       }
     }
-    // Mark the linked appointment completed once the visit is actually over
-    // for everyone: either another party already ended it (fromRemote — the
-    // Firestore status change is the authoritative signal) or this device is
-    // the last one leaving. Idempotent even if another party's leave races this.
-    if ((fromRemote || isLastToLeave) &&
-        _appointmentId != null &&
-        _appointmentId!.isNotEmpty) {
-      try {
-        await FirebaseFirestore.instance
-            .collection('appointments')
-            .doc(_appointmentId!)
-            .update({
-          'status': 'completed',
-          'completedAt': FieldValue.serverTimestamp(),
-        });
-      } catch (e) {
-        debugPrint('[VideoCall] Appointment complete failed: $e');
-      }
-    }
+    // The linked appointment is NOT completed from the patient app: patients
+    // can never mark a booking 'completed' (firestore.rules). The server
+    // (onConsultationEndedCompleteAppointment in functions/index.js) completes
+    // the appointment when this consultation ends, and the doctor app also
+    // completes it from its side. The follow-up prompt in app.dart reacts to
+    // that server-side transition / the consultation 'ended' status.
     if (mounted) setState(() { _engineReady = false; _remoteUids = {}; });
     await _agora.dispose();
     if (!mounted) return;

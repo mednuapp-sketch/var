@@ -52,6 +52,7 @@ Future<void> _cancelOrder(BuildContext context, String orderId) async {
     await FirebaseFirestore.instance.collection('orders').doc(orderId).update({
       'status': 'cancelled',
       'cancelReason': 'Cancelled by patient',
+      'cancelledBy': 'patient', // drives the server-side refund policy
       'updatedAt': FieldValue.serverTimestamp(),
     });
     if (context.mounted) {

@@ -54,8 +54,31 @@ class SharedAppShell extends ConsumerWidget {
     final engine = ref.watch(roleEngineProvider);
     final user = ref.watch(currentUserProvider).valueOrNull;
     final unread = ref.watch(sharedUnreadCountProvider);
-    final items = showBottomNav ? buildMenuForRole(engine.activeRole) : const <NavItem>[];
+    // While the role is still resolving, the engine falls back to Doctor —
+    // building that menu would flash the Doctor nav (Home/Patients/Schedule…)
+    // on a partner screen and then swap it. Reserve the bar's space with a
+    // blank placeholder until the real role is known.
+    final roleLoading = showBottomNav && engine.isLoading;
+    final items = (showBottomNav && !roleLoading)
+        ? buildMenuForRole(engine.activeRole)
+        : const <NavItem>[];
     final isTablet = R.isTablet(context);
+
+    // Screens reached via `context.go(...)` (bottom-nav tabs) have nothing to
+    // pop, so Android back would close the app. Send back to the role's home
+    // tab instead when this isn't already it.
+    final homeRoute = (roleLoading || !showBottomNav)
+        ? null
+        : buildMenuForRole(engine.activeRole).firstOrNull?.route;
+    final redirectBack =
+        homeRoute != null && currentRoute != homeRoute && !context.canPop();
+    Widget guard(Widget child) => PopScope(
+          canPop: !redirectBack,
+          onPopInvokedWithResult: (didPop, _) {
+            if (!didPop && homeRoute != null) context.go(homeRoute);
+          },
+          child: child,
+        );
 
     final appBar = _ShellAppBar(
       title: title,
@@ -69,7 +92,7 @@ class SharedAppShell extends ConsumerWidget {
     );
 
     if (isTablet && items.isNotEmpty) {
-      return Scaffold(
+      return guard(Scaffold(
         backgroundColor: AppColors.background,
         appBar: appBar,
         floatingActionButton: floatingActionButton,
@@ -86,10 +109,10 @@ class SharedAppShell extends ConsumerWidget {
             ),
           ],
         ),
-      );
+      ));
     }
 
-    return Scaffold(
+    return guard(Scaffold(
       backgroundColor: AppColors.background,
       appBar: appBar,
       resizeToAvoidBottomInset: true,
@@ -101,13 +124,24 @@ class SharedAppShell extends ConsumerWidget {
       // would double up the bottom inset and leave a visible gap under it.
       body: showBottomNav ? SafeArea(top: false, child: body) : body,
       bottomNavigationBar: items.isEmpty
-          ? null
+          ? (roleLoading
+              ? SafeArea(
+                  top: false,
+                  child: Container(
+                    height: 56,
+                    decoration: const BoxDecoration(
+                      color: AppColors.surface,
+                      border: Border(top: BorderSide(color: AppColors.divider)),
+                    ),
+                  ),
+                )
+              : null)
           : _ShellBottomNav(
               items: items,
               currentRoute: currentRoute,
               onSelect: (item) => navigateToNavItem(context, item, currentRoute),
             ),
-    );
+    ));
   }
 }
 

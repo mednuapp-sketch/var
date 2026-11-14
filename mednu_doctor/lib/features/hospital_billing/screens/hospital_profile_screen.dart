@@ -101,10 +101,19 @@ class _HospitalProfileScreenState extends ConsumerState<HospitalProfileScreen> {
   void _syncFromProfile(HospitalProfile profile) {
     if (_synced) return;
     _synced = true;
-    _contactNameCtrl.text = profile.displayName;
-    _phoneCtrl.text = profile.phone;
-    _currentPhotoUrl = profile.photoUrl;
+    // Show the desk its own submitted-but-unapproved edits on top of the live
+    // values so re-opening the screen doesn't look like a revert.
+    final pend = profile.isActive ? profile.pendingChanges : const <String, dynamic>{};
+    _contactNameCtrl.text = profile.isLinked
+        ? profile.displayName
+        : (pend['contactName'] as String? ?? profile.displayName);
+    _phoneCtrl.text = pend['phone'] as String? ?? profile.phone;
+    _currentPhotoUrl = pend['photoUrl'] as String? ?? profile.photoUrl;
   }
+
+  HospitalProfile? get _liveProfile => ref.read(hospitalProfileProvider).valueOrNull;
+  String get _liveStatus => _liveProfile?.status ?? 'pending';
+  Map<String, dynamic> get _livePending => _liveProfile?.pendingChanges ?? const {};
 
   Future<void> _save(HospitalProfile profile) async {
     final uid = profile.uid;
@@ -125,11 +134,24 @@ class _HospitalProfileScreenState extends ConsumerState<HospitalProfileScreen> {
         uid,
         contactName: profile.isLinked ? profile.contactName : _contactNameCtrl.text.trim(),
         phone: _phoneCtrl.text.trim(),
+        currentStatus: profile.status,
+        pending: profile.pendingChanges,
       );
       if (!mounted) return;
-      FeedbackService.showSuccess(context, 'Profile updated');
-    } catch (_) {
-      if (mounted) FeedbackService.showError(context, "Couldn't save changes. Please try again.");
+      FeedbackService.showSuccess(
+          context,
+          profile.isActive
+              ? 'Changes submitted for admin review. They go live once approved.'
+              : 'Profile updated');
+    } catch (e) {
+      if (mounted) {
+        final msg = e.toString().replaceAll('Exception: ', '');
+        FeedbackService.showError(
+            context,
+            msg.startsWith('Upload your required documents')
+                ? msg
+                : "Couldn't save changes. Please try again.");
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -233,13 +255,18 @@ class _HospitalProfileScreenState extends ConsumerState<HospitalProfileScreen> {
         },
       );
       if (!mounted) return;
-      await HospitalProfileService.updatePhotoUrl(uid, url);
+      await HospitalProfileService.updatePhotoUrl(uid, url,
+          currentStatus: _liveStatus, pending: _livePending);
       if (!mounted) return;
       setState(() {
         _currentPhotoUrl = url;
         _uploading = false;
       });
-      FeedbackService.showSuccess(context, 'Profile photo updated!');
+      FeedbackService.showSuccess(
+          context,
+          _liveStatus == 'active'
+              ? 'Photo submitted for admin review.'
+              : 'Profile photo updated!');
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -257,7 +284,8 @@ class _HospitalProfileScreenState extends ConsumerState<HospitalProfileScreen> {
     setState(() => _uploading = true);
     try {
       await ImageUploadService.deletePartnerProfileImage(profileCollection: 'hospital_profiles', uid: uid);
-      await HospitalProfileService.updatePhotoUrl(uid, '');
+      await HospitalProfileService.updatePhotoUrl(uid, '',
+          currentStatus: _liveStatus, pending: _livePending);
       if (!mounted) return;
       setState(() {
         _currentPhotoUrl = '';
@@ -392,6 +420,7 @@ class _HospitalProfileScreenState extends ConsumerState<HospitalProfileScreen> {
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
+              if (profile.hasPendingChanges) const PendingReviewBanner(),
               FadeInSlide(
                 child: PartnerProfileHero(
                   avatar: _buildAvatar(),

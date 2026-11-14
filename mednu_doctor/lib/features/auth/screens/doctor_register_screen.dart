@@ -8,6 +8,9 @@ import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/services/image_upload_service.dart';
 import '../../../core/utils/validators.dart';
+import '../../../core/utils/specialty_utils.dart';
+import '../../../shared_core/documents/partner_document_models.dart';
+import '../../../shared_core/documents/partner_other_documents.dart';
 import '../../location/models/precise_address.dart';
 import '../../location/screens/map_location_picker_screen.dart';
 
@@ -86,11 +89,21 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
   ];
 
   // ── Step 3: Documents ─────────────────────────────────────────────────────
-  File? _mbbsDegreeFile;
-  File? _specCertFile;
-  File? _mbbsRegCertFile;
-  File? _renewalCertFile;
+  File? _mbbsDegreeFile;      // UG degree
+  File? _specCertFile;        // PG degree
+  File? _mbbsRegCertFile;     // State registration (first)
+  File? _stateReg2File;       // Additional state registrations (optional)
+  File? _stateReg3File;
+  File? _nationalRegFile;     // National registration
+  File? _renewalCertFile;     // optional
+  File? _otherCertFile;       // optional
+
+  /// Optional extra documents (`other_doc_1..5`): typed title + picked image.
+  final Map<String, String> _otherDocLabels = {};
+  final Map<String, File> _otherDocFiles = {};
+  File? _resumeFile;          // optional
   File? _profilePhotoFile;
+  int _extraStateRegs = 0;    // how many optional state-registration slots are shown
 
   // ── Step 4: Declaration ───────────────────────────────────────────────────
   bool _declarationAccepted = false;
@@ -133,12 +146,20 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
 
   // ── Validation helpers ────────────────────────────────────────────────────
 
-  bool get _allDocsUploaded =>
-      _mbbsDegreeFile  != null &&
-      _specCertFile    != null &&
-      _mbbsRegCertFile != null &&
-      _renewalCertFile != null &&
-      _profilePhotoFile != null;
+  /// Dental specialty => BDS/MDS/DCI document set (PG optional, renewal required).
+  bool get _dental => isDentalSpecialty(_effectiveSpecialty);
+
+  /// Files that must be present for the current specialty (always 5).
+  List<File?> get _requiredDocFiles => [
+        _mbbsDegreeFile,
+        if (!_dental) _specCertFile,
+        _mbbsRegCertFile,
+        _nationalRegFile,
+        if (_dental) _renewalCertFile,
+        _profilePhotoFile,
+      ];
+
+  bool get _allDocsUploaded => _requiredDocFiles.every((f) => f != null);
 
   void _nextPage() => _pageController.nextPage(
       duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
@@ -250,10 +271,17 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
     // Re-check every step, not just the documents, so no earlier page's
     // details can be skipped on the way to the final submit.
     if (!_validatePage1() || !_validatePage2()) return;
-    final docFiles = [_mbbsDegreeFile, _specCertFile, _mbbsRegCertFile,
-        _renewalCertFile, _profilePhotoFile];
-    if (!_allDocsUploaded || docFiles.any((f) => !f!.existsSync())) {
-      _snack('Please upload all 5 required documents before submitting');
+    final docFiles = _requiredDocFiles;
+    // Optional files (incl. whichever of PG / renewal is optional for the
+    // current specialty) only need to exist on disk when they were picked.
+    final optionalFiles = [_stateReg2File, _stateReg3File,
+        if (_dental) _specCertFile else _renewalCertFile,
+        _otherCertFile, _resumeFile];
+    if (!_allDocsUploaded ||
+        docFiles.any((f) => !f!.existsSync()) ||
+        optionalFiles.any((f) => f != null && !f.existsSync()) ||
+        _otherDocFiles.values.any((f) => !f.existsSync())) {
+      _snack('Please upload all required documents before submitting');
       return;
     }
     if (!_declarationAccepted || !_termsAccepted) {
@@ -269,19 +297,39 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
     setState(() { _isLoading = true; _uploadStatus = 'Uploading documents…'; });
 
     try {
-      // Upload all 5 documents to Firebase Storage
+      // Upload required + any optional documents the doctor chose to add.
+      final files = <String, File?>{
+        'mbbs_degree':       _mbbsDegreeFile,
+        'spec_cert':         _specCertFile,
+        'mbbs_reg_cert':     _mbbsRegCertFile,
+        'state_reg_cert_2':  _stateReg2File,
+        'state_reg_cert_3':  _stateReg3File,
+        'national_reg_cert': _nationalRegFile,
+        'renewal_cert':      _renewalCertFile,
+        'other_cert':        _otherCertFile,
+        'resume':            _resumeFile,
+        'profile_photo':     _profilePhotoFile,
+      };
       final uploads = <String, Future<String>>{
-        'mbbs_degree':    ImageUploadService.uploadDoctorDocument(file: _mbbsDegreeFile!,  uid: uid, docType: 'mbbs_degree'),
-        'spec_cert':      ImageUploadService.uploadDoctorDocument(file: _specCertFile!,    uid: uid, docType: 'spec_cert'),
-        'mbbs_reg_cert':  ImageUploadService.uploadDoctorDocument(file: _mbbsRegCertFile!, uid: uid, docType: 'mbbs_reg_cert'),
-        'renewal_cert':   ImageUploadService.uploadDoctorDocument(file: _renewalCertFile!, uid: uid, docType: 'renewal_cert'),
-        'profile_photo':  ImageUploadService.uploadDoctorDocument(file: _profilePhotoFile!, uid: uid, docType: 'profile_photo'),
+        for (final e in files.entries)
+          if (e.value != null)
+            e.key: ImageUploadService.uploadDoctorDocument(
+                file: e.value!, uid: uid, docType: e.key),
       };
 
       final urls = <String, String>{};
       for (final entry in uploads.entries) {
         if (mounted) setState(() => _uploadStatus = 'Uploading ${_docLabel(entry.key)}…');
         urls[entry.key] = await entry.value;
+      }
+      // Optional "Other documents" — skipped entirely when none were added.
+      final docLabels = <String, String>{};
+      for (final e in _otherDocFiles.entries) {
+        final title = _otherDocLabels[e.key] ?? '';
+        if (mounted) setState(() => _uploadStatus = 'Uploading ${title.isEmpty ? 'other document' : title}…');
+        urls[e.key] = await ImageUploadService.uploadDoctorDocument(
+            file: e.value, uid: uid, docType: e.key);
+        if (title.isNotEmpty) docLabels[e.key] = title;
       }
 
       if (mounted) setState(() => _uploadStatus = 'Saving profile…');
@@ -306,6 +354,7 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
         clinicLng:          _needsClinic ? _clinicLng : null,
         clinicCity:         _needsClinic ? _clinicCity : '',
         documentUrls:       urls,
+        documentLabels:     docLabels,
       );
 
       if (mounted) context.go(AppRoutes.verificationPending);
@@ -317,13 +366,8 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
     }
   }
 
-  String _docLabel(String key) => const {
-    'mbbs_degree':   'MBBS Degree',
-    'spec_cert':     'Specialization Certificate',
-    'mbbs_reg_cert': 'Registration Certificate',
-    'renewal_cert':  'Renewal Certificate',
-    'profile_photo': 'Profile Photo',
-  }[key] ?? key;
+  String _docLabel(String key) =>
+      doctorDocLabels(dental: _dental)[key] ?? key;
 
   // ── Build ─────────────────────────────────────────────────────────────────
 
@@ -679,12 +723,71 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
       ),
   ];
 
+  // ── Optional "Other documents" (other_doc_1..5, typed titles) ────────────
+
+  List<Widget> _otherDocsBlock() {
+    final keys = _otherDocLabels.keys.toList()..sort();
+    final atCap = keys.length >= PartnerDocumentType.maxOtherDocs;
+    return [
+      const OtherDocumentsHeading(),
+      const SizedBox(height: 4),
+      const Text(
+        'If you have any other documents, you can add them here (up to 5). Optional.',
+        style: AppTextStyles.caption,
+      ),
+      const SizedBox(height: 10),
+      for (final k in keys) ...[
+        _DocUploadTile(
+          title: _otherDocLabels[k] ?? 'Other document',
+          subtitle: 'Optional · tap to replace',
+          icon: Icons.description_rounded,
+          file: _otherDocFiles[k],
+          onTap: () => _pickDoc(_otherDocLabels[k] ?? 'Other document',
+              (f) => _otherDocFiles[k] = f),
+        ),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton.icon(
+            onPressed: () => setState(() {
+              _otherDocLabels.remove(k);
+              _otherDocFiles.remove(k);
+            }),
+            icon: const Icon(Icons.close_rounded, size: 16),
+            label: const Text('Remove'),
+          ),
+        ),
+      ],
+      SizedBox(
+        width: double.infinity,
+        child: OutlinedButton.icon(
+          onPressed: atCap ? null : _addOtherDoc,
+          icon: const Icon(Icons.add_rounded),
+          label: Text(atCap
+              ? 'Maximum ${PartnerDocumentType.maxOtherDocs} documents added'
+              : 'Add another document'),
+        ),
+      ),
+      const SizedBox(height: 12),
+    ];
+  }
+
+  Future<void> _addOtherDoc() async {
+    final key = PartnerDocumentType.nextFreeOtherDocKey(_otherDocLabels.keys);
+    if (key == null) return;
+    final title = await askOtherDocumentTitle(context);
+    if (title == null || !mounted) return;
+    await _pickDoc(title, (f) {
+      _otherDocLabels[key] = title;
+      _otherDocFiles[key] = f;
+    });
+  }
+
   // ── PAGE 3 — Document Upload ──────────────────────────────────────────────
 
   Widget _buildPage3() => SingleChildScrollView(
     padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      const _SectionHeader(icon: Icons.folder_rounded, title: 'Upload Documents', subtitle: 'All 5 documents are mandatory'),
+      const _SectionHeader(icon: Icons.folder_rounded, title: 'Upload Documents', subtitle: 'Documents marked optional can be skipped'),
       const SizedBox(height: 8),
       Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -704,35 +807,103 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
       ),
       const SizedBox(height: 20),
       _DocUploadTile(
-        title: 'MBBS Degree Certificate',
-        subtitle: 'Your MBBS degree from a recognized university',
+        title: _dental ? 'BDS Degree' : 'UG Degree',
+        subtitle: _dental
+            ? 'Bachelor of Dental Surgery degree from a recognised university'
+            : 'MBBS / BDS / BAMS or equivalent undergraduate degree',
         icon: Icons.school_rounded,
         file: _mbbsDegreeFile,
-        onTap: () => _pickDoc('MBBS Degree', (f) => _mbbsDegreeFile = f),
+        onTap: () => _pickDoc(_docLabel('mbbs_degree'), (f) => _mbbsDegreeFile = f),
       ),
       const SizedBox(height: 12),
       _DocUploadTile(
-        title: 'Specialization Certificate',
-        subtitle: 'MD / MS / DNB or equivalent post-graduate degree',
+        title: _dental ? 'MDS Degree (optional)' : 'PG Degree',
+        subtitle: _dental
+            ? 'Master of Dental Surgery or other post-graduate dental degree'
+            : 'MD / MS / DNB or equivalent post-graduate degree',
         icon: Icons.workspace_premium_rounded,
         file: _specCertFile,
-        onTap: () => _pickDoc('Specialization Certificate', (f) => _specCertFile = f),
+        onTap: () => _pickDoc(_docLabel('spec_cert'), (f) => _specCertFile = f),
       ),
       const SizedBox(height: 12),
       _DocUploadTile(
-        title: 'MBBS Registration Certificate',
-        subtitle: 'MCI / State Medical Council registration',
+        title: _dental ? 'State Dental Council Registration' : 'Registration - State',
+        subtitle: _dental
+            ? 'Registration with your State Dental Council'
+            : 'State Medical Council registration',
         icon: Icons.card_membership_rounded,
         file: _mbbsRegCertFile,
-        onTap: () => _pickDoc('MBBS Registration Certificate', (f) => _mbbsRegCertFile = f),
+        onTap: () => _pickDoc(_docLabel('mbbs_reg_cert'), (f) => _mbbsRegCertFile = f),
+      ),
+      if (_extraStateRegs >= 1) ...[
+      const SizedBox(height: 12),
+      _DocUploadTile(
+        title: _dental ? 'State Dental Council Registration 2 (optional)' : 'Registration - State 2 (optional)',
+        subtitle: _dental
+            ? 'Registration with another State Dental Council'
+            : 'Registration with another State Medical Council',
+        icon: Icons.card_membership_rounded,
+        file: _stateReg2File,
+        onTap: () => _pickDoc(_docLabel('state_reg_cert_2'), (f) => _stateReg2File = f),
+      ),
+      ],
+      if (_extraStateRegs >= 2) ...[
+      const SizedBox(height: 12),
+      _DocUploadTile(
+        title: _dental ? 'State Dental Council Registration 3 (optional)' : 'Registration - State 3 (optional)',
+        subtitle: _dental
+            ? 'Registration with another State Dental Council'
+            : 'Registration with another State Medical Council',
+        icon: Icons.card_membership_rounded,
+        file: _stateReg3File,
+        onTap: () => _pickDoc(_docLabel('state_reg_cert_3'), (f) => _stateReg3File = f),
+      ),
+      ],
+      if (_extraStateRegs < 2)
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: () => setState(() => _extraStateRegs++),
+            icon: const Icon(Icons.add_rounded, size: 18),
+            label: const Text('Add another state registration'),
+          ),
+        ),
+      const SizedBox(height: 12),
+      _DocUploadTile(
+        title: _dental ? 'Dental Council of India (DCI) Registration' : 'Registration - National',
+        subtitle: _dental
+            ? 'Dental Council of India registration'
+            : 'National Medical Commission (NMC) registration',
+        icon: Icons.verified_user_rounded,
+        file: _nationalRegFile,
+        onTap: () => _pickDoc(_dental ? 'DCI Registration' : 'National Registration', (f) => _nationalRegFile = f),
       ),
       const SizedBox(height: 12),
       _DocUploadTile(
-        title: 'Renewal Certificate',
-        subtitle: 'Medical Council license renewal document',
+        title: _dental ? 'Renewal Certificate' : 'Renewal Certificate (optional)',
+        subtitle: _dental
+            ? 'Dental Council registration renewal document'
+            : 'Medical Council license renewal document',
         icon: Icons.autorenew_rounded,
         file: _renewalCertFile,
         onTap: () => _pickDoc('Renewal Certificate', (f) => _renewalCertFile = f),
+      ),
+      const SizedBox(height: 12),
+      _DocUploadTile(
+        title: _dental ? 'Other Certificates (optional)' : 'Other Certificate (optional)',
+        subtitle: 'Any additional qualification or certificate',
+        icon: Icons.description_rounded,
+        file: _otherCertFile,
+        onTap: () => _pickDoc('Other Certificate', (f) => _otherCertFile = f),
+      ),
+      const SizedBox(height: 12),
+      ..._otherDocsBlock(),
+      _DocUploadTile(
+        title: 'Resume (optional)',
+        subtitle: 'Your CV / professional resume',
+        icon: Icons.article_rounded,
+        file: _resumeFile,
+        onTap: () => _pickDoc('Resume', (f) => _resumeFile = f),
       ),
       const SizedBox(height: 12),
       _DocUploadTile(
@@ -745,16 +916,15 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
       const SizedBox(height: 20),
       // Progress indicator
       _DocsProgressBar(
-        uploaded: [_mbbsDegreeFile, _specCertFile, _mbbsRegCertFile, _renewalCertFile, _profilePhotoFile]
-            .where((f) => f != null).length,
-        total: 5,
+        uploaded: _requiredDocFiles.where((f) => f != null).length,
+        total: _requiredDocFiles.length,
       ),
       const SizedBox(height: 24),
       _NextButton(
         label: 'Next: Declaration',
         icon: Icons.arrow_forward_rounded,
         enabled: _allDocsUploaded,
-        onTap: _allDocsUploaded ? _nextPage : () => _snack('Please upload all 5 required documents'),
+        onTap: _allDocsUploaded ? _nextPage : () => _snack('Please upload all required documents'),
       ),
     ]),
   );

@@ -171,9 +171,6 @@
       <div class="nav-item" data-tab="settlements" data-title="Settlements" title="Partner payout settlement tracking">
         <i class="ti ti-cash nav-icon" aria-hidden="true"></i> Settlements
       </div>
-      <div class="nav-item" data-tab="commission-rules" data-title="Commission" title="Commission percentage configured per service type">
-        <i class="ti ti-percentage nav-icon" aria-hidden="true"></i> Commission
-      </div>
       <div class="nav-item" data-tab="coupons" data-title="Coupons" title="Discount coupon codes">
         <i class="ti ti-ticket nav-icon" aria-hidden="true"></i> Coupons
       </div>
@@ -694,7 +691,7 @@
             </div>
             <div class="form-group">
               <label class="form-label">Specialty <span style="color:var(--danger)">*</span></label>
-              <select id="dr-specialty" class="filter-select" style="width:100%;padding:10px 12px;height:auto;"></select>
+              <select id="dr-specialty" class="filter-select" style="width:100%;padding:10px 12px;height:auto;" onchange="applyDoctorDocLabels()"></select>
             </div>
             <div class="form-group">
               <label class="form-label">Gender <span style="color:var(--danger)">*</span></label>
@@ -732,7 +729,7 @@
               <div class="doc-upload-tile" id="doc-tile-mbbs_degree">
                 <div class="doc-upload-icon"><i class="ti ti-certificate"></i></div>
                 <div class="doc-upload-info">
-                  <div class="doc-upload-label">MBBS Degree Certificate</div>
+                  <div class="doc-upload-label">UG Degree</div>
                   <div class="doc-upload-status" id="doc-status-mbbs_degree">Not uploaded</div>
                 </div>
                 <input type="file" id="doc-file-mbbs_degree" accept="image/*,.pdf" style="display:none;" onchange="onDoctorDocSelected(event,'mbbs_degree')" />
@@ -743,7 +740,7 @@
               <div class="doc-upload-tile" id="doc-tile-spec_cert">
                 <div class="doc-upload-icon"><i class="ti ti-certificate"></i></div>
                 <div class="doc-upload-info">
-                  <div class="doc-upload-label">Specialization Certificate</div>
+                  <div class="doc-upload-label">PG Degree</div>
                   <div class="doc-upload-status" id="doc-status-spec_cert">Not uploaded</div>
                 </div>
                 <input type="file" id="doc-file-spec_cert" accept="image/*,.pdf" style="display:none;" onchange="onDoctorDocSelected(event,'spec_cert')" />
@@ -754,7 +751,7 @@
               <div class="doc-upload-tile" id="doc-tile-mbbs_reg_cert">
                 <div class="doc-upload-icon"><i class="ti ti-file-certificate"></i></div>
                 <div class="doc-upload-info">
-                  <div class="doc-upload-label">MBBS Registration Certificate</div>
+                  <div class="doc-upload-label">Registration - State</div>
                   <div class="doc-upload-status" id="doc-status-mbbs_reg_cert">Not uploaded</div>
                 </div>
                 <input type="file" id="doc-file-mbbs_reg_cert" accept="image/*,.pdf" style="display:none;" onchange="onDoctorDocSelected(event,'mbbs_reg_cert')" />
@@ -762,14 +759,69 @@
                   <i class="ti ti-upload"></i> Upload
                 </button>
               </div>
+              <div class="doc-upload-tile" id="doc-tile-state_reg_cert_2">
+                <div class="doc-upload-icon"><i class="ti ti-file-certificate"></i></div>
+                <div class="doc-upload-info">
+                  <div class="doc-upload-label">Registration - State 2 (optional)</div>
+                  <div class="doc-upload-status" id="doc-status-state_reg_cert_2">Not uploaded</div>
+                </div>
+                <input type="file" id="doc-file-state_reg_cert_2" accept="image/*,.pdf" style="display:none;" onchange="onDoctorDocSelected(event,'state_reg_cert_2')" />
+                <button type="button" class="btn btn-outline doc-upload-btn" id="doc-btn-state_reg_cert_2" onclick="document.getElementById('doc-file-state_reg_cert_2').click()">
+                  <i class="ti ti-upload"></i> Upload
+                </button>
+              </div>
+              <div class="doc-upload-tile" id="doc-tile-state_reg_cert_3">
+                <div class="doc-upload-icon"><i class="ti ti-file-certificate"></i></div>
+                <div class="doc-upload-info">
+                  <div class="doc-upload-label">Registration - State 3 (optional)</div>
+                  <div class="doc-upload-status" id="doc-status-state_reg_cert_3">Not uploaded</div>
+                </div>
+                <input type="file" id="doc-file-state_reg_cert_3" accept="image/*,.pdf" style="display:none;" onchange="onDoctorDocSelected(event,'state_reg_cert_3')" />
+                <button type="button" class="btn btn-outline doc-upload-btn" id="doc-btn-state_reg_cert_3" onclick="document.getElementById('doc-file-state_reg_cert_3').click()">
+                  <i class="ti ti-upload"></i> Upload
+                </button>
+              </div>
+              <div class="doc-upload-tile" id="doc-tile-national_reg_cert">
+                <div class="doc-upload-icon"><i class="ti ti-rosette-discount-check"></i></div>
+                <div class="doc-upload-info">
+                  <div class="doc-upload-label">Registration - National</div>
+                  <div class="doc-upload-status" id="doc-status-national_reg_cert">Not uploaded</div>
+                </div>
+                <input type="file" id="doc-file-national_reg_cert" accept="image/*,.pdf" style="display:none;" onchange="onDoctorDocSelected(event,'national_reg_cert')" />
+                <button type="button" class="btn btn-outline doc-upload-btn" id="doc-btn-national_reg_cert" onclick="document.getElementById('doc-file-national_reg_cert').click()">
+                  <i class="ti ti-upload"></i> Upload
+                </button>
+              </div>
               <div class="doc-upload-tile" id="doc-tile-renewal_cert">
                 <div class="doc-upload-icon"><i class="ti ti-refresh"></i></div>
                 <div class="doc-upload-info">
-                  <div class="doc-upload-label">Renewal Certificate</div>
+                  <div class="doc-upload-label">Renewal Certificate (optional)</div>
                   <div class="doc-upload-status" id="doc-status-renewal_cert">Not uploaded</div>
                 </div>
                 <input type="file" id="doc-file-renewal_cert" accept="image/*,.pdf" style="display:none;" onchange="onDoctorDocSelected(event,'renewal_cert')" />
                 <button type="button" class="btn btn-outline doc-upload-btn" id="doc-btn-renewal_cert" onclick="document.getElementById('doc-file-renewal_cert').click()">
+                  <i class="ti ti-upload"></i> Upload
+                </button>
+              </div>
+              <div class="doc-upload-tile" id="doc-tile-other_cert">
+                <div class="doc-upload-icon"><i class="ti ti-file-description"></i></div>
+                <div class="doc-upload-info">
+                  <div class="doc-upload-label">Other Certificate (optional)</div>
+                  <div class="doc-upload-status" id="doc-status-other_cert">Not uploaded</div>
+                </div>
+                <input type="file" id="doc-file-other_cert" accept="image/*,.pdf" style="display:none;" onchange="onDoctorDocSelected(event,'other_cert')" />
+                <button type="button" class="btn btn-outline doc-upload-btn" id="doc-btn-other_cert" onclick="document.getElementById('doc-file-other_cert').click()">
+                  <i class="ti ti-upload"></i> Upload
+                </button>
+              </div>
+              <div class="doc-upload-tile" id="doc-tile-resume">
+                <div class="doc-upload-icon"><i class="ti ti-file-cv"></i></div>
+                <div class="doc-upload-info">
+                  <div class="doc-upload-label">Resume (optional)</div>
+                  <div class="doc-upload-status" id="doc-status-resume">Not uploaded</div>
+                </div>
+                <input type="file" id="doc-file-resume" accept="image/*,.pdf" style="display:none;" onchange="onDoctorDocSelected(event,'resume')" />
+                <button type="button" class="btn btn-outline doc-upload-btn" id="doc-btn-resume" onclick="document.getElementById('doc-file-resume').click()">
                   <i class="ti ti-upload"></i> Upload
                 </button>
               </div>
@@ -965,7 +1017,7 @@
           </div>
         </div>
 
-        <!-- Settlement engine analytics: Coupon usage / AOV / Commission by service / Top providers / Refund rate -->
+        <!-- Settlement engine analytics: Coupon usage / AOV / Platform fee by service / Top providers / Refund rate -->
         <div class="grid-2" style="margin-top:16px;">
           <div class="card">
             <div class="card-header"><span class="card-title">Coupon Usage — Redemptions per Coupon</span></div>
@@ -982,9 +1034,9 @@
         </div>
         <div class="grid-2">
           <div class="card">
-            <div class="card-header"><span class="card-title">Commission Earned by Service</span></div>
+            <div class="card-header"><span class="card-title">Platform Fee Revenue by Service</span></div>
             <div class="chart-container" style="height:220px;">
-              <canvas id="commission-by-service-chart" role="img" aria-label="Pie chart of commission by service type">Commission earned grouped by service type.</canvas>
+              <canvas id="commission-by-service-chart" role="img" aria-label="Pie chart of platform fee revenue by service type">Platform fee revenue grouped by service type.</canvas>
             </div>
           </div>
           <div class="card">
@@ -1118,7 +1170,6 @@
                 <option value="payments">Revenue &amp; Payments</option>
                 <option value="transactions">Wallet Transactions</option>
                 <option value="settlements">Partner Settlements</option>
-                <option value="commission_rules">Commission Rules</option>
                 <option value="coupons">Coupons</option>
                 <option value="refunds">Refunds</option>
                 <option value="referrals">Referrals</option>
@@ -4427,7 +4478,7 @@
             <div class="metric-icon" style="background:#e6f4ea;color:#1e8e3e;"><i class="ti ti-percentage"></i></div>
             <div class="metric-info">
               <div class="metric-value" id="stl-commission">—</div>
-              <div class="metric-label">Commission Earned</div>
+              <div class="metric-label">Platform Fee Revenue</div>
             </div>
           </div>
           <div class="metric-card">
@@ -4489,6 +4540,114 @@
           </div>
         </div>
 
+        <!-- Director-only switches (hidden for other roles; firestore.rules enforce it too) -->
+        <div class="card" id="director-money-settings" style="margin-bottom:16px;display:none;">
+          <div class="card-header"><span class="card-title">Money Settings (Director only)</span></div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+            <div style="border:1px solid #f5c2c0;background:#fff5f5;border-radius:10px;padding:14px;">
+              <label style="display:flex;align-items:center;gap:10px;font-weight:600;cursor:pointer;">
+                <input type="checkbox" id="test-credit-enabled" onchange="saveTestCreditEnabled(this)" />
+                Credit partner wallets for completed TEST bookings
+              </label>
+              <div style="margin-top:8px;font-size:12.5px;color:#b3261e;font-weight:600;">
+                TEST PROJECTS ONLY: when on, completed test bookings credit partner wallets with money that does not exist. Keep OFF in production.
+              </div>
+              <div id="test-credit-status" style="margin-top:6px;font-size:12px;color:var(--text-muted);"></div>
+            </div>
+            <div style="border:1px solid var(--border,#e3e8ef);border-radius:10px;padding:14px;">
+              <div style="font-weight:600;margin-bottom:6px;">Referral reward</div>
+              <div style="font-size:12.5px;color:var(--text-secondary);margin-bottom:8px;">
+                Paid to the <b>referrer only</b>, once, when the person they referred makes their first booking. The referred customer gets nothing. Off or &#8377;0 = no reward.
+              </div>
+              <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:8px;cursor:pointer;">
+                <input type="checkbox" id="referral-reward-enabled" /> Referral reward enabled
+              </label>
+              <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
+                <div class="form-group" style="margin:0;">
+                  <label class="form-label">Reward amount (&#8377;)</label>
+                  <input id="referral-reward-amount" type="number" min="0" step="1" class="form-input" style="width:140px;" placeholder="0" />
+                </div>
+                <button class="btn-publish" onclick="saveReferralReward()" id="save-referral-reward-btn"><i class="ti ti-device-floppy"></i> Save</button>
+              </div>
+              <div id="referral-reward-status" style="margin-top:6px;font-size:12px;color:var(--text-muted);"></div>
+            </div>
+          </div>
+          <div style="border:1px solid var(--border,#e3e8ef);border-radius:10px;padding:14px;margin-top:16px;">
+            <div style="font-weight:600;margin-bottom:6px;">Platform fee per service (shown to patients at checkout)</div>
+            <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:10px;cursor:pointer;">
+              <input type="checkbox" id="platform-fee-enabled" /> Platform fees enabled (overall switch)
+            </label>
+            <div class="form-group" style="margin:0 0 10px;">
+              <label class="form-label">Default fee (&#8377;) &mdash; used for any service without its own value</label>
+              <input id="platform-fee-default" type="number" min="0" step="1" class="form-input" style="width:140px;" placeholder="0" />
+            </div>
+            <div id="platform-fee-services" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;"></div>
+            <div style="margin-top:16px;padding-top:14px;border-top:1px dashed var(--border,#e3e8ef);">
+              <div style="font-weight:600;margin-bottom:4px;">Partner-specific fees</div>
+              <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">Overrides the service/default fee for one partner profile (e.g. a special pharmacy or doctor). Partners always receive their base price; the platform earns only this fee.</div>
+              <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+                <div class="form-group" style="margin:0;flex:1 1 260px;position:relative;">
+                  <label class="form-label">Find partner (name, phone, email or ID)</label>
+                  <input id="pf-partner-search" type="text" class="form-input" autocomplete="off" placeholder="Start typing..." oninput="pfPartnerSearch()" />
+                  <div id="pf-partner-results" style="display:none;position:absolute;left:0;right:0;top:100%;z-index:20;background:#fff;border:1px solid var(--border,#e3e8ef);border-radius:10px;max-height:240px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.12);"></div>
+                </div>
+                <div class="form-group" style="margin:0;width:140px;">
+                  <label class="form-label">Fee (&#8377;)</label>
+                  <input id="pf-partner-amount" type="number" min="0" step="1" class="form-input" placeholder="0" />
+                </div>
+                <button class="btn-publish" type="button" onclick="pfAddProvider()" id="pf-partner-add-btn"><i class="ti ti-plus"></i> Add / Update</button>
+              </div>
+              <div id="pf-partner-selected" style="margin-top:8px;font-size:12px;color:var(--text-secondary);"></div>
+              <div style="overflow-x:auto;margin-top:10px;">
+                <table class="data-table" style="width:100%;min-width:420px;">
+                  <thead><tr><th>Partner</th><th>Role</th><th>Fee</th><th></th></tr></thead>
+                  <tbody id="pf-partner-table"><tr><td colspan="4" style="color:var(--text-muted);">No partner-specific fees.</td></tr></tbody>
+                </table>
+              </div>
+              <div style="margin-top:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+                <button class="btn-publish" type="button" onclick="savePartnerFees()" id="pf-partner-save-btn"><i class="ti ti-device-floppy"></i> Save partner fees</button>
+                <span id="pf-partner-status" style="font-size:12px;color:var(--text-muted);"></span>
+              </div>
+            </div>
+            <div style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+              <button class="btn-publish" onclick="savePlatformFee()" id="save-platform-fee-btn"><i class="ti ti-device-floppy"></i> Save all</button>
+              <span id="platform-fee-status" style="font-size:12px;color:var(--text-muted);"></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Ambulance rate ranges (Director only; shown by loadAmbulanceRates) -->
+        <div class="card" id="ambulance-rates-card" style="margin-bottom:16px;display:none;">
+          <div class="card-header"><span class="card-title">Ambulance Rates (per vehicle type)</span></div>
+          <div style="font-size:12px;color:var(--text-muted,#5f6368);margin:0 0 12px;">
+            Each vehicle type has a rate range. Customers see the range and are charged the maximum at booking;
+            the driver sets their own rate inside the range and the final fare is that rate.
+          </div>
+          <div id="ambulance-rates-rows" style="display:flex;flex-direction:column;gap:12px;"></div>
+          <div style="margin-top:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+            <button class="btn-publish" onclick="saveAmbulanceRates()" id="save-ambulance-rates-btn">
+              <i class="ti ti-device-floppy"></i> Save Ambulance Rates
+            </button>
+            <span id="ambulance-rates-status" style="font-size:12px;color:var(--text-muted,#5f6368);"></span>
+          </div>
+          <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border,#e8eaed);">
+            <div style="font-weight:600;margin-bottom:4px;">Unaccepted-request alert</div>
+            <div style="font-size:12px;color:var(--text-muted,#5f6368);margin:0 0 12px;">
+              Alert the admin once if no ambulance has accepted a request after this many minutes (1 to 240).
+            </div>
+            <div style="display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;">
+              <div class="form-group" style="margin:0;width:160px;">
+                <label class="form-label">Alert after (minutes)</label>
+                <input type="number" min="1" max="240" step="1" class="form-input" id="amb-alert-minutes" value="10">
+              </div>
+              <button class="btn-publish" onclick="saveAmbulanceAlertMinutes()" id="save-ambulance-alert-btn">
+                <i class="ti ti-device-floppy"></i> Save Alert Time
+              </button>
+              <span id="ambulance-alert-status" style="font-size:12px;color:var(--text-muted,#5f6368);"></span>
+            </div>
+          </div>
+        </div>
+
         <!-- Provider settlements table -->
         <div class="card">
           <div class="card-header">
@@ -4504,91 +4663,13 @@
                   <th style="width:32px;"><input type="checkbox" id="settlement-select-all" onchange="toggleSelectAllSettlements(this.checked)" /></th>
                   <th>Provider</th>
                   <th>Earnings</th>
-                  <th>Commission</th>
+                  <th>Platform fee</th>
                   <th>Payable</th>
                   <th>Status</th>
                   <th>Actions</th>
                 </tr>
               </thead>
               <tbody id="settlements-tbody"><tr><td colspan="7" class="loading">Loading settlements...</td></tr></tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
-      <!-- ===== COMMISSION RULES TAB ===== -->
-      <div id="tab-commission-rules" class="tab-section">
-        <div class="card" style="margin-bottom:16px;">
-          <div class="card-header">
-            <span class="card-title" id="commission-form-title">Commission Rule — select a service below to edit</span>
-            <button class="btn btn-outline" id="cancel-commission-btn" style="display:none;" onclick="cancelCommissionRuleEditor()">
-              <i class="ti ti-x"></i> Cancel
-            </button>
-          </div>
-          <div id="commission-editor" style="display:none;">
-            <input type="hidden" id="commission-service-type" />
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
-              <div class="form-group" style="margin:0;">
-                <label class="form-label">Rule Type</label>
-                <select id="commission-type" class="filter-select" style="width:100%;" onchange="commissionTypeChanged()">
-                  <option value="percentage">Percentage</option>
-                  <option value="fixed">Fixed Amount</option>
-                  <option value="hybrid">Hybrid (% + Fixed)</option>
-                </select>
-              </div>
-              <div class="form-group" style="margin:0;" id="commission-percentage-group">
-                <label class="form-label">Percentage (%)</label>
-                <input id="commission-percentage" type="number" min="0" max="100" step="0.01" class="form-input" placeholder="e.g. 15" />
-              </div>
-              <div class="form-group" style="margin:0;" id="commission-fixed-group">
-                <label class="form-label">Fixed Amount (₹)</label>
-                <input id="commission-fixed" type="number" min="0" step="0.01" class="form-input" placeholder="e.g. 50" />
-              </div>
-            </div>
-
-            <!-- Provider overrides -->
-            <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:12px;">
-              <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="toggleOverridesPanel()">
-                <span class="form-label" style="margin:0;">Provider Overrides <span id="commission-overrides-count" class="form-hint"></span></span>
-                <i class="ti ti-chevron-down" id="commission-overrides-chevron"></i>
-              </div>
-              <div id="commission-overrides-panel" style="display:none;margin-top:10px;">
-                <div id="commission-overrides-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px;"></div>
-                <div style="display:grid;grid-template-columns:1.5fr 1fr 1fr auto;gap:8px;align-items:end;">
-                  <div class="form-group" style="margin:0;">
-                    <label class="form-label">Provider ID</label>
-                    <input id="override-provider-id" type="text" class="form-input" placeholder="Provider document ID" />
-                  </div>
-                  <div class="form-group" style="margin:0;">
-                    <label class="form-label">Type</label>
-                    <select id="override-type" class="filter-select" style="width:100%;">
-                      <option value="percentage">Percentage</option>
-                      <option value="fixed">Fixed</option>
-                    </select>
-                  </div>
-                  <div class="form-group" style="margin:0;">
-                    <label class="form-label">Value</label>
-                    <input id="override-value" type="number" min="0" step="0.01" class="form-input" placeholder="Value" />
-                  </div>
-                  <button class="btn btn-outline" onclick="addCommissionOverride()" style="height:38px;"><i class="ti ti-plus"></i> Add</button>
-                </div>
-              </div>
-            </div>
-
-            <div style="margin-top:16px;text-align:right;">
-              <button id="save-commission-btn" class="btn-publish" onclick="saveCommissionRule()">
-                <i class="ti ti-device-floppy"></i> Save Rule
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card-header"><span class="card-title">Service Commission Rules</span></div>
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>Service Type</th><th>Rule Type</th><th>Value</th><th>Provider Overrides</th><th>Last Updated</th><th>Actions</th></tr></thead>
-              <tbody id="commission-rules-tbody"><tr><td colspan="6" class="loading">Loading commission rules...</td></tr></tbody>
             </table>
           </div>
         </div>
@@ -4776,6 +4857,21 @@
 
       <!-- ===== REFUNDS TAB ===== -->
       <div id="tab-refunds" class="tab-section">
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-header">
+            <span class="card-title">Refund Requests <span id="refund-requests-count" style="font-weight:500;color:var(--text-muted);font-size:12px;"></span></span>
+          </div>
+          <div style="font-size:12.5px;color:var(--text-secondary);margin-bottom:10px;">
+            Customers who cancelled a paid booking <b>after</b> the provider accepted it (before it started). Cancellations before acceptance are refunded automatically.
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Booking</th><th>Patient</th><th>Amount</th><th>Reason</th><th>Status</th><th>Requested</th><th>Actions</th></tr></thead>
+              <tbody id="refund-requests-tbody"><tr><td colspan="7" class="loading">Loading requests...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+
         <div class="card" style="margin-bottom:16px;">
           <div class="card-header"><span class="card-title">Issue Refund</span></div>
           <div style="display:grid;grid-template-columns:2fr auto;gap:12px;align-items:end;">

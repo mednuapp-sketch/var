@@ -1,6 +1,8 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import '../../../core/services/fcm_service.dart';
+import '../../../core/services/partner_presence_shutdown.dart';
 import '../../../shared_core/services/role_prefs.dart';
 
 class DoctorAuthService {
@@ -70,6 +72,7 @@ class DoctorAuthService {
     double? clinicLng,
     String clinicCity = '',
     Map<String, String> documentUrls = const {},
+    Map<String, String> documentLabels = const {},
   }) async {
     String? fcmToken;
     try {
@@ -100,6 +103,12 @@ class DoctorAuthService {
       'totalReviews': 0,
       'totalConsultations': 0,
       'documents': documentUrls,
+      if (documentLabels.isNotEmpty) 'documentLabels': documentLabels,
+      // The registration "Profile Photo" doubles as the public avatar —
+      // nothing else ever copies documents.profile_photo into photoUrl, so
+      // approved doctors showed no photo to patients until they re-uploaded.
+      if ((documentUrls['profile_photo'] ?? '').isNotEmpty)
+        'photoUrl': documentUrls['profile_photo'],
       'declarationAccepted': true,
       'termsAccepted': true,
       'termsAcceptedAt': FieldValue.serverTimestamp(),
@@ -144,6 +153,9 @@ class DoctorAuthService {
   /// is keyed by device, not by uid, so it has to be wiped on sign-out
   /// rather than on sign-in.
   static Future<void> signOut() async {
+    await PartnerPresenceShutdown.goOfflineAll();
+    // Needs the live auth session (Firestore rules) — must run before signOut.
+    await FcmService.clearTokenOnSignOut();
     await RolePrefs.clear();
     await _auth.signOut();
   }
