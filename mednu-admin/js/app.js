@@ -97,6 +97,11 @@ const ROLE_LABELS = {
 };
 
 function isDirector() { return currentAdminRole === 'director'; }
+// Money actions (approve/hold/pay settlements, refunds, settlement batch, manual
+// reminders, settlement frequency) are Director/Finance only on the server.
+// HR can still VIEW those tabs; the action controls are hidden for them.
+function canMoveMoney() { return currentAdminRole === 'director' || currentAdminRole === 'finance'; }
+const VIEW_ONLY_HTML = '<span style="color:var(--text-muted,#888);font-size:12px;">View only</span>';
 
 function canAccessTab(tab) {
   // The Director already has the full Overview — "My Dashboard" is for the other profiles.
@@ -314,6 +319,7 @@ function switchTab(tab, title, navItem) {
     loadCampaigns();
   }
   if (tab === 'settlements' && !_settlementsInited) { _settlementsInited = true; initSettlementDashboardListeners(); }
+  if (tab === 'settlements' && typeof loadWeightLossPlans === 'function') loadWeightLossPlans(false);
   if (tab === 'refunds' && !_refundsInited) { _refundsInited = true; loadRefunds(); }
   if (tab === 'reports' || tab === 'quality-reports') loadReportsList();
 }
@@ -2824,7 +2830,7 @@ function initRequestsListener() {
       snap.forEach(doc => _allRequests.push({ id: doc.id, ...doc.data() }));
       applyRequestFilters();
       updateRequestStats();
-      updateRequestsBadge();
+      updateEmergencyRequestsBadge();
     }, err => console.error('Requests listener error:', err));
 }
 
@@ -2845,9 +2851,10 @@ function updateRequestStats() {
   setText('strip-emergency-count', activeRequests);
 }
 
-function updateRequestsBadge() {
+function updateEmergencyRequestsBadge() {
   const pending = _allRequests.filter(r => !r.status || r.status === 'pending').length;
   const badge   = document.getElementById('nav-requests-count');
+  if (!badge) return;
   if (pending > 0) {
     badge.textContent  = pending;
     badge.style.display = 'inline-flex';
@@ -3902,6 +3909,9 @@ function renderEquipmentVendorsList(vendors) {
 }
 
 async function saveEquipmentVendor() {
+  // Equipment vendors register themselves in the partner app (equipment_profiles);
+  // an admin-created vendor would have no account and no items, so no new ones here.
+  if (!_editingEquipmentVendorId) { showToast('Equipment vendors register through the partner app. Admin can only edit existing ones.'); return; }
   const name    = document.getElementById('eqv-name')?.value.trim();
   const phone   = document.getElementById('eqv-phone')?.value.trim();
   const city    = document.getElementById('eqv-city')?.value.trim();
@@ -5272,6 +5282,11 @@ function _syncEquipmentFields() {
   if (priceLabel)     priceLabel.textContent       = isEquipment ? 'Rent Price / Day (₹)' : 'Price (₹)';
   if (vendorGroup)     vendorGroup.style.display    = isEquipment ? 'block' : 'none';
   if (isEquipment) _syncEquipmentVendorDropdown();
+  // Equipment is vendor-only: no admin add/edit form, just a notice.
+  const formCard = document.getElementById('service-form-card');
+  const eqNotice = document.getElementById('service-equipment-notice');
+  if (formCard) formCard.style.display = isEquipment ? 'none' : '';
+  if (eqNotice) eqNotice.style.display = isEquipment ? 'block' : 'none';
 }
 
 // ============================================
@@ -5419,12 +5434,12 @@ function renderServicesList(services) {
           <input type="checkbox" ${s.isEnabled ? 'checked' : ''} onchange="toggleService('${s.id}', this.checked)" />
           <span class="toggle-switch"></span>
         </label>
-        <button class="btn btn-outline" onclick="editService('${s.id}')" title="Edit" aria-label="Edit">
+        ${s.type === 'equipment' ? '' : `<button class="btn btn-outline" onclick="editService('${s.id}')" title="Edit" aria-label="Edit">
           <i class="ti ti-edit"></i>
         </button>
         <button class="btn btn-reject" onclick="deleteService('${s.id}', '${escHtml(s.storagePath||'')}', this)" title="Delete" aria-label="Delete">
           <i class="ti ti-trash"></i>
-        </button>
+        </button>`}
       </div>
     </div>`;
   }).join('') + loadMoreCard('services', services.length, 'filterServices();');
@@ -5449,6 +5464,7 @@ async function saveService() {
 
   if (!name) { showToast('Service name is required'); return; }
   if (!type)  { showToast('Please select a category'); return; }
+  if (type === 'equipment') { showToast('Equipment is now uploaded by equipment vendors only'); return; }
 
   const btn      = document.getElementById('save-service-btn');
   const progress = document.getElementById('service-upload-progress');
@@ -6428,6 +6444,10 @@ function initMaternityListeners() {
       setText('mat-checkups', snap.size);
     }, err => console.error('pregnancy_checkups listener error:', err));
 }
+
+// Alerts are realtime (initMaternityListeners); the Refresh button has nothing to
+// re-fetch, but the handler must exist so the click does not throw.
+function loadMaternityAlerts() {}
 
 function renderMaternityAlerts(alerts) {
   const tbody = document.getElementById('mat-alerts-body');
@@ -8788,7 +8808,7 @@ const PARTNER_ROLES = {
     extraFilterId:'lp-service-filter',
     docSlots: {
       lab_license:              'Lab Licence',
-      maridi_certificate:       'Maridi Certificate',
+      maridi_certificate:       'Maridi Certificate (Waste Disposal)',
       lab_technician_details:   'Lab Technician Details',
       pathologist_registration: 'Biochemist / Pathologist / Microbiologist Details',
       trade_license:            'Trade Licence (optional)',
@@ -8930,7 +8950,7 @@ const PARTNER_ROLES = {
     docSlots: {
       dmho_license:          'DM&HO Licence',
       fire_certificate:      'Fire Certificate',
-      maridi_certificate:    'Maridi Certificate',
+      maridi_certificate:    'Maridi Certificate (Waste Disposal)',
       gvmc_certificate:      'GVMC Certificate',
       pollution_certificate: 'Pollution Certificate',
       trade_license:         'Trade Licence',
@@ -9584,6 +9604,32 @@ async function approvePendingProfileEdit(role, id, btn) {
         delete changes.staffDetails;
         Object.keys(sd).forEach(k => { changes['staffDetails.' + k] = sd[k]; });
       }
+      // Partner-added "Other documents": a pending `documents` map is applied as
+      // DOTTED PATHS and ONLY for keys other_doc_1..5 (anything else, e.g. an
+      // attempt to replace a verified fixed document, is dropped), capped at 5
+      // in total, so existing fixed documents can never be overwritten.
+      if (changes.documents && typeof changes.documents === 'object' && !Array.isArray(changes.documents)) {
+        const pd = changes.documents;
+        delete changes.documents;
+        const liveDocs = (data.documents && typeof data.documents === 'object') ? data.documents : {};
+        let used = Object.keys(liveDocs).filter(k => /^other_doc_[1-5]$/.test(k) && liveDocs[k] && liveDocs[k].url).length;
+        for (const k of Object.keys(pd).sort()) {
+          const m = pd[k];
+          if (!/^other_doc_[1-5]$/.test(k) || !m || typeof m !== 'object' || !/^https?:\/\//i.test(String(m.url || ''))) continue;
+          const exists = !!(liveDocs[k] && liveDocs[k].url);
+          if (!exists && used >= 5) continue;
+          if (!exists) used++;
+          changes['documents.' + k] = {
+            url: String(m.url),
+            storagePath: String(m.storagePath || ''),
+            fileName: String(m.fileName || ''),
+            contentType: String(m.contentType || ''),
+            sizeBytes: Number(m.sizeBytes) || 0,
+            label: String(m.label || '').slice(0, 60),
+            uploadedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          };
+        }
+      }
       await ref.update(Object.assign({}, changes, {
         pendingChanges:  {},
         hasPendingChanges: false,
@@ -9608,6 +9654,22 @@ async function rejectPendingProfileEdit(role, id, btn) {
   withCooldown('partner-edit-' + role + '-' + id + '-reject', async () => {
     if (btn) { btn.disabled = true; btn.textContent = '...'; }
     try {
+      // Pending "Other documents" were already uploaded to Storage by the
+      // partner; best-effort delete (storage.rules lets admin delete partner
+      // document files). Only other_doc paths under this partner's own folder.
+      try {
+        const rs = await db.collection(cfg.collection).doc(id).get();
+        const pd = rs.exists && rs.data().pendingChanges && rs.data().pendingChanges.documents;
+        if (pd && typeof pd === 'object') {
+          for (const k of Object.keys(pd)) {
+            const sp = pd[k] && pd[k].storagePath;
+            if (/^other_doc_[1-5]$/.test(k) && typeof sp === 'string' &&
+                sp.startsWith('/') === false && sp.includes('_documents/' + id + '/' + k + '.')) {
+              try { await storage.ref(sp).delete(); } catch (_) {}
+            }
+          }
+        }
+      } catch (_) {}
       await db.collection(cfg.collection).doc(id).update({
         pendingChanges: {},
         hasPendingChanges: false,
@@ -10151,11 +10213,28 @@ function showPartnerModal(role, id) {
         Object.entries(newVal).forEach(([k, v]) => pendingEntries.push(['availability ' + k, v, (p.availability || {})[k]]));
       } else if (key === 'staffDetails' && newVal && typeof newVal === 'object' && !Array.isArray(newVal)) {
         Object.entries(newVal).forEach(([k, v]) => pendingEntries.push(['staffDetails ' + k, v, (p.staffDetails || {})[k]]));
+      } else if (key === 'documents') {
+        // Rendered separately below as titled rows with a view link.
       } else {
         pendingEntries.push([key, newVal, p[key]]);
       }
     });
-    const rows = pendingEntries.map(([key, newVal, oldVal]) => {
+    const pendingDocRows = (pendingChanges.documents && typeof pendingChanges.documents === 'object')
+      ? Object.keys(pendingChanges.documents).filter(k => /^other_doc_[1-5]$/.test(k)).sort().map(k => {
+          const m = pendingChanges.documents[k] || {};
+          const title = String(m.label || '').trim() || ('Other document ' + k.slice(-1));
+          const isPdf = m.contentType === 'application/pdf';
+          return `<div class="partner-doc-item" style="margin-bottom:8px;">
+        <div style="font-size:11px;color:#aaa;font-weight:600;text-transform:uppercase;">New other document</div>
+        <div style="font-size:13px;margin-top:2px;overflow-wrap:anywhere;">
+          <span style="color:#2e7d32;font-weight:700;">${escHtml(title)}</span>
+          <span style="color:#888;"> &middot; ${isPdf ? 'PDF' : 'Image'}</span>
+          <a href="${escHtml(safeUrl(m.url))}" target="_blank" rel="noopener noreferrer" style="margin-left:8px;">View</a>
+        </div>
+      </div>`;
+        }).join('')
+      : '';
+    const rows = pendingDocRows + pendingEntries.map(([key, newVal, oldVal]) => {
       const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, c => c.toUpperCase());
       return `<div class="partner-doc-item" style="margin-bottom:8px;">
         <div style="font-size:11px;color:#aaa;font-weight:600;text-transform:uppercase;">${escHtml(label)}</div>
@@ -11056,6 +11135,89 @@ function initSettlementDashboardListeners() {
 
   loadSettlementFrequency();
   loadAmbulanceRates();
+  initUnpaidTripsListener();
+}
+
+// ── Unpaid ambulance trips (Director / Finance) ─────────────────────────────
+// service_requests the server flagged paymentStatus 'payment_due'. Admin read
+// of service_requests is allowed by firestore.rules (isAdmin()); the query is
+// equality-only so it needs no composite index. All writes go through the
+// sendTripPaymentReminder / markTripWrittenOff callables.
+let _unpaidTripsListener = null;
+let _unpaidTrips = [];
+
+function initUnpaidTripsListener() {
+  const card = document.getElementById('unpaid-trips-card');
+  if (!card) return;
+  if (!(isDirector() || currentAdminRole === 'finance')) { card.style.display = 'none'; return; }
+  card.style.display = '';
+  if (_unpaidTripsListener) _unpaidTripsListener();
+  _unpaidTripsListener = db.collection('service_requests')
+    .where('type', '==', 'ambulance')
+    .where('paymentStatus', '==', 'payment_due')
+    .onSnapshot(snap => {
+      _unpaidTrips = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      renderUnpaidTrips();
+    }, err => {
+      console.error('unpaid trips listener', err);
+      const tb = document.getElementById('unpaid-trips-tbody');
+      if (tb) tb.innerHTML = '<tr><td colspan="6" class="empty-state">Could not load unpaid trips.</td></tr>';
+    });
+}
+
+function renderUnpaidTrips() {
+  const tb = document.getElementById('unpaid-trips-tbody');
+  if (!tb) return;
+  if (!_unpaidTrips.length) {
+    tb.innerHTML = '<tr><td colspan="6" class="empty-state">No unpaid ambulance trips.</td></tr>';
+    return;
+  }
+  const ms = t => (t && t.toMillis ? t.toMillis() : 0);
+  const rows = [..._unpaidTrips].sort((a, b) => ms(a.paymentDueAt) - ms(b.paymentDueAt));
+  tb.innerHTML = rows.map(t => {
+    const dueMs = ms(t.paymentDueAt);
+    const days = dueMs ? Math.max(0, Math.floor((Date.now() - dueMs) / 86400000)) : 0;
+    const date = dueMs ? new Date(dueMs).toLocaleString() : '-';
+    const amt = Number(t.amountDue);
+    const id = escHtml(t.id);
+    return `<tr>
+      <td>${escHtml(t.patientName || 'Patient')}</td>
+      <td>${escHtml(t.patientPhone || '-')}</td>
+      <td>${escHtml(date)}</td>
+      <td>&#8377;${Number.isFinite(amt) ? amt.toFixed(0) : '-'}</td>
+      <td>${days}</td>
+      <td style="white-space:nowrap;">
+        ${canMoveMoney() ? `<button class="btn-publish" type="button" onclick="sendTripReminderRow('${id}')">Send reminder</button>` : VIEW_ONLY_HTML}
+        ${isDirector() ? `<button class="btn-publish" type="button" style="background:#c62828;" onclick="writeOffTripRow('${id}')">Mark as written off</button>` : ''}
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+async function sendTripReminderRow(id) {
+  if (!canMoveMoney()) { showToast('Only Director or Finance can send reminders.'); return; }
+  try {
+    await functions.httpsCallable('sendTripPaymentReminder')({ requestId: id });
+    showToast('Reminder sent');
+  } catch (err) {
+    showToast('Reminder failed: ' + err.message);
+  }
+}
+
+async function writeOffTripRow(id) {
+  if (!isDirector()) { showToast('Only a Director can write off a trip.'); return; }
+  const trip = _unpaidTrips.find(t => t.id === id);
+  const fare = Number(trip && trip.fareFinal);
+  const fareTxt = Number.isFinite(fare) && fare > 0 ? '₹' + fare.toFixed(0) : 'the trip fare';
+  if (!confirm('The driver will still be paid ' + fareTxt + ' from platform funds. The customer\'s debt is written off.\n\nContinue?')) return;
+  const reason = prompt('Reason for writing off this unpaid trip (the patient will be able to book again):');
+  if (reason == null) return;
+  try {
+    await functions.httpsCallable('markTripWrittenOff')({ requestId: id, reason });
+    showToast('Trip marked as written off');
+  } catch (err) {
+    showToast('Write-off failed: ' + err.message);
+  }
 }
 
 // ── Ambulance rate ranges: app_config/ambulance_rates ──────────────────────
@@ -11208,6 +11370,7 @@ function settlementStatusBadge(status) {
     approved: ['#e3f2fd', '#1565c0', 'Approved'],
     held: ['#ffebee', '#c62828', 'Held'],
     paid: ['#e8f5e9', '#1e8e3e', 'Paid'],
+    cancelled: ['#f3f4f6', '#6b7280', 'Cancelled'],
   };
   const [bg, fg, label] = map[status] || ['#f3f4f6', '#6b7280', status || '—'];
   return inlineBadge(label, bg, fg);
@@ -11227,18 +11390,22 @@ function renderSettlementsTable() {
     const selectable = ['pending', 'held'].includes(s.status);
     const checked = _selectedSettlementIds.has(s.id) ? 'checked' : '';
     let actions = `<button class="btn btn-outline" onclick="toggleSettlementDetails('${s.id}')" title="View payment IDs" aria-label="View payment IDs"><i class="ti ti-eye"></i></button>`;
-    if (selectable) {
-      actions += ` <button class="btn btn-outline" onclick="approveSettlementRow('${s.id}')" title="Approve" aria-label="Approve"><i class="ti ti-check"></i></button>`;
-    }
-    if (s.status === 'pending') {
-      actions += ` <button class="btn btn-reject" onclick="holdSettlementRow('${s.id}')" title="Hold" aria-label="Hold"><i class="ti ti-player-pause"></i></button>`;
-    }
-    if (s.status === 'approved') {
-      actions += ` <button class="btn-publish" style="padding:6px 12px;font-size:12px;" onclick="markSettlementPaidRow('${s.id}')" title="Mark Paid" aria-label="Mark Paid"><i class="ti ti-cash"></i> Mark Paid</button>`;
+    if (!canMoveMoney()) {
+      actions += ' ' + VIEW_ONLY_HTML;
+    } else {
+      if (selectable) {
+        actions += ` <button class="btn btn-outline" onclick="approveSettlementRow('${s.id}')" title="Approve" aria-label="Approve"><i class="ti ti-check"></i></button>`;
+      }
+      if (s.status === 'pending') {
+        actions += ` <button class="btn btn-reject" onclick="holdSettlementRow('${s.id}')" title="Hold" aria-label="Hold"><i class="ti ti-player-pause"></i></button>`;
+      }
+      if (s.status === 'approved') {
+        actions += ` <button class="btn-publish" style="padding:6px 12px;font-size:12px;" onclick="markSettlementPaidRow('${s.id}')" title="Mark Paid" aria-label="Mark Paid"><i class="ti ti-cash"></i> Mark Paid</button>`;
+      }
     }
     return `<tr>
-      <td><input type="checkbox" ${selectable ? '' : 'disabled'} ${checked} onchange="toggleSettlementSelect('${s.id}', this.checked)" /></td>
-      <td>${escHtml(providerName)}<div style="font-size:10px;color:var(--text-muted);font-family:monospace;">${escHtml(s.providerId || '')}</div></td>
+      <td>${canMoveMoney() ? `<input type="checkbox" ${selectable ? '' : 'disabled'} ${checked} onchange="toggleSettlementSelect('${s.id}', this.checked)" />` : ''}</td>
+      <td>${escHtml(providerName)}${s.requestedByPartner ? ' ' + inlineBadge('Requested by partner', '#ede7f6', '#4527a0') : ''}<div style="font-size:10px;color:var(--text-muted);font-family:monospace;">${escHtml(s.providerId || '')}</div></td>
       <td>${formatCurrency(earnings)}</td>
       <td>${formatCurrency(commission)}</td>
       <td>${formatCurrency(payable)}</td>
@@ -11252,10 +11419,27 @@ function renderSettlementsTable() {
         <div style="font-family:monospace;word-break:break-all;margin-top:4px;color:var(--text-secondary);">${(s.paymentIds || []).map(escHtml).join(', ') || '—'}</div>
         ${s.holdReason ? `<div style="margin-top:6px;color:var(--danger);"><strong>Hold reason:</strong> ${escHtml(s.holdReason)}</div>` : ''}
         ${s.payoutReference ? `<div style="margin-top:6px;"><strong>Payout reference:</strong> ${escHtml(s.payoutReference)}</div>` : ''}
+        ${settlementDestinationHtml(s)}
       </td>
     </tr>`;
   }).join('');
   updateBulkApproveButton();
+}
+
+// Where to transfer a settlement: the snapshot stored when the partner
+// requested the payout. Daily-queue settlements have none.
+function settlementDestinationHtml(s) {
+  if (!canMoveMoney()) return '';
+  const d = s.payoutAccountSnapshot;
+  if (!d || typeof d !== 'object') {
+    return '<div style="margin-top:6px;color:var(--text-muted);"><strong>Payout destination:</strong> Look up bank details in Payout accounts</div>';
+  }
+  const parts = [
+    ['Account holder', d.holderName], ['Bank', d.bankName], ['IFSC', d.ifsc],
+    ['Account', d.accountNumberMasked], ['UPI', d.upiId],
+  ].filter(([, v]) => v);
+  const req = s.requestedAt && s.requestedAt.toDate ? ' · requested ' + escHtml(formatDate(s.requestedAt)) : '';
+  return `<div style="margin-top:6px;"><strong>Payout destination${req}:</strong> ${parts.map(([k, v]) => `${escHtml(k)}: ${escHtml(String(v))}`).join(' · ')}</div>`;
 }
 
 function toggleSettlementDetails(id) {
@@ -11284,6 +11468,7 @@ function updateBulkApproveButton() {
 }
 
 async function approveSettlementRow(id) {
+  if (!canMoveMoney()) { showToast('View only: Director or Finance required.'); return; }
   try {
     await functions.httpsCallable('approveSettlement')({ settlementId: id });
     showToast('Settlement approved ✓');
@@ -11293,6 +11478,7 @@ async function approveSettlementRow(id) {
 }
 
 async function holdSettlementRow(id) {
+  if (!canMoveMoney()) { showToast('View only: Director or Finance required.'); return; }
   const reason = prompt('Reason for holding this settlement:');
   if (reason == null) return;
   try {
@@ -11304,6 +11490,7 @@ async function holdSettlementRow(id) {
 }
 
 async function markSettlementPaidRow(id) {
+  if (!canMoveMoney()) { showToast('View only: Director or Finance required.'); return; }
   const payoutReference = prompt('Payout reference (optional — NEFT/UPI ref no.):');
   if (payoutReference === null) return; // user cancelled
   try {
@@ -11315,7 +11502,7 @@ async function markSettlementPaidRow(id) {
 }
 
 async function bulkApproveSelectedSettlements() {
-  if (!_selectedSettlementIds.size) return;
+  if (!_selectedSettlementIds.size || !canMoveMoney()) return;
   const ids = Array.from(_selectedSettlementIds);
   try {
     const res = await functions.httpsCallable('bulkApproveSettlements')({ settlementIds: ids });
@@ -11330,6 +11517,7 @@ async function bulkApproveSelectedSettlements() {
 }
 
 async function runManualSettlementBatchNow() {
+  if (!canMoveMoney()) { showToast('View only: Director or Finance required.'); return; }
   const btn = document.getElementById('run-settlement-batch-btn');
   btn.disabled = true;
   try {
@@ -11344,11 +11532,13 @@ async function runManualSettlementBatchNow() {
 }
 
 async function loadSettlementFrequency() {
+  applyMoneyActionVisibility();
   try {
     const snap = await db.collection('settlement_config').doc('global').get();
     const sel = document.getElementById('settlement-frequency');
     if (sel) sel.value = (snap.exists && snap.get('frequency')) || 'daily';
     loadDirectorMoneySettings(snap);
+    loadPayoutAccountsCard();
   } catch (err) {
     console.error('settlement_config load error', err);
   }
@@ -11363,11 +11553,20 @@ async function loadDirectorMoneySettings(settlementSnap) {
   if (!card) return;
   if (!isDirector()) { card.style.display = 'none'; return; }
   card.style.display = '';
+  loadPayoutsConfig();
   const on = !!(settlementSnap && settlementSnap.exists && settlementSnap.get('testCreditEnabled') === true);
   const cb = document.getElementById('test-credit-enabled');
   if (cb) cb.checked = on;
   const st = document.getElementById('test-credit-status');
-  if (st) st.textContent = on ? 'Currently ON — test bookings credit wallets.' : 'Currently OFF.';
+  if (st) {
+    const at = settlementSnap && settlementSnap.exists ? settlementSnap.get('testCreditEnabledAt') : null;
+    const ms = at && typeof at.toMillis === 'function' ? at.toMillis() : 0;
+    const left = ms ? ms + 7 * 24 * 3600 * 1000 - Date.now() : 0;
+    st.textContent = !on ? 'Currently OFF.'
+      : (left > 0 ? `Currently ON — auto-switches off in ${Math.ceil(left / 3600000)}h (7 days after enabling).`
+                  : 'Flag is ON but expired (or has no enable time) — the server ignores it. Toggle off/on to re-enable for 7 days.');
+  }
+  loadPaymentsAndVersionSettings();
   try {
     const [fee, ref] = await Promise.all([
       db.collection('app_config').doc('platform_fee').get(),
@@ -11426,14 +11625,254 @@ async function saveTestCreditEnabled(cb) {
   try {
     await db.collection('settlement_config').doc('global').set({
       testCreditEnabled: turningOn, updatedBy: auth.currentUser?.email || 'admin',
+      // The server only honours the flag for 7 days after this timestamp.
+      testCreditEnabledAt: turningOn ? firebase.firestore.FieldValue.serverTimestamp() : firebase.firestore.FieldValue.delete(),
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
     const st = document.getElementById('test-credit-status');
-    if (st) st.textContent = turningOn ? 'Currently ON — test bookings credit wallets.' : 'Currently OFF.';
+    if (st) st.textContent = turningOn ? 'Currently ON — auto-switches off in 168h (7 days after enabling).' : 'Currently OFF.';
     showToast(turningOn ? 'Test credit turned ON' : 'Test credit turned OFF');
   } catch (err) {
     cb.checked = !turningOn;
     showToast('Update failed: ' + err.message);
+  }
+}
+
+// ── Real-payments switch + forced-update versions (Director only) ───────────
+// app_config/payments = { requirePayment, updatedAt, updatedBy }
+// app_config/app_version = { patient:{minVersion,message?}, partner:{...}, updatedAt, updatedBy }
+const SEMVER_RE = /^\d+\.\d+\.\d+$/;
+async function loadPaymentsAndVersionSettings() {
+  try {
+    const [pay, ver] = await Promise.all([
+      db.collection('app_config').doc('payments').get(),
+      db.collection('app_config').doc('app_version').get(),
+    ]);
+    const on = pay.exists && pay.get('requirePayment') === true;
+    const cb = document.getElementById('require-payment-enabled');
+    if (cb) cb.checked = on;
+    const st = document.getElementById('require-payment-status');
+    if (st) st.textContent = pay.exists
+      ? `Currently ${on ? 'ON — real payments required' : 'OFF — test/no-payment bookings allowed'}${pay.get('updatedBy') ? ' · set by ' + pay.get('updatedBy') : ''}`
+      : 'Not set — apps use their built-in default (OFF).';
+    const vd = ver.exists ? ver.data() : {};
+    [['patient', 'min-version-patient', 'min-message-patient'], ['partner', 'min-version-partner', 'min-message-partner']].forEach(([k, vId, mId]) => {
+      const s = vd[k] && typeof vd[k] === 'object' ? vd[k] : {};
+      const v = document.getElementById(vId); if (v) v.value = s.minVersion || '';
+      const m = document.getElementById(mId); if (m) m.value = s.message || '';
+    });
+    const vs = document.getElementById('min-version-status');
+    if (vs) vs.textContent = ver.exists ? `Saved${vd.updatedBy ? ' · set by ' + vd.updatedBy : ''}` : 'Not set — no app is blocked.';
+  } catch (err) {
+    console.error('payments/app_version load error', err);
+  }
+}
+
+async function saveRequirePayment(cb) {
+  if (!isDirector()) { showToast('Only a Director can change this.'); cb.checked = !cb.checked; return; }
+  const turningOn = cb.checked;
+  if (turningOn && !(await showConfirm(
+    'Turning this ON means all new bookings must be paid through Razorpay/wallet. Make sure every user is on the latest app version.',
+    { title: 'Require real payments?', confirmLabel: 'Turn ON' }
+  ))) { cb.checked = false; return; }
+  try {
+    await db.collection('app_config').doc('payments').set({
+      requirePayment: turningOn,
+      updatedBy: auth.currentUser?.email || 'admin',
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    const st = document.getElementById('require-payment-status');
+    if (st) st.textContent = turningOn ? 'Currently ON — real payments required' : 'Currently OFF — test/no-payment bookings allowed';
+    showToast(turningOn ? 'Real payments required' : 'Real payments switched OFF');
+  } catch (err) {
+    cb.checked = !turningOn;
+    showToast('Update failed: ' + err.message);
+  }
+}
+
+async function saveMinVersions() {
+  if (!isDirector()) { showToast('Only a Director can change this.'); return; }
+  const out = {};
+  for (const [k, vId, mId, label] of [['patient', 'min-version-patient', 'min-message-patient', 'Patient app'], ['partner', 'min-version-partner', 'min-message-partner', 'Partner app']]) {
+    const v = (document.getElementById(vId).value || '').trim();
+    const m = (document.getElementById(mId).value || '').trim();
+    if (v && !SEMVER_RE.test(v)) { showToast(`${label}: version must look like 1.2.3`); return; }
+    out[k] = v ? { minVersion: v, message: m || firebase.firestore.FieldValue.delete() } : firebase.firestore.FieldValue.delete();
+  }
+  if (!(await showConfirm(
+    'Every user on an older version will be locked out until they update from the store. Make sure the new version is live on Google Play / App Store first.',
+    { title: 'Force app update?', confirmLabel: 'Save' }
+  ))) return;
+  const btn = document.getElementById('save-min-versions-btn');
+  if (btn) btn.disabled = true;
+  try {
+    await db.collection('app_config').doc('app_version').set({
+      ...out,
+      updatedBy: auth.currentUser?.email || 'admin',
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    const vs = document.getElementById('min-version-status');
+    if (vs) vs.textContent = 'Saved · ' + (auth.currentUser?.email || 'admin');
+    showToast('Minimum versions saved');
+  } catch (err) {
+    showToast('Save failed: ' + err.message);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+// ── Partner payouts: bank-account verification + payout settings ────────────
+// payout_accounts/{providerId} is written by the partner (always back to
+// status 'pending'); Finance/Director only touch status/verifiedAt/verifiedBy/
+// rejectReason (firestore.rules). The full account number is only ever shown
+// here, behind an explicit per-row reveal, and is never logged.
+let _payoutAccounts = [];
+const _payoutRevealed = new Set();
+
+function maskAccountNumber(n) {
+  const v = String(n || '');
+  return v.length <= 4 ? v : '•'.repeat(v.length - 4) + v.slice(-4);
+}
+
+async function loadPayoutAccountsCard() {
+  const card = document.getElementById('payout-accounts-card');
+  if (!card) return;
+  if (!canMoveMoney()) { card.style.display = 'none'; return; }
+  card.style.display = '';
+  const tbody = document.getElementById('payout-accounts-tbody');
+  if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="loading">Loading payout accounts...</td></tr>';
+  try {
+    const snap = await db.collection('payout_accounts').limit(500).get();
+    _payoutAccounts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    await Promise.all([...new Set(_payoutAccounts.map(a => a.providerId || a.id))].map(resolveProviderName));
+    renderPayoutAccounts();
+  } catch (err) {
+    console.error('payout_accounts load error');
+    if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Could not load payout accounts.</td></tr>';
+  }
+}
+
+function payoutStatusBadge(st) {
+  const map = {
+    pending: ['#fff8e1', '#f57f17', 'Pending'],
+    verified: ['#e8f5e9', '#1e8e3e', 'Verified'],
+    rejected: ['#ffebee', '#c62828', 'Rejected'],
+  };
+  const [bg, fg, label] = map[st] || ['#f3f4f6', '#6b7280', st || '—'];
+  return inlineBadge(label, bg, fg);
+}
+
+function renderPayoutAccounts() {
+  const tbody = document.getElementById('payout-accounts-tbody');
+  if (!tbody) return;
+  const filter = (document.getElementById('payout-accounts-filter') || {}).value || 'pending';
+  const order = { pending: 0, rejected: 1, verified: 2 };
+  const ms = a => (a.submittedAt && a.submittedAt.toMillis ? a.submittedAt.toMillis() : 0);
+  let rows = _payoutAccounts.slice();
+  if (filter !== 'all') rows = rows.filter(a => (a.status || 'pending') === filter);
+  rows.sort((a, b) => ((order[a.status || 'pending'] ?? 3) - (order[b.status || 'pending'] ?? 3)) || (ms(b) - ms(a)));
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No payout accounts in this view.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(a => {
+    const pid = a.providerId || a.id;
+    const name = _providerNameCache[pid] || pid;
+    const shown = _payoutRevealed.has(a.id);
+    const st = a.status || 'pending';
+    const actions = [];
+    if (st !== 'verified') actions.push(`<button class="btn-publish" style="padding:6px 12px;font-size:12px;" onclick="verifyPayoutAccount('${escHtml(a.id)}')">Verify</button>`);
+    if (st !== 'rejected') actions.push(`<button class="btn btn-reject" onclick="rejectPayoutAccount('${escHtml(a.id)}')">Reject</button>`);
+    return `<tr>
+      <td>${escHtml(name)}<div style="font-size:11px;color:var(--text-muted);">${escHtml(a.role || '')}</div><div style="font-size:10px;color:var(--text-muted);font-family:monospace;">${escHtml(pid)}</div></td>
+      <td>${escHtml(a.holderName || '—')}<div style="font-size:12px;color:var(--text-secondary);">${escHtml(a.bankName || '')}</div></td>
+      <td style="font-family:monospace;">${escHtml(a.ifsc || '—')}</td>
+      <td style="font-family:monospace;white-space:nowrap;">${escHtml(shown ? (a.accountNumber || '—') : maskAccountNumber(a.accountNumber))}
+        <button class="btn btn-outline" style="padding:2px 8px;font-size:11px;margin-left:6px;" onclick="togglePayoutReveal('${escHtml(a.id)}')">${shown ? 'Hide' : 'Reveal full number'}</button></td>
+      <td>${escHtml(a.upiId || '—')}</td>
+      <td>${payoutStatusBadge(st)}<div style="font-size:11px;color:var(--text-muted);">${escHtml(formatDate(a.submittedAt))}</div>${st === 'rejected' && a.rejectReason ? `<div style="font-size:11px;color:var(--danger);">${escHtml(a.rejectReason)}</div>` : ''}</td>
+      <td style="white-space:nowrap;">${canMoveMoney() ? actions.join(' ') : VIEW_ONLY_HTML}</td>
+    </tr>`;
+  }).join('');
+}
+
+function togglePayoutReveal(id) {
+  if (!canMoveMoney()) return;
+  if (_payoutRevealed.has(id)) _payoutRevealed.delete(id); else _payoutRevealed.add(id);
+  renderPayoutAccounts();
+}
+
+async function verifyPayoutAccount(id) {
+  if (!canMoveMoney()) { showToast('View only: Director or Finance required.'); return; }
+  try {
+    await db.collection('payout_accounts').doc(id).update({
+      status: 'verified',
+      verifiedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      verifiedBy: auth.currentUser?.email || 'admin',
+      rejectReason: firebase.firestore.FieldValue.delete(),
+    });
+    showToast('Payout account verified ✓');
+    _payoutRevealed.delete(id);
+    loadPayoutAccountsCard();
+  } catch (err) {
+    showToast('Verify failed: ' + err.message);
+  }
+}
+
+async function rejectPayoutAccount(id) {
+  if (!canMoveMoney()) { showToast('View only: Director or Finance required.'); return; }
+  const reason = (window.prompt('Reason for rejecting these bank details (shown to the partner):') || '').trim();
+  if (!reason) { showToast('A reason is required to reject.'); return; }
+  try {
+    await db.collection('payout_accounts').doc(id).update({
+      status: 'rejected',
+      rejectReason: reason.slice(0, 200),
+    });
+    showToast('Payout account rejected');
+    _payoutRevealed.delete(id);
+    loadPayoutAccountsCard();
+  } catch (err) {
+    showToast('Reject failed: ' + err.message);
+  }
+}
+
+// app_config/payouts {enabled (default true), minAmount (default 500)} —
+// Director-only (same rule as the other app_config switches).
+async function loadPayoutsConfig() {
+  if (!isDirector()) return;
+  try {
+    const snap = await db.collection('app_config').doc('payouts').get();
+    const en = document.getElementById('payouts-enabled');
+    const mn = document.getElementById('payouts-min-amount');
+    if (en) en.checked = !(snap.exists && snap.get('enabled') === false);
+    const min = snap.exists ? snap.get('minAmount') : null;
+    if (mn) mn.value = typeof min === 'number' ? min : 500;
+  } catch (err) {
+    console.error('payouts config load error');
+  }
+}
+
+async function savePayoutsConfig() {
+  if (!isDirector()) { showToast('Only a Director can change payout settings.'); return; }
+  const enabled = document.getElementById('payouts-enabled').checked;
+  const raw = document.getElementById('payouts-min-amount').value;
+  const minAmount = Number(raw);
+  if (raw === '' || !isFinite(minAmount) || minAmount < 0) { showToast('Enter a minimum amount of 0 or more'); return; }
+  const btn = document.getElementById('save-payouts-btn');
+  if (btn) btn.disabled = true;
+  try {
+    await db.collection('app_config').doc('payouts').set({
+      enabled, minAmount,
+      updatedBy: auth.currentUser?.email || 'admin',
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    const st = document.getElementById('payouts-status');
+    if (st) st.textContent = `Saved · ${enabled ? 'ON' : 'OFF'} · minimum ₹${minAmount}`;
+    showToast('Payout settings saved ✓');
+  } catch (err) {
+    showToast('Save failed: ' + err.message);
+  } finally {
+    if (btn) btn.disabled = false;
   }
 }
 
@@ -11681,6 +12120,7 @@ async function saveReferralReward() {
 }
 
 async function saveSettlementFrequency() {
+  if (!canMoveMoney()) { showToast('View only: Director or Finance required.'); return; }
   const frequency = document.getElementById('settlement-frequency').value;
   try {
     await db.collection('settlement_config').doc('global').set({
@@ -11709,6 +12149,118 @@ function exportSettlementsCsv() {
   const a = document.createElement('a');
   a.href = url;
   a.download = `settlements_${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// ============================================
+//   WEIGHT-LOSS PLANS (read-only report; Director / Finance / HR via the
+//   settlements tab). Source: nutrition_subscriptions (server-written).
+// ============================================
+let _wlPlans = [];
+let _wlPlansLoaded = false;
+
+// Equal share per consultation, remainder paise on the last (mirrors
+// splitPayout in functions/plan_helpers.js).
+function _wlSplitShares(total, months) {
+  const paise = Math.round((Number(total) || 0) * 100);
+  if (!(months >= 1)) return [];
+  const each = Math.floor(paise / months);
+  const out = [];
+  for (let i = 1; i <= months; i++) out.push((i === months ? paise - each * (months - 1) : each) / 100);
+  return out;
+}
+
+function _wlPlanRow(s) {
+  const credits = Array.isArray(s.consultations) ? s.consultations : [];
+  const count = st => credits.filter(c => c.status === st).length;
+  const shares = _wlSplitShares(s.baseTotal, Number(s.months) || credits.length);
+  const lapsed = credits.filter(c => c.status === 'lapsed');
+  const forfeited = lapsed.reduce((a, c) => a + (shares[(Number(c.index) || 0) - 1] || 0), 0);
+  const base = Number(s.baseTotal) || 0;
+  const fee = Number(s.platformFee) || 0;
+  return {
+    id: s.id,
+    patient: s.patientName || '',
+    phone: s.patientPhone || '',
+    dietician: s.nutritionistName || '',
+    months: Number(s.months) || credits.length,
+    total: base + fee,
+    start: s.startDate || '',
+    end: s.endsAtDate || '',
+    status: s.status || '',
+    used: count('completed'),
+    booked: count('booked'),
+    lapsed: lapsed.length,
+    lapsedIdx: lapsed.map(c => c.index).join(' '),
+    forfeited: Math.round(forfeited * 100) / 100,
+    unusedRefundDue: Number(s.unusedRefundDue) || 0,
+    createdAt: s.createdAt,
+  };
+}
+
+async function loadWeightLossPlans(force) {
+  const tbody = document.getElementById('wl-plans-tbody');
+  if (!tbody) return;
+  if (_wlPlansLoaded && !force) { renderWeightLossPlans(); return; }
+  tbody.innerHTML = '<tr><td colspan="11" class="loading">Loading plans...</td></tr>';
+  try {
+    const snap = await db.collection('nutrition_subscriptions').orderBy('createdAt', 'desc').limit(500).get();
+    _wlPlans = snap.docs.map(d => _wlPlanRow({ id: d.id, ...d.data() }));
+    _wlPlansLoaded = true;
+    renderWeightLossPlans();
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="11" class="loading">Could not load plans: ${escHtml(err.message)}</td></tr>`;
+  }
+}
+
+function _wlFilteredPlans() {
+  const q = (document.getElementById('wl-plans-filter')?.value || '').trim().toLowerCase();
+  if (!q) return _wlPlans;
+  return _wlPlans.filter(p => [p.patient, p.phone, p.dietician, p.status, p.id].join(' ').toLowerCase().includes(q));
+}
+
+function renderWeightLossPlans() {
+  const tbody = document.getElementById('wl-plans-tbody');
+  if (!tbody) return;
+  const rows = _wlFilteredPlans();
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="11" class="loading">No weight-loss plans found.</td></tr>';
+    return;
+  }
+  const inr = n => '₹' + Number(n || 0).toLocaleString('en-IN');
+  tbody.innerHTML = rows.map(p => `
+    <tr>
+      <td>${escHtml(p.patient || '—')}<div style="font-size:11px;color:var(--text-muted,#888);">${escHtml(p.phone)}</div></td>
+      <td>${escHtml(p.dietician || '—')}</td>
+      <td>${p.months}</td>
+      <td>${inr(p.total)}</td>
+      <td>${escHtml(p.start || '—')}</td>
+      <td>${escHtml(p.end || '—')}</td>
+      <td>${escHtml(p.status || '—')}</td>
+      <td>${p.used} / ${p.booked} / ${p.lapsed}</td>
+      <td>${p.lapsed ? `${p.lapsed} (month ${escHtml(p.lapsedIdx)})` : '—'}</td>
+      <td>${p.forfeited > 0 ? inr(p.forfeited) : '—'}</td>
+      <td>${p.unusedRefundDue > 0 ? inr(p.unusedRefundDue) : '—'}</td>
+    </tr>`).join('');
+}
+
+function exportWeightLossPlansCsv() {
+  const rows = _wlFilteredPlans();
+  if (!rows.length) { showToast('No plans to export'); return; }
+  const header = ['Plan ID', 'Patient', 'Phone', 'Dietician', 'Months', 'Total', 'Start', 'End', 'Status',
+    'Consultations used', 'Booked', 'Lapsed', 'Lapsed months', 'Forfeited base', 'Unused refund due'];
+  const body = rows.map(p => [p.id, p.patient, p.phone, p.dietician, p.months, p.total.toFixed(2), p.start, p.end,
+    p.status, p.used, p.booked, p.lapsed, p.lapsedIdx, p.forfeited.toFixed(2), p.unusedRefundDue.toFixed(2)]);
+  const csvEscape = v => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`;
+  const csv = [header, ...body].map(row => row.map(csvEscape).join(',')).join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `weight_loss_plans_${new Date().toISOString().slice(0, 10)}.csv`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -11752,7 +12304,9 @@ function renderRefundRequests() {
     : s === 'processing' ? inlineBadge('Processing', '#e3f2fd', '#1565c0')
     : inlineBadge('Pending', '#fff3e0', '#e65100');
   tbody.innerHTML = allRefundRequests.map(r => {
-    const actions = r.status === 'pending'
+    const actions = (r.status === 'pending' && !canMoveMoney())
+      ? VIEW_ONLY_HTML
+      : r.status === 'pending'
       ? `<button class="btn btn-outline" onclick="resolveRefundRequest('${escHtml(r.id)}','approve')"><i class="ti ti-check"></i> Approve</button>
          <button class="btn btn-outline" style="color:var(--danger);" onclick="resolveRefundRequest('${escHtml(r.id)}','reject')"><i class="ti ti-x"></i> Reject</button>`
       : (r.adminNote ? `<span style="font-size:12px;color:var(--text-muted);">${escHtml(r.adminNote)}</span>` : '—');
@@ -11769,6 +12323,7 @@ function renderRefundRequests() {
 }
 
 async function resolveRefundRequest(requestId, decision) {
+  if (!canMoveMoney()) { showToast('View only: Director or Finance required.'); return; }
   let note = '';
   if (decision === 'reject') {
     note = (prompt('Reason for rejecting this refund (shown to the customer):') || '').trim();
@@ -11784,7 +12339,16 @@ async function resolveRefundRequest(requestId, decision) {
   }
 }
 
+// Hide money-action controls that the signed-in role cannot perform (HR keeps
+// view access to these tabs). Idempotent; called when the tabs load.
+function applyMoneyActionVisibility() {
+  const show = canMoveMoney();
+  ['settlement-freq-group', 'run-settlement-batch-btn', 'bulk-approve-settlements-btn', 'settlement-select-all', 'issue-refund-card']
+    .forEach(id => { const el = document.getElementById(id); if (el) el.style.display = show ? '' : 'none'; });
+}
+
 function loadRefunds() {
+  applyMoneyActionVisibility();
   loadRefundRequests();
   if (_refundsListener) return; // already live
   _refundsListener = db.collection('refunds').orderBy('createdAt', 'desc').onSnapshot(async snap => {
@@ -11861,6 +12425,7 @@ async function lookupRefundPayment() {
 }
 
 async function submitRefund() {
+  if (!canMoveMoney()) { showToast('View only: Director or Finance required.'); return; }
   if (!_refundLookupPayment) { showToast('Look up a payment first'); return; }
   const reason = document.getElementById('refund-reason').value.trim();
   const btn = document.getElementById('issue-refund-btn');

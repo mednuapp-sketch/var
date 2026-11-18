@@ -2606,8 +2606,16 @@
             </div>
           </div>
 
+          <!-- Equipment is vendor-only: shown instead of the form for the equipment category -->
+          <div class="card" id="service-equipment-notice" style="margin-bottom:16px;display:none;">
+            <div style="padding:14px 16px;font-size:13px;line-height:1.5;color:var(--text-secondary);">
+              <strong>Equipment is now uploaded by equipment vendors only.</strong>
+              Vendors manage their own items from the partner app. Older admin-listed items below are read-only and are no longer shown to patients.
+            </div>
+          </div>
+
           <!-- Add / Edit Service Form -->
-          <div class="card" style="margin-bottom:16px;">
+          <div class="card" id="service-form-card" style="margin-bottom:16px;">
             <div class="card-header">
               <span class="card-title" id="service-form-title">Add Service</span>
               <button class="btn btn-outline" id="cancel-service-btn" style="display:none;" onclick="cancelServiceEdit()">
@@ -4522,7 +4530,7 @@
         <div class="card" style="margin-bottom:16px;">
           <div class="card-header"><span class="card-title">Settlement Automation</span></div>
           <div style="display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;padding-top:4px;">
-            <div class="form-group" style="margin:0;min-width:220px;">
+            <div class="form-group" id="settlement-freq-group" style="margin:0;min-width:220px;">
               <label class="form-label">Settlement Frequency</label>
               <select id="settlement-frequency" class="filter-select" style="width:100%;" onchange="saveSettlementFrequency()">
                 <option value="daily">Daily</option>
@@ -4540,6 +4548,26 @@
           </div>
         </div>
 
+        <!-- Partner payout bank accounts: Finance/Director only -->
+        <div class="card" id="payout-accounts-card" style="margin-bottom:16px;display:none;">
+          <div class="card-header" style="gap:10px;flex-wrap:wrap;">
+            <span class="card-title">Payout accounts</span>
+            <select id="payout-accounts-filter" class="form-input" style="width:auto;margin-left:auto;" onchange="renderPayoutAccounts()">
+              <option value="pending">Pending verification</option>
+              <option value="rejected">Rejected</option>
+              <option value="verified">Verified</option>
+              <option value="all">All</option>
+            </select>
+          </div>
+          <div style="font-size:12.5px;color:var(--text-secondary);margin-bottom:10px;">Check the bank details before verifying. Payouts are sent only to a verified account; any change by the partner resets it to pending.</div>
+          <div style="overflow-x:auto;">
+            <table class="data-table">
+              <thead><tr><th>Partner</th><th>Holder / Bank</th><th>IFSC</th><th>Account number</th><th>UPI</th><th>Status</th><th>Actions</th></tr></thead>
+              <tbody id="payout-accounts-tbody"><tr><td colspan="7" class="loading">Loading payout accounts...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+
         <!-- Director-only switches (hidden for other roles; firestore.rules enforce it too) -->
         <div class="card" id="director-money-settings" style="margin-bottom:16px;display:none;">
           <div class="card-header"><span class="card-title">Money Settings (Director only)</span></div>
@@ -4551,8 +4579,47 @@
               </label>
               <div style="margin-top:8px;font-size:12.5px;color:#b3261e;font-weight:600;">
                 TEST PROJECTS ONLY: when on, completed test bookings credit partner wallets with money that does not exist. Keep OFF in production.
+                Auto-switches off 7 days after enabling, and is ignored whenever &ldquo;Require real payments&rdquo; is ON.
               </div>
               <div id="test-credit-status" style="margin-top:6px;font-size:12px;color:var(--text-muted);"></div>
+            </div>
+            <div style="border:1px solid var(--border,#e3e8ef);border-radius:10px;padding:14px;">
+              <label style="display:flex;align-items:center;gap:10px;font-weight:600;cursor:pointer;">
+                <input type="checkbox" id="require-payment-enabled" onchange="saveRequirePayment(this)" />
+                Require real payments
+              </label>
+              <div style="margin-top:8px;font-size:12.5px;color:var(--text-secondary);">
+                When ON, all new bookings must be paid through Razorpay/wallet; apps and Firestore rules reject no-payment test bookings. Switch OFF to roll back instantly (no app release needed).
+              </div>
+              <div id="require-payment-status" style="margin-top:6px;font-size:12px;color:var(--text-muted);"></div>
+            </div>
+            <div style="border:1px solid var(--border,#e3e8ef);border-radius:10px;padding:14px;">
+              <div style="font-weight:600;margin-bottom:6px;">Minimum app version (forced update)</div>
+              <div style="font-size:12.5px;color:#b3261e;margin-bottom:8px;">
+                Warning: apps below this version are fully blocked until updated. Publish the new build to the stores first. Leave blank for no minimum.
+              </div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+                <div class="form-group" style="margin:0;width:130px;">
+                  <label class="form-label">Patient (x.y.z)</label>
+                  <input id="min-version-patient" type="text" class="form-input" placeholder="1.2.3" />
+                </div>
+                <div class="form-group" style="margin:0;flex:1 1 180px;">
+                  <label class="form-label">Patient message (optional)</label>
+                  <input id="min-message-patient" type="text" class="form-input" maxlength="200" />
+                </div>
+              </div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+                <div class="form-group" style="margin:0;width:130px;">
+                  <label class="form-label">Partner (x.y.z)</label>
+                  <input id="min-version-partner" type="text" class="form-input" placeholder="1.2.3" />
+                </div>
+                <div class="form-group" style="margin:0;flex:1 1 180px;">
+                  <label class="form-label">Partner message (optional)</label>
+                  <input id="min-message-partner" type="text" class="form-input" maxlength="200" />
+                </div>
+              </div>
+              <button class="btn-publish" onclick="saveMinVersions()" id="save-min-versions-btn"><i class="ti ti-device-floppy"></i> Save</button>
+              <div id="min-version-status" style="margin-top:6px;font-size:12px;color:var(--text-muted);"></div>
             </div>
             <div style="border:1px solid var(--border,#e3e8ef);border-radius:10px;padding:14px;">
               <div style="font-weight:600;margin-bottom:6px;">Referral reward</div>
@@ -4570,6 +4637,23 @@
                 <button class="btn-publish" onclick="saveReferralReward()" id="save-referral-reward-btn"><i class="ti ti-device-floppy"></i> Save</button>
               </div>
               <div id="referral-reward-status" style="margin-top:6px;font-size:12px;color:var(--text-muted);"></div>
+            </div>
+            <div style="border:1px solid var(--border,#e3e8ef);border-radius:10px;padding:14px;">
+              <div style="font-weight:600;margin-bottom:6px;">Partner payouts</div>
+              <div style="font-size:12.5px;color:var(--text-secondary);margin-bottom:8px;">
+                Lets partners request a payout from their app (to a verified bank account). Requests appear in the settlements list for Finance to approve and mark paid. Turn off to pause new requests; the minimum is the least pending earnings needed to request.
+              </div>
+              <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:8px;cursor:pointer;">
+                <input type="checkbox" id="payouts-enabled" /> Payout requests enabled
+              </label>
+              <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
+                <div class="form-group" style="margin:0;">
+                  <label class="form-label">Minimum amount (&#8377;)</label>
+                  <input id="payouts-min-amount" type="number" min="0" step="1" class="form-input" style="width:140px;" placeholder="500" />
+                </div>
+                <button class="btn-publish" onclick="savePayoutsConfig()" id="save-payouts-btn"><i class="ti ti-device-floppy"></i> Save</button>
+              </div>
+              <div id="payouts-status" style="margin-top:6px;font-size:12px;color:var(--text-muted);"></div>
             </div>
           </div>
           <div style="border:1px solid var(--border,#e3e8ef);border-radius:10px;padding:14px;margin-top:16px;">
@@ -4648,6 +4732,21 @@
           </div>
         </div>
 
+        <!-- Unpaid ambulance trips (Director / Finance; shown by initUnpaidTripsListener) -->
+        <div class="card" id="unpaid-trips-card" style="margin-bottom:16px;display:none;">
+          <div class="card-header"><span class="card-title">Unpaid ambulance trips</span></div>
+          <div style="font-size:12px;color:var(--text-muted,#5f6368);margin:0 0 12px;">
+            Completed trips still awaiting patient payment. Patients are reminded automatically after 2 hours and 24 hours.
+            Writing a trip off (Director only) lifts the patient's booking block.
+          </div>
+          <div style="overflow-x:auto;">
+            <table class="data-table" style="width:100%;min-width:640px;">
+              <thead><tr><th>Patient</th><th>Phone</th><th>Trip date</th><th>Amount due</th><th>Days overdue</th><th></th></tr></thead>
+              <tbody id="unpaid-trips-tbody"><tr><td colspan="6" class="loading">Loading...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+
         <!-- Provider settlements table -->
         <div class="card">
           <div class="card-header">
@@ -4672,6 +4771,39 @@
               <tbody id="settlements-tbody"><tr><td colspan="7" class="loading">Loading settlements...</td></tr></tbody>
             </table>
           </div>
+        </div>
+
+        <!-- Weight-loss plans (nutrition subscriptions): read-only report -->
+        <div class="card" style="margin-top:16px;" id="wl-plans-card">
+          <div class="card-header" style="flex-wrap:wrap;gap:8px;">
+            <span class="card-title">Weight-loss plans</span>
+            <div style="display:flex;gap:8px;align-items:center;margin-left:auto;flex-wrap:wrap;">
+              <input type="text" id="wl-plans-filter" class="filter-select" style="min-width:220px;" placeholder="Filter by patient, phone, dietician, status" oninput="renderWeightLossPlans()" />
+              <button class="btn btn-outline" onclick="loadWeightLossPlans(true)"><i class="ti ti-refresh"></i> Refresh</button>
+              <button class="btn btn-outline" onclick="exportWeightLossPlansCsv()"><i class="ti ti-download"></i> Export CSV</button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Patient</th>
+                  <th>Dietician</th>
+                  <th>Months</th>
+                  <th>Total</th>
+                  <th>Start</th>
+                  <th>End</th>
+                  <th>Status</th>
+                  <th>Used / Booked / Lapsed</th>
+                  <th>Lapsed credits</th>
+                  <th>Forfeited base</th>
+                  <th>Unused refund due</th>
+                </tr>
+              </thead>
+              <tbody id="wl-plans-tbody"><tr><td colspan="11" class="loading">Loading plans...</td></tr></tbody>
+            </table>
+          </div>
+          <div style="padding:8px 16px;font-size:12px;color:var(--text-muted,#888);" id="wl-plans-note">Read-only. Showing the latest 500 plans, newest first.</div>
         </div>
       </div>
 
@@ -4872,7 +5004,7 @@
           </div>
         </div>
 
-        <div class="card" style="margin-bottom:16px;">
+        <div class="card" id="issue-refund-card" style="margin-bottom:16px;">
           <div class="card-header"><span class="card-title">Issue Refund</span></div>
           <div style="display:grid;grid-template-columns:2fr auto;gap:12px;align-items:end;">
             <div class="form-group" style="margin:0;">
