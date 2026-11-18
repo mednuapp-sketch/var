@@ -1,9 +1,14 @@
 {
   "name": "mednu-firestore-rules-tests",
-  "description": "Firestore Rules Unit Tests for the shared firestore.rules file — Lab & Diagnostics, and orders (Patient Prescription Upload).",
+  "description": "Firestore + Storage Rules Unit Tests for the shared firestore.rules / storage.rules files.",
   "private": true,
   "scripts": {
-    "test": "node --test lab.rules.test.js orders_prescription.rules.test.js appointments_join_call.rules.test.js guest_join.rules.test.js"
+    "test": "node --test --test-concurrency=1 *.rules.test.js",
+    "test:legacy": "node --test --test-concurrency=1 lab.rules.test.js orders_prescription.rules.test.js appointments_join_call.rules.test.js guest_join.rules.test.js",
+    "test:firestore": "node --test --test-concurrency=1 appointments.rules.test.js consultations.rules.test.js service_requests.rules.test.js partner_profiles.rules.test.js caregiver_visits.rules.test.js pool_orders.rules.test.js nutrition.rules.test.js money_config.rules.test.js payments_switch.rules.test.js payouts.rules.test.js",
+    "test:storage": "node --test --test-concurrency=1 storage.rules.test.js",
+    "test:emulator": "firebase emulators:exec --only firestore,storage --project mednu-rules-test \"npm --prefix firestore-tests test\"",
+    "check": "node --check helpers/env.js && node --check appointments.rules.test.js && node --check consultations.rules.test.js && node --check service_requests.rules.test.js && node --check partner_profiles.rules.test.js && node --check caregiver_visits.rules.test.js && node --check pool_orders.rules.test.js && node --check nutrition.rules.test.js && node --check money_config.rules.test.js && node --check payments_switch.rules.test.js && node --check payouts.rules.test.js && node --check storage.rules.test.js"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^3.0.4"
