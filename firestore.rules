@@ -35,6 +35,46 @@ service cloud.firestore {
     function isDirector() { return adminRole() == 'director'; }
     function adminInRoles(roles) { return isAdmin() && (isDirector() || adminRole() in roles); }
 
+    // ── Real-payments switch (app_config/payments.requirePayment) ───────────
+    // A missing doc means OFF. When ON, a client may not create a booking that
+    // skips payment: paymentStatus 'not_required'/'paid' and any client-written
+    // paymentId are rejected. Real paid bookings are created by capturePayment /
+    // captureCartPayment / captureTripPayment (Admin SDK, bypasses rules).
+    // Free (zero-price) bookings are ALSO server-created while ON (callable
+    // createFreeBooking proves the real price is zero): rules cannot see the
+    // real price, so client creates of appointments / hospital_appointments /
+    // nutrition_appointments / orders / service_requests are denied when ON,
+    // except ambulance 'pay_after_trip', the SOS 'emergency_doctor' request,
+    // provider-created consultations and the scheduled call of the patient's
+    // own appointment. Costs one extra read per booking create.
+    function _requirePaymentOn() {
+      return exists(/databases/$(database)/documents/app_config/payments) &&
+        get(/databases/$(database)/documents/app_config/payments).data.get('requirePayment', false) == true;
+    }
+    function _paymentBypassOk() {
+      return !_requirePaymentOn() || (
+        !(request.resource.data.get('paymentStatus', '') in ['not_required', 'paid']) &&
+        !('paymentId' in request.resource.data.keys())
+      );
+    }
+    // Optional price field: absent / null / <= 0 (SOS request carries no price).
+    function _priceZeroOrAbsent(field) {
+      let p = request.resource.data.get(field, null);
+      return p == null || (p is number && p <= 0);
+    }
+
+    // Switch-ON exception for consultations: the patient-side scheduled call
+    // of an appointment that already exists for this patient with the same
+    // doctor (that appointment could only be created via a verified payment
+    // or the server-side createFreeBooking).
+    function _scheduledConsultOfOwnAppointment() {
+      let aid = request.resource.data.get('appointmentId', '');
+      return aid is string && aid != '' &&
+        exists(/databases/$(database)/documents/appointments/$(aid)) &&
+        get(/databases/$(database)/documents/appointments/$(aid)).data.patientId == request.auth.uid &&
+        get(/databases/$(database)/documents/appointments/$(aid)).data.doctorId == request.resource.data.get('doctorId', '');
+    }
+
     // Check if user is a verified doctor
     // An *approved* doctor only. Mere existence of `doctors/{uid}` is not
     // enough: every partner-app signup (any role, before any admin review)
@@ -314,6 +354,28 @@ service cloud.firestore {
                           doesNotModify(['name', 'bio', 'about', 'fee', 'experience', 'qualifications',
                                          'clinicName', 'clinicAddress', 'clinicLat', 'clinicLng',
                                          'clinicCity', 'photoUrl', 'languages'])) &&
+                        // Active owners: strict allowlist (verification fields such as
+                        // documents/isVerified/documentVerification are admin-only).
+                        // Every key here is a real client write: presence/heartbeat,
+                        // location, availability.*, pendingChanges flow, fcm token,
+                        // WhatsApp opt-in, and the role-switcher append (roles +
+                        // termsAccepted*). `roles` may only grow with partner roles.
+                        (resource.data.status != 'active' ||
+                          (validFcmTokenWrite() &&
+                           request.resource.data.diff(resource.data).affectedKeys()
+                             .hasOnly(['pendingChanges', 'hasPendingChanges', 'updatedAt',
+                                       'isOnline', 'acceptingConsultations', 'lastHeartbeat',
+                                       'location', 'geohash', 'geohash5', 'lastLocationUpdate',
+                                       'availability',
+                                       'fcmToken', 'fcmTokenUpdatedAt', 'fcmPlatform',
+                                       'whatsappOptIn', 'whatsappPhone', 'language', 'whatsappOptInUpdatedAt',
+                                       'roles', 'termsAccepted', 'termsAcceptedAt']) &&
+                           (!('roles' in request.resource.data.diff(resource.data).affectedKeys()) ||
+                            (request.resource.data.roles is list &&
+                             request.resource.data.roles.hasAll(resource.data.get('roles', [])) &&
+                             request.resource.data.roles.toSet().difference(resource.data.get('roles', []).toSet())
+                               .hasOnly(['doctor', 'ambulance', 'pharmacy', 'lab', 'equipment', 'caregiver',
+                                         'care_assistant', 'physiotherapist', 'counsellor', 'nutritionist', 'hospital']))))) &&
                         (!('roles' in request.resource.data) ||
                          !('admin' in request.resource.data.roles)));
       allow delete: if isAdmin();
@@ -357,7 +419,8 @@ service cloud.firestore {
       // Only the booking patient can create; must set their own patientId.
       allow create: if isAuth() &&
                        request.resource.data.patientId == request.auth.uid &&
-                       request.resource.data.doctorId != request.auth.uid;
+                       request.resource.data.doctorId != request.auth.uid &&
+                       !_requirePaymentOn();
       // Patient can cancel (status update only) or reschedule (date/time/type
       // only — doctorId, patientId, fee stay locked so a reschedule can never
       // change who's billed or how much); doctor can update consultation status.
@@ -437,7 +500,8 @@ service cloud.firestore {
         isAdmin() ||
         isHospitalPartnerFor(resource.data.hospitalId)
       );
-      allow create: if isAuth() && request.resource.data.patientId == request.auth.uid;
+      allow create: if isAuth() && request.resource.data.patientId == request.auth.uid &&
+                       !_requirePaymentOn();
       allow update: if isAuth() && (
         (resource.data.patientId == request.auth.uid &&
           resource.data.status in ['booked', 'checked_in'] &&
@@ -542,7 +606,11 @@ service cloud.firestore {
     // for serviceType 'hospital_bill', or written directly by the client while
     // kRequirePayment is false — see payment_screen.dart).
     match /hospital_bill_payments/{paymentId} {
-      allow create: if isAuth() && request.resource.data.patientId == request.auth.uid;
+      // Switch ON: clients never create these (capturePayment, Admin SDK,
+      // does) — only the no-pay path writes them directly, and only while
+      // the real-payments switch is OFF.
+      allow create: if isAuth() && request.resource.data.patientId == request.auth.uid &&
+                       !_requirePaymentOn();
       // A hospital's own billing-desk login may read its hospital's payment
       // records (see hospital_profiles below) so staff can confirm a
       // patient's payment actually landed, in real time.
@@ -577,7 +645,8 @@ service cloud.firestore {
 
     match /hospital_profiles/{hospitalUid} {
       allow read:   if isAuth() && (isOwner(hospitalUid) || isAdmin());
-      allow create: if isOwner(hospitalUid) && request.resource.data.status == 'pending';
+      allow create: if isOwner(hospitalUid) && request.resource.data.status == 'pending' &&
+                       (!('isVerified' in request.resource.data) || request.resource.data.isVerified == false);
       // `documentVerification`/`documentsVerified` are admin-only like every
       // other partner role, and `documents` locks once approved so a
       // verified file can't be swapped out after the fact.
@@ -590,7 +659,7 @@ service cloud.firestore {
       allow update: if (isOwner(hospitalUid) &&
                          (
                            (resource.data.status != 'active' &&
-                             doesNotModify(['status', 'hospitalId', 'hospitalName', 'documentVerification', 'documentsVerified'])) ||
+                             doesNotModify(['status', 'isVerified', 'rating', 'hospitalId', 'hospitalName', 'documentVerification', 'documentsVerified'])) ||
                            (resource.data.status == 'active' &&
                              validFcmTokenWrite() &&
                              request.resource.data.diff(resource.data).affectedKeys()
@@ -738,9 +807,14 @@ service cloud.firestore {
       // either way, just held for a different role.
       // We key off callerType rather than isDoctor() to avoid exists() overhead and to support
       // accounts that appear in both users and doctors collections during development.
-      allow create: if isAuth() && (
+      // Switch ON: a patient-created consultation must be zero-fee OR the
+      // scheduled call of the patient's own existing appointment (written by
+      // appointment_screen.dart, no fee field; the appointment itself was
+      // already paid/created server-side). Provider-created docs are exempt.
+      allow create: if isAuth() && _paymentBypassOk() && (
         (request.resource.data.callerType == 'patient' &&
           request.resource.data.patientId == request.auth.uid &&
+          (!_requirePaymentOn() || _scheduledConsultOfOwnAppointment()) &&
           // A patient-created consultation starts as a request only — never
           // as 'active'/'ongoing'/'ended'/'completed'.
           request.resource.data.get('status', 'pending') in ['pending', 'scheduled_waiting']) ||
@@ -769,6 +843,11 @@ service cloud.firestore {
             .hasOnly(['status', 'ringingAt', 'declinedAt', 'endedAt',
                       'startedAt', 'durationSeconds', 'doctorNotes',
                       'missedAt', 'active', 'cancelledAt',
+                      // endedBy: the provider app stamps its own uid when IT ends
+                      // the call; the server accepts it (with a minimum call
+                      // length) as proof the doctor joined when the 'active'
+                      // write was lost. Patients cannot write it (not in their list).
+                      'endedBy',
                       // Written by mednu_doctor: dashboard "join waiting patient"
                       // (updatedAt), write_prescription_screen (prescriptionId/
                       // prescriptionWritten, read by the dashboard Rx badge) and
@@ -840,7 +919,16 @@ service cloud.firestore {
       allow read: if isAuth() && (
         resource.data.patientId == request.auth.uid || isAdmin() || isDoctor()
       );
+      // Switch ON: client creates are denied (free bookings go through the
+      // createFreeBooking callable) except ambulance pay_after_trip and the
+      // SOS 'emergency_doctor' request, which must never depend on a callable.
       allow create: if isAuth() && request.resource.data.patientId == request.auth.uid &&
+        _paymentBypassOk() &&
+        (!_requirePaymentOn() ||
+          (request.resource.data.get('type', '') == 'emergency_doctor' &&
+            _priceZeroOrAbsent('amount')) ||
+          (request.resource.data.get('type', '') == 'ambulance' &&
+            request.resource.data.get('paymentStatus', '') == 'pay_after_trip')) &&
         // Ambulance pay-after-trip: payment_due / amountDue / fareFinal / paymentId
         // are server-written only (completion trigger + captureTripPayment).
         !(request.resource.data.get('type', '') == 'ambulance' &&
@@ -1405,7 +1493,9 @@ service cloud.firestore {
                                .hasOnly(['pendingChanges', 'hasPendingChanges', 'updatedAt',
                                          'fcmToken', 'fcmTokenUpdatedAt', 'fcmPlatform',
                                          'isOnline', 'lastHeartbeat', 'location', 'geohash', 'geohash5',
-                                         'speedKmh', 'lastLocationUpdate', 'ratePerTrip']))
+                                         'speedKmh', 'lastLocationUpdate', 'ratePerTrip',
+                                         // WhatsApp opt-in toggle (WhatsAppOptInService) — settings, not profile details.
+                                         'whatsappOptIn', 'whatsappPhone', 'language', 'whatsappOptInUpdatedAt']))
                          )) ||
                        (adminInRoles(['hr']) &&
                          request.resource.data.diff(resource.data).affectedKeys()
@@ -1521,7 +1611,9 @@ service cloud.firestore {
                              validFcmTokenWrite() &&
                              request.resource.data.diff(resource.data).affectedKeys()
                                .hasOnly(['pendingChanges', 'hasPendingChanges', 'updatedAt', 'isOnDuty',
-                                         'fcmToken', 'fcmTokenUpdatedAt', 'fcmPlatform']))
+                                         'fcmToken', 'fcmTokenUpdatedAt', 'fcmPlatform',
+                                         // WhatsApp opt-in toggle (WhatsAppOptInService) — settings, not profile details.
+                                         'whatsappOptIn', 'whatsappPhone', 'language', 'whatsappOptInUpdatedAt']))
                          )) ||
                        (adminInRoles(['hr']) &&
                          request.resource.data.diff(resource.data).affectedKeys()
@@ -1562,7 +1654,8 @@ service cloud.firestore {
           resource.data.status == 'scheduled' &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['declinedBy', 'updatedAt']) &&
           request.auth.uid in request.resource.data.declinedBy &&
-          request.resource.data.declinedBy.hasAll(resource.data.get('declinedBy', []))) ||
+          request.resource.data.declinedBy.hasAll(resource.data.get('declinedBy', [])) &&
+          request.resource.data.declinedBy.size() <= resource.data.get('declinedBy', []).size() + 1) ||
         // Care Assistant declining a request the patient pinned to them (and
         // that they haven't accepted yet): releases it back to the open pool.
         (resource.data.caregiverId == request.auth.uid &&
@@ -1572,7 +1665,8 @@ service cloud.firestore {
           request.resource.data.status == 'scheduled' &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['caregiverId', 'declinedBy', 'updatedAt']) &&
           request.auth.uid in request.resource.data.declinedBy &&
-          request.resource.data.declinedBy.hasAll(resource.data.get('declinedBy', []))) ||
+          request.resource.data.declinedBy.hasAll(resource.data.get('declinedBy', [])) &&
+          request.resource.data.declinedBy.size() <= resource.data.get('declinedBy', []).size() + 1) ||
         // Nurse / Care Assistant cancelling a visit they ALREADY accepted, before
         // it started (status still 'scheduled', not checked in): released back to
         // the open pool — caregiverId and acceptedAt cleared, uid added to
@@ -1591,7 +1685,8 @@ service cloud.firestore {
           request.resource.data.providerCancelReason is string &&
           request.resource.data.providerCancelReason.size() <= 200 &&
           request.auth.uid in request.resource.data.declinedBy &&
-          request.resource.data.declinedBy.hasAll(resource.data.get('declinedBy', [])))
+          request.resource.data.declinedBy.hasAll(resource.data.get('declinedBy', [])) &&
+          request.resource.data.declinedBy.size() <= resource.data.get('declinedBy', []).size() + 1)
       );
       // Created only by the Cloud Function mirror (Admin SDK bypasses rules).
       allow create, delete: if isAdmin();
@@ -1738,7 +1833,9 @@ service cloud.firestore {
                                          'fcmToken', 'fcmTokenUpdatedAt', 'fcmPlatform',
                                          // Published booking slots (weekly schedule / slot length / blocked
                                          // slots) — operational like presence, same as doctors' availability.
-                                         'availability']))
+                                         'availability',
+                                         // WhatsApp opt-in toggle (WhatsAppOptInService) — settings, not profile details.
+                                         'whatsappOptIn', 'whatsappPhone', 'language', 'whatsappOptInUpdatedAt']))
                          )) ||
                        (adminInRoles(['hr']) &&
                          request.resource.data.diff(resource.data).affectedKeys()
@@ -1809,7 +1906,9 @@ service cloud.firestore {
                                          'fcmToken', 'fcmTokenUpdatedAt', 'fcmPlatform',
                                          // Published booking slots (weekly schedule / slot length / blocked
                                          // slots) — operational like presence, same as doctors' availability.
-                                         'availability']))
+                                         'availability',
+                                         // WhatsApp opt-in toggle (WhatsAppOptInService) — settings, not profile details.
+                                         'whatsappOptIn', 'whatsappPhone', 'language', 'whatsappOptInUpdatedAt']))
                          )) ||
                        (adminInRoles(['hr']) &&
                          request.resource.data.diff(resource.data).affectedKeys()
@@ -1955,21 +2054,70 @@ service cloud.firestore {
 
     // ── Settlements — batched provider payouts ────────────────────────────────
     match /settlements/{settlementId} {
+      // The provider (uid, or hospital billing-desk login for its hospitalId) can
+      // read its own settlements so the app can show payout-request status.
       allow read: if isAuth() && (
-        resource.data.providerId == request.auth.uid || isAdmin()
+        resource.data.providerId == request.auth.uid || isAdmin() ||
+        isHospitalPartnerFor(resource.data.providerId)
       );
-      allow write: if false; // approveSettlement/holdSettlement/markSettlementPaid/etc only
+      allow write: if false; // approveSettlement/holdSettlement/markSettlementPaid/requestPayout/etc only
+    }
+
+    // ── Partner payout (bank/UPI) details ─────────────────────────────────────
+    // Keyed by provider id (uid; hospitalId for hospitals). The owner may only
+    // write status 'pending' (editing a verified account re-queues verification).
+    // Finance/Director verify or reject (status/rejectReason/verifiedAt/verifiedBy
+    // only). Read: owner + Finance/Director — never hr/support/marketing.
+    match /payout_accounts/{providerId} {
+      function paOwner() {
+        return isOwner(providerId) || isHospitalPartnerFor(providerId);
+      }
+      function paValid() {
+        let d = request.resource.data;
+        return d.keys().hasOnly(['providerId', 'ownerUid', 'role', 'holderName', 'accountNumber',
+                                 'ifsc', 'bankName', 'upiId', 'submittedAt', 'updatedAt', 'status']) &&
+          d.keys().hasAll(['providerId', 'ownerUid', 'role', 'holderName', 'accountNumber',
+                           'ifsc', 'bankName', 'submittedAt', 'updatedAt', 'status']) &&
+          d.providerId == providerId &&
+          d.ownerUid == request.auth.uid &&
+          d.status == 'pending' &&
+          d.role is string && d.role.size() > 0 && d.role.size() <= 30 &&
+          d.holderName is string && d.holderName.size() >= 2 && d.holderName.size() <= 80 &&
+          d.accountNumber is string && d.accountNumber.matches('^[0-9]{6,20}$') &&
+          d.ifsc is string && d.ifsc.matches('^[A-Z]{4}0[A-Z0-9]{6}$') &&
+          d.bankName is string && d.bankName.size() >= 2 && d.bankName.size() <= 80 &&
+          (!('upiId' in d) || d.upiId == null ||
+            (d.upiId is string && d.upiId.size() < 80 && d.upiId.matches('.*@.*')));
+      }
+      allow read: if isAuth() && (paOwner() || adminInRoles(['finance']));
+      allow create: if isAuth() && paOwner() && paValid();
+      allow update: if isAuth() && (
+        (paOwner() && resource.data.ownerUid == request.auth.uid && paValid()) ||
+        (adminInRoles(['finance']) &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['status', 'rejectReason', 'verifiedAt', 'verifiedBy']) &&
+          request.resource.data.status in ['verified', 'rejected', 'pending'])
+      );
+      allow delete: if false;
     }
 
     // ── Settlement frequency config (daily/weekly/monthly/manual) ─────────────
     // `testCreditEnabled` makes completed test bookings credit partner wallets
     // with money that does not exist — only a Director may change it.
+    // Director or Finance may write; the three money-safety flags below are
+    // Director-only (a Finance write must leave them unchanged).
     match /settlement_config/{docId} {
+      function scKeyUnchanged(k) {
+        return request.resource.data.get(k, null) ==
+          (resource == null ? null : resource.data.get(k, null));
+      }
       allow read: if isAuth();
-      allow create, update: if isAdmin() && (
-        isDirector() ||
-        request.resource.data.get('testCreditEnabled', null) ==
-          (resource == null ? null : resource.data.get('testCreditEnabled', null))
+      allow create, update: if adminInRoles(['finance']) && (
+        isDirector() || (
+          scKeyUnchanged('testCreditEnabled') &&
+          scKeyUnchanged('testCreditEnabledAt') &&
+          scKeyUnchanged('enforcePriceCheck')
+        )
       );
       allow delete: if isDirector();
     }
@@ -2076,7 +2224,13 @@ service cloud.firestore {
         resource.data.nutritionistId == request.auth.uid ||
         isAdmin()
       );
-      allow create: if isAuth() && request.resource.data.userId == request.auth.uid;
+      // Plan links (subscriptionId/planIndex) and paymentStatus 'plan_prepaid'
+      // are server-set (capturePayment / bookPlanConsultation): a client can
+      // never mint a prepaid consultation, even in test mode.
+      allow create: if isAuth() && request.resource.data.userId == request.auth.uid &&
+                       !_requirePaymentOn() &&
+                       !request.resource.data.keys().hasAny(['subscriptionId', 'planIndex']) &&
+                       request.resource.data.get('paymentStatus', '') != 'plan_prepaid';
       // Status moves only along the real pipeline — a nutritionist can't jump
       // straight to 'completed' (which makes the payout eligible, see
       // onNutritionAppointmentSettlement), and a patient can only cancel an
@@ -2099,6 +2253,19 @@ service cloud.firestore {
         isAdmin()
       );
       allow delete: if isAdmin();
+    }
+
+    // ── Prepaid weight-loss plans (subscriptions) ─────────────────────────────
+    // Server-write only (capturePayment, bookPlanConsultation, cancelWeightLossPlan,
+    // the plan scheduler and settlement triggers). The patient and the assigned
+    // dietician read their own.
+    match /nutrition_subscriptions/{subId} {
+      allow read: if isAuth() && (
+        resource.data.patientId == request.auth.uid ||
+        resource.data.nutritionistId == request.auth.uid ||
+        isAdmin()
+      );
+      allow write: if false;
     }
 
     // ── Meal tracking (per-user nutrition logs) ───────────────────────────────
@@ -2192,7 +2359,9 @@ service cloud.firestore {
                              request.resource.data.diff(resource.data).affectedKeys()
                                .hasOnly(['pendingChanges', 'hasPendingChanges', 'updatedAt', 'isOnline',
                                          'fcmToken', 'fcmTokenUpdatedAt', 'fcmPlatform',
-                                         'availability', 'isOnlineAvailable', 'isInPersonAvailable']))
+                                         'availability', 'isOnlineAvailable', 'isInPersonAvailable',
+                                         // WhatsApp opt-in toggle (WhatsAppOptInService) — settings, not profile details.
+                                         'whatsappOptIn', 'whatsappPhone', 'language', 'whatsappOptInUpdatedAt']))
                          )) ||
                        (adminInRoles(['hr']) &&
                          request.resource.data.diff(resource.data).affectedKeys()
@@ -2362,7 +2531,8 @@ service cloud.firestore {
       allow read: if isAuth() && (
         resource.data.patientId == request.auth.uid || isAdmin()
       );
-      allow create: if isAuth() && request.resource.data.patientId == request.auth.uid;
+      allow create: if isAuth() && request.resource.data.patientId == request.auth.uid &&
+                       !_requirePaymentOn();
       // Patients may self-update their cancel fields and — additively —
       // the prescription-upload fields (url/fileType/uploadedAt). They may
       // NEVER set prescriptionVerified/prescriptionRejectedReason
@@ -2493,6 +2663,12 @@ service cloud.firestore {
       allow read: if isAuth() && (
         resource.data.uid == request.auth.uid || isAdmin()
       );
+      allow write: if false;
+    }
+
+    // ── Automatic Razorpay refunds (idempotency guard + audit; server-only) ───
+    match /razorpay_refunds/{paymentId} {
+      allow read: if isAdmin();
       allow write: if false;
     }
 
