@@ -146,6 +146,23 @@ class _TimelineTile extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
                     Text(appointment.userName, style: AppTextStyles.bodyMedium),
+                    if (appointment.planLabel != null) ...[
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          const Icon(Icons.event_repeat_rounded, size: 14, color: AppColors.primary),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              appointment.planLabel!,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTextStyles.bodySmall.copyWith(color: AppColors.primary),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                     const SizedBox(height: 10),
                     Row(
                       children: [
@@ -159,7 +176,11 @@ class _TimelineTile extends StatelessWidget {
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          CurrencyFormatter.format(appointment.fee),
+                          appointment.isPlanConsultation
+                              ? (appointment.planEarning != null
+                                  ? 'You earn ${CurrencyFormatter.format(appointment.planEarning!)}'
+                                  : 'Plan consultation')
+                              : CurrencyFormatter.format(appointment.fee),
                           style: AppTextStyles.labelLarge.copyWith(color: AppColors.success),
                         ),
                       ],

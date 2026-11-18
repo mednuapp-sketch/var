@@ -216,14 +216,55 @@ class _DoctorVideoCallScreenState extends State<DoctorVideoCallScreen>
     }
     // Signal the patient app to join by setting status to 'active'.
     // The patient's Firestore listener watches for this exact status change.
-    try {
-      await FirebaseFirestore.instance
-          .collection('consultations')
-          .doc(widget.consultationId)
-          .update({'status': 'active'});
-    } catch (e) {
-      debugPrint('[DoctorVideoCall] Active status update failed: $e');
+    await _markActive();
+  }
+
+  // 'active' is the doctor-joined proof the server uses to credit the
+  // consultation, so a transient failure must not be swallowed: 3 quick tries,
+  // then a non-blocking toast and a background retry until the call ends.
+  Timer? _activeRetryTimer;
+  bool _activeRetryBusy = false;
+
+  Future<bool> _tryWriteActive() async {
+    for (var attempt = 0; attempt < 3; attempt++) {
+      if (_endCallLock || !mounted) return true; // call over: nothing to mark
+      try {
+        await FirebaseFirestore.instance
+            .collection('consultations')
+            .doc(widget.consultationId)
+            .update({'status': 'active'});
+        return true;
+      } catch (e) {
+        debugPrint('[DoctorVideoCall] Active status update failed (try ${attempt + 1}): $e');
+        if (attempt < 2) {
+          await Future.delayed(Duration(milliseconds: 600 * (attempt + 1)));
+        }
+      }
     }
+    return false;
+  }
+
+  Future<void> _markActive() async {
+    if (await _tryWriteActive()) return;
+    if (!mounted || _endCallLock) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Connection issue, retrying...'),
+        duration: Duration(seconds: 3),
+      ),
+    );
+    _activeRetryTimer?.cancel();
+    _activeRetryTimer = Timer.periodic(const Duration(seconds: 8), (t) async {
+      if (!mounted || _endCallLock) {
+        t.cancel();
+        return;
+      }
+      if (_activeRetryBusy) return;
+      _activeRetryBusy = true;
+      final ok = await _tryWriteActive();
+      _activeRetryBusy = false;
+      if (ok) t.cancel();
+    });
   }
 
   Future<void> _enableScreenProtection() async {
@@ -355,6 +396,7 @@ class _DoctorVideoCallScreenState extends State<DoctorVideoCallScreen>
     ProviderScope.containerOf(context, listen: false)
         .read(criticalOperationInProgressProvider.notifier)
         .state = false;
+    _activeRetryTimer?.cancel();
     _consultSub?.cancel();
     _apptLabelSub?.cancel();
     _notesCtrl.dispose();
@@ -1326,6 +1368,9 @@ class _DoctorVideoCallScreenState extends State<DoctorVideoCallScreen>
         if (isLastToLeave) {
           updates['status'] = 'ended';
           updates['endedAt'] = FieldValue.serverTimestamp();
+          // Server credits a doctor-ended call even if the 'active' write was lost.
+          final uid = FirebaseAuth.instance.currentUser?.uid;
+          if (uid != null) updates['endedBy'] = uid;
         }
         if (updates.isNotEmpty) {
           await consultRef.update(updates);

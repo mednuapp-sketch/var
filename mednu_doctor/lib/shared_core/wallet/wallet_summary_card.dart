@@ -5,6 +5,7 @@ import '../../core/constants/app_text_styles.dart';
 import '../../core/widgets/ux_widgets.dart';
 import '../widgets/shared_state_widgets.dart';
 import 'currency_formatter.dart';
+import 'payout_widgets.dart';
 import 'wallet_providers.dart';
 
 /// Shown once on every partner earnings/wallet surface.
@@ -47,7 +48,14 @@ class SharedWalletSummaryCard extends ConsumerWidget {
   final VoidCallback? onTap;
   /// Side inset; pass 0 when the parent list already pads its children.
   final double horizontalPadding;
-  const SharedWalletSummaryCard({super.key, this.onTap, this.horizontalPadding = 16});
+  /// Shows the payout request / payout account actions under the balance.
+  final bool showPayoutActions;
+  const SharedWalletSummaryCard({
+    super.key,
+    this.onTap,
+    this.horizontalPadding = 16,
+    this.showPayoutActions = true,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -60,7 +68,11 @@ class SharedWalletSummaryCard extends ConsumerWidget {
         error: (_, __) => const PremiumCard(
           child: NetworkErrorState(),
         ),
-        data: (summary) => TapScale(
+        data: (summary) => Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TapScale(
           onTap: onTap,
           child: Container(
             padding: const EdgeInsets.all(18),
@@ -131,6 +143,12 @@ class SharedWalletSummaryCard extends ConsumerWidget {
               ],
             ),
           ),
+        ),
+            if (showPayoutActions) ...[
+              const SizedBox(height: 10),
+              PayoutActionsPanel(pending: summary.pendingAmount),
+            ],
+          ],
         ),
       ),
     );

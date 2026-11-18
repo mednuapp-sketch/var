@@ -9,6 +9,7 @@ import '../quick_connect_earnings.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../../../core/router/app_router.dart';
 import '../../../shared_core/wallet/wallet_summary_card.dart' show EarningsFeeNote;
+import '../../../shared_core/wallet/payout_widgets.dart';
 
 class DoctorEarningsScreen extends StatefulWidget {
   const DoctorEarningsScreen({super.key});
@@ -583,8 +584,9 @@ class _EarningsBody extends StatelessWidget {
 // Settlement Engine (functions/index.js). Payouts are admin-initiated (the
 // admin approves a settlement batch and transfers funds outside the app,
 // then marks it paid) rather than doctor-requested — see `settlement_config`
-// for the schedule — so this no longer offers a fake "Request Withdrawal"
-// action; it shows the real balances and the next scheduled payout instead.
+// for the schedule — so there is no fake withdrawal button; the real payout
+// request flow (verified account + requestPayout callable) lives in
+// PayoutActionsPanel below the balances.
 class _WalletSection extends StatelessWidget {
   final String uid;
 
@@ -600,7 +602,7 @@ class _WalletSection extends StatelessWidget {
         final pending = (d?['pendingEarnings'] as num?) ?? 0;
         final paidThisMonth = (d?['paidThisMonth'] as num?) ?? 0;
 
-        return Container(
+        final card = Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             gradient: const LinearGradient(
@@ -671,6 +673,15 @@ class _WalletSection extends StatelessWidget {
             ],
           ),
         );
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            card,
+            const SizedBox(height: 10),
+            PayoutActionsPanel(pending: pending),
+          ],
+        );
       },
     );
   }
@@ -701,7 +712,7 @@ class _WalletSection extends StatelessWidget {
             content: Text(
               '$scheduleText\n\nOnce a batch is approved, MedNU transfers the funds to your '
               'registered account and marks it paid — you\'ll get a notification when that happens. '
-              'There\'s no need to request a payout.',
+              'You can also request a payout yourself once your payout account is verified.',
               style: AppTextStyles.bodyMedium,
             ),
             actions: [

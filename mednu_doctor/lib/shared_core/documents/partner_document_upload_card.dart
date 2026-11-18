@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -51,8 +52,39 @@ class PartnerDocumentsSection extends StatelessWidget {
     this.locked = false,
   });
 
+  /// `pendingChanges.documents.other_doc_N` entries awaiting admin review.
+  /// Only `other_doc_[1-5]` keys are ever honoured — anything else in a pending
+  /// `documents` map is ignored here (and stripped again on admin approval).
+  static Map<String, dynamic> _pendingOtherDocs(Map<String, dynamic>? data) {
+    final pc = data?['pendingChanges'];
+    final docs = pc is Map ? pc['documents'] : null;
+    if (docs is! Map) return const {};
+    return {
+      for (final e in docs.entries)
+        if (e.key is String &&
+            RegExp(r'^other_doc_[1-5]$').hasMatch(e.key as String) &&
+            PartnerDocumentMeta.fromMap(e.value) != null)
+          e.key as String: e.value,
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
+    // Active (locked) partners can still queue extra documents for review, so
+    // watch their own profile doc for the pending ones. Small single-doc
+    // listener, only while locked.
+    if (!locked) return _buildContent(context, const {});
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('${role}_profiles')
+          .doc(uid)
+          .snapshots(),
+      builder: (context, snap) =>
+          _buildContent(context, _pendingOtherDocs(snap.data?.data())),
+    );
+  }
+
+  Widget _buildContent(BuildContext context, Map<String, dynamic> pendingDocs) {
     final types = PartnerDocumentType.forRole(typeKey ?? role);
     if (types.isEmpty) return const SizedBox.shrink();
     final requiredCount = types.where((t) => !t.optional).length;
@@ -93,14 +125,25 @@ class PartnerDocumentsSection extends StatelessWidget {
     final cardTypes = [...shownTypes, ...legacyTypes];
 
     // Optional partner-added documents (other_doc_1..5) with their own titles.
-    final otherKeys = PartnerDocumentType.otherDocKeysIn(documents);
+    // Live ones plus (for approved partners) those still pending admin review.
+    final otherDocs = <String, dynamic>{
+      for (final e in pendingDocs.entries)
+        if (PartnerDocumentMeta.fromMap(documents[e.key]) == null)
+          e.key: e.value,
+      ...documents,
+    };
+    final pendingOtherKeys = {
+      for (final k in pendingDocs.keys)
+        if (PartnerDocumentMeta.fromMap(documents[k]) == null) k,
+    };
+    final otherKeys = PartnerDocumentType.otherDocKeysIn(otherDocs);
     final otherTypes = [
       for (final k in otherKeys)
         PartnerDocumentType(
           k,
-          (PartnerDocumentMeta.fromMap(documents[k])?.label ?? '').trim().isEmpty
+          (PartnerDocumentMeta.fromMap(otherDocs[k])?.label ?? '').trim().isEmpty
               ? 'Other document ${k.substring(k.length - 1)}'
-              : PartnerDocumentMeta.fromMap(documents[k])!.label!.trim(),
+              : PartnerDocumentMeta.fromMap(otherDocs[k])!.label!.trim(),
         ),
     ];
 
@@ -174,7 +217,8 @@ class PartnerDocumentsSection extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               locked
-                  ? 'Additional documents you submitted.'
+                  ? 'Add extra documents any time. New ones are reviewed by the '
+                      'MedNU team before they show as approved.'
                   : 'Anything else you would like us to see, such as a fellowship or '
                       'extra certificate. These never block your approval.',
               style: AppTextStyles.caption,
@@ -192,7 +236,7 @@ class PartnerDocumentsSection extends StatelessWidget {
                     runSpacing: 12,
                     children: otherTypes.map((type) {
                       final meta =
-                          PartnerDocumentMeta.fromMap(documents[type.key]);
+                          PartnerDocumentMeta.fromMap(otherDocs[type.key]);
                       return SizedBox(
                         width: itemWidth,
                         child: PartnerDocumentUploadCard(
@@ -200,7 +244,9 @@ class PartnerDocumentsSection extends StatelessWidget {
                           uid: uid,
                           type: type,
                           meta: meta,
-                          locked: locked,
+                          locked: locked || pendingOtherKeys.contains(type.key),
+                          pendingAdminReview:
+                              pendingOtherKeys.contains(type.key),
                           verification: PartnerDocumentVerification.fromMap(
                             documentVerification[type.key],
                             hasDocument: meta != null,
@@ -212,14 +258,13 @@ class PartnerDocumentsSection extends StatelessWidget {
                   );
                 },
               ),
-            if (!locked) ...[
-              if (otherTypes.isNotEmpty) const SizedBox(height: 12),
-              AddOtherDocumentButton(
-                role: role,
-                uid: uid,
-                usedKeys: otherKeys,
-              ),
-            ],
+            if (otherTypes.isNotEmpty) const SizedBox(height: 12),
+            AddOtherDocumentButton(
+              role: role,
+              uid: uid,
+              usedKeys: otherKeys,
+              active: locked,
+            ),
           ],
         ],
       ),
@@ -241,6 +286,10 @@ class PartnerDocumentUploadCard extends StatefulWidget {
   final PartnerDocumentVerification verification;
   final bool locked;
 
+  /// An approved partner's new 'Other document' still awaiting admin review
+  /// (lives in `pendingChanges`, not yet in the live `documents` map).
+  final bool pendingAdminReview;
+
   const PartnerDocumentUploadCard({
     super.key,
     required this.role,
@@ -249,6 +298,7 @@ class PartnerDocumentUploadCard extends StatefulWidget {
     required this.meta,
     required this.verification,
     this.locked = false,
+    this.pendingAdminReview = false,
   });
 
   @override
@@ -502,6 +552,13 @@ class _PartnerDocumentUploadCardState extends State<PartnerDocumentUploadCard> {
   // ── Status chip ──────────────────────────────────────────────────────────
 
   ({String label, Color color, IconData icon}) get _badge {
+    if (widget.pendingAdminReview) {
+      return (
+        label: 'Pending admin review',
+        color: AppColors.warning,
+        icon: Icons.hourglass_bottom_rounded
+      );
+    }
     switch (widget.verification.status) {
       case PartnerDocumentStatus.verified:
         return (

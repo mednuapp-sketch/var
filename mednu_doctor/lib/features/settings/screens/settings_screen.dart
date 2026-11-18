@@ -411,6 +411,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         delay: const Duration(milliseconds: 200),
                         child: _SettingsCard(children: [
                           _SettingsTile(
+                            icon: Icons.account_balance_rounded,
+                            iconColor: AppColors.primary,
+                            title: 'Payout account',
+                            onTap: () => context.push(AppRoutes.payoutAccount),
+                          ),
+                          _divider(),
+                          _SettingsTile(
                             icon: Icons.info_outline_rounded,
                             iconColor: AppColors.primary,
                             title: 'App Version',

@@ -29,7 +29,16 @@ class AmbulanceIncomingRequestsScreen extends ConsumerWidget {
     return SharedAppShell(
       currentRoute: AppRoutes.ambulanceIncomingRequests,
       title: 'Incoming Requests',
-      body: pending.isEmpty
+      body: pending.isEmpty && ref.watch(ambulanceNeedsVehicleTypeProvider) == true
+          ? AppEmptyState(
+              icon: Icons.local_shipping_outlined,
+              title: 'Choose your vehicle type',
+              message:
+                  'Requests are matched by ambulance type (Basic, ALS or ICU). Choose yours to start receiving requests.',
+              actionLabel: 'Choose vehicle type',
+              onAction: () => context.push(AppRoutes.ambulanceVehicleProfile),
+            )
+          : pending.isEmpty
           ? const AppEmptyState(
               icon: Icons.notifications_none_rounded,
               title: 'No pending requests',

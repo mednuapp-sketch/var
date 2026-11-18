@@ -226,6 +226,7 @@ class _CounsellingSettingsScreenState extends State<CounsellingSettingsScreen> {
         SettingsSectionData(
           title: 'Account',
           items: [
+            AccountSettingsItems.payoutAccount(context),
             SettingsItemData(
               icon: Icons.logout_rounded,
               title: 'Sign Out',

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:ui';
+import 'core/widgets/app_version_gate.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -519,20 +520,23 @@ class _MedNUDoctorAppState extends ConsumerState<MedNUDoctorApp>
               maxScaleFactor: 1.0,
             ),
           ),
-          child: Stack(
-            children: [
-              child ?? const SizedBox.expand(),
-              ActiveSessionBridge(router: router),
-              if (_isLocked)
-                LockScreen(
-                  onAuthStarted: () => _isAuthenticating = true,
-                  onAuthEnded:   () => _isAuthenticating = false,
-                  onUnlocked:    () {
-                    _isAuthenticating = false;
-                    if (mounted) setState(() => _isLocked = false);
-                  },
-                ),
-            ],
+          child: AppVersionGate(
+            appKey: 'partner',
+            child: Stack(
+              children: [
+                child ?? const SizedBox.expand(),
+                ActiveSessionBridge(router: router),
+                if (_isLocked)
+                  LockScreen(
+                    onAuthStarted: () => _isAuthenticating = true,
+                    onAuthEnded:   () => _isAuthenticating = false,
+                    onUnlocked:    () {
+                      _isAuthenticating = false;
+                      if (mounted) setState(() => _isLocked = false);
+                    },
+                  ),
+              ],
+            ),
           ),
         );
       },

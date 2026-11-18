@@ -1,11 +1,13 @@
 import 'dart:io';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_text_styles.dart';
 import 'partner_document_models.dart';
+import '../services/pending_profile_edit_service.dart';
 import 'partner_document_service.dart';
 
 /// Asks for the short title of an optional "Other document" (e.g. "Fellowship
@@ -131,11 +133,18 @@ class AddOtherDocumentButton extends StatefulWidget {
   /// `other_doc_N` keys already on the profile.
   final List<String> usedKeys;
 
+  /// True once the profile is 'active'. The live `documents` map is then
+  /// locked by firestore.rules, so the new document is queued for admin review
+  /// as a `pendingChanges.documents.other_doc_N` entry instead of being written
+  /// directly.
+  final bool active;
+
   const AddOtherDocumentButton({
     super.key,
     required this.role,
     required this.uid,
     required this.usedKeys,
+    this.active = false,
   });
 
   @override
@@ -160,14 +169,45 @@ class _AddOtherDocumentButtonState extends State<AddOtherDocumentButton> {
       _progress = null;
     });
     try {
-      await service.uploadDocument(
-        docType: key,
-        file: file,
-        label: title,
-        onProgress: (p) {
-          if (mounted) setState(() => _progress = p);
-        },
-      );
+      if (widget.active) {
+        // Approved partner: Storage only accepts `other_doc_N` files for them
+        // (storage.rules), and the metadata goes through the pending-review
+        // path. `pendingChanges` is deep-merged by set(merge: true), so
+        // earlier pending documents are kept.
+        final meta = await service.uploadToStorage(
+          docType: key,
+          file: file,
+          label: title,
+          onProgress: (p) {
+            if (mounted) setState(() => _progress = p);
+          },
+        );
+        await PendingProfileEditService.apply(
+          ref: FirebaseFirestore.instance
+              .collection('${widget.role}_profiles')
+              .doc(widget.uid),
+          currentStatus: 'active',
+          fields: {
+            'documents': {
+              key: {...meta, 'uploadedAt': Timestamp.now()},
+            },
+          },
+        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Document submitted for admin review.'),
+          ));
+        }
+      } else {
+        await service.uploadDocument(
+          docType: key,
+          file: file,
+          label: title,
+          onProgress: (p) {
+            if (mounted) setState(() => _progress = p);
+          },
+        );
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(

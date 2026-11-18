@@ -32,11 +32,30 @@ final availableAmbulanceRequestsProvider =
     StreamProvider.autoDispose<List<AmbulanceRequest>>((ref) {
   final uid = AmbulanceProfileService.currentUid;
   if (uid == null) return Stream.value(const []);
+  // TYPE-AWARE POOL: a driver only sees open requests for their own vehicle
+  // type. A driver with no vehicleTypeKey yet sees nothing (the dashboard
+  // prompts them to choose a type). Legacy requests without a requested
+  // type stay visible to any driver who has a type.
+  final myTypeKey = ref.watch(
+      ambulanceProfileDocProvider.select((p) => p.valueOrNull?.vehicleTypeKey));
+  if (myTypeKey == null) return Stream.value(const []);
   // Requests this driver declined stay in the shared pool for everyone else.
   return AmbulanceRequestService.availableRequestsStream().map((snap) => snap.docs
       .where((d) => !((d.data()['declinedBy'] as List?)?.contains(uid) ?? false))
+      .where((d) {
+        final want = d.data()['ambulanceTypeKey'] as String?;
+        return want == null || want.isEmpty || want == myTypeKey;
+      })
       .map(AmbulanceRequest.fromFirestore)
       .toList());
+});
+
+/// True when the signed-in driver has not chosen a vehicle type yet, so the
+/// open pool is hidden from them. Null while the profile is still loading.
+final ambulanceNeedsVehicleTypeProvider = Provider.autoDispose<bool?>((ref) {
+  final profile = ref.watch(ambulanceProfileDocProvider);
+  if (!profile.hasValue) return null;
+  return profile.value?.vehicleTypeKey == null;
 });
 
 final myAmbulanceRequestsProvider =

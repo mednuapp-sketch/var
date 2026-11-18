@@ -114,6 +114,7 @@ class _AmbulanceDashboardScreenState extends ConsumerState<AmbulanceDashboardScr
     final metrics = ref.watch(ambulanceDashboardMetricsProvider);
     final pending = ref.watch(pendingRequestsProvider);
     final active = ref.watch(activeRequestProvider);
+    final needsType = ref.watch(ambulanceNeedsVehicleTypeProvider);
 
     return SharedAppShell(
       currentRoute: AppRoutes.ambulanceDashboard,
@@ -156,7 +157,16 @@ class _AmbulanceDashboardScreenState extends ConsumerState<AmbulanceDashboardScr
             action: pending.isNotEmpty ? 'View all' : null,
             onAction: pending.isNotEmpty ? () => context.push(AppRoutes.ambulanceIncomingRequests) : null,
           ),
-          if (pending.isEmpty)
+          if (needsType == true)
+            AppEmptyState(
+              icon: Icons.local_shipping_outlined,
+              title: 'Choose your vehicle type',
+              message:
+                  'Requests are matched by ambulance type (Basic, ALS or ICU). Choose yours to start receiving requests.',
+              actionLabel: 'Choose vehicle type',
+              onAction: () => context.push(AppRoutes.ambulanceVehicleProfile),
+            )
+          else if (pending.isEmpty)
             const AppEmptyState(
               icon: Icons.check_circle_outline_rounded,
               title: 'All caught up',

@@ -34,6 +34,15 @@ class AccountSettingsItems {
         ),
       ];
 
+  /// "Payout account" row — bank details used for partner payouts. Same
+  /// screen for every role.
+  static SettingsItemData payoutAccount(BuildContext context) => SettingsItemData(
+        icon: Icons.account_balance_rounded,
+        title: 'Payout account',
+        subtitle: 'Bank details for receiving payouts',
+        onTap: () => context.push(AppRoutes.payoutAccount),
+      );
+
   /// Destructive "Delete Account" row — append to the "Account" section.
   /// [role] is the role's firestore value (e.g. 'lab', 'pharmacy', 'doctor').
   static SettingsItemData deleteAccount(BuildContext context, {required String role}) =>

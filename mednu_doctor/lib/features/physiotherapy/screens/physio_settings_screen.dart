@@ -227,6 +227,7 @@ class _PhysioSettingsScreenState extends State<PhysioSettingsScreen> {
         SettingsSectionData(
           title: 'Account',
           items: [
+            AccountSettingsItems.payoutAccount(context),
             SettingsItemData(
               icon: Icons.logout_rounded,
               title: 'Sign Out',

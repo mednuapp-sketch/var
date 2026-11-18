@@ -224,9 +224,12 @@ class _NutritionAppointmentDetailScreenState extends ConsumerState<NutritionAppo
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            'Weight Loss Plan: ${appointment.planMonths} months · '
-                            '${appointment.planConsultations ?? appointment.planMonths} '
-                            'consultations (1 per month).',
+                            appointment.planLabel != null
+                                ? '${appointment.planLabel!}\n'
+                                    '${appointment.planMonths}-month plan · 1 consultation per month.'
+                                : 'Weight Loss Plan: ${appointment.planMonths} months · '
+                                    '${appointment.planConsultations ?? appointment.planMonths} '
+                                    'consultations (1 per month).',
                             style: AppTextStyles.bodyMedium,
                           ),
                         ),
@@ -265,10 +268,18 @@ class _NutritionAppointmentDetailScreenState extends ConsumerState<NutritionAppo
                     children: [
                       const Icon(Icons.currency_rupee_rounded, color: AppColors.primary),
                       const SizedBox(width: 10),
-                      const Text('Consultation Fee', style: AppTextStyles.bodyMedium),
-                      const Spacer(),
+                      Expanded(
+                        child: Text(
+                          appointment.isPlanConsultation ? 'Prepaid plan consultation' : 'Consultation Fee',
+                          style: AppTextStyles.bodyMedium,
+                        ),
+                      ),
                       Text(
-                        CurrencyFormatter.format(appointment.fee),
+                        appointment.isPlanConsultation
+                            ? (appointment.planEarning != null
+                                ? 'You earn ${CurrencyFormatter.format(appointment.planEarning!)}'
+                                : 'Included in plan')
+                            : CurrencyFormatter.format(appointment.fee),
                         style: AppTextStyles.labelLarge.copyWith(color: AppColors.success),
                       ),
                     ],

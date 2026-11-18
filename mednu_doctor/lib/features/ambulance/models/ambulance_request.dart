@@ -126,6 +126,10 @@ class AmbulanceRequest {
   /// available "when did it get cancelled/declined" signal.
   final DateTime? updatedAt;
 
+  /// Vehicle type the patient asked for ('basic' | 'als' | 'icu'); null on
+  /// legacy requests, which any driver may take.
+  final String? requestedTypeKey;
+
   const AmbulanceRequest({
     required this.id,
     required this.type,
@@ -144,6 +148,7 @@ class AmbulanceRequest {
     this.ambulanceId,
     this.cancelReason,
     this.updatedAt,
+    this.requestedTypeKey,
   });
 
   /// Parses an `ambulance_requests` document. Unknown/missing enum strings
@@ -174,6 +179,7 @@ class AmbulanceRequest {
       cancelReason: _reasonFrom(d),
       updatedAt: (d['cancelledAt'] as Timestamp?)?.toDate() ??
           (d['updatedAt'] as Timestamp?)?.toDate(),
+      requestedTypeKey: d['ambulanceTypeKey'] as String?,
     );
   }
 
@@ -218,5 +224,6 @@ class AmbulanceRequest {
         ambulanceId: ambulanceId,
         cancelReason: cancelReason,
         updatedAt: updatedAt,
+        requestedTypeKey: requestedTypeKey,
       );
 }

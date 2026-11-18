@@ -23,7 +23,7 @@ class PartnerDocumentType {
 
   static const lab = <PartnerDocumentType>[
     PartnerDocumentType('lab_license', 'Lab Licence'),
-    PartnerDocumentType('maridi_certificate', 'Maridi Certificate'),
+    PartnerDocumentType('maridi_certificate', 'Maridi Certificate (Waste Disposal)'),
     PartnerDocumentType('lab_technician_details', 'Lab Technician Details'),
     PartnerDocumentType('pathologist_registration',
         'Biochemist / Pathologist / Microbiologist Details (as per lab type)'),
@@ -89,7 +89,7 @@ class PartnerDocumentType {
   static const hospital = <PartnerDocumentType>[
     PartnerDocumentType('dmho_license', 'DM&HO Licence'),
     PartnerDocumentType('fire_certificate', 'Fire Certificate'),
-    PartnerDocumentType('maridi_certificate', 'Maridi Certificate'),
+    PartnerDocumentType('maridi_certificate', 'Maridi Certificate (Waste Disposal)'),
     PartnerDocumentType('gvmc_certificate', 'GVMC Certificate'),
     PartnerDocumentType('pollution_certificate', 'Pollution Certificate'),
     PartnerDocumentType('trade_license', 'Trade Licence'),

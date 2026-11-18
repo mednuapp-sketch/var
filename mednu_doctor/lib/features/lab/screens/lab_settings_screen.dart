@@ -217,6 +217,7 @@ class _LabSettingsScreenState extends State<LabSettingsScreen> {
         SettingsSectionData(
           title: 'Account',
           items: [
+            AccountSettingsItems.payoutAccount(context),
             SettingsItemData(
               icon: Icons.logout_rounded,
               title: 'Sign Out',

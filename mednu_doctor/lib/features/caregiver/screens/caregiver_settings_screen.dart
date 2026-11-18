@@ -198,6 +198,7 @@ class _CaregiverSettingsScreenState extends State<CaregiverSettingsScreen> {
         SettingsSectionData(
           title: 'Account',
           items: [
+            AccountSettingsItems.payoutAccount(context),
             SettingsItemData(
               icon: Icons.logout_rounded,
               title: 'Sign Out',

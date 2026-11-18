@@ -100,6 +100,6 @@ final nutritionDashboardMetricsProvider = Provider.autoDispose<NutritionDashboar
   return NutritionDashboardMetrics(
     todayAppointments: today.length,
     completedToday: completedToday.length,
-    todayEarnings: completedToday.fold<num>(0, (s, a) => s + a.fee),
+    todayEarnings: completedToday.fold<num>(0, (s, a) => s + (a.planEarning ?? a.fee)),
   );
 });

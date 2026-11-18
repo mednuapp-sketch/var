@@ -43,6 +43,9 @@ export 'wallet/wallet_models.dart';
 export 'wallet/wallet_providers.dart';
 export 'wallet/wallet_repository.dart';
 export 'wallet/wallet_summary_card.dart';
+export 'wallet/payout_data.dart';
+export 'wallet/payout_widgets.dart';
+export 'wallet/payout_account_screen.dart';
 
 // Partner verification documents
 export 'documents/partner_document_models.dart';

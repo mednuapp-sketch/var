@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -169,14 +170,55 @@ class _ProviderVideoCallScreenState extends State<ProviderVideoCallScreen> {
       setState(() => _agoraError = 'Could not start the video call. Please try again.');
       return;
     }
-    try {
-      await FirebaseFirestore.instance
-          .collection('consultations')
-          .doc(widget.consultationId)
-          .update({'status': 'active'});
-    } catch (e) {
-      debugPrint('[ProviderVideoCall] Active status update failed: $e');
+    await _markActive();
+  }
+
+  // 'active' is the doctor-joined proof the server uses to credit the
+  // consultation, so a transient failure must not be swallowed: 3 quick tries,
+  // then a non-blocking toast and a background retry until the call ends.
+  Timer? _activeRetryTimer;
+  bool _activeRetryBusy = false;
+
+  Future<bool> _tryWriteActive() async {
+    for (var attempt = 0; attempt < 3; attempt++) {
+      if (_endCallLock || !mounted) return true; // call over: nothing to mark
+      try {
+        await FirebaseFirestore.instance
+            .collection('consultations')
+            .doc(widget.consultationId)
+            .update({'status': 'active'});
+        return true;
+      } catch (e) {
+        debugPrint('[ProviderVideoCall] Active status update failed (try ${attempt + 1}): $e');
+        if (attempt < 2) {
+          await Future.delayed(Duration(milliseconds: 600 * (attempt + 1)));
+        }
+      }
     }
+    return false;
+  }
+
+  Future<void> _markActive() async {
+    if (await _tryWriteActive()) return;
+    if (!mounted || _endCallLock) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Connection issue, retrying...'),
+        duration: Duration(seconds: 3),
+      ),
+    );
+    _activeRetryTimer?.cancel();
+    _activeRetryTimer = Timer.periodic(const Duration(seconds: 8), (t) async {
+      if (!mounted || _endCallLock) {
+        t.cancel();
+        return;
+      }
+      if (_activeRetryBusy) return;
+      _activeRetryBusy = true;
+      final ok = await _tryWriteActive();
+      _activeRetryBusy = false;
+      if (ok) t.cancel();
+    });
   }
 
   Future<void> _enableScreenProtection() async {
@@ -281,7 +323,13 @@ class _ProviderVideoCallScreenState extends State<ProviderVideoCallScreen> {
     final consultRef = FirebaseFirestore.instance.collection('consultations').doc(widget.consultationId);
     if (!fromRemote && isLastToLeave) {
       try {
-        await consultRef.update({'status': 'ended', 'endedAt': FieldValue.serverTimestamp()});
+        final uid = FirebaseAuth.instance.currentUser?.uid;
+        await consultRef.update({
+          'status': 'ended',
+          'endedAt': FieldValue.serverTimestamp(),
+          // Server credits a provider-ended call even if the 'active' write was lost.
+          if (uid != null) 'endedBy': uid,
+        });
       } catch (_) {}
     }
 
@@ -308,6 +356,7 @@ class _ProviderVideoCallScreenState extends State<ProviderVideoCallScreen> {
     ProviderScope.containerOf(context, listen: false)
         .read(criticalOperationInProgressProvider.notifier)
         .state = false;
+    _activeRetryTimer?.cancel();
     _consultSub?.cancel();
     ScreenProtector.protectDataLeakageOff();
     ScreenProtector.protectDataLeakageWithColorOff();

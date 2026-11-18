@@ -2154,25 +2154,6 @@ class _EarningsTab extends StatelessWidget {
                     Container(width: 1, height: 40, color: Colors.white24),
                     _EarnStat('$totalConsultations', 'Consultations'),
                   ]),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: monthEarnings > 0 ? () {
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                          content: Text('Withdrawal request submitted. Processing in 3-5 business days.'),
-                          behavior: SnackBarBehavior.floating,
-                        ));
-                      } : null,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: AppColors.primary,
-                        disabledBackgroundColor: Colors.white.withValues(alpha: 0.25),
-                        disabledForegroundColor: Colors.white70,
-                      ),
-                      child: const Text('Withdraw', style: TextStyle(fontWeight: FontWeight.w700)),
-                    ),
-                  ),
                 ]),
               ),
               const SizedBox(height: 20),

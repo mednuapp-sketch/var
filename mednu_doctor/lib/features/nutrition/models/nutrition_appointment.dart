@@ -63,6 +63,15 @@ class NutritionAppointment {
   /// consultation): `planMonths` months, one consultation per month.
   final int? planMonths;
   final int? planConsultations;
+
+  /// Prepaid-plan link (server-set): which subscription and which month's
+  /// consultation (1-based) this appointment is. `planBaseTotal` is the plan's
+  /// base price (display only; the payout is computed server-side).
+  final String? subscriptionId;
+  final int? planIndex;
+  final num? planBaseTotal;
+  final num? planMonthlyPrice;
+
   String get consultationLabel {
     switch (consultationType) {
       case 'online':
@@ -75,6 +84,33 @@ class NutritionAppointment {
   }
 
   bool get isPlan => planMonths != null && planMonths! > 0;
+
+  /// A consultation of a prepaid weight-loss plan ("consultation N of M").
+  bool get isPlanConsultation =>
+      subscriptionId != null && planIndex != null && planMonths != null && planMonths! > 0;
+
+  /// 'Weight-loss plan · consultation N of M' (null when not a plan consultation).
+  String? get planLabel =>
+      isPlanConsultation ? 'Weight-loss plan · consultation $planIndex of $planMonths' : null;
+
+  /// What the dietician earns for THIS consultation: the plan base split equally
+  /// over the months with the remainder (paise) on the last one — the same rule
+  /// as the server (functions/plan_helpers.js splitPayout). Falls back to `fee`
+  /// for the purchase booking, which carries its share. Null when unknown.
+  num? get planEarning {
+    if (!isPlanConsultation) return null;
+    final months = planMonths!;
+    final idx = planIndex!;
+    if (idx < 1 || idx > months) return null;
+    final base = planBaseTotal;
+    if (base != null && base > 0) {
+      final paise = (base * 100).round();
+      final each = paise ~/ months;
+      final share = idx == months ? paise - each * (months - 1) : each;
+      return share / 100;
+    }
+    return fee > 0 ? fee : null;
+  }
 
   const NutritionAppointment({
     required this.id,
@@ -92,6 +128,10 @@ class NutritionAppointment {
     required this.createdAt,
     this.planMonths,
     this.planConsultations,
+    this.subscriptionId,
+    this.planIndex,
+    this.planBaseTotal,
+    this.planMonthlyPrice,
   });
 
   factory NutritionAppointment.fromFirestore(DocumentSnapshot<Object?> doc) {
@@ -112,6 +152,10 @@ class NutritionAppointment {
       createdAt: (d['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       planMonths: (d['planMonths'] as num?)?.toInt(),
       planConsultations: (d['planConsultations'] as num?)?.toInt(),
+      subscriptionId: d['subscriptionId'] as String?,
+      planIndex: (d['planIndex'] as num?)?.toInt(),
+      planBaseTotal: d['planBaseTotal'] as num?,
+      planMonthlyPrice: d['planMonthlyPrice'] as num?,
     );
   }
 

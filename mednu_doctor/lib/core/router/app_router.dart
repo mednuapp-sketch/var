@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../features/auth/services/doctor_auth_service.dart';
 import '../../shared_core/navigation/role_menu.dart';
+import '../../shared_core/wallet/payout_account_screen.dart';
 import '../../features/auth/screens/doctor_login_screen.dart';
 import '../../features/auth/screens/doctor_register_screen.dart';
 import '../../features/auth/screens/doctor_otp_screen.dart';
@@ -357,6 +358,8 @@ class AppRoutes {
   static const earnings            = '/earnings';
   static const notifications       = '/notifications';
   static const settings            = '/settings';
+  /// Shared by every partner role (payout bank details + verification).
+  static const payoutAccount       = '/payout-account';
   static const helpSupport              = '/help-support';
   static const liveChat                 = '/live-chat';
   static const reportProblem            = '/report-problem';
@@ -687,6 +690,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: AppRoutes.notifications,   builder: (c, s) => const DoctorNotificationsScreen()),
       GoRoute(path: AppRoutes.earnings,        builder: (c, s) => const DoctorEarningsScreen()),
       GoRoute(path: AppRoutes.settings,        builder: (c, s) => const SettingsScreen()),
+      GoRoute(path: AppRoutes.payoutAccount,   builder: (c, s) => const PayoutAccountScreen()),
       GoRoute(path: AppRoutes.helpSupport,       builder: (c, s) => const HelpSupportScreen()),
       GoRoute(path: AppRoutes.liveChat,          builder: (c, s) => const LiveChatScreen()),
       GoRoute(path: AppRoutes.reportProblem,     builder: (c, s) => const ReportProblemScreen()),

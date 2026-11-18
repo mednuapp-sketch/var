@@ -56,6 +56,8 @@ class HospitalEarningsScreen extends ConsumerWidget {
           children: [
             const EarningsFeeNote(),
             const SizedBox(height: 12),
+            const PayoutActionsPanel(),
+            const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(

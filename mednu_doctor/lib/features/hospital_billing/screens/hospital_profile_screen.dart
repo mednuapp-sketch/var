@@ -477,6 +477,11 @@ class _HospitalProfileScreenState extends ConsumerState<HospitalProfileScreen> {
                 title: 'Legal & Account',
                 children: [
                   _actionRow(
+                    icon: Icons.account_balance_rounded,
+                    label: 'Payout account',
+                    onTap: () => context.push(AppRoutes.payoutAccount),
+                  ),
+                  _actionRow(
                     icon: Icons.privacy_tip_outlined,
                     label: 'Privacy Policy',
                     onTap: () => PartnerLegalScreen.openPrivacy(context),

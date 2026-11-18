@@ -220,6 +220,7 @@ class _EquipmentSettingsScreenState extends State<EquipmentSettingsScreen> {
         SettingsSectionData(
           title: 'Account',
           items: [
+            AccountSettingsItems.payoutAccount(context),
             SettingsItemData(
               icon: Icons.logout_rounded,
               title: 'Sign Out',
