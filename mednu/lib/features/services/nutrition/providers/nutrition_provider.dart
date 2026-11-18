@@ -138,7 +138,8 @@ class NutritionBookingNotifier extends StateNotifier<BookingState> {
       state = state.copyWith(isLoading: false, confirmedId: id);
       return true;
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+      state = state.copyWith(
+          isLoading: false, error: e.toString().replaceFirst('Exception: ', ''));
       return false;
     }
   }

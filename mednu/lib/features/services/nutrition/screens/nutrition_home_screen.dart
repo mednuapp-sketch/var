@@ -10,6 +10,7 @@ import '../models/nutritionist_model.dart';
 import '../models/nutrition_appointment_model.dart';
 import '../models/nutrition_goal_model.dart';
 import '../providers/nutrition_provider.dart';
+import 'my_weight_loss_plan_screen.dart' show WeightLossPlanBanner;
 
 class NutritionHomeScreen extends ConsumerWidget {
   const NutritionHomeScreen({super.key});
@@ -48,6 +49,7 @@ class NutritionHomeScreen extends ConsumerWidget {
                     onBmi:       () => context.push(AppRoutes.nutritionBmi),
                   ),
                   SizedBox(height: R.h(context, 20)),
+                  const WeightLossPlanBanner(margin: EdgeInsets.only(bottom: 20)),
                   _FindNutritionistBanner(
                     onTap: () => context.push(AppRoutes.nutritionNutritionists),
                   ),

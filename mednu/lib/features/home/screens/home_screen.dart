@@ -1400,9 +1400,9 @@ class _ProfileBody extends ConsumerWidget {
     final referralPoints = (docData?['referralPoints'] ?? 0) as num;
     final isMale = (docData?['gender'] as String? ?? '').toLowerCase() == 'male';
 
-    // One-time migration: regenerate legacy referral codes that don't match XXXX#### format
+    // Generate a referral code only when the user has none; never overwrite an existing one
     if (docData != null && uid.isNotEmpty) {
-      final validFormat = RegExp(r'^[A-Z]{4}[0-9]{4}$').hasMatch(referralCode);
+      final validFormat = referralCode != '—' && referralCode.trim().isNotEmpty;
       if (!validFormat) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           final newCode = generateReferralCode(name, uid);

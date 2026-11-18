@@ -8,6 +8,8 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'core/theme/app_theme.dart';
+import 'core/constants/payment_config.dart';
+import 'core/widgets/app_version_gate.dart';
 import 'core/router/app_router.dart';
 import 'core/providers/theme_provider.dart';
 import 'core/services/call_notification_service.dart';
@@ -66,6 +68,8 @@ class _MedNUAppState extends ConsumerState<MedNUApp>
     WidgetsBinding.instance.addObserver(this);
     _checkInitialLock();
     _setupListeners();
+    // Runtime real-payments switch (app_config/payments).
+    PaymentConfig.start();
   }
 
   void _setupListeners() {
@@ -452,20 +456,23 @@ class _MedNUAppState extends ConsumerState<MedNUApp>
               maxScaleFactor: 1.0,
             ),
           ),
-          child: Stack(
-            children: [
-              OfflineBanner(child: child ?? const SizedBox.expand()),
-              ActiveSessionBridge(router: router),
-              if (_isLocked)
-                LockScreen(
-                  onAuthStarted: () => _isAuthenticating = true,
-                  onAuthEnded: () => _isAuthenticating = false,
-                  onUnlocked: () {
-                    _isAuthenticating = false;
-                    if (mounted) setState(() => _isLocked = false);
-                  },
-                ),
-            ],
+          child: AppVersionGate(
+            appKey: 'patient',
+            child: Stack(
+              children: [
+                OfflineBanner(child: child ?? const SizedBox.expand()),
+                ActiveSessionBridge(router: router),
+                if (_isLocked)
+                  LockScreen(
+                    onAuthStarted: () => _isAuthenticating = true,
+                    onAuthEnded: () => _isAuthenticating = false,
+                    onUnlocked: () {
+                      _isAuthenticating = false;
+                      if (mounted) setState(() => _isLocked = false);
+                    },
+                  ),
+              ],
+            ),
           ),
         );
       },

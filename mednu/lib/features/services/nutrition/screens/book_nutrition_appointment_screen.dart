@@ -39,6 +39,8 @@ class _BookNutritionAppointmentScreenState
   String _healthGoal = 'Weight Loss';
   final _notesCtrl = TextEditingController();
   final int? _planMonths = selectedWeightLossMonths.value;
+  final String? _planId = selectedWeightLossPlanId.value;
+  final int? _planMonthly = selectedWeightLossMonthly.value;
   // Guards the payment hand-off against a double-tap opening two payment screens.
   bool _openingPayment = false;
 
@@ -61,8 +63,13 @@ class _BookNutritionAppointmentScreenState
       widget.extra['nutritionistName'] as String? ?? '';
   String get _specialization =>
       widget.extra['nutritionistSpecialization'] as String? ?? '';
-  double get _fee =>
+  double get _consultFee =>
       (widget.extra['fee'] as num?)?.toDouble() ?? 0.0;
+  // A prepaid weight-loss plan is charged as monthly price x months (the
+  // dietician's own per-session fee is not charged); the server re-verifies it.
+  double get _fee => (_planMonths != null && _planMonthly != null)
+      ? (_planMonthly * _planMonths).toDouble()
+      : _consultFee;
   bool get _isOnline   => widget.extra['isOnline'] as bool? ?? true;
   bool get _isInPerson => widget.extra['isInPerson'] as bool? ?? false;
 
@@ -122,9 +129,21 @@ class _BookNutritionAppointmentScreenState
     }
     if (!mounted) return;
 
+    if (_planMonths != null && _planMonthly == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('The price of this plan is unavailable. Please go back and choose the plan again.'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
     // A ₹0 nutritionist consultation has no payment concept at all — book
     // directly, same as every other free-of-charge service in the app.
-    if (_fee <= 0) {
+    // (A weight-loss plan is never free: it always goes through payment.)
+    if (_fee <= 0 && _planMonths == null) {
       final success =
           await ref.read(nutritionBookingProvider.notifier).bookAppointment(
                 nutritionistId: _nutritionistId,
@@ -177,7 +196,9 @@ class _BookNutritionAppointmentScreenState
       AppRoutes.payment,
       extra: {
         'amount': _fee.toInt().toString(),
-        'description': 'Nutrition Consultation with $_nutritionistName',
+        'description': _planMonths != null
+            ? 'Weight-loss plan ($_planMonths months) with $_nutritionistName'
+            : 'Nutrition Consultation with $_nutritionistName',
         'serviceType': 'nutrition',
         'bookingCollection': 'nutrition_appointments',
         'bookingData': {
@@ -200,6 +221,10 @@ class _BookNutritionAppointmentScreenState
             'planType': 'weight_loss',
             'planMonths': _planMonths,
             'planConsultations': _planMonths,
+            // Hints only: the server reads the real price from diet_plans.
+            'planContract': 2,
+            if (_planId != null) 'planId': _planId,
+            if (_planMonthly != null) 'planMonthlyPrice': _planMonthly,
           },
         },
       },
@@ -321,7 +346,8 @@ class _BookNutritionAppointmentScreenState
             _NutritionistHeader(
               name: _nutritionistName,
               specialization: _specialization,
-              fee: _fee,
+              fee: _planMonthly?.toDouble() ?? _consultFee,
+              unit: _planMonths != null ? 'month' : 'session',
             ),
             const SizedBox(height: 20),
 
@@ -407,6 +433,15 @@ class _BookNutritionAppointmentScreenState
                   ],
                 ),
               ),
+              const SizedBox(height: 8),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Text(
+                  '$kWeightLossPlanNotice This first slot is your month 1 consultation; book the other months from My Weight-Loss Plan.',
+                  style: AppTextStyles.caption
+                      .copyWith(color: context.appTextSecondary, height: 1.4),
+                ),
+              ),
               const SizedBox(height: 20),
             ],
             // ── Health goal ───────────────────────────
@@ -490,11 +525,13 @@ class _NutritionistHeader extends StatelessWidget {
   final String name;
   final String specialization;
   final double fee;
+  final String unit;
 
   const _NutritionistHeader({
     required this.name,
     required this.specialization,
     required this.fee,
+    this.unit = 'session',
   });
 
   @override
@@ -554,7 +591,7 @@ class _NutritionistHeader extends StatelessWidget {
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
-                    '₹${fee.toInt()} / session',
+                    '₹${fee.toInt()} / $unit',
                     style: const TextStyle(
                       fontFamily: 'Poppins',
                       fontSize: 12,

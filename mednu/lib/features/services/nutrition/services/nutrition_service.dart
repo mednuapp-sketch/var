@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../../../core/constants/payment_config.dart';
+import '../../../../core/services/booking_service.dart';
 import '../models/nutritionist_model.dart';
 import '../models/nutrition_appointment_model.dart';
 import '../models/meal_log_model.dart';
@@ -103,6 +105,33 @@ class NutritionService {
     if (uid == null) throw Exception('Not authenticated');
     final user = _auth.currentUser;
     if (user == null) throw Exception('Not authenticated');
+    // Switch ON: firestore.rules deny client creates of nutrition_appointments
+    // (a client-written fee of 0 is not trusted); the server verifies the
+    // nutritionist's real fee is zero and creates the doc. The key is
+    // deterministic for this slot so a retry never duplicates the booking.
+    if (PaymentConfig.requirePayment) {
+      return BookingService.createFreeBooking(
+        serviceType: 'nutrition',
+        bookingCollection: 'nutrition_appointments',
+        idempotencyKey: 'nutr-$nutritionistId-$date-$timeSlot',
+        bookingData: {
+          'userId': uid,
+          'userName': user.displayName ?? 'Patient',
+          'userPhone': user.phoneNumber ?? '',
+          'nutritionistId': nutritionistId,
+          'nutritionistName': nutritionistName,
+          'nutritionistSpecialization': nutritionistSpecialization,
+          'consultationType': consultationType,
+          'date': date,
+          'timeSlot': timeSlot,
+          'status': 'pending',
+          'notes': notes,
+          'fee': fee,
+          'healthGoal': healthGoal,
+          ...extraFields,
+        },
+      );
+    }
     final ref = await _db.collection('nutrition_appointments').add({
       'userId': uid,
       'userName': user.displayName ?? 'Patient',

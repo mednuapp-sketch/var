@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/services/feedback_service.dart';
+import '../../../core/services/system_cancel_watcher.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../../../core/widgets/provider_availability.dart';
 import '../models/cart_item.dart';
@@ -31,9 +32,20 @@ class _CartScreenState extends ConsumerState<CartScreen> {
       final d = i.serviceDetails;
       if (i.type == 'medicine') return pharmacies.contains(d['sourcePharmacyId']);
       if (i.type == 'diagnostics') return labs.contains(d['sourceLabId']);
-      if (i.type == 'equipment') return vendors.contains(d['sourceVendorId']);
+      if (i.type == 'equipment') {
+        return _isLegacyEquipment(i) || vendors.contains(d['sourceVendorId']);
+      }
       return false;
     }).toList();
+  }
+
+  /// Equipment is vendor-only. An equipment line without a `sourceVendorId`
+  /// (added before that change and still in a saved cart) is "No longer
+  /// available" and must be removed before checkout.
+  static bool _isLegacyEquipment(CartItem i) {
+    if (i.type != 'equipment') return false;
+    final v = i.serviceDetails['sourceVendorId'];
+    return !(v is String && v.trim().isNotEmpty);
   }
 
   static String _providerLabel(CartItem i) {
@@ -50,7 +62,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
     final items = ref.read(cartProvider);
     if (items.isEmpty) return;
     if (_blockedItems(items).isNotEmpty) {
-      FeedbackService.showError(context, "Some items are from a provider that isn't accepting orders right now. Remove them to continue.");
+      FeedbackService.showError(context, "Some items are unavailable (provider closed or no longer available). Remove them to continue.");
       return;
     }
 
@@ -190,6 +202,27 @@ class _CartScreenState extends ConsumerState<CartScreen> {
     setState(() => _checkingOut = false);
     FeedbackService.showSuccess(context, 'Order placed successfully!');
 
+    // A booking the server blocks right after creation (provider paused,
+    // equipment without a vendor) flips to cancelled within seconds: explain
+    // why instead of leaving only the success toast. Listeners self-release
+    // after 8s; the dialog uses the root navigator, which outlives this screen.
+    final rootCtx = Navigator.of(context, rootNavigator: true).context;
+    var blockedShown = false;
+    for (final p in payments) {
+      final col = p['bookingCollection'];
+      final id = p['bookingId'];
+      if (col is! String || id is! String) continue;
+      SystemCancelWatcher.watch(
+        collection: col,
+        docId: id,
+        onBlocked: (msg, _) {
+          if (blockedShown || !rootCtx.mounted) return;
+          blockedShown = true;
+          SystemCancelWatcher.showBlockedDialog(rootCtx, msg);
+        },
+      );
+    }
+
     // A placed medicine order can need a prescription — take the patient
     // straight to where they can upload one rather than the general
     // services tracker. Every other booking type keeps the existing
@@ -280,7 +313,15 @@ class _CartScreenState extends ConsumerState<CartScreen> {
   }
 
   Widget _buildBlockedBanner(List<CartItem> blocked) {
-    final names = blocked.map(_providerLabel).toSet().join(', ');
+    final legacy = blocked.where(_isLegacyEquipment).toList();
+    final closed = blocked.where((b) => !_isLegacyEquipment(b)).toList();
+    final names = closed.map(_providerLabel).toSet().join(', ');
+    final removeHint = "Remove ${blocked.length == 1 ? 'this item' : 'these items'} to check out.";
+    final message = closed.isEmpty
+        ? "No longer available: equipment must now be ordered from an equipment vendor. $removeHint"
+        : legacy.isEmpty
+            ? "$names isn't accepting orders right now. It will be back soon. $removeHint"
+            : "$names isn't accepting orders right now, and some equipment is no longer available. $removeHint";
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -294,8 +335,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              "$names isn't accepting orders right now. It will be back soon. "
-              "Remove ${blocked.length == 1 ? 'this item' : 'these items'} to check out.",
+              message,
               style: const TextStyle(fontFamily: 'Poppins', fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFFB45309), height: 1.4),
             ),
           ),

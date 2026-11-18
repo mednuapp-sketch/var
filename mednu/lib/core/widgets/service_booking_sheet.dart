@@ -9,7 +9,9 @@ import 'package:go_router/go_router.dart';
 import '../services/booking_service.dart';
 import '../services/feedback_service.dart';
 import '../services/places_service.dart';
+import '../services/system_cancel_watcher.dart';
 import '../constants/app_colors.dart';
+import '../constants/payment_config.dart';
 import '../constants/app_text_styles.dart';
 import '../router/app_router.dart';
 import '../../features/home/providers/location_provider.dart';
@@ -82,6 +84,8 @@ class _ServiceBookingSheetState extends ConsumerState<ServiceBookingSheet> {
   final _phoneCtrl = TextEditingController();
   final _manualAddrCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
+  // Stable per sheet instance so a retry of a free booking never duplicates it.
+  final String _freeBookingKey = 'svc-${DateTime.now().microsecondsSinceEpoch}';
 
   // Types that count as therapy sessions — exempt from the adult-accompaniment
   // warning shown for minors on every other consultation/service booking.
@@ -105,6 +109,7 @@ class _ServiceBookingSheetState extends ConsumerState<ServiceBookingSheet> {
   String _time = '';
   bool _busy = false;
   bool _done = false;
+  SystemCancelHandle? _blockWatch;
   bool _gpsRefreshing = false;
   bool _dateError = false;
   bool _timeError = false;
@@ -744,6 +749,7 @@ class _ServiceBookingSheetState extends ConsumerState<ServiceBookingSheet> {
 
       FeedbackService.dismiss(context);
       setState(() { _busy = false; _done = true; });
+      _watchBlocked(result!['bookingId']);
       Future.delayed(const Duration(milliseconds: 1200), () {
         if (mounted) maybeShowRatingSheet(context, themeColor: widget.themeColor);
       });
@@ -755,25 +761,38 @@ class _ServiceBookingSheetState extends ConsumerState<ServiceBookingSheet> {
     FeedbackService.showLoading(context, 'Booking ${widget.serviceName}...');
 
     try {
-      await BookingService.createRequest(
-        type: widget.type,
-        serviceName: widget.serviceName,
-        patientName: _nameCtrl.text.trim(),
-        patientPhone: _phoneCtrl.text.trim(),
-        address: finalAddr,
-        preferredDate: _date,
-        preferredTime: _time,
-        notes: _notesCtrl.text.trim(),
-        serviceDetails: {
-          ...widget.serviceDetails,
-          'locationData': locationData,
-        },
-        extraFields: widget.extraFields,
-      );
+      String? createdId;
+      if (PaymentConfig.requirePayment) {
+        // Switch ON: firestore.rules deny client creates of service_requests;
+        // the server proves the price is zero and creates the doc.
+        createdId = await BookingService.createFreeBooking(
+          serviceType: widget.type,
+          bookingCollection: 'service_requests',
+          bookingData: {...bookingData, 'amount': null},
+          idempotencyKey: _freeBookingKey,
+        );
+      } else {
+        createdId = await BookingService.createRequest(
+          type: widget.type,
+          serviceName: widget.serviceName,
+          patientName: _nameCtrl.text.trim(),
+          patientPhone: _phoneCtrl.text.trim(),
+          address: finalAddr,
+          preferredDate: _date,
+          preferredTime: _time,
+          notes: _notesCtrl.text.trim(),
+          serviceDetails: {
+            ...widget.serviceDetails,
+            'locationData': locationData,
+          },
+          extraFields: widget.extraFields,
+        );
+      }
 
       if (mounted) {
         FeedbackService.dismiss(context);
         setState(() { _busy = false; _done = true; });
+        _watchBlocked(createdId);
         // Show one-time app rating prompt after a short delay so the
         // success screen is visible first. Skipped if already submitted.
         Future.delayed(const Duration(milliseconds: 1200), () {
@@ -785,17 +804,43 @@ class _ServiceBookingSheetState extends ConsumerState<ServiceBookingSheet> {
     } catch (e) {
       if (mounted) {
         setState(() => _busy = false);
+        final msg = e.toString().replaceFirst('Exception: ', '');
         FeedbackService.showError(
           context,
-          'Booking failed. Check your connection and try again.',
+          PaymentConfig.requirePayment && msg.isNotEmpty
+              ? msg
+              : 'Booking failed. Check your connection and try again.',
           onRetry: _submit,
         );
       }
     }
   }
 
+  /// The server can cancel a just-created request (provider paused, ...):
+  /// for ~8s after creation swap the success view for the reason.
+  void _watchBlocked(Object? id) {
+    if (id is! String || id.isEmpty) return;
+    _blockWatch?.cancel();
+    String? name;
+    for (final k in const ['providerName', 'physiotherapistName', 'counsellorName', 'vendorName']) {
+      final v = widget.serviceDetails[k];
+      if (v is String && v.trim().isNotEmpty) { name = v.trim(); break; }
+    }
+    _blockWatch = SystemCancelWatcher.watch(
+      collection: 'service_requests',
+      docId: id,
+      providerName: name,
+      onBlocked: (msg, _) {
+        if (!mounted) return;
+        setState(() => _done = false);
+        SystemCancelWatcher.showBlockedDialog(context, msg);
+      },
+    );
+  }
+
   @override
   void dispose() {
+    _blockWatch?.cancel();
     _addrDebounce?.cancel();
     _manualAddrCtrl.removeListener(_onAddrChanged);
     _nameCtrl.dispose();

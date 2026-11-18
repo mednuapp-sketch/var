@@ -71,6 +71,7 @@ class _TripPaymentScreenState extends ConsumerState<TripPaymentScreen> {
   }
 
   void _onSuccess(PaymentSuccessResponse r) {
+    if (!mounted) return;
     final orderId = r.orderId ?? _orderId ?? '';
     if (orderId.isEmpty || (r.signature ?? '').isEmpty || (r.paymentId ?? '').isEmpty) {
       setState(() => _busy = false);

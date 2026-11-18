@@ -149,7 +149,8 @@ class _PhysiotherapistProfileScreenState extends State<PhysiotherapistProfileScr
         extra: {
           'amount': p.onlineRate.round().toString(),
           'description': 'Video consultation with ${p.name}',
-          'serviceType': 'video_consultation',
+          // Priced with the PHYSIOTHERAPY platform fee (not video_consultation).
+          'serviceType': 'physiotherapy',
           'bookingCollection': 'consultations',
           'bookingData': {
             'status': 'pending',
@@ -163,6 +164,7 @@ class _PhysiotherapistProfileScreenState extends State<PhysiotherapistProfileScr
             'patientFcmToken': patientFcmToken,
             'patientPhotoUrl': patientPhotoUrl,
             'doctorId': p.id,
+            'physiotherapistId': p.id,
             'doctorName': p.name,
             'doctorSpecialty': 'Physiotherapist',
             'doctorPhotoUrl': p.photoUrl,

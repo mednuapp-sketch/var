@@ -10,6 +10,7 @@ import 'package:razorpay_flutter/razorpay_flutter.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/constants/payment_config.dart';
+import '../../../core/services/booking_service.dart';
 import '../../wallet/wallet_provider.dart';
 import '../../../core/providers/platform_fee_provider.dart';
 
@@ -286,6 +287,45 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen>
     }
     setState(() => _isProcessing = true);
     try {
+      // Switch ON: firestore.rules deny client creates of booking docs, so a
+      // free booking is created by the `createFreeBooking` callable, which
+      // verifies the real price is zero (a priced booking is refused with
+      // "This booking requires payment."). The keys are stable per screen
+      // instance, so a retry returns the same booking(s) instead of duplicating.
+      if (PaymentConfig.requirePayment) {
+        if (widget.cartItems != null) {
+          final payments = <Map<String, dynamic>>[];
+          var i = 0;
+          for (final item in widget.cartItems!) {
+            final id = await BookingService.createFreeBooking(
+              serviceType: item['serviceType'].toString(),
+              bookingCollection: item['bookingCollection'] as String,
+              bookingData: (item['bookingData'] as Map).cast<String, dynamic>(),
+              idempotencyKey: 'pay-$_idempotencyKey-${i++}',
+            );
+            payments.add({
+              'bookingId': id,
+              'bookingCollection': item['bookingCollection'],
+              'serviceType': item['serviceType'],
+              'paidAmount': 0,
+            });
+          }
+          if (!mounted) return;
+          setState(() => _isProcessing = false);
+          _showSuccessSheet('NOPAY-$_idempotencyKey', cartPayments: payments);
+        } else {
+          final id = await BookingService.createFreeBooking(
+            serviceType: widget.serviceType!,
+            bookingCollection: widget.bookingCollection!,
+            bookingData: widget.bookingData!,
+            idempotencyKey: 'pay-$_idempotencyKey',
+          );
+          if (!mounted) return;
+          setState(() => _isProcessing = false);
+          _showSuccessSheet('NOPAY-$_idempotencyKey', bookingId: id);
+        }
+        return;
+      }
       final db = FirebaseFirestore.instance;
       if (widget.cartItems != null) {
         final payments = <Map<String, dynamic>>[];
@@ -346,7 +386,8 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen>
     } catch (e) {
       if (!mounted) return;
       setState(() => _isProcessing = false);
-      _showError('Could not confirm booking: $e');
+      _showError(
+          'Could not confirm booking: ${e.toString().replaceFirst('Exception: ', '')}');
     }
   }
 
@@ -394,12 +435,19 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen>
       final refunded = await _refundSettledDebits(e, razorpayPaymentId: paymentId);
       if (!mounted) return;
       setState(() => _isProcessing = false);
-      final msg = e.message ?? 'Payment could not be recorded. Contact support with ID: $paymentId';
+      // The server refunds a gateway charge it could not book (see
+      // _withCaptureRefund). Signature / ownership rejections are not refund
+      // cases, so those keep the server's own message.
+      final notRefundCase =
+          e.code == 'unauthenticated' || e.code == 'permission-denied';
+      final msg = notRefundCase
+          ? (e.message ?? _paymentNotCompletedMsg)
+          : _paymentNotCompletedMsg;
       _showError(refunded ? '$msg $_walletRefundedNote' : msg);
     } catch (e) {
       if (!mounted) return;
       setState(() => _isProcessing = false);
-      _showError('Payment could not be recorded. Contact support with ID: $paymentId');
+      _showError(_paymentNotCompletedMsg);
     }
   }
 
@@ -475,6 +523,10 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen>
     }
     return null;
   }
+
+  static const String _paymentNotCompletedMsg =
+      'Your payment could not be completed. If money was deducted it will be '
+      'refunded to your original payment method automatically.';
 
   static const String _walletRefundedNote =
       'We refunded the amount taken from your wallet.';
@@ -722,6 +774,8 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen>
   Widget build(BuildContext context) {
     // Keep the fee live (admin can change it while this screen is open).
     ref.watch(platformFeeConfigProvider);
+    // Rebuild when the real-payments switch (app_config/payments) flips.
+    ref.watch(requirePaymentProvider);
     return Scaffold(
       backgroundColor: context.appBackground,
       appBar: _buildAppBar(),
@@ -734,7 +788,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen>
               children: [
                 _buildOrderSummary(),
                 const SizedBox(height: 16),
-                if (!kRequirePayment) ...[
+                if (!PaymentConfig.requirePayment) ...[
                   _buildNoPaymentNote(),
                 ] else ...[
                   if (_mednuMoneyBalance > 0) ...[
@@ -1532,7 +1586,9 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen>
             child: ElevatedButton(
               onPressed: _isProcessing
                   ? null
-                  : (kRequirePayment ? _openRazorpay : _confirmWithoutPayment),
+                  : (PaymentConfig.requirePayment && _totalAmount > 0
+                      ? _openRazorpay
+                      : _confirmWithoutPayment),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
@@ -1551,13 +1607,13 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen>
                   : Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(
-                          kRequirePayment ? Icons.lock_rounded : Icons.check_circle_rounded,
+                        Icon(
+                          PaymentConfig.requirePayment ? Icons.lock_rounded : Icons.check_circle_rounded,
                           size: 16,
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          !kRequirePayment
+                          (!PaymentConfig.requirePayment || _totalAmount <= 0)
                               ? 'Confirm Booking'
                               : (_amountAfterWallet <= 0
                                   ? 'Complete with Wallet'
@@ -1572,12 +1628,12 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen>
                     ),
             ),
           ),
-          // Debug-only shortcut for QA once kRequirePayment is flipped back
+          // Debug-only shortcut for QA once PaymentConfig.requirePayment is flipped back
           // on — kDebugMode is compiled out entirely in release builds, so
           // this button is physically absent from anything shipped to a real
-          // user or app store. When kRequirePayment is already false the
+          // user or app store. When PaymentConfig.requirePayment is already false the
           // main button above does the same thing, so this stays hidden.
-          if (kRequirePayment && kDebugMode) ...[
+          if (PaymentConfig.requirePayment && kDebugMode) ...[
             const SizedBox(height: 8),
             SizedBox(
               height: 44,
@@ -1732,6 +1788,11 @@ class _SuccessSheetState extends State<_SuccessSheet>
   late final Animation<double> _scale;
   late final Animation<double> _fade;
 
+  // Nothing was charged: test mode, or a real-payments booking whose total is 0
+  // (e.g. a 100% coupon). Shown as 'Booking Confirmed', never 'Payment Successful'.
+  bool get _noCharge =>
+      !PaymentConfig.requirePayment || (double.tryParse(widget.amount) ?? 1) <= 0;
+
   @override
   void initState() {
     super.initState();
@@ -1799,7 +1860,7 @@ class _SuccessSheetState extends State<_SuccessSheet>
             child: Column(
               children: [
                 Text(
-                  kRequirePayment ? 'Payment Successful!' : 'Booking Confirmed!',
+                  !_noCharge ? 'Payment Successful!' : 'Booking Confirmed!',
                   style: TextStyle(
                     fontFamily: 'Poppins',
                     fontSize: 22,
@@ -1809,7 +1870,7 @@ class _SuccessSheetState extends State<_SuccessSheet>
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  kRequirePayment
+                  !_noCharge
                       ? '₹${widget.amount} paid successfully'
                       : 'Your booking is confirmed',
                   style: TextStyle(
@@ -1833,14 +1894,14 @@ class _SuccessSheetState extends State<_SuccessSheet>
                       _ReceiptRow('Service', widget.description),
                       const SizedBox(height: 8),
                       _ReceiptRow(
-                        kRequirePayment ? 'Amount Paid' : 'Amount',
-                        kRequirePayment
+                        !_noCharge ? 'Amount Paid' : 'Amount',
+                        !_noCharge
                             ? '₹${widget.amount}'
-                            : 'No charge (test mode)',
+                            : (PaymentConfig.requirePayment ? 'No charge' : 'No charge (test mode)'),
                       ),
                       const SizedBox(height: 8),
                       _ReceiptRow(
-                        kRequirePayment ? 'Transaction ID' : 'Booking reference',
+                        !_noCharge ? 'Transaction ID' : 'Booking reference',
                         widget.paymentId.length > 16
                             ? '${widget.paymentId.substring(0, 16)}…'
                             : widget.paymentId,
@@ -1934,13 +1995,11 @@ class _ReceiptRow extends StatelessWidget {
 class _SummaryRow extends StatelessWidget {
   final String label, value;
   final Color? valueColor;
-  final String? valueNote;
 
   const _SummaryRow(
     this.label,
     this.value, {
     this.valueColor,
-    this.valueNote,
   });
 
   @override
@@ -1952,26 +2011,6 @@ class _SummaryRow extends StatelessWidget {
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (valueNote != null) ...[
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: _kGreen.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(5),
-                ),
-                child: Text(
-                  valueNote!,
-                  style: const TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 9,
-                    fontWeight: FontWeight.w700,
-                    color: _kGreen,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 6),
-            ],
             Text(
               value,
               style: AppTextStyles.labelMedium.copyWith(

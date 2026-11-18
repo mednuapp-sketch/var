@@ -9,12 +9,16 @@ import 'package:mednu/core/widgets/ux_widgets.dart';
 import 'models/diet_plan_model.dart';
 import 'models/weight_loss_plan.dart';
 import 'providers/nutrition_provider.dart';
+import 'screens/my_weight_loss_plan_screen.dart' show WeightLossPlanBanner;
 
 /// Weight-loss enrolment first asks for a 2 / 4 / 6-month duration (6 months
 /// recommended); every other plan goes straight to choosing a dietician.
-Future<void> _enroll(BuildContext context, String title, String price) async {
+Future<void> _enroll(BuildContext context, String title, String price,
+    [String? planId]) async {
   if (!isWeightLossPlan(title)) {
     selectedWeightLossMonths.value = null;
+    selectedWeightLossPlanId.value = null;
+    selectedWeightLossMonthly.value = null;
     context.push(AppRoutes.nutritionNutritionists);
     return;
   }
@@ -27,10 +31,14 @@ Future<void> _enroll(BuildContext context, String title, String price) async {
   );
   if (months == null || !context.mounted) return;
   selectedWeightLossMonths.value = months;
+  selectedWeightLossPlanId.value = planId;
+  selectedWeightLossMonthly.value = monthlyAmountFromPrice(price);
   await context.push(AppRoutes.nutritionNutritionists);
   // The plan choice only lives for this dietician-picking flow; clear it when
   // the list is closed so a later unrelated booking is not tagged as a plan.
   selectedWeightLossMonths.value = null;
+  selectedWeightLossPlanId.value = null;
+  selectedWeightLossMonthly.value = null;
 }
 
 class _WeightLossDurationSheet extends StatefulWidget {
@@ -97,7 +105,22 @@ class _WeightLossDurationSheetState extends State<_WeightLossDurationSheet> {
                 ),
                 const SizedBox(height: 10),
               ],
-              const SizedBox(height: 6),
+              const SizedBox(height: 2),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.info_outline_rounded, size: 16, color: context.appTextHint),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      kWeightLossPlanNotice,
+                      style: AppTextStyles.caption.copyWith(
+                          color: context.appTextSecondary, height: 1.4),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
               SizedBox(
                 width: double.infinity,
                 height: 50,
@@ -260,6 +283,7 @@ class NutritionScreen extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  const WeightLossPlanBanner(margin: EdgeInsets.only(bottom: 16)),
                   _BmiBanner(onTap: () => context.push(AppRoutes.nutritionBmi)),
                   SizedBox(height: R.h(context, 24)),
                   const _SectionHeader(
@@ -271,11 +295,11 @@ class NutritionScreen extends ConsumerWidget {
                     loading: () => const _PlanListSkeleton(),
                     error: (_, __) => _PlansList(
                       plans: null,
-                      onEnroll: (title, price) => _enroll(context, title, price),
+                      onEnroll: (title, price, id) => _enroll(context, title, price, id),
                     ),
                     data: (plans) => _PlansList(
                       plans: plans.isEmpty ? null : plans,
-                      onEnroll: (title, price) => _enroll(context, title, price),
+                      onEnroll: (title, price, id) => _enroll(context, title, price, id),
                     ),
                   ),
                 ],
@@ -408,7 +432,7 @@ class _SectionHeader extends StatelessWidget {
 
 class _PlansList extends StatelessWidget {
   final List<DietPlanModel>? plans;
-  final void Function(String title, String price) onEnroll;
+  final void Function(String title, String price, String? id) onEnroll;
   const _PlansList({required this.plans, required this.onEnroll});
 
   @override
@@ -422,7 +446,7 @@ class _PlansList extends StatelessWidget {
                   icon: DietPlanModel.iconFromKey(p.iconKey),
                   color: DietPlanModel.colorFromKey(p.colorKey),
                   price: p.price,
-                  onEnroll: () => onEnroll(p.title, p.price),
+                  onEnroll: () => onEnroll(p.title, p.price, p.id),
                 ))
             .toList(),
       );
@@ -435,7 +459,7 @@ class _PlansList extends StatelessWidget {
                 icon: DietPlanModel.iconFromKey(p['iconKey'] as String),
                 color: DietPlanModel.colorFromKey(p['colorKey'] as String),
                 price: p['price'] as String,
-                onEnroll: () => onEnroll(p['title'] as String, p['price'] as String),
+                onEnroll: () => onEnroll(p['title'] as String, p['price'] as String, null),
               ))
           .toList(),
     );

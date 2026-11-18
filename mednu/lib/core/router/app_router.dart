@@ -32,6 +32,7 @@ import '../../features/services/nutrition/screens/nutrition_dashboard_screen.dar
 import '../../features/services/nutrition/screens/meal_tracking_screen.dart';
 import '../../features/services/nutrition/screens/bmi_calculator_screen.dart';
 import '../../features/services/nutrition/screens/nutrition_goals_screen.dart';
+import '../../features/services/nutrition/screens/my_weight_loss_plan_screen.dart';
 import '../../features/services/physiotherapy/physio_screen.dart';
 import '../../features/services/physiotherapy/screens/physiotherapist_list_screen.dart';
 import '../../features/services/physiotherapy/screens/physiotherapist_profile_screen.dart';
@@ -134,6 +135,7 @@ class AppRoutes {
   static const nutritionMeals                 = '/nutrition/meals';
   static const nutritionBmi                   = '/nutrition/bmi';
   static const nutritionGoals                 = '/nutrition/goals';
+  static const nutritionPlan                  = '/nutrition/plan';
   static const counselling        = '/counselling';
   static const counsellingCounsellors       = '/counselling/counsellors';
   static const counsellingCounsellorProfile = '/counselling/counsellor/:id';
@@ -322,6 +324,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: AppRoutes.nutritionMeals,               builder: (c, s) => const MealTrackingScreen()),
       GoRoute(path: AppRoutes.nutritionBmi,                 builder: (c, s) => const BmiCalculatorScreen()),
       GoRoute(path: AppRoutes.nutritionGoals,               builder: (c, s) => const NutritionGoalsScreen()),
+      GoRoute(path: AppRoutes.nutritionPlan,                builder: (c, s) => const MyWeightLossPlanScreen()),
       GoRoute(path: AppRoutes.physio,             builder: (c, s) => const PhysioScreen()),
       GoRoute(path: AppRoutes.physioTherapistList, builder: (c, s) => const PhysiotherapistListScreen()),
       GoRoute(

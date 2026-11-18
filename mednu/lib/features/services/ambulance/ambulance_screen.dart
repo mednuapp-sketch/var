@@ -9,6 +9,7 @@ import '../../../core/constants/app_spacing.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/constants/payment_config.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/services/system_cancel_watcher.dart';
 import '../../../core/utils/r.dart';
 import '../../home/providers/location_provider.dart';
 import '../../location/providers/saved_addresses_provider.dart';
@@ -100,6 +101,7 @@ class _AmbulanceScreenState extends ConsumerState<AmbulanceScreen> {
   String _selectedType = 'Basic';
   bool _busy = false;
   bool _done = false;
+  SystemCancelHandle? _blockWatch;
 
   // GPS-verified location (null = not set yet)
   PreciseAddress? _location;
@@ -155,6 +157,7 @@ class _AmbulanceScreenState extends ConsumerState<AmbulanceScreen> {
 
   @override
   void dispose() {
+    _blockWatch?.cancel();
     _ratesSub?.cancel();
     _notesCtrl.dispose();
     super.dispose();
@@ -368,7 +371,8 @@ class _AmbulanceScreenState extends ConsumerState<AmbulanceScreen> {
               );
               return;
             }
-            await FirebaseFirestore.instance.collection('service_requests').add({
+            final newRef =
+                await FirebaseFirestore.instance.collection('service_requests').add({
               'type': 'ambulance',
               'serviceName': '${typeData.name} Ambulance',
               'patientId': uid,
@@ -392,7 +396,7 @@ class _AmbulanceScreenState extends ConsumerState<AmbulanceScreen> {
               // server computes the fare at completion (fareFinal).
               'amount': 0,
               'paymentStatus':
-                  kRequirePayment ? 'pay_after_trip' : 'not_required',
+                  PaymentConfig.requirePayment ? 'pay_after_trip' : 'not_required',
               'status': 'pending',
               'assignedTo': null,
               'createdAt': FieldValue.serverTimestamp(),
@@ -400,6 +404,19 @@ class _AmbulanceScreenState extends ConsumerState<AmbulanceScreen> {
             });
             if (!mounted) return;
             setState(() { _busy = false; _done = true; });
+            // The server cancels the request right away when the previous
+            // trip is unpaid: swap the success view for the reason.
+            _blockWatch?.cancel();
+            _blockWatch = SystemCancelWatcher.watch(
+              collection: 'service_requests',
+              docId: newRef.id,
+              onBlocked: (msg, _) {
+                if (!mounted) return;
+                setState(() => _done = false);
+                SystemCancelWatcher.showBlockedDialog(context, msg,
+                    title: 'Payment pending');
+              },
+            );
           } catch (_) {
             if (mounted) {
               setState(() => _busy = false);

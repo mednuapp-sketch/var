@@ -1,3 +1,9 @@
+import 'dart:async';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 /// Razorpay publishable key (safe to ship — the secret lives only in Cloud
 /// Functions config, which is what actually verifies every payment).
 ///
@@ -25,6 +31,65 @@ const kRazorpayKeyId = String.fromEnvironment(
 /// Flip this to `true` (and set `kRazorpayKeyId` to a live key) once the app
 /// is ready to actually collect money.
 const bool kRequirePayment = false;
+
+/// Runtime accessor for the real-payments switch. Source of truth is the
+/// Firestore doc `app_config/payments` = { requirePayment: bool, updatedAt,
+/// updatedBy } (Director-only write from the admin panel), so go-live needs no
+/// app release. [kRequirePayment] is only the fallback while the doc has not
+/// loaded yet / is missing / unreadable (rules require sign-in to read it).
+///
+/// Use [PaymentConfig.requirePayment] (synchronous, last known value) in
+/// handlers and [requirePaymentProvider] in build methods.
+class PaymentConfig {
+  PaymentConfig._();
+
+  static bool? _remote;
+  static final StreamController<bool> _controller =
+      StreamController<bool>.broadcast();
+  static StreamSubscription<User?>? _authSub;
+  static StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _docSub;
+
+  /// Remote value when known, else the compile-time fallback.
+  static bool get requirePayment => _remote ?? kRequirePayment;
+
+  /// Emits the effective value each time it changes.
+  static Stream<bool> get changes => _controller.stream;
+
+  /// Idempotent; call once at app start.
+  static void start() {
+    if (_authSub != null) return;
+    _authSub = FirebaseAuth.instance.authStateChanges().listen((user) {
+      _docSub?.cancel();
+      _docSub = null;
+      if (user == null) return; // keep the last known value
+      _docSub = FirebaseFirestore.instance
+          .collection('app_config')
+          .doc('payments')
+          .snapshots()
+          .listen((snap) {
+        final data = snap.data();
+        final v = data == null ? null : data['requirePayment'];
+        _set(v is bool ? v : null);
+      }, onError: (_) {
+        // Unreadable: keep the cached value (or the compile-time fallback).
+      });
+    });
+  }
+
+  static void _set(bool? value) {
+    final before = requirePayment;
+    _remote = value;
+    if (before != requirePayment && !_controller.isClosed) {
+      _controller.add(requirePayment);
+    }
+  }
+}
+
+/// Reactive view of [PaymentConfig.requirePayment] for widgets.
+final requirePaymentProvider = StreamProvider<bool>((ref) async* {
+  yield PaymentConfig.requirePayment;
+  yield* PaymentConfig.changes;
+});
 
 /// Flat OP registration fee charged when a patient books an in-person OP
 /// appointment directly with a MedNU-registered hospital (as opposed to an

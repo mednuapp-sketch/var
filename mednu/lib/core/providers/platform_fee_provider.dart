@@ -171,9 +171,27 @@ String? feeProviderIdFor(String? serviceType, Map? bookingData) {
   final sdRaw = bookingData['serviceDetails'];
   final sd = sdRaw is Map ? sdRaw : const {};
   final t = (serviceType ?? '').trim().toLowerCase();
+  // Cart physio sessions are priced from the admin catalogue by name
+  // (serviceDetails.sessionType): no partner binding => default fee. Mirrors
+  // the server (feeProviderIdFor in functions/price_helpers.js).
+  if (t == 'physiotherapy') {
+    final st = sd['sessionType'];
+    if (st is String ? st.isNotEmpty : (st != null && st != false && st != 0)) {
+      return null;
+    }
+  }
   final keys = _kFeeProviderKeys[t] ?? _kFeeProviderFallback;
   for (final k in keys) {
     final v = k.startsWith('sd.') ? sd[k.substring(3)] : bookingData[k];
+    if (v is String) {
+      final s = v.trim();
+      if (s.isNotEmpty && !s.contains('/') && v.length < 400) return s;
+    }
+  }
+  // A physiotherapist video call lives in `consultations` where the physio's
+  // uid is stored as `doctorId` (providerRole 'physiotherapist').
+  if (t == 'physiotherapy' && bookingData['providerRole'] == 'physiotherapist') {
+    final v = bookingData['doctorId'];
     if (v is String) {
       final s = v.trim();
       if (s.isNotEmpty && !s.contains('/') && v.length < 400) return s;

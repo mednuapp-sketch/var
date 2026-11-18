@@ -20,6 +20,19 @@ const weightLossPlanOptions = <WeightLossPlanOption>[
 /// cleared) by the booking screen so the choice is stored on the appointment.
 final ValueNotifier<int?> selectedWeightLossMonths = ValueNotifier<int?>(null);
 
+/// The `diet_plans` doc id of the plan being bought (null when the built-in
+/// fallback card was used). Only a hint: the server re-reads the real price.
+final ValueNotifier<String?> selectedWeightLossPlanId = ValueNotifier<String?>(null);
+
+/// Monthly price (rupees) shown to the patient for the chosen plan. Only used to
+/// display the total and to prefill the payment amount; the server verifies it.
+final ValueNotifier<int?> selectedWeightLossMonthly = ValueNotifier<int?>(null);
+
+/// Shown before payment (duration sheet + booking summary).
+const String kWeightLossPlanNotice =
+    'Pay once, one consultation per month. Unused consultations expire at the '
+    'end of the plan and are not refunded. The platform fee is non-refundable.';
+
 bool isWeightLossPlan(String title) =>
     title.toLowerCase().contains('weight loss');
 

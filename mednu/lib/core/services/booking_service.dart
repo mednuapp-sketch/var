@@ -1,10 +1,42 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'operation_logger.dart';
 
 class BookingService {
   static final _db   = FirebaseFirestore.instance;
   static final _auth = FirebaseAuth.instance;
+
+  /// Free (zero-price) booking created SERVER-side via the `createFreeBooking`
+  /// callable. Used instead of a direct Firestore write while the real-payments
+  /// switch (`PaymentConfig.requirePayment`) is ON, because firestore.rules then
+  /// deny client creates of booking docs. The server verifies the real price is
+  /// zero. Pass the SAME [idempotencyKey] on retry (no duplicate booking).
+  /// Returns the booking id; throws a readable [Exception] on failure.
+  static Future<String> createFreeBooking({
+    required String serviceType,
+    required String bookingCollection,
+    required Map<String, dynamic> bookingData,
+    required String idempotencyKey,
+  }) async {
+    try {
+      final result = await FirebaseFunctions.instance
+          .httpsCallable('createFreeBooking')
+          .call({
+        'serviceType': serviceType,
+        'bookingCollection': bookingCollection,
+        'bookingData': bookingData,
+        'idempotencyKey': idempotencyKey,
+      });
+      final id = ((result.data as Map?) ?? const {})['bookingId'];
+      if (id is! String || id.isEmpty) {
+        throw Exception('Booking could not be created. Please try again.');
+      }
+      return id;
+    } on FirebaseFunctionsException catch (e) {
+      throw Exception(e.message ?? 'Booking could not be created. Please try again.');
+    }
+  }
 
   /// Creates a service request in Firestore and logs the operation.
   /// Returns the new document ID on success, throws on failure.

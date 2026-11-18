@@ -279,7 +279,12 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen> with SingleTi
                 if (snap.hasError) {
                   return _buildError(context);
                 }
-                final docs = snap.data?.docs ?? [];
+                // Equipment is vendor-only: legacy admin-listed docs (no
+                // sourceVendorId) are never shown or addable to the cart.
+                final docs = (snap.data?.docs ?? []).where((doc) {
+                  final v = (doc.data() as Map<String, dynamic>)['sourceVendorId'];
+                  return v is String && v.trim().isNotEmpty;
+                }).toList();
                 if (docs.isEmpty) {
                   return _buildEmpty();
                 }
@@ -486,7 +491,7 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen> with SingleTi
   Widget _buildEmpty() => const AppEmptyState(
     icon: Icons.medical_services_outlined,
     title: 'No Equipment Listed',
-    message: 'Medical equipment will appear here once added.',
+    message: 'Medical equipment will appear here once an equipment vendor adds it.',
   );
 }
 

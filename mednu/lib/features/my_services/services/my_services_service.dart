@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/unified_booking.dart';
 import '../../../../core/services/operation_logger.dart';
+import '../../../../core/services/system_cancel_watcher.dart';
 
 class MyServicesService {
   static final _db   = FirebaseFirestore.instance;
@@ -261,8 +262,11 @@ class MyServicesService {
   static void _emit(StreamController<List<UnifiedBooking>> ctrl,
       List<List<UnifiedBooking>> latest) {
     if (ctrl.isClosed) return;
+    // Bookings the system blocked at creation (previous trip unpaid, provider
+    // not accepting, equipment vendor required) never show in the lists.
     final merged = latest
         .expand((l) => l)
+        .where((b) => !SystemCancelWatcher.isHiddenBlocked(b.rawData))
         .toList()
       ..sort((a, b) {
         final at = a.createdAt ?? DateTime(1970);

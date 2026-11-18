@@ -8,6 +8,8 @@ import '../../../core/services/feedback_service.dart';
 import '../../../core/widgets/ux_widgets.dart';
 import '../../home/providers/home_nav_provider.dart'
     show bottomNavIndexProvider;
+import '../../services/nutrition/screens/my_weight_loss_plan_screen.dart'
+    show WeightLossPlanBanner;
 import '../models/unified_booking.dart';
 import '../providers/my_services_provider.dart';
 import '../services/my_services_service.dart';
@@ -115,13 +117,22 @@ class _MyServicesScreenState extends ConsumerState<MyServicesScreen>
               .toList(),
         ),
       ),
-      body: TabBarView(
-        controller: _tab,
-        children: const [
-          _BookingsList(filter: _BookingFilter.active),
-          _BookingsList(filter: _BookingFilter.upcoming),
-          _BookingsList(filter: _BookingFilter.completed),
-          _BookingsList(filter: _BookingFilter.cancelled),
+      body: Column(
+        children: [
+          // Only visible while the patient has an active weight-loss plan.
+          const WeightLossPlanBanner(
+              margin: EdgeInsets.fromLTRB(16, 12, 16, 4)),
+          Expanded(
+            child: TabBarView(
+              controller: _tab,
+              children: const [
+                _BookingsList(filter: _BookingFilter.active),
+                _BookingsList(filter: _BookingFilter.upcoming),
+                _BookingsList(filter: _BookingFilter.completed),
+                _BookingsList(filter: _BookingFilter.cancelled),
+              ],
+            ),
+          ),
         ],
       ),
     );
