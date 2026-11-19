@@ -2,7 +2,7 @@
 
 Write your answer after **Answer:** (for example "A", "Yes", or a sentence). Nothing is deployed.
 
-Closed and built: weight-loss plan (prepaid subscription, forfeit policy), dental doctors, nurse and care assistant need not coexist, Maridi certificate, physio video-call fee, vendor-only equipment, approved partners adding "other" documents, automatic Razorpay refund, server checks the partner for fees, home screen referral code, ambulance vehicle-type matching (B3), unpaid ambulance trips (B7), forced app update (B9), go-live as a runtime switch (B12), final review (C1), HR view-only on money actions, written-off trips pay the driver, test credit safeguards (auto-expiry, off when real payments are on).
+Closed and built: admin hosted on Firebase, hospital refunds always admin review (confirmed), weight-loss plan (prepaid subscription, forfeit policy), dental doctors, nurse and care assistant need not coexist, Maridi certificate, physio video-call fee, vendor-only equipment, approved partners adding "other" documents, automatic Razorpay refund, server checks the partner for fees, home screen referral code, ambulance vehicle-type matching (B3), unpaid ambulance trips (B7), forced app update (B9), go-live as a runtime switch (B12), final review (C1), HR view-only on money actions, written-off trips pay the driver, test credit safeguards (auto-expiry, off when real payments are on).
 
 ---
 
@@ -13,16 +13,10 @@ Closed and built: weight-loss plan (prepaid subscription, forfeit policy), denta
 - B) Platform bears it: the partner always gets the full ₹500.
 - Answer:
 
-**2. iOS store link (optional).** Send the App Store link for the forced-update screen, or skip it (iPhones then see the message without a button).
-- Answer:
-
-**3. Admin hosting.** `PENDING.md` mentions Vercel, `firebase.json` has an admin hosting target. Which host serves the admin panel?
+**2. iOS store link.** You said yes: please paste the App Store URL (I will not guess it).
 - Answer:
 
 **4. Razorpay key on iOS builds.** `codemagic.yaml` passes no build settings for iOS. How does the live Razorpay key reach the iOS apps?
-- Answer:
-
-**5. Hospital refunds.** Hospital appointments always go to admin review (no automatic refund before acceptance). Intended?
 - Answer:
 
 ---
