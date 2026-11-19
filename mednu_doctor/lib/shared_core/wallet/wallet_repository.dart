@@ -243,8 +243,8 @@ class HospitalWalletRepository extends SettlementWalletRepository {
 /// participants on the backend — `provider_wallets`/`wallet_ledger` is the
 /// correct, authoritative source once real payments exist. But that backend
 /// call is a no-op until a real `payments` doc exists (see
-/// `_transitionPaymentToEligible`'s own guard), and `kRequirePayment` is
-/// still `false` — no booking has ever gone through `capturePayment` yet, so
+/// `_transitionPaymentToEligible`'s own guard), and real payments may still be
+/// switched off (`app_config/payments`; no booking has gone through `capturePayment` then), so
 /// `provider_wallets` is empty for every current physiotherapist/counsellor.
 /// Meanwhile the legacy ledger credit in those same trigger functions is
 /// unconditional on every completion regardless of payment status, and is

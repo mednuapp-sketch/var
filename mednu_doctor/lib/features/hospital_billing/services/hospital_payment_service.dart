@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 /// One `hospital_bill_payments/{id}` doc — written by the patient app's
 /// PayHospitalBillScreen (via the shared PaymentScreen/capturePayment
-/// pipeline, or directly when `kRequirePayment` is false — see mednu's
+/// pipeline, or directly when the remote `app_config/payments` switch is off — see mednu's
 /// payment_config.dart). Read-only apart from [HospitalPaymentService.
 /// markVerified] — the billing desk's one available action, matching
 /// firestore.rules' `hospital_bill_payments` update rule, which allows

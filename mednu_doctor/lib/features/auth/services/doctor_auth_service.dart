@@ -71,7 +71,10 @@ class DoctorAuthService {
     double? clinicLat,
     double? clinicLng,
     String clinicCity = '',
-    Map<String, String> documentUrls = const {},
+    // Storage PATHS keyed by docType (never download URLs).
+    Map<String, String> documentPaths = const {},
+    // Public avatar URL (doctors/{uid}/profile.jpg), '' if none.
+    String photoUrl = '',
     Map<String, String> documentLabels = const {},
   }) async {
     String? fcmToken;
@@ -102,13 +105,12 @@ class DoctorAuthService {
       'rating': 0.0,
       'totalReviews': 0,
       'totalConsultations': 0,
-      'documents': documentUrls,
+      'documents': documentPaths,
       if (documentLabels.isNotEmpty) 'documentLabels': documentLabels,
-      // The registration "Profile Photo" doubles as the public avatar —
-      // nothing else ever copies documents.profile_photo into photoUrl, so
-      // approved doctors showed no photo to patients until they re-uploaded.
-      if ((documentUrls['profile_photo'] ?? '').isNotEmpty)
-        'photoUrl': documentUrls['profile_photo'],
+      // The registration "Profile Photo" doubles as the public avatar. It is
+      // uploaded to the public-read doctors/{uid}/profile.jpg; documents.
+      // profile_photo only holds the private docs/ path.
+      if (photoUrl.isNotEmpty) 'photoUrl': photoUrl,
       'declarationAccepted': true,
       'termsAccepted': true,
       'termsAcceptedAt': FieldValue.serverTimestamp(),

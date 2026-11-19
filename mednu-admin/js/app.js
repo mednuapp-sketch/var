@@ -22,7 +22,68 @@ function escHtml(str) {
     .replace(/'/g, '&#x27;');
 }
 
+// ── Verification documents: legacy URL OR Storage path ──────────────────────
+// New uploads store only the Storage PATH (a tokenised download URL in a
+// world-readable profile doc would bypass Storage rules). Legacy entries still
+// hold an http(s) URL. docRefOf() normalises both shapes (a bare string, or a
+// partner map {url?, storagePath?, ...}) to one string: the URL for legacy
+// entries, else the path. '' means "no file".
+function docRefOf(d) {
+  if (!d) return '';
+  if (typeof d === 'string') return d.trim();
+  if (typeof d === 'object') {
+    const u = String(d.url == null ? '' : d.url).trim();
+    if (/^https?:\/\//i.test(u)) return u;
+    return String(d.storagePath == null ? '' : d.storagePath).trim();
+  }
+  return '';
+}
+function hasDocFile(d) { return docRefOf(d) !== ''; }
+// Attribute string for an <a> that views a document (already escaped).
+function docLinkAttrs(d) {
+  const ref = docRefOf(d);
+  if (/^https?:\/\//i.test(ref)) {
+    return 'href="' + escHtml(safeUrl(ref)) + '" target="_blank" rel="noopener"';
+  }
+  return 'href="#" onclick="openStoredDocument(' + escJsAttr(ref) + '); return false;"';
+}
+// Resolves a fresh download URL through the authenticated SDK (needs Storage
+// read permission: admin/owner only) and opens it. The tab is opened
+// synchronously so popup blockers allow it, then pointed at the URL.
+async function openStoredDocument(path) {
+  const p = String(path || '');
+  if (!p || p.includes('..') || p.includes('://') || p.startsWith('/')) {
+    showToast('Could not open document');
+    return;
+  }
+  let w = null;
+  try { w = window.open('about:blank', '_blank'); if (w) w.opener = null; } catch (_) { w = null; }
+  try {
+    const url = await storage.ref(p).getDownloadURL();
+    if (w) w.location.href = url; else window.open(url, '_blank', 'noopener');
+  } catch (err) {
+    try { if (w) w.close(); } catch (_) {}
+    console.error('openStoredDocument:', err);
+    showToast('Could not open document: ' + ((err && err.message) || 'unknown error'));
+  }
+}
+
 // â”€â”€ Rate-limit guard (prevents double-clicking approve/reject) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Safe JS string literal for use INSIDE a double-quoted inline handler attribute:
+//   onclick="fn(${escJsAttr(userText)})"   (no surrounding quotes in the template)
+// JSON.stringify yields a valid, fully escaped JS string literal; U+2028/2029 and < > &
+// are unicode-escaped; escHtml then makes it attribute-safe and the HTML parser decodes it back
+// to the exact literal before the JS runs.
+function escJsAttr(str) {
+  const lit = JSON.stringify(String(str == null ? '' : str))
+    .replace(/[<>&\u2028\u2029]/g, c => '\x5cu' + c.charCodeAt(0).toString(16).padStart(4, '0'));
+  return escHtml(lit);
+}
+
+// Cost guard: the Refunds list (plain list, no derived totals) shows only the latest N.
+// Settlement totals use a separate listener and are NOT limited.
+const REFUNDS_LIST_LIMIT = 500;
+
 const _actionCooldowns = new Set();
 function withCooldown(key, fn) {
   if (_actionCooldowns.has(key)) return;
@@ -32,9 +93,54 @@ function withCooldown(key, fn) {
 }
 
 // â”€â”€ Global unhandled rejection logger â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Central, never-throwing client error reporter. There is no client-writable log
+// collection in firestore.rules (audit_logs / whatsapp_logs are write:false), so
+// errors go to console.error as a structured payload plus a throttled toast.
+let _errReportBusy = false;
+let _errToastAt = 0;
+let _errReportCount = 0;
+function reportClientError(kind, detail) {
+  if (_errReportBusy) return;          // re-entrancy guard: can never loop
+  _errReportBusy = true;
+  try {
+    if (++_errReportCount > 50) return; // hard cap per page load
+    const d = detail || {};
+    const payload = {
+      app: 'mednu-admin', kind: String(kind),
+      message: String((d.message != null ? d.message : d) || '').slice(0, 500),
+      source: d.source ? String(d.source).slice(0, 200) : undefined,
+      line: d.line, col: d.col,
+      stack: d.stack ? String(d.stack).slice(0, 1500) : undefined,
+      page: String(location.pathname + location.hash).slice(0, 120),
+      at: new Date().toISOString(),
+    };
+    console.error('[MedNU Admin] client error', payload);
+    const now = Date.now();
+    if (now - _errToastAt > 5000) {       // at most one toast per 5s
+      _errToastAt = now;
+      try { showToast('Something went wrong. Please retry or reload the page.'); } catch (_) {}
+    }
+  } catch (_) { /* swallow: the handler must never throw */ }
+  finally { _errReportBusy = false; }
+}
+window.addEventListener('error', ev => {
+  try {
+    // Resource load failures (img/script) bubble here too; ignore them, only report script errors.
+    if (ev && ev.target && ev.target !== window) return;
+    const err = ev && ev.error;
+    reportClientError('window.onerror', {
+      message: (ev && ev.message) || (err && err.message),
+      source: ev && ev.filename, line: ev && ev.lineno, col: ev && ev.colno,
+      stack: err && err.stack,
+    });
+  } catch (_) {}
+});
 window.addEventListener('unhandledrejection', event => {
   console.error('[MedNU Admin] Unhandled promise rejection:', event.reason);
-  showToast('An unexpected error occurred. Check the console.');
+  try {
+    const r = event.reason;
+    reportClientError('unhandledrejection', { message: r && r.message ? r.message : r, stack: r && r.stack });
+  } catch (_) {}
 });
 
 // â”€â”€ Admin role verification â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -85,7 +191,7 @@ const ROLE_TAB_ACCESS = {
   // Support: the Support heading + Feedback.
   support:   ['home', ..._SUPPORT_TABS, 'feedback'],
   // Marketing: the Marketing heading + Health Articles + Feedback.
-  marketing: ['home', ..._MARKETING_TABS, 'health-articles', 'feedback'],
+  marketing: ['home', ..._MARKETING_TABS, 'coupons', 'health-articles', 'feedback'],
 };
 
 const ROLE_LABELS = {
@@ -1078,7 +1184,7 @@ function populateDoctorDocsUI(existingDocs) {
     const tileEl   = document.getElementById(`doc-tile-${docType}`);
     if (!statusEl) return;
     if (url) {
-      statusEl.innerHTML = `<a href="${escHtml(safeUrl(url))}" target="_blank" rel="noopener">View uploaded file</a>`;
+      statusEl.innerHTML = `<a ${docLinkAttrs(url)}>View uploaded file</a>`;
       if (btnEl) btnEl.innerHTML = '<i class="ti ti-replace"></i> Replace';
       if (tileEl) tileEl.classList.add('doc-uploaded');
     } else {
@@ -1100,7 +1206,8 @@ async function uploadDoctorDocuments(docId) {
     const ref  = storage.ref(storagePath);
     const task = ref.put(file, { contentType: file.type });
     await new Promise((res, rej) => task.on('state_changed', null, rej, res));
-    result[docType] = await ref.getDownloadURL();
+    // Store the PATH, not a tokenised download URL (see docRefOf).
+    result[docType] = storagePath;
   }));
   return result;
 }
@@ -1269,7 +1376,7 @@ function showDoctorModal(d) {
     return url
       ? `<div style="margin-bottom:10px;">
            <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">${label}</div>
-           <a href="${escHtml(safeUrl(url))}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:var(--primary-light,#f3e5f5);color:var(--primary,#880E4F);border-radius:8px;font-size:13px;font-weight:600;text-decoration:none;">
+           <a ${docLinkAttrs(url)} style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:var(--primary-light,#f3e5f5);color:var(--primary,#880E4F);border-radius:8px;font-size:13px;font-weight:600;text-decoration:none;">
              <span> View Document
            </a>
          </div>`
@@ -1286,7 +1393,7 @@ function showDoctorModal(d) {
     const title = String(_docLabels[k] || '').trim() || ('Other document ' + k.slice(-1));
     return `<div style="margin-bottom:10px;">
            <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;overflow-wrap:anywhere;">${escHtml(title)}</div>
-           <a href="${escHtml(safeUrl(docs[k]))}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:var(--primary-light,#f3e5f5);color:var(--primary,#880E4F);border-radius:8px;font-size:13px;font-weight:600;text-decoration:none;">
+           <a ${docLinkAttrs(docs[k])} style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:var(--primary-light,#f3e5f5);color:var(--primary,#880E4F);border-radius:8px;font-size:13px;font-weight:600;text-decoration:none;">
              View Document
            </a>
          </div>`;
@@ -2506,7 +2613,7 @@ function renderBannersList(banners) {
         <button class="btn btn-outline" onclick="editBanner('${b.id}')" title="Edit banner">
           <i class="ti ti-edit"></i>
         </button>
-        <button class="btn btn-reject" onclick="deleteBanner('${b.id}', '${escHtml(b.storagePath||'')}', this)" title="Delete banner">
+        <button class="btn btn-reject" onclick="deleteBanner('${b.id}', ${escJsAttr(b.storagePath||'')}, this)" title="Delete banner">
           <i class="ti ti-trash"></i>
         </button>
       </div>
@@ -2922,9 +3029,9 @@ function renderRequestsTable(requests) {
       ? `<span title="GPS: ${parseFloat(locData.lat).toFixed(5)},${parseFloat(locData.lng).toFixed(5)}" style="display:inline-flex;align-items:center;gap:2px;background:#e8f5e9;color:#2e7d32;font-size:9px;font-weight:700;padding:2px 6px;border-radius:10px;margin-left:4px;vertical-align:middle;">&#x1F4CD; GPS</span>`
       : `<span title="No GPS coordinates" style="display:inline-flex;align-items:center;gap:2px;background:#fff3e0;color:#e65100;font-size:9px;font-weight:700;padding:2px 6px;border-radius:10px;margin-left:4px;vertical-align:middle;">&#x26A0; No GPS</span>`;
     const mapsLink    = hasGps
-      ? `<a href="https://www.google.com/maps?q=${locData.lat},${locData.lng}" target="_blank" title="Open in Google Maps" style="margin-left:4px;color:#1a73e8;font-size:12px;">Map</a>`
+      ? `<a href="https://www.google.com/maps?q=${parseFloat(locData.lat) || 0},${parseFloat(locData.lng) || 0}" target="_blank" rel="noopener" title="Open in Google Maps" style="margin-left:4px;color:#1a73e8;font-size:12px;">Map</a>`
       : '';
-    const address     = `${addrShort}${gpsBadge}${mapsLink}`;
+    const address     = `${escHtml(addrShort)}${gpsBadge}${mapsLink}`;
     const isPending   = status === 'pending';
     const isActive    = ['accepted','assigned','in_progress'].includes(status);
     const isDone      = ['completed','cancelled','rejected'].includes(status);
@@ -2943,7 +3050,7 @@ function renderRequestsTable(requests) {
       <td><span class="req-type-badge" style="background:${typeColor.bg};color:${typeColor.fg};">${typeLabel}</span></td>
       <td>${dateTime}</td>
       <td style="max-width:140px;font-size:12px;color:var(--text-secondary);">${address}</td>
-      <td><span class="pill pill-${statusPillClass(status)}">${capitalize(status.replace('_',' '))}</span></td>
+      <td><span class="pill pill-${statusPillClass(status)}">${escHtml(capitalize(status.replace('_',' ')))}</span></td>
       <td style="font-size:12px;color:var(--text-secondary);">${received}</td>
       <td>
         <div style="display:flex;gap:4px;flex-wrap:wrap;">
@@ -3006,7 +3113,7 @@ function viewRequestDetail(id) {
         </div>
         <div>
           <div style="font-weight:700;font-size:15px;">${escHtml(r.serviceName || '—')}</div>
-          <div style="font-size:12px;color:#888;">${reqTypeLabel(r.type)} &middot; <span class="pill pill-${statusPillClass(status)}" style="font-size:11px;">${capitalize(status.replace('_',' '))}</span></div>
+          <div style="font-size:12px;color:#888;">${reqTypeLabel(r.type)} &middot; <span class="pill pill-${statusPillClass(status)}" style="font-size:11px;">${escHtml(capitalize(status.replace('_',' ')))}</span></div>
         </div>
       </div>
 
@@ -3060,8 +3167,9 @@ function viewRequestDetail(id) {
 function buildLocationBlock(r) {
   const loc = r.serviceDetails?.locationData || {};
   const formatted = loc.formattedAddress || r.address || '—';
-  const lat = loc.lat;
-  const lng = loc.lng;
+  // lat/lng are numeric-coerced: they land in hrefs, so a string value must not pass through.
+  const lat = Number.isFinite(parseFloat(loc.lat)) ? parseFloat(loc.lat) : null;
+  const lng = Number.isFinite(parseFloat(loc.lng)) ? parseFloat(loc.lng) : null;
 
   const hasPrecise = loc.plotNo || loc.building || loc.street || loc.area;
 
@@ -3090,15 +3198,15 @@ function buildLocationBlock(r) {
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
       <div style="font-size:11px;font-weight:700;color:#1a73e8;letter-spacing:0.5px;"> SERVICE LOCATION</div>
       <div style="display:flex;gap:6px;">
-        ${navUrl ? `<a href="${navUrl}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:4px;background:#34a853;color:#fff;font-size:11px;font-weight:700;padding:5px 10px;border-radius:8px;text-decoration:none;">
+        ${navUrl ? `<a href="${escHtml(navUrl)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:4px;background:#34a853;color:#fff;font-size:11px;font-weight:700;padding:5px 10px;border-radius:8px;text-decoration:none;">
            Navigate
         </a>` : ''}
-        ${mapsUrl ? `<a href="${mapsUrl}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:4px;background:#1a73e8;color:#fff;font-size:11px;font-weight:700;padding:5px 10px;border-radius:8px;text-decoration:none;">
+        ${mapsUrl ? `<a href="${escHtml(mapsUrl)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:4px;background:#1a73e8;color:#fff;font-size:11px;font-weight:700;padding:5px 10px;border-radius:8px;text-decoration:none;">
            Open in Maps
         </a>` : ''}
       </div>
     </div>
-    <div style="font-size:13px;font-weight:600;color:#1a1a1a;margin-bottom:${hasPrecise ? '10' : '0'}px;">${formatted}</div>
+    <div style="font-size:13px;font-weight:600;color:#1a1a1a;margin-bottom:${hasPrecise ? '10' : '0'}px;">${escHtml(formatted)}</div>
     ${hasPrecise ? `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px;">
       ${fields.map(([k, v]) => `
@@ -3112,7 +3220,7 @@ function buildLocationBlock(r) {
 
 function reqTypeLabel(type) {
   const m = { diagnostics: 'Diagnostics', lab_tests: 'Lab Tests', care_assistant: 'Care Assistant', physiotherapy: 'Physiotherapy', equipment: 'Equipment', caregivers: 'Nurses' };
-  return m[type] || capitalize(type || 'Service');
+  return m[type] || capitalize(String(type || 'Service').replace(/[^\w ]/g, ''));
 }
 
 function reqTypeColor(type) {
@@ -5318,7 +5426,7 @@ function svcTypeLabel(type) {
     consultation:'Consultation', nutrition:'Dietician', counselling:'Counselling',
     medicine_delivery:'Medicine Delivery',
   };
-  return m[type] || capitalize(type || 'Service');
+  return m[type] || capitalize(String(type || 'Service').replace(/[^\w ]/g, ''));
 }
 
 function initServicesListener() {
@@ -5406,7 +5514,7 @@ function renderServicesList(services) {
   el.innerHTML = services.slice(0, pageShown('services')).map(s => {
     const tc      = svcTypeColors[s.type] || { bg: '#f3e5f5', fg: '#6a1b9a', icon: '' };
     const priceStr = s.price
-      ? `₹${Number(s.price).toLocaleString('en-IN')} <span style="font-size:11px;font-weight:400;color:var(--text-muted);">${s.priceUnit ? '/ '+s.priceUnit.replace('_',' ') : ''}</span>`
+      ? `₹${Number(s.price).toLocaleString('en-IN')} <span style="font-size:11px;font-weight:400;color:var(--text-muted);">${s.priceUnit ? '/ '+escHtml(String(s.priceUnit).replace('_',' ')) : ''}</span>`
       : '<span style="color:var(--text-muted);font-size:12px;">Price not set</span>';
     const buyPriceStr = (s.type === 'equipment' && s.purchasePrice)
       ? `<span class="service-price">Buy: ₹${Number(s.purchasePrice).toLocaleString('en-IN')}</span>`
@@ -5437,7 +5545,7 @@ function renderServicesList(services) {
         ${s.type === 'equipment' ? '' : `<button class="btn btn-outline" onclick="editService('${s.id}')" title="Edit" aria-label="Edit">
           <i class="ti ti-edit"></i>
         </button>
-        <button class="btn btn-reject" onclick="deleteService('${s.id}', '${escHtml(s.storagePath||'')}', this)" title="Delete" aria-label="Delete">
+        <button class="btn btn-reject" onclick="deleteService('${s.id}', ${escJsAttr(s.storagePath||'')}, this)" title="Delete" aria-label="Delete">
           <i class="ti ti-trash"></i>
         </button>`}
       </div>
@@ -5726,7 +5834,7 @@ function renderAppointmentsTable(list) {
     const typeBadge = a.consultationType === 'Video'
       ? '<span class="pill" style="background:#e3f2fd;color:#1565c0;"> Video</span>'
       : '<span class="pill" style="background:#e8f5e9;color:#2e7d32;"> In-Person</span>';
-    const slot = [a.date, a.time].filter(Boolean).join(' &middot; ') || '—';
+    const slot = [a.date, a.time].filter(Boolean).map(escHtml).join(' &middot; ') || '—';
     return `<tr>
       <td>
         <div class="user-cell">
@@ -5740,7 +5848,7 @@ function renderAppointmentsTable(list) {
       </td>
       <td><span class="appt-time-badge">${slot}</span></td>
       <td>${typeBadge}</td>
-      <td><span class="pill pill-${pillCls}">${capitalize(status.replace('_',' '))}</span></td>
+      <td><span class="pill pill-${pillCls}">${escHtml(capitalize(status.replace('_',' ')))}</span></td>
       <td style="font-size:12px;color:var(--text-secondary);">${escHtml(formatDate(a.createdAt))}</td>
       <td>
         <div style="display:flex;gap:4px;flex-wrap:wrap;">
@@ -5907,9 +6015,9 @@ function renderWalletTable(list) {
     return `<tr>
       <td>
         <div class="user-name">${escHtml(t.userName || '—')}</div>
-        <div class="user-sub">${t.userPhone || t.userId?.slice(0,8) || ''}</div>
+        <div class="user-sub">${escHtml(t.userPhone || t.userId?.slice(0,8) || '')}</div>
       </td>
-      <td class="tx-amount-${t.type || 'credit'}" style="font-size:15px;">${sign}₹${Number(t.amount||0).toLocaleString('en-IN')}</td>
+      <td class="tx-amount-${escHtml(t.type || 'credit')}" style="font-size:15px;">${sign}₹${Number(t.amount||0).toLocaleString('en-IN')}</td>
       <td><span class="pill pill-${tc}">${tl}</span></td>
       <td style="font-size:12px;color:var(--text-secondary);">${escHtml(t.reason || '—')}</td>
       <td style="font-weight:600;">₹${Number(t.balanceAfter||0).toLocaleString('en-IN')}</td>
@@ -5932,7 +6040,7 @@ function searchWalletUser() {
       if (snap.empty) { sugBox.innerHTML = '<div class="wallet-suggestion-item" style="color:var(--text-muted);">No users found</div>'; return; }
       sugBox.innerHTML = snap.docs.map(doc => {
         const u = doc.data();
-        return `<div class="wallet-suggestion-item" onclick="selectWalletUser('${doc.id}','${escHtml(u.name||'')}','${escHtml(u.phone||'')}')">
+        return `<div class="wallet-suggestion-item" onclick="selectWalletUser('${doc.id}',${escJsAttr(u.name||'')},${escJsAttr(u.phone||'')})">
           <div class="doc-avatar" style="background:#F5E6F0;color:#522546;width:28px;height:28px;font-size:11px;">${escHtml(getInitials(u.name||'U'))}</div>
           <div><div style="font-weight:600;">${escHtml(u.name||'—')}</div><div style="font-size:11px;color:var(--text-muted);">${escHtml(u.phone||u.email||doc.id)}</div></div>
         </div>`;
@@ -6513,7 +6621,7 @@ function renderMaternityPatients(profiles) {
       <td>${riskBadge}</td>
       <td>
         <button class="btn-outline" style="padding:4px 10px;font-size:11px;"
-          onclick="openAssignDoctorModal('${p.id}','${escHtml(p.patientName||p.patientId||'Patient')}')">
+          onclick="openAssignDoctorModal('${p.id}',${escJsAttr(p.patientName||p.patientId||'Patient')})">
           Assign Doctor
         </button>
         ${p.isHighRisk ? '' : `<button class="btn-outline" style="padding:4px 10px;font-size:11px;color:#e65100;border-color:#e65100;margin-left:4px;"
@@ -7234,7 +7342,7 @@ function _renderNutritionistsListImpl() {
         </div>
         <div style="display:flex;gap:6px;flex-shrink:0;">
           <button class="btn-icon" title="Edit" aria-label="Edit" onclick="openEditNutritionistModal('${escHtml(n.id)}')"><i class="ti ti-pencil"></i></button>
-          <button class="btn-icon btn-icon-danger" title="Delete" aria-label="Delete" onclick="deleteNutritionist('${escHtml(n.id)}','${escHtml(n.name || '')}')"><i class="ti ti-trash"></i></button>
+          <button class="btn-icon btn-icon-danger" title="Delete" aria-label="Delete" onclick="deleteNutritionist(${escJsAttr(n.id)},${escJsAttr(n.name || '')})"><i class="ti ti-trash"></i></button>
         </div>
       </div>`;
   });
@@ -7691,7 +7799,7 @@ function renderDietPlans() {
         </div>
         <div style="display:flex;gap:6px;flex-shrink:0;">
           <button class="btn-icon" title="Edit" aria-label="Edit" onclick="openEditDietPlanModal('${escHtml(p.id)}')"><i class="ti ti-pencil"></i></button>
-          <button class="btn-icon btn-icon-danger" title="Delete" aria-label="Delete" onclick="deleteDietPlan('${escHtml(p.id)}','${escHtml(p.title || '')}')"><i class="ti ti-trash"></i></button>
+          <button class="btn-icon btn-icon-danger" title="Delete" aria-label="Delete" onclick="deleteDietPlan(${escJsAttr(p.id)},${escJsAttr(p.title || '')})"><i class="ti ti-trash"></i></button>
         </div>
       </div>`;
   });
@@ -8233,7 +8341,7 @@ function loadRecentSearches() {
     wrap.style.display = '';
     list.innerHTML = recent.map(r => {
       const cfg = GS_COLLECTIONS[r.resultType] || {};
-      return `<div class="gs-recent-item" onclick="rerunSearch(${JSON.stringify(escHtml(r.query))})">
+      return `<div class="gs-recent-item" onclick="rerunSearch(${escJsAttr(r.query)})">
         <i class="ti ti-history"></i>
         <span style="flex:1;">${escHtml(r.query)}</span>
         <span style="font-size:11px;color:var(--text-muted);">${escHtml(cfg.label || r.resultType || '')}</span>
@@ -8995,7 +9103,7 @@ function partnerRequiredSlotKeys(cfg, p) {
 // partner-typed `label`). Never part of the required checklist / roll-up.
 function partnerOtherDocKeys(docs) {
   return Object.keys(docs || {})
-    .filter(k => /^other_doc_[1-5]$/.test(k) && docs[k] && docs[k].url)
+    .filter(k => /^other_doc_[1-5]$/.test(k) && hasDocFile(docs[k]))
     .sort();
 }
 
@@ -9074,7 +9182,7 @@ function renderHospitalAppointmentsTable(rows) {
       <td>${escHtml(a.hospitalName || '—')}</td>
       <td>${escHtml(a.date || '—')} ${escHtml(a.time || '')}</td>
       <td>${escHtml(a.opToken || '—')}</td>
-      <td><span class="pill pill-${pillClass}">${capitalize(status.replace('_', ' '))}</span></td>
+      <td><span class="pill pill-${pillClass}">${escHtml(capitalize(status.replace('_', ' ')))}</span></td>
       <td>₹${escHtml(String(a.fee ?? '—'))}</td>
     </tr>`;
   }).join('');
@@ -9612,15 +9720,17 @@ async function approvePendingProfileEdit(role, id, btn) {
         const pd = changes.documents;
         delete changes.documents;
         const liveDocs = (data.documents && typeof data.documents === 'object') ? data.documents : {};
-        let used = Object.keys(liveDocs).filter(k => /^other_doc_[1-5]$/.test(k) && liveDocs[k] && liveDocs[k].url).length;
+        let used = Object.keys(liveDocs).filter(k => /^other_doc_[1-5]$/.test(k) && hasDocFile(liveDocs[k])).length;
         for (const k of Object.keys(pd).sort()) {
           const m = pd[k];
-          if (!/^other_doc_[1-5]$/.test(k) || !m || typeof m !== 'object' || !/^https?:\/\//i.test(String(m.url || ''))) continue;
-          const exists = !!(liveDocs[k] && liveDocs[k].url);
+          if (!/^other_doc_[1-5]$/.test(k) || !m || typeof m !== 'object' || !hasDocFile(m)) continue;
+          const exists = hasDocFile(liveDocs[k]);
           if (!exists && used >= 5) continue;
           if (!exists) used++;
+          // New entries carry no tokenised `url`; a legacy pending entry that
+          // still has one keeps it until the migration rewrites it.
           changes['documents.' + k] = {
-            url: String(m.url),
+            ...(/^https?:\/\//i.test(String(m.url || '')) ? { url: String(m.url) } : {}),
             storagePath: String(m.storagePath || ''),
             fileName: String(m.fileName || ''),
             contentType: String(m.contentType || ''),
@@ -9772,7 +9882,7 @@ function _showPartnerDocRejectDialog(role, id, docType) {
       <div style="display:flex;gap:10px;margin-top:14px;">
         <button onclick="document.getElementById('pdoc-reject-dialog').remove()"
           style="flex:1;padding:11px;border:1px solid #e0e0e0;background:#fff;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;">Cancel</button>
-        <button onclick="_submitPartnerDocReject('${role}','${escHtml(id)}','${escHtml(docType)}')"
+        <button onclick="_submitPartnerDocReject('${role}',${escJsAttr(id)},${escJsAttr(docType)})"
           style="flex:1;padding:11px;background:#c62828;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">Reject Document</button>
       </div>
     </div>`;
@@ -9972,7 +10082,7 @@ const _DOC_STATUS_CHIPS = {
 /// replaced the document) — reads as pending, with no write needed: admin
 /// creates the `documentVerification` row when they hit Verify/Reject.
 function _partnerDocStatus(doc, ver) {
-  if (!doc || !doc.url) return 'not_uploaded';
+  if (!hasDocFile(doc)) return 'not_uploaded';
   if (!ver || !ver.status) return 'pending';
   const upAt  = doc.uploadedAt && doc.uploadedAt.toDate ? doc.uploadedAt.toDate().getTime() : 0;
   const verAt = ver.verifiedAt && ver.verifiedAt.toDate ? ver.verifiedAt.toDate().getTime() : 0;
@@ -10003,7 +10113,7 @@ function showPartnerModal(role, id) {
   const _slotsNow = partnerDocSlots(cfg, p);
   const _legacySlots = {};
   Object.keys(docs).forEach(k => {
-    if (!(k in _slotsNow) && !k.startsWith('other_doc_') && docs[k] && (docs[k].url || typeof docs[k] === 'string')) {
+    if (!(k in _slotsNow) && !k.startsWith('other_doc_') && hasDocFile(docs[k])) {
       _legacySlots[k] = 'Other / legacy document (' + k.replace(/_/g, ' ') + ')';
     }
   });
@@ -10021,11 +10131,11 @@ function showPartnerModal(role, id) {
         <span style="font-size:12px;font-weight:700;color:var(--text-secondary);">${escHtml(label)}</span>
         <span class="${chip.cls}">${escHtml(chip.label)}</span>
       </div>
-      ${doc && doc.url ? `
+      ${hasDocFile(doc) ? `
         <div class="partner-doc-file">
           <span class="partner-doc-icon"><i class="ti ti-${isPdf ? 'file-type-pdf' : 'photo'}"></i></span>
           <div style="min-width:0;">
-            <a href="${escHtml(safeUrl(doc.url))}" target="_blank" rel="noopener"
+            <a ${docLinkAttrs(doc)}
                style="font-size:13px;font-weight:600;color:var(--primary,#880E4F);text-decoration:none;overflow-wrap:anywhere;">
               View / Download</a>
             <div style="font-size:11px;color:#888;">Uploaded ${escHtml(doc.uploadedAt ? formatDate(doc.uploadedAt) : '—')}</div>
@@ -10060,7 +10170,7 @@ function showPartnerModal(role, id) {
       <div class="partner-doc-file">
         <span class="partner-doc-icon"><i class="ti ti-${isPdf ? 'file-type-pdf' : 'photo'}"></i></span>
         <div style="min-width:0;">
-          <a href="${escHtml(safeUrl(doc.url))}" target="_blank" rel="noopener"
+          <a ${docLinkAttrs(doc)}
              style="font-size:13px;font-weight:600;color:var(--primary,#880E4F);text-decoration:none;overflow-wrap:anywhere;">
             View / Download</a>
           <div style="font-size:11px;color:#888;">Uploaded ${escHtml(doc.uploadedAt ? formatDate(doc.uploadedAt) : '—')}</div>
@@ -10229,7 +10339,7 @@ function showPartnerModal(role, id) {
         <div style="font-size:13px;margin-top:2px;overflow-wrap:anywhere;">
           <span style="color:#2e7d32;font-weight:700;">${escHtml(title)}</span>
           <span style="color:#888;"> &middot; ${isPdf ? 'PDF' : 'Image'}</span>
-          <a href="${escHtml(safeUrl(m.url))}" target="_blank" rel="noopener noreferrer" style="margin-left:8px;">View</a>
+          <a ${docLinkAttrs(m)} style="margin-left:8px;">View</a>
         </div>
       </div>`;
         }).join('')
@@ -10706,13 +10816,13 @@ function renderCouponsList(coupons) {
       <td style="max-width:180px;">${services}</td>
       <td>
         <label class="toggle-label" title="${c.active ? 'Click to deactivate' : 'Click to activate'}">
-          <input type="checkbox" ${c.active ? 'checked' : ''} onchange="toggleCouponActive('${escHtml(c.code)}', this.checked)" />
+          <input type="checkbox" ${c.active ? 'checked' : ''} onchange="toggleCouponActive(${escJsAttr(c.code)}, this.checked)" />
           <span class="toggle-switch"></span>
         </label>
       </td>
       <td style="white-space:nowrap;">
-        <button class="btn btn-outline" onclick="editCoupon('${escHtml(c.code)}')" title="Edit coupon" aria-label="Edit coupon"><i class="ti ti-edit"></i></button>
-        <button class="btn btn-reject" onclick="deactivateCouponConfirm('${escHtml(c.code)}')" title="Deactivate coupon (soft delete — preserves redemption history)" aria-label="Deactivate coupon"><i class="ti ti-ban"></i></button>
+        <button class="btn btn-outline" onclick="editCoupon(${escJsAttr(c.code)})" title="Edit coupon" aria-label="Edit coupon"><i class="ti ti-edit"></i></button>
+        <button class="btn btn-reject" onclick="deactivateCouponConfirm(${escJsAttr(c.code)})" title="Deactivate coupon (soft delete — preserves redemption history)" aria-label="Deactivate coupon"><i class="ti ti-ban"></i></button>
       </td>
     </tr>`;
   }).join('') + loadMoreRow('coupons', coupons.length, 8, 'filterCoupons();');
@@ -10899,7 +11009,7 @@ function renderCampaignsList(campaigns) {
           <span class="toggle-switch"></span>
         </label>
         <button class="btn btn-outline" onclick="editCampaign('${c.id}')" title="Edit campaign" aria-label="Edit campaign"><i class="ti ti-edit"></i></button>
-        <button class="btn btn-reject" onclick="deleteCampaign('${c.id}', '${escHtml(c.storagePath || '')}', this)" title="Delete campaign" aria-label="Delete campaign"><i class="ti ti-trash"></i></button>
+        <button class="btn btn-reject" onclick="deleteCampaign('${c.id}', ${escJsAttr(c.storagePath || '')}, this)" title="Delete campaign" aria-label="Delete campaign"><i class="ti ti-trash"></i></button>
       </div>
     </div>`;
   }).join('') + loadMoreCard('campaigns', campaigns.length, 'renderCampaignsList(allCampaigns);');
@@ -12351,7 +12461,7 @@ function loadRefunds() {
   applyMoneyActionVisibility();
   loadRefundRequests();
   if (_refundsListener) return; // already live
-  _refundsListener = db.collection('refunds').orderBy('createdAt', 'desc').onSnapshot(async snap => {
+  _refundsListener = db.collection('refunds').orderBy('createdAt', 'desc').limit(REFUNDS_LIST_LIMIT).onSnapshot(async snap => {
     allRefunds = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     const uniqueProviderIds = [...new Set(allRefunds.map(r => r.providerId).filter(Boolean))];
     await Promise.all(uniqueProviderIds.map(resolveProviderName));
@@ -12386,7 +12496,8 @@ function renderRefundsList(refunds) {
       <td>${refundStatusBadge(r.status)}</td>
       <td>${formatDate(r.createdAt)}</td>
     </tr>`;
-  }).join('') + loadMoreRow('refunds', refunds.length, 7, 'renderRefundsList(allRefunds);');
+  }).join('') + loadMoreRow('refunds', refunds.length, 7, 'renderRefundsList(allRefunds);') +
+    (refunds.length >= REFUNDS_LIST_LIMIT ? `<tr><td colspan="7" style="text-align:center;color:var(--text-muted);font-size:12px;padding:10px;">Showing latest ${REFUNDS_LIST_LIMIT} refunds</td></tr>` : '');
 }
 
 async function lookupRefundPayment() {

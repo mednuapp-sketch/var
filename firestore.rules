@@ -2030,14 +2030,18 @@ service cloud.firestore {
     }
 
     // ── Commission rules — admin-configured, read by capturePayment ───────────
+    // Deprecated: no client reads it (capturePayment uses Admin SDK). Admin only
+    // so the per-service commission is not exposed to patients/partners.
     match /commission_rules/{serviceType} {
-      allow read: if isAuth();
+      allow read: if adminInRoles(['finance', 'hr']);
       allow write: if false; // setCommissionRule (Admin SDK) only
     }
 
     // ── Coupons ─────────────────────────────────────────────────────────────
+    // Patients validate via the validateCoupon callable; no client lists this
+    // collection (only the admin panel Coupons tab), so codes are not enumerable.
     match /coupons/{couponCode} {
-      allow read: if isAuth();
+      allow read: if adminInRoles(['finance', 'hr', 'marketing']);
       allow write: if false; // createCoupon/updateCoupon/toggleCoupon/deactivateCoupon only
 
       match /redemptions/{userId} {
@@ -2125,8 +2129,14 @@ service cloud.firestore {
     // ── App-wide config read by the patient app (e.g. platform_fee) ──────────
     // Shape of app_config/platform_fee: { enabled, defaultAmount, services:{type:n},
     // providers:{<providerId>:{amount,label}}, updatedAt, updatedBy }.
+    // Read is limited to the docs the apps/admin panel actually use; anything
+    // else (e.g. nutrition_plans, read by Cloud Functions only) is admin-only.
     match /app_config/{docId} {
-      allow read: if isAuth();
+      allow read: if isAuth() && (
+        docId in ['payments', 'platform_fee', 'payouts', 'app_version',
+                  'ambulance_rates', 'ambulance_settings', 'referral'] ||
+        isAdmin()
+      );
       allow write: if isDirector();
     }
 

@@ -97,7 +97,9 @@ class PartnerDocumentService {
     }
 
     return {
-      'url': await ref.getDownloadURL(),
+      // No `url`: a tokenised download URL in this (world-readable) profile
+      // doc would let any signed-in user fetch the file. Viewers resolve a
+      // fresh URL from `storagePath` via resolveDocumentUrl().
       'storagePath': storagePath,
       'fileName': file.path.split(Platform.pathSeparator).last,
       'contentType': contentType,

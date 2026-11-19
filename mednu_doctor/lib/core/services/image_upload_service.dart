@@ -81,7 +81,11 @@ class ImageUploadService {
     return xFile != null ? File(xFile.path) : null;
   }
 
-  /// Uploads to `doctors/{uid}/docs/{docType}.jpg` and returns the download URL.
+  /// Uploads to `doctors/{uid}/docs/{docType}.jpg` and returns the Storage
+  /// PATH (not a download URL). A tokenised download URL stored on the
+  /// world-readable `doctors/{uid}` doc would let any signed-in user fetch the
+  /// file around `storage.rules`; the owner/admin resolve a fresh URL from the
+  /// path on demand (see `resolveDocumentUrl`).
   static Future<String> uploadDoctorDocument({
     required File file,
     required String uid,
@@ -106,7 +110,7 @@ class ImageUploadService {
     if (snapshot.state != TaskState.success) {
       throw Exception('Upload failed for $docType. Check Storage rules.');
     }
-    return await ref.getDownloadURL();
+    return ref.fullPath;
   }
 
   /// Uploads signature PNG bytes to `doctors/{uid}/signature.png` and returns the download URL.

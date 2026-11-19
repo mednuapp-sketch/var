@@ -30,8 +30,14 @@ function hostPort(envName, defHost, defPort) {
 }
 
 async function setup(name, { storage = false } = {}) {
+  // Storage rules call firestore.get()/exists(), which the Storage emulator
+  // resolves against the emulator suite's own project (--project), so storage
+  // tests must run under that project id or the cross-service lookups miss.
+  const projectId = storage
+    ? (process.env.GCLOUD_PROJECT || "mednu-rules-test")
+    : `mednu-rules-${String(name).toLowerCase().replace(/[^a-z0-9-]/g, "-")}`;
   const cfg = {
-    projectId: `mednu-rules-${name}`,
+    projectId,
     firestore: { rules: readRules("firestore.rules"), ...hostPort("FIRESTORE_EMULATOR_HOST", "127.0.0.1", 8080) },
   };
   if (storage) {
@@ -97,10 +103,19 @@ async function seedBase(env) {
 }
 
 /** Named auth contexts. */
+function memo(ctx) {
+  // ctx.firestore() re-applies useEmulator() on every call, which throws once
+  // Firestore has started; cache the instances per context.
+  let f, s;
+  const ff = ctx.firestore.bind(ctx);
+  ctx.firestore = (...args) => (f = f || ff(...args));
+  if (ctx.storage) { const sf = ctx.storage.bind(ctx); ctx.storage = (...args) => (s = s || sf(...args)); }
+  return ctx;
+}
 function actors(env) {
-  const a = (uid, claims) => env.authenticatedContext(uid, claims);
+  const a = (uid, claims) => memo(env.authenticatedContext(uid, claims));
   return {
-    anon: env.unauthenticatedContext(),
+    anon: memo(env.unauthenticatedContext()),
     patient: a(U.patient),
     otherPatient: a(U.otherPatient),
     doctor: a(U.doctor),

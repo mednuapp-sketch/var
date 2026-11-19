@@ -2047,11 +2047,7 @@ exports.onBroadcastCreated = onDocumentCreated(
 
 function _logWallet(severity, event, data = {}) {
   const payload = { severity, module: "wallet", event, ...data };
-  if (severity === "ERROR" || severity === "WARNING") {
-    console.error(JSON.stringify(payload));
-  } else {
-    console.log(JSON.stringify(payload));
-  }
+  _emitLog(severity, payload);
 }
 
 const _WALLET_MAX_AMOUNT = 500000; // ₹5,00,000 — sanity ceiling on any single entry
@@ -2137,6 +2133,7 @@ exports.createRazorpayOrder = onCall({ enforceAppCheck: true }, async (request) 
   if (!uid) {
     throw new HttpsError("unauthenticated", "Sign in to start a payment.");
   }
+  await _rateLimit(getFirestore(), `createRazorpayOrder:${uid}`, 20, 600);
 
   // Pay-after-trip (ambulance): the order is for the server-stored amount due
   // on THIS existing booking, never a client-sent figure. captureTripPayment
@@ -2959,6 +2956,7 @@ exports.applyReferralCode = onCall({ enforceAppCheck: true }, async (request) =>
   if (!code || code.length > 32) throw new HttpsError("invalid-argument", "Enter a valid referral code.");
 
   const db = getFirestore();
+  await _rateLimit(db, `applyReferralCode:${uid}`, 5, 3600);
   const userRef = db.collection("users").doc(uid);
   const userSnap = await userRef.get();
   if (!userSnap.exists) throw new HttpsError("failed-precondition", "Complete your profile first.");
@@ -3131,8 +3129,20 @@ function _round2(n) {
   return Math.round((Number(n) || 0) * 100) / 100;
 }
 
+// Shared structured-log emitter. Cloud Logging reads `severity` (not `level`)
+// from a JSON log line, so every module logger goes through here. `level` is
+// kept on _logSettlement lines for backward compatibility. Event names are
+// stable (alerts key on them).
+function _emitLog(severity, payload) {
+  const sev = String(severity || "INFO").toUpperCase();
+  const line = JSON.stringify({ severity: sev, ...payload });
+  if (sev === "ERROR" || sev === "CRITICAL") console.error(line);
+  else if (sev === "WARNING") console.warn(line);
+  else console.log(line);
+}
+
 function _logSettlement(level, event, data) {
-  console.log(JSON.stringify({ level, module: "settlement", event, ...data }));
+  _emitLog(level, { level, module: "settlement", event, ...data });
 }
 
 async function _assertAdmin(db, uid) {
@@ -3140,6 +3150,51 @@ async function _assertAdmin(db, uid) {
   const snap = await db.collection("admins").doc(uid).get();
   if (!snap.exists) throw new HttpsError("permission-denied", "Admin access required.");
   return snap;
+}
+
+// Fixed-window rate limiter backed by a transactional counter doc in
+// `rate_limits/{sha256(key)}` (server-only: firestore.rules has a default-deny
+// catch-all). Fields: count, windowStart (ms), expireAt (Timestamp, for a
+// Firestore TTL policy on `expireAt`). Throws resource-exhausted when over
+// `max` within `windowSec`. Fails OPEN: if the limiter itself errors, it logs a
+// WARNING and allows the call so a limiter outage never blocks payments.
+// The key is hashed so raw ids/IPs are never stored in document ids.
+async function _rateLimit(db, key, max, windowSec) {
+  let allowed = true;
+  try {
+    const id = crypto.createHash("sha256").update(`${key}|${windowSec}`).digest("hex");
+    const ref = db.collection("rate_limits").doc(id);
+    const nowMs = Date.now();
+    const windowMs = windowSec * 1000;
+    allowed = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      const d = snap.exists ? snap.data() : null;
+      if (!d || typeof d.windowStart !== "number" || nowMs - d.windowStart >= windowMs) {
+        tx.set(ref, { count: 1, windowStart: nowMs, expireAt: Timestamp.fromMillis(nowMs + windowMs + 3600 * 1000) });
+        return true;
+      }
+      if ((Number(d.count) || 0) >= max) return false;
+      tx.update(ref, { count: (Number(d.count) || 0) + 1 });
+      return true;
+    });
+  } catch (err) {
+    _logSettlement("WARNING", "rate_limit_check_failed", { error: err && err.message });
+    return;
+  }
+  if (!allowed) {
+    throw new HttpsError("resource-exhausted", "Too many requests. Please try again later.");
+  }
+}
+
+// Validates a client-supplied id before it is used in a `.doc(...)` path, where
+// a '/' would silently change the path. Returns the id unchanged (no trimming).
+function _safeId(value, label) {
+  const name = label || "id";
+  const v = typeof value === "string" ? value : "";
+  if (!v || v.length > 128 || v.includes("/") || v.includes("..") || !/^[A-Za-z0-9_:.\-]+$/.test(v)) {
+    throw new HttpsError("invalid-argument", `${name} is invalid.`);
+  }
+  return v;
 }
 
 // Role-gated admin check. admins/{uid}.role is one of director | hr | finance |
@@ -3416,6 +3471,30 @@ async function _sendAdminAlert(db, messaging, opts) {
     console.error("Failed to write admin_alerts doc:", err.message);
   }
   await _pushToAllAdmins(db, messaging, { title, body, type });
+}
+
+// State-changing write whose failure must never change the caller's outcome
+// but must not be silent either: runs `fn`, retries once, then logs `event` at
+// ERROR (and optionally raises an admin alert). Never throws; resolves true/false.
+async function _guardedWrite(event, ctx, fn, alertOpts) {
+  let lastErr = null;
+  for (let i = 0; i < 2; i++) {
+    try {
+      await fn();
+      return true;
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+  _logSettlement("ERROR", event, { ...ctx, error: lastErr && lastErr.message });
+  if (alertOpts) {
+    try {
+      await _sendAdminAlert(getFirestore(), getMessaging(), alertOpts);
+    } catch (e) {
+      console.error(JSON.stringify({ severity: "ERROR", event: `${event}_alert_failed`, error: e && e.message }));
+    }
+  }
+  return false;
 }
 
 // ── Settlement engine: fee-only model ─────────────────────────────────────────
@@ -4382,6 +4461,7 @@ exports.createFreeBooking = onCall({ enforceAppCheck: true }, async (request) =>
   const uid = request.auth?.uid;
   if (!uid) throw new HttpsError("unauthenticated", "Sign in to continue.");
   const { serviceType, bookingCollection, bookingData, idempotencyKey } = request.data || {};
+  await _rateLimit(getFirestore(), `createFreeBooking:${uid}`, 30, 3600);
 
   if (typeof serviceType !== "string" || !serviceType.trim()) {
     throw new HttpsError("invalid-argument", "serviceType is required.");
@@ -4476,7 +4556,9 @@ exports.validateCoupon = onCall({ enforceAppCheck: true }, async (request) => {
   }
   const orderAmount = _assertWalletAmount(rawAmount);
   const db = getFirestore();
-  const couponId = couponCode.trim().toUpperCase();
+  await _rateLimit(db, `validateCoupon:min:${uid}`, 10, 60);
+  await _rateLimit(db, `validateCoupon:day:${uid}`, 50, 86400);
+  const couponId = _safeId(couponCode.trim().toUpperCase(), "couponCode");
   const couponRef = db.collection("coupons").doc(couponId);
   const redemptionRef = couponRef.collection("redemptions").doc(uid);
 
@@ -5172,8 +5254,12 @@ async function _refundRazorpayPayment(db, { paymentId, amountPaise, reason, orde
   }
 
   const fail = async (msg, alertTitle) => {
-    await refundRef.set({ status: "failed", error: String(msg).slice(0, 500), failedAt: FieldValue.serverTimestamp() }, { merge: true }).catch(() => {});
-    if (orderRef) await orderRef.update({ refundState: "refund_failed" }).catch(() => {});
+    await _guardedWrite("refund_marker_write_failed", { paymentId, orderId, marker: "failed" },
+      () => refundRef.set({ status: "failed", error: String(msg).slice(0, 500), failedAt: FieldValue.serverTimestamp() }, { merge: true }));
+    if (orderRef) {
+      await _guardedWrite("refund_state_write_failed", { paymentId, orderId, refundState: "refund_failed" },
+        () => orderRef.update({ refundState: "refund_failed" }));
+    }
     _logSettlement("ERROR", "razorpay_auto_refund_failed", { paymentId, orderId, error: String(msg) });
     _sendAdminAlert(db, messaging, {
       title: alertTitle || "Razorpay Auto-Refund Needs Manual Action",
@@ -5194,7 +5280,8 @@ async function _refundRazorpayPayment(db, { paymentId, amountPaise, reason, orde
       // 'created'/'failed' means no money was taken. Nothing to refund via API.
       await refundRef.set({ status: "not_refundable", gatewayStatus: pay.status, completedAt: FieldValue.serverTimestamp() }, { merge: true });
       if (orderRef) {
-        await orderRef.update({ refundState: pay.status === "authorized" ? "authorized_auto_void" : FieldValue.delete() }).catch(() => {});
+        await _guardedWrite("refund_state_write_failed", { paymentId, orderId, refundState: pay.status },
+          () => orderRef.update({ refundState: pay.status === "authorized" ? "authorized_auto_void" : FieldValue.delete() }));
       }
       if (pay.status === "authorized") {
         _sendAdminAlert(db, messaging, {
@@ -5222,7 +5309,14 @@ async function _refundRazorpayPayment(db, { paymentId, amountPaise, reason, orde
     await refundRef.set({
       status: "succeeded", refundId, refundedPaise, completedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
-    if (orderRef) await orderRef.update({ refundState: "refunded", refundId, refundedAt: FieldValue.serverTimestamp() }).catch(() => {});
+    if (orderRef) {
+      await _guardedWrite("refund_state_write_failed", { paymentId, orderId, refundState: "refunded", refundId },
+        () => orderRef.update({ refundState: "refunded", refundId, refundedAt: FieldValue.serverTimestamp() }), {
+          title: "Refund Done But Order State Not Updated",
+          body: `Payment ${paymentId} (order ${orderId || "?"}) was refunded at Razorpay (refund ${refundId || "?"}) but the order record could not be updated. No money action is needed; check the order document.`,
+          type: "refund_state_write_failed", extraData: { paymentId, orderId: orderId || "", uid: uid || "" },
+        });
+    }
     _logSettlement("INFO", "razorpay_auto_refund_succeeded", { paymentId, orderId, refundId, refundedPaise });
     if (uid && refundedPaise > 0) {
       _sendPatientNotification(db, messaging, uid, {
@@ -5519,7 +5613,7 @@ async function _transitionPaymentToEligible(db, { sourceCollection, sourceId, pr
     if (transitioned) _sendProviderNotification(db, getMessaging(), providerId, {
       title: "New Earnings", body: "A completed booking is now pending settlement.",
       type: "new_earnings", serviceType,
-    }).catch(() => {});
+    }).catch((e) => console.warn(JSON.stringify({ severity: "WARNING", event: "earnings_notification_failed", providerId, error: e && e.message })));
   } catch (err) {
     _logSettlement("ERROR", "transition_payment_failed", { sourceCollection, sourceId, providerId, error: err.message });
     throw err;
@@ -5935,12 +6029,17 @@ function _validateCouponPayload(data) {
   };
 }
 
+// Coupon management roles. Matches the admin panel, where the Coupons tab sits
+// under the Finance heading (visible to director, hr, finance). Marketing has no
+// Coupons tab in the panel, so it is not granted here.
+const _COUPON_ADMIN_ROLES = ["director", "hr", "finance", "marketing"];
+
 exports.createCoupon = onCall({ enforceAppCheck: true }, async (request) => {
   const uid = request.auth?.uid;
   const db = getFirestore();
-  await _assertAdmin(db, uid);
+  await _assertAdminRole(db, uid, _COUPON_ADMIN_ROLES);
   const payload = _validateCouponPayload(request.data);
-  const ref = db.collection("coupons").doc(payload.code);
+  const ref = db.collection("coupons").doc(_safeId(payload.code, "code"));
   const existing = await ref.get();
   if (existing.exists) throw new HttpsError("already-exists", "A coupon with this code already exists.");
   const doc = { ...payload, usedCount: 0, createdBy: uid, createdAt: FieldValue.serverTimestamp() };
@@ -5954,11 +6053,11 @@ exports.createCoupon = onCall({ enforceAppCheck: true }, async (request) => {
 exports.updateCoupon = onCall({ enforceAppCheck: true }, async (request) => {
   const uid = request.auth?.uid;
   const db = getFirestore();
-  await _assertAdmin(db, uid);
+  await _assertAdminRole(db, uid, _COUPON_ADMIN_ROLES);
   const { code } = request.data || {};
   if (typeof code !== "string" || !code.trim()) throw new HttpsError("invalid-argument", "code is required.");
   const payload = _validateCouponPayload({ ...request.data, code });
-  const ref = db.collection("coupons").doc(payload.code);
+  const ref = db.collection("coupons").doc(_safeId(payload.code, "code"));
   const snap = await ref.get();
   if (!snap.exists) throw new HttpsError("not-found", "Coupon not found.");
   const before = snap.data();
@@ -5973,10 +6072,10 @@ exports.updateCoupon = onCall({ enforceAppCheck: true }, async (request) => {
 exports.toggleCoupon = onCall({ enforceAppCheck: true }, async (request) => {
   const uid = request.auth?.uid;
   const db = getFirestore();
-  await _assertAdmin(db, uid);
+  await _assertAdminRole(db, uid, _COUPON_ADMIN_ROLES);
   const { code, active } = request.data || {};
   if (typeof code !== "string" || !code.trim()) throw new HttpsError("invalid-argument", "code is required.");
-  const ref = db.collection("coupons").doc(code.trim().toUpperCase());
+  const ref = db.collection("coupons").doc(_safeId(code.trim().toUpperCase(), "code"));
   const snap = await ref.get();
   if (!snap.exists) throw new HttpsError("not-found", "Coupon not found.");
   await ref.update({ active: !!active, updatedBy: uid, updatedAt: FieldValue.serverTimestamp() });
@@ -5992,10 +6091,10 @@ exports.toggleCoupon = onCall({ enforceAppCheck: true }, async (request) => {
 exports.deactivateCoupon = onCall({ enforceAppCheck: true }, async (request) => {
   const uid = request.auth?.uid;
   const db = getFirestore();
-  await _assertAdmin(db, uid);
+  await _assertAdminRole(db, uid, _COUPON_ADMIN_ROLES);
   const { code } = request.data || {};
   if (typeof code !== "string" || !code.trim()) throw new HttpsError("invalid-argument", "code is required.");
-  const ref = db.collection("coupons").doc(code.trim().toUpperCase());
+  const ref = db.collection("coupons").doc(_safeId(code.trim().toUpperCase(), "code"));
   await ref.update({ active: false, deactivatedBy: uid, deactivatedAt: FieldValue.serverTimestamp() });
   await db.collection("audit_logs").add(_auditLogDoc({
     actorId: uid, action: "deactivateCoupon", targetType: "coupons", targetId: ref.id, before: null, after: { active: false },
@@ -6126,6 +6225,7 @@ exports.approveSettlement = onCall({ enforceAppCheck: true }, async (request) =>
   if (typeof settlementId !== "string" || !settlementId.trim()) {
     throw new HttpsError("invalid-argument", "settlementId is required.");
   }
+  _safeId(settlementId, "settlementId");
   const ref = db.collection("settlements").doc(settlementId);
   // Transactional so a partner cancelling their payout request (cancelPayoutRequest)
   // cannot interleave with this approval and leave a cancelled settlement approved.
@@ -6194,6 +6294,7 @@ exports.holdSettlement = onCall({ enforceAppCheck: true }, async (request) => {
   if (typeof settlementId !== "string" || !settlementId.trim()) {
     throw new HttpsError("invalid-argument", "settlementId is required.");
   }
+  _safeId(settlementId, "settlementId");
   const ref = db.collection("settlements").doc(settlementId);
   const before = (await ref.get()).data();
   if (!before) throw new HttpsError("not-found", "Settlement not found.");
@@ -6234,6 +6335,7 @@ exports.markSettlementPaid = onCall({ enforceAppCheck: true }, async (request) =
   if (typeof settlementId !== "string" || !settlementId.trim()) {
     throw new HttpsError("invalid-argument", "settlementId is required.");
   }
+  _safeId(settlementId, "settlementId");
   const settlementRef = db.collection("settlements").doc(settlementId);
 
   let result;
@@ -6342,6 +6444,7 @@ exports.requestPayout = onCall({ enforceAppCheck: true }, async (request) => {
   const uid = request.auth?.uid;
   const db = getFirestore();
   const { providerId, role, name } = await _resolvePayoutProvider(db, uid);
+  await _rateLimit(db, `requestPayout:${uid}`, 5, 3600);
 
   const cfgSnap = await db.collection("app_config").doc("payouts").get();
   if (cfgSnap.exists && cfgSnap.get("enabled") === false) {
@@ -6417,10 +6520,14 @@ exports.requestPayout = onCall({ enforceAppCheck: true }, async (request) => {
   }
 
   const amount = settlement.totalAmount;
-  await db.collection("audit_logs").add(_auditLogDoc({
-    actorId: uid, action: "requestPayout", targetType: "settlements", targetId: settlement.id,
-    before: null, after: { providerId, role, amount, grossAmount: settlement.grossAmount },
-  })).catch(() => {});
+  await _guardedWrite("audit_write_failed", { action: "requestPayout", targetId: settlement.id, actorId: uid },
+    () => db.collection("audit_logs").add(_auditLogDoc({
+      actorId: uid, action: "requestPayout", targetType: "settlements", targetId: settlement.id,
+      before: null, after: { providerId, role, amount, grossAmount: settlement.grossAmount },
+    })), {
+      title: "Audit Log Write Failed", body: `The audit entry for payout request ${settlement.id} could not be written. The payout itself succeeded.`,
+      type: "audit_write_failed", extraData: { action: "requestPayout", targetId: settlement.id },
+    });
   _sendAdminAlert(db, getMessaging(), {
     title: "Payout Requested", body: `${name} requested a payout of ₹${amount.toFixed(0)}.`,
     type: "payout_requested", extraData: { settlementId: settlement.id, providerId, amount: String(amount) },
@@ -6445,6 +6552,7 @@ exports.cancelPayoutRequest = onCall({ enforceAppCheck: true }, async (request) 
   if (settlementId !== undefined && (typeof settlementId !== "string" || !settlementId.trim())) {
     throw new HttpsError("invalid-argument", "settlementId must be a string.");
   }
+  if (settlementId) _safeId(settlementId, "settlementId");
   if (!settlementId) {
     const q = await db.collection("settlements")
       .where("providerId", "==", providerId).where("requestedByPartner", "==", true).limit(50).get();
@@ -6491,10 +6599,14 @@ exports.cancelPayoutRequest = onCall({ enforceAppCheck: true }, async (request) 
     }
   });
 
-  await db.collection("audit_logs").add(_auditLogDoc({
-    actorId: uid, action: "cancelPayoutRequest", targetType: "settlements", targetId: settlementId,
-    before: { status: "pending" }, after: { status: "cancelled" },
-  })).catch(() => {});
+  await _guardedWrite("audit_write_failed", { action: "cancelPayoutRequest", targetId: settlementId, actorId: uid },
+    () => db.collection("audit_logs").add(_auditLogDoc({
+      actorId: uid, action: "cancelPayoutRequest", targetType: "settlements", targetId: settlementId,
+      before: { status: "pending" }, after: { status: "cancelled" },
+    })), {
+      title: "Audit Log Write Failed", body: `The audit entry for cancelling payout request ${settlementId} could not be written. The cancellation itself succeeded.`,
+      type: "audit_write_failed", extraData: { action: "cancelPayoutRequest", targetId: settlementId },
+    });
   return { success: true, settlementId };
 });
 
@@ -6880,10 +6992,15 @@ async function _refundPayment(db, paymentId, reason, actorId, opts = {}) {
 
   // A refunded plan payment ends the subscription (an admin full refund too).
   if (payment.planSubscriptionId) {
-    await db.collection("nutrition_subscriptions").doc(payment.planSubscriptionId).set({
-      status: "cancelled", paymentRefunded: true, refundedAmount: refundedRupees,
-      cancelledAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
-    }, { merge: true }).catch(() => {});
+    await _guardedWrite("plan_subscription_cancel_write_failed", { paymentId, subscriptionId: payment.planSubscriptionId },
+      () => db.collection("nutrition_subscriptions").doc(payment.planSubscriptionId).set({
+        status: "cancelled", paymentRefunded: true, refundedAmount: refundedRupees,
+        cancelledAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true }), {
+        title: "Plan Not Closed After Refund",
+        body: `Payment ${paymentId} was refunded but plan subscription ${payment.planSubscriptionId} could not be marked cancelled. Close it manually.`,
+        type: "plan_subscription_cancel_write_failed", extraData: { paymentId, subscriptionId: payment.planSubscriptionId },
+      });
   }
 
   if (wasSettled) {
@@ -7132,6 +7249,7 @@ exports.resolveRefundRequest = onCall({ enforceAppCheck: true }, async (request)
   if (typeof requestId !== "string" || !requestId.trim()) {
     throw new HttpsError("invalid-argument", "requestId is required.");
   }
+  _safeId(requestId, "requestId");
   if (decision !== "approve" && decision !== "reject") {
     throw new HttpsError("invalid-argument", "decision must be approve or reject.");
   }
@@ -7172,7 +7290,12 @@ exports.resolveRefundRequest = onCall({ enforceAppCheck: true }, async (request)
   try {
     result = await _refundPayment(db, claimed.paymentId, adminNote || "Customer cancellation approved by admin", uid);
   } catch (err) {
-    await reqRef.update({ status: "pending" }).catch(() => {}); // let the admin retry or reject
+    // let the admin retry or reject
+    await _guardedWrite("refund_request_revert_failed", { requestId: reqRef.id },
+      () => reqRef.update({ status: "pending" }), {
+        title: "Refund Request Stuck", body: `Refund request ${reqRef.id} failed and could not be reset to pending. Check it manually.`,
+        type: "refund_request_revert_failed", extraData: { requestId: reqRef.id },
+      });
     throw err;
   }
   await reqRef.update({
@@ -7352,11 +7475,7 @@ const _STALE_PENDING_HOURS = 24;
 // this file already uses.
 function _logLab(severity, event, data = {}) {
   const payload = { severity, module: "lab", event, ...data };
-  if (severity === "ERROR" || severity === "WARNING") {
-    console.error(JSON.stringify(payload));
-  } else {
-    console.log(JSON.stringify(payload));
-  }
+  _emitLog(severity, payload);
 }
 
 // ── 1) Mirror new diagnostics/lab_tests service_requests into diagnostic_bookings ──
@@ -7934,11 +8053,7 @@ const _PHARMACY_STALE_PENDING_HOURS = 24;
 
 function _logPharmacy(severity, event, data = {}) {
   const payload = { severity, module: "pharmacy", event, ...data };
-  if (severity === "ERROR" || severity === "WARNING") {
-    console.error(JSON.stringify(payload));
-  } else {
-    console.log(JSON.stringify(payload));
-  }
+  _emitLog(severity, payload);
 }
 
 // Pharmacy-side status -> `orders.status` (medicine). `orders` has no
@@ -8730,11 +8845,7 @@ exports.onPharmacyProfileStatusChangeForInventory = onDocumentUpdated(
 
 function _logEquipment(severity, event, data = {}) {
   const payload = { severity, module: "equipment", event, ...data };
-  if (severity === "ERROR" || severity === "WARNING") {
-    console.error(JSON.stringify(payload));
-  } else {
-    console.log(JSON.stringify(payload));
-  }
+  _emitLog(severity, payload);
 }
 
 const _EQUIPMENT_STALE_PENDING_HOURS = 12;
@@ -9220,11 +9331,7 @@ function _ambulanceEmergencyType(raw) {
 
 function _logAmbulance(severity, event, data = {}) {
   const payload = { severity, module: "ambulance", event, ...data };
-  if (severity === "ERROR" || severity === "WARNING") {
-    console.error(JSON.stringify(payload));
-  } else {
-    console.log(JSON.stringify(payload));
-  }
+  _emitLog(severity, payload);
 }
 
 // Great-circle distance in km — used to pick the nearest online ambulance to
@@ -9807,6 +9914,7 @@ exports.sendTripPaymentReminder = onCall({ enforceAppCheck: true }, async (reque
   if (typeof requestId !== "string" || !requestId.trim()) {
     throw new HttpsError("invalid-argument", "requestId is required.");
   }
+  _safeId(requestId, "requestId");
   const snap = await db.collection("service_requests").doc(requestId).get();
   if (!snap.exists || snap.get("type") !== "ambulance" || snap.get("paymentStatus") !== "payment_due") {
     throw new HttpsError("failed-precondition", "This trip is not awaiting payment.");
@@ -9833,6 +9941,7 @@ exports.markTripWrittenOff = onCall({ enforceAppCheck: true }, async (request) =
   if (typeof requestId !== "string" || !requestId.trim()) {
     throw new HttpsError("invalid-argument", "requestId is required.");
   }
+  _safeId(requestId, "requestId");
   const ref = db.collection("service_requests").doc(requestId);
   // The driver still earns the trip fare: the platform pays it (a synthetic,
   // already-'eligible' payment so the normal settlement queue batches it, plus a
@@ -9923,7 +10032,7 @@ exports.markTripWrittenOff = onCall({ enforceAppCheck: true }, async (request) =
     _sendProviderNotification(db, getMessaging(), out.providerId, {
       title: "New Earnings", body: "A completed booking is now pending settlement.",
       type: "new_earnings", serviceType: "ambulance",
-    }).catch(() => {});
+    }).catch((e) => console.warn(JSON.stringify({ severity: "WARNING", event: "earnings_notification_failed", providerId: out.providerId, error: e && e.message })));
   }
   await db.collection("audit_logs").add(_auditLogDoc({
     actorId: uid, action: "markTripWrittenOff", targetType: "service_requests", targetId: requestId,
@@ -10321,11 +10430,7 @@ function _caregiverScheduledAt(data) {
 
 function _logCaregiver(severity, event, data = {}) {
   const payload = { severity, module: "caregiver", event, ...data };
-  if (severity === "ERROR" || severity === "WARNING") {
-    console.error(JSON.stringify(payload));
-  } else {
-    console.log(JSON.stringify(payload));
-  }
+  _emitLog(severity, payload);
 }
 
 // ── 1) Mirror new caregiver service_requests into caregiver_visits ─────────
@@ -10858,13 +10963,11 @@ const _COUNSELLING_TO_SERVICE_REQUEST_STATUS = { ..._PHYSIO_TO_SERVICE_REQUEST_S
 
 function _logPhysio(severity, event, data = {}) {
   const payload = { severity, module: "physiotherapy", event, ...data };
-  if (severity === "ERROR" || severity === "WARNING") console.error(JSON.stringify(payload));
-  else console.log(JSON.stringify(payload));
+  _emitLog(severity, payload);
 }
 function _logCounselling(severity, event, data = {}) {
   const payload = { severity, module: "counselling", event, ...data };
-  if (severity === "ERROR" || severity === "WARNING") console.error(JSON.stringify(payload));
-  else console.log(JSON.stringify(payload));
+  _emitLog(severity, payload);
 }
 
 // `assignedTo` on service_requests has always been the provider's raw uid
@@ -11935,7 +12038,7 @@ async function _completePlanConsultation(db, appointmentId, appt) {
     _sendProviderNotification(db, getMessaging(), providerId, {
       title: "New Earnings", body: "A completed plan consultation is now pending settlement.",
       type: "new_earnings", serviceType: "nutrition",
-    }).catch(() => {});
+    }).catch((e) => console.warn(JSON.stringify({ severity: "WARNING", event: "earnings_notification_failed", providerId: providerId, error: e && e.message })));
   }
 }
 
@@ -11992,6 +12095,7 @@ exports.bookPlanConsultation = onCall({ enforceAppCheck: true }, async (request)
   if (typeof subscriptionId !== "string" || !subscriptionId.trim() || subscriptionId.includes("/") || subscriptionId.length > 300) {
     throw new HttpsError("invalid-argument", "subscriptionId is required.");
   }
+  _safeId(subscriptionId, "subscriptionId");
   if (typeof date !== "string" || !PlanH.parseKey(date)) throw new HttpsError("invalid-argument", "Pick a valid date.");
   const slotMin = _slotStartMinutes(timeSlot);
   if (slotMin === null) throw new HttpsError("invalid-argument", "Pick a valid time slot.");
@@ -12098,6 +12202,7 @@ exports.cancelWeightLossPlan = onCall({ enforceAppCheck: true }, async (request)
   if (typeof subscriptionId !== "string" || !subscriptionId.trim() || subscriptionId.includes("/")) {
     throw new HttpsError("invalid-argument", "subscriptionId is required.");
   }
+  _safeId(subscriptionId, "subscriptionId");
   const db = getFirestore();
   const subRef = db.collection("nutrition_subscriptions").doc(subscriptionId.trim());
   const note = typeof reason === "string" ? reason.trim().slice(0, 300) : "";
@@ -12110,7 +12215,11 @@ exports.cancelWeightLossPlan = onCall({ enforceAppCheck: true }, async (request)
     tx.update(subRef, { status: "cancelling", updatedAt: FieldValue.serverTimestamp() });
     return s.data();
   });
-  const revert = () => subRef.update({ status: "active", updatedAt: FieldValue.serverTimestamp() }).catch(() => {});
+  const revert = () => _guardedWrite("plan_revert_write_failed", { subscriptionId: subRef.id },
+    () => subRef.update({ status: "active", updatedAt: FieldValue.serverTimestamp() }), {
+      title: "Plan Stuck Cancelling", body: `Plan ${subRef.id} could not be restored to active after a failed cancel. Check it manually.`,
+      type: "plan_revert_write_failed", extraData: { subscriptionId: subRef.id },
+    });
   let refundDone = false;
   let refundedAmt = 0;
 
@@ -12177,7 +12286,11 @@ exports.cancelWeightLossPlan = onCall({ enforceAppCheck: true }, async (request)
     if (refundDone) {
       // Money already went back: never hand the plan back. Close it and report.
       _logSettlement("ERROR", "plan_cancel_post_refund_failed", { subscriptionId: subRef.id, error: err.message });
-      await subRef.set({ status: "cancelled", cancelledBy: "patient", cancelledAt: FieldValue.serverTimestamp() }, { merge: true }).catch(() => {});
+      await _guardedWrite("plan_close_after_refund_failed", { subscriptionId: subRef.id },
+        () => subRef.set({ status: "cancelled", cancelledBy: "patient", cancelledAt: FieldValue.serverTimestamp() }, { merge: true }), {
+          title: "Plan Not Closed After Refund", body: `Plan ${subRef.id} was refunded but could not be marked cancelled. Close it manually.`,
+          type: "plan_close_after_refund_failed", extraData: { subscriptionId: subRef.id },
+        });
       return { success: true, refunded: refundedAmt, nonRefundableFee: Number(sub.platformFee) || 0, unusedRefundDue: 0 };
     }
     // Nothing was refunded: hand the plan back to the customer.
@@ -13290,7 +13403,9 @@ async function _sendGuestLinkOnWhatsApp({ appointmentId, exp, appt, guestPhone, 
 
 // Request data: { appointmentId: string }
 // Response:     { deepLink: string, whatsappSent: boolean }
-exports.createGuestJoinLink = onCall({ secrets: ["GUEST_LINK_SECRET", waConfig.WHATSAPP_TOKEN] }, async (request) => {
+// App Check decision: ENFORCED. Called only from the signed-in patient app
+// (App Check present). Also rate limited per appointment and per user.
+exports.createGuestJoinLink = onCall({ enforceAppCheck: true, secrets: ["GUEST_LINK_SECRET", waConfig.WHATSAPP_TOKEN] }, async (request) => {
   const uid = request.auth?.uid;
   if (!uid) throw new HttpsError("unauthenticated", "Sign in to continue.");
 
@@ -13298,6 +13413,9 @@ exports.createGuestJoinLink = onCall({ secrets: ["GUEST_LINK_SECRET", waConfig.W
   if (typeof appointmentId !== "string" || !appointmentId.trim()) {
     throw new HttpsError("invalid-argument", "appointmentId is required.");
   }
+  _safeId(appointmentId, "appointmentId");
+  await _rateLimit(getFirestore(), `createGuestJoinLink:appt:${appointmentId.trim()}`, 5, 3600);
+  await _rateLimit(getFirestore(), `createGuestJoinLink:uid:${uid}`, 20, 3600);
 
   const db = getFirestore();
   const apptSnap = await db.collection("appointments").doc(appointmentId).get();
@@ -13352,6 +13470,9 @@ exports.createGuestJoinLink = onCall({ secrets: ["GUEST_LINK_SECRET", waConfig.W
 
 // Request data: { appointmentId: string, token: string, exp: number }
 // Response:     { customToken, doctorName, doctorSpecialty, date, time, consultationId }
+// App Check decision: NOT enforced. Called by unauthenticated guests on the web
+// page (mednu_web has no App Check), so enforcing would break guests. Protected
+// by the HMAC token plus a per-client-IP rate limit.
 exports.redeemGuestJoinLink = onCall({ secrets: ["GUEST_LINK_SECRET"] }, async (request) => {
   const { appointmentId, token, exp } = request.data || {};
   if (
@@ -13361,6 +13482,10 @@ exports.redeemGuestJoinLink = onCall({ secrets: ["GUEST_LINK_SECRET"] }, async (
   ) {
     throw new HttpsError("invalid-argument", "Invalid join link.");
   }
+  _safeId(appointmentId, "appointmentId");
+  const clientIp = request.rawRequest && request.rawRequest.ip;
+  const ipKey = clientIp ? crypto.createHash("sha256").update(String(clientIp)).digest("hex") : "global";
+  await _rateLimit(getFirestore(), `redeemGuestJoinLink:${ipKey}`, 20, 3600);
 
   if (Math.floor(Date.now() / 1000) > exp) {
     throw new HttpsError("deadline-exceeded", "This join link has expired.");
@@ -13424,6 +13549,10 @@ exports.redeemGuestJoinLink = onCall({ secrets: ["GUEST_LINK_SECRET"] }, async (
 // RAZORPAY_KEY_SECRET is already configured for this project.
 const AGORA_APP_ID = "b0143ffdfef74f399a420c7cd73c9e8b";
 
+// App Check decision: NOT enforced. Called by both apps AND by guests on the web
+// join page (mednu_web has no App Check); enforcing would lock guests out.
+// Access is gated by the consultation participant / guest-claim check below,
+// plus a rate limit per uid (or per guest appointment claim).
 exports.generateAgoraToken = onCall({ secrets: ["AGORA_APP_CERTIFICATE"] }, async (request) => {
   const uid = request.auth?.uid;
   if (!uid) throw new HttpsError("unauthenticated", "Sign in to continue.");
@@ -13432,7 +13561,9 @@ exports.generateAgoraToken = onCall({ secrets: ["AGORA_APP_CERTIFICATE"] }, asyn
   if (typeof channelName !== "string" || !channelName.trim()) {
     throw new HttpsError("invalid-argument", "channelName is required.");
   }
-  const consultationId = channelName.trim();
+  const consultationId = _safeId(channelName, "channelName");
+  const guestClaim = request.auth?.token?.guestAppointmentId;
+  await _rateLimit(getFirestore(), guestClaim ? `generateAgoraToken:guest:${guestClaim}` : `generateAgoraToken:uid:${uid}`, 60, 3600);
 
   // Both apps use the consultation's own Firestore doc id as the Agora
   // channel name, so this doubles as the join authorization check — only
@@ -13500,6 +13631,8 @@ const _DELETION_STORAGE_PREFIXES = [
   ..._DELETION_UID_DOC_COLLECTIONS,
 ];
 
+// App Check decision: NOT enforced yet. Called from the admin panel, which does
+// not have App Check; the Director-only role check below is the gate.
 exports.processAccountDeletion = onCall({ timeoutSeconds: 300 }, async (request) => {
   const adminUid = request.auth?.uid;
   const db = getFirestore();
@@ -13604,6 +13737,6 @@ if (process.env.MEDNU_TEST === "1") {
   module.exports.__testing = {
     _refundPayment, _creditTestEarningsTx, _transitionPaymentToEligible, _computeProviderSplit,
     _completePlanConsultation, _createSettlementForProvider, _runSettlementQueueOnce,
-    _ledgerId, _ledgerDoc, _round2,
+    _ledgerId, _ledgerDoc, _round2, _rateLimit, _safeId,
   };
 }

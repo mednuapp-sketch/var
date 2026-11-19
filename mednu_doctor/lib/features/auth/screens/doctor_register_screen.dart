@@ -317,10 +317,25 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
                 file: e.value!, uid: uid, docType: e.key),
       };
 
+      // Values are Storage PATHS (never download URLs) — see uploadDoctorDocument.
       final urls = <String, String>{};
       for (final entry in uploads.entries) {
         if (mounted) setState(() => _uploadStatus = 'Uploading ${_docLabel(entry.key)}…');
         urls[entry.key] = await entry.value;
+      }
+      // The profile photo doubles as the public avatar (`photoUrl`), so it is
+      // ALSO stored at the public-read `doctors/{uid}/profile.jpg` path. The
+      // copy under docs/ stays private and only its path is recorded.
+      String photoUrl = '';
+      if (_profilePhotoFile != null) {
+        try {
+          photoUrl = await ImageUploadService.uploadDoctorProfileImage(
+              imageFile: _profilePhotoFile!, uid: uid);
+        } catch (_) {
+          // Avatar is best-effort (e.g. >5 MB); the doctor can re-upload it
+          // from their profile. Registration must not fail because of it.
+          photoUrl = '';
+        }
       }
       // Optional "Other documents" — skipped entirely when none were added.
       final docLabels = <String, String>{};
@@ -353,7 +368,8 @@ class _DoctorRegisterScreenState extends State<DoctorRegisterScreen> {
         clinicLat:          _needsClinic ? _clinicLat : null,
         clinicLng:          _needsClinic ? _clinicLng : null,
         clinicCity:         _needsClinic ? _clinicCity : '',
-        documentUrls:       urls,
+        documentPaths:      urls,
+        photoUrl:           photoUrl,
         documentLabels:     docLabels,
       );
 

@@ -235,8 +235,13 @@ test("diagnostic_reports are append-only — a lab cannot update or delete an ex
 });
 
 test("a lab cannot self-verify or inflate its own rating on lab_profiles", async () => {
-  const labCtx = testEnv.authenticatedContext(LAB_A);
-  const ref = labCtx.firestore().collection("lab_profiles").doc(LAB_A);
+  // LAB_A is already active+verified, so re-writing the same values is a harmless
+  // no-op diff; use a still-pending lab to prove self-verification is blocked.
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().collection("lab_profiles").doc("lab-c-uid").set({ status: "pending", isVerified: false });
+  });
+  const labCtx = testEnv.authenticatedContext("lab-c-uid");
+  const ref = labCtx.firestore().collection("lab_profiles").doc("lab-c-uid");
   await assertFails(ref.update({ isVerified: true, status: "active" }));
   await assertFails(ref.update({ rating: 5, totalReviews: 999 }));
   await assertSucceeds(ref.update({ address: "New address" }));

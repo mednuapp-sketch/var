@@ -1,0 +1,14 @@
+const assert = require("assert");
+const H = require("../../ambulance_match_helpers.js");
+assert.strictEqual(H.requestedAmbulanceTypeKey({ ambulanceTypeKey: "als" }), "als");
+assert.strictEqual(H.requestedAmbulanceTypeKey({ ambulanceType: "ICU Ambulance" }), "icu");
+assert.strictEqual(H.requestedAmbulanceTypeKey({ ambulanceType: "Basic" }), "basic");
+assert.strictEqual(H.requestedAmbulanceTypeKey({}), null);
+assert.strictEqual(H.requestedAmbulanceTypeKey(undefined), null);
+assert.strictEqual(H.driverMatchesRequestedType({ vehicleTypeKey: "als" }, "als"), true);
+assert.strictEqual(H.driverMatchesRequestedType({ vehicleTypeKey: "basic" }, "als"), false);
+assert.strictEqual(H.driverMatchesRequestedType({}, "als"), false);
+assert.strictEqual(H.driverMatchesRequestedType(null, "als"), false);
+assert.strictEqual(H.driverMatchesRequestedType({}, null), true);
+assert.strictEqual(H.ambulanceTypeLabel("icu"), "ICU");
+console.log("all ok");

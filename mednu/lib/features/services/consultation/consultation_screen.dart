@@ -626,7 +626,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen>
       // Same capturePayment-backed booking flow every other paid service goes
       // through (see _BookingConfirmSheetState._confirmAndPay below) — the
       // consultation doc is only created once PaymentScreen confirms the
-      // booking (for real once kRequirePayment is true; instantly for free
+      // booking (for real once PaymentConfig.requirePayment is true; instantly for free
       // while it's false — see payment_config.dart), instead of being written
       // directly here with no payment step at all.
       result = await context.push<Map<String, dynamic>>(

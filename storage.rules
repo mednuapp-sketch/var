@@ -64,8 +64,13 @@ service firebase.storage {
 
     // ── Patient profile photos: users/{uid}/profile.jpg ─────────────────────
     // Public read so the permanent token-free URL never expires.
-    match /users/{uid}/{allPaths=**} {
+    // Only profile.jpg is public (the one file any app stores under users/);
+    // anything else under the folder is owner/admin readable.
+    match /users/{uid}/profile.jpg {
       allow read:  if true;
+    }
+    match /users/{uid}/{allPaths=**} {
+      allow read:  if isAuth() && (isOwner(uid) || isAdmin());
       allow write: if isOwner(uid)
                    && request.resource.size < 5 * 1024 * 1024
                    && isImage();
@@ -325,8 +330,8 @@ service firebase.storage {
              firestore.get(/databases/(default)/documents/$(coll)/$(uid)).data.get('status', '') == 'active';
     }
 
-    function partnerDocWritable(coll, uid, file) {
-      return !partnerIsActive(coll, uid) || file.matches('other_doc_[1-5][.](jpg|pdf)');
+    function partnerDocWritable(coll, uid, name) {
+      return !partnerIsActive(coll, uid) || name.matches('[^/]+/[^/]+/other_doc_[1-5][.](jpg|pdf)');
     }
 
     // ── Partner verification documents: {role}_documents/{uid}/{docType}.{jpg|pdf} ──
@@ -338,7 +343,7 @@ service firebase.storage {
     match /lab_documents/{uid}/{allPaths=**} {
       allow read:  if isAuth() && (isOwner(uid) || isAdmin());
       allow write: if isOwner(uid)
-                   && partnerDocWritable('lab_profiles', uid, allPaths)
+                   && partnerDocWritable('lab_profiles', uid, request.resource.name)
                    && request.resource.size < 20 * 1024 * 1024
                    && isDocument();
       // Admin may remove a rejected pending 'Other document' file.
@@ -348,7 +353,7 @@ service firebase.storage {
     match /pharmacy_documents/{uid}/{allPaths=**} {
       allow read:  if isAuth() && (isOwner(uid) || isAdmin());
       allow write: if isOwner(uid)
-                   && partnerDocWritable('pharmacy_profiles', uid, allPaths)
+                   && partnerDocWritable('pharmacy_profiles', uid, request.resource.name)
                    && request.resource.size < 20 * 1024 * 1024
                    && isDocument();
       // Admin may remove a rejected pending 'Other document' file.
@@ -358,7 +363,7 @@ service firebase.storage {
     match /equipment_documents/{uid}/{allPaths=**} {
       allow read:  if isAuth() && (isOwner(uid) || isAdmin());
       allow write: if isOwner(uid)
-                   && partnerDocWritable('equipment_profiles', uid, allPaths)
+                   && partnerDocWritable('equipment_profiles', uid, request.resource.name)
                    && request.resource.size < 20 * 1024 * 1024
                    && isDocument();
       // Admin may remove a rejected pending 'Other document' file.
@@ -368,7 +373,7 @@ service firebase.storage {
     match /ambulance_documents/{uid}/{allPaths=**} {
       allow read:  if isAuth() && (isOwner(uid) || isAdmin());
       allow write: if isOwner(uid)
-                   && partnerDocWritable('ambulance_profiles', uid, allPaths)
+                   && partnerDocWritable('ambulance_profiles', uid, request.resource.name)
                    && request.resource.size < 20 * 1024 * 1024
                    && isDocument();
       // Admin may remove a rejected pending 'Other document' file.
@@ -378,7 +383,7 @@ service firebase.storage {
     match /caregiver_documents/{uid}/{allPaths=**} {
       allow read:  if isAuth() && (isOwner(uid) || isAdmin());
       allow write: if isOwner(uid)
-                   && partnerDocWritable('caregiver_profiles', uid, allPaths)
+                   && partnerDocWritable('caregiver_profiles', uid, request.resource.name)
                    && request.resource.size < 20 * 1024 * 1024
                    && isDocument();
       // Admin may remove a rejected pending 'Other document' file.
@@ -388,7 +393,7 @@ service firebase.storage {
     match /counsellor_documents/{uid}/{allPaths=**} {
       allow read:  if isAuth() && (isOwner(uid) || isAdmin());
       allow write: if isOwner(uid)
-                   && partnerDocWritable('counsellor_profiles', uid, allPaths)
+                   && partnerDocWritable('counsellor_profiles', uid, request.resource.name)
                    && request.resource.size < 20 * 1024 * 1024
                    && isDocument();
       // Admin may remove a rejected pending 'Other document' file.
@@ -398,7 +403,7 @@ service firebase.storage {
     match /physiotherapist_documents/{uid}/{allPaths=**} {
       allow read:  if isAuth() && (isOwner(uid) || isAdmin());
       allow write: if isOwner(uid)
-                   && partnerDocWritable('physiotherapist_profiles', uid, allPaths)
+                   && partnerDocWritable('physiotherapist_profiles', uid, request.resource.name)
                    && request.resource.size < 20 * 1024 * 1024
                    && isDocument();
       // Admin may remove a rejected pending 'Other document' file.
@@ -408,7 +413,7 @@ service firebase.storage {
     match /nutritionist_documents/{uid}/{allPaths=**} {
       allow read:  if isAuth() && (isOwner(uid) || isAdmin());
       allow write: if isOwner(uid)
-                   && partnerDocWritable('nutritionist_profiles', uid, allPaths)
+                   && partnerDocWritable('nutritionist_profiles', uid, request.resource.name)
                    && request.resource.size < 20 * 1024 * 1024
                    && isDocument();
       // Admin may remove a rejected pending 'Other document' file.
@@ -418,11 +423,20 @@ service firebase.storage {
     match /hospital_documents/{uid}/{allPaths=**} {
       allow read:  if isAuth() && (isOwner(uid) || isAdmin());
       allow write: if isOwner(uid)
-                   && partnerDocWritable('hospital_profiles', uid, allPaths)
+                   && partnerDocWritable('hospital_profiles', uid, request.resource.name)
                    && request.resource.size < 20 * 1024 * 1024
                    && isDocument();
       // Admin may remove a rejected pending 'Other document' file.
       allow delete: if isAdmin();
+    }
+
+    // Documents uploaded by an admin when adding a doctor from the admin panel.
+    // Private: admin only (read + write).
+    match /doctor_documents/{docId}/{allPaths=**} {
+      allow read:  if isAuth() && isAdmin();
+      allow write: if isAuth() && isAdmin()
+                   && request.resource.size < 20 * 1024 * 1024
+                   && isDocument();
     }
 
     // Landing-page ad images — same public-read / admin-only-write model.

@@ -28,7 +28,6 @@ AuthKey_*.p8
 **/.flutter-plugins
 **/.flutter-plugins-dependencies
 **/.packages
-**/pubspec.lock
 
 # Android generated
 **/android/.gradle/
@@ -49,3 +48,18 @@ mednu-admin/.next/
 
 # Flutter SDK (local installation)
 flutter/
+
+# Hygiene (added by repo audit)
+**/node_modules/
+*.log
+*.hprof
+**/android/build/
+.DS_Store
+Thumbs.db
+.firebase/
+**/.firebase/
+functions/.env*
+*.pem
+*.p8
+functions/deploy_list.txt
+functions/retry_list.txt

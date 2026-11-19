@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import 'document_link.dart';
+
 /// Shared, role-parameterised model layer for partner verification documents.
 ///
 /// One canonical set of `docType` keys is used everywhere — Firestore field
@@ -177,6 +179,8 @@ class PartnerDocumentType {
 /// One entry of `{role}_profiles/{uid}.documents` — written by the partner
 /// app on upload, never by admin.
 class PartnerDocumentMeta {
+  /// LEGACY ONLY: tokenised download URL written by older app builds. New
+  /// entries carry no `url` (see [storagePath] / [resolveUrl]).
   final String url;
   final String storagePath;
   final String fileName;
@@ -199,14 +203,32 @@ class PartnerDocumentMeta {
 
   bool get isPdf => contentType == 'application/pdf';
 
+  /// A document exists when it has a Storage path (new shape) or a legacy URL.
+  bool get hasFile => storagePath.isNotEmpty || url.isNotEmpty;
+
+  /// A viewable URL: resolved fresh from [storagePath] through the
+  /// authenticated SDK, falling back to the legacy [url] if that fails.
+  Future<String> resolveUrl() async {
+    if (storagePath.isNotEmpty) {
+      try {
+        return await resolveDocumentUrl(storagePath);
+      } catch (_) {
+        if (url.isNotEmpty) return url;
+        rethrow;
+      }
+    }
+    return resolveDocumentUrl(url);
+  }
+
   static PartnerDocumentMeta? fromMap(Object? raw) {
     if (raw is! Map) return null;
     final url = raw['url']?.toString() ?? '';
-    if (url.isEmpty) return null;
+    final storagePath = raw['storagePath']?.toString() ?? '';
+    if (url.isEmpty && storagePath.isEmpty) return null;
     final ts = raw['uploadedAt'];
     return PartnerDocumentMeta(
       url: url,
-      storagePath: raw['storagePath']?.toString() ?? '',
+      storagePath: storagePath,
       fileName: raw['fileName']?.toString() ?? '',
       contentType: raw['contentType']?.toString() ?? '',
       sizeBytes: (raw['sizeBytes'] as num?)?.toInt() ?? 0,

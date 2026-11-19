@@ -27,7 +27,7 @@ const _kPurple = Color(0xFF6A1B9A);
 /// the doctor app's write_prescription_screen.dart — same 'MN-YYYYMMDD-
 /// XXXXXX' format. Needed here too because `_confirmWithoutPayment` below
 /// writes the booking doc directly from the client (whenever
-/// kRequirePayment is false) instead of going through the capturePayment
+/// PaymentConfig.requirePayment is false, i.e. app_config/payments) instead of going through the capturePayment
 /// Cloud Function where the server-side generator normally runs.
 String _generateOpRxId() {
   final now = DateTime.now();
@@ -268,10 +268,11 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen>
   }
 
   // ── Booking without a real charge ───────────────────────
-  // Used unconditionally whenever `kRequirePayment` is false (see
-  // payment_config.dart), and also wired to the debug-only "Skip Payment"
-  // button so QA can still bypass a live gateway once `kRequirePayment` is
-  // flipped back on. Writes the booking doc(s) directly, deliberately
+  // Used unconditionally whenever `PaymentConfig.requirePayment` is false (remote
+  // `app_config/payments`; `kRequirePayment` in payment_config.dart is only
+  // the fallback), and also wired to the debug-only "Skip Payment"
+  // button so QA can still bypass a live gateway once real payments are
+  // switched on. Writes the booking doc(s) directly, deliberately
   // WITHOUT a paymentId, so the settlement engine (which only acts on
   // payments a paymentId points to) never sees these — no fake
   // payments/wallet_ledger/commission entries, nothing for the real

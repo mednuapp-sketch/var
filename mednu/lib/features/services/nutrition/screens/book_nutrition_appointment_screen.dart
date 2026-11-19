@@ -181,8 +181,8 @@ class _BookNutritionAppointmentScreenState
     }
 
     // ── Payment gate ──────────────────────────────────────
-    // capturePayment (functions/index.js) — or, while kRequirePayment is
-    // false, PaymentScreen's own no-payment path — creates the
+    // capturePayment (functions/index.js) — or, while PaymentConfig.requirePayment
+    // (app_config/payments) is false, PaymentScreen's own no-payment path — creates the
     // nutrition_appointments doc itself. `userId` must be set explicitly
     // here (not just the auto-added `patientId`) because every other
     // nutrition query/rule keys off `userId`, not `patientId`.

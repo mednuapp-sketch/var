@@ -494,7 +494,13 @@ class _PartnerDocumentUploadCardState extends State<PartnerDocumentUploadCard> {
     // No in-app PDF renderer is bundled (and none may be added), so a PDF
     // opens in the device's external viewer/browser via its download URL.
     if (meta.isPdf) {
-      final uri = Uri.tryParse(meta.url);
+      Uri? uri;
+      try {
+        uri = Uri.tryParse(await meta.resolveUrl());
+      } catch (_) {
+        uri = null;
+      }
+      if (!mounted) return;
       var opened = false;
       if (uri != null) {
         try {
@@ -513,6 +519,13 @@ class _PartnerDocumentUploadCardState extends State<PartnerDocumentUploadCard> {
     }
 
     if (!mounted) return;
+    const loadError = Padding(
+      padding: EdgeInsets.all(32),
+      child: Text(
+        'Could not load this document.',
+        style: TextStyle(color: Colors.white),
+      ),
+    );
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => Dialog(
@@ -522,16 +535,22 @@ class _PartnerDocumentUploadCardState extends State<PartnerDocumentUploadCard> {
           children: [
             InteractiveViewer(
               child: Center(
-                child: Image.network(
-                  meta.url,
-                  fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) => const Padding(
-                    padding: EdgeInsets.all(32),
-                    child: Text(
-                      'Could not load this document.',
-                      style: TextStyle(color: Colors.white),
-                    ),
-                  ),
+                child: FutureBuilder<String>(
+                  future: meta.resolveUrl(),
+                  builder: (_, snap) {
+                    if (snap.hasError) return loadError;
+                    if (!snap.hasData) {
+                      return const Padding(
+                        padding: EdgeInsets.all(32),
+                        child: CircularProgressIndicator(color: Colors.white),
+                      );
+                    }
+                    return Image.network(
+                      snap.data!,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) => loadError,
+                    );
+                  },
                 ),
               ),
             ),
@@ -857,27 +876,36 @@ class _PartnerDocumentUploadCardState extends State<PartnerDocumentUploadCard> {
             color: AppColors.error, size: 22),
       );
     }
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(10),
-      child: Image.network(
-        meta.url,
-        width: side,
-        height: side,
-        fit: BoxFit.cover,
-        // A 46 dp thumbnail must not decode a full-resolution document scan
-        // into the image cache — one card per docType would otherwise hold
-        // several multi-megapixel bitmaps at once.
-        cacheWidth:
-            (side * MediaQuery.devicePixelRatioOf(context)).round(),
-        cacheHeight:
-            (side * MediaQuery.devicePixelRatioOf(context)).round(),
-        errorBuilder: (_, __, ___) => Container(
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+    Widget placeholder(IconData icon) => Container(
           width: side,
           height: side,
           color: AppColors.divider,
-          child: const Icon(Icons.image_not_supported_outlined,
-              size: 20, color: AppColors.textSecondary),
-        ),
+          child: Icon(icon, size: 20, color: AppColors.textSecondary),
+        );
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(10),
+      child: FutureBuilder<String>(
+        future: meta.resolveUrl(),
+        builder: (_, snap) {
+          if (snap.hasError) {
+            return placeholder(Icons.image_not_supported_outlined);
+          }
+          if (!snap.hasData) return placeholder(Icons.image_outlined);
+          return Image.network(
+            snap.data!,
+            width: side,
+            height: side,
+            fit: BoxFit.cover,
+            // A 46 dp thumbnail must not decode a full-resolution document scan
+            // into the image cache — one card per docType would otherwise hold
+            // several multi-megapixel bitmaps at once.
+            cacheWidth: (side * dpr).round(),
+            cacheHeight: (side * dpr).round(),
+            errorBuilder: (_, __, ___) =>
+                placeholder(Icons.image_not_supported_outlined),
+          );
+        },
       ),
     );
   }

@@ -152,7 +152,7 @@ function renderHome() {
       attEl.style.display = '';
       attEl.innerHTML = `<div class="home-att-title"><i class="ti ti-bell-ringing"></i> Needs your attention</div>
         <div class="home-att-list">${attention.map(a =>
-          `<button class="home-att-item" onclick="switchTab('${escHtml(a.tab)}','${escHtml(a.title || '')}')">
+          `<button class="home-att-item" onclick="switchTab(${escJsAttr(a.tab)},${escJsAttr(a.title || '')})">
              <span class="home-att-count">${a.attention}</span>
              <span class="home-att-label">${escHtml(a.label)}<small>${escHtml(a.section)}</small></span>
              <i class="ti ti-chevron-right"></i>
@@ -168,7 +168,7 @@ function renderHome() {
       <div class="home-card-head"><span class="home-card-ico"><i class="${escHtml(s.icon)}"></i></span>
         <span class="home-card-title">${escHtml(s.name)}</span><span class="home-card-n">${s.items.length}</span></div>
       <div class="home-links">${s.items.map(i => `
-        <button class="home-link" onclick="switchTab('${escHtml(i.tab)}','${escHtml(i.title || '')}')">
+        <button class="home-link" onclick="switchTab(${escJsAttr(i.tab)},${escJsAttr(i.title || '')})">
           <i class="${escHtml(i.icon)}"></i><span>${escHtml(i.label)}</span>${i.attention ? `<b>${i.attention}</b>` : ''}
         </button>`).join('')}</div>
     </div>`).join('');
@@ -715,7 +715,7 @@ function renderScopedReportLists() {
       <div class="report-ico"><i class="ti ti-file-spreadsheet"></i></div>
       <div class="report-meta"><div class="user-name">${escHtml(r.title || 'Report')}</div>
         <div class="user-sub">${escHtml((r.format || '').toUpperCase())}${r.rowCount != null ? ' · ' + escHtml(String(r.rowCount)) + ' rows' : ''} · ${escHtml(r.createdBy || '')} · ${escHtml(_fmtWhen(r.createdAt))}</div></div>
-      ${r.collection && REPORT_SOURCES[r.collection] ? `<button class="btn btn-outline" onclick="rerunScopedReport('${escHtml(prefix)}','${escHtml(r.collection)}','${escHtml(String(r.rangeDays ?? 30))}','${escHtml(r.format || 'csv')}')"><i class="ti ti-refresh"></i> Run again</button>` : ''}
+      ${r.collection && REPORT_SOURCES[r.collection] ? `<button class="btn btn-outline" onclick="rerunScopedReport(${escJsAttr(prefix)},${escJsAttr(r.collection)},${escJsAttr(String(r.rangeDays ?? 30))},${escJsAttr(r.format || 'csv')})"><i class="ti ti-refresh"></i> Run again</button>` : ''}
     </div>`).join('');
   });
 }

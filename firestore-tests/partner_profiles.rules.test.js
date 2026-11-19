@@ -69,8 +69,10 @@ for (const [role, coll] of Object.entries(ROLES)) {
   // ── read ────────────────────────────────────────────────────────────────
   test(`[${role}] read: owner, HR and any signed-in (active profile) allowed; anon denied`, async () => {
     await ok(P(A.partner(role), active(role)).get());
-    await ok(P(A.stranger, active(role)).get());
     await ok(P(A.hr, pending(role)).get());
+    // hospital_profiles is private (owner/admin only); every other role lets any signed-in user read an active profile.
+    if (role === "hospital") await no(P(A.stranger, active(role)).get());
+    else await ok(P(A.stranger, active(role)).get());
     await no(P(A.anon, active(role)).get());
   });
   test(`[${role}] read: a pending profile is hidden from strangers`, () =>
